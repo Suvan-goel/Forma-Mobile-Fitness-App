@@ -2,6 +2,8 @@
 
 Forma is an AI-powered fitness app that uses real-time camera-based pose estimation to analyse exercise form as you train. By combining on-device computer vision with biomechanical heuristics, Forma detects key body joints, tracks movement quality, and gives instant feedback on technique, range of motion, and consistency.
 
+
+
 # To run the app on Android:
 
 1. Plug Phone into laptop via usb-c or run via simulator 
@@ -18,6 +20,8 @@ Forma is an AI-powered fitness app that uses real-time camera-based pose estimat
    If wanting to launch over wired connection:
     Run 'adb reverse tcp:8081 tcp:8081'
     Followed by 'npx expo start --dev-client'
+
+
 
 # To run the app on IOS:
 
