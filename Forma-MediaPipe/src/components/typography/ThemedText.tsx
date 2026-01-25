@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Text, TextProps, StyleSheet } from 'react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 
@@ -10,7 +10,7 @@ interface ThemedTextProps extends Omit<TextProps, 'style'> {
   style?: TextProps['style'];
 }
 
-export const ThemedText: React.FC<ThemedTextProps> = ({
+export const ThemedText: React.FC<ThemedTextProps> = memo(({
   variant = 'body',
   color = COLORS.text,
   style,
@@ -24,7 +24,7 @@ export const ThemedText: React.FC<ThemedTextProps> = ({
       {children}
     </Text>
   );
-};
+});
 
 const styles = StyleSheet.create({
   base: {

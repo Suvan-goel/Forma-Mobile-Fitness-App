@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -46,19 +46,44 @@ export type RootTabParamList = {
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+// Icon mapping - memoized to prevent recreation
+const TAB_ICONS: { [key: string]: any } = {
+  Record: Video,
+  Logbook: BookOpen,
+  Analytics: BarChart2,
+  Rewards: Star,
+  Trainer: User,
+};
+
+// Custom Tab Bar Item - memoized for performance
+const TabBarItem = memo(({ 
+  route, 
+  isFocused, 
+  onPress 
+}: { 
+  route: any; 
+  isFocused: boolean; 
+  onPress: () => void;
+}) => {
+  const Icon = TAB_ICONS[route.name];
+  const label = route.name;
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.tabItem, isFocused && styles.tabItemActive]}
+      activeOpacity={0.7}
+    >
+      <Icon size={22} color={isFocused ? COLORS.primary : COLORS.textSecondary} />
+      {isFocused && <Text style={styles.tabLabel}>{label}</Text>}
+    </TouchableOpacity>
+  );
+});
+
 // Custom Tab Bar
-const CustomTabBar = ({ state, descriptors, navigation, onTabChange }: any) => {
+const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any) => {
   const insets = useSafeAreaInsets();
   const navBarMargin = insets.bottom > 0 ? insets.bottom - 20 : 0;
-  const footerHeight = 80 + navBarMargin + 20; // tab bar height + margin + extra space
-  
-  const icons: { [key: string]: any } = {
-    Record: Video,
-    Logbook: BookOpen,
-    Analytics: BarChart2,
-    Rewards: Star,
-    Trainer: User,
-  };
   
   // Notify parent of tab changes
   React.useEffect(() => {
@@ -69,15 +94,11 @@ const CustomTabBar = ({ state, descriptors, navigation, onTabChange }: any) => {
   }, [state.index, onTabChange]);
 
   return (
-    <>
-      <View style={[styles.tabBar, { marginBottom: navBarMargin }]}>
+    <View style={[styles.tabBar, { marginBottom: navBarMargin }]}>
       {state.routes.map((route: any, index: number) => {
-        const { options } = descriptors[route.key];
-        const label = route.name;
         const isFocused = state.index === index;
-        const Icon = icons[route.name];
 
-        const onPress = () => {
+        const onPress = useCallback(() => {
           const event = navigation.emit({
             type: 'tabPress',
             target: route.key,
@@ -87,29 +108,30 @@ const CustomTabBar = ({ state, descriptors, navigation, onTabChange }: any) => {
           if (!isFocused && !event.defaultPrevented) {
             navigation.navigate(route.name);
           }
-        };
+        }, [isFocused, route.key, route.name]);
 
         return (
-          <TouchableOpacity
+          <TabBarItem
             key={route.key}
+            route={route}
+            isFocused={isFocused}
             onPress={onPress}
-            style={[styles.tabItem, isFocused && styles.tabItemActive]}
-            activeOpacity={0.7}
-          >
-            <Icon size={22} color={isFocused ? COLORS.primary : COLORS.textSecondary} />
-            {isFocused && <Text style={styles.tabLabel}>{label}</Text>}
-          </TouchableOpacity>
+          />
         );
       })}
     </View>
-    </>
   );
-};
+});
 
 // Bottom Tab Navigator with static header
-const AppTabs: React.FC = () => {
+const AppTabs: React.FC = memo(() => {
   const insets = useSafeAreaInsets();
-  const [currentTab, setCurrentTab] = React.useState('Logbook');
+  const [currentTab, setCurrentTab] = useState('Logbook');
+  
+  // Memoize tab change handler
+  const handleTabChange = useCallback((tabName: string) => {
+    setCurrentTab(tabName);
+  }, []);
   
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
@@ -118,7 +140,7 @@ const AppTabs: React.FC = () => {
       
       {/* Tab Navigator */}
       <Tab.Navigator
-        tabBar={(props) => <CustomTabBar {...props} onTabChange={setCurrentTab} />}
+        tabBar={(props) => <CustomTabBar {...props} onTabChange={handleTabChange} />}
         screenOptions={{
           headerShown: false,
         }}
@@ -135,7 +157,7 @@ const AppTabs: React.FC = () => {
       </Tab.Navigator>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   footerMask: {

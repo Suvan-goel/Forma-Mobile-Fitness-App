@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
   TouchableOpacity,
   TouchableOpacityProps,
@@ -17,7 +17,7 @@ interface NeonButtonProps extends Omit<TouchableOpacityProps, 'style'> {
   style?: ViewStyle;
 }
 
-export const NeonButton: React.FC<NeonButtonProps> = ({
+export const NeonButton: React.FC<NeonButtonProps> = memo(({
   title,
   variant = 'primary',
   style,
@@ -46,7 +46,7 @@ export const NeonButton: React.FC<NeonButtonProps> = ({
       </Text>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   button: {

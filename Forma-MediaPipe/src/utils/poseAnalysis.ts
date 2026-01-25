@@ -20,7 +20,7 @@ export type ExerciseState = {
 };
 
 /**
- * Calculate angle between three points (in degrees)
+ * Calculate angle between three points (in degrees) - optimized
  * @param a First point (e.g., shoulder)
  * @param b Middle point (e.g., elbow) - the vertex of the angle
  * @param c Third point (e.g., wrist)
@@ -31,9 +31,14 @@ export function calculateAngle(
   b: { x: number; y: number },
   c: { x: number; y: number }
 ): number {
-  const radians =
-    Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-  let angle = Math.abs((radians * 180.0) / Math.PI);
+  // Optimized: pre-compute differences
+  const dx1 = a.x - b.x;
+  const dy1 = a.y - b.y;
+  const dx2 = c.x - b.x;
+  const dy2 = c.y - b.y;
+  
+  const radians = Math.atan2(dy2, dx2) - Math.atan2(dy1, dx1);
+  let angle = Math.abs(radians * 57.29577951308232); // 180/PI pre-calculated
 
   if (angle > 180.0) {
     angle = 360 - angle;
@@ -53,9 +58,41 @@ export function getKeypoint(keypoints: Keypoint[], name: string): Keypoint | nul
 /**
  * Check if keypoint is visible (confidence > threshold)
  * MediaPipe uses visibility scores (0-1), lower threshold for better detection
+ * Optimized inline for performance
  */
 export function isVisible(keypoint: Keypoint | null, threshold = 0.8): boolean {
   return keypoint !== null && keypoint.score > threshold;
+}
+
+/**
+ * Calculate torso height with caching to avoid redundant computation
+ */
+function getTorsoHeight(keypoints: Keypoint[]): number {
+  const now = Date.now();
+  
+  // Return cached value if still valid
+  if (now - geometryCache.lastUpdate < geometryCache.CACHE_DURATION) {
+    return geometryCache.torsoHeight;
+  }
+  
+  const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
+  const leftHip = getKeypoint(keypoints, 'left_hip');
+  const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+  const rightHip = getKeypoint(keypoints, 'right_hip');
+  
+  let torsoHeight = 200; // Default fallback
+  
+  if (isVisible(leftShoulder, 0.2) && isVisible(leftHip, 0.2)) {
+    torsoHeight = Math.abs(leftHip!.y - leftShoulder!.y);
+  } else if (isVisible(rightShoulder, 0.2) && isVisible(rightHip, 0.2)) {
+    torsoHeight = Math.abs(rightHip!.y - rightShoulder!.y);
+  }
+  
+  // Update cache
+  geometryCache.torsoHeight = torsoHeight;
+  geometryCache.lastUpdate = now;
+  
+  return torsoHeight;
 }
 
 // Store smoothed angles for stable detection
@@ -63,7 +100,14 @@ let smoothedLeftElbowAngle: number | null = null;
 let smoothedRightElbowAngle: number | null = null;
 let smoothedPushupAngle: number | null = null;
 let smoothedSquatAngle: number | null = null;
-const ANGLE_SMOOTHING = 0.15; // Reduced from 0.4 - faster response, minimal lag (85% current, 15% previous)
+const ANGLE_SMOOTHING = 0.1; // Reduced from 0.15 - even faster response for minimal lag (90% current, 10% previous)
+
+// Cache for calculated values to avoid redundant computation
+const geometryCache = {
+  torsoHeight: 200,
+  lastUpdate: 0,
+  CACHE_DURATION: 100, // Cache torso height for 100ms
+};
 
 /**
  * Detect if person is doing bicep curls
@@ -90,13 +134,8 @@ export function detectBicepCurl(keypoints: Keypoint[]): {
   let leftAngle: number | null = null;
   let rightAngle: number | null = null;
 
-  // Calculate torso height for relative measurements (scale-independent)
-  let torsoHeight = 200; // Default fallback
-  if (isVisible(leftShoulder, 0.2) && isVisible(leftHip, 0.2)) {
-    torsoHeight = Math.abs(leftHip.y - leftShoulder.y);
-  } else if (isVisible(rightShoulder, 0.2) && isVisible(rightHip, 0.2)) {
-    torsoHeight = Math.abs(rightHip.y - rightShoulder.y);
-  }
+  // Use cached torso height for relative measurements (scale-independent)
+  const torsoHeight = getTorsoHeight(keypoints);
   
   // Use relative thresholds based on torso size
   const elbowTolerance = torsoHeight * 0.3; // 30% of torso height
@@ -314,7 +353,7 @@ export function detectSquat(keypoints: Keypoint[]): {
 
 // Track exercise detection stability
 let exerciseDetectionHistory: string[] = [];
-const DETECTION_HISTORY_SIZE = 3; // Reduced from 5 - faster detection response
+const DETECTION_HISTORY_SIZE = 2; // Reduced from 3 - fastest detection response (requires 2/2 consensus)
 
 /**
  * Detect current exercise based on pose keypoints
@@ -380,7 +419,7 @@ export function detectExercise(keypoints: Keypoint[]): {
     }
   }
 
-  // Require at least 2 out of 3 frames to confirm exercise (faster response)
+  // Require at least 2 out of 2 frames to confirm exercise (immediate response)
   if (maxCount < 2) {
     stableExercise = null;
   }

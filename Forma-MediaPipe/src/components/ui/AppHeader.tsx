@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Search, Bell, Settings } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, FONTS } from '../../constants/theme';
 
-export const AppHeader: React.FC = () => {
+export const AppHeader: React.FC = memo(() => {
   const navigation = useNavigation<any>();
+
+  const handleSettingsPress = useCallback(() => {
+    navigation.navigate('Settings');
+  }, [navigation]);
 
   return (
     <View style={styles.header}>
@@ -29,13 +33,13 @@ export const AppHeader: React.FC = () => {
         <TouchableOpacity style={styles.iconButton}>
           <Bell size={22} color={COLORS.text} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Settings')}>
+        <TouchableOpacity style={styles.iconButton} onPress={handleSettingsPress}>
           <Settings size={22} color={COLORS.text} />
         </TouchableOpacity>
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   header: {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Text, TextProps, StyleSheet } from 'react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 
@@ -8,7 +8,7 @@ interface MonoTextProps extends Omit<TextProps, 'style'> {
   style?: TextProps['style'];
 }
 
-export const MonoText: React.FC<MonoTextProps> = ({
+export const MonoText: React.FC<MonoTextProps> = memo(({
   bold = false,
   color = COLORS.text,
   style,
@@ -32,7 +32,7 @@ export const MonoText: React.FC<MonoTextProps> = ({
       {children}
     </Text>
   );
-};
+});
 
 const styles = StyleSheet.create({
   base: {

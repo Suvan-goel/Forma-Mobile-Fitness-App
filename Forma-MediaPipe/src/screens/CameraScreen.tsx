@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -103,13 +103,14 @@ export const CameraScreen: React.FC = () => {
     }
   }, []);
 
-  // Handle landmark data from MediaPipe
+  // Handle landmark data from MediaPipe with optimized throttling
   const handleLandmark = useCallback((data: any) => {
     if (!isRecording || isPaused) return;
 
-    // Throttle detection to prevent UI blocking (33ms = 30fps)
+    // Reduced throttle to 16ms (~60fps) for ultra-low latency
+    // Most devices can handle 60fps, provides smooth real-time feedback
     const now = Date.now();
-    if (now - lastDetectionTimeRef.current < 33) {
+    if (now - lastDetectionTimeRef.current < 16) {
       return;
     }
     lastDetectionTimeRef.current = now;
@@ -152,7 +153,7 @@ export const CameraScreen: React.FC = () => {
         setCurrentFormScore(formScore);
         setCurrentEffortScore(effortScore);
         
-        // Update workout data
+        // Update workout data with functional update to avoid stale closures
         setWorkoutData(prev => ({
           ...prev,
           totalReps: prev.totalReps + 1,
@@ -167,7 +168,8 @@ export const CameraScreen: React.FC = () => {
     }
   }, [isRecording, isPaused, convertLandmarksToKeypoints]);
 
-  const handleRecordPress = () => {
+  // Memoize button handlers to prevent recreating on every render
+  const handleRecordPress = useCallback(() => {
     if (isRecording) {
       // Stop recording and navigate to SaveWorkout
       setIsRecording(false);
@@ -215,34 +217,52 @@ export const CameraScreen: React.FC = () => {
         duration: 0,
       });
     }
-  };
+  }, [isRecording, workoutData, category, navigation]);
 
-  const handlePausePress = () => {
+  const handlePausePress = useCallback(() => {
     setIsPaused(!isPaused);
-  };
+  }, [isPaused]);
 
-  const handleCameraFlip = () => {
+  const handleCameraFlip = useCallback(() => {
     switchCamera();
-  };
+  }, []);
+
+  const handleInfoPress = useCallback(() => {
+    (navigation as any).push('WorkoutInfo');
+  }, [navigation]);
+
+  // Memoize MediaPipe props to prevent unnecessary re-renders
+  const mediapipeProps = useMemo(() => ({
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT - insets.top - insets.bottom - TAB_BAR_HEIGHT,
+    face: true,
+    leftArm: true,
+    rightArm: true,
+    torso: true,
+    leftLeg: true,
+    rightLeg: true,
+    leftWrist: true,
+    rightWrist: true,
+    leftAnkle: true,
+    rightAnkle: true,
+  }), [insets.top, insets.bottom]);
+
+  // Memoize display values to avoid recalculation
+  const displayValues = useMemo(() => ({
+    reps: repCount > 0 ? repCount : '-',
+    form: repCount > 0 && currentFormScore !== null ? currentFormScore : '-',
+    effort: repCount > 0 && currentEffortScore !== null ? currentEffortScore : '-',
+    exerciseName: currentExercise || 'No Exercise Detected',
+    exerciseColor: currentExercise ? COLORS.primary : COLORS.textSecondary,
+  }), [repCount, currentFormScore, currentEffortScore, currentExercise]);
 
   return (
     <View style={styles.container}>
       {/* MediaPipe Camera */}
       <View style={styles.cameraContainer}>
         <RNMediapipe
-          width={SCREEN_WIDTH}
-          height={SCREEN_HEIGHT - insets.top - insets.bottom - TAB_BAR_HEIGHT}
+          {...mediapipeProps}
           onLandmark={handleLandmark}
-          face={true}
-          leftArm={true}
-          rightArm={true}
-          torso={true}
-          leftLeg={true}
-          rightLeg={true}
-          leftWrist={true}
-          rightWrist={true}
-          leftAnkle={true}
-          rightAnkle={true}
         />
       </View>
 
@@ -257,9 +277,9 @@ export const CameraScreen: React.FC = () => {
             <Text style={styles.detectionLabel}>EXERCISE</Text>
             <Text style={[
               styles.detectionExercise,
-              { color: currentExercise ? COLORS.primary : COLORS.textSecondary }
+              { color: displayValues.exerciseColor }
             ]}>
-              {currentExercise || 'No Exercise Detected'}
+              {displayValues.exerciseName}
             </Text>
           </View>
           <TouchableOpacity style={styles.flipButton} onPress={handleCameraFlip}>
@@ -280,19 +300,19 @@ export const CameraScreen: React.FC = () => {
             <View style={styles.metricItem}>
               <Text style={styles.metricLabel}>Reps</Text>
               <MonoText style={styles.metricValue}>
-                {repCount > 0 ? repCount : '-'}
+                {displayValues.reps}
               </MonoText>
             </View>
             <View style={styles.metricItem}>
               <Text style={styles.metricLabel}>Form</Text>
               <MonoText style={styles.metricValue}>
-                {repCount > 0 && currentFormScore !== null ? currentFormScore : '-'}
+                {displayValues.form}
               </MonoText>
             </View>
             <View style={styles.metricItem}>
               <Text style={styles.metricLabel}>Effort</Text>
               <MonoText style={styles.metricValue}>
-                {repCount > 0 && currentEffortScore !== null ? currentEffortScore : '-'}
+                {displayValues.effort}
               </MonoText>
             </View>
           </View>
@@ -324,9 +344,7 @@ export const CameraScreen: React.FC = () => {
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.infoButton} 
-                onPress={() => {
-                  (navigation as any).push('WorkoutInfo');
-                }}
+                onPress={handleInfoPress}
                 activeOpacity={0.8}
               >
                 <Info size={24} color={COLORS.text} />

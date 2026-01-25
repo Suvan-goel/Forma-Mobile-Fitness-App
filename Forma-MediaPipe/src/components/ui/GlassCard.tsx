@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, ViewProps, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 
@@ -6,7 +6,7 @@ interface GlassCardProps extends ViewProps {
   children?: React.ReactNode;
 }
 
-export const GlassCard: React.FC<GlassCardProps> = ({
+export const GlassCard: React.FC<GlassCardProps> = memo(({
   children,
   style,
   testID,
@@ -47,7 +47,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
       {children}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   card: {
