@@ -10,11 +10,20 @@ echo "16KB Page Size Compatibility Checker"
 echo "======================================"
 echo ""
 
-# Check if llvm-objdump is available
-if ! command -v llvm-objdump &> /dev/null; then
+# Resolve llvm-objdump (allow ANDROID_HOME/NDK when not on PATH)
+LLVM_OBJDUMP=""
+if command -v llvm-objdump &> /dev/null; then
+    LLVM_OBJDUMP="llvm-objdump"
+elif [ -n "$ANDROID_HOME" ] && [ -d "$ANDROID_HOME/ndk" ]; then
+    _found=$(find "$ANDROID_HOME/ndk" -name "llvm-objdump" -type f 2>/dev/null | head -1)
+    if [ -n "$_found" ]; then
+        LLVM_OBJDUMP="$_found"
+    fi
+fi
+if [ -z "$LLVM_OBJDUMP" ] || ! "$LLVM_OBJDUMP" -v &>/dev/null; then
     echo "❌ llvm-objdump not found!"
     echo ""
-    echo "Please install Android NDK and add llvm-objdump to PATH:"
+    echo "Install Android NDK and either add it to PATH or set ANDROID_HOME:"
     echo "  - Android Studio: SDK Manager > SDK Tools > NDK"
     echo "  - Path: \$ANDROID_HOME/ndk/<version>/toolchains/llvm/prebuilt/<platform>/bin"
     echo ""
@@ -55,7 +64,7 @@ echo "📦 Extracting $BUILD_FILE..."
 
 # Check file type and extract
 if [[ "$BUILD_FILE" == *.apk ]]; then
-    unzip -q "$BUILD_FILE" -d "$TEMP_DIR"
+    unzip -o -q "$BUILD_FILE" -d "$TEMP_DIR"
     LIB_DIR="$TEMP_DIR/lib"
 elif [[ "$BUILD_FILE" == *.aab ]]; then
     # For AAB, we need bundletool (more complex)
@@ -102,7 +111,7 @@ for so_file in "$ARM64_DIR"/*.so; do
     LIB_NAME=$(basename "$so_file")
     
     # Check PT_LOAD alignment using llvm-objdump
-    ALIGNMENT=$(llvm-objdump -p "$so_file" | grep -A 2 "LOAD" | grep "align" | head -1 | awk '{print $NF}')
+    ALIGNMENT=$("$LLVM_OBJDUMP" -p "$so_file" | grep -A 2 "LOAD" | grep "align" | head -1 | awk '{print $NF}')
     
     # Convert hex alignment to decimal (e.g., 2**14 = 16384)
     # We're looking for 2**14 (16KB) or 2**16 (64KB) or higher

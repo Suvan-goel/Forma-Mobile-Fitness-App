@@ -39,16 +39,14 @@
       "assets/**/*"
     ],
     "plugins": [
-      "react-native-vision-camera",
-      "react-native-fast-tflite",
       "expo-font",
       [
         "expo-build-properties",
         {
           "android": {
             "minSdkVersion": 26,
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
           }
         }
       ]

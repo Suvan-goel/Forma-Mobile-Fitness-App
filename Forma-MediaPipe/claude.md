@@ -1,19 +1,16 @@
 # Forma Mobile - Project Context & Constraints
 
 ## 1. Core Architecture
-- **Framework:** React Native 0.74.5 (Expo SDK 51 Managed Workflow)
+- **Framework:** React Native 0.79.x (Expo SDK 53 Managed Workflow), upgraded for 16KB / Google Play targetSdk 35
 - **Engine:** Hermes
 - **Platform:** iOS (primary) & Android
 
 ## 2. Critical Dependency Versions ("The Golden Standard")
-**DO NOT DEVIATE** from these specific versions. They are locked to avoid binary conflicts.
-- `react-native-vision-camera`: **^4.0.5**
+After the Expo 53 / 16KB upgrade, the canonical set is in **package.json** and aligned via `npx expo install --fix`. Key pieces:
+- **Expo:** ~53.0.0 — **React:** 19.0.0 — **React Native:** 0.79.x
 - `react-native-worklets-core`: **^1.3.3** (The Margelo version. NOT `react-native-worklets`)
-- `react-native-fast-tflite`: **^1.2.1**
-- `@shopify/react-native-skia`: **^1.2.3**
-- `react-native-reanimated`: **~3.10.1**
-- `react-native-screens`: **~3.31.1** (Strictly locked for Expo 51 compatibility)
-- `@react-navigation/native`: **^6.x.x** (We use v6, NOT v7)
+- `react-native-vision-camera`, `react-native-fast-tflite`, `@shopify/react-native-skia`, `react-native-reanimated`, `react-native-screens`, etc.: use versions that `npx expo install --fix` selects for SDK 53
+- See **docs/EXPO-53-16KB-UPGRADE.md** for the full upgrade and local steps.
 
 ## 3. Worklet Rules (Strict)
 We use `react-native-worklets-core` for VisionCamera frame processors.
