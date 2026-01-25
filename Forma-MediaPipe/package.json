@@ -6,8 +6,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "download:mediapipe-lite": "python3 scripts/download_mediapipe_lite.py || bash scripts/download_mediapipe_lite.sh"
+    "web": "expo start --web"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
