@@ -2,7 +2,13 @@
 
 Forma is an AI-powered fitness app that uses real-time camera-based pose estimation to analyse exercise form as you train. By combining on-device computer vision with biomechanical heuristics, Forma detects key body joints, tracks movement quality, and gives instant feedback on technique, range of motion, and consistency.
 
+# Forma-MediaPipe
 
+This version uses the MediaPipe pose landmark model to detect 33 key points on the human body and output co-ordinates in 3d space. This is the default version for the production app.
+
+# Forma-MoveNet
+
+This version uses the MoveNet Thunder/Lightning models to detect 17 key points on the human body and output co-ordinates in 2d space. This is the backup version for the production app.
 
 # To run the app on Android:
 
