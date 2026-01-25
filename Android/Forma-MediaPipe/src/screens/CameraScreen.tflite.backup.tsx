@@ -21,45 +21,63 @@ type Keypoint = {
   score: number;
 };
 
-// Detect model size dynamically - will be set based on actual model
-// Thunder uses 256x256, Lightning uses 192x192
-let MOVENET_INPUT_SIZE = 256; // default for Thunder, will be overridden if different
+// MediaPipe Pose Full model - 256×256 input, 33 landmarks output
+const MEDIAPIPE_INPUT_SIZE = 256;
+
+// MediaPipe Pose outputs 33 landmarks (vs MoveNet's 17)
+// Format follows BlazePose topology
 const KEYPOINT_NAMES = [
-  'nose',
-  'left_eye',
-  'right_eye',
-  'left_ear',
-  'right_ear',
-  'left_shoulder',
-  'right_shoulder',
-  'left_elbow',
-  'right_elbow',
-  'left_wrist',
-  'right_wrist',
-  'left_hip',
-  'right_hip',
-  'left_knee',
-  'right_knee',
-  'left_ankle',
-  'right_ankle',
+  'nose',              // 0
+  'left_eye_inner',    // 1
+  'left_eye',          // 2
+  'left_eye_outer',    // 3
+  'right_eye_inner',   // 4
+  'right_eye',         // 5
+  'right_eye_outer',   // 6
+  'left_ear',          // 7
+  'right_ear',         // 8
+  'mouth_left',        // 9
+  'mouth_right',       // 10
+  'left_shoulder',     // 11
+  'right_shoulder',    // 12
+  'left_elbow',        // 13
+  'right_elbow',       // 14
+  'left_wrist',        // 15
+  'right_wrist',       // 16
+  'left_pinky',        // 17
+  'right_pinky',       // 18
+  'left_index',        // 19
+  'right_index',       // 20
+  'left_thumb',        // 21
+  'right_thumb',       // 22
+  'left_hip',          // 23
+  'right_hip',         // 24
+  'left_knee',         // 25
+  'right_knee',        // 26
+  'left_ankle',        // 27
+  'right_ankle',       // 28
+  'left_heel',         // 29
+  'right_heel',        // 30
+  'left_foot_index',   // 31
+  'right_foot_index',  // 32
 ];
 
-// Available models - switch between them for testing
+// Mapping from MediaPipe indices to common exercise keypoint names
+// This enables compatibility with poseAnalysis.ts which uses name-based lookup
+const MEDIAPIPE_LANDMARK_COUNT = 33;
+
+// Available models
 const MODELS = {
-  LIGHTNING_QUANTIZED: require('../../assets/models/movenet_lightning_quantized.tflite'),
-  LIGHTNING_FLOAT32: require('../../assets/models/movenet_lightning_float32.tflite'),
-  THUNDER_QUANTIZED: require('../../assets/models/movenet_thunder_quantized.tflite'),
-  THUNDER_FLOAT16: require('../../assets/models/movenet_thunder_float16.tflite'),
+  // MediaPipe Pose Lite - 33 landmarks, 256×256, faster inference, lower accuracy
+  MEDIAPIPE_POSE_LITE: require('../../assets/models/pose_landmark_lite.tflite'),
+  // MediaPipe Pose Full - 33 landmarks, 256×256, high accuracy
+  MEDIAPIPE_POSE_FULL: require('../../assets/models/pose_landmark_full.tflite'),
+  // Legacy MoveNet models (kept for reference)
 };
 
-// MoveNet Thunder Float16: 256×256 FP16 model for highest accuracy
-// Balanced performance (~20-30ms inference) with superior pose detection quality
-// Ideal for fitness applications requiring precise form analysis
-const MOVENET_MODEL = MODELS.THUNDER_FLOAT16;
-// Alternative models for different use cases:
-// LIGHTNING_QUANTIZED: 192×192 uint8 (~10-15ms, lowest latency, good accuracy)
-// LIGHTNING_FLOAT32: 192×192 float32 (~25-30ms, balanced)
-// THUNDER_QUANTIZED: 256×256 uint8 (~15-20ms, high accuracy, fast)
+// Default to Lite model (faster, smaller file size)
+// Switch to MEDIAPIPE_POSE_FULL for higher accuracy
+const POSE_MODEL = MODELS.MEDIAPIPE_POSE_FULL;
 
 type CameraScreenRouteProp = RouteProp<RootTabParamList, 'Record'>;
 type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Camera'>;
@@ -78,6 +96,7 @@ export const CameraScreen: React.FC = () => {
   const [currentFormScore, setCurrentFormScore] = useState<number | null>(null);
   const [currentEffortScore, setCurrentEffortScore] = useState<number | null>(null);
   const [exercisePhase, setExercisePhase] = useState<'up' | 'down' | 'idle'>('idle');
+  const [lastAngle, setLastAngle] = useState<number | null>(null);
   const [workoutStartTime, setWorkoutStartTime] = useState<Date | null>(null);
   const [workoutData, setWorkoutData] = useState({
     totalReps: 0,
@@ -87,8 +106,6 @@ export const CameraScreen: React.FC = () => {
   });
   const [poseKeypoints, setPoseKeypoints] = useState<Keypoint[] | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
-  
-  // Use refs to minimize re-renders and track frame timing
   const prevKeypointsRef = useRef<Keypoint[] | null>(null);
 
   const isFocused = useIsFocused();
@@ -100,41 +117,30 @@ export const CameraScreen: React.FC = () => {
   const modelInputTypeSV = useSharedValue(0); // 0 unknown, 1 uint8, 2 int32, 3 float32
 
   const category = route.params?.category ?? 'Weightlifting';
-  const modelState = useTensorflowModel(MOVENET_MODEL);
+  const modelState = useTensorflowModel(POSE_MODEL);
   const model = modelState.state === 'loaded' ? modelState.model : undefined;
   const { resize } = useResizePlugin();
-  const outputQuantParamsSV = useSharedValue<{zeroPoint: number; scale: number} | null>(null);
 
-  // Detect actual model contract and adapt
+  // MediaPipe Pose Full uses float32 input normalized to [0, 1]
+  // We default to float32 if type detection fails
   useEffect(() => {
     if (!model) return;
     
     const input = model.inputs?.[0] as any;
-    const shape = input?.shape ? JSON.stringify(input.shape) : 'unknown';
     const dtypeRaw = input?.dataType ?? input?.dtype ?? input?.type ?? 'unknown';
     const dtype = typeof dtypeRaw === 'string' ? dtypeRaw : String(dtypeRaw);
 
-    // Extract model size from shape [1, H, W, 3]
-    const shapeMatch = shape.match(/\[1,(\d+),(\d+),3\]/);
-    if (shapeMatch) {
-      const h = parseInt(shapeMatch[1], 10);
-      const w = parseInt(shapeMatch[2], 10);
-      if (h === w && (h === 192 || h === 256)) {
-        MOVENET_INPUT_SIZE = h;
-      }
-    }
-
-    // Detect dtype
+    // MediaPipe Pose Full expects float32 input
     const dtypeLower = dtype.toLowerCase();
-    
-    if (dtypeLower.includes('uint8')) {
-      modelInputTypeSV.value = 1; // uint8
-      outputQuantParamsSV.value = null;
-    } else if (dtypeLower.includes('float')) {
+    if (dtypeLower.includes('float')) {
       modelInputTypeSV.value = 3; // float32
-      outputQuantParamsSV.value = null;
+    } else if (dtypeLower.includes('uint8')) {
+      modelInputTypeSV.value = 1; // uint8
+    } else {
+      // Default to float32 for MediaPipe
+      modelInputTypeSV.value = 3;
     }
-  }, [model, modelInputTypeSV, outputQuantParamsSV]);
+  }, [model, modelInputTypeSV]);
 
   const syncCameraPermission = useCallback(async () => {
     const status = await Camera.getCameraPermissionStatus();
@@ -195,108 +201,209 @@ export const CameraScreen: React.FC = () => {
     const height = previewSize.height;
     if (width === 0 || height === 0) return;
 
-    // Calculate aspect ratio correction for coordinate mapping
-    // After 90deg/270deg rotation, frame dimensions are swapped
-    // Model processes square 192x192 input with aspect ratio maintained (letterboxed/pillarboxed)
+    // MediaPipe Pose outputs 33 landmarks
+    // Output format depends on model variant:
+    // - Some output [x, y, z, visibility] × 33 = 132 values
+    // - Some output [x, y, z] × 33 = 99 values  
+    // - Some output [x, y, z, visibility, presence] × 33 = 165 values
+    // We handle multiple formats for compatibility
     
-    const rotatedWidth = frameHeight;
-    const rotatedHeight = frameWidth;
-    const frameAspectRatio = rotatedWidth / rotatedHeight;
+    const outputLen = flatOutput.length;
+    let stride = 4; // Default: [x, y, z, visibility]
     
-    // Model input is square (1.0 aspect ratio)
-    let contentScaleX = 1.0;
-    let contentScaleY = 1.0;
-    let contentOffsetX = 0.0;
-    let contentOffsetY = 0.0;
-    
-    if (frameAspectRatio > 1.0) {
-      contentScaleY = frameAspectRatio;
-      contentOffsetY = (contentScaleY - 1.0) / 2.0;
-    } else if (frameAspectRatio < 1.0) {
-      contentScaleX = 1.0 / frameAspectRatio;
-      contentOffsetX = (contentScaleX - 1.0) / 2.0;
+    // Determine stride based on output length
+    if (outputLen === 99) {
+      stride = 3; // [x, y, z] format
+    } else if (outputLen === 132) {
+      stride = 4; // [x, y, z, visibility] format
+    } else if (outputLen === 165) {
+      stride = 5; // [x, y, z, visibility, presence] format
+    } else if (outputLen === 195) {
+      stride = 5; // Extra fields, use first 5 per landmark
+    } else if (outputLen === 198) {
+      stride = 6; // Even more fields
+    } else {
+      // Try to infer stride
+      stride = Math.floor(outputLen / MEDIAPIPE_LANDMARK_COUNT);
     }
 
-    // Extract and transform keypoints
-    const keypoints: Keypoint[] = new Array(KEYPOINT_NAMES.length);
-    let totalScore = 0;
+    // ASPECT RATIO CORRECTION
+    // The camera frame is rotated 90° and resized to 256×256 (square) for the model
+    // But the preview is rectangular (width × height)
+    // We need to map from model's square coordinates to preview's aspect ratio
     
-    for (let i = 0; i < KEYPOINT_NAMES.length; i++) {
-      const modelY = flatOutput[i * 3];
-      const modelX = flatOutput[i * 3 + 1];
-      const score = flatOutput[i * 3 + 2];
-      totalScore += score;
+    // After rotation, the original frame dimensions are swapped
+    // If frame is 1920×1080 portrait, after 90° rotation it becomes 1080×1920 landscape
+    const rotatedFrameWidth = frameHeight;  // Width after rotation
+    const rotatedFrameHeight = frameWidth;  // Height after rotation
+    
+    // Calculate how the frame was scaled to fit into 256×256
+    // The resize plugin uses "cover" scaling (fills the square, may crop)
+    const frameAspect = rotatedFrameWidth / rotatedFrameHeight;
+    const modelAspect = 1.0; // 256×256 is square
+    
+    let scaleX = 1.0;
+    let scaleY = 1.0;
+    let offsetX = 0.0;
+    let offsetY = 0.0;
+    
+    if (frameAspect > modelAspect) {
+      // Frame is wider than square - horizontal crop
+      // Height fills the model, width is cropped
+      scaleY = 1.0;
+      scaleX = modelAspect / frameAspect;
+      offsetX = (1.0 - scaleX) / 2.0;
+    } else {
+      // Frame is taller than square - vertical crop
+      // Width fills the model, height is cropped
+      scaleX = 1.0;
+      scaleY = frameAspect / modelAspect;
+      offsetY = (1.0 - scaleY) / 2.0;
+    }
+
+    // Extract keypoints with coordinate mapping and STRICT validation using model confidence
+    const keypoints: Keypoint[] = new Array(MEDIAPIPE_LANDMARK_COUNT);
+    
+    for (let i = 0; i < MEDIAPIPE_LANDMARK_COUNT; i++) {
+      const baseIdx = i * stride;
       
-      const correctedX = (modelX * contentScaleX) - contentOffsetX;
-      const correctedY = (modelY * contentScaleY) - contentOffsetY;
+      // MediaPipe Pose outputs coordinates in PIXEL SPACE (0-256) relative to input image
+      let modelX = flatOutput[baseIdx] / MEDIAPIPE_INPUT_SIZE;       // Convert 0-256 → 0-1
+      let modelY = flatOutput[baseIdx + 1] / MEDIAPIPE_INPUT_SIZE;   // Convert 0-256 → 0-1
+      // Z coordinate (depth) available at baseIdx + 2
+      
+      // Apply inverse scaling to account for the crop
+      // Map from cropped square coordinates back to original frame coordinates
+      modelX = (modelX - offsetX) / scaleX;
+      modelY = (modelY - offsetY) / scaleY;
+      
+      // Get visibility/confidence score from model if available (stride >= 4)
+      let visibility = 1.0;
+      if (stride >= 4) {
+        visibility = flatOutput[baseIdx + 3]; // Model's confidence score
+      }
+      
+      // STRICT validation: high confidence required to prevent false positives
+      const isValidX = modelX >= -0.1 && modelX <= 1.1; // Allow slight overflow due to crop correction
+      const isValidY = modelY >= -0.1 && modelY <= 1.1;
+      const isHighConfidence = visibility >= 0.65; // Very high threshold for Lite model to prevent false positives
+      
+      const confidence = (isValidX && isValidY && isHighConfidence) ? visibility : 0.0;
+      
+      // Handle front camera mirroring
+      const finalX = isFrontCamera ? (1 - modelX) : modelX;
+      
+      // Map to preview coordinates
+      // Preview aspect ratio matches the rotated frame aspect ratio
+      const previewAspect = width / height;
+      const targetAspect = rotatedFrameWidth / rotatedFrameHeight;
+      
+      let previewX: number;
+      let previewY: number;
+      
+      if (Math.abs(previewAspect - targetAspect) < 0.01) {
+        // Aspect ratios match - direct mapping
+        previewX = finalX * width;
+        previewY = modelY * height;
+      } else if (previewAspect > targetAspect) {
+        // Preview is wider - pillarbox (black bars on sides)
+        const usedWidth = height * targetAspect;
+        const xOffset = (width - usedWidth) / 2;
+        previewX = finalX * usedWidth + xOffset;
+        previewY = modelY * height;
+      } else {
+        // Preview is taller - letterbox (black bars on top/bottom)
+        const usedHeight = width / targetAspect;
+        const yOffset = (height - usedHeight) / 2;
+        previewX = finalX * width;
+        previewY = modelY * usedHeight + yOffset;
+      }
+      
+      // Clamp coordinates to screen bounds
+      const clampedX = Math.max(0, Math.min(width, previewX));
+      const clampedY = Math.max(0, Math.min(height, previewY));
       
       keypoints[i] = {
         name: KEYPOINT_NAMES[i],
-        x: correctedX * width,
-        y: correctedY * height,
-        score,
+        x: clampedX,
+        y: clampedY,
+        score: confidence,
       };
     }
 
-    // STABILITY: Higher confidence threshold reduces flickering
-    // Thunder Quantized has good accuracy - can afford higher thresholds
-    const confidenceThreshold = isFrontCamera ? 0.18 : 0.22;
-    if (totalScore / KEYPOINT_NAMES.length < confidenceThreshold) {
-      prevKeypointsRef.current = null;
-      // LATENCY: Update state immediately (no delays)
+    // OPTIMIZED FAST PERSON DETECTION
+    // Simplified validation for better performance while maintaining accuracy
+    
+    const nose = keypoints[0];
+    const leftShoulder = keypoints[11];
+    const rightShoulder = keypoints[12];
+    const leftElbow = keypoints[13];
+    const rightElbow = keypoints[14];
+    const leftHip = keypoints[23];
+    const rightHip = keypoints[24];
+    const leftKnee = keypoints[25];
+    const rightKnee = keypoints[26];
+    
+    // Fast confidence check - single threshold
+    const MIN_CONF = 0.6;
+    
+    // Quick region checks (no complex logic)
+    const hasHead = nose.score >= MIN_CONF;
+    const hasShoulders = (leftShoulder.score >= MIN_CONF && rightShoulder.score >= MIN_CONF);
+    const hasArms = (leftElbow.score >= MIN_CONF || rightElbow.score >= MIN_CONF);
+    const hasHips = (leftHip.score >= MIN_CONF && rightHip.score >= MIN_CONF);
+    const hasLegs = (leftKnee.score >= MIN_CONF || rightKnee.score >= MIN_CONF);
+    
+    // Fast rejection: need shoulders + hips (core torso)
+    if (!hasShoulders || !hasHips) {
       setPoseKeypoints(null);
+      prevKeypointsRef.current = null;
+      return;
+    }
+    
+    // Fast anatomical check: shoulders above hips
+    const shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+    const hipY = (leftHip.y + rightHip.y) / 2;
+    
+    if (shoulderY >= hipY || (hipY - shoulderY) < 35) {
+      setPoseKeypoints(null);
+      prevKeypointsRef.current = null;
       return;
     }
 
-    // STABILITY: Enhanced smoothing for rock-solid skeleton
-    // Aggressive smoothing reduces jitter dramatically
+    // ULTRA-FAST SMOOTHING - Minimum smoothing for maximum responsiveness
+    const DEADZONE = 1;        // Extremely small deadzone
+    const SMOOTHING = 0.05;    // Almost no smoothing (95% current, 5% previous)
+    
     const prev = prevKeypointsRef.current;
+    
     if (prev && prev.length === keypoints.length) {
       for (let i = 0; i < keypoints.length; i++) {
-        const current = keypoints[i];
-        const previous = prev[i];
-        const dx = current.x - previous.x;
-        const dy = current.y - previous.y;
-        const distSq = dx * dx + dy * dy;
+        const dx = keypoints[i].x - prev[i].x;
+        const dy = keypoints[i].y - prev[i].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
         
-        // STABILITY: Confidence-based smoothing - more aggressive
-        const confidence = current.score;
+        if (dist < DEADZONE) {
+          // Below deadzone - keep previous position (eliminates jitter)
+          keypoints[i].x = prev[i].x;
+          keypoints[i].y = prev[i].y;
+        } else if (dist > 150) {
+          // Very large jump - likely fast movement or tracking switch
+          // Use almost no smoothing to stay responsive
+          keypoints[i].x = prev[i].x * 0.1 + keypoints[i].x * 0.9;
+          keypoints[i].y = prev[i].y * 0.1 + keypoints[i].y * 0.9;
+        } else {
+          // Normal movement - apply ultra-minimal smoothing
+          keypoints[i].x = prev[i].x * SMOOTHING + keypoints[i].x * (1 - SMOOTHING);
+          keypoints[i].y = prev[i].y * SMOOTHING + keypoints[i].y * (1 - SMOOTHING);
+        }
         
-        if (distSq < 9) {
-          // Small movements (< 3px) - heavy smoothing to eliminate jitter
-          // High confidence (>0.7): moderate smoothing
-          // Medium confidence (0.4-0.7): heavy smoothing
-          // Low confidence (<0.4): very heavy smoothing
-          let smoothFactor;
-          if (confidence > 0.7) {
-            smoothFactor = 0.30; // 70% current - more stable than before
-          } else if (confidence > 0.4) {
-            smoothFactor = 0.50; // 50% current - balanced
-          } else {
-            smoothFactor = 0.65; // 35% current - very stable
-          }
-          
-          current.x = previous.x * smoothFactor + current.x * (1 - smoothFactor);
-          current.y = previous.y * smoothFactor + current.y * (1 - smoothFactor);
-        }
-        else if (distSq < 36) {
-          // Medium movements (3-6px) - light smoothing for stability
-          current.x = previous.x * 0.25 + current.x * 0.75;
-          current.y = previous.y * 0.25 + current.y * 0.75;
-        }
-        else if (distSq < 100) {
-          // Larger movements (6-10px) - minimal smoothing
-          current.x = previous.x * 0.10 + current.x * 0.90;
-          current.y = previous.y * 0.10 + current.y * 0.90;
-        }
-        // Very large movements (>10px) - zero smoothing for instant tracking
+        // Almost no score smoothing for instant confidence updates
+        keypoints[i].score = prev[i].score * 0.05 + keypoints[i].score * 0.95;
       }
     }
 
     prevKeypointsRef.current = keypoints;
-    
-    // LATENCY: Update state IMMEDIATELY - no throttle, no rAF
-    // Direct state update for fastest response
     setPoseKeypoints(keypoints);
   }, [previewSize.width, previewSize.height]);
 
@@ -313,94 +420,109 @@ export const CameraScreen: React.FC = () => {
       const timestamp = frame.timestamp;
       const timestampMs =
         timestamp > 1e12 ? timestamp / 1e6 : timestamp > 1e9 ? timestamp / 1e3 : timestamp * 1000;
-      // Thunder FP16: Target ~24 FPS inference (model ~20-30ms, leaves headroom)
-      // Slightly lower rate than Lightning to prevent frame backup
-      if (timestampMs - lastInferenceTime.value < 42) return; // ~24 FPS
+      if (timestampMs - lastInferenceTime.value < 33) return; // ~30 FPS - Maximum responsiveness
       lastInferenceTime.value = timestampMs;
 
-      if (model == null) return;
+      if (model == null) {
+        return;
+      }
 
-      // Use resize plugin to convert YUV to RGB, resize, AND rotate in one optimized step
-      // This properly handles the YUV->RGB conversion that Android cameras require
-      // AND rotates 90° CW for portrait mode (much faster than manual rotation)
-      const inputType = modelInputTypeSV.value; // 1=uint8, 3=float32
-      
-      // Wait for model metadata to be detected before processing frames
-      if (inputType === 0) return;
+      const inputType = modelInputTypeSV.value;
+      const isFrontCamera = isFrontCameraSV.value;
+
+      // Front cameras need different rotation than back cameras
+      // Back camera: 90deg (landscape left)
+      // Front camera: 270deg (landscape right, because front camera is mirrored)
+      const rotation = isFrontCamera ? '270deg' : '90deg';
+
+      // MediaPipe Pose Full expects 256×256 float32 RGB input normalized to [0,1]
+      // Use resize plugin to convert YUV→RGB, resize, AND rotate in one optimized step
       
       let inputTensor: Uint8Array | Float32Array;
-      
-      // Front camera needs 270deg rotation (or -90deg), back camera needs 90deg
-      // This ensures the model receives properly oriented frames for accurate detection
-      const rotation = isFrontCameraSV.value ? '270deg' : '90deg';
       
       try {
         if (inputType === 1) {
           // Quantized model expects uint8 RGB
           inputTensor = resize(frame, {
             scale: {
-              width: MOVENET_INPUT_SIZE,
-              height: MOVENET_INPUT_SIZE,
+              width: MEDIAPIPE_INPUT_SIZE,
+              height: MEDIAPIPE_INPUT_SIZE,
             },
             pixelFormat: 'rgb',
             dataType: 'uint8',
-            rotation, // Apply camera-specific rotation
+            rotation: rotation,
           });
         } else {
-          // Float model expects float32 RGB normalized to [0,1]
+          // MediaPipe float model expects float32 RGB normalized to [0,1]
+          // Default to float32 if inputType is unknown (0) or explicitly float32 (3)
           inputTensor = resize(frame, {
             scale: {
-              width: MOVENET_INPUT_SIZE,
-              height: MOVENET_INPUT_SIZE,
+              width: MEDIAPIPE_INPUT_SIZE,
+              height: MEDIAPIPE_INPUT_SIZE,
             },
             pixelFormat: 'rgb',
             dataType: 'float32',
-            rotation, // Apply camera-specific rotation
+            rotation: rotation,
           });
         }
       } catch (e) {
-        // Silently fail and skip this frame
         return;
       }
 
-      // Run inference with typed array input
       let rawOut: any;
       try {
         rawOut = model.runSync([inputTensor])[0];
       } catch (e) {
-        // Model inference failed - skip this frame
-        console.warn('Model inference error:', e);
         return;
       }
       
-      // Fast extraction - Lightning Quantized returns data directly
-      const expectedOutLen = 51; // 17 keypoints * 3 values
+      let outputArray: number[] | Float32Array;
+      // MediaPipe models can output in different formats:
+      // 1. Float32Array: Already flat typed array
+      // 2. Regular array: [x1, y1, z1, vis1, ...]
+      // 3. Nested array: [[x1, y1, z1, vis1], [x2, y2, z2, vis2], ...]
       
-      // Most common case: array with correct length
-      if (rawOut && rawOut.length === expectedOutLen) {
-        // Direct pass to JS - avoid intermediate array creation
-        const flat: number[] = new Array(expectedOutLen);
-        for (let i = 0; i < expectedOutLen; i++) {
-          flat[i] = rawOut[i];
+      // Handle typed arrays (Float32Array, Uint8Array, etc.)
+      const flat: number[] = [];
+      
+      if (rawOut instanceof Float32Array || rawOut instanceof Uint8Array || rawOut instanceof Int8Array) {
+        // Typed array - directly convert to regular array
+        for (let i = 0; i < rawOut.length; i++) {
+          flat.push(rawOut[i]);
         }
-        sendPoseOutputToJS(flat, isFrontCameraSV.value, frame.width, frame.height);
-        return;
-      }
-      
-      // Handle nested array (rare case)
-      if (Array.isArray(rawOut)) {
-        const flat: number[] = [];
+      } else {
+        // Regular array or nested structure - flatten recursively
         const flatten = (arr: any) => {
-          for (let i = 0; i < arr.length; i++) {
-            if (Array.isArray(arr[i])) flatten(arr[i]);
-            else if (typeof arr[i] === 'number') flat.push(arr[i]);
+          if (Array.isArray(arr)) {
+            for (const item of arr) {
+              flatten(item);
+            }
+          } else if (typeof arr === 'number') {
+            flat.push(arr);
           }
         };
         flatten(rawOut);
-        if (flat.length === expectedOutLen) {
-          sendPoseOutputToJS(flat, isFrontCameraSV.value, frame.width, frame.height);
-        }
       }
+      
+      const outLen = flat.length;
+      
+      // MediaPipe outputs vary: 99 (x,y,z), 132 (x,y,z,vis), 165 (x,y,z,vis,pres), 195 (extra fields)
+      const minExpectedLen = MEDIAPIPE_LANDMARK_COUNT * 3; // 99
+      const maxExpectedLen = MEDIAPIPE_LANDMARK_COUNT * 6; // 198 (allow extra fields)
+      
+      if (outLen < minExpectedLen || outLen > maxExpectedLen) {
+        return;
+      }
+      
+      outputArray = new Float32Array(flat);
+
+      // Extract flat output array and send to JS
+      const finalFlat: number[] = [];
+      for (let i = 0; i < outLen; i += 1) {
+        finalFlat.push(outputArray[i]);
+      }
+
+      sendPoseOutputToJS(finalFlat, isFrontCameraSV.value, frame.width, frame.height);
     },
     [model, resize, sendPoseOutputToJS, isFrontCameraSV]
   );
@@ -442,16 +564,16 @@ export const CameraScreen: React.FC = () => {
     currentExerciseRef.current = currentExercise;
   }, [currentExercise]);
 
-  // Exercise detection - throttled to 100ms to not block skeleton rendering
+  // Ultra-fast exercise detection - runs at most every 33ms for real-time tracking
   useEffect(() => {
     if (!isRecording || isPaused || !poseKeypoints || poseKeypoints.length === 0) {
       return;
     }
 
-    // Throttle exercise detection to 10fps (100ms) - it doesn't need to be as fast as skeleton
+    // Minimal throttle for maximum responsiveness (33ms = 30fps)
     const now = Date.now();
-    if (now - lastDetectionTimeRef.current < 100) {
-      return;
+    if (now - lastDetectionTimeRef.current < 33) {
+      return; // Skip this frame
     }
     lastDetectionTimeRef.current = now;
 
@@ -461,7 +583,7 @@ export const CameraScreen: React.FC = () => {
     if (detection.exercise && detection.angle !== null) {
       const exerciseName = detection.exercise;
       
-      // Update exercise name if changed
+      // Update exercise name if changed (batch with phase reset)
       if (currentExerciseRef.current !== exerciseName) {
         setCurrentExercise(exerciseName);
         setExercisePhase('idle');
@@ -481,7 +603,7 @@ export const CameraScreen: React.FC = () => {
         setExercisePhase(repUpdate.phase);
       }
 
-      // Rep completed - batch all updates
+      // Rep completed - batch all updates into single setWorkoutData call
       if (repUpdate.repCount > repCountRef.current) {
         const formScore = repUpdate.formScore;
         const effortScore = Math.min(95, 75 + Math.floor(detection.confidence * 20));
@@ -490,6 +612,7 @@ export const CameraScreen: React.FC = () => {
         setCurrentFormScore(formScore);
         setCurrentEffortScore(effortScore);
         
+        // Single batched update for workout data
         setWorkoutData(prev => ({
           ...prev,
           totalReps: prev.totalReps + 1,
@@ -498,6 +621,7 @@ export const CameraScreen: React.FC = () => {
         }));
       }
     } else if (currentExerciseRef.current !== null) {
+      // No exercise detected - reset
       setCurrentExercise(null);
       setExercisePhase('idle');
     }
@@ -594,29 +718,6 @@ export const CameraScreen: React.FC = () => {
     );
   }
 
-  // Show loading indicator while model is loading
-  if (modelState.state === 'loading') {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.permissionText}>Loading pose detection model...</Text>
-      </View>
-    );
-  }
-
-  // Show error if model failed to load
-  if (modelState.state === 'error') {
-    return (
-      <View style={styles.container}>
-        <View style={styles.permissionContainer}>
-          <Text style={styles.permissionTitle}>Model Loading Failed</Text>
-          <Text style={styles.permissionText}>
-            Failed to load pose detection model. Please restart the app.
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <View
@@ -638,27 +739,17 @@ export const CameraScreen: React.FC = () => {
             photo={false}
             video={false}
             androidPreviewViewType="texture-view"
-            // Lower resolution for faster processing
-            // @ts-ignore
-            videoStabilizationMode="off"
-            // @ts-ignore - exposure optimization
-            exposure={0}
           />
         ) : null}
         <PoseOverlay
           keypoints={poseKeypoints}
           width={previewSize.width}
           height={previewSize.height}
-          mirror={facing === 'front'}
-          minScore={facing === 'front' ? 0.12 : 0.18}
+          mirror={false}
+          minScore={0.6}
         />
       </View>
       <View style={styles.overlay} pointerEvents="box-none">
-        {modelState.state !== 'loaded' && (
-          <View style={[styles.modelStatus, { top: insets.top + SPACING.lg }]} pointerEvents="none">
-            <Text style={styles.modelStatusText}>Pose model loading...</Text>
-          </View>
-        )}
         {/* Top Bar */}
         <View style={[styles.topBar, { paddingTop: insets.top + SPACING.xs }]}>
           <View style={styles.weightsIconContainer}>
@@ -782,17 +873,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
-  },
-  modelStatus: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  modelStatusText: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
   },
   loadingContainer: {
     flex: 1,
@@ -981,3 +1061,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30', // Red when recording
   },
 });
+
