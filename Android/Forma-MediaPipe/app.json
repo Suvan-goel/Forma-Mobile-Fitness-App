@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.forma.dev.allahham.12345.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Forma needs camera access to track your workout form and provide real-time feedback."
+        "NSCameraUsageDescription": "This app requires camera access to process video frames for MediaPipe pose detection."
       }
     },
     "android": {
