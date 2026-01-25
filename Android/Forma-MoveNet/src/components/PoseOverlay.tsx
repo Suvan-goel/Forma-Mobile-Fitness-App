@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { Canvas, Circle, Line, vec } from '@shopify/react-native-skia';
 
@@ -48,6 +48,31 @@ const SKELETON_CONNECTIONS: Array<[number, number]> = [
   [6, 12],  // right_shoulder - right_hip
 ];
 
+// Interpolate between two keypoint arrays for smooth animation
+function interpolateKeypoints(
+  from: PoseKeypoint[] | null,
+  to: PoseKeypoint[] | null,
+  progress: number
+): PoseKeypoint[] | null {
+  if (!to) return null;
+  if (!from || from.length !== to.length) return to;
+  
+  // Smooth easing function for natural movement
+  const eased = progress < 0.5 
+    ? 2 * progress * progress 
+    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+  
+  return to.map((toPoint, i) => {
+    const fromPoint = from[i];
+    return {
+      name: toPoint.name,
+      x: fromPoint.x + (toPoint.x - fromPoint.x) * eased,
+      y: fromPoint.y + (toPoint.y - fromPoint.y) * eased,
+      score: toPoint.score,
+    };
+  });
+}
+
 // Memoized component to prevent unnecessary re-renders
 export const PoseOverlay: React.FC<PoseOverlayProps> = React.memo(({
   keypoints,
@@ -56,38 +81,108 @@ export const PoseOverlay: React.FC<PoseOverlayProps> = React.memo(({
   mirror = false,
   minScore = 0.2,
 }) => {
-  // Early return for invalid state
-  if (!keypoints || width <= 0 || height <= 0) return null;
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // This includes useState, useRef, useEffect, useMemo, useCallback, etc.
+  
+  const [interpolatedKeypoints, setInterpolatedKeypoints] = React.useState<PoseKeypoint[] | null>(null);
+  const prevKeypointsRef = useRef<PoseKeypoint[] | null>(null);
+  const targetKeypointsRef = useRef<PoseKeypoint[] | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const currentInterpolatedRef = useRef<PoseKeypoint[] | null>(null);
 
-  // Pre-compute mapped coordinates once
-  const mappedKeypoints = useMemo(() => {
-    if (!keypoints) return null;
-    return keypoints.map(kp => ({
+  // When new keypoints arrive, set up interpolation
+  useEffect(() => {
+    // Check for invalid dimensions inside the effect
+    if (width <= 0 || height <= 0) {
+      setInterpolatedKeypoints(null);
+      return;
+    }
+    
+    if (!keypoints) {
+      setInterpolatedKeypoints(null);
+      prevKeypointsRef.current = null;
+      targetKeypointsRef.current = null;
+      currentInterpolatedRef.current = null;
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      return;
+    }
+
+    // Map keypoints with mirroring
+    const mapped = keypoints.map(kp => ({
+      name: kp.name,
       x: mirror ? width - kp.x : kp.x,
       y: kp.y,
       score: kp.score,
     }));
-  }, [keypoints, width, mirror]);
 
-  if (!mappedKeypoints) return null;
+    // Start interpolation animation
+    prevKeypointsRef.current = currentInterpolatedRef.current || mapped;
+    targetKeypointsRef.current = mapped;
+    startTimeRef.current = performance.now();
 
-  // Pre-filter visible lines and points
+    const animate = () => {
+      const now = performance.now();
+      const elapsed = now - startTimeRef.current;
+      // Interpolate over 16ms (one frame at 60fps) for buttery smooth animation
+      const progress = Math.min(elapsed / 16, 1);
+
+      const interpolated = interpolateKeypoints(
+        prevKeypointsRef.current,
+        targetKeypointsRef.current,
+        progress
+      );
+
+      currentInterpolatedRef.current = interpolated;
+      setInterpolatedKeypoints(interpolated);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        animationFrameRef.current = null;
+        prevKeypointsRef.current = targetKeypointsRef.current;
+      }
+    };
+
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [keypoints, width, height, mirror]);
+
+  // Pre-compute visible lines and points (useMemo hooks must come before early returns)
   const visibleLines = useMemo(() => {
+    if (!interpolatedKeypoints) return [];
     const lines: Array<{ p1: { x: number; y: number }; p2: { x: number; y: number } }> = [];
     for (let i = 0; i < SKELETON_CONNECTIONS.length; i++) {
       const [startIdx, endIdx] = SKELETON_CONNECTIONS[i];
-      const start = mappedKeypoints[startIdx];
-      const end = mappedKeypoints[endIdx];
+      const start = interpolatedKeypoints[startIdx];
+      const end = interpolatedKeypoints[endIdx];
       if (start.score >= minScore && end.score >= minScore) {
         lines.push({ p1: start, p2: end });
       }
     }
     return lines;
-  }, [mappedKeypoints, minScore]);
+  }, [interpolatedKeypoints, minScore]);
 
   const visiblePoints = useMemo(() => {
-    return mappedKeypoints.filter(kp => kp.score >= minScore);
-  }, [mappedKeypoints, minScore]);
+    if (!interpolatedKeypoints) return [];
+    return interpolatedKeypoints.filter(kp => kp.score >= minScore);
+  }, [interpolatedKeypoints, minScore]);
+
+  // NOW it's safe to do early returns - all hooks have been called
+  if (width <= 0 || height <= 0) return null;
+  if (!interpolatedKeypoints) return null;
 
   return (
     <Canvas style={[styles.overlay, { width, height }]}>

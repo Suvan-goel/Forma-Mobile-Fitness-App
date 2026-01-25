@@ -51,10 +51,10 @@ const MODELS = {
   THUNDER_FLOAT16: require('../../assets/models/movenet_thunder_float16.tflite'),
 };
 
-// MoveNet Thunder Float16: 256×256 float16 model (highest accuracy)
-const MOVENET_MODEL = MODELS.THUNDER_QUANTIZED;
+// MoveNet Lightning Quantized: 192×192 uint8 model (fastest, lowest latency)
+// Optimized for real-time performance with ~10-15ms inference time
+const MOVENET_MODEL = MODELS.LIGHTNING_FLOAT32;
 // Alternative models:
-// const MOVENET_MODEL = MODELS.LIGHTNING_QUANTIZED; // 192×192 uint8 (fastest, lower accuracy)
 // const MOVENET_MODEL = MODELS.LIGHTNING_FLOAT32; // 192×192 float32 (balanced accuracy/speed)
 // const MOVENET_MODEL = MODELS.THUNDER_QUANTIZED; // 256×256 uint8 (high accuracy, moderate speed)
 
@@ -197,7 +197,7 @@ export const CameraScreen: React.FC = () => {
 
     // Calculate aspect ratio correction for coordinate mapping
     // After 90deg/270deg rotation, frame dimensions are swapped
-    // Model processes square 256x256 input with aspect ratio maintained (letterboxed/pillarboxed)
+    // Model processes square 192x192 input with aspect ratio maintained (letterboxed/pillarboxed)
     
     // The frame after rotation has dimensions frameHeight x frameWidth (because rotation swaps them)
     const rotatedWidth = frameHeight;
@@ -224,7 +224,7 @@ export const CameraScreen: React.FC = () => {
     }
     // If frameAspectRatio == 1.0, no correction needed
 
-    // Extract keypoints with intelligent smoothing for accuracy
+    // Extract keypoints with minimal latency processing
     const keypoints: Keypoint[] = new Array(KEYPOINT_NAMES.length);
     let totalScore = 0;
     
@@ -248,8 +248,8 @@ export const CameraScreen: React.FC = () => {
       };
     }
 
-    // Confidence threshold - Thunder Quantized provides excellent accuracy
-    const confidenceThreshold = isFrontCamera ? 0.15 : 0.22;
+    // Confidence threshold - Lightning Quantized is still very accurate
+    const confidenceThreshold = isFrontCamera ? 0.12 : 0.18;
     if (totalScore / KEYPOINT_NAMES.length < confidenceThreshold) {
       keypointsRef.current = null;
       prevKeypointsRef.current = null;
@@ -263,43 +263,37 @@ export const CameraScreen: React.FC = () => {
       return;
     }
 
-    // Apply intelligent smoothing: light for high confidence, more for low confidence
-    // This reduces jitter while maintaining responsiveness
+    // Minimal smoothing - prioritize responsiveness over jitter reduction
+    // Only smooth to remove sensor noise, not to delay movement
     const prev = prevKeypointsRef.current;
     if (prev && prev.length === keypoints.length) {
       for (let i = 0; i < keypoints.length; i++) {
         const current = keypoints[i];
         const previous = prev[i];
         
-        // Confidence-adaptive smoothing: 
-        // High confidence (>0.6): 3% smoothing (97% current)
-        // Medium confidence (0.3-0.6): 5% smoothing (95% current)
-        // Low confidence (<0.3): 8% smoothing (92% current)
-        let smoothingFactor = 0.03;
-        if (current.score < 0.3) {
-          smoothingFactor = 0.08;
-        } else if (current.score < 0.6) {
-          smoothingFactor = 0.05;
-        }
+        // Very light smoothing for instant response
+        // High confidence: virtually no smoothing (98% current)
+        // Low confidence: minimal smoothing (90% current)
+        const smoothingFactor = current.score > 0.5 ? 0.02 : 0.10;
         
         // Calculate movement distance
         const dx = current.x - previous.x;
         const dy = current.y - previous.y;
         const distSq = dx * dx + dy * dy;
         
-        // Jitter threshold: movements < 2px are likely noise
-        const JITTER_THRESHOLD_SQ = 4; // 2px squared
+        // Only smooth very tiny movements (< 1px) that are likely sensor noise
+        const JITTER_THRESHOLD_SQ = 1; // 1px squared
         
         if (distSq < JITTER_THRESHOLD_SQ) {
-          // Very small movement - likely jitter, apply more smoothing
-          current.x = previous.x * 0.7 + current.x * 0.3;
-          current.y = previous.y * 0.7 + current.y * 0.3;
-        } else if (distSq < 100) {
-          // Small/medium movement - apply adaptive smoothing
+          // Micro-jitter only - light smoothing
+          current.x = previous.x * 0.4 + current.x * 0.6;
+          current.y = previous.y * 0.4 + current.y * 0.6;
+        } else if (distSq < 25) {
+          // Small movement - minimal smoothing
           current.x = previous.x * smoothingFactor + current.x * (1 - smoothingFactor);
           current.y = previous.y * smoothingFactor + current.y * (1 - smoothingFactor);
         }
-        // Large movements (>10px) - no smoothing for instant response
+        // Larger movements (>5px) - no smoothing for instant tracking
       }
     }
 
@@ -307,9 +301,9 @@ export const CameraScreen: React.FC = () => {
     prevKeypointsRef.current = keypoints;
     keypointsRef.current = keypoints;
     
-    // Throttle UI updates to 30fps (33ms) to prevent render backlog
+    // High-frequency UI updates at 60fps (16ms) for ultra-smooth rendering
     const now = Date.now();
-    if (now - lastUIUpdateRef.current < 33) {
+    if (now - lastUIUpdateRef.current < 16) {
       return;
     }
     lastUIUpdateRef.current = now;
@@ -337,8 +331,8 @@ export const CameraScreen: React.FC = () => {
       const timestamp = frame.timestamp;
       const timestampMs =
         timestamp > 1e12 ? timestamp / 1e6 : timestamp > 1e9 ? timestamp / 1e3 : timestamp * 1000;
-      // Thunder Float16 needs ~50ms per inference - run at 20 FPS to avoid frame backup
-      if (timestampMs - lastInferenceTime.value < 50) return;
+      // Lightning Quantized needs ~10-15ms per inference - run at 30 FPS for instant response
+      if (timestampMs - lastInferenceTime.value < 33) return;
       lastInferenceTime.value = timestampMs;
 
       if (model == null) return;
@@ -386,10 +380,10 @@ export const CameraScreen: React.FC = () => {
       // Run inference with typed array input
       const rawOut = model.runSync([inputTensor])[0] as any;
       
-      // Fast extraction - Thunder Float16 returns Float32Array directly
+      // Fast extraction - Lightning Quantized returns data directly
       const expectedOutLen = 51; // 17 keypoints * 3 values
       
-      // Most common case: Float32Array with correct length
+      // Most common case: array with correct length
       if (rawOut && rawOut.length === expectedOutLen) {
         // Direct pass to JS - avoid intermediate array creation
         const flat: number[] = new Array(expectedOutLen);
@@ -623,7 +617,7 @@ export const CameraScreen: React.FC = () => {
             isActive={shouldCameraBeActive}
             frameProcessor={shouldCameraBeActive && model ? frameProcessor : undefined}
             // @ts-ignore - frameProcessorFps available at runtime
-            frameProcessorFps={20}
+            frameProcessorFps={30}
             pixelFormat="yuv"
             photo={false}
             video={false}
@@ -640,7 +634,7 @@ export const CameraScreen: React.FC = () => {
           width={previewSize.width}
           height={previewSize.height}
           mirror={facing === 'front'}
-          minScore={facing === 'front' ? 0.15 : 0.22}
+          minScore={facing === 'front' ? 0.12 : 0.18}
         />
       </View>
       <View style={styles.overlay} pointerEvents="box-none">
