@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.allahham.goel.forma.new.v1",
+      "bundleIdentifier": "com.forma.dev.allahham.12345.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Forma needs camera access to track your workout form and provide real-time feedback."
       }
