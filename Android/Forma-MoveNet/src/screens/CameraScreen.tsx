@@ -22,7 +22,8 @@ type Keypoint = {
 };
 
 // Detect model size dynamically - will be set based on actual model
-let MOVENET_INPUT_SIZE = 192; // default, will be overridden
+// Thunder uses 256x256, Lightning uses 192x192
+let MOVENET_INPUT_SIZE = 256; // default for Thunder, will be overridden if different
 const KEYPOINT_NAMES = [
   'nose',
   'left_eye',
@@ -51,12 +52,14 @@ const MODELS = {
   THUNDER_FLOAT16: require('../../assets/models/movenet_thunder_float16.tflite'),
 };
 
-// MoveNet Lightning Quantized: 192×192 uint8 model (fastest, lowest latency)
-// Optimized for real-time performance with ~10-15ms inference time
-const MOVENET_MODEL = MODELS.LIGHTNING_FLOAT32;
-// Alternative models:
-// const MOVENET_MODEL = MODELS.LIGHTNING_FLOAT32; // 192×192 float32 (balanced accuracy/speed)
-// const MOVENET_MODEL = MODELS.THUNDER_QUANTIZED; // 256×256 uint8 (high accuracy, moderate speed)
+// MoveNet Thunder Float16: 256×256 FP16 model for highest accuracy
+// Balanced performance (~20-30ms inference) with superior pose detection quality
+// Ideal for fitness applications requiring precise form analysis
+const MOVENET_MODEL = MODELS.THUNDER_QUANTIZED;
+// Alternative models for different use cases:
+// LIGHTNING_QUANTIZED: 192×192 uint8 (~10-15ms, lowest latency, good accuracy)
+// LIGHTNING_FLOAT32: 192×192 float32 (~25-30ms, balanced)
+// THUNDER_QUANTIZED: 256×256 uint8 (~15-20ms, high accuracy, fast)
 
 type CameraScreenRouteProp = RouteProp<RootTabParamList, 'Record'>;
 type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Camera'>;
@@ -86,10 +89,7 @@ export const CameraScreen: React.FC = () => {
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
   
   // Use refs to minimize re-renders and track frame timing
-  const keypointsRef = useRef<Keypoint[] | null>(null);
   const prevKeypointsRef = useRef<Keypoint[] | null>(null);
-  const pendingUpdateRef = useRef<boolean>(false);
-  const lastUIUpdateRef = useRef<number>(0);
 
   const isFocused = useIsFocused();
   const isMountedRef = useRef(true);
@@ -199,32 +199,25 @@ export const CameraScreen: React.FC = () => {
     // After 90deg/270deg rotation, frame dimensions are swapped
     // Model processes square 192x192 input with aspect ratio maintained (letterboxed/pillarboxed)
     
-    // The frame after rotation has dimensions frameHeight x frameWidth (because rotation swaps them)
     const rotatedWidth = frameHeight;
     const rotatedHeight = frameWidth;
     const frameAspectRatio = rotatedWidth / rotatedHeight;
     
     // Model input is square (1.0 aspect ratio)
-    // Determine how the frame was fitted into the square model input
     let contentScaleX = 1.0;
     let contentScaleY = 1.0;
     let contentOffsetX = 0.0;
     let contentOffsetY = 0.0;
     
     if (frameAspectRatio > 1.0) {
-      // Frame is wider than tall - letterboxed (black bars top/bottom)
-      // Content fills full width, partial height
       contentScaleY = frameAspectRatio;
       contentOffsetY = (contentScaleY - 1.0) / 2.0;
     } else if (frameAspectRatio < 1.0) {
-      // Frame is taller than wide - pillarboxed (black bars left/right)
-      // Content fills full height, partial width
       contentScaleX = 1.0 / frameAspectRatio;
       contentOffsetX = (contentScaleX - 1.0) / 2.0;
     }
-    // If frameAspectRatio == 1.0, no correction needed
 
-    // Extract keypoints with minimal latency processing
+    // Extract and transform keypoints
     const keypoints: Keypoint[] = new Array(KEYPOINT_NAMES.length);
     let totalScore = 0;
     
@@ -232,11 +225,8 @@ export const CameraScreen: React.FC = () => {
       const modelY = flatOutput[i * 3];
       const modelX = flatOutput[i * 3 + 1];
       const score = flatOutput[i * 3 + 2];
-      
       totalScore += score;
       
-      // Transform from model space [0,1] to content space (removing letterbox/pillarbox)
-      // Model coords are in the letterboxed square, we need to map to actual content
       const correctedX = (modelX * contentScaleX) - contentOffsetX;
       const correctedY = (modelY * contentScaleY) - contentOffsetY;
       
@@ -248,74 +238,41 @@ export const CameraScreen: React.FC = () => {
       };
     }
 
-    // Confidence threshold - Lightning Quantized is still very accurate
+    // Confidence threshold - preserve detection quality
     const confidenceThreshold = isFrontCamera ? 0.12 : 0.18;
     if (totalScore / KEYPOINT_NAMES.length < confidenceThreshold) {
-      keypointsRef.current = null;
       prevKeypointsRef.current = null;
-      if (!pendingUpdateRef.current) {
-        pendingUpdateRef.current = true;
-        requestAnimationFrame(() => {
-          pendingUpdateRef.current = false;
-          setPoseKeypoints(null);
-        });
-      }
+      // LATENCY: Update state immediately (no delays)
+      setPoseKeypoints(null);
       return;
     }
 
-    // Minimal smoothing - prioritize responsiveness over jitter reduction
-    // Only smooth to remove sensor noise, not to delay movement
+    // LATENCY: Minimal smoothing - only sub-pixel jitter to preserve correctness
+    // No smoothing on real movement to avoid added latency
     const prev = prevKeypointsRef.current;
     if (prev && prev.length === keypoints.length) {
+      const JITTER_THRESHOLD_SQ = 0.5; // 0.7px - only filter sensor noise
       for (let i = 0; i < keypoints.length; i++) {
         const current = keypoints[i];
         const previous = prev[i];
-        
-        // Very light smoothing for instant response
-        // High confidence: virtually no smoothing (98% current)
-        // Low confidence: minimal smoothing (90% current)
-        const smoothingFactor = current.score > 0.5 ? 0.02 : 0.10;
-        
-        // Calculate movement distance
         const dx = current.x - previous.x;
         const dy = current.y - previous.y;
         const distSq = dx * dx + dy * dy;
         
-        // Only smooth very tiny movements (< 1px) that are likely sensor noise
-        const JITTER_THRESHOLD_SQ = 1; // 1px squared
-        
         if (distSq < JITTER_THRESHOLD_SQ) {
-          // Micro-jitter only - light smoothing
-          current.x = previous.x * 0.4 + current.x * 0.6;
-          current.y = previous.y * 0.4 + current.y * 0.6;
-        } else if (distSq < 25) {
-          // Small movement - minimal smoothing
-          current.x = previous.x * smoothingFactor + current.x * (1 - smoothingFactor);
-          current.y = previous.y * smoothingFactor + current.y * (1 - smoothingFactor);
+          // Sub-pixel jitter only
+          current.x = previous.x * 0.3 + current.x * 0.7;
+          current.y = previous.y * 0.3 + current.y * 0.7;
         }
-        // Larger movements (>5px) - no smoothing for instant tracking
+        // All other movement: no smoothing for instant response
       }
     }
 
-    // Store for next frame
     prevKeypointsRef.current = keypoints;
-    keypointsRef.current = keypoints;
     
-    // High-frequency UI updates at 60fps (16ms) for ultra-smooth rendering
-    const now = Date.now();
-    if (now - lastUIUpdateRef.current < 16) {
-      return;
-    }
-    lastUIUpdateRef.current = now;
-    
-    // Schedule state update on next frame for smooth rendering
-    if (!pendingUpdateRef.current) {
-      pendingUpdateRef.current = true;
-      requestAnimationFrame(() => {
-        pendingUpdateRef.current = false;
-        setPoseKeypoints(keypointsRef.current);
-      });
-    }
+    // LATENCY: Update state IMMEDIATELY - no throttle, no rAF
+    // Direct state update for fastest response
+    setPoseKeypoints(keypoints);
   }, [previewSize.width, previewSize.height]);
 
   const sendPoseOutputToJS = useMemo(
@@ -331,8 +288,9 @@ export const CameraScreen: React.FC = () => {
       const timestamp = frame.timestamp;
       const timestampMs =
         timestamp > 1e12 ? timestamp / 1e6 : timestamp > 1e9 ? timestamp / 1e3 : timestamp * 1000;
-      // Lightning Quantized needs ~10-15ms per inference - run at 30 FPS for instant response
-      if (timestampMs - lastInferenceTime.value < 33) return;
+      // Thunder FP16: Target ~24 FPS inference (model ~20-30ms, leaves headroom)
+      // Slightly lower rate than Lightning to prevent frame backup
+      if (timestampMs - lastInferenceTime.value < 42) return; // ~24 FPS
       lastInferenceTime.value = timestampMs;
 
       if (model == null) return;
@@ -341,6 +299,9 @@ export const CameraScreen: React.FC = () => {
       // This properly handles the YUV->RGB conversion that Android cameras require
       // AND rotates 90° CW for portrait mode (much faster than manual rotation)
       const inputType = modelInputTypeSV.value; // 1=uint8, 3=float32
+      
+      // Wait for model metadata to be detected before processing frames
+      if (inputType === 0) return;
       
       let inputTensor: Uint8Array | Float32Array;
       
@@ -378,7 +339,14 @@ export const CameraScreen: React.FC = () => {
       }
 
       // Run inference with typed array input
-      const rawOut = model.runSync([inputTensor])[0] as any;
+      let rawOut: any;
+      try {
+        rawOut = model.runSync([inputTensor])[0];
+      } catch (e) {
+        // Model inference failed - skip this frame
+        console.warn('Model inference error:', e);
+        return;
+      }
       
       // Fast extraction - Lightning Quantized returns data directly
       const expectedOutLen = 51; // 17 keypoints * 3 values
@@ -596,6 +564,29 @@ export const CameraScreen: React.FC = () => {
           >
             <Text style={styles.backButtonText}>Open Settings</Text>
           </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Show loading indicator while model is loading
+  if (modelState.state === 'loading') {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.permissionText}>Loading pose detection model...</Text>
+      </View>
+    );
+  }
+
+  // Show error if model failed to load
+  if (modelState.state === 'error') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionTitle}>Model Loading Failed</Text>
+          <Text style={styles.permissionText}>
+            Failed to load pose detection model. Please restart the app.
+          </Text>
         </View>
       </View>
     );
@@ -965,4 +956,3 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30', // Red when recording
   },
 });
-
