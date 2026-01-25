@@ -50,18 +50,24 @@ export const PoseOverlay: React.FC<PoseOverlayProps> = React.memo(({
     }));
   }, [keypoints, width, mirror]);
 
-  // Pre-filter visible elements for performance
+  // STABILITY: Filter lines with adaptive confidence thresholds
+  // Uses average of both endpoint confidences to reduce flickering
   const visibleLines = useMemo(() => {
     if (!mappedKeypoints) return [];
-    const lines: Array<{ p1: { x: number; y: number }; p2: { x: number; y: number } }> = [];
+    const lines: Array<{ p1: { x: number; y: number }; p2: { x: number; y: number }; avgScore: number }> = [];
     
     for (let i = 0; i < SKELETON_CONNECTIONS.length; i++) {
       const [startIdx, endIdx] = SKELETON_CONNECTIONS[i];
       const start = mappedKeypoints[startIdx];
       const end = mappedKeypoints[endIdx];
       
-      if (start.score >= minScore && end.score >= minScore) {
-        lines.push({ p1: start, p2: end });
+      // STABILITY: Use average confidence for line visibility
+      // This prevents lines from flickering when one endpoint drops slightly
+      const avgScore = (start.score + end.score) / 2;
+      
+      // Both endpoints must meet minimum, AND average must be good
+      if (start.score >= minScore && end.score >= minScore && avgScore >= minScore + 0.05) {
+        lines.push({ p1: start, p2: end, avgScore });
       }
     }
     return lines;
@@ -77,27 +83,36 @@ export const PoseOverlay: React.FC<PoseOverlayProps> = React.memo(({
 
   return (
     <Canvas style={[styles.overlay, { width, height }]}>
-      {/* Render skeleton lines */}
-      {visibleLines.map((line, i) => (
-        <Line
-          key={`line-${i}`}
-          p1={vec(line.p1.x, line.p1.y)}
-          p2={vec(line.p2.x, line.p2.y)}
-          color="rgba(0, 255, 0, 0.7)"
-          strokeWidth={2}
-        />
-      ))}
+      {/* STABILITY: Render lines with confidence-based opacity */}
+      {visibleLines.map((line, i) => {
+        // Opacity based on average confidence (0.2-0.9 score → 0.3-0.8 opacity)
+        const opacity = Math.min(0.8, Math.max(0.3, line.avgScore * 0.8));
+        return (
+          <Line
+            key={`line-${i}`}
+            p1={vec(line.p1.x, line.p1.y)}
+            p2={vec(line.p2.x, line.p2.y)}
+            color={`rgba(0, 255, 0, ${opacity})`}
+            strokeWidth={3}
+          />
+        );
+      })}
       
-      {/* Render keypoints */}
-      {visiblePoints.map((point, i) => (
-        <Circle
-          key={`point-${i}`}
-          cx={point.x}
-          cy={point.y}
-          r={5}
-          color="rgba(0, 255, 0, 0.9)"
-        />
-      ))}
+      {/* STABILITY: Render keypoints with confidence-based size */}
+      {visiblePoints.map((point, i) => {
+        // Radius based on confidence (0.2-0.9 score → 3-6 radius)
+        const radius = Math.min(6, Math.max(3, 3 + point.score * 3));
+        const opacity = Math.min(0.9, Math.max(0.4, point.score));
+        return (
+          <Circle
+            key={`point-${i}`}
+            cx={point.x}
+            cy={point.y}
+            r={radius}
+            color={`rgba(0, 255, 0, ${opacity})`}
+          />
+        );
+      })}
     </Canvas>
   );
 }, (prevProps, nextProps) => {

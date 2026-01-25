@@ -55,7 +55,7 @@ const MODELS = {
 // MoveNet Thunder Float16: 256×256 FP16 model for highest accuracy
 // Balanced performance (~20-30ms inference) with superior pose detection quality
 // Ideal for fitness applications requiring precise form analysis
-const MOVENET_MODEL = MODELS.THUNDER_QUANTIZED;
+const MOVENET_MODEL = MODELS.THUNDER_FLOAT16;
 // Alternative models for different use cases:
 // LIGHTNING_QUANTIZED: 192×192 uint8 (~10-15ms, lowest latency, good accuracy)
 // LIGHTNING_FLOAT32: 192×192 float32 (~25-30ms, balanced)
@@ -238,8 +238,9 @@ export const CameraScreen: React.FC = () => {
       };
     }
 
-    // Confidence threshold - preserve detection quality
-    const confidenceThreshold = isFrontCamera ? 0.12 : 0.18;
+    // STABILITY: Higher confidence threshold reduces flickering
+    // Thunder Quantized has good accuracy - can afford higher thresholds
+    const confidenceThreshold = isFrontCamera ? 0.18 : 0.22;
     if (totalScore / KEYPOINT_NAMES.length < confidenceThreshold) {
       prevKeypointsRef.current = null;
       // LATENCY: Update state immediately (no delays)
@@ -247,11 +248,10 @@ export const CameraScreen: React.FC = () => {
       return;
     }
 
-    // LATENCY: Minimal smoothing - only sub-pixel jitter to preserve correctness
-    // No smoothing on real movement to avoid added latency
+    // STABILITY: Enhanced smoothing for rock-solid skeleton
+    // Aggressive smoothing reduces jitter dramatically
     const prev = prevKeypointsRef.current;
     if (prev && prev.length === keypoints.length) {
-      const JITTER_THRESHOLD_SQ = 0.5; // 0.7px - only filter sensor noise
       for (let i = 0; i < keypoints.length; i++) {
         const current = keypoints[i];
         const previous = prev[i];
@@ -259,12 +259,37 @@ export const CameraScreen: React.FC = () => {
         const dy = current.y - previous.y;
         const distSq = dx * dx + dy * dy;
         
-        if (distSq < JITTER_THRESHOLD_SQ) {
-          // Sub-pixel jitter only
-          current.x = previous.x * 0.3 + current.x * 0.7;
-          current.y = previous.y * 0.3 + current.y * 0.7;
+        // STABILITY: Confidence-based smoothing - more aggressive
+        const confidence = current.score;
+        
+        if (distSq < 9) {
+          // Small movements (< 3px) - heavy smoothing to eliminate jitter
+          // High confidence (>0.7): moderate smoothing
+          // Medium confidence (0.4-0.7): heavy smoothing
+          // Low confidence (<0.4): very heavy smoothing
+          let smoothFactor;
+          if (confidence > 0.7) {
+            smoothFactor = 0.30; // 70% current - more stable than before
+          } else if (confidence > 0.4) {
+            smoothFactor = 0.50; // 50% current - balanced
+          } else {
+            smoothFactor = 0.65; // 35% current - very stable
+          }
+          
+          current.x = previous.x * smoothFactor + current.x * (1 - smoothFactor);
+          current.y = previous.y * smoothFactor + current.y * (1 - smoothFactor);
         }
-        // All other movement: no smoothing for instant response
+        else if (distSq < 36) {
+          // Medium movements (3-6px) - light smoothing for stability
+          current.x = previous.x * 0.25 + current.x * 0.75;
+          current.y = previous.y * 0.25 + current.y * 0.75;
+        }
+        else if (distSq < 100) {
+          // Larger movements (6-10px) - minimal smoothing
+          current.x = previous.x * 0.10 + current.x * 0.90;
+          current.y = previous.y * 0.10 + current.y * 0.90;
+        }
+        // Very large movements (>10px) - zero smoothing for instant tracking
       }
     }
 
