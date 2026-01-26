@@ -17,10 +17,17 @@ import { WorkoutDetailsScreen } from '../screens/WorkoutDetailsScreen';
 import { WorkoutExercisesScreen } from '../screens/WorkoutExercisesScreen';
 import { SaveWorkoutScreen } from '../screens/SaveWorkoutScreen';
 import { WorkoutInfoScreen } from '../screens/WorkoutInfoScreen';
+import { RecordLandingScreen } from '../screens/RecordLandingScreen';
+import { CurrentWorkoutScreen, LoggedSet } from '../screens/CurrentWorkoutScreen';
+import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
 import { AppHeader } from '../components/ui/AppHeader';
 import { COLORS, FONTS } from '../constants/theme';
 
-export type CameraParams = { category?: string } | undefined;
+export type CameraParams = { 
+  category?: string;
+  exerciseName?: string;
+  returnToCurrentWorkout?: boolean;
+} | undefined;
 
 // Define the Root Stack Param List
 export type RootStackParamList = {
@@ -35,16 +42,25 @@ export type RootStackParamList = {
   WorkoutInfo: undefined;
 };
 
+// Define the Record Stack Param List
+export type RecordStackParamList = {
+  RecordLanding: undefined;
+  CurrentWorkout: { newSet?: LoggedSet } | undefined;
+  ChooseExercise: undefined;
+  Camera: { exerciseName: string; category: string; returnToCurrentWorkout: true };
+};
+
 export type RootTabParamList = {
   Logbook: undefined;
   Analytics: undefined;
-  Record: CameraParams;
+  Record: undefined;
   Trainer: undefined;
   Rewards: undefined;
 };
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const RecordStack = createNativeStackNavigator<RecordStackParamList>();
 
 // Icon mapping - memoized to prevent recreation
 const TAB_ICONS: { [key: string]: any } = {
@@ -80,11 +96,30 @@ const TabBarItem = memo(({
   );
 });
 
+// Extra space between the tab bar and the bottom edge of the screen (and home indicator)
+const TAB_BAR_BOTTOM_PADDING = 12;
+
+// Record Stack Navigator
+const RecordStackNavigator: React.FC = memo(() => {
+  return (
+    <RecordStack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <RecordStack.Screen name="RecordLanding" component={RecordLandingScreen} />
+      <RecordStack.Screen name="CurrentWorkout" component={CurrentWorkoutScreen} />
+      <RecordStack.Screen name="ChooseExercise" component={ChooseExerciseScreen} />
+      <RecordStack.Screen name="Camera" component={CameraScreen} />
+    </RecordStack.Navigator>
+  );
+});
+
 // Custom Tab Bar
 const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any) => {
   const insets = useSafeAreaInsets();
-  const navBarMargin = insets.bottom > 0 ? insets.bottom - 20 : 0;
-  
+  const bottomOffset = insets.bottom + TAB_BAR_BOTTOM_PADDING;
+
   // Notify parent of tab changes
   React.useEffect(() => {
     const route = state.routes[state.index];
@@ -94,7 +129,7 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   }, [state.index, onTabChange]);
 
   return (
-    <View style={[styles.tabBar, { marginBottom: navBarMargin }]}>
+    <View style={[styles.tabBar, { marginBottom: bottomOffset }]}>
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index;
 
@@ -147,11 +182,7 @@ const AppTabs: React.FC = memo(() => {
       >
         <Tab.Screen name="Logbook" component={LogbookScreen} />
         <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-        <Tab.Screen 
-          name="Record" 
-          component={CameraScreen}
-          initialParams={{ category: 'Weightlifting' }}
-        />
+        <Tab.Screen name="Record" component={RecordStackNavigator} />
         <Tab.Screen name="Trainer" component={TrainerScreen} />
         <Tab.Screen name="Rewards" component={RewardsScreen} />
       </Tab.Navigator>

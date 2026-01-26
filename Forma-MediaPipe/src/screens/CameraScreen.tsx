@@ -7,13 +7,14 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { FlipHorizontal, Pause, Play, Info, Dumbbell } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
-import { RootStackParamList, RootTabParamList } from '../app/RootNavigator';
+import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount, Keypoint } from '../utils/poseAnalysis';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-type CameraScreenRouteProp = RouteProp<RootTabParamList, 'Record'>;
-type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Camera'>;
+// Camera can be called from either the root stack or the record stack
+type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
+type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList | RecordStackParamList>;
 
 // MediaPipe landmark names (33 landmarks)
 const MEDIAPIPE_LANDMARK_NAMES = [
@@ -49,6 +50,8 @@ export const CameraScreen: React.FC = () => {
   });
 
   const category = route.params?.category ?? 'Weightlifting';
+  const exerciseNameFromRoute = (route.params as any)?.exerciseName;
+  const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const TAB_BAR_HEIGHT = 80;
 
   // Use refs to track exercise state without triggering re-renders
@@ -171,7 +174,7 @@ export const CameraScreen: React.FC = () => {
   // Memoize button handlers to prevent recreating on every render
   const handleRecordPress = useCallback(() => {
     if (isRecording) {
-      // Stop recording and navigate to SaveWorkout
+      // Stop recording
       setIsRecording(false);
       
       // Calculate workout data
@@ -181,31 +184,47 @@ export const CameraScreen: React.FC = () => {
       const avgEffortScore = workoutData.effortScores.length > 0
         ? Math.round(workoutData.effortScores.reduce((a, b) => a + b, 0) / workoutData.effortScores.length)
         : 0;
-      
-      const minutes = Math.floor(workoutData.duration / 60);
-      const seconds = workoutData.duration % 60;
-      const durationString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-      // Prepare workout data
-      const workoutDataToSave = {
-        category,
-        duration: durationString,
-        totalReps: workoutData.totalReps,
-        avgFormScore,
-        avgEffortScore,
-      };
+      // Check if this is from the Record stack (Current Workout flow)
+      if (returnToCurrentWorkout && exerciseNameFromRoute) {
+        // Navigate back to CurrentWorkout with the new set
+        const newSet = {
+          exerciseName: exerciseNameFromRoute,
+          reps: workoutData.totalReps,
+          weight: 0,
+          formScore: avgFormScore,
+          effortScore: avgEffortScore,
+        };
+        
+        setTimeout(() => {
+          (navigation as any).navigate('CurrentWorkout', { newSet });
+        }, 100);
+      } else {
+        // Original flow: navigate to SaveWorkout
+        const minutes = Math.floor(workoutData.duration / 60);
+        const seconds = workoutData.duration % 60;
+        const durationString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-      // Navigate to SaveWorkout
-      setTimeout(() => {
-        navigation.replace('SaveWorkout', {
-          workoutData: workoutDataToSave,
-        });
-      }, 100);
+        const workoutDataToSave = {
+          category,
+          duration: durationString,
+          totalReps: workoutData.totalReps,
+          avgFormScore,
+          avgEffortScore,
+        };
+
+        setTimeout(() => {
+          (navigation as any).replace('SaveWorkout', {
+            workoutData: workoutDataToSave,
+          });
+        }, 100);
+      }
     } else {
       // Start recording
       setIsRecording(true);
       setWorkoutStartTime(new Date());
-      setCurrentExercise(null);
+      // If exercise name is provided from route, use it; otherwise let detection handle it
+      setCurrentExercise(exerciseNameFromRoute || null);
       setRepCount(0);
       setCurrentFormScore(null);
       setCurrentEffortScore(null);
@@ -217,7 +236,7 @@ export const CameraScreen: React.FC = () => {
         duration: 0,
       });
     }
-  }, [isRecording, workoutData, category, navigation]);
+  }, [isRecording, workoutData, category, exerciseNameFromRoute, returnToCurrentWorkout, navigation]);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(!isPaused);
