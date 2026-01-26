@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Play } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { AppHeader } from '../components/ui/AppHeader';
 
 type RecordStackParamList = {
   RecordLanding: undefined;
@@ -23,6 +24,7 @@ export const RecordLandingScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <AppHeader />
       <View style={styles.centerContent}>
         <TouchableOpacity
           style={styles.startButton}

@@ -57,17 +57,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logoContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     overflow: 'hidden',
   },
   logoImage: {
-    width: 52,
-    height: 52,
+    width: 64,
+    height: 64,
   },
   textContainer: {
     flex: 1,
