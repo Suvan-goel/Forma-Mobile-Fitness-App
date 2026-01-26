@@ -84,6 +84,7 @@ export const ChooseExerciseScreen: React.FC = () => {
       exerciseName,
       category,
       returnToCurrentWorkout: true,
+      cameraSessionKey: Date.now(), // New key per visit so native camera gets a fresh init
     });
   };
 

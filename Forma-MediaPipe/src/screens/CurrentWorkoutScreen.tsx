@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   StyleSheet,
@@ -14,14 +14,9 @@ import { Plus, Check, ChevronLeft, Dumbbell } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { saveWorkout } from '../services/workoutStorage';
+import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 
-export interface LoggedSet {
-  exerciseName: string;
-  reps: number;
-  weight?: number;
-  formScore: number;
-  effortScore: number;
-}
+export type { LoggedSet };
 
 type RecordStackParamList = {
   RecordLanding: undefined;
@@ -37,17 +32,16 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
   const route = useRoute<CurrentWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
-  const [sets, setSets] = useState<LoggedSet[]>([]);
+  const { sets, addSet, clearSets } = useCurrentWorkout();
 
-  // Handle incoming set from Camera
+  // Fallback: if Camera passed newSet via params (e.g. before context existed), add it
   useFocusEffect(
     React.useCallback(() => {
       if (route.params?.newSet) {
-        setSets((prev) => [...prev, route.params!.newSet!]);
-        // Clear the param to avoid re-adding on next focus
+        addSet(route.params.newSet);
         navigation.setParams({ newSet: undefined });
       }
-    }, [route.params?.newSet, navigation])
+    }, [route.params?.newSet, addSet, navigation])
   );
 
   const handleAddSet = () => {
@@ -86,7 +80,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
       effortScore: avgEffortScore,
     });
 
-    // Reset to RecordLanding
+    // Clear sets and reset to RecordLanding
+    clearSets();
     navigation.reset({
       index: 0,
       routes: [{ name: 'RecordLanding' }],
@@ -104,6 +99,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             text: 'Discard',
             style: 'destructive',
             onPress: () => {
+              clearSets();
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'RecordLanding' }],
@@ -113,6 +109,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         ]
       );
     } else {
+      clearSets();
       navigation.reset({
         index: 0,
         routes: [{ name: 'RecordLanding' }],

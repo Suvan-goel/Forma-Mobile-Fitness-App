@@ -2,13 +2,14 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { FlipHorizontal, Pause, Play, Info, Dumbbell } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount, Keypoint } from '../utils/poseAnalysis';
+import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,6 +34,7 @@ export const CameraScreen: React.FC = () => {
   const navigation = useNavigation<CameraScreenNavigationProp>();
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
+  const { addSet } = useCurrentWorkout();
   
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -52,7 +54,22 @@ export const CameraScreen: React.FC = () => {
   const category = route.params?.category ?? 'Weightlifting';
   const exerciseNameFromRoute = (route.params as any)?.exerciseName;
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
+  const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
   const TAB_BAR_HEIGHT = 80;
+
+  // Unmount camera before leaving so native layer can release it; avoids "Camera initialization failed" on next open
+  const [cameraMounted, setCameraMounted] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Delay mount slightly when screen gains focus so previous native camera has time to release
+  useFocusEffect(
+    useCallback(() => {
+      if (isClosing) return;
+      setCameraMounted(false);
+      const t = setTimeout(() => setCameraMounted(true), 400);
+      return () => clearTimeout(t);
+    }, [isClosing])
+  );
 
   // Use refs to track exercise state without triggering re-renders
   const exercisePhaseRef = useRef(exercisePhase);
@@ -187,7 +204,6 @@ export const CameraScreen: React.FC = () => {
 
       // Check if this is from the Record stack (Current Workout flow)
       if (returnToCurrentWorkout && exerciseNameFromRoute) {
-        // Navigate back to CurrentWorkout with the new set
         const newSet = {
           exerciseName: exerciseNameFromRoute,
           reps: workoutData.totalReps,
@@ -195,10 +211,13 @@ export const CameraScreen: React.FC = () => {
           formScore: avgFormScore,
           effortScore: avgEffortScore,
         };
-        
+        addSet(newSet);
+        // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
+        setIsClosing(true);
+        setCameraMounted(false);
         setTimeout(() => {
-          (navigation as any).navigate('CurrentWorkout', { newSet });
-        }, 100);
+          (navigation as any).navigate('CurrentWorkout');
+        }, 450);
       } else {
         // Original flow: navigate to SaveWorkout
         const minutes = Math.floor(workoutData.duration / 60);
@@ -236,7 +255,7 @@ export const CameraScreen: React.FC = () => {
         duration: 0,
       });
     }
-  }, [isRecording, workoutData, category, exerciseNameFromRoute, returnToCurrentWorkout, navigation]);
+  }, [isRecording, workoutData, category, exerciseNameFromRoute, returnToCurrentWorkout, navigation, addSet]);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(!isPaused);
@@ -275,14 +294,19 @@ export const CameraScreen: React.FC = () => {
     exerciseColor: currentExercise ? COLORS.primary : COLORS.textSecondary,
   }), [repCount, currentFormScore, currentEffortScore, currentExercise]);
 
+  const showCamera = cameraMounted && !isClosing;
+
   return (
     <View style={styles.container}>
-      {/* MediaPipe Camera */}
+      {/* MediaPipe Camera – only mount when ready so prior session can release native camera */}
       <View style={styles.cameraContainer}>
-        <RNMediapipe
-          {...mediapipeProps}
-          onLandmark={handleLandmark}
-        />
+        {showCamera && (
+          <RNMediapipe
+            key={String(cameraSessionKey)}
+            {...mediapipeProps}
+            onLandmark={handleLandmark}
+          />
+        )}
       </View>
 
       {/* Overlay UI */}

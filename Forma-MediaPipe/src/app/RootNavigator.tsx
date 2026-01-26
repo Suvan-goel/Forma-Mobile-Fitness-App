@@ -18,8 +18,9 @@ import { WorkoutExercisesScreen } from '../screens/WorkoutExercisesScreen';
 import { SaveWorkoutScreen } from '../screens/SaveWorkoutScreen';
 import { WorkoutInfoScreen } from '../screens/WorkoutInfoScreen';
 import { RecordLandingScreen } from '../screens/RecordLandingScreen';
-import { CurrentWorkoutScreen, LoggedSet } from '../screens/CurrentWorkoutScreen';
+import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
+import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { AppHeader } from '../components/ui/AppHeader';
 import { COLORS, FONTS } from '../constants/theme';
 
@@ -115,6 +116,13 @@ const RecordStackNavigator: React.FC = memo(() => {
   );
 });
 
+// Record tab wrapper: provides current-workout state so sets persist across Camera navigation
+const RecordTabWithProvider: React.FC = memo(() => (
+  <CurrentWorkoutProvider>
+    <RecordStackNavigator />
+  </CurrentWorkoutProvider>
+));
+
 // Custom Tab Bar
 const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any) => {
   const insets = useSafeAreaInsets();
@@ -182,7 +190,7 @@ const AppTabs: React.FC = memo(() => {
       >
         <Tab.Screen name="Logbook" component={LogbookScreen} />
         <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-        <Tab.Screen name="Record" component={RecordStackNavigator} />
+        <Tab.Screen name="Record" component={RecordTabWithProvider} />
         <Tab.Screen name="Trainer" component={TrainerScreen} />
         <Tab.Screen name="Rewards" component={RewardsScreen} />
       </Tab.Navigator>
