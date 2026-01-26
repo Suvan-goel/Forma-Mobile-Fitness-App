@@ -292,21 +292,6 @@ interface WorkoutCardProps {
   session: WorkoutSession;
 }
 
-// Get color for day of week (faded/muted versions)
-const getDayColor = (date: Date): string => {
-  const day = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const dayColors: { [key: number]: string } = {
-    0: 'rgba(236, 72, 153, 0.6)', // Sunday - Pink/Magenta (faded)
-    1: 'rgba(245, 158, 11, 0.6)', // Monday - Orange/Amber (faded)
-    2: 'rgba(16, 185, 129, 0.6)', // Tuesday - Green (faded)
-    3: 'rgba(0, 212, 187, 0.6)', // Wednesday - Teal (primary, faded)
-    4: 'rgba(139, 92, 246, 0.6)', // Thursday - Purple (faded)
-    5: 'rgba(239, 68, 68, 0.6)', // Friday - Red (faded)
-    6: 'rgba(59, 130, 246, 0.6)', // Saturday - Blue (faded)
-  };
-  return dayColors[day] || 'rgba(0, 212, 187, 0.6)';
-};
-
 // Get category color and display name
 const getCategoryInfo = (category?: string): { color: string; name: string } | null => {
   if (!category) return null;
@@ -323,7 +308,6 @@ const getCategoryInfo = (category?: string): { color: string; name: string } | n
 
 const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const dayColor = getDayColor(session.fullDate);
   const categoryInfo = getCategoryInfo(session.category);
   
   const handlePress = () => {
@@ -331,7 +315,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
   };
 
   return (
-    <TouchableOpacity style={[styles.card, { borderLeftWidth: 4, borderLeftColor: dayColor }]} activeOpacity={0.8} onPress={handlePress}>
+    <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={handlePress}>
       <View style={styles.cardContent}>
         {/* Date Badge */}
         <View style={styles.headerRow}>

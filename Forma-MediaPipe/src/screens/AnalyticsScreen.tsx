@@ -473,23 +473,8 @@ const MetricCard = ({
   );
 };
 
-// Bar Chart Component
-// Get color for day of week for bar chart (full opacity)
-const getDayColorForBar = (dayIndex: number): string => {
-  // dayIndex: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
-  // Map to getDay() values: Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6, Sun=0
-  const dayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1;
-  const dayColors: { [key: number]: string } = {
-    0: 'rgba(236, 72, 153, 0.8)', // Sunday - Pink/Magenta
-    1: 'rgba(245, 158, 11, 0.8)', // Monday - Orange/Amber
-    2: 'rgba(16, 185, 129, 0.8)', // Tuesday - Green
-    3: 'rgba(0, 212, 187, 0.8)', // Wednesday - Teal
-    4: 'rgba(139, 92, 246, 0.8)', // Thursday - Purple
-    5: 'rgba(239, 68, 68, 0.8)', // Friday - Red
-    6: 'rgba(59, 130, 246, 0.8)', // Saturday - Blue
-  };
-  return dayColors[dayOfWeek] || 'rgba(0, 212, 187, 0.8)';
-};
+// Bar Chart Component - all bars use faded accent green
+const BAR_FILL_COLOR = 'rgba(16, 185, 129, 0.6)'; // COLORS.primary (#10B981) faded
 
 const WorkoutBarChart = ({ onDaySelect }: { onDaySelect?: (dayData: { day: string; value: number; hours: number; minutes: number } | null) => void }) => {
   const [selectedDay, setSelectedDay] = React.useState<number | null>(null);
@@ -537,7 +522,6 @@ const WorkoutBarChart = ({ onDaySelect }: { onDaySelect?: (dayData: { day: strin
     <>
       <View style={styles.barChartContainer}>
         {data.map((item, index) => {
-          const dayColor = getDayColorForBar(index);
           const isSelected = selectedDay === index;
           return (
             <TouchableOpacity 
@@ -552,8 +536,8 @@ const WorkoutBarChart = ({ onDaySelect }: { onDaySelect?: (dayData: { day: strin
                     styles.bar, 
                     { 
                       height: `${item.value}%`,
-                      backgroundColor: item.value > 0 ? dayColor : COLORS.chartSecondary,
-                      opacity: isSelected ? 1 : item.value > 0 ? 0.8 : 0.5,
+                      backgroundColor: item.value > 0 ? BAR_FILL_COLOR : COLORS.chartSecondary,
+                      opacity: isSelected ? 1 : item.value > 0 ? 1 : 0.5,
                     }
                   ]} 
                 />

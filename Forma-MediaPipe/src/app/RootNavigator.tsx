@@ -91,8 +91,12 @@ const TabBarItem = memo(({
       style={[styles.tabItem, isFocused && styles.tabItemActive]}
       activeOpacity={0.7}
     >
-      <Icon size={22} color={isFocused ? COLORS.primary : COLORS.textSecondary} />
-      {isFocused && <Text style={styles.tabLabel}>{label}</Text>}
+      <Icon size={22} color={isFocused ? COLORS.primary : COLORS.textSecondary} style={styles.tabIcon} />
+      {isFocused && (
+        <Text style={styles.tabLabel} numberOfLines={1}>
+          {label}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 });
@@ -219,8 +223,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
     borderWidth: 2,
     borderColor: COLORS.primary,
     shadowColor: '#000',
@@ -228,24 +232,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 40,
     elevation: 40,
+    overflow: 'hidden',
   },
   tabItem: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 6,
     borderRadius: 25,
   },
   tabItemActive: {
     backgroundColor: '#000000',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
+  },
+  tabIcon: {
+    flexShrink: 0,
   },
   tabLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
-    marginLeft: 8,
+    marginLeft: 4,
+    flexShrink: 1,
   },
 });
 

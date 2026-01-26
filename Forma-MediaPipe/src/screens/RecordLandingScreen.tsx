@@ -2,7 +2,6 @@ import React from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Play } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { AppHeader } from '../components/ui/AppHeader';
 
@@ -24,17 +23,19 @@ export const RecordLandingScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <AppHeader />
-      <View style={styles.centerContent}>
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={handleStartWorkout}
-          activeOpacity={0.8}
-        >
-          <Play size={24} color="#000000" style={styles.icon} />
-          <Text style={styles.buttonText}>Record new workout</Text>
-        </TouchableOpacity>
+      <View style={styles.centerContent} pointerEvents="box-none">
+        <View style={styles.centeredBlock}>
+          <Text style={styles.headingText}>Record New Workout</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleStartWorkout}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addButtonText}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+      <AppHeader />
     </View>
   );
 };
@@ -45,27 +46,32 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   centerContent: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: SPACING.xl,
   },
-  startButton: {
-    flexDirection: 'row',
+  centeredBlock: {
+    alignItems: 'center',
+  },
+  headingText: {
+    fontSize: 22,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.text,
+    marginBottom: SPACING.xl,
+  },
+  addButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.xl * 2,
-    borderRadius: 40,
-    gap: SPACING.sm,
   },
-  icon: {
-    marginRight: SPACING.xs,
-  },
-  buttonText: {
-    fontSize: 18,
+  addButtonText: {
+    fontSize: 36,
     fontFamily: FONTS.ui.bold,
     color: '#000000',
+    lineHeight: 40,
   },
 });
