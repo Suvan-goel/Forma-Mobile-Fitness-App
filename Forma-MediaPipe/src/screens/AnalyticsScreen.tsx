@@ -293,14 +293,13 @@ const ScoreChart = ({
             {/* All data points (clickable) */}
             {points.map((point, index) => {
               const pointDate = dates && dates[index] ? dates[index] : new Date();
-              const pointColor = getDayColor(pointDate);
               return (
                 <Circle
                   key={index}
                   cx={point.x}
                   cy={point.y}
                   r={index === selectedIndex ? "6" : "4"}
-                  fill={pointColor}
+                  fill={COLORS.text}
                   fillOpacity={1}
                   stroke={COLORS.background}
                   strokeWidth={index === selectedIndex ? "2" : "1"}
@@ -474,7 +473,7 @@ const MetricCard = ({
 };
 
 // Bar Chart Component - all bars use faded accent green
-const BAR_FILL_COLOR = 'rgba(16, 185, 129, 0.6)'; // COLORS.primary (#10B981) faded
+const BAR_FILL_COLOR = COLORS.primary; // COLORS.primary (#10B981) full opacity
 
 const WorkoutBarChart = ({ onDaySelect }: { onDaySelect?: (dayData: { day: string; value: number; hours: number; minutes: number } | null) => void }) => {
   const [selectedDay, setSelectedDay] = React.useState<number | null>(null);
@@ -537,7 +536,7 @@ const WorkoutBarChart = ({ onDaySelect }: { onDaySelect?: (dayData: { day: strin
                     { 
                       height: `${item.value}%`,
                       backgroundColor: item.value > 0 ? BAR_FILL_COLOR : COLORS.chartSecondary,
-                      opacity: isSelected ? 1 : item.value > 0 ? 1 : 0.5,
+                      opacity: 1,
                     }
                   ]} 
                 />
@@ -907,7 +906,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   chartCard: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'transparent',
     borderRadius: 24,
     padding: SPACING.lg,
   },
