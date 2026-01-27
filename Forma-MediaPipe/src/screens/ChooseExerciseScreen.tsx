@@ -11,7 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Bookmark, HelpCircle } from 'lucide-react-native';
+import { ChevronLeft, Bookmark, HelpCircle, Search } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 
 type RecordStackParamList = {
@@ -155,17 +155,9 @@ export const ChooseExerciseScreen: React.FC = () => {
           <ChevronLeft size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add exercises</Text>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.headerIconButton}>
-            <Text style={styles.headerIcon}>🔍</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIconButton}>
-            <Text style={styles.headerIcon}>☰</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIconButton}>
-            <Text style={styles.headerIcon}>+</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.headerIconButton}>
+          <Search size={22} color={COLORS.text} />
+        </TouchableOpacity>
       </View>
 
       {/* Muscle Group Sliding Tab */}
@@ -198,7 +190,7 @@ export const ChooseExerciseScreen: React.FC = () => {
       <View style={styles.subheadingContainer}>
         <Text style={styles.subheading}>All exercises</Text>
         <TouchableOpacity>
-          <Text style={styles.subheadingIcon}>☰</Text>
+          <Bookmark size={20} color={COLORS.text} />
         </TouchableOpacity>
       </View>
 
@@ -242,19 +234,11 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
   },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
   headerIconButton: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerIcon: {
-    fontSize: 18,
-    color: COLORS.text,
   },
   muscleGroupTabWrapper: {
     height: 70,
@@ -296,10 +280,6 @@ const styles = StyleSheet.create({
   subheading: {
     fontSize: 18,
     fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
-  },
-  subheadingIcon: {
-    fontSize: 20,
     color: COLORS.text,
   },
   cardsContainer: {
