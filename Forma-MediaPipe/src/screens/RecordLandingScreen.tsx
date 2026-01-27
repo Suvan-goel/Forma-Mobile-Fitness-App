@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
@@ -25,14 +25,14 @@ export const RecordLandingScreen: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.centerContent} pointerEvents="box-none">
         <View style={styles.centeredBlock}>
-          <Text style={styles.headingText}>Record New Workout</Text>
           <TouchableOpacity
             style={styles.addButton}
             onPress={handleStartWorkout}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Text style={styles.addButtonText}>+</Text>
           </TouchableOpacity>
+          <Text style={styles.instructionText}>Tap to start new workout</Text>
         </View>
       </View>
       <AppHeader />
@@ -54,24 +54,22 @@ const styles = StyleSheet.create({
   centeredBlock: {
     alignItems: 'center',
   },
-  headingText: {
-    fontSize: 22,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
-    marginBottom: SPACING.xl,
-  },
   addButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: SPACING.md,
   },
   addButtonText: {
-    fontSize: 36,
-    fontFamily: FONTS.ui.bold,
-    color: '#000000',
-    lineHeight: 40,
+    fontSize: 140,
+    color: COLORS.primary,
+    lineHeight: 150,
+    fontWeight: '100',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-thin',
+  },
+  instructionText: {
+    fontSize: 16,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+    opacity: 0.6,
   },
 });
