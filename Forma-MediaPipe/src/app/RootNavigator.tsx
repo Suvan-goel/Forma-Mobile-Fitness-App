@@ -88,7 +88,7 @@ const TabBarItem = memo(({
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={[styles.tabItem, isFocused && styles.tabItemActive]}
+      style={[styles.tabItem, isFocused ? styles.tabItemActive : styles.tabItemInactive]}
       activeOpacity={0.7}
     >
       <Icon size={22} color={isFocused ? COLORS.primary : COLORS.textSecondary} style={styles.tabIcon} />
@@ -100,9 +100,6 @@ const TabBarItem = memo(({
     </TouchableOpacity>
   );
 });
-
-// Extra space between the tab bar and the bottom edge of the screen (and home indicator)
-const TAB_BAR_BOTTOM_PADDING = 12;
 
 // Record Stack Navigator
 const RecordStackNavigator: React.FC = memo(() => {
@@ -130,7 +127,6 @@ const RecordTabWithProvider: React.FC = memo(() => (
 // Custom Tab Bar
 const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any) => {
   const insets = useSafeAreaInsets();
-  const bottomOffset = insets.bottom + TAB_BAR_BOTTOM_PADDING;
 
   // Notify parent of tab changes
   React.useEffect(() => {
@@ -141,7 +137,7 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   }, [state.index, onTabChange]);
 
   return (
-    <View style={[styles.tabBar, { marginBottom: bottomOffset }]}>
+    <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8), minHeight: 60 + Math.max(insets.bottom, 8) }]}>
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index;
 
@@ -214,10 +210,7 @@ const styles = StyleSheet.create({
   tabBar: {
     zIndex: 10,
     flexDirection: 'row',
-    backgroundColor: '#1E2228',
-    borderRadius: 40,
-    marginHorizontal: 20,
-    height: 80,
+    backgroundColor: '#000000',
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -225,8 +218,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
+    paddingTop: 8,
+    borderTopWidth: 1.5,
+    borderTopColor: 'rgba(128, 128, 128, 0.2)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 1,
@@ -235,27 +229,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tabItem: {
-    flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingTop: 8,
+    paddingBottom: 16,
     borderRadius: 25,
   },
   tabItemActive: {
+    flex: 2,
     backgroundColor: '#000000',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
+  },
+  tabItemInactive: {
+    flex: 0.75,
+    paddingHorizontal: 4,
   },
   tabIcon: {
     flexShrink: 0,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
-    marginLeft: 4,
+    marginLeft: 8,
     flexShrink: 1,
   },
 });
