@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.xs,
   },
   pointsCard: {
     backgroundColor: COLORS.cardBackground,

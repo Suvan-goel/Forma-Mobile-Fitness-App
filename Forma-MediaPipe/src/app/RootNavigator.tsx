@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
-    color: COLORS.primary,
+    color: COLORS.text,
     marginLeft: 8,
     flexShrink: 1,
   },

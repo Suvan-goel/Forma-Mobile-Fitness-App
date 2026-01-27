@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingTop: 0,
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.sm,
   },
   profileSection: {
     flex: 1,

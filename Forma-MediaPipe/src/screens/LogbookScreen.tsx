@@ -317,12 +317,10 @@ const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
   return (
     <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={handlePress}>
       <View style={styles.cardContent}>
-        {/* Date Badge */}
-        <View style={styles.headerRow}>
-          <View style={styles.dateBadge}>
-            <Text style={styles.dateBadgeText}>{session.date}</Text>
-          </View>
-        </View>
+        {/* Date */}
+        <Text style={styles.dateText}>
+          {session.date} {session.fullDate.getFullYear()}
+        </Text>
 
         {/* Workout Info */}
         <Text style={styles.workoutName}>{session.name}</Text>
@@ -915,19 +913,13 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     flexWrap: 'wrap',
   },
-  dateBadge: {
-    backgroundColor: COLORS.cardBackgroundLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  dateBadgeText: {
+  dateText: {
     fontSize: 11,
     fontFamily: FONTS.ui.bold,
     color: COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginBottom: 4,
   },
   categoryTag: {
     paddingHorizontal: SPACING.sm,

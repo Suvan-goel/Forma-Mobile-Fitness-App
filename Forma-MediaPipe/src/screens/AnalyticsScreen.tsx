@@ -373,22 +373,27 @@ const ImprovementCard = ({
 
   return (
     <View style={styles.improvementCard}>
-      <View style={styles.improvementCardHeader}>
-        <View style={styles.improvementIconContainer}>
-          <Icon size={18} color={COLORS.text} />
+      <View style={styles.improvementCardTopRow}>
+        <View style={styles.improvementCardHeader}>
+          <View style={styles.improvementIconContainer}>
+            <Icon size={22} color={COLORS.text} />
+          </View>
+          <Text style={styles.improvementTitle}>{title}</Text>
         </View>
-        <Text style={styles.improvementTitle}>{title}</Text>
+        <View style={styles.improvementValueContainer}>
+          <MonoText style={styles.improvementValue}>{currentValue}</MonoText>
+          <Text style={styles.improvementUnit}>/100</Text>
+        </View>
       </View>
-      <View style={styles.improvementValueContainer}>
-        <MonoText style={styles.improvementValue}>{currentValue}</MonoText>
-        <Text style={styles.improvementUnit}>/100</Text>
-      </View>
-      <View style={styles.improvementChangeContainer}>
-        <ArrowIcon size={14} color={changeColor} />
-        <Text style={[styles.improvementChange, { color: changeColor }]}>
-          {isImproving ? '+' : ''}{change} ({isImproving ? '+' : ''}{changePercent}%)
-        </Text>
-        <Text style={styles.improvementLabel}>vs last week</Text>
+      <View style={styles.improvementCardBottomRow}>
+        <View style={{ flex: 1 }} />
+        <View style={styles.improvementChangeContainer}>
+          <ArrowIcon size={14} color={changeColor} />
+          <Text style={[styles.improvementChange, { color: changeColor }]}>
+            {isImproving ? '+' : ''}{change} ({isImproving ? '+' : ''}{changePercent}%)
+          </Text>
+          <Text style={styles.improvementLabel}>vs last week</Text>
+        </View>
       </View>
     </View>
   );
@@ -1055,43 +1060,56 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   improvementGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
     marginBottom: SPACING.md,
-    justifyContent: 'space-between',
     gap: 12,
   },
   improvementCard: {
-    width: '48%',
-    backgroundColor: COLORS.cardBackground,
+    width: '100%',
+    backgroundColor: 'transparent',
     borderRadius: 20,
     padding: SPACING.md,
     paddingTop: SPACING.md + 2,
     gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  improvementCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  improvementCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    width: '100%',
+    marginTop: 4,
   },
   improvementCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   improvementIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: COLORS.cardBackgroundLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   improvementTitle: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
+    fontSize: 16,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.text,
   },
   improvementValueContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4,
-    paddingTop: 2,
   },
   improvementValue: {
     fontSize: 24,
@@ -1109,6 +1127,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   improvementChange: {
     fontSize: 12,
