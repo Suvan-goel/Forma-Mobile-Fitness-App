@@ -107,8 +107,8 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
-    gap: SPACING.md,
+    paddingTop: SPACING.sm,
+    gap: SPACING.lg,
   },
   card: {
     flex: 1,
@@ -132,6 +132,7 @@ const styles = StyleSheet.create({
   cardText: {
     fontSize: 18,
     fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
+    color: COLORS.textSecondary,
+    opacity: 0.4,
   },
 });
