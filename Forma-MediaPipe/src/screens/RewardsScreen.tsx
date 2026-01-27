@@ -127,7 +127,7 @@ const RewardCard = ({ reward, userPoints }: { reward: Reward; userPoints: number
         <Text style={styles.rewardDescription}>{reward.description}</Text>
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: reward.color }]} />
+            <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: COLORS.primary }]} />
           </View>
           <Text style={styles.pointsText}>{reward.pointsRequired} pts</Text>
         </View>
