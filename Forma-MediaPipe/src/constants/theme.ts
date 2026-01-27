@@ -6,9 +6,9 @@
 
 export const COLORS = {
   // Backgrounds
-  background: '#030910', // App Background - Very Dark Blue-Black
-  cardBackground: '#252B33', // Card Background - Faded Gray
-  cardBackgroundLight: '#252B33', // Lighter card background
+  background: '#000000', // App Background - Pure black
+  cardBackground: '#1c1b20', // Card Background
+  cardBackgroundLight: '#1c1b20', // Lighter card background
 
   // Primary Actions
   primary: '#10B981', // Green - Primary accent
