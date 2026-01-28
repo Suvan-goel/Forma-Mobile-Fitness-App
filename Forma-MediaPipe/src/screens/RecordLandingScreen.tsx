@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LayoutTemplate, Dumbbell } from 'lucide-react-native';
+import { LayoutTemplate, Plus } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { AppHeader } from '../components/ui/AppHeader';
 
@@ -42,7 +42,7 @@ export const RecordLandingScreen: React.FC = () => {
         >
           <View style={styles.cardContent}>
             <View style={styles.plusIconContainer}>
-              <Dumbbell size={100} color={COLORS.primary} strokeWidth={1.5} />
+              <Plus size={80} color={COLORS.primary} strokeWidth={1} />
             </View>
             <Text style={styles.cardText}>Start New Workout</Text>
           </View>
@@ -56,7 +56,7 @@ export const RecordLandingScreen: React.FC = () => {
         >
           <View style={styles.cardContent}>
             <View style={styles.plusIconContainer}>
-              <LayoutTemplate size={100} color={COLORS.primary} strokeWidth={1.5} />
+              <LayoutTemplate size={80} color={COLORS.primary} strokeWidth={1} />
             </View>
             <Text style={styles.cardText}>Choose Template</Text>
           </View>
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.2)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING.lg,
@@ -98,9 +98,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardText: {
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
-    opacity: 0.4,
+    opacity: 0.85,
   },
 });
