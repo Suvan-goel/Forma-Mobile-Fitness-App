@@ -13,6 +13,12 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// 3:4 portrait aspect ratio (width:height) – taller than wide, like typical phone cameras
+const CAMERA_ASPECT_WIDTH = 3;
+const CAMERA_ASPECT_HEIGHT = 4;
+const cameraDisplayWidth = SCREEN_WIDTH;
+const cameraDisplayHeight = (SCREEN_WIDTH * CAMERA_ASPECT_HEIGHT) / CAMERA_ASPECT_WIDTH; // width * 4/3
+
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
 type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList | RecordStackParamList>;
@@ -55,7 +61,6 @@ export const CameraScreen: React.FC = () => {
   const exerciseNameFromRoute = (route.params as any)?.exerciseName;
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
-  const TAB_BAR_HEIGHT = 80;
 
   // Unmount camera before leaving so native layer can release it; avoids "Camera initialization failed" on next open
   const [cameraMounted, setCameraMounted] = useState(false);
@@ -269,10 +274,10 @@ export const CameraScreen: React.FC = () => {
     (navigation as any).push('WorkoutInfo');
   }, [navigation]);
 
-  // Memoize MediaPipe props to prevent unnecessary re-renders
+  // Memoize MediaPipe props – 3:4 portrait (taller than wide)
   const mediapipeProps = useMemo(() => ({
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT - insets.top - insets.bottom - TAB_BAR_HEIGHT,
+    width: cameraDisplayWidth,
+    height: cameraDisplayHeight,
     face: true,
     leftArm: true,
     rightArm: true,
@@ -283,7 +288,7 @@ export const CameraScreen: React.FC = () => {
     rightWrist: true,
     leftAnkle: true,
     rightAnkle: true,
-  }), [insets.top, insets.bottom]);
+  }), []);
 
   // Memoize display values to avoid recalculation
   const displayValues = useMemo(() => ({
@@ -298,15 +303,17 @@ export const CameraScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* MediaPipe Camera – only mount when ready so prior session can release native camera */}
-      <View style={styles.cameraContainer}>
-        {showCamera && (
-          <RNMediapipe
-            key={String(cameraSessionKey)}
-            {...mediapipeProps}
-            onLandmark={handleLandmark}
-          />
-        )}
+      {/* Letterbox: center camera at 3:4 portrait with equal black bars above/below */}
+      <View style={styles.cameraLetterbox}>
+        <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
+          {showCamera && (
+            <RNMediapipe
+              key={String(cameraSessionKey)}
+              {...mediapipeProps}
+              onLandmark={handleLandmark}
+            />
+          )}
+        </View>
       </View>
 
       {/* Overlay UI */}
@@ -334,8 +341,7 @@ export const CameraScreen: React.FC = () => {
         <View style={[
           styles.bottomBar,
           {
-            paddingBottom: SPACING.lg,
-            marginBottom: insets.bottom + TAB_BAR_HEIGHT,
+            paddingBottom: SPACING.lg + insets.bottom,
           }
         ]}>
           {/* Metrics Row */}
@@ -405,9 +411,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  cameraContainer: {
+  cameraLetterbox: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+  },
+  cameraContainer: {
     position: 'relative',
+    overflow: 'hidden',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
