@@ -7,12 +7,26 @@ import {
   ScrollView,
   FlatList,
   Image,
+  ImageSourcePropType,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, HelpCircle, Search } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
+
+// Category-based images so each card shows an image matching its exercise type
+const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
+  'Weightlifting': require('../assets/weightlifting_bg.png'),
+  'Calisthenics': require('../assets/calisthenics_bg.png'),
+  'Mobility & Flexibility': require('../assets/mobility&flexibility_bg.png'),
+};
+const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
+
+function getExerciseImage(exercise: Exercise): ImageSourcePropType {
+  return CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
+}
 
 type RecordStackParamList = {
   RecordLanding: undefined;
@@ -26,18 +40,18 @@ type ChooseExerciseNavigationProp = NativeStackNavigationProp<
   'ChooseExercise'
 >;
 
-// Muscle groups for the sliding tab
+// Muscle groups for the sliding tab (only these categories)
 const muscleGroups = [
   { id: 'all', name: 'All', icon: '💪' },
   { id: 'chest', name: 'Chest', icon: '🫁' },
   { id: 'back', name: 'Back', icon: '🦴' },
   { id: 'shoulders', name: 'Shoulders', icon: '💪' },
-  { id: 'arms', name: 'Arms', icon: '💪' },
-  { id: 'abs', name: 'Abs', icon: '🫁' },
+  { id: 'biceps', name: 'Biceps', icon: '💪' },
+  { id: 'triceps', name: 'Triceps', icon: '💪' },
   { id: 'legs', name: 'Legs', icon: '🦵' },
-  { id: 'hamstrings', name: 'Hamstrings', icon: '🦵' },
   { id: 'glutes', name: 'Glutes', icon: '🍑' },
   { id: 'calves', name: 'Calves', icon: '🦵' },
+  { id: 'core', name: 'Core', icon: '🫁' },
 ];
 
 // Exercise data organized by muscle group
@@ -45,62 +59,76 @@ interface Exercise {
   name: string;
   muscleGroup: string;
   category: string;
-  image?: any; // Placeholder for exercise images
+  image?: any;
 }
 
 const allExercises: Exercise[] = [
-  // Chest exercises
-  { name: 'Bench Press', muscleGroup: 'chest', category: 'Weightlifting' },
-  { name: 'Push-ups', muscleGroup: 'chest', category: 'Calisthenics' },
-  { name: 'Chest Fly', muscleGroup: 'chest', category: 'Weightlifting' },
-  { name: 'Dips', muscleGroup: 'chest', category: 'Calisthenics' },
-  
-  // Back exercises
+  // Chest
+  { name: 'Barbell Bench Press', muscleGroup: 'chest', category: 'Weightlifting' },
+  { name: 'Incline Dumbbell Press', muscleGroup: 'chest', category: 'Weightlifting' },
+  { name: 'Dumbbell Chest Fly (flat or incline)', muscleGroup: 'chest', category: 'Weightlifting' },
+  { name: 'Weighted Dips (chest-leaning)', muscleGroup: 'chest', category: 'Weightlifting' },
+  { name: 'Cable Fly (mid–low or high–low)', muscleGroup: 'chest', category: 'Weightlifting' },
+  { name: 'Push-Ups (standard / deficit / weighted)', muscleGroup: 'chest', category: 'Weightlifting' },
+  { name: 'Incline Barbell Bench Press', muscleGroup: 'chest', category: 'Weightlifting' },
+  // Back
   { name: 'Deadlift', muscleGroup: 'back', category: 'Weightlifting' },
+  { name: 'Pull-Ups / Weighted Pull-Ups', muscleGroup: 'back', category: 'Weightlifting' },
   { name: 'Barbell Row', muscleGroup: 'back', category: 'Weightlifting' },
-  { name: 'Pull-ups', muscleGroup: 'back', category: 'Calisthenics' },
   { name: 'Lat Pulldown', muscleGroup: 'back', category: 'Weightlifting' },
-  
-  // Shoulders
-  { name: 'Overhead Press', muscleGroup: 'shoulders', category: 'Weightlifting' },
+  { name: 'Seated Cable Row', muscleGroup: 'back', category: 'Weightlifting' },
+  // Shoulders (Deltoids)
+  { name: 'Overhead Barbell Press', muscleGroup: 'shoulders', category: 'Weightlifting' },
+  { name: 'Dumbbell Shoulder Press', muscleGroup: 'shoulders', category: 'Weightlifting' },
   { name: 'Lateral Raises', muscleGroup: 'shoulders', category: 'Weightlifting' },
-  { name: 'Shoulder Mobility', muscleGroup: 'shoulders', category: 'Mobility & Flexibility' },
-  
-  // Arms
-  { name: 'Bicep Curl', muscleGroup: 'arms', category: 'Weightlifting' },
-  { name: 'Tricep Extension', muscleGroup: 'arms', category: 'Weightlifting' },
-  { name: 'Hammer Curl', muscleGroup: 'arms', category: 'Weightlifting' },
-  
-  // Abs
-  { name: 'Plank', muscleGroup: 'abs', category: 'Calisthenics' },
-  { name: 'Crunches', muscleGroup: 'abs', category: 'Calisthenics' },
-  { name: 'Leg Raises', muscleGroup: 'abs', category: 'Calisthenics' },
-  
-  // Legs
-  { name: 'Squat', muscleGroup: 'legs', category: 'Weightlifting' },
+  { name: 'Rear Delt Fly (dumbbell or cable)', muscleGroup: 'shoulders', category: 'Weightlifting' },
+  // Biceps
+  { name: 'Barbell Curl', muscleGroup: 'biceps', category: 'Weightlifting' },
+  { name: 'Incline Dumbbell Curl', muscleGroup: 'biceps', category: 'Weightlifting' },
+  { name: 'Hammer Curl', muscleGroup: 'biceps', category: 'Weightlifting' },
+  { name: 'Preacher Curl', muscleGroup: 'biceps', category: 'Weightlifting' },
+  { name: 'Cable Curl', muscleGroup: 'biceps', category: 'Weightlifting' },
+  // Triceps
+  { name: 'Close-Grip Bench Press', muscleGroup: 'triceps', category: 'Weightlifting' },
+  { name: 'Skull Crushers (EZ-bar)', muscleGroup: 'triceps', category: 'Weightlifting' },
+  { name: 'Cable Pushdowns', muscleGroup: 'triceps', category: 'Weightlifting' },
+  { name: 'Overhead Triceps Extension', muscleGroup: 'triceps', category: 'Weightlifting' },
+  { name: 'Weighted Dips', muscleGroup: 'triceps', category: 'Weightlifting' },
+  { name: 'Diamond Push-Ups', muscleGroup: 'triceps', category: 'Weightlifting' },
+  // Legs (Quads, Hamstrings, Glutes)
+  { name: 'Back Squat', muscleGroup: 'legs', category: 'Weightlifting' },
+  { name: 'Romanian Deadlift', muscleGroup: 'legs', category: 'Weightlifting' },
   { name: 'Leg Press', muscleGroup: 'legs', category: 'Weightlifting' },
-  { name: 'Lunges', muscleGroup: 'legs', category: 'Calisthenics' },
-  { name: 'Squats', muscleGroup: 'legs', category: 'Calisthenics' },
-  
-  // Hamstrings
-  { name: 'Lever Lying Leg Curl', muscleGroup: 'hamstrings', category: 'Weightlifting' },
-  { name: 'Barbell Stiff Legged Deadlift', muscleGroup: 'hamstrings', category: 'Weightlifting' },
-  { name: 'Hamstring Stretch', muscleGroup: 'hamstrings', category: 'Mobility & Flexibility' },
-  
+  { name: 'Walking Lunges', muscleGroup: 'legs', category: 'Weightlifting' },
+  { name: 'Leg Curl (machine)', muscleGroup: 'legs', category: 'Weightlifting' },
   // Glutes
-  { name: 'Sled 45° Leg Press', muscleGroup: 'glutes', category: 'Weightlifting' },
-  { name: 'Hip Thrust', muscleGroup: 'glutes', category: 'Weightlifting' },
-  { name: 'Glute Bridge', muscleGroup: 'glutes', category: 'Calisthenics' },
-  
+  { name: 'Barbell Hip Thrust', muscleGroup: 'glutes', category: 'Weightlifting' },
+  { name: 'Bulgarian Split Squat', muscleGroup: 'glutes', category: 'Weightlifting' },
+  { name: 'Sumo Deadlift', muscleGroup: 'glutes', category: 'Weightlifting' },
+  { name: 'Cable Kickbacks', muscleGroup: 'glutes', category: 'Weightlifting' },
+  { name: 'Step-Ups', muscleGroup: 'glutes', category: 'Weightlifting' },
   // Calves
-  { name: 'Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
-  { name: 'Standing Calf Raise', muscleGroup: 'calves', category: 'Weightlifting' },
+  { name: 'Standing Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
+  { name: 'Seated Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
+  { name: 'Donkey Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
+  { name: 'Single-Leg Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
+  { name: 'Leg Press Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
+  // Core (Abs & Obliques)
+  { name: 'Hanging Leg Raises', muscleGroup: 'core', category: 'Weightlifting' },
+  { name: 'Cable Crunches', muscleGroup: 'core', category: 'Weightlifting' },
+  { name: 'Ab Wheel Rollouts', muscleGroup: 'core', category: 'Weightlifting' },
+  { name: 'Russian Twists (weighted)', muscleGroup: 'core', category: 'Weightlifting' },
+  { name: 'Planks (weighted)', muscleGroup: 'core', category: 'Weightlifting' },
 ];
 
 export const ChooseExerciseScreen: React.FC = () => {
   const navigation = useNavigation<ChooseExerciseNavigationProp>();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('all');
+
+  // Fixed card width so the last card in an odd row doesn't stretch full width
+  const cardWidth = (screenWidth - SPACING.md * 2 - SPACING.md) / 2;
 
   const handleSelectExercise = (exercise: Exercise) => {
     navigation.navigate('Camera', {
@@ -122,7 +150,7 @@ export const ChooseExerciseScreen: React.FC = () => {
 
   const renderExerciseCard = ({ item }: { item: Exercise }) => (
     <TouchableOpacity
-      style={styles.exerciseCard}
+      style={[styles.exerciseCard, { width: cardWidth }]}
       onPress={() => handleSelectExercise(item)}
       activeOpacity={0.7}
     >
@@ -135,9 +163,12 @@ export const ChooseExerciseScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
       
-      {/* Placeholder for exercise image - in real app, this would be an actual image */}
-      <View style={styles.exerciseImagePlaceholder}>
-        <Text style={styles.exerciseImageText}>{item.name.charAt(0)}</Text>
+      <View style={styles.exerciseImageContainer}>
+        <Image
+          source={getExerciseImage(item)}
+          style={styles.exerciseImage}
+          resizeMode="cover"
+        />
       </View>
       
       <View style={styles.exerciseCardTextBlock}>
@@ -170,9 +201,6 @@ export const ChooseExerciseScreen: React.FC = () => {
           contentContainerStyle={styles.muscleGroupTab}
           style={styles.muscleGroupTabContainer}
         >
-          <TouchableOpacity style={styles.muscleGroupTabItem}>
-            <Text style={styles.muscleGroupTabIcon}>🔖</Text>
-          </TouchableOpacity>
           {muscleGroups.map((group) => (
             <TouchableOpacity
               key={group.id}
@@ -188,9 +216,13 @@ export const ChooseExerciseScreen: React.FC = () => {
         </ScrollView>
       </View>
 
-      {/* All Exercises Subheading */}
+      {/* Exercises Subheading */}
       <View style={styles.subheadingContainer}>
-        <Text style={styles.subheading}>All exercises</Text>
+        <Text style={styles.subheading}>
+          {selectedMuscleGroup === 'all'
+            ? 'All exercises'
+            : muscleGroups.find(m => m.id === selectedMuscleGroup)?.name ?? 'Exercises'}
+        </Text>
         <TouchableOpacity>
           <Bookmark size={20} color={COLORS.text} />
         </TouchableOpacity>
@@ -294,7 +326,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   exerciseCard: {
-    flex: 1,
     backgroundColor: 'transparent',
     borderRadius: 16,
     padding: SPACING.sm,
@@ -312,24 +343,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  exerciseImagePlaceholder: {
+  exerciseImageContainer: {
     width: '100%',
     height: 120,
-    backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
     marginBottom: SPACING.sm,
   },
-  exerciseImageText: {
-    fontSize: 32,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textSecondary,
+  exerciseImage: {
+    width: '100%',
+    height: '100%',
   },
   exerciseCardTextBlock: {
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
   },
   exerciseCardName: {
     fontSize: 14,
