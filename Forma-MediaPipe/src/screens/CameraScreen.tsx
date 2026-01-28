@@ -295,16 +295,23 @@ export const CameraScreen: React.FC = () => {
     reps: repCount > 0 ? repCount : '-',
     form: repCount > 0 && currentFormScore !== null ? currentFormScore : '-',
     effort: repCount > 0 && currentEffortScore !== null ? currentEffortScore : '-',
-    exerciseName: currentExercise || 'No Exercise Detected',
-    exerciseColor: currentExercise ? COLORS.primary : COLORS.textSecondary,
-  }), [repCount, currentFormScore, currentEffortScore, currentExercise]);
+    exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
+  }), [repCount, currentFormScore, currentEffortScore, currentExercise, exerciseNameFromRoute]);
 
   const showCamera = cameraMounted && !isClosing;
 
+  const topBarContentHeight = insets.top + 44;
+  const gapAboveCamera = SPACING.xl;
+  const topBarHeight = topBarContentHeight + gapAboveCamera;
+  const bottomBarHeight = insets.bottom + SPACING.lg + 40 + SPACING.lg + 80 + SPACING.md;
+
   return (
     <View style={styles.container}>
-      {/* Letterbox: center camera at 3:4 portrait with equal black bars above/below */}
-      <View style={styles.cameraLetterbox}>
+      {/* Camera fixed below top bar (same gap); extra space goes below for metrics */}
+      <View style={[
+        styles.cameraLetterbox,
+        { paddingTop: topBarHeight, paddingBottom: bottomBarHeight },
+      ]}>
         <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
           {showCamera && (
             <RNMediapipe
@@ -319,17 +326,13 @@ export const CameraScreen: React.FC = () => {
       {/* Overlay UI */}
       <View style={styles.overlay} pointerEvents="box-none">
         {/* Top Bar */}
-        <View style={[styles.topBar, { paddingTop: insets.top + SPACING.xs }]}>
+        <View style={[styles.topBar, { paddingTop: insets.top }]}>
           <View style={styles.weightsIconContainer}>
             <Dumbbell size={24} color={COLORS.text} />
           </View>
           <View style={styles.exerciseTopCard}>
-            <Text style={styles.detectionLabel}>EXERCISE</Text>
-            <Text style={[
-              styles.detectionExercise,
-              { color: displayValues.exerciseColor }
-            ]}>
-              {displayValues.exerciseName}
+            <Text style={styles.detectionExercise} numberOfLines={1}>
+              {displayValues.exerciseDisplayName}
             </Text>
           </View>
           <TouchableOpacity style={styles.flipButton} onPress={handleCameraFlip}>
@@ -504,18 +507,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  detectionLabel: {
-    fontSize: 10,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 2,
-    textAlign: 'center',
-  },
   detectionExercise: {
-    fontSize: 16,
+    fontSize: 12,
     fontFamily: FONTS.ui.bold,
+    color: COLORS.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     textAlign: 'center',
   },
   metricsContainer: {
