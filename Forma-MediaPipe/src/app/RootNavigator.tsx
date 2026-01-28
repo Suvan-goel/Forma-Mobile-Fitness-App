@@ -2,7 +2,7 @@ import React, { memo, useCallback, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, BookOpen, BarChart2, Star, User } from 'lucide-react-native';
 import { LogbookScreen } from '../screens/LogbookScreen';
@@ -127,17 +127,28 @@ const RecordTabWithProvider: React.FC = memo(() => (
 // Custom Tab Bar
 const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any) => {
   const insets = useSafeAreaInsets();
+  const currentTabRoute = state.routes[state.index];
+  const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
+  const hideTabBar = currentTabRoute?.name === 'Record' && focusedRouteName === 'ChooseExercise';
 
   // Notify parent of tab changes
   React.useEffect(() => {
-    const route = state.routes[state.index];
-    if (route?.name && onTabChange) {
-      onTabChange(route.name);
+    if (currentTabRoute?.name && onTabChange) {
+      onTabChange(currentTabRoute.name);
     }
-  }, [state.index, onTabChange]);
+  }, [state.index, onTabChange, currentTabRoute?.name]);
 
   return (
-    <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8), minHeight: 60 + Math.max(insets.bottom, 8) }]}>
+    <View
+      style={[
+        styles.tabBar,
+        {
+          paddingBottom: Math.max(insets.bottom, 8),
+          minHeight: 60 + Math.max(insets.bottom, 8),
+          display: hideTabBar ? 'none' : 'flex',
+        },
+      ]}
+    >
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index;
 

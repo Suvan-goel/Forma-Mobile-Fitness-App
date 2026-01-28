@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Line } from 'react-native-svg';
+import { LayoutTemplate, Dumbbell } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { AppHeader } from '../components/ui/AppHeader';
 
@@ -15,38 +15,6 @@ type RecordStackParamList = {
 };
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'RecordLanding'>;
-
-// Thin Plus Icon Component using SVG for consistent rendering across all devices
-const ThinPlusIcon: React.FC<{ size?: number; color?: string }> = ({ size = 140, color = COLORS.primary }) => {
-  const strokeWidth = 2; // Very thin stroke
-  const center = size / 2;
-  const lineLength = size * 0.4; // Length of each line in the plus
-  
-  return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {/* Horizontal line */}
-      <Line
-        x1={center - lineLength / 2}
-        y1={center}
-        x2={center + lineLength / 2}
-        y2={center}
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-      />
-      {/* Vertical line */}
-      <Line
-        x1={center}
-        y1={center - lineLength / 2}
-        x2={center}
-        y2={center + lineLength / 2}
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-      />
-    </Svg>
-  );
-};
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
@@ -74,7 +42,7 @@ export const RecordLandingScreen: React.FC = () => {
         >
           <View style={styles.cardContent}>
             <View style={styles.plusIconContainer}>
-              <ThinPlusIcon size={140} color={COLORS.primary} />
+              <Dumbbell size={100} color={COLORS.primary} strokeWidth={1.5} />
             </View>
             <Text style={styles.cardText}>Start New Workout</Text>
           </View>
@@ -88,7 +56,7 @@ export const RecordLandingScreen: React.FC = () => {
         >
           <View style={styles.cardContent}>
             <View style={styles.plusIconContainer}>
-              <ThinPlusIcon size={140} color={COLORS.primary} />
+              <LayoutTemplate size={100} color={COLORS.primary} strokeWidth={1.5} />
             </View>
             <Text style={styles.cardText}>Choose Template</Text>
           </View>

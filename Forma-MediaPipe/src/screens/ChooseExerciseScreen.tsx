@@ -202,7 +202,7 @@ export const ChooseExerciseScreen: React.FC = () => {
         numColumns={2}
         contentContainerStyle={[
           styles.cardsContainer,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 80 },
+          { paddingBottom: Math.max(insets.bottom, SPACING.xl) },
         ]}
         columnWrapperStyle={styles.cardRow}
         showsVerticalScrollIndicator={false}
@@ -287,15 +287,15 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
   },
   cardRow: {
-    justifyContent: 'space-between',
+    flexDirection: 'row',
+    gap: SPACING.md,
     marginBottom: SPACING.md,
   },
   exerciseCard: {
-    width: '48%',
+    flex: 1,
     backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
     padding: SPACING.sm,
-    marginBottom: SPACING.md,
   },
   cardHeader: {
     flexDirection: 'row',
