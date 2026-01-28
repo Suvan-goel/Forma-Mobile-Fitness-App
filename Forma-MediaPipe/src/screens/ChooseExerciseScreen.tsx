@@ -140,17 +140,19 @@ export const ChooseExerciseScreen: React.FC = () => {
         <Text style={styles.exerciseImageText}>{item.name.charAt(0)}</Text>
       </View>
       
-      <Text style={styles.exerciseCardName} numberOfLines={2}>{item.name}</Text>
-      <Text style={styles.exerciseCardMuscle} numberOfLines={1}>
-        {muscleGroups.find(m => m.id === item.muscleGroup)?.name || item.muscleGroup}
-      </Text>
+      <View style={styles.exerciseCardTextBlock}>
+        <Text style={styles.exerciseCardName} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.exerciseCardMuscle} numberOfLines={1}>
+          {muscleGroups.find(m => m.id === item.muscleGroup)?.name || item.muscleGroup}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
           <ChevronLeft size={24} color={COLORS.text} />
         </TouchableOpacity>
@@ -293,9 +295,11 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'transparent',
     borderRadius: 16,
     padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -322,12 +326,16 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
     color: COLORS.textSecondary,
   },
+  exerciseCardTextBlock: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.md,
+  },
   exerciseCardName: {
     fontSize: 14,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
-    marginBottom: SPACING.xs,
-    minHeight: 36,
+    marginBottom: 3,
   },
   exerciseCardMuscle: {
     fontSize: 12,
