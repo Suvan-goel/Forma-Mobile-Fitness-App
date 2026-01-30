@@ -1,12 +1,21 @@
-import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LayoutTemplate, Plus, Timer } from 'lucide-react-native';
+import { LayoutTemplate, Plus, Timer, Trash2, Pause, Play, Flag } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { AppHeader } from '../components/ui/AppHeader';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
+import { MonoText } from '../components/typography/MonoText';
+import { saveWorkout } from '../services/workoutStorage';
+
+const formatStopwatch = (totalSeconds: number) => {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
 
 type RecordStackParamList = {
   RecordLanding: undefined;
@@ -20,8 +29,18 @@ type RecordLandingNavigationProp = NativeStackNavigationProp<RecordStackParamLis
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const insets = useSafeAreaInsets();
-  const { workoutInProgress, sets } = useCurrentWorkout();
+  const { workoutInProgress, sets, workoutElapsedSeconds, setWorkoutElapsedSeconds, clearSets } =
+    useCurrentWorkout();
   const navigationBarHeight = 60 + Math.max(insets.bottom, 8); // Approximate nav bar height + safe area
+  const [timerPaused, setTimerPaused] = useState(false);
+
+  useEffect(() => {
+    if (!workoutInProgress || timerPaused) return;
+    const interval = setInterval(() => {
+      setWorkoutElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [workoutInProgress, timerPaused, setWorkoutElapsedSeconds]);
 
   const handleStartWorkout = () => {
     navigation.navigate('CurrentWorkout');
@@ -35,29 +54,104 @@ export const RecordLandingScreen: React.FC = () => {
     navigation.navigate('ChooseExercise');
   };
 
+  const handleDiscardWorkout = () => {
+    Alert.alert(
+      'Discard workout',
+      'Are you sure? This will clear all sets and time.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: clearSets },
+      ]
+    );
+  };
+
+  const handlePauseWorkout = () => {
+    setTimerPaused((p) => !p);
+  };
+
+  const handleFinishWorkout = () => {
+    if (sets.length === 0) {
+      clearSets();
+      return;
+    }
+    const totalSets = sets.length;
+    const totalReps = sets.reduce((sum, set) => sum + set.reps, 0);
+    const avgFormScore = Math.round(
+      sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
+    );
+    const avgEffortScore = Math.round(
+      sets.reduce((sum, set) => sum + set.effortScore, 0) / sets.length
+    );
+    const category = sets[0]?.exerciseName || 'General';
+    const now = new Date();
+    const name = `Workout – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const duration = formatStopwatch(workoutElapsedSeconds);
+    saveWorkout({
+      name,
+      category,
+      duration,
+      totalSets,
+      totalReps,
+      formScore: avgFormScore,
+      effortScore: avgEffortScore,
+    });
+    clearSets();
+  };
+
   return (
     <View style={styles.container}>
       <AppHeader />
       <View style={[styles.cardsContainer, { paddingBottom: navigationBarHeight + SPACING.lg }]}>
         {/* Top Card - Workout in progress (when active) or Start New Workout */}
         {workoutInProgress ? (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={handleResumeWorkout}
-            activeOpacity={0.7}
-          >
-            <View style={styles.cardContent}>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.cardContent}
+              onPress={handleResumeWorkout}
+              activeOpacity={0.7}
+            >
               <View style={styles.plusIconContainer}>
                 <Timer size={80} color={COLORS.primary} strokeWidth={1} />
               </View>
+              <MonoText style={styles.cardTimer}>{formatStopwatch(workoutElapsedSeconds)}</MonoText>
               <Text style={styles.cardText}>Workout in progress</Text>
               <Text style={styles.cardSubtext}>
                 {sets.length > 0
                   ? `${sets.length} set${sets.length === 1 ? '' : 's'} • Tap to resume`
                   : 'Tap to resume'}
               </Text>
+            </TouchableOpacity>
+            <View style={styles.workoutActions}>
+              <TouchableOpacity
+                style={styles.workoutActionButton}
+                onPress={handleDiscardWorkout}
+                activeOpacity={0.7}
+              >
+                <Trash2 size={22} color={COLORS.textTertiary} strokeWidth={1.5} />
+                <Text style={styles.workoutActionLabel}>Discard</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.workoutActionButton}
+                onPress={handlePauseWorkout}
+                activeOpacity={0.7}
+              >
+                {timerPaused ? (
+                  <Play size={22} color={COLORS.primary} strokeWidth={1.5} />
+                ) : (
+                  <Pause size={22} color={COLORS.primary} strokeWidth={1.5} />
+                )}
+                <Text style={styles.workoutActionLabel}>{timerPaused ? 'Resume' : 'Pause'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.workoutActionButton}
+                onPress={handleFinishWorkout}
+                activeOpacity={0.7}
+              >
+                <Flag size={22} color={COLORS.primary} strokeWidth={1.5} />
+                <Text style={styles.workoutActionLabel}>Finish</Text>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </View>
         ) : (
           <TouchableOpacity
             style={styles.card}
@@ -73,19 +167,21 @@ export const RecordLandingScreen: React.FC = () => {
           </TouchableOpacity>
         )}
 
-        {/* Bottom Card - Choose Template */}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={handleChooseTemplate}
-          activeOpacity={0.7}
-        >
-          <View style={styles.cardContent}>
-            <View style={styles.plusIconContainer}>
-              <LayoutTemplate size={80} color={COLORS.primary} strokeWidth={1} />
+        {/* Bottom Card - Choose Template (hidden when workout in progress) */}
+        {!workoutInProgress && (
+          <TouchableOpacity
+            style={styles.card}
+            onPress={handleChooseTemplate}
+            activeOpacity={0.7}
+          >
+            <View style={styles.cardContent}>
+              <View style={styles.plusIconContainer}>
+                <LayoutTemplate size={80} color={COLORS.primary} strokeWidth={1} />
+              </View>
+              <Text style={styles.cardText}>Choose Template</Text>
             </View>
-            <Text style={styles.cardText}>Choose Template</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -114,25 +210,56 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   cardContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: SPACING.xl,
+  },
+  workoutActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.xxl,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  workoutActionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 80,
+  },
+  workoutActionLabel: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+    marginTop: SPACING.sm,
+  },
+  plusIconContainer: {
+    marginBottom: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plusIconContainer: {
-    marginBottom: SPACING.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardTimer: {
+    fontSize: 28,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.primary,
+    marginBottom: SPACING.sm,
   },
   cardText: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
     opacity: 0.85,
+    marginBottom: SPACING.xs,
   },
   cardSubtext: {
     fontSize: 12,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
     opacity: 0.8,
-    marginTop: SPACING.xs,
+    marginTop: SPACING.sm,
   },
 });

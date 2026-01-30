@@ -32,8 +32,15 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
   const route = useRoute<CurrentWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
-  const { sets, addSet, clearSets, setWorkoutInProgress } = useCurrentWorkout();
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const {
+    sets,
+    addSet,
+    clearSets,
+    setWorkoutInProgress,
+    workoutElapsedSeconds: contextElapsed,
+    setWorkoutElapsedSeconds,
+  } = useCurrentWorkout();
+  const [elapsedSeconds, setElapsedSeconds] = useState(contextElapsed);
   const [isPaused, setIsPaused] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,8 +54,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   useEffect(() => {
     setWorkoutInProgress(true);
-    startTimeRef.current = Date.now();
-    setElapsedSeconds(0);
+    const startFrom = contextElapsed > 0 ? contextElapsed : 0;
+    startTimeRef.current = Date.now() - startFrom * 1000;
+    setElapsedSeconds(startFrom);
     intervalRef.current = setInterval(() => {
       if (startTimeRef.current !== null) {
         setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -59,7 +67,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
       intervalRef.current = null;
       startTimeRef.current = null;
     };
-  }, [setWorkoutInProgress]);
+  }, [setWorkoutInProgress, contextElapsed]);
 
   useEffect(() => {
     if (isPaused && intervalRef.current) {
@@ -134,6 +142,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   };
 
   const handleGoBack = () => {
+    setWorkoutElapsedSeconds(elapsedSeconds);
     navigation.reset({
       index: 0,
       routes: [{ name: 'RecordLanding' }],
