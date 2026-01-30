@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,7 +10,7 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Check, ChevronLeft, Dumbbell } from 'lucide-react-native';
+import { Plus, ChevronLeft, Dumbbell, Pause, Play } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { saveWorkout } from '../services/workoutStorage';
@@ -32,7 +32,52 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
   const route = useRoute<CurrentWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
-  const { sets, addSet, clearSets } = useCurrentWorkout();
+  const { sets, addSet, clearSets, setWorkoutInProgress } = useCurrentWorkout();
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const startTimeRef = useRef<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const formatStopwatch = (totalSeconds: number) => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    setWorkoutInProgress(true);
+    startTimeRef.current = Date.now();
+    setElapsedSeconds(0);
+    intervalRef.current = setInterval(() => {
+      if (startTimeRef.current !== null) {
+        setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      }
+    }, 1000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      startTimeRef.current = null;
+    };
+  }, [setWorkoutInProgress]);
+
+  useEffect(() => {
+    if (isPaused && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    } else if (!isPaused && intervalRef.current === null && startTimeRef.current !== null) {
+      startTimeRef.current = Date.now() - elapsedSeconds * 1000;
+      intervalRef.current = setInterval(() => {
+        if (startTimeRef.current !== null) {
+          setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
+      }, 1000);
+    }
+  }, [isPaused]);
+
+  const handlePausePress = () => {
+    setIsPaused((p) => !p);
+  };
 
   // Fallback: if Camera passed newSet via params (e.g. before context existed), add it
   useFocusEffect(
@@ -89,43 +134,40 @@ export const CurrentWorkoutScreen: React.FC = () => {
   };
 
   const handleGoBack = () => {
-    if (sets.length > 0) {
-      Alert.alert(
-        'Discard workout?',
-        'You have unsaved sets. Are you sure you want to go back?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => {
-              clearSets();
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'RecordLanding' }],
-              });
-            },
-          },
-        ]
-      );
-    } else {
-      clearSets();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'RecordLanding' }],
-      });
-    }
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'RecordLanding' }],
+    });
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header: back left; timer + pause + end grouped on same line with border */}
       <View style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
-        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
+        <TouchableOpacity style={styles.headerButton} onPress={handleGoBack}>
           <ChevronLeft size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Current Workout</Text>
-        <View style={styles.backButton} />
+        <View style={styles.headerTimerGroup}>
+          <MonoText style={styles.headerTitle}>{formatStopwatch(elapsedSeconds)}</MonoText>
+          <TouchableOpacity
+            style={styles.headerTimerGroupButton}
+            onPress={handlePausePress}
+            activeOpacity={0.7}
+          >
+            {isPaused ? (
+              <Play size={20} color={COLORS.text} />
+            ) : (
+              <Pause size={20} color={COLORS.text} />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerEndWorkoutButton}
+            onPress={handleEndWorkout}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.headerEndWorkoutText}>End Workout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Add New Set Button */}
@@ -141,7 +183,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 80 },
+          { paddingBottom: Math.max(insets.bottom, SPACING.xl) },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -182,33 +224,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
           ))
         )}
       </ScrollView>
-
-      {/* End Workout Button */}
-      <View
-        style={[
-          styles.bottomButtonContainer,
-          {
-            paddingBottom: Math.max(insets.bottom, SPACING.md) + 80, // Account for tab bar
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.endButton, sets.length === 0 && styles.endButtonDisabled]}
-          onPress={handleEndWorkout}
-          activeOpacity={0.8}
-          disabled={sets.length === 0}
-        >
-          <Check size={20} color={sets.length > 0 ? '#000000' : COLORS.textSecondary} />
-          <Text
-            style={[
-              styles.endButtonText,
-              sets.length === 0 && styles.endButtonTextDisabled,
-            ]}
-          >
-            End workout
-          </Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -224,17 +239,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.sm,
+    minHeight: 48,
   },
-  backButton: {
+  headerTimerGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+  },
+  headerButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: FONTS.ui.bold,
+  headerTimerGroupButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.85,
+  },
+  headerEndWorkoutButton: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    justifyContent: 'center',
+    opacity: 0.85,
+  },
+  headerEndWorkoutText: {
+    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.text,
+    opacity: 0.9,
   },
   addButtonContainer: {
     paddingHorizontal: SPACING.lg,

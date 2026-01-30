@@ -129,7 +129,7 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   const insets = useSafeAreaInsets();
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
-  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'Camera');
+  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'Camera' || focusedRouteName === 'CurrentWorkout');
 
   // Notify parent of tab changes
   React.useEffect(() => {

@@ -10,20 +10,25 @@ export interface LoggedSet {
 
 type CurrentWorkoutContextValue = {
   sets: LoggedSet[];
+  workoutInProgress: boolean;
   addSet: (set: LoggedSet) => void;
   clearSets: () => void;
+  setWorkoutInProgress: (value: boolean) => void;
 };
 
 const defaultValue: CurrentWorkoutContextValue = {
   sets: [],
+  workoutInProgress: false,
   addSet: () => {},
   clearSets: () => {},
+  setWorkoutInProgress: () => {},
 };
 
 const CurrentWorkoutContext = createContext<CurrentWorkoutContextValue>(defaultValue);
 
 export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sets, setSets] = useState<LoggedSet[]>([]);
+  const [workoutInProgress, setWorkoutInProgress] = useState(false);
 
   const addSet = useCallback((set: LoggedSet) => {
     setSets((prev) => [...prev, set]);
@@ -31,10 +36,13 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
 
   const clearSets = useCallback(() => {
     setSets([]);
+    setWorkoutInProgress(false);
   }, []);
 
   return (
-    <CurrentWorkoutContext.Provider value={{ sets, addSet, clearSets }}>
+    <CurrentWorkoutContext.Provider
+      value={{ sets, workoutInProgress, addSet, clearSets, setWorkoutInProgress }}
+    >
       {children}
     </CurrentWorkoutContext.Provider>
   );
