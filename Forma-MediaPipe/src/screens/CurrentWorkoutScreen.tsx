@@ -10,10 +10,9 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronLeft, Dumbbell, Pause, Play } from 'lucide-react-native';
+import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
-import { saveWorkout } from '../services/workoutStorage';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 
 export type { LoggedSet };
@@ -117,27 +116,18 @@ export const CurrentWorkoutScreen: React.FC = () => {
       sets.reduce((sum, set) => sum + set.effortScore, 0) / sets.length
     );
 
-    // Use the first exercise's name as category or default to "General"
     const category = sets[0]?.exerciseName || 'General';
-    const now = new Date();
-    const name = `Workout – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const duration = formatStopwatch(elapsedSeconds);
 
-    // Save workout
-    saveWorkout({
-      name,
-      category,
-      duration: '0:00', // Can be enhanced with actual timing later
-      totalSets,
-      totalReps,
-      formScore: avgFormScore,
-      effortScore: avgEffortScore,
-    });
-
-    // Clear sets and reset to RecordLanding
-    clearSets();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'RecordLanding' }],
+    navigation.navigate('SaveWorkout', {
+      workoutData: {
+        category,
+        duration,
+        totalSets,
+        totalReps,
+        avgFormScore,
+        avgEffortScore,
+      },
     });
   };
 
@@ -147,6 +137,29 @@ export const CurrentWorkoutScreen: React.FC = () => {
       index: 0,
       routes: [{ name: 'RecordLanding' }],
     });
+  };
+
+  const handleDiscardWorkout = () => {
+    Alert.alert(
+      'Discard Workout',
+      'Are you sure? This will delete all recorded sets and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            clearSets();
+            setWorkoutElapsedSeconds(0);
+            setWorkoutInProgress(false);
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'RecordLanding' }],
+            });
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -176,6 +189,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
           >
             <Text style={styles.headerEndWorkoutText}>End Workout</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerDiscardButton}
+            onPress={handleDiscardWorkout}
+            activeOpacity={0.7}
+          >
+            <Trash2 size={18} color={COLORS.textSecondary} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -193,12 +213,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: Math.max(insets.bottom, SPACING.xl) },
+          sets.length === 0 && styles.scrollContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
       >
         {sets.length === 0 ? (
           <View style={styles.emptyState}>
-            <Dumbbell size={48} color={COLORS.textSecondary} />
+            <Dumbbell size={48} color={COLORS.textSecondary} strokeWidth={1} />
             <Text style={styles.emptyStateText}>No sets yet</Text>
             <Text style={styles.emptyStateSubtext}>Tap "Add new set" to get started</Text>
           </View>
@@ -253,8 +274,8 @@ const styles = StyleSheet.create({
   headerTimerGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.lg,
-    paddingHorizontal: SPACING.md,
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: 10,
     borderWidth: 1,
@@ -274,7 +295,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   headerEndWorkoutButton: {
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
     paddingVertical: SPACING.xs,
     justifyContent: 'center',
     opacity: 0.85,
@@ -283,6 +304,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
+  },
+  headerDiscardButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.85,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(128, 128, 128, 0.35)',
+    marginLeft: SPACING.xs,
+    paddingLeft: SPACING.xs,
   },
   headerTitle: {
     fontSize: 15,
@@ -316,10 +348,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.sm,
   },
+  scrollContentEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: SPACING.xxxl * 2,
+    alignSelf: 'stretch',
   },
   emptyStateText: {
     fontSize: 18,

@@ -39,7 +39,6 @@ export type RootStackParamList = {
   Insights: { metric: string };
   WorkoutDetails: { workoutId: string };
   WorkoutExercises: { category: string; color: string; iconName: string };
-  SaveWorkout: { workoutData: any };
   WorkoutInfo: undefined;
 };
 
@@ -49,6 +48,7 @@ export type RecordStackParamList = {
   CurrentWorkout: { newSet?: LoggedSet } | undefined;
   ChooseExercise: undefined;
   Camera: { exerciseName: string; category: string; returnToCurrentWorkout: true };
+  SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number; avgEffortScore: number } };
 };
 
 export type RootTabParamList = {
@@ -113,6 +113,7 @@ const RecordStackNavigator: React.FC = memo(() => {
       <RecordStack.Screen name="CurrentWorkout" component={CurrentWorkoutScreen} />
       <RecordStack.Screen name="ChooseExercise" component={ChooseExerciseScreen} />
       <RecordStack.Screen name="Camera" component={CameraScreen} />
+      <RecordStack.Screen name="SaveWorkout" component={SaveWorkoutScreen} />
     </RecordStack.Navigator>
   );
 });
@@ -129,7 +130,7 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   const insets = useSafeAreaInsets();
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
-  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'Camera' || focusedRouteName === 'CurrentWorkout');
+  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'Camera' || focusedRouteName === 'CurrentWorkout' || focusedRouteName === 'SaveWorkout');
 
   // Notify parent of tab changes
   React.useEffect(() => {
@@ -307,14 +308,6 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen 
         name="WorkoutExercises" 
         component={WorkoutExercisesScreen}
-        options={{
-          presentation: 'card',
-          animation: 'slide_from_right',
-        }}
-      />
-      <Stack.Screen 
-        name="SaveWorkout" 
-        component={SaveWorkoutScreen}
         options={{
           presentation: 'card',
           animation: 'slide_from_right',

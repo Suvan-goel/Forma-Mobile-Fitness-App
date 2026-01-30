@@ -8,7 +8,6 @@ import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { AppHeader } from '../components/ui/AppHeader';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
-import { saveWorkout } from '../services/workoutStorage';
 
 const formatStopwatch = (totalSeconds: number) => {
   const h = Math.floor(totalSeconds / 3600);
@@ -17,12 +16,7 @@ const formatStopwatch = (totalSeconds: number) => {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-type RecordStackParamList = {
-  RecordLanding: undefined;
-  CurrentWorkout: { newSet?: any } | undefined;
-  ChooseExercise: undefined;
-  Camera: { exerciseName: string; category: string; returnToCurrentWorkout: true };
-};
+import type { RecordStackParamList } from '../app/RootNavigator';
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'RecordLanding'>;
 
@@ -83,19 +77,18 @@ export const RecordLandingScreen: React.FC = () => {
       sets.reduce((sum, set) => sum + set.effortScore, 0) / sets.length
     );
     const category = sets[0]?.exerciseName || 'General';
-    const now = new Date();
-    const name = `Workout – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     const duration = formatStopwatch(workoutElapsedSeconds);
-    saveWorkout({
-      name,
-      category,
-      duration,
-      totalSets,
-      totalReps,
-      formScore: avgFormScore,
-      effortScore: avgEffortScore,
+
+    navigation.navigate('SaveWorkout', {
+      workoutData: {
+        category,
+        duration,
+        totalSets,
+        totalReps,
+        avgFormScore,
+        avgEffortScore,
+      },
     });
-    clearSets();
   };
 
   return (

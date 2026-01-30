@@ -15,17 +15,19 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
-import { RootStackParamList } from '../app/RootNavigator';
+import { RecordStackParamList } from '../app/RootNavigator';
 import { saveWorkout } from '../services/workoutStorage';
+import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
-type SaveWorkoutRouteProp = RouteProp<RootStackParamList, 'SaveWorkout'>;
-type SaveWorkoutNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SaveWorkout'>;
+type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
+type SaveWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'SaveWorkout'>;
 
 export const SaveWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<SaveWorkoutNavigationProp>();
   const route = useRoute<SaveWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
   const { workoutData } = route.params;
+  const { clearSets, setWorkoutInProgress } = useCurrentWorkout();
 
   const [workoutName, setWorkoutName] = useState('');
   const [workoutDescription, setWorkoutDescription] = useState('');
@@ -41,15 +43,18 @@ export const SaveWorkoutScreen: React.FC = () => {
       description: workoutDescription.trim() || undefined,
       category: workoutData.category,
       duration: workoutData.duration,
-      totalSets: 0, // Could calculate from workout data if available
+      totalSets: workoutData.totalSets,
       totalReps: workoutData.totalReps,
       formScore: workoutData.avgFormScore,
       effortScore: workoutData.avgEffortScore,
     });
 
+    clearSets();
+    setWorkoutInProgress(false);
+
     // Navigate to Logbook tab to show the saved workout
-    // Since SaveWorkout is in the Root Stack Navigator, we can use navigation directly
-    navigation.dispatch(
+    const rootNav = navigation.getParent()?.getParent();
+    rootNav?.dispatch(
       CommonActions.reset({
         index: 0,
         routes: [
@@ -84,28 +89,12 @@ export const SaveWorkoutScreen: React.FC = () => {
           text: 'Yes',
           style: 'destructive',
           onPress: () => {
-            // Navigate to Record page
-            // Since SaveWorkout is in the Root Stack Navigator, we can use navigation directly
-            navigation.dispatch(
-              CommonActions.reset({
-                index: 0,
-                routes: [
-                  {
-                    name: 'MainTabs',
-                    state: {
-                      routes: [
-                        { name: 'Logbook' },
-                        { name: 'Analytics' },
-                        { name: 'Record' },
-                        { name: 'Trainer' },
-                        { name: 'Rewards' },
-                      ],
-                      index: 2, // Record tab index
-                    },
-                  },
-                ],
-              })
-            );
+            clearSets();
+            setWorkoutInProgress(false);
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'RecordLanding' }],
+            });
           },
         },
       ]
@@ -158,10 +147,10 @@ export const SaveWorkoutScreen: React.FC = () => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description (Optional)</Text>
+            <Text style={styles.label}>Notes (Optional)</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Add a description..."
+              placeholder="Add notes..."
               placeholderTextColor={COLORS.textSecondary}
               value={workoutDescription}
               onChangeText={setWorkoutDescription}
