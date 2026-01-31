@@ -94,7 +94,7 @@ export const RecordLandingScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <AppHeader />
-      <View style={[styles.cardsContainer, { paddingBottom: navigationBarHeight + SPACING.md }]}>
+      <View style={[styles.cardsContainer, { paddingBottom: navigationBarHeight }]}>
         {/* Top Card - Workout in progress (when active) or Start New Workout */}
         {workoutInProgress ? (
           <View style={styles.card}>
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
+    paddingTop: 0,
     gap: SPACING.md,
   },
   card: {

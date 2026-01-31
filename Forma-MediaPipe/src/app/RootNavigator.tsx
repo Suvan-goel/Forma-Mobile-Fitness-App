@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native';
@@ -151,6 +152,11 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
         },
       ]}
     >
+      <LinearGradient
+        colors={['rgba(0, 0, 0, 0)', '#000000']}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.tabBarContent}>
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index;
 
@@ -175,6 +181,7 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
           />
         );
       })}
+      </View>
     </View>
   );
 });
@@ -222,24 +229,27 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     zIndex: 10,
-    flexDirection: 'row',
-    backgroundColor: '#000000',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 8,
-    paddingTop: 8,
-    borderTopWidth: 1.5,
-    borderTopColor: 'rgba(128, 128, 128, 0.2)',
+    paddingTop: 48,
+    paddingBottom: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 1,
     shadowRadius: 40,
     elevation: 40,
     overflow: 'hidden',
+  },
+  tabBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 20,
+    paddingBottom: 8,
   },
   tabItem: {
     minWidth: 0,
@@ -252,7 +262,6 @@ const styles = StyleSheet.create({
   },
   tabItemActive: {
     flex: 2,
-    backgroundColor: '#000000',
     paddingHorizontal: 6,
   },
   tabItemInactive: {
