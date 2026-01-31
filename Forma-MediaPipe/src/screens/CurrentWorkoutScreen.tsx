@@ -10,7 +10,7 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2 } from 'lucide-react-native';
+import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
@@ -21,7 +21,7 @@ type RecordStackParamList = {
   RecordLanding: undefined;
   CurrentWorkout: { newSet?: LoggedSet } | undefined;
   ChooseExercise: undefined;
-  Camera: { exerciseName: string; category: string; returnToCurrentWorkout: true };
+  Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout: true };
 };
 
 type CurrentWorkoutRouteProp = RouteProp<RecordStackParamList, 'CurrentWorkout'>;
@@ -32,6 +32,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const route = useRoute<CurrentWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
   const {
+    exercises,
     sets,
     addSet,
     clearSets,
@@ -41,8 +42,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
   } = useCurrentWorkout();
   const [elapsedSeconds, setElapsedSeconds] = useState(contextElapsed);
   const [isPaused, setIsPaused] = useState(false);
+  const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevSetCountsRef = useRef<Map<string, number>>(new Map());
 
   const formatStopwatch = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
@@ -96,8 +99,41 @@ export const CurrentWorkoutScreen: React.FC = () => {
     }, [route.params?.newSet, addSet, navigation])
   );
 
-  const handleAddSet = () => {
+  // Auto-expand exercises when new sets are added
+  useEffect(() => {
+    exercises.forEach((exercise) => {
+      const prevCount = prevSetCountsRef.current.get(exercise.id) || 0;
+      const currentCount = exercise.sets.length;
+      if (currentCount > prevCount) {
+        setExpandedExerciseIds((prev) => new Set(prev).add(exercise.id));
+      }
+      prevSetCountsRef.current.set(exercise.id, currentCount);
+    });
+  }, [exercises]);
+
+  const toggleExerciseExpanded = (exerciseId: string) => {
+    setExpandedExerciseIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(exerciseId)) {
+        newSet.delete(exerciseId);
+      } else {
+        newSet.add(exerciseId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleAddExercise = () => {
     navigation.navigate('ChooseExercise');
+  };
+
+  const handleAddSet = (exercise: { id: string; name: string; category: string }) => {
+    navigation.navigate('Camera', {
+      exerciseName: exercise.name,
+      category: exercise.category,
+      exerciseId: exercise.id,
+      returnToCurrentWorkout: true,
+    });
   };
 
   const handleEndWorkout = () => {
@@ -116,7 +152,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
       sets.reduce((sum, set) => sum + set.effortScore, 0) / sets.length
     );
 
-    const category = sets[0]?.exerciseName || 'General';
+    const category = exercises[0]?.name || 'General';
     const duration = formatStopwatch(elapsedSeconds);
 
     navigation.navigate('SaveWorkout', {
@@ -199,59 +235,91 @@ export const CurrentWorkoutScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Add New Set Button */}
+      {/* Add New Exercise Button */}
       <View style={styles.addButtonContainer}>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddSet} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddExercise} activeOpacity={0.8}>
           <Plus size={20} color="#000000" />
-          <Text style={styles.addButtonText}>Add new set</Text>
+          <Text style={styles.addButtonText}>Add new exercise</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Sets List */}
+      {/* Exercises List */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: Math.max(insets.bottom, SPACING.xl) },
-          sets.length === 0 && styles.scrollContentEmpty,
+          exercises.length === 0 && styles.scrollContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {sets.length === 0 ? (
+        {exercises.length === 0 ? (
           <View style={styles.emptyState}>
             <Dumbbell size={48} color={COLORS.textSecondary} strokeWidth={1} />
             <Text style={styles.emptyStateText}>No sets yet</Text>
-            <Text style={styles.emptyStateSubtext}>Tap "Add new set" to get started</Text>
+            <Text style={styles.emptyStateSubtext}>Tap "Add new exercise" to get started</Text>
           </View>
         ) : (
-          sets.map((set, index) => (
-            <View key={index} style={styles.setCard}>
-              <View style={styles.setHeader}>
-                <Text style={styles.setNumber}>Set {index + 1}</Text>
-                <Text style={styles.exerciseName}>{set.exerciseName}</Text>
+          exercises.map((exercise) => {
+            const isExpanded = expandedExerciseIds.has(exercise.id);
+            return (
+              <View key={exercise.id} style={styles.exerciseCard}>
+                <TouchableOpacity
+                  style={styles.exerciseCardHeader}
+                  onPress={() => toggleExerciseExpanded(exercise.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.exerciseName}>{exercise.name}</Text>
+                  <View style={styles.exerciseHeaderRight}>
+                    <Text style={styles.setCount}>{exercise.sets.length} sets</Text>
+                    {isExpanded ? (
+                      <ChevronUp size={20} color={COLORS.textSecondary} />
+                    ) : (
+                      <ChevronDown size={20} color={COLORS.textSecondary} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {isExpanded && (
+                  <View style={styles.setsList}>
+                    {exercise.sets.map((set, setIndex) => (
+                      <View key={setIndex} style={styles.setCard}>
+                        <Text style={styles.setNumber}>Set {setIndex + 1}</Text>
+                        <View style={styles.setMetrics}>
+                          <View style={styles.metricItem}>
+                            <Text style={styles.metricLabel}>Reps</Text>
+                            <MonoText style={styles.metricValue}>{set.reps}</MonoText>
+                          </View>
+                          <View style={styles.metricItem}>
+                            <Text style={styles.metricLabel}>Weight</Text>
+                            <MonoText style={styles.metricValue}>
+                              {set.weight && set.weight > 0 ? `${set.weight}` : '—'}
+                            </MonoText>
+                          </View>
+                          <View style={styles.metricItem}>
+                            <Text style={styles.metricLabel}>Form</Text>
+                            <MonoText style={styles.metricValue}>{set.formScore}</MonoText>
+                          </View>
+                          <View style={styles.metricItem}>
+                            <Text style={styles.metricLabel}>Effort</Text>
+                            <MonoText style={styles.metricValue}>{set.effortScore}</MonoText>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={styles.addSetButton}
+                  onPress={() => handleAddSet(exercise)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.addSetButtonText}>Add set</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.setMetrics}>
-                <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Reps</Text>
-                  <MonoText style={styles.metricValue}>{set.reps}</MonoText>
-                </View>
-                <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Weight</Text>
-                  <MonoText style={styles.metricValue}>
-                    {set.weight && set.weight > 0 ? `${set.weight}` : '—'}
-                  </MonoText>
-                </View>
-                <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Form</Text>
-                  <MonoText style={styles.metricValue}>{set.formScore}</MonoText>
-                </View>
-                <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Effort</Text>
-                  <MonoText style={styles.metricValue}>{set.effortScore}</MonoText>
-                </View>
-              </View>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -370,13 +438,50 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     marginTop: SPACING.xs,
   },
-  setCard: {
+  exerciseCard: {
     backgroundColor: '#1E2228',
     borderRadius: 12,
-    padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.primary + '40',
+    overflow: 'hidden',
+  },
+  exerciseCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.md,
+  },
+  exerciseHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  setCount: {
+    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+  },
+  setsList: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  addSetButton: {
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  addSetButtonText: {
+    fontSize: 14,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.primary,
+  },
+  setCard: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(128, 128, 128, 0.15)',
   },
   setHeader: {
     flexDirection: 'row',
@@ -387,7 +492,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.ui.bold,
     color: COLORS.primary,
-    marginRight: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   exerciseName: {
     fontSize: 16,

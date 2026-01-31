@@ -27,6 +27,7 @@ import { COLORS, FONTS } from '../constants/theme';
 export type CameraParams = { 
   category?: string;
   exerciseName?: string;
+  exerciseId?: string;
   returnToCurrentWorkout?: boolean;
 } | undefined;
 
@@ -47,7 +48,7 @@ export type RecordStackParamList = {
   RecordLanding: undefined;
   CurrentWorkout: { newSet?: LoggedSet } | undefined;
   ChooseExercise: undefined;
-  Camera: { exerciseName: string; category: string; returnToCurrentWorkout: true };
+  Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout?: true };
   SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number; avgEffortScore: number } };
 };
 

@@ -40,7 +40,7 @@ export const CameraScreen: React.FC = () => {
   const navigation = useNavigation<CameraScreenNavigationProp>();
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
-  const { addSet } = useCurrentWorkout();
+  const { addSetToExercise } = useCurrentWorkout();
   
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -59,6 +59,7 @@ export const CameraScreen: React.FC = () => {
 
   const category = route.params?.category ?? 'Weightlifting';
   const exerciseNameFromRoute = (route.params as any)?.exerciseName;
+  const exerciseId = (route.params as any)?.exerciseId;
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
 
@@ -208,7 +209,7 @@ export const CameraScreen: React.FC = () => {
         : 0;
 
       // Check if this is from the Record stack (Current Workout flow)
-      if (returnToCurrentWorkout && exerciseNameFromRoute) {
+      if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
         const newSet = {
           exerciseName: exerciseNameFromRoute,
           reps: workoutData.totalReps,
@@ -216,7 +217,7 @@ export const CameraScreen: React.FC = () => {
           formScore: avgFormScore,
           effortScore: avgEffortScore,
         };
-        addSet(newSet);
+        addSetToExercise(exerciseId, newSet);
         // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
         setIsClosing(true);
         setCameraMounted(false);
@@ -260,7 +261,7 @@ export const CameraScreen: React.FC = () => {
         duration: 0,
       });
     }
-  }, [isRecording, workoutData, category, exerciseNameFromRoute, returnToCurrentWorkout, navigation, addSet]);
+  }, [isRecording, workoutData, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(!isPaused);

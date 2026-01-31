@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, HelpCircle, Search } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 // Category-based images so each card shows an image matching its exercise type
 const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
@@ -126,17 +127,14 @@ export const ChooseExerciseScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('all');
+  const { addExercise } = useCurrentWorkout();
 
   // Fixed card width so the last card in an odd row doesn't stretch full width
   const cardWidth = (screenWidth - SPACING.md * 2 - SPACING.md) / 2;
 
   const handleSelectExercise = (exercise: Exercise) => {
-    navigation.navigate('Camera', {
-      exerciseName: exercise.name,
-      category: exercise.category,
-      returnToCurrentWorkout: true,
-      cameraSessionKey: Date.now(),
-    });
+    addExercise({ name: exercise.name, category: exercise.category });
+    navigation.navigate('CurrentWorkout');
   };
 
   const handleGoBack = () => {
