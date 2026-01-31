@@ -210,11 +210,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.xs,
   },
   pointsCard: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#121212',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.35)',
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
   rewardCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#121212',
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.35)',

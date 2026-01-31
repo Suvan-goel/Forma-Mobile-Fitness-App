@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: SPACING.sm,
   },
   backButton: {
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     height: 70,
   },
   muscleGroupTab: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
     height: 70,
     alignItems: 'center',
     justifyContent: 'center',
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: SPACING.md,
   },
   subheading: {
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   cardsContainer: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.sm,
   },
   cardRow: {

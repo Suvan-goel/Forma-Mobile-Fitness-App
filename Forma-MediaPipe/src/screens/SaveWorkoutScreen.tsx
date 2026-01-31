@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topBar: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: SPACING.sm,
     zIndex: 10,
   },
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.md,
   },
   header: {
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,

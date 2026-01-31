@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topBar: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: SPACING.sm,
     zIndex: 10,
   },
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.md,
     paddingBottom: 100,
   },
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,

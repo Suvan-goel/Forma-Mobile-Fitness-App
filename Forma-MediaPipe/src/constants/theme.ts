@@ -41,6 +41,8 @@ export const SPACING = {
   xl: 24,
   xxl: 32,
   xxxl: 48,
+  /** Reduced horizontal padding for screen edges - uses more of phone width */
+  screenHorizontal: 12,
 } as const;
 
 export const FONTS = {

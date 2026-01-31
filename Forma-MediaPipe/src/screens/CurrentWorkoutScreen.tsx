@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: SPACING.sm,
     minHeight: 48,
   },
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   addButtonContainer: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.md,
     backgroundColor: COLORS.background,
   },
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.sm,
   },
   scrollContentEmpty: {
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   bottomButtonContainer: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.md,
     backgroundColor: COLORS.background,
   },

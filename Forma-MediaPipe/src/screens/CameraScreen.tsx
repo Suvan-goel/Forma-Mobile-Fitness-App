@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   weightsIconContainer: {
     width: 44,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   exerciseTopCard: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   flipButton: {
     width: 44,

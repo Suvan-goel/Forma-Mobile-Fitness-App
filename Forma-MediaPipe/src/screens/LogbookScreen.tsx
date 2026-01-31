@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     gap: 8,
     alignItems: 'center',
     height: 48,
@@ -656,7 +656,7 @@ const styles = StyleSheet.create({
   tabPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: COLORS.cardBackground,
@@ -703,7 +703,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: SPACING.md,
     zIndex: 10,
     backgroundColor: COLORS.background,
@@ -732,7 +732,7 @@ const styles = StyleSheet.create({
     maxHeight: 300,
   },
   dropdownItem: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 12,
     borderRadius: 12,
   },
@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: FONTS.ui.bold,
     color: COLORS.primary,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   calendarTitle: {
     fontSize: 18,
@@ -842,14 +842,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   summaryContainer: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.lg,
   },
   summaryCard: {
     backgroundColor: COLORS.cardBackground,
     borderRadius: 20,
     paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -882,13 +882,15 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   listContent: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
     gap: 8,
   },
   card: {
     backgroundColor: '#121212',
-    borderRadius: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
     padding: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',

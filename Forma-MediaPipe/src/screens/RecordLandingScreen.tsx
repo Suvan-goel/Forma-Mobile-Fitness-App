@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   cardsContainer: {
     flex: 1,
     flexDirection: 'column',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
     gap: SPACING.md,
   },

@@ -788,13 +788,13 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     gap: 8,
     alignItems: 'center', // Vertically center tabs
     minHeight: 40, // Match original tab height
   },
   tabPill: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: COLORS.cardBackground,
@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     gap: SPACING.md,
   },
   statsGrid: {
@@ -992,7 +992,7 @@ const styles = StyleSheet.create({
   selectedDateContainer: {
     marginTop: SPACING.sm,
     paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 8,
     alignSelf: 'flex-start',
@@ -1008,7 +1008,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: SPACING.md,
     paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
     borderRadius: 12,
     backgroundColor: COLORS.cardBackgroundLight,
   },
@@ -1145,7 +1145,7 @@ const styles = StyleSheet.create({
   timeRangeDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 12,
     borderRadius: 20,
     backgroundColor: COLORS.cardBackground,
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   dropdownItem: {
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 12,
   },
   dropdownItemActive: {

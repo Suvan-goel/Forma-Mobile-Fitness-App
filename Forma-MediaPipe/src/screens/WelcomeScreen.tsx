@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
     justifyContent: 'center',
     paddingBottom: SPACING.xl,
   },
