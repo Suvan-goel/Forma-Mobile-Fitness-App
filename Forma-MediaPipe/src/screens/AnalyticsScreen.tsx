@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Dimensions, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Activity, Flame, Droplet, Dumbbell, Target, Zap, TrendingUp, ChevronRight, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react-native';
+import { Activity, Flame, Droplet, Dumbbell, Target, TrendingUp, ChevronRight, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -122,7 +122,7 @@ const getDayColor = (date: Date): string => {
   return dayColors[day] || '#00D4BB';
 };
 
-// Score Chart Component (Form, Effort, Consistency)
+// Score Chart Component (Form, Consistency, Strength)
 const ScoreChart = ({ 
   title, 
   initialValue, 
@@ -638,20 +638,16 @@ export const AnalyticsScreen: React.FC = () => {
 
   // Base data for each metric
   const formBaseData = [72, 75, 78, 82, 80, 85, 87];
-  const effortBaseData = [68, 72, 75, 80, 85, 88, 92];
   const consistencyBaseData = [65, 70, 68, 72, 75, 78, 79];
   const strengthBaseData = [70, 72, 75, 78, 80, 82, 84];
 
   // Generate data based on selected time range
   const formDataResult = generateDataForTimeRange(formBaseData, activeTab);
-  const effortDataResult = generateDataForTimeRange(effortBaseData, activeTab);
   const consistencyDataResult = generateDataForTimeRange(consistencyBaseData, activeTab);
   const strengthDataResult = generateDataForTimeRange(strengthBaseData, activeTab);
   
   const formData = formDataResult.values;
   const formDates = formDataResult.dates;
-  const effortData = effortDataResult.values;
-  const effortDates = effortDataResult.dates;
   const consistencyData = consistencyDataResult.values;
   const consistencyDates = consistencyDataResult.dates;
   const strengthData = strengthDataResult.values;
@@ -660,8 +656,6 @@ export const AnalyticsScreen: React.FC = () => {
   // Get current and comparison values
   const formCurrent = formData[formData.length - 1];
   const formComparison = getComparisonValue(formData, activeTab);
-  const effortCurrent = effortData[effortData.length - 1];
-  const effortComparison = getComparisonValue(effortData, activeTab);
   const consistencyCurrent = consistencyData[consistencyData.length - 1];
   const consistencyComparison = getComparisonValue(consistencyData, activeTab);
 
@@ -711,12 +705,6 @@ export const AnalyticsScreen: React.FC = () => {
             icon={Target}
           />
           <ImprovementCard
-            title="Effort"
-            currentValue={effortCurrent}
-            previousValue={effortComparison}
-            icon={Zap}
-          />
-          <ImprovementCard
             title="Consistency"
             currentValue={consistencyCurrent}
             previousValue={consistencyComparison}
@@ -745,15 +733,6 @@ export const AnalyticsScreen: React.FC = () => {
           icon={Target}
           data={formData}
           dates={formDates}
-        />
-
-        {/* Effort Score Chart */}
-        <ScoreChart
-          title="Effort"
-          initialValue={effortCurrent}
-          icon={Zap}
-          data={effortData}
-          dates={effortDates}
         />
 
         {/* Consistency Score Chart */}
@@ -826,8 +805,7 @@ const styles = StyleSheet.create({
   },
   stepsCard: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 24,
+    ...CARD_STYLE,
     padding: SPACING.lg,
   },
   stepsHeader: {
@@ -886,8 +864,7 @@ const styles = StyleSheet.create({
   },
   smallCard: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 24,
+    ...CARD_STYLE,
     padding: SPACING.md,
     justifyContent: 'center',
   },
@@ -911,8 +888,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   chartCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 24,
+    ...CARD_STYLE,
     padding: SPACING.lg,
   },
   chartCardHeader: {
@@ -1066,13 +1042,10 @@ const styles = StyleSheet.create({
   },
   improvementCard: {
     width: '100%',
-    backgroundColor: 'transparent',
-    borderRadius: 20,
+    ...CARD_STYLE,
     padding: SPACING.md,
     paddingTop: SPACING.md + 2,
     gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.2)',
   },
   improvementCardTopRow: {
     flexDirection: 'row',
@@ -1147,10 +1120,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 12,
-    borderRadius: 20,
-    backgroundColor: COLORS.cardBackground,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    ...CARD_STYLE,
   },
   timeRangeDropdownText: {
     fontSize: 14,
@@ -1164,8 +1134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dropdownMenu: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    ...CARD_STYLE,
     paddingVertical: 8,
     minWidth: 200,
     shadowColor: '#000',

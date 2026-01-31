@@ -50,7 +50,7 @@ export type RecordStackParamList = {
   CurrentWorkout: { newSet?: LoggedSet } | undefined;
   ChooseExercise: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout?: true };
-  SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number; avgEffortScore: number } };
+  SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number } };
 };
 
 export type RootTabParamList = {

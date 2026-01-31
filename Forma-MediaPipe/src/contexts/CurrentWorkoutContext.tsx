@@ -5,7 +5,6 @@ export interface LoggedSet {
   reps: number;
   weight?: number;
   formScore: number;
-  effortScore: number;
 }
 
 export interface WorkoutExercise {

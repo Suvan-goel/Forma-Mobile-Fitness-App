@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LayoutTemplate, Plus, Timer, Trash2, Pause, Play, Flag } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { AppHeader } from '../components/ui/AppHeader';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
@@ -73,9 +73,6 @@ export const RecordLandingScreen: React.FC = () => {
     const avgFormScore = Math.round(
       sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
     );
-    const avgEffortScore = Math.round(
-      sets.reduce((sum, set) => sum + set.effortScore, 0) / sets.length
-    );
     const category = sets[0]?.exerciseName || 'General';
     const duration = formatStopwatch(workoutElapsedSeconds);
 
@@ -86,7 +83,6 @@ export const RecordLandingScreen: React.FC = () => {
         totalSets,
         totalReps,
         avgFormScore,
-        avgEffortScore,
       },
     });
   };
@@ -200,8 +196,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    backgroundColor: '#121212',
-    borderRadius: 10,
+    ...CARD_STYLE,
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING.lg,

@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Target, Zap } from 'lucide-react-native';
+import { ChevronLeft, Target } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 
 type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetails'>;
@@ -16,7 +16,6 @@ interface Set {
   reps: number;
   weight: number; // in lbs or kg
   formScore: number;
-  effortScore: number;
 }
 
 interface Exercise {
@@ -45,28 +44,28 @@ const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
         id: '1',
         name: 'Bench Press',
         sets: [
-          { setNumber: 1, reps: 8, weight: 225, formScore: 88, effortScore: 92 },
-          { setNumber: 2, reps: 8, weight: 225, formScore: 87, effortScore: 93 },
-          { setNumber: 3, reps: 6, weight: 225, formScore: 85, effortScore: 95 },
-          { setNumber: 4, reps: 6, weight: 225, formScore: 86, effortScore: 94 },
+          { setNumber: 1, reps: 8, weight: 225, formScore: 88 },
+          { setNumber: 2, reps: 8, weight: 225, formScore: 87 },
+          { setNumber: 3, reps: 6, weight: 225, formScore: 85 },
+          { setNumber: 4, reps: 6, weight: 225, formScore: 86 },
         ],
       },
       {
         id: '2',
         name: 'Overhead Press',
         sets: [
-          { setNumber: 1, reps: 8, weight: 135, formScore: 90, effortScore: 88 },
-          { setNumber: 2, reps: 8, weight: 135, formScore: 89, effortScore: 89 },
-          { setNumber: 3, reps: 6, weight: 135, formScore: 88, effortScore: 90 },
+          { setNumber: 1, reps: 8, weight: 135, formScore: 90 },
+          { setNumber: 2, reps: 8, weight: 135, formScore: 89 },
+          { setNumber: 3, reps: 6, weight: 135, formScore: 88 },
         ],
       },
       {
         id: '3',
         name: 'Incline Dumbbell Press',
         sets: [
-          { setNumber: 1, reps: 10, weight: 70, formScore: 85, effortScore: 87 },
-          { setNumber: 2, reps: 10, weight: 70, formScore: 84, effortScore: 88 },
-          { setNumber: 3, reps: 8, weight: 70, formScore: 83, effortScore: 89 },
+          { setNumber: 1, reps: 10, weight: 70, formScore: 85 },
+          { setNumber: 2, reps: 10, weight: 70, formScore: 84 },
+          { setNumber: 3, reps: 8, weight: 70, formScore: 83 },
         ],
       },
     ],
@@ -81,28 +80,28 @@ const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
         id: '1',
         name: 'Barbell Squat',
         sets: [
-          { setNumber: 1, reps: 12, weight: 185, formScore: 82, effortScore: 85 },
-          { setNumber: 2, reps: 12, weight: 185, formScore: 83, effortScore: 86 },
-          { setNumber: 3, reps: 10, weight: 185, formScore: 84, effortScore: 87 },
-          { setNumber: 4, reps: 10, weight: 185, formScore: 85, effortScore: 88 },
+          { setNumber: 1, reps: 12, weight: 185, formScore: 82 },
+          { setNumber: 2, reps: 12, weight: 185, formScore: 83 },
+          { setNumber: 3, reps: 10, weight: 185, formScore: 84 },
+          { setNumber: 4, reps: 10, weight: 185, formScore: 85 },
         ],
       },
       {
         id: '2',
         name: 'Romanian Deadlift',
         sets: [
-          { setNumber: 1, reps: 10, weight: 225, formScore: 88, effortScore: 85 },
-          { setNumber: 2, reps: 10, weight: 225, formScore: 87, effortScore: 86 },
-          { setNumber: 3, reps: 8, weight: 225, formScore: 89, effortScore: 87 },
+          { setNumber: 1, reps: 10, weight: 225, formScore: 88 },
+          { setNumber: 2, reps: 10, weight: 225, formScore: 87 },
+          { setNumber: 3, reps: 8, weight: 225, formScore: 89 },
         ],
       },
       {
         id: '3',
         name: 'Leg Press',
         sets: [
-          { setNumber: 1, reps: 15, weight: 315, formScore: 80, effortScore: 82 },
-          { setNumber: 2, reps: 15, weight: 315, formScore: 81, effortScore: 83 },
-          { setNumber: 3, reps: 12, weight: 315, formScore: 82, effortScore: 84 },
+          { setNumber: 1, reps: 15, weight: 315, formScore: 80 },
+          { setNumber: 2, reps: 15, weight: 315, formScore: 81 },
+          { setNumber: 3, reps: 12, weight: 315, formScore: 82 },
         ],
       },
     ],
@@ -117,27 +116,27 @@ const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
         id: '1',
         name: 'Deadlift',
         sets: [
-          { setNumber: 1, reps: 8, weight: 275, formScore: 85, effortScore: 88 },
-          { setNumber: 2, reps: 8, weight: 275, formScore: 86, effortScore: 89 },
-          { setNumber: 3, reps: 6, weight: 275, formScore: 84, effortScore: 90 },
+          { setNumber: 1, reps: 8, weight: 275, formScore: 85 },
+          { setNumber: 2, reps: 8, weight: 275, formScore: 86 },
+          { setNumber: 3, reps: 6, weight: 275, formScore: 84 },
         ],
       },
       {
         id: '2',
         name: 'Pull-ups',
         sets: [
-          { setNumber: 1, reps: 10, weight: 0, formScore: 88, effortScore: 85 },
-          { setNumber: 2, reps: 8, weight: 0, formScore: 87, effortScore: 86 },
-          { setNumber: 3, reps: 8, weight: 0, formScore: 86, effortScore: 87 },
+          { setNumber: 1, reps: 10, weight: 0, formScore: 88 },
+          { setNumber: 2, reps: 8, weight: 0, formScore: 87 },
+          { setNumber: 3, reps: 8, weight: 0, formScore: 86 },
         ],
       },
       {
         id: '3',
         name: 'Dips',
         sets: [
-          { setNumber: 1, reps: 12, weight: 0, formScore: 82, effortScore: 80 },
-          { setNumber: 2, reps: 10, weight: 0, formScore: 83, effortScore: 81 },
-          { setNumber: 3, reps: 10, weight: 0, formScore: 84, effortScore: 82 },
+          { setNumber: 1, reps: 12, weight: 0, formScore: 82 },
+          { setNumber: 2, reps: 10, weight: 0, formScore: 83 },
+          { setNumber: 3, reps: 10, weight: 0, formScore: 84 },
         ],
       },
     ],
@@ -152,16 +151,16 @@ const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
         id: '1',
         name: 'Hip Flexor Stretch',
         sets: [
-          { setNumber: 1, reps: 1, weight: 0, formScore: 75, effortScore: 70 },
-          { setNumber: 2, reps: 1, weight: 0, formScore: 76, effortScore: 71 },
+          { setNumber: 1, reps: 1, weight: 0, formScore: 75 },
+          { setNumber: 2, reps: 1, weight: 0, formScore: 76 },
         ],
       },
       {
         id: '2',
         name: 'Shoulder Mobility',
         sets: [
-          { setNumber: 1, reps: 10, weight: 0, formScore: 78, effortScore: 72 },
-          { setNumber: 2, reps: 10, weight: 0, formScore: 79, effortScore: 73 },
+          { setNumber: 1, reps: 10, weight: 0, formScore: 78 },
+          { setNumber: 2, reps: 10, weight: 0, formScore: 79 },
         ],
       },
     ],
@@ -176,18 +175,18 @@ const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
         id: '1',
         name: 'Barbell Row',
         sets: [
-          { setNumber: 1, reps: 8, weight: 185, formScore: 90, effortScore: 88 },
-          { setNumber: 2, reps: 8, weight: 185, formScore: 91, effortScore: 89 },
-          { setNumber: 3, reps: 6, weight: 185, formScore: 89, effortScore: 90 },
+          { setNumber: 1, reps: 8, weight: 185, formScore: 90 },
+          { setNumber: 2, reps: 8, weight: 185, formScore: 91 },
+          { setNumber: 3, reps: 6, weight: 185, formScore: 89 },
         ],
       },
       {
         id: '2',
         name: 'Lat Pulldown',
         sets: [
-          { setNumber: 1, reps: 10, weight: 150, formScore: 88, effortScore: 85 },
-          { setNumber: 2, reps: 10, weight: 150, formScore: 87, effortScore: 86 },
-          { setNumber: 3, reps: 8, weight: 150, formScore: 89, effortScore: 87 },
+          { setNumber: 1, reps: 10, weight: 150, formScore: 88 },
+          { setNumber: 2, reps: 10, weight: 150, formScore: 87 },
+          { setNumber: 3, reps: 8, weight: 150, formScore: 89 },
         ],
       },
     ],
@@ -202,14 +201,14 @@ const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
         id: '1',
         name: 'Running',
         sets: [
-          { setNumber: 1, reps: 1, weight: 0, formScore: 78, effortScore: 85 },
+          { setNumber: 1, reps: 1, weight: 0, formScore: 78 },
         ],
       },
       {
         id: '2',
         name: 'Rowing',
         sets: [
-          { setNumber: 1, reps: 500, weight: 0, formScore: 80, effortScore: 88 },
+          { setNumber: 1, reps: 500, weight: 0, formScore: 80 },
         ],
       },
     ],
@@ -230,10 +229,6 @@ const ExerciseCard: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
           <Target size={12} color={COLORS.primary} />
           <Text style={styles.setsHeaderText}>Form</Text>
         </View>
-        <View style={styles.scoreColumn}>
-          <Zap size={12} color={COLORS.primary} />
-          <Text style={styles.setsHeaderText}>Effort</Text>
-        </View>
       </View>
 
       {/* Sets */}
@@ -246,9 +241,6 @@ const ExerciseCard: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
           </Text>
           <MonoText style={[styles.setCell, styles.scoreCell]}>
             {set.formScore}
-          </MonoText>
-          <MonoText style={[styles.setCell, styles.scoreCell]}>
-            {set.effortScore}
           </MonoText>
         </View>
       ))}
@@ -366,8 +358,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   exerciseCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 20,
+    ...CARD_STYLE,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
   },

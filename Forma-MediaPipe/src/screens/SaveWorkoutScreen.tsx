@@ -14,7 +14,7 @@ import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-naviga
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
 import { saveWorkout } from '../services/workoutStorage';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
@@ -46,7 +46,6 @@ export const SaveWorkoutScreen: React.FC = () => {
       totalSets: workoutData.totalSets,
       totalReps: workoutData.totalReps,
       formScore: workoutData.avgFormScore,
-      effortScore: workoutData.avgEffortScore,
     });
 
     clearSets();
@@ -175,10 +174,6 @@ export const SaveWorkoutScreen: React.FC = () => {
               <Text style={styles.summaryLabel}>Avg Form Score:</Text>
               <Text style={styles.summaryValue}>{workoutData.avgFormScore}%</Text>
             </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Avg Effort Score:</Text>
-              <Text style={styles.summaryValue}>{workoutData.avgEffortScore}%</Text>
-            </View>
           </View>
         </View>
       </ScrollView>
@@ -254,25 +249,19 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   input: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    ...CARD_STYLE,
     padding: SPACING.md,
     fontSize: 16,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   textArea: {
     minHeight: 100,
     paddingTop: SPACING.md,
   },
   summaryCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    ...CARD_STYLE,
     padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   summaryTitle: {
     fontSize: 18,

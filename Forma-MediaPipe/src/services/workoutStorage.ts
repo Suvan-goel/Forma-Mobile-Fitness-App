@@ -12,7 +12,6 @@ export interface SavedWorkout {
   totalSets: number;
   totalReps: number;
   formScore: number;
-  effortScore: number;
 }
 
 let workouts: SavedWorkout[] = [];

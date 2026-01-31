@@ -9,7 +9,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, Video, Lightbulb, ChevronDown } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { RootStackParamList } from '../app/RootNavigator';
 
 type WorkoutInfoRouteProp = RouteProp<RootStackParamList, 'WorkoutInfo'>;
@@ -165,8 +165,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   exercisesList: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 20,
+    ...CARD_STYLE,
     padding: SPACING.md,
     gap: SPACING.sm,
   },
@@ -186,8 +185,7 @@ const styles = StyleSheet.create({
   },
   instructionItem: {
     flexDirection: 'row',
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    ...CARD_STYLE,
     padding: SPACING.md,
     gap: SPACING.md,
   },

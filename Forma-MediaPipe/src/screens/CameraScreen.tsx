@@ -47,13 +47,11 @@ export const CameraScreen: React.FC = () => {
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [currentFormScore, setCurrentFormScore] = useState<number | null>(null);
-  const [currentEffortScore, setCurrentEffortScore] = useState<number | null>(null);
   const [exercisePhase, setExercisePhase] = useState<'up' | 'down' | 'idle'>('idle');
   const [workoutStartTime, setWorkoutStartTime] = useState<Date | null>(null);
   const [workoutData, setWorkoutData] = useState({
     totalReps: 0,
     formScores: [] as number[],
-    effortScores: [] as number[],
     duration: 0,
   });
 
@@ -173,18 +171,15 @@ export const CameraScreen: React.FC = () => {
       // Rep completed
       if (repUpdate.repCount > repCountRef.current) {
         const formScore = repUpdate.formScore;
-        const effortScore = Math.min(95, 75 + Math.floor(detection.confidence * 20));
         
         setRepCount(repUpdate.repCount);
         setCurrentFormScore(formScore);
-        setCurrentEffortScore(effortScore);
         
         // Update workout data with functional update to avoid stale closures
         setWorkoutData(prev => ({
           ...prev,
           totalReps: prev.totalReps + 1,
           formScores: [...prev.formScores, formScore],
-          effortScores: [...prev.effortScores, effortScore],
         }));
       }
     } else if (currentExerciseRef.current !== null) {
@@ -204,9 +199,6 @@ export const CameraScreen: React.FC = () => {
       const avgFormScore = workoutData.formScores.length > 0
         ? Math.round(workoutData.formScores.reduce((a, b) => a + b, 0) / workoutData.formScores.length)
         : 0;
-      const avgEffortScore = workoutData.effortScores.length > 0
-        ? Math.round(workoutData.effortScores.reduce((a, b) => a + b, 0) / workoutData.effortScores.length)
-        : 0;
 
       // Check if this is from the Record stack (Current Workout flow)
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
@@ -215,7 +207,6 @@ export const CameraScreen: React.FC = () => {
           reps: workoutData.totalReps,
           weight: 0,
           formScore: avgFormScore,
-          effortScore: avgEffortScore,
         };
         addSetToExercise(exerciseId, newSet);
         // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
@@ -235,7 +226,6 @@ export const CameraScreen: React.FC = () => {
           duration: durationString,
           totalReps: workoutData.totalReps,
           avgFormScore,
-          avgEffortScore,
         };
 
         setTimeout(() => {
@@ -252,12 +242,10 @@ export const CameraScreen: React.FC = () => {
       setCurrentExercise(exerciseNameFromRoute || null);
       setRepCount(0);
       setCurrentFormScore(null);
-      setCurrentEffortScore(null);
       setIsPaused(false);
       setWorkoutData({
         totalReps: 0,
         formScores: [],
-        effortScores: [],
         duration: 0,
       });
     }
@@ -295,9 +283,8 @@ export const CameraScreen: React.FC = () => {
   const displayValues = useMemo(() => ({
     reps: repCount > 0 ? repCount : '-',
     form: repCount > 0 && currentFormScore !== null ? currentFormScore : '-',
-    effort: repCount > 0 && currentEffortScore !== null ? currentEffortScore : '-',
     exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
-  }), [repCount, currentFormScore, currentEffortScore, currentExercise, exerciseNameFromRoute]);
+  }), [repCount, currentFormScore, currentExercise, exerciseNameFromRoute]);
 
   const showCamera = cameraMounted && !isClosing;
 
@@ -360,12 +347,6 @@ export const CameraScreen: React.FC = () => {
               <Text style={styles.metricLabel}>Form</Text>
               <MonoText style={styles.metricValue}>
                 {displayValues.form}
-              </MonoText>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Effort</Text>
-              <MonoText style={styles.metricValue}>
-                {displayValues.effort}
               </MonoText>
             </View>
           </View>

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Send, Bot, TrendingUp, Target, AlertCircle, CheckCircle2 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 
 // Mock workout data (same as LogbookScreen)
 interface WorkoutSession {
@@ -24,7 +24,6 @@ interface WorkoutSession {
   totalSets: number;
   totalReps: number;
   formScore: number;
-  effortScore: number;
 }
 
 const mockWorkoutSessions: WorkoutSession[] = [
@@ -37,7 +36,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 15,
     totalReps: 120,
     formScore: 87,
-    effortScore: 92,
   },
   {
     id: '2',
@@ -48,7 +46,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 18,
     totalReps: 210,
     formScore: 85,
-    effortScore: 88,
   },
   {
     id: '3',
@@ -59,7 +56,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 12,
     totalReps: 300,
     formScore: 82,
-    effortScore: 85,
   },
   {
     id: '4',
@@ -70,7 +66,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 8,
     totalReps: 50,
     formScore: 75,
-    effortScore: 70,
   },
   {
     id: '5',
@@ -81,7 +76,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 16,
     totalReps: 180,
     formScore: 90,
-    effortScore: 88,
   },
   {
     id: '6',
@@ -92,7 +86,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 10,
     totalReps: 200,
     formScore: 78,
-    effortScore: 85,
   },
 ];
 
@@ -113,11 +106,6 @@ const calculateProgress = () => {
     ? olderWorkouts.reduce((sum, w) => sum + w.formScore, 0) / olderWorkouts.length 
     : avgFormRecent;
   
-  const avgEffortRecent = recentWorkouts.reduce((sum, w) => sum + w.effortScore, 0) / recentWorkouts.length;
-  const avgEffortOlder = olderWorkouts.length > 0 
-    ? olderWorkouts.reduce((sum, w) => sum + w.effortScore, 0) / olderWorkouts.length 
-    : avgEffortRecent;
-  
   const totalReps = recentWorkouts.reduce((sum, w) => sum + w.totalReps, 0);
   const avgDuration = recentWorkouts.reduce((sum, w) => {
     const mins = parseInt(w.duration.replace(' min', ''));
@@ -125,13 +113,10 @@ const calculateProgress = () => {
   }, 0) / recentWorkouts.length;
   
   const formTrend = avgFormRecent - avgFormOlder;
-  const effortTrend = avgEffortRecent - avgEffortOlder;
   
   return {
     avgFormScore: Math.round(avgFormRecent),
-    avgEffortScore: Math.round(avgEffortRecent),
     formTrend,
-    effortTrend,
     totalReps,
     avgDuration: Math.round(avgDuration),
     workoutCount: recentWorkouts.length,
@@ -164,14 +149,6 @@ const generateRecommendations = (progress: ReturnType<typeof calculateProgress>)
     });
   }
   
-  if (progress.avgEffortScore < 85) {
-    recommendations.push({
-      type: 'info',
-      title: 'Increase Training Intensity',
-      message: 'Your effort scores suggest room for increased intensity. Push yourself harder in your next session.',
-    });
-  }
-  
   if (progress.workoutCount < 3) {
     recommendations.push({
       type: 'info',
@@ -184,7 +161,7 @@ const generateRecommendations = (progress: ReturnType<typeof calculateProgress>)
     recommendations.push({
       type: 'success',
       title: 'On Track',
-      message: 'You\'re making excellent progress! Keep up the consistent training and effort.',
+      message: 'You\'re making excellent progress! Keep up the consistent training.',
     });
   }
   
@@ -203,17 +180,11 @@ const generateAIResponse = (userMessage: string, progress: ReturnType<typeof cal
     return `Your form scores are looking good at ${progress.avgFormScore}% average! Keep focusing on controlled movements and full range of motion. Your form has been ${progress.formTrend > 0 ? 'improving' : 'stable'} recently.`;
   }
   
-  // Effort/intensity questions
-  if (lowerMessage.includes('effort') || lowerMessage.includes('intensity') || lowerMessage.includes('hard')) {
-    return `Your average effort score is ${progress.avgEffortScore}%, which is ${progress.avgEffortScore >= 90 ? 'excellent' : progress.avgEffortScore >= 85 ? 'good' : 'could be improved'}.\n\n${progress.avgEffortScore < 85 ? 'Try pushing yourself harder in your next session. Aim for that 90%+ effort level!' : 'You\'re pushing hard! Keep maintaining this intensity.'}`;
-  }
-  
   // Progress questions
   if (lowerMessage.includes('progress') || lowerMessage.includes('improve') || lowerMessage.includes('better')) {
     const formTrend = progress.formTrend > 0 ? 'improving' : progress.formTrend < 0 ? 'declining' : 'stable';
-    const effortTrend = progress.effortTrend > 0 ? 'increasing' : progress.effortTrend < 0 ? 'decreasing' : 'stable';
     
-    return `Here's your progress overview:\n\n📊 Form Score: ${progress.avgFormScore}% (${formTrend})\n💪 Effort Score: ${progress.avgEffortScore}% (${effortTrend})\n🏋️ Total Reps (recent): ${progress.totalReps}\n⏱️ Avg Duration: ${progress.avgDuration} min\n\n${progress.formTrend > 0 && progress.effortTrend > 0 ? 'You\'re making great progress! Keep it up!' : 'Focus on maintaining consistent form and effort to see better results.'}`;
+    return `Here's your progress overview:\n\n📊 Form Score: ${progress.avgFormScore}% (${formTrend})\n🏋️ Total Reps (recent): ${progress.totalReps}\n⏱️ Avg Duration: ${progress.avgDuration} min\n\n${progress.formTrend > 0 ? 'You\'re making great progress! Keep it up!' : 'Focus on maintaining consistent form to see better results.'}`;
   }
   
   // Workout frequency
@@ -223,7 +194,7 @@ const generateAIResponse = (userMessage: string, progress: ReturnType<typeof cal
   
   // Nutrition questions
   if (lowerMessage.includes('nutrition') || lowerMessage.includes('diet') || lowerMessage.includes('eat') || lowerMessage.includes('food')) {
-    return `Based on your training intensity (${progress.avgEffortScore}% effort), here are my nutrition recommendations:\n\n1. Protein: Aim for 0.8-1g per lb of bodyweight daily\n2. Carbs: Focus on complex carbs pre-workout for energy\n3. Hydration: Drink 0.5-1L water during workouts\n4. Recovery: Post-workout meal within 30-60 minutes\n\nYour high effort scores suggest you need proper nutrition to support recovery!`;
+    return `Here are my nutrition recommendations:\n\n1. Protein: Aim for 0.8-1g per lb of bodyweight daily\n2. Carbs: Focus on complex carbs pre-workout for energy\n3. Hydration: Drink 0.5-1L water during workouts\n4. Recovery: Post-workout meal within 30-60 minutes\n\nProper nutrition supports recovery and performance!`;
   }
   
   // Recovery questions
@@ -237,7 +208,7 @@ const generateAIResponse = (userMessage: string, progress: ReturnType<typeof cal
   }
   
   // Default response
-  return `I'm here to help with your fitness journey! Based on your recent workouts:\n\n• Average Form: ${progress.avgFormScore}%\n• Average Effort: ${progress.avgEffortScore}%\n• Recent Workouts: ${progress.workoutCount}\n\nYou can ask me about:\n- Form and technique\n- Training intensity\n- Progress tracking\n- Nutrition\n- Recovery\n- Workout planning\n\nWhat would you like to know?`;
+  return `I'm here to help with your fitness journey! Based on your recent workouts:\n\n• Average Form: ${progress.avgFormScore}%\n• Recent Workouts: ${progress.workoutCount}\n\nYou can ask me about:\n- Form and technique\n- Progress tracking\n- Nutrition\n- Recovery\n- Workout planning\n\nWhat would you like to know?`;
 };
 
 const RecommendationCard: React.FC<{ recommendation: any }> = ({ recommendation }) => {
@@ -469,8 +440,7 @@ const styles = StyleSheet.create({
   },
   progressCard: {
     width: '48%',
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    ...CARD_STYLE,
     padding: SPACING.md,
   },
   progressLabel: {
@@ -502,8 +472,7 @@ const styles = StyleSheet.create({
   },
   recommendationCard: {
     flexDirection: 'row',
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    ...CARD_STYLE,
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },

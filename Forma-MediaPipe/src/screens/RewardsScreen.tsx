@@ -2,22 +2,20 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 
 // Mock user stats (would come from analytics in real app)
 const userStats = {
   formScore: 87,
-  effortScore: 92,
   consistencyScore: 79,
 };
 
 // Calculate points based on metrics
-// Points are calculated as the sum of all three scores
+// Points are calculated as the sum of form and consistency scores
 const calculatePoints = () => {
   const formPoints = userStats.formScore;
-  const effortPoints = userStats.effortScore;
   const consistencyPoints = userStats.consistencyScore;
-  return formPoints + effortPoints + consistencyPoints;
+  return formPoints + consistencyPoints;
 };
 
 interface Reward {
@@ -170,11 +168,6 @@ export const RewardsScreen: React.FC = () => {
             </View>
             <View style={styles.breakdownDivider} />
             <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Effort</Text>
-              <Text style={styles.breakdownValue}>+{userStats.effortScore}</Text>
-            </View>
-            <View style={styles.breakdownDivider} />
-            <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>Consistency</Text>
               <Text style={styles.breakdownValue}>+{userStats.consistencyScore}</Text>
             </View>
@@ -214,10 +207,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xs,
   },
   pointsCard: {
-    backgroundColor: '#121212',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    ...CARD_STYLE,
     padding: SPACING.lg,
     marginBottom: SPACING.xl,
   },
@@ -283,10 +273,7 @@ const styles = StyleSheet.create({
   rewardCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#121212',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    ...CARD_STYLE,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     gap: 12,

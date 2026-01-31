@@ -4,9 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
-import { ChevronRight, Clock, Dumbbell, Zap, ChevronDown, Calendar, Target } from 'lucide-react-native';
+import { ChevronRight, Clock, Dumbbell, ChevronDown, Calendar, Target } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { getWorkouts, SavedWorkout } from '../services/workoutStorage';
 
 // Dropdown Pill Component
@@ -215,7 +215,6 @@ interface WorkoutSession {
   totalSets: number;
   totalReps: number;
   formScore: number;
-  effortScore: number;
   category?: string;
 }
 
@@ -229,7 +228,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 15,
     totalReps: 120,
     formScore: 87,
-    effortScore: 92,
   },
   {
     id: '2',
@@ -240,7 +238,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 18,
     totalReps: 210,
     formScore: 85,
-    effortScore: 88,
   },
   {
     id: '3',
@@ -251,7 +248,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 12,
     totalReps: 300,
     formScore: 82,
-    effortScore: 85,
   },
   {
     id: '4',
@@ -262,7 +258,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 8,
     totalReps: 50,
     formScore: 75,
-    effortScore: 70,
   },
   {
     id: '5',
@@ -273,7 +268,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 16,
     totalReps: 180,
     formScore: 90,
-    effortScore: 88,
   },
   {
     id: '6',
@@ -284,7 +278,6 @@ const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 10,
     totalReps: 200,
     formScore: 78,
-    effortScore: 85,
   },
 ];
 
@@ -339,10 +332,6 @@ const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
             <Target size={14} color={COLORS.primary} />
             <MonoText style={styles.scoreText}>{session.formScore}</MonoText>
           </View>
-          <View style={styles.statItem}>
-            <Zap size={14} color={COLORS.primary} />
-            <MonoText style={styles.scoreText}>{session.effortScore}</MonoText>
-          </View>
         </View>
       </View>
 
@@ -380,7 +369,6 @@ export const LogbookScreen: React.FC = () => {
       totalSets: workout.totalSets,
       totalReps: workout.totalReps,
       formScore: workout.formScore,
-      effortScore: workout.effortScore,
       category: workout.category,
     }));
     
@@ -751,8 +739,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
   },
   calendarContainer: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 24,
+    ...CARD_STYLE,
     padding: SPACING.lg,
     width: '90%',
     maxWidth: 400,
@@ -846,8 +833,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   summaryCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 20,
+    ...CARD_STYLE,
     paddingVertical: SPACING.xl,
     paddingHorizontal: SPACING.screenHorizontal,
   },
@@ -887,10 +873,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   card: {
-    backgroundColor: '#121212',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    ...CARD_STYLE,
     padding: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',

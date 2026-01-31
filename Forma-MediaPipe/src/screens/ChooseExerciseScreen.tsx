@@ -14,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, HelpCircle, Search } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 // Category-based images so each card shows an image matching its exercise type
@@ -324,11 +324,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   exerciseCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 16,
+    ...CARD_STYLE,
     padding: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   cardHeader: {
     flexDirection: 'row',

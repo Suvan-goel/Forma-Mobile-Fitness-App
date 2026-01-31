@@ -51,13 +51,15 @@ export const GlassCard: React.FC<GlassCardProps> = memo(({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   fallback: {
-    backgroundColor: 'rgba(30, 30, 30, 0.85)',
+    backgroundColor: '#121212',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
 });
 

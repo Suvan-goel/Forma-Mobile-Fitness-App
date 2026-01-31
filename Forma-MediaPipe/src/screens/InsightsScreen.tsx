@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Sparkles } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
@@ -17,13 +17,6 @@ const insightsData: { [key: string]: string[] } = {
     "Your deadlift form is excellent, with consistent hip hinge mechanics throughout your sets.",
     "Consider reducing weight slightly on overhead presses to maintain better shoulder stability.",
     "Your bench press form is solid, but try to keep your feet flat on the floor for better power transfer."
-  ],
-  Effort: [
-    "Your effort levels have been consistently high, averaging 92% intensity across all workouts.",
-    "You're pushing yourself appropriately - your RPE (Rate of Perceived Exertion) matches your performance metrics.",
-    "Consider adding 1-2 rest days this week to allow for optimal recovery and prevent overtraining.",
-    "Your effort distribution is well-balanced between strength and endurance training.",
-    "Great job maintaining intensity even during longer workout sessions - your mental toughness is showing."
   ],
   Consistency: [
     "You've maintained a 79% consistency rate over the past month - keep up the momentum!",
@@ -126,8 +119,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   insightsCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 24,
+    ...CARD_STYLE,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
   },
@@ -171,8 +163,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   recommendationsCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 24,
+    ...CARD_STYLE,
     padding: SPACING.lg,
   },
   recommendationsTitle: {

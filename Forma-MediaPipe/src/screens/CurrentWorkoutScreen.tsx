@@ -11,7 +11,7 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 
@@ -148,9 +148,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     const avgFormScore = Math.round(
       sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
     );
-    const avgEffortScore = Math.round(
-      sets.reduce((sum, set) => sum + set.effortScore, 0) / sets.length
-    );
 
     const category = exercises[0]?.name || 'General';
     const duration = formatStopwatch(elapsedSeconds);
@@ -162,7 +159,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
         totalSets,
         totalReps,
         avgFormScore,
-        avgEffortScore,
       },
     });
   };
@@ -291,10 +287,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
                           <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Form</Text>
                             <MonoText style={styles.metricValue}>{set.formScore}</MonoText>
-                          </View>
-                          <View style={styles.metricItem}>
-                            <Text style={styles.metricLabel}>Effort</Text>
-                            <MonoText style={styles.metricValue}>{set.effortScore}</MonoText>
                           </View>
                         </View>
                       </View>
@@ -441,11 +433,8 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   exerciseCard: {
-    backgroundColor: '#1E2228',
-    borderRadius: 12,
+    ...CARD_STYLE,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '40',
     overflow: 'hidden',
   },
   exerciseCardHeader: {

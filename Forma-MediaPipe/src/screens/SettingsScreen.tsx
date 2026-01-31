@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, User, Bell, Lock, HelpCircle, LogOut } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -99,8 +99,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   section: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    ...CARD_STYLE,
     overflow: 'hidden',
   },
   settingItem: {

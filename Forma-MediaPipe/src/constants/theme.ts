@@ -33,6 +33,14 @@ export const COLORS = {
   chartSecondary: '#3A4550',
 } as const;
 
+/** Standard card styling - #121212 background, green border, 14px radius */
+export const CARD_STYLE = {
+  backgroundColor: '#121212',
+  borderWidth: 1,
+  borderColor: 'rgba(16, 185, 129, 0.35)',
+  borderRadius: 14,
+} as const;
+
 export const SPACING = {
   xs: 4,
   sm: 8,
