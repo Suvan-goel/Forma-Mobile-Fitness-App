@@ -235,20 +235,12 @@ export const CurrentWorkoutScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Add New Exercise Button */}
-      <View style={styles.addButtonContainer}>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddExercise} activeOpacity={0.8}>
-          <Plus size={20} color="#000000" />
-          <Text style={styles.addButtonText}>Add new exercise</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Exercises List */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) },
+          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 60 },
           exercises.length === 0 && styles.scrollContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
@@ -322,6 +314,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
           })
         )}
       </ScrollView>
+
+      {/* Add New Exercise Button - Fixed at bottom */}
+      <View style={[styles.addButtonContainer, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddExercise} activeOpacity={0.8}>
+          <Plus size={18} color={COLORS.primary} />
+          <Text style={styles.addButtonText}>Add new exercise</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -393,21 +393,23 @@ const styles = StyleSheet.create({
   addButtonContainer: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
+    backgroundColor: COLORS.background,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.md,
-    borderRadius: 12,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    paddingVertical: SPACING.lg,
+    borderRadius: 28,
     gap: SPACING.xs,
   },
   addButtonText: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.bold,
-    color: '#000000',
+    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.primary,
   },
   scrollView: {
     flex: 1,

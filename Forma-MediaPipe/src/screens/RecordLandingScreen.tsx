@@ -120,7 +120,9 @@ export const RecordLandingScreen: React.FC = () => {
                 onPress={handleDiscardWorkout}
                 activeOpacity={0.7}
               >
-                <Trash2 size={22} color={COLORS.textTertiary} strokeWidth={1.5} />
+                <View style={styles.workoutActionIconWrap}>
+                  <Trash2 size={22} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </View>
                 <Text style={styles.workoutActionLabel}>Discard</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -128,11 +130,13 @@ export const RecordLandingScreen: React.FC = () => {
                 onPress={handlePauseWorkout}
                 activeOpacity={0.7}
               >
-                {timerPaused ? (
-                  <Play size={22} color={COLORS.primary} strokeWidth={1.5} />
-                ) : (
-                  <Pause size={22} color={COLORS.primary} strokeWidth={1.5} />
-                )}
+                <View style={styles.workoutActionIconWrap}>
+                  {timerPaused ? (
+                    <Play size={22} color={COLORS.primary} strokeWidth={1.5} />
+                  ) : (
+                    <Pause size={22} color={COLORS.primary} strokeWidth={1.5} />
+                  )}
+                </View>
                 <Text style={styles.workoutActionLabel}>{timerPaused ? 'Resume' : 'Pause'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -140,7 +144,9 @@ export const RecordLandingScreen: React.FC = () => {
                 onPress={handleFinishWorkout}
                 activeOpacity={0.7}
               >
-                <Flag size={22} color={COLORS.primary} strokeWidth={1.5} />
+                <View style={styles.workoutActionIconWrap}>
+                  <Flag size={22} color={COLORS.primary} strokeWidth={1.5} />
+                </View>
                 <Text style={styles.workoutActionLabel}>Finish</Text>
               </TouchableOpacity>
             </View>
@@ -210,25 +216,31 @@ const styles = StyleSheet.create({
   },
   workoutActions: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.xxl,
+    justifyContent: 'space-evenly',
+    alignSelf: 'stretch',
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
     borderTopWidth: 1,
     borderTopColor: 'rgba(16, 185, 129, 0.2)',
   },
   workoutActionButton: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 80,
+  },
+  workoutActionIconWrap: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   workoutActionLabel: {
     fontSize: 12,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
     marginTop: SPACING.sm,
+    textAlign: 'center',
   },
   plusIconContainer: {
     marginBottom: SPACING.lg,
