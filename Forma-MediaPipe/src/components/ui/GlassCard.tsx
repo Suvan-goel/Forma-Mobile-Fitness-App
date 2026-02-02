@@ -53,13 +53,11 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderWidth: 0,
   },
   fallback: {
-    backgroundColor: '#121212',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    backgroundColor: '#262626',
+    borderWidth: 0,
   },
 });
 

@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.xl,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(16, 185, 129, 0.2)',
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
   workoutActionButton: {
     flex: 1,

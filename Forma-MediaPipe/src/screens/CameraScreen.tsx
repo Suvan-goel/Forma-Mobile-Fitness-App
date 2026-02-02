@@ -742,10 +742,9 @@ const styles = StyleSheet.create({
     zIndex: 9,
   },
   anglesDebugCard: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: '#262626',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderWidth: 0,
     padding: SPACING.md,
   },
   anglesDebugTitle: {

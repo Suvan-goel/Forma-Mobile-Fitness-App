@@ -7,8 +7,8 @@
 export const COLORS = {
   // Backgrounds
   background: '#000000', // App Background - Pure black
-  cardBackground: '#1c1b20', // Card Background
-  cardBackgroundLight: '#1c1b20', // Lighter card background
+  cardBackground: '#262626', // Card Background
+  cardBackgroundLight: '#262626', // Lighter card background
 
   // Primary Actions
   primary: '#10B981', // Green - Primary accent
@@ -33,11 +33,10 @@ export const COLORS = {
   chartSecondary: '#3A4550',
 } as const;
 
-/** Standard card styling - #121212 background, green border, 14px radius */
+/** Standard card styling - #262626 background, no border, 14px radius */
 export const CARD_STYLE = {
-  backgroundColor: '#121212',
-  borderWidth: 1,
-  borderColor: 'rgba(16, 185, 129, 0.35)',
+  backgroundColor: '#262626',
+  borderWidth: 0,
   borderRadius: 14,
 } as const;
 
