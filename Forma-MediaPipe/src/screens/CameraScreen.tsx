@@ -406,12 +406,14 @@ export const CameraScreen: React.FC = () => {
 
   // Memoize display values to avoid recalculation
   const displayValues = useMemo(() => {
+    const formDisplay = repCount > 0 && currentFormScore !== null
+      ? Number(currentFormScore).toFixed(1)
+      : '-';
     const values = {
       reps: repCount > 0 ? repCount : '-',
-      form: repCount > 0 && currentFormScore !== null ? currentFormScore : '-',
+      form: formDisplay,
       exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
     };
-    console.log('[CameraScreen] Display values updated:', values);
     return values;
   }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute]);
 
@@ -719,7 +721,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   metricValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontFamily: FONTS.mono.bold,
     color: COLORS.primary,
     minWidth: 30,
