@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   feedbackCard: {
-    backgroundColor: 'rgba(16, 185, 129, 0.95)',
+    backgroundColor: 'rgba(32, 215, 96, 0.95)',
     borderRadius: 12,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,

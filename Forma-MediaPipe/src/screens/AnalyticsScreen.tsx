@@ -114,7 +114,7 @@ const getDayColor = (date: Date): string => {
   const dayColors: { [key: number]: string } = {
     0: '#EC4899', // Sunday - Pink/Magenta
     1: '#F59E0B', // Monday - Orange/Amber
-    2: '#10B981', // Tuesday - Green
+    2: COLORS.primary, // Tuesday - Green
     3: '#00D4BB', // Wednesday - Teal (primary)
     4: '#8B5CF6', // Thursday - Purple
     5: '#EF4444', // Friday - Red
@@ -369,7 +369,7 @@ const ImprovementCard = ({
   const change = currentValue - previousValue;
   const isImproving = change > 0;
   const ArrowIcon = isImproving ? ArrowUp : ArrowDown;
-  const changeColor = isImproving ? '#10B981' : '#FF3B30';
+  const changeColor = isImproving ? COLORS.primary : '#FF3B30';
   const changePercent = previousValue > 0 ? Math.round((change / previousValue) * 100) : 0;
 
   return (
@@ -479,7 +479,7 @@ const MetricCard = ({
 };
 
 // Bar Chart Component - all bars use faded accent green
-const BAR_FILL_COLOR = COLORS.primary; // COLORS.primary (#10B981) full opacity
+const BAR_FILL_COLOR = COLORS.primary;
 
 const WorkoutBarChart = ({ onDaySelect }: { onDaySelect?: (dayData: { day: string; value: number; hours: number; minutes: number } | null) => void }) => {
   const [selectedDay, setSelectedDay] = React.useState<number | null>(null);

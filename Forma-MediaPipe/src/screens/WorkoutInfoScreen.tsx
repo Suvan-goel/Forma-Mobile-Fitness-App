@@ -35,7 +35,7 @@ const getDayColors = () => {
   return {
     sunday: { faded: 'rgba(236, 72, 153, 0.6)', full: 'rgba(236, 72, 153, 1)' }, // Pink/Magenta
     monday: { faded: 'rgba(245, 158, 11, 0.6)', full: 'rgba(245, 158, 11, 1)' }, // Orange/Amber
-    tuesday: { faded: 'rgba(16, 185, 129, 0.6)', full: 'rgba(16, 185, 129, 1)' }, // Green
+    tuesday: { faded: 'rgba(32, 215, 96, 0.6)', full: 'rgba(32, 215, 96, 1)' }, // Green
     wednesday: { faded: 'rgba(0, 212, 187, 0.6)', full: 'rgba(0, 212, 187, 1)' }, // Teal (primary)
     thursday: { faded: 'rgba(139, 92, 246, 0.6)', full: 'rgba(139, 92, 246, 1)' }, // Purple
     friday: { faded: 'rgba(239, 68, 68, 0.6)', full: 'rgba(239, 68, 68, 1)' }, // Red

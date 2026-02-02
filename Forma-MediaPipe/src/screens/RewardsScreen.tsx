@@ -36,7 +36,7 @@ const rewards: Reward[] = [
     description: 'Redeem at any partner gym',
     pointsRequired: 200,
     icon: Pill,
-    color: '#10B981',
+    color: COLORS.primary,
     category: 'Supplements',
   },
   {

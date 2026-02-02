@@ -294,7 +294,7 @@ const getCategoryInfo = (category?: string): { color: string; name: string } | n
     'Weightlifting': { color: COLORS.primary, name: 'Weightlifting' },
     'Calisthenics': { color: COLORS.orange, name: 'Calisthenics' },
     'Mobility & Flexibility': { color: '#8B5CF6', name: 'Mobility & Flexibility' },
-    'Sport': { color: '#10B981', name: 'Sport' },
+    'Sport': { color: COLORS.primary, name: 'Sport' },
   };
   
   return categoryMap[category] || null;

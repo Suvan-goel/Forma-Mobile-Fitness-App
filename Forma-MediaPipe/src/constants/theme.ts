@@ -11,8 +11,8 @@ export const COLORS = {
   cardBackgroundLight: '#262626', // Lighter card background
 
   // Primary Actions
-  primary: '#10B981', // Green - Primary accent
-  primaryDark: '#059669', // Darker green for gradients
+  primary: '#20d760', // Green - Primary accent
+  primaryDark: '#1ab84d', // Darker green for gradients
   
   // Secondary Colors
   orange: '#E07856', // Orange for secondary workout cards
@@ -29,7 +29,7 @@ export const COLORS = {
   inactive: '#4A5568', // Inactive elements
   
   // Chart colors
-  chartPrimary: '#10B981',
+  chartPrimary: '#20d760',
   chartSecondary: '#3A4550',
 } as const;
 
