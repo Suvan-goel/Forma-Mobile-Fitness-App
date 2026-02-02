@@ -9,6 +9,7 @@ import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount, Keypoint } from '../utils/poseAnalysis';
+import { updateBarbellCurlState, initializeBarbellCurlState, BarbellCurlState } from '../utils/barbellCurlAnalysis';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -54,12 +55,46 @@ export const CameraScreen: React.FC = () => {
     formScores: [] as number[],
     duration: 0,
   });
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Debug angles display state (for UI only)
+  const [debugAngles, setDebugAngles] = useState<{
+    leftElbow: number | null;
+    rightElbow: number | null;
+    leftShoulder: number | null;
+    rightShoulder: number | null;
+    leftHip: number | null;
+    rightHip: number | null;
+    leftKnee: number | null;
+    rightKnee: number | null;
+    phase: string;
+  }>({
+    leftElbow: null,
+    rightElbow: null,
+    leftShoulder: null,
+    rightShoulder: null,
+    leftHip: null,
+    rightHip: null,
+    leftKnee: null,
+    rightKnee: null,
+    phase: 'idle',
+  });
+
+  // Barbell curl specific state
+  const barbellCurlStateRef = useRef<BarbellCurlState>(initializeBarbellCurlState());
 
   const category = route.params?.category ?? 'Weightlifting';
   const exerciseNameFromRoute = (route.params as any)?.exerciseName;
   const exerciseId = (route.params as any)?.exerciseId;
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
+
+  // Debug logging on mount
+  useEffect(() => {
+    console.log('[CameraScreen] Mounted with exercise:', exerciseNameFromRoute);
+    console.log('[CameraScreen] Exercise ID:', exerciseId);
+    console.log('[CameraScreen] Return to current workout:', returnToCurrentWorkout);
+  }, []);
 
   // Unmount camera before leaving so native layer can release it; avoids "Camera initialization failed" on next open
   const [cameraMounted, setCameraMounted] = useState(false);
@@ -80,6 +115,8 @@ export const CameraScreen: React.FC = () => {
   const repCountRef = useRef(repCount);
   const currentExerciseRef = useRef(currentExercise);
   const lastDetectionTimeRef = useRef(0);
+  const isRecordingRef = useRef(isRecording);
+  const isPausedRef = useRef(isPaused);
   
   // Sync refs with state
   useEffect(() => {
@@ -88,11 +125,20 @@ export const CameraScreen: React.FC = () => {
   
   useEffect(() => {
     repCountRef.current = repCount;
+    console.log('[CameraScreen] repCount state changed to:', repCount);
   }, [repCount]);
   
   useEffect(() => {
     currentExerciseRef.current = currentExercise;
   }, [currentExercise]);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   // Track workout duration
   useEffect(() => {
@@ -110,26 +156,43 @@ export const CameraScreen: React.FC = () => {
 
   // Convert MediaPipe landmark data to our Keypoint format
   const convertLandmarksToKeypoints = useCallback((landmarkData: any): Keypoint[] | null => {
-    if (!landmarkData || !Array.isArray(landmarkData)) return null;
-
     try {
-      const keypoints: Keypoint[] = landmarkData.map((landmark: any, index: number) => ({
+      // Parse JSON string if needed
+      let parsedData = landmarkData;
+      if (typeof landmarkData === 'string') {
+        parsedData = JSON.parse(landmarkData);
+      }
+
+      // Extract landmarks array from the object
+      const landmarksArray = parsedData?.landmarks || parsedData;
+      
+      if (!Array.isArray(landmarksArray)) {
+        return null;
+      }
+
+      const keypoints: Keypoint[] = landmarksArray.map((landmark: any, index: number) => ({
         name: MEDIAPIPE_LANDMARK_NAMES[index] || `landmark_${index}`,
         x: landmark.x || 0,
         y: landmark.y || 0,
         score: landmark.visibility !== undefined ? landmark.visibility : 1.0,
       }));
-
+      
       return keypoints;
     } catch (error) {
-      console.error('Error converting landmarks:', error);
+      console.error('[CameraScreen] Error converting landmarks:', error);
       return null;
     }
   }, []);
 
   // Handle landmark data from MediaPipe with optimized throttling
   const handleLandmark = useCallback((data: any) => {
-    if (!isRecording || isPaused) return;
+    if (!isRecordingRef.current) {
+      return;
+    }
+    
+    if (isPausedRef.current) {
+      return;
+    }
 
     // Reduced throttle to 16ms (~60fps) for ultra-low latency
     // Most devices can handle 60fps, provides smooth real-time feedback
@@ -140,57 +203,113 @@ export const CameraScreen: React.FC = () => {
     lastDetectionTimeRef.current = now;
 
     const keypoints = convertLandmarksToKeypoints(data);
-    if (!keypoints || keypoints.length === 0) return;
+    if (!keypoints || keypoints.length === 0) {
+      return;
+    }
 
-    // Run exercise detection
-    const detection = detectExercise(keypoints);
-    
-    if (detection.exercise && detection.angle !== null) {
-      const exerciseName = detection.exercise;
+    // Check if this is a Barbell Curl exercise (exercise-specific logic)
+    if (exerciseNameFromRoute === 'Barbell Curl') {
+      // Use barbell curl-specific analysis
+      const newState = updateBarbellCurlState(keypoints, barbellCurlStateRef.current);
       
-      // Update exercise name if changed
-      if (currentExerciseRef.current !== exerciseName) {
-        setCurrentExercise(exerciseName);
-        setExercisePhase('idle');
-        return;
+      // Check if rep count changed
+      if (newState.repCount !== barbellCurlStateRef.current.repCount) {
+        console.log('[CameraScreen] ✓✓✓ REP COUNT CHANGED:', barbellCurlStateRef.current.repCount, '->', newState.repCount);
+      }
+      
+      barbellCurlStateRef.current = newState;
+
+      // Update debug angles display
+      setDebugAngles({
+        leftElbow: newState.leftElbowAngle,
+        rightElbow: newState.rightElbowAngle,
+        leftShoulder: newState.leftShoulderAngle,
+        rightShoulder: newState.rightShoulderAngle,
+        leftHip: newState.leftHipAngle,
+        rightHip: newState.rightHipAngle,
+        leftKnee: newState.leftKneeAngle,
+        rightKnee: newState.rightKneeAngle,
+        phase: newState.phase,
+      });
+
+      // Always update rep count (even if it hasn't changed)
+      console.log('[CameraScreen] Calling setRepCount with:', newState.repCount);
+      setRepCount(newState.repCount);
+      
+      if (newState.formScore > 0) {
+        setCurrentFormScore(newState.formScore);
+      }
+      
+      // Update feedback (will auto-clear after 2 seconds in the analysis logic)
+      if (newState.feedback) {
+        setFeedback(newState.feedback);
+      } else {
+        setFeedback(null);
       }
 
-      // Count reps based on angle changes
-      const repUpdate = updateRepCount(
-        exerciseName,
-        detection.angle,
-        exercisePhaseRef.current,
-        repCountRef.current
-      );
-
-      // Only update state if something changed
-      if (repUpdate.phase !== exercisePhaseRef.current) {
-        setExercisePhase(repUpdate.phase);
-      }
-
-      // Rep completed
-      if (repUpdate.repCount > repCountRef.current) {
-        const formScore = repUpdate.formScore;
-        
-        setRepCount(repUpdate.repCount);
-        setCurrentFormScore(formScore);
-        
-        // Update workout data with functional update to avoid stale closures
+      // Update workout data when a rep is completed
+      if (newState.repCount > repCountRef.current) {
+        console.log('[CameraScreen] Rep completed! Updating workout data from', repCountRef.current, 'to', newState.repCount);
         setWorkoutData(prev => ({
           ...prev,
-          totalReps: prev.totalReps + 1,
-          formScores: [...prev.formScores, formScore],
+          totalReps: newState.repCount,
+          formScores: [...prev.formScores, newState.formScore],
         }));
       }
-    } else if (currentExerciseRef.current !== null) {
-      // No exercise detected - reset
-      setCurrentExercise(null);
-      setExercisePhase('idle');
+    } else {
+      console.log('[CameraScreen] Using generic exercise detection');
+      // Use generic exercise detection for other exercises
+      const detection = detectExercise(keypoints);
+      
+      if (detection.exercise && detection.angle !== null) {
+        const exerciseName = detection.exercise;
+        
+        // Update exercise name if changed
+        if (currentExerciseRef.current !== exerciseName) {
+          setCurrentExercise(exerciseName);
+          setExercisePhase('idle');
+          return;
+        }
+
+        // Count reps based on angle changes
+        const repUpdate = updateRepCount(
+          exerciseName,
+          detection.angle,
+          exercisePhaseRef.current,
+          repCountRef.current
+        );
+
+        // Only update state if something changed
+        if (repUpdate.phase !== exercisePhaseRef.current) {
+          setExercisePhase(repUpdate.phase);
+        }
+
+        // Rep completed
+        if (repUpdate.repCount > repCountRef.current) {
+          const formScore = repUpdate.formScore;
+          
+          setRepCount(repUpdate.repCount);
+          setCurrentFormScore(formScore);
+          
+          // Update workout data with functional update to avoid stale closures
+          setWorkoutData(prev => ({
+            ...prev,
+            totalReps: prev.totalReps + 1,
+            formScores: [...prev.formScores, formScore],
+          }));
+        }
+      } else if (currentExerciseRef.current !== null) {
+        // No exercise detected - reset
+        setCurrentExercise(null);
+        setExercisePhase('idle');
+      }
     }
-  }, [isRecording, isPaused, convertLandmarksToKeypoints]);
+  }, [convertLandmarksToKeypoints, exerciseNameFromRoute]);
 
   // Memoize button handlers to prevent recreating on every render
   const handleRecordPress = useCallback(() => {
+    console.log('[CameraScreen] Record button pressed, isRecording:', isRecording);
+    
     if (isRecording) {
       // Stop recording
       setIsRecording(false);
@@ -236,6 +355,7 @@ export const CameraScreen: React.FC = () => {
       }
     } else {
       // Start recording
+      console.log('[CameraScreen] Starting recording for exercise:', exerciseNameFromRoute);
       setIsRecording(true);
       setWorkoutStartTime(new Date());
       // If exercise name is provided from route, use it; otherwise let detection handle it
@@ -243,6 +363,11 @@ export const CameraScreen: React.FC = () => {
       setRepCount(0);
       setCurrentFormScore(null);
       setIsPaused(false);
+      setFeedback(null);
+      // Reset barbell curl state if starting a barbell curl
+      if (exerciseNameFromRoute === 'Barbell Curl') {
+        barbellCurlStateRef.current = initializeBarbellCurlState();
+      }
       setWorkoutData({
         totalReps: 0,
         formScores: [],
@@ -280,13 +405,21 @@ export const CameraScreen: React.FC = () => {
   }), []);
 
   // Memoize display values to avoid recalculation
-  const displayValues = useMemo(() => ({
-    reps: repCount > 0 ? repCount : '-',
-    form: repCount > 0 && currentFormScore !== null ? currentFormScore : '-',
-    exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
-  }), [repCount, currentFormScore, currentExercise, exerciseNameFromRoute]);
+  const displayValues = useMemo(() => {
+    const values = {
+      reps: repCount > 0 ? repCount : '-',
+      form: repCount > 0 && currentFormScore !== null ? currentFormScore : '-',
+      exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
+    };
+    console.log('[CameraScreen] Display values updated:', values);
+    return values;
+  }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute]);
 
   const showCamera = cameraMounted && !isClosing;
+
+  useEffect(() => {
+    console.log('[CameraScreen] Camera state - mounted:', cameraMounted, 'closing:', isClosing, 'showCamera:', showCamera);
+  }, [cameraMounted, isClosing, showCamera]);
 
   const topBarContentHeight = insets.top + 44;
   const gapAboveCamera = SPACING.xl;
@@ -305,7 +438,10 @@ export const CameraScreen: React.FC = () => {
             <RNMediapipe
               key={String(cameraSessionKey)}
               {...mediapipeProps}
-              onLandmark={handleLandmark}
+              onLandmark={(data) => {
+                console.log('[CameraScreen] onLandmark RAW callback triggered');
+                handleLandmark(data);
+              }}
             />
           )}
         </View>
@@ -327,6 +463,72 @@ export const CameraScreen: React.FC = () => {
             <FlipHorizontal size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>
+
+        {/* Feedback Display - Appears below exercise name */}
+        {feedback && (
+          <View style={styles.feedbackContainer}>
+            <View style={styles.feedbackCard}>
+              <Text style={styles.feedbackText}>{feedback}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Debug Angles Display - Only show when recording Barbell Curl */}
+        {isRecording && exerciseNameFromRoute === 'Barbell Curl' && (
+          <View style={styles.anglesDebugContainer}>
+            <View style={styles.anglesDebugCard}>
+              <Text style={styles.anglesDebugTitle}>Joint Angles (°)</Text>
+              <View style={styles.anglesGrid}>
+                <View style={styles.angleRow}>
+                  <Text style={styles.angleLabel}>L Elbow:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.leftElbow?.toFixed(1) || '-'}
+                  </Text>
+                  <Text style={styles.angleLabel}>R Elbow:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.rightElbow?.toFixed(1) || '-'}
+                  </Text>
+                </View>
+                <View style={styles.angleRow}>
+                  <Text style={styles.angleLabel}>L Shoulder:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.leftShoulder?.toFixed(1) || '-'}
+                  </Text>
+                  <Text style={styles.angleLabel}>R Shoulder:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.rightShoulder?.toFixed(1) || '-'}
+                  </Text>
+                </View>
+                <View style={styles.angleRow}>
+                  <Text style={styles.angleLabel}>L Hip:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.leftHip?.toFixed(1) || '-'}
+                  </Text>
+                  <Text style={styles.angleLabel}>R Hip:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.rightHip?.toFixed(1) || '-'}
+                  </Text>
+                </View>
+                <View style={styles.angleRow}>
+                  <Text style={styles.angleLabel}>L Knee:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.leftKnee?.toFixed(1) || '-'}
+                  </Text>
+                  <Text style={styles.angleLabel}>R Knee:</Text>
+                  <Text style={styles.angleValue}>
+                    {debugAngles.rightKnee?.toFixed(1) || '-'}
+                  </Text>
+                </View>
+                <View style={styles.angleRow}>
+                  <Text style={styles.angleLabel}>Phase:</Text>
+                  <Text style={[styles.angleValue, styles.phaseValue]}>
+                    {debugAngles.phase.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Bottom Controls */}
         <View style={[
@@ -527,6 +729,79 @@ const styles = StyleSheet.create({
   },
   recordButtonInnerActive: {
     backgroundColor: '#FF3B30',
+  },
+  feedbackContainer: {
+    position: 'absolute',
+    top: 120,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    zIndex: 10,
+  },
+  feedbackCard: {
+    backgroundColor: 'rgba(16, 185, 129, 0.95)',
+    borderRadius: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    maxWidth: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  feedbackText: {
+    fontSize: 14,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  anglesDebugContainer: {
+    position: 'absolute',
+    top: 180,
+    left: SPACING.screenHorizontal,
+    right: SPACING.screenHorizontal,
+    zIndex: 9,
+  },
+  anglesDebugCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    padding: SPACING.md,
+  },
+  anglesDebugTitle: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.primary,
+    marginBottom: SPACING.xs,
+    textAlign: 'center',
+  },
+  anglesGrid: {
+    gap: 4,
+  },
+  angleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  angleLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  angleValue: {
+    fontSize: 12,
+    fontFamily: FONTS.mono.regular,
+    color: COLORS.text,
+    flex: 1,
+    textAlign: 'right',
+  },
+  phaseValue: {
+    color: COLORS.primary,
+    fontFamily: FONTS.ui.bold,
   },
 });
 
