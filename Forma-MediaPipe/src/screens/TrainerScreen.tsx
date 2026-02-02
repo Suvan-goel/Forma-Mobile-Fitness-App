@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Send, Bot, TrendingUp, Target, AlertCircle, CheckCircle2 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { useScroll } from '../contexts/ScrollContext';
 
 // Mock workout data (same as LogbookScreen)
 interface WorkoutSession {
@@ -248,6 +249,7 @@ const ChatBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
 
 export const TrainerScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { onScroll } = useScroll();
   const [activeTab, setActiveTab] = useState<'overview' | 'chat'>('overview');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -328,6 +330,8 @@ export const TrainerScreen: React.FC = () => {
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: 200 }]}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         >
           {/* Recommendations */}
           <View style={styles.section}>

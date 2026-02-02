@@ -1,5 +1,5 @@
-import React, { memo, useCallback, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { memo, useCallback, useState, useContext, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -22,6 +22,7 @@ import { RecordLandingScreen } from '../screens/RecordLandingScreen';
 import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
+import { ScrollProvider, ScrollContext } from '../contexts/ScrollContext';
 import { AppHeader } from '../components/ui/AppHeader';
 import { COLORS, FONTS } from '../constants/theme';
 
@@ -186,9 +187,50 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   );
 });
 
+// Inner component that uses ScrollContext
+const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: string) => void }> = memo(({ currentTab, onTabChange }) => {
+  const insets = useSafeAreaInsets();
+  const scrollContext = useContext(ScrollContext);
+  const contentMarginTop = scrollContext?.contentMarginTop;
+  
+  // Reset header whenever tab changes
+  useEffect(() => {
+    if (scrollContext?.resetHeader) {
+      scrollContext.resetHeader();
+    }
+  }, [currentTab, scrollContext]);
+  
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
+      {/* Collapsible Header - Hidden for Record tab */}
+      {currentTab !== 'Record' && <AppHeader />}
+      
+      {/* Tab Navigator with animated margin */}
+      <Animated.View 
+        style={{ 
+          flex: 1,
+          marginTop: contentMarginTop || 0,
+        }}
+      >
+        <Tab.Navigator
+          tabBar={(props) => <CustomTabBar {...props} onTabChange={onTabChange} />}
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
+          <Tab.Screen name="Logbook" component={LogbookScreen} />
+          <Tab.Screen name="Analytics" component={AnalyticsScreen} />
+          <Tab.Screen name="Record" component={RecordTabWithProvider} />
+          <Tab.Screen name="Trainer" component={TrainerScreen} />
+          <Tab.Screen name="Rewards" component={RewardsScreen} />
+        </Tab.Navigator>
+      </Animated.View>
+    </View>
+  );
+});
+
 // Bottom Tab Navigator with static header
 const AppTabs: React.FC = memo(() => {
-  const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState('Logbook');
   
   // Memoize tab change handler
@@ -197,24 +239,9 @@ const AppTabs: React.FC = memo(() => {
   }, []);
   
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
-      {/* Static Header - Hidden for Record tab */}
-      {currentTab !== 'Record' && <AppHeader />}
-      
-      {/* Tab Navigator */}
-      <Tab.Navigator
-        tabBar={(props) => <CustomTabBar {...props} onTabChange={handleTabChange} />}
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
-        <Tab.Screen name="Logbook" component={LogbookScreen} />
-        <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-        <Tab.Screen name="Record" component={RecordTabWithProvider} />
-        <Tab.Screen name="Trainer" component={TrainerScreen} />
-        <Tab.Screen name="Rewards" component={RewardsScreen} />
-      </Tab.Navigator>
-    </View>
+    <ScrollProvider>
+      <AppTabsContent currentTab={currentTab} onTabChange={handleTabChange} />
+    </ScrollProvider>
   );
 });
 

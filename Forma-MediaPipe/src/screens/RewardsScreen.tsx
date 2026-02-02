@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { useScroll } from '../contexts/ScrollContext';
 
 // Mock user stats (would come from analytics in real app)
 const userStats = {
@@ -141,6 +142,7 @@ const RewardCard = ({ reward, userPoints }: { reward: Reward; userPoints: number
 
 export const RewardsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { onScroll } = useScroll();
   const userPoints = calculatePoints();
 
   return (
@@ -149,6 +151,8 @@ export const RewardsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 200 }]}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         {/* Points Summary Card */}
         <View style={styles.pointsCard}>

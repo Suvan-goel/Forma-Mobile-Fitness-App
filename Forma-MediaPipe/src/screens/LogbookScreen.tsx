@@ -8,6 +8,7 @@ import { ChevronRight, Clock, Dumbbell, ChevronDown, Calendar, Target } from 'lu
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { getWorkouts, SavedWorkout } from '../services/workoutStorage';
+import { useScroll } from '../contexts/ScrollContext';
 
 // Dropdown Pill Component
 const DropdownPill = ({ 
@@ -343,6 +344,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
 
 export const LogbookScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { onScroll } = useScroll();
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
@@ -615,6 +617,8 @@ export const LogbookScreen: React.FC = () => {
             },
           ]}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         />
       )}
     </View>

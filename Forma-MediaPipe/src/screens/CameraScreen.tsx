@@ -89,12 +89,6 @@ export const CameraScreen: React.FC = () => {
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
 
-  // Debug logging on mount
-  useEffect(() => {
-    console.log('[CameraScreen] Mounted with exercise:', exerciseNameFromRoute);
-    console.log('[CameraScreen] Exercise ID:', exerciseId);
-    console.log('[CameraScreen] Return to current workout:', returnToCurrentWorkout);
-  }, []);
 
   // Unmount camera before leaving so native layer can release it; avoids "Camera initialization failed" on next open
   const [cameraMounted, setCameraMounted] = useState(false);
@@ -125,7 +119,6 @@ export const CameraScreen: React.FC = () => {
   
   useEffect(() => {
     repCountRef.current = repCount;
-    console.log('[CameraScreen] repCount state changed to:', repCount);
   }, [repCount]);
   
   useEffect(() => {
@@ -178,8 +171,7 @@ export const CameraScreen: React.FC = () => {
       }));
       
       return keypoints;
-    } catch (error) {
-      console.error('[CameraScreen] Error converting landmarks:', error);
+    } catch {
       return null;
     }
   }, []);
@@ -212,11 +204,6 @@ export const CameraScreen: React.FC = () => {
       // Use barbell curl-specific analysis
       const newState = updateBarbellCurlState(keypoints, barbellCurlStateRef.current);
       
-      // Check if rep count changed
-      if (newState.repCount !== barbellCurlStateRef.current.repCount) {
-        console.log('[CameraScreen] ✓✓✓ REP COUNT CHANGED:', barbellCurlStateRef.current.repCount, '->', newState.repCount);
-      }
-      
       barbellCurlStateRef.current = newState;
 
       // Update debug angles display
@@ -233,7 +220,6 @@ export const CameraScreen: React.FC = () => {
       });
 
       // Always update rep count (even if it hasn't changed)
-      console.log('[CameraScreen] Calling setRepCount with:', newState.repCount);
       setRepCount(newState.repCount);
       
       if (newState.formScore > 0) {
@@ -249,7 +235,6 @@ export const CameraScreen: React.FC = () => {
 
       // Update workout data when a rep is completed
       if (newState.repCount > repCountRef.current) {
-        console.log('[CameraScreen] Rep completed! Updating workout data from', repCountRef.current, 'to', newState.repCount);
         setWorkoutData(prev => ({
           ...prev,
           totalReps: newState.repCount,
@@ -257,7 +242,6 @@ export const CameraScreen: React.FC = () => {
         }));
       }
     } else {
-      console.log('[CameraScreen] Using generic exercise detection');
       // Use generic exercise detection for other exercises
       const detection = detectExercise(keypoints);
       
@@ -308,8 +292,6 @@ export const CameraScreen: React.FC = () => {
 
   // Memoize button handlers to prevent recreating on every render
   const handleRecordPress = useCallback(() => {
-    console.log('[CameraScreen] Record button pressed, isRecording:', isRecording);
-    
     if (isRecording) {
       // Stop recording
       setIsRecording(false);
@@ -355,7 +337,6 @@ export const CameraScreen: React.FC = () => {
       }
     } else {
       // Start recording
-      console.log('[CameraScreen] Starting recording for exercise:', exerciseNameFromRoute);
       setIsRecording(true);
       setWorkoutStartTime(new Date());
       // If exercise name is provided from route, use it; otherwise let detection handle it
@@ -419,9 +400,6 @@ export const CameraScreen: React.FC = () => {
 
   const showCamera = cameraMounted && !isClosing;
 
-  useEffect(() => {
-    console.log('[CameraScreen] Camera state - mounted:', cameraMounted, 'closing:', isClosing, 'showCamera:', showCamera);
-  }, [cameraMounted, isClosing, showCamera]);
 
   const topBarContentHeight = insets.top + 44;
   const gapAboveCamera = SPACING.xl;
@@ -440,10 +418,7 @@ export const CameraScreen: React.FC = () => {
             <RNMediapipe
               key={String(cameraSessionKey)}
               {...mediapipeProps}
-              onLandmark={(data) => {
-                console.log('[CameraScreen] onLandmark RAW callback triggered');
-                handleLandmark(data);
-              }}
+              onLandmark={handleLandmark}
             />
           )}
         </View>

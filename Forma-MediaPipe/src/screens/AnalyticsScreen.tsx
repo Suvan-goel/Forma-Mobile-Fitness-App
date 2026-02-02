@@ -8,6 +8,7 @@ import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
+import { useScroll } from '../contexts/ScrollContext';
 
 // Circular Progress Component
 const CircularProgress = ({ size, strokeWidth, progress, icon: Icon }: { size: number; strokeWidth: number; progress: number; icon: any }) => {
@@ -633,6 +634,7 @@ const getComparisonValue = (data: number[], timeRange: string): number => {
 
 export const AnalyticsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { onScroll } = useScroll();
   const [activeTab, setActiveTab] = React.useState('1 week');
   const tabBarHeight = 80;
 
@@ -692,6 +694,8 @@ export const AnalyticsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 200 }]}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         {/* Workout Duration Card */}
         <WorkoutDurationCard />
