@@ -3,33 +3,50 @@
 ## 1. Core Architecture
 - **Framework:** React Native 0.79.x (Expo SDK 53 Managed Workflow), upgraded for 16KB / Google Play targetSdk 35
 - **Engine:** Hermes
-- **Platform:** iOS (primary) & Android
+- **Platform:** iOS & Android
 
 ## 2. Critical Dependency Versions ("The Golden Standard")
 After the Expo 53 / 16KB upgrade, the canonical set is in **package.json** and aligned via `npx expo install --fix`. Key pieces:
 - **Expo:** ~53.0.0 — **React:** 19.0.0 — **React Native:** 0.79.x
-- `react-native-worklets-core`: **^1.3.3** (The Margelo version. NOT `react-native-worklets`)
-- `react-native-vision-camera`, `react-native-fast-tflite`, `@shopify/react-native-skia`, `react-native-reanimated`, `react-native-screens`, etc.: use versions that `npx expo install --fix` selects for SDK 53
+- `@thinksys/react-native-mediapipe`: ^0.0.19 (Pose detection)
+- `react-native-screens`, `react-native-gesture-handler`, etc.: use versions that `npx expo install --fix` selects for SDK 53
 - See **docs/EXPO-53-16KB-UPGRADE.md** for the full upgrade and local steps.
 
-## 3. Worklet Rules (Strict)
-We use `react-native-worklets-core` for VisionCamera frame processors.
-- **Rule 1:** Any function called inside `useFrameProcessor` MUST start with the `'worklet';` directive at the very top.
-- **Rule 2:** Do not use `runOnJS` unless absolutely necessary for UI updates that SharedValues cannot handle.
-- **Rule 3:** Complex logic (angles, rep counting) should be extracted into separate files where functions are explicitly marked `'worklet'`.
-- **Rule 4:** NEVER install `@swmansion/react-native-worklets`. It conflicts with our stack. 
+## 3. MediaPipe Integration
+We use `@thinksys/react-native-mediapipe` for pose detection with callback-based landmark data.
+- The `RNMediapipe` component handles camera and pose detection internally
+- Landmark data is received via `onLandmark` callback (not frame processors/worklets)
+- No worklets, no Reanimated needed - pure callback-based architecture
+
+### Removed Dependencies (iOS Hermes Fix)
+The following were removed to fix iOS crashes ("Cannot read property 'S' of undefined"):
+- `react-native-reanimated` - was not used in app code
+- `react-native-worklets-core` - was not used in app code
+- Corresponding Babel plugins removed from babel.config.js
 
 ## 4. Coding Patterns
-### Frame Processor Pattern
+### MediaPipe Landmark Handling
 ```typescript
-const frameProcessor = useFrameProcessor((frame) => {
-  'worklet';
-  // 1. Resize/Format Frame
-  const resized = resize(frame, { scale: 0.25 });
-  
-  // 2. Run Model
-  const outputs = model.run(resized);
-  
-  // 3. Update SharedValues for Skia (Do not set React State here!)
-  poseKeypoints.value = outputs[0];
-}, [model]);
+const handleLandmark = useCallback((data: any) => {
+  const keypoints = convertLandmarksToKeypoints(data);
+  if (!keypoints) return;
+
+  // Process pose data (rep counting, form analysis)
+  const result = updateBarbellCurlState(keypoints, stateRef.current);
+
+  // Update React state for UI
+  setRepCount(result.repCount);
+  setCurrentFormScore(result.formScore);
+}, []);
+
+<RNMediapipe
+  {...mediapipeProps}
+  onLandmark={handleLandmark}
+/>
+```
+
+## 5. Animations
+Use React Native's built-in `Animated` API from `react-native` (NOT Reanimated):
+```typescript
+import { Animated } from 'react-native';
+```

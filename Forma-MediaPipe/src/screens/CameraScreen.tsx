@@ -426,7 +426,6 @@ export const CameraScreen: React.FC = () => {
         <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
           {showCamera && (
             <RNMediapipe
-              key={String(cameraSessionKey)}
               {...mediapipeProps}
               onLandmark={handleLandmark}
             />
