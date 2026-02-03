@@ -143,6 +143,23 @@ function calculateJointAngles(keypoints: Keypoint[]): {
   };
 }
 
+/** Max degrees difference between left/right before we average (symmetric exercises) */
+const SYMMETRIC_ANGLE_TOLERANCE_DEG = 25;
+
+/**
+ * For symmetric joints (elbow, shoulder, hip, knee) during barbell curl: when both sides
+ * are available but differ significantly, use their average. This corrects for single-side
+ * detection errors and enforces the physical reality that both arms/legs move together.
+ */
+function symmetrizeAngle(left: number, right: number): { left: number; right: number } {
+  const diff = Math.abs(left - right);
+  if (diff <= SYMMETRIC_ANGLE_TOLERANCE_DEG) {
+    return { left, right };
+  }
+  const avg = (left + right) / 2;
+  return { left: avg, right: avg };
+}
+
 /**
  * When one side is occluded (e.g. side-on view), use the visible limb's angle
  * as an estimate for the occluded side. Barbell curls are symmetric, so both
@@ -161,18 +178,32 @@ function getEffectiveAngles(
   rightKnee: number;
   canAnalyze: boolean;
 } {
-  const elbow = raw.leftElbow !== null || raw.rightElbow !== null
+  let elbow = raw.leftElbow !== null || raw.rightElbow !== null
     ? { left: raw.leftElbow ?? raw.rightElbow!, right: raw.rightElbow ?? raw.leftElbow! }
     : null;
-  const shoulder = raw.leftShoulder !== null || raw.rightShoulder !== null
+  let shoulder = raw.leftShoulder !== null || raw.rightShoulder !== null
     ? { left: raw.leftShoulder ?? raw.rightShoulder!, right: raw.rightShoulder ?? raw.leftShoulder! }
     : null;
-  const hip = raw.leftHip !== null || raw.rightHip !== null
+  let hip = raw.leftHip !== null || raw.rightHip !== null
     ? { left: raw.leftHip ?? raw.rightHip!, right: raw.rightHip ?? raw.leftHip! }
     : null;
-  const knee = raw.leftKnee !== null || raw.rightKnee !== null
+  let knee = raw.leftKnee !== null || raw.rightKnee !== null
     ? { left: raw.leftKnee ?? raw.rightKnee!, right: raw.rightKnee ?? raw.leftKnee! }
     : null;
+
+  // Symmetrize when both sides available but differ too much (detection noise)
+  if (elbow && raw.leftElbow != null && raw.rightElbow != null) {
+    elbow = symmetrizeAngle(raw.leftElbow, raw.rightElbow);
+  }
+  if (shoulder && raw.leftShoulder != null && raw.rightShoulder != null) {
+    shoulder = symmetrizeAngle(raw.leftShoulder, raw.rightShoulder);
+  }
+  if (hip && raw.leftHip != null && raw.rightHip != null) {
+    hip = symmetrizeAngle(raw.leftHip, raw.rightHip);
+  }
+  if (knee && raw.leftKnee != null && raw.rightKnee != null) {
+    knee = symmetrizeAngle(raw.leftKnee, raw.rightKnee);
+  }
 
   const canAnalyze = elbow !== null && shoulder !== null;
 

@@ -9,6 +9,7 @@ export type Keypoint = {
   name: string;
   x: number;
   y: number;
+  z?: number; // MediaPipe depth - smaller = closer to camera
   score: number;
 };
 
@@ -19,32 +20,54 @@ export type ExerciseState = {
   lastPhaseChange: number;
 };
 
+/** Point with optional z for 3D */
+type Point3D = { x: number; y: number; z?: number };
+
 /**
- * Calculate angle between three points (in degrees) - optimized
+ * Calculate 3D angle between three points (in degrees).
+ * Uses dot product for accurate angles regardless of camera angle or body orientation.
+ * MediaPipe provides x, y (normalized image coords) and z (relative depth).
+ *
  * @param a First point (e.g., shoulder)
  * @param b Middle point (e.g., elbow) - the vertex of the angle
  * @param c Third point (e.g., wrist)
  * @returns Angle in degrees (0-180)
  */
 export function calculateAngle(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-  c: { x: number; y: number }
+  a: Point3D,
+  b: Point3D,
+  c: Point3D
 ): number {
-  // Optimized: pre-compute differences
-  const dx1 = a.x - b.x;
-  const dy1 = a.y - b.y;
-  const dx2 = c.x - b.x;
-  const dy2 = c.y - b.y;
-  
-  const radians = Math.atan2(dy2, dx2) - Math.atan2(dy1, dx1);
-  let angle = Math.abs(radians * 57.29577951308232); // 180/PI pre-calculated
+  const zA = a.z ?? 0;
+  const zB = b.z ?? 0;
+  const zC = c.z ?? 0;
 
-  if (angle > 180.0) {
-    angle = 360 - angle;
+  // Vectors from vertex b to a and c
+  const v1x = a.x - b.x;
+  const v1y = a.y - b.y;
+  const v1z = zA - zB;
+
+  const v2x = c.x - b.x;
+  const v2y = c.y - b.y;
+  const v2z = zC - zB;
+
+  // Dot product
+  const dot = v1x * v2x + v1y * v2y + v1z * v2z;
+
+  // Magnitudes
+  const mag1 = Math.sqrt(v1x * v1x + v1y * v1y + v1z * v1z);
+  const mag2 = Math.sqrt(v2x * v2x + v2y * v2y + v2z * v2z);
+
+  // Avoid division by zero
+  if (mag1 < 1e-8 || mag2 < 1e-8) {
+    return 0;
   }
 
-  return angle;
+  // Clamp to [-1, 1] to handle floating point precision
+  const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
+  const radians = Math.acos(cosAngle);
+
+  return radians * 57.29577951308232; // 180/PI -> degrees
 }
 
 /**

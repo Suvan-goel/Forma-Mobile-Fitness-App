@@ -147,29 +147,39 @@ export const CameraScreen: React.FC = () => {
     };
   }, [isRecording, isPaused, workoutStartTime]);
 
-  // Convert MediaPipe landmark data to our Keypoint format
+  // Convert MediaPipe landmark data to our Keypoint format.
+  // Prefer worldLandmarks (3D real-world coords in meters) for accurate joint angles - they have
+  // consistent scale across x,y,z and represent actual body pose. Fall back to landmarks (image
+  // coords) if worldLandmarks unavailable.
   const convertLandmarksToKeypoints = useCallback((landmarkData: any): Keypoint[] | null => {
     try {
-      // Parse JSON string if needed
       let parsedData = landmarkData;
       if (typeof landmarkData === 'string') {
         parsedData = JSON.parse(landmarkData);
       }
 
-      // Extract landmarks array from the object
-      const landmarksArray = parsedData?.landmarks || parsedData;
-      
-      if (!Array.isArray(landmarksArray)) {
+      const worldLandmarksArray = parsedData?.worldLandmarks;
+      const imageLandmarksArray = parsedData?.landmarks || parsedData;
+
+      const landmarksArray =
+        Array.isArray(worldLandmarksArray) && worldLandmarksArray.length === 33
+          ? worldLandmarksArray
+          : Array.isArray(imageLandmarksArray)
+            ? imageLandmarksArray
+            : null;
+
+      if (!landmarksArray) {
         return null;
       }
 
       const keypoints: Keypoint[] = landmarksArray.map((landmark: any, index: number) => ({
         name: MEDIAPIPE_LANDMARK_NAMES[index] || `landmark_${index}`,
-        x: landmark.x || 0,
-        y: landmark.y || 0,
+        x: landmark.x ?? 0,
+        y: landmark.y ?? 0,
+        z: typeof landmark.z === 'number' ? landmark.z : 0,
         score: landmark.visibility !== undefined ? landmark.visibility : 1.0,
       }));
-      
+
       return keypoints;
     } catch {
       return null;
