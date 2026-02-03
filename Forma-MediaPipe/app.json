@@ -43,6 +43,9 @@
       [
         "expo-build-properties",
         {
+          "ios": {
+            "jsEngine": "jsc"
+          },
           "android": {
             "minSdkVersion": 26,
             "compileSdkVersion": 35,
