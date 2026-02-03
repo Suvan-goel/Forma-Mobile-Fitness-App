@@ -9,6 +9,9 @@ import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { getWorkouts, SavedWorkout } from '../services/workoutStorage';
 import { useScroll } from '../contexts/ScrollContext';
+import { useWorkouts } from '../hooks';
+import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { WorkoutSession } from '../services/api';
 
 // Dropdown Pill Component
 const DropdownPill = ({ 
@@ -207,80 +210,7 @@ const CalendarModal = ({
   );
 };
 
-interface WorkoutSession {
-  id: string;
-  name: string;
-  date: string;
-  fullDate: Date;
-  duration: string;
-  totalSets: number;
-  totalReps: number;
-  formScore: number;
-  category?: string;
-}
-
-const mockWorkoutSessions: WorkoutSession[] = [
-  {
-    id: '1',
-    name: 'Push Day - Strength',
-    date: 'Oct 24',
-    fullDate: new Date(2024, 9, 24), // October 24, 2024
-    duration: '45 min',
-    totalSets: 15,
-    totalReps: 120,
-    formScore: 87,
-  },
-  {
-    id: '2',
-    name: 'Leg Hypertrophy',
-    date: 'Oct 22',
-    fullDate: new Date(2024, 9, 22), // October 22, 2024
-    duration: '60 min',
-    totalSets: 18,
-    totalReps: 210,
-    formScore: 85,
-  },
-  {
-    id: '3',
-    name: 'Full Body Circuit',
-    date: 'Oct 20',
-    fullDate: new Date(2024, 9, 20), // October 20, 2024
-    duration: '35 min',
-    totalSets: 12,
-    totalReps: 300,
-    formScore: 82,
-  },
-  {
-    id: '4',
-    name: 'Morning Mobility',
-    date: 'Oct 18',
-    fullDate: new Date(2024, 9, 18), // October 18, 2024
-    duration: '20 min',
-    totalSets: 8,
-    totalReps: 50,
-    formScore: 75,
-  },
-  {
-    id: '5',
-    name: 'Upper Body Focus',
-    date: 'Sep 15',
-    fullDate: new Date(2024, 8, 15), // September 15, 2024
-    duration: '50 min',
-    totalSets: 16,
-    totalReps: 180,
-    formScore: 90,
-  },
-  {
-    id: '6',
-    name: 'Cardio Blast',
-    date: 'Sep 10',
-    fullDate: new Date(2024, 8, 10), // September 10, 2024
-    duration: '30 min',
-    totalSets: 10,
-    totalReps: 200,
-    formScore: 78,
-  },
-];
+// WorkoutSession interface is now imported from '../services/api'
 
 interface WorkoutCardProps {
   session: WorkoutSession;
@@ -352,12 +282,16 @@ export const LogbookScreen: React.FC = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Fetch workouts from API service
+  const { workouts: mockWorkoutSessions, isLoading, error, refetch } = useWorkouts();
+
   // Refresh workouts when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       // Force re-render by updating refresh key
       setRefreshKey(prev => prev + 1);
-    }, [])
+      refetch();
+    }, [refetch])
   );
 
   // Get all workouts (saved + mock) - helper function
@@ -373,9 +307,9 @@ export const LogbookScreen: React.FC = () => {
       formScore: workout.formScore,
       category: workout.category,
     }));
-    
+
     // Merge and sort by date (most recent first)
-    return [...savedWorkouts, ...mockWorkoutSessions].sort((a, b) => 
+    return [...savedWorkouts, ...mockWorkoutSessions].sort((a, b) =>
       b.fullDate.getTime() - a.fullDate.getTime()
     );
   };
@@ -526,6 +460,30 @@ export const LogbookScreen: React.FC = () => {
     return `${monthNames[selectedDate.getMonth()]} ${selectedDate.getDate()}, ${selectedDate.getFullYear()}`;
   };
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+        </View>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <ErrorState message={error} onRetry={refetch} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Filter Pills */}
@@ -629,6 +587,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    padding: SPACING.screenHorizontal,
+    paddingTop: SPACING.lg,
+  },
+  errorContainer: {
+    flex: 1,
+    padding: SPACING.screenHorizontal,
+    justifyContent: 'center',
   },
   tabsScrollView: {
     height: 48,

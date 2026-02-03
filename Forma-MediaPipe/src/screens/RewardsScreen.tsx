@@ -1,113 +1,32 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock } from 'lucide-react-native';
+import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock, LucideIcon } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
+import { useRewards } from '../hooks';
+import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { Reward } from '../services/api';
 
-// Mock user stats (would come from analytics in real app)
-const userStats = {
-  formScore: 87,
-  consistencyScore: 79,
+// Icon resolver map for dynamic icon rendering
+const iconMap: { [key: string]: LucideIcon } = {
+  Gift,
+  Utensils,
+  Dumbbell,
+  ShoppingBag,
+  Pill,
+  Star,
+  Lock,
 };
 
-// Calculate points based on metrics
-// Points are calculated as the sum of form and consistency scores
-const calculatePoints = () => {
-  const formPoints = userStats.formScore;
-  const consistencyPoints = userStats.consistencyScore;
-  return formPoints + consistencyPoints;
+const getIconComponent = (iconName: string): LucideIcon => {
+  return iconMap[iconName] || Gift;
 };
-
-interface Reward {
-  id: string;
-  title: string;
-  description: string;
-  pointsRequired: number;
-  icon: any;
-  color: string;
-  category: string;
-}
-
-const rewards: Reward[] = [
-  {
-    id: '1',
-    title: 'Free Protein Shake',
-    description: 'Redeem at any partner gym',
-    pointsRequired: 200,
-    icon: Pill,
-    color: COLORS.primary,
-    category: 'Supplements',
-  },
-  {
-    id: '2',
-    title: 'Healthy Meal Voucher',
-    description: '$15 off at partner restaurants',
-    pointsRequired: 350,
-    icon: Utensils,
-    color: '#F59E0B',
-    category: 'Meals',
-  },
-  {
-    id: '3',
-    title: 'Gym Day Pass',
-    description: 'Free day pass at partner gyms',
-    pointsRequired: 500,
-    icon: Dumbbell,
-    color: COLORS.primary,
-    category: 'Gym',
-  },
-  {
-    id: '4',
-    title: 'Resistance Bands Set',
-    description: 'Premium exercise bands',
-    pointsRequired: 750,
-    icon: ShoppingBag,
-    color: '#8B5CF6',
-    category: 'Accessories',
-  },
-  {
-    id: '5',
-    title: 'Monthly Supplement Box',
-    description: 'Curated supplements for your goals',
-    pointsRequired: 1000,
-    icon: Pill,
-    color: '#EC4899',
-    category: 'Supplements',
-  },
-  {
-    id: '6',
-    title: 'Weekly Meal Prep',
-    description: '7 healthy meals delivered',
-    pointsRequired: 1500,
-    icon: Utensils,
-    color: '#F59E0B',
-    category: 'Meals',
-  },
-  {
-    id: '7',
-    title: 'Monthly Gym Membership',
-    description: 'Full access to partner gyms',
-    pointsRequired: 2500,
-    icon: Dumbbell,
-    color: COLORS.primary,
-    category: 'Gym',
-  },
-  {
-    id: '8',
-    title: 'Premium Gym Bag',
-    description: 'High-quality training bag',
-    pointsRequired: 3000,
-    icon: ShoppingBag,
-    color: '#8B5CF6',
-    category: 'Accessories',
-  },
-];
 
 const RewardCard = ({ reward, userPoints }: { reward: Reward; userPoints: number }) => {
   const isUnlocked = userPoints >= reward.pointsRequired;
   const progress = Math.min((userPoints / reward.pointsRequired) * 100, 100);
-  const Icon = reward.icon;
+  const Icon = getIconComponent(reward.iconName);
 
   return (
     <TouchableOpacity 
@@ -143,7 +62,35 @@ const RewardCard = ({ reward, userPoints }: { reward: Reward; userPoints: number
 export const RewardsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { onScroll } = useScroll();
-  const userPoints = calculatePoints();
+
+  // Fetch rewards from API service
+  const { rewards, userStats, userPoints, isLoading, error, refetch } = useRewards();
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingSkeleton variant="card" height={160} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="text" width="40%" height={20} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={80} />
+        </View>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <ErrorState message={error} onRetry={refetch} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -168,12 +115,12 @@ export const RewardsScreen: React.FC = () => {
           <View style={styles.pointsBreakdown}>
             <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>Form</Text>
-              <Text style={styles.breakdownValue}>+{userStats.formScore}</Text>
+              <Text style={styles.breakdownValue}>+{userStats?.formScore || 0}</Text>
             </View>
             <View style={styles.breakdownDivider} />
             <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>Consistency</Text>
-              <Text style={styles.breakdownValue}>+{userStats.consistencyScore}</Text>
+              <Text style={styles.breakdownValue}>+{userStats?.consistencyScore || 0}</Text>
             </View>
           </View>
         </View>
@@ -202,6 +149,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.xs,
+  },
+  errorContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    justifyContent: 'center',
   },
   scrollView: {
     flex: 1,

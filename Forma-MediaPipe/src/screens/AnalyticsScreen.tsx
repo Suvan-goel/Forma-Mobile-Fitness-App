@@ -9,6 +9,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
 import { useScroll } from '../contexts/ScrollContext';
+import { useAnalytics } from '../hooks';
+import { LoadingSkeleton, ErrorState } from '../components/ui';
 
 // Circular Progress Component
 const CircularProgress = ({ size, strokeWidth, progress, icon: Icon }: { size: number; strokeWidth: number; progress: number; icon: any }) => {
@@ -563,71 +565,8 @@ const WorkoutBarChart = ({ onDaySelect }: { onDaySelect?: (dayData: { day: strin
   );
 };
 
-// Generate data based on time range
-const generateDataForTimeRange = (baseData: number[], timeRange: string): { values: number[]; dates: Date[] } => {
-  const currentValue = baseData[baseData.length - 1];
-  const startValue = baseData[0];
-  
-  let numPoints: number;
-  let daysBack: number;
-  switch (timeRange) {
-    case '1 week':
-      numPoints = 7;
-      daysBack = 7;
-      break;
-    case '4 weeks':
-      numPoints = 28;
-      daysBack = 28;
-      break;
-    case '3 months':
-      numPoints = 13; // Weekly data for 3 months
-      daysBack = 91;
-      break;
-    case '6 months':
-      numPoints = 26; // Weekly data for 6 months
-      daysBack = 182;
-      break;
-    case 'Year':
-      numPoints = 52; // Weekly data for a year
-      daysBack = 365;
-      break;
-    default:
-      numPoints = 7;
-      daysBack = 7;
-  }
-  
-  // Generate data points with gradual progression and realistic variation
-  const data: number[] = [];
-  const dates: Date[] = [];
-  const seed = baseData.reduce((a, b) => a + b, 0); // Use base data to create consistent seed
-  const today = new Date();
-  
-  for (let i = 0; i < numPoints; i++) {
-    const progress = i / (numPoints - 1);
-    // Create smooth progression with some realistic variation
-    const baseProgression = startValue + (currentValue - startValue) * progress;
-    // Add wave-like variation for realism (not random, but deterministic based on index)
-    const waveVariation = Math.sin((i / numPoints) * Math.PI * 6) * 2;
-    const trendVariation = Math.sin((i / numPoints) * Math.PI * 2) * 1.5;
-    const value = Math.round(baseProgression + waveVariation + trendVariation);
-    data.push(Math.max(0, Math.min(100, value)));
-    
-    // Generate date for this data point
-    const daysAgo = Math.round(daysBack * (1 - progress));
-    const date = new Date(today);
-    date.setDate(date.getDate() - daysAgo);
-    dates.push(date);
-  }
-  
-  // Ensure the last value matches the current value
-  data[data.length - 1] = currentValue;
-  dates[dates.length - 1] = today;
-  
-  return { values: data, dates };
-};
-
 // Get comparison value based on time range (value at the start of the range)
-const getComparisonValue = (data: number[], timeRange: string): number => {
+const getComparisonValue = (data: number[]): number => {
   // For all ranges, compare to the first value in the dataset (start of the range)
   return data[0] || 0;
 };
@@ -638,28 +577,54 @@ export const AnalyticsScreen: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState('1 week');
   const tabBarHeight = 80;
 
-  // Base data for each metric
-  const formBaseData = [72, 75, 78, 82, 80, 85, 87];
-  const consistencyBaseData = [65, 70, 68, 72, 75, 78, 79];
-  const strengthBaseData = [70, 72, 75, 78, 80, 82, 84];
+  // Fetch analytics from API service
+  const { analytics, isLoading, error, refetch } = useAnalytics(activeTab);
 
-  // Generate data based on selected time range
-  const formDataResult = generateDataForTimeRange(formBaseData, activeTab);
-  const consistencyDataResult = generateDataForTimeRange(consistencyBaseData, activeTab);
-  const strengthDataResult = generateDataForTimeRange(strengthBaseData, activeTab);
-  
-  const formData = formDataResult.values;
-  const formDates = formDataResult.dates;
-  const consistencyData = consistencyDataResult.values;
-  const consistencyDates = consistencyDataResult.dates;
-  const strengthData = strengthDataResult.values;
-  const strengthDates = strengthDataResult.dates;
+  // Handle time range change
+  const handleTimeRangeChange = (timeRange: string) => {
+    setActiveTab(timeRange);
+    refetch(timeRange);
+  };
+
+  // Loading state
+  if (isLoading || !analytics) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingSkeleton variant="card" height={200} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={200} />
+        </View>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <ErrorState message={error} onRetry={() => refetch()} />
+        </View>
+      </View>
+    );
+  }
+
+  // Extract data from analytics
+  const formData = analytics.formData.values;
+  const formDates = analytics.formData.dates;
+  const consistencyData = analytics.consistencyData.values;
+  const consistencyDates = analytics.consistencyData.dates;
+  const strengthData = analytics.strengthData.values;
+  const strengthDates = analytics.strengthData.dates;
 
   // Get current and comparison values
   const formCurrent = formData[formData.length - 1];
-  const formComparison = getComparisonValue(formData, activeTab);
+  const formComparison = getComparisonValue(formData);
   const consistencyCurrent = consistencyData[consistencyData.length - 1];
-  const consistencyComparison = getComparisonValue(consistencyData, activeTab);
+  const consistencyComparison = getComparisonValue(consistencyData);
 
   // Workout Duration Card Component
   const WorkoutDurationCard = () => {
@@ -724,9 +689,9 @@ export const AnalyticsScreen: React.FC = () => {
 
         {/* Time Range Dropdown */}
         <View style={styles.timeRangeContainer}>
-          <TimeRangeDropdown 
-            selectedValue={activeTab} 
-            onSelect={setActiveTab} 
+          <TimeRangeDropdown
+            selectedValue={activeTab}
+            onSelect={handleTimeRangeChange}
           />
         </View>
 
@@ -765,6 +730,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.md,
+  },
+  errorContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    justifyContent: 'center',
   },
   tabsScrollContainer: {
     marginBottom: SPACING.lg,

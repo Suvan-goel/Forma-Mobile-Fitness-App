@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Sparkles } from 'lucide-react-native';
@@ -6,41 +6,81 @@ import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
+import { insightsService, InsightsData } from '../services/api';
+import { LoadingSkeleton, ErrorState } from '../components/ui';
 
 type InsightsScreenRouteProp = RouteProp<RootStackParamList, 'Insights'>;
 type InsightsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Insights'>;
-
-const insightsData: { [key: string]: string[] } = {
-  Form: [
-    "Your form has improved significantly over the past week, with a 15% increase in average score.",
-    "Focus on maintaining proper posture during squats - your lower back alignment shows room for improvement.",
-    "Your deadlift form is excellent, with consistent hip hinge mechanics throughout your sets.",
-    "Consider reducing weight slightly on overhead presses to maintain better shoulder stability.",
-    "Your bench press form is solid, but try to keep your feet flat on the floor for better power transfer."
-  ],
-  Consistency: [
-    "You've maintained a 79% consistency rate over the past month - keep up the momentum!",
-    "Your workout frequency has been steady, with 5-6 sessions per week on average.",
-    "Try to establish a more consistent morning routine to improve your adherence rate.",
-    "Your consistency is strongest on weekdays - consider adding weekend sessions to boost your overall rate.",
-    "You're building excellent habits - consistency is the key to long-term progress."
-  ],
-  Strength: [
-    "Your strength has been steadily increasing, with a 14-point improvement over the past month.",
-    "Your progressive overload strategy is working well - continue gradually increasing weight or reps.",
-    "Focus on compound movements like squats and deadlifts to maximize strength gains.",
-    "Your bench press strength is progressing nicely - consider adding accessory work for triceps.",
-    "Maintain proper form as you increase weight - strength without form is counterproductive."
-  ]
-};
 
 export const InsightsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<InsightsScreenNavigationProp>();
   const route = useRoute<InsightsScreenRouteProp>();
   const { metric } = route.params;
-  
-  const insights = insightsData[metric] || [];
+
+  // Local state for insights
+  const [insights, setInsights] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch insights from service
+  const fetchInsights = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await insightsService.getInsights(metric as keyof InsightsData);
+      if (response.success) {
+        setInsights(response.data);
+      } else {
+        setError(response.error || 'Failed to fetch insights');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [metric]);
+
+  useEffect(() => {
+    fetchInsights();
+  }, [fetchInsights]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <ChevronLeft size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{metric} Analysis</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <LoadingSkeleton variant="card" height={300} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={120} />
+        </View>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <ChevronLeft size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{metric} Analysis</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.errorContainer}>
+          <ErrorState message={error} onRetry={fetchInsights} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -91,6 +131,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.md,
+  },
+  errorContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

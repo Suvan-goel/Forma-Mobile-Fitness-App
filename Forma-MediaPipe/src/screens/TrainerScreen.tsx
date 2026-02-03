@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  KeyboardAvoidingView, 
+import {
+  View,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  KeyboardAvoidingView,
   Platform,
   FlatList
 } from 'react-native';
@@ -14,205 +14,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Send, Bot, TrendingUp, Target, AlertCircle, CheckCircle2 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
+import { useTrainer } from '../hooks';
+import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { ChatMessage, Recommendation } from '../services/api';
 
-// Mock workout data (same as LogbookScreen)
-interface WorkoutSession {
-  id: string;
-  name: string;
-  date: string;
-  fullDate: Date;
-  duration: string;
-  totalSets: number;
-  totalReps: number;
-  formScore: number;
-}
-
-const mockWorkoutSessions: WorkoutSession[] = [
-  {
-    id: '1',
-    name: 'Push Day - Strength',
-    date: 'Oct 24',
-    fullDate: new Date(2024, 9, 24),
-    duration: '45 min',
-    totalSets: 15,
-    totalReps: 120,
-    formScore: 87,
-  },
-  {
-    id: '2',
-    name: 'Leg Hypertrophy',
-    date: 'Oct 22',
-    fullDate: new Date(2024, 9, 22),
-    duration: '60 min',
-    totalSets: 18,
-    totalReps: 210,
-    formScore: 85,
-  },
-  {
-    id: '3',
-    name: 'Full Body Circuit',
-    date: 'Oct 20',
-    fullDate: new Date(2024, 9, 20),
-    duration: '35 min',
-    totalSets: 12,
-    totalReps: 300,
-    formScore: 82,
-  },
-  {
-    id: '4',
-    name: 'Morning Mobility',
-    date: 'Oct 18',
-    fullDate: new Date(2024, 9, 18),
-    duration: '20 min',
-    totalSets: 8,
-    totalReps: 50,
-    formScore: 75,
-  },
-  {
-    id: '5',
-    name: 'Upper Body Focus',
-    date: 'Sep 15',
-    fullDate: new Date(2024, 8, 15),
-    duration: '50 min',
-    totalSets: 16,
-    totalReps: 180,
-    formScore: 90,
-  },
-  {
-    id: '6',
-    name: 'Cardio Blast',
-    date: 'Sep 10',
-    fullDate: new Date(2024, 8, 10),
-    duration: '30 min',
-    totalSets: 10,
-    totalReps: 200,
-    formScore: 78,
-  },
-];
-
-interface ChatMessage {
-  id: string;
-  text: string;
-  isUser: boolean;
-  timestamp: Date;
-}
-
-// Calculate progress insights from workout data
-const calculateProgress = () => {
-  const recentWorkouts = mockWorkoutSessions.slice(0, 4);
-  const olderWorkouts = mockWorkoutSessions.slice(4);
-  
-  const avgFormRecent = recentWorkouts.reduce((sum, w) => sum + w.formScore, 0) / recentWorkouts.length;
-  const avgFormOlder = olderWorkouts.length > 0 
-    ? olderWorkouts.reduce((sum, w) => sum + w.formScore, 0) / olderWorkouts.length 
-    : avgFormRecent;
-  
-  const totalReps = recentWorkouts.reduce((sum, w) => sum + w.totalReps, 0);
-  const avgDuration = recentWorkouts.reduce((sum, w) => {
-    const mins = parseInt(w.duration.replace(' min', ''));
-    return sum + mins;
-  }, 0) / recentWorkouts.length;
-  
-  const formTrend = avgFormRecent - avgFormOlder;
-  
-  return {
-    avgFormScore: Math.round(avgFormRecent),
-    formTrend,
-    totalReps,
-    avgDuration: Math.round(avgDuration),
-    workoutCount: recentWorkouts.length,
-  };
-};
-
-// Generate AI recommendations
-const generateRecommendations = (progress: ReturnType<typeof calculateProgress>) => {
-  const recommendations = [];
-  
-  if (progress.formTrend < 0) {
-    recommendations.push({
-      type: 'warning',
-      title: 'Form Score Declining',
-      message: 'Your form scores have decreased recently. Focus on proper technique and consider reducing weight to maintain form.',
-    });
-  } else if (progress.formTrend > 0) {
-    recommendations.push({
-      type: 'success',
-      title: 'Form Improving',
-      message: 'Great job! Your form scores are trending upward. Keep focusing on technique.',
-    });
-  }
-  
-  if (progress.avgFormScore < 80) {
-    recommendations.push({
-      type: 'warning',
-      title: 'Form Needs Attention',
-      message: 'Your average form score is below 80. Consider working with lighter weights or focusing on form drills.',
-    });
-  }
-  
-  if (progress.workoutCount < 3) {
-    recommendations.push({
-      type: 'info',
-      title: 'Increase Frequency',
-      message: 'You\'ve been training less frequently. Aim for at least 3-4 workouts per week for optimal progress.',
-    });
-  }
-  
-  if (recommendations.length === 0) {
-    recommendations.push({
-      type: 'success',
-      title: 'On Track',
-      message: 'You\'re making excellent progress! Keep up the consistent training.',
-    });
-  }
-  
-  return recommendations;
-};
-
-// Mock AI response generator
-const generateAIResponse = (userMessage: string, progress: ReturnType<typeof calculateProgress>): string => {
-  const lowerMessage = userMessage.toLowerCase();
-  
-  // Form-related questions
-  if (lowerMessage.includes('form') || lowerMessage.includes('technique')) {
-    if (progress.avgFormScore < 80) {
-      return `Based on your recent workouts, your average form score is ${progress.avgFormScore}%, which is below optimal. I recommend focusing on proper technique by:\n\n1. Reducing weight by 10-15% to perfect form\n2. Recording yourself to identify form issues\n3. Slowing down your reps to maintain control\n\nYour form has ${progress.formTrend > 0 ? 'improved' : 'declined'} recently, so let's get it back on track!`;
-    }
-    return `Your form scores are looking good at ${progress.avgFormScore}% average! Keep focusing on controlled movements and full range of motion. Your form has been ${progress.formTrend > 0 ? 'improving' : 'stable'} recently.`;
-  }
-  
-  // Progress questions
-  if (lowerMessage.includes('progress') || lowerMessage.includes('improve') || lowerMessage.includes('better')) {
-    const formTrend = progress.formTrend > 0 ? 'improving' : progress.formTrend < 0 ? 'declining' : 'stable';
-    
-    return `Here's your progress overview:\n\n📊 Form Score: ${progress.avgFormScore}% (${formTrend})\n🏋️ Total Reps (recent): ${progress.totalReps}\n⏱️ Avg Duration: ${progress.avgDuration} min\n\n${progress.formTrend > 0 ? 'You\'re making great progress! Keep it up!' : 'Focus on maintaining consistent form to see better results.'}`;
-  }
-  
-  // Workout frequency
-  if (lowerMessage.includes('frequency') || lowerMessage.includes('often') || lowerMessage.includes('times')) {
-    return `You've completed ${progress.workoutCount} workouts recently. For optimal progress, aim for 3-4 workouts per week. ${progress.workoutCount < 3 ? 'Try to increase your training frequency!' : 'You\'re on track with your frequency!'}`;
-  }
-  
-  // Nutrition questions
-  if (lowerMessage.includes('nutrition') || lowerMessage.includes('diet') || lowerMessage.includes('eat') || lowerMessage.includes('food')) {
-    return `Here are my nutrition recommendations:\n\n1. Protein: Aim for 0.8-1g per lb of bodyweight daily\n2. Carbs: Focus on complex carbs pre-workout for energy\n3. Hydration: Drink 0.5-1L water during workouts\n4. Recovery: Post-workout meal within 30-60 minutes\n\nProper nutrition supports recovery and performance!`;
-  }
-  
-  // Recovery questions
-  if (lowerMessage.includes('recovery') || lowerMessage.includes('rest') || lowerMessage.includes('sleep')) {
-    return `Recovery is crucial for your progress! Based on your ${progress.avgDuration}-minute average workout duration:\n\n1. Sleep: Aim for 7-9 hours nightly\n2. Rest Days: Take 1-2 rest days between intense sessions\n3. Active Recovery: Light walks or stretching on rest days\n4. Hydration: Stay hydrated throughout the day\n\nWith your current training intensity, proper recovery will maximize your gains!`;
-  }
-  
-  // General fitness advice
-  if (lowerMessage.includes('workout') || lowerMessage.includes('exercise') || lowerMessage.includes('routine')) {
-    return `Based on your workout history, I see you're doing a mix of strength and cardio. Here's what I recommend:\n\n1. Continue your current split (Push, Legs, Full Body)\n2. Add 1-2 mobility sessions per week (like your Morning Mobility)\n3. Focus on progressive overload - gradually increase weight or reps\n4. Track your form scores to ensure quality over quantity\n\nYour recent workouts show good variety - keep it up!`;
-  }
-  
-  // Default response
-  return `I'm here to help with your fitness journey! Based on your recent workouts:\n\n• Average Form: ${progress.avgFormScore}%\n• Recent Workouts: ${progress.workoutCount}\n\nYou can ask me about:\n- Form and technique\n- Progress tracking\n- Nutrition\n- Recovery\n- Workout planning\n\nWhat would you like to know?`;
-};
-
-const RecommendationCard: React.FC<{ recommendation: any }> = ({ recommendation }) => {
+const RecommendationCard: React.FC<{ recommendation: Recommendation }> = ({ recommendation }) => {
   const Icon = recommendation.type === 'success' ? CheckCircle2 
     : recommendation.type === 'warning' ? AlertCircle 
     : Target;
@@ -264,35 +70,34 @@ export const TrainerScreen: React.FC = () => {
   const chatListRef = useRef<FlatList>(null);
   const navBarMargin = insets.bottom > 0 ? insets.bottom - 20 : 0;
   const footerHeight = 80 + navBarMargin + 20; // tab bar height + margin + extra space
-  
-  const progress = calculateProgress();
-  const recommendations = generateRecommendations(progress);
-  
-  const handleSendMessage = () => {
+
+  // Fetch trainer data from API service
+  const { progress, recommendations, isLoading, error, refetch, sendMessage } = useTrainer();
+
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
-    
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       text: inputText.trim(),
       isUser: true,
       timestamp: new Date(),
     };
-    
+
     setChatMessages(prev => [...prev, userMessage]);
     setInputText('');
-    
-    // Simulate AI thinking delay
-    setTimeout(() => {
-      const aiResponse: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        text: generateAIResponse(userMessage.text, progress),
-        isUser: false,
-        timestamp: new Date(),
-      };
-      setChatMessages(prev => [...prev, aiResponse]);
-    }, 500);
+
+    // Get AI response from service
+    const responseText = await sendMessage(userMessage.text);
+    const aiResponse: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      text: responseText,
+      isUser: false,
+      timestamp: new Date(),
+    };
+    setChatMessages(prev => [...prev, aiResponse]);
   };
-  
+
   useEffect(() => {
     if (activeTab === 'chat' && chatListRef.current) {
       setTimeout(() => {
@@ -300,7 +105,51 @@ export const TrainerScreen: React.FC = () => {
       }, 100);
     }
   }, [chatMessages, activeTab]);
-  
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.tabSelector}>
+          <TouchableOpacity style={[styles.tab, styles.tabActive]}>
+            <TrendingUp size={18} color={COLORS.primary} />
+            <Text style={[styles.tabText, styles.tabTextActive]}>Overview</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tab}>
+            <Bot size={18} color={COLORS.textSecondary} />
+            <Text style={styles.tabText}>Chat</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <LoadingSkeleton variant="card" height={100} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={100} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={100} />
+        </View>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.tabSelector}>
+          <TouchableOpacity style={[styles.tab, styles.tabActive]}>
+            <TrendingUp size={18} color={COLORS.primary} />
+            <Text style={[styles.tabText, styles.tabTextActive]}>Overview</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tab}>
+            <Bot size={18} color={COLORS.textSecondary} />
+            <Text style={styles.tabText}>Chat</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.errorContainer}>
+          <ErrorState message={error} onRetry={refetch} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Tab Selector */}
@@ -389,6 +238,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.md,
+  },
+  errorContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    justifyContent: 'center',
   },
   tabSelector: {
     flexDirection: 'row',
