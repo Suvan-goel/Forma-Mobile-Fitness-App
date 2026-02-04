@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform, InteractionManager } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -57,27 +57,31 @@ export const CameraScreen: React.FC = () => {
   });
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  // Debug angles display state (for UI only)
-  const [debugAngles, setDebugAngles] = useState<{
-    leftElbow: number | null;
-    rightElbow: number | null;
-    leftShoulder: number | null;
-    rightShoulder: number | null;
-    leftHip: number | null;
-    rightHip: number | null;
-    leftKnee: number | null;
-    rightKnee: number | null;
-    phase: string;
+  // Joint angles and positions for skeleton overlay (Barbell Curl)
+  const [jointOverlayData, setJointOverlayData] = useState<{
+    angles: {
+      leftElbow: number | null;
+      rightElbow: number | null;
+      leftShoulder: number | null;
+      rightShoulder: number | null;
+      leftHip: number | null;
+      rightHip: number | null;
+      leftKnee: number | null;
+      rightKnee: number | null;
+    };
+    positions: {
+      leftElbow: { x: number; y: number } | null;
+      rightElbow: { x: number; y: number } | null;
+      leftShoulder: { x: number; y: number } | null;
+      rightShoulder: { x: number; y: number } | null;
+      leftHip: { x: number; y: number } | null;
+      rightHip: { x: number; y: number } | null;
+      leftKnee: { x: number; y: number } | null;
+      rightKnee: { x: number; y: number } | null;
+    };
   }>({
-    leftElbow: null,
-    rightElbow: null,
-    leftShoulder: null,
-    rightShoulder: null,
-    leftHip: null,
-    rightHip: null,
-    leftKnee: null,
-    rightKnee: null,
-    phase: 'idle',
+    angles: { leftElbow: null, rightElbow: null, leftShoulder: null, rightShoulder: null, leftHip: null, rightHip: null, leftKnee: null, rightKnee: null },
+    positions: { leftElbow: null, rightElbow: null, leftShoulder: null, rightShoulder: null, leftHip: null, rightHip: null, leftKnee: null, rightKnee: null },
   });
 
   // Barbell curl specific state
@@ -109,6 +113,17 @@ export const CameraScreen: React.FC = () => {
   const repCountRef = useRef(repCount);
   const currentExerciseRef = useRef(currentExercise);
   const lastDetectionTimeRef = useRef(0);
+  const lastUIUpdateTimeRef = useRef(0);
+  const pendingUIStateRef = useRef<{
+    repCount?: number;
+    formScore?: number;
+    feedback?: string | null;
+    jointOverlayData?: {
+      angles: { leftElbow: number | null; rightElbow: number | null; leftShoulder: number | null; rightShoulder: number | null; leftHip: number | null; rightHip: number | null; leftKnee: number | null; rightKnee: number | null };
+      positions: Record<string, { x: number; y: number } | null>;
+    };
+    workoutUpdate?: { totalReps: number; formScore: number };
+  } | null>(null);
   const isRecordingRef = useRef(isRecording);
   const isPausedRef = useRef(isPaused);
   
@@ -148,9 +163,8 @@ export const CameraScreen: React.FC = () => {
   }, [isRecording, isPaused, workoutStartTime]);
 
   // Convert MediaPipe landmark data to our Keypoint format.
-  // Prefer worldLandmarks (3D real-world coords in meters) for accurate joint angles - they have
-  // consistent scale across x,y,z and represent actual body pose. Fall back to landmarks (image
-  // coords) if worldLandmarks unavailable.
+  // For Barbell Curl: use image coords so 2D elbow angle matches the visible bend on screen.
+  // Otherwise: prefer worldLandmarks (3D) for consistent scale.
   const convertLandmarksToKeypoints = useCallback((landmarkData: any): Keypoint[] | null => {
     try {
       let parsedData = landmarkData;
@@ -161,11 +175,20 @@ export const CameraScreen: React.FC = () => {
       const worldLandmarksArray = parsedData?.worldLandmarks;
       const imageLandmarksArray = parsedData?.landmarks || parsedData;
 
-      const landmarksArray =
-        Array.isArray(worldLandmarksArray) && worldLandmarksArray.length === 33
-          ? worldLandmarksArray
-          : Array.isArray(imageLandmarksArray)
-            ? imageLandmarksArray
+      const hasWorld =
+        Array.isArray(worldLandmarksArray) &&
+        worldLandmarksArray.length >= 33 &&
+        typeof worldLandmarksArray[0]?.x === 'number';
+      const hasImage = Array.isArray(imageLandmarksArray) && imageLandmarksArray.length >= 33;
+
+      // Barbell Curl: use image coords for elbow angle (2D xy = visible bend on camera)
+      const useImage = exerciseNameFromRoute === 'Barbell Curl' && hasImage;
+      const landmarksArray = useImage
+        ? imageLandmarksArray.slice(0, 33)
+        : hasWorld
+          ? worldLandmarksArray.slice(0, 33)
+          : hasImage
+            ? imageLandmarksArray.slice(0, 33)
             : null;
 
       if (!landmarksArray) {
@@ -184,75 +207,114 @@ export const CameraScreen: React.FC = () => {
     } catch {
       return null;
     }
+  }, [exerciseNameFromRoute]);
+
+  // Flush pending UI updates to React state (throttled to avoid blocking main thread)
+  const UI_UPDATE_INTERVAL_MS = 100; // Max 10 UI updates/sec - keeps buttons responsive
+  const ANALYSIS_THROTTLE_MS = 33;   // ~30fps analysis - balance between accuracy and perf
+
+  const flushPendingUI = useCallback(() => {
+    const pending = pendingUIStateRef.current;
+    if (!pending) return;
+    pendingUIStateRef.current = null;
+
+    // Defer state updates until after interactions (button presses) complete
+    InteractionManager.runAfterInteractions(() => {
+      if (pending.repCount !== undefined) setRepCount(pending.repCount);
+      if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
+      if (pending.feedback !== undefined) setFeedback(pending.feedback);
+      if (pending.jointOverlayData) setJointOverlayData(pending.jointOverlayData);
+      if (pending.workoutUpdate) {
+        setWorkoutData(prev => ({
+          ...prev,
+          totalReps: pending.workoutUpdate!.totalReps,
+          formScores: [...prev.formScores, pending.workoutUpdate!.formScore],
+        }));
+      }
+    });
   }, []);
 
-  // Handle landmark data from MediaPipe with optimized throttling
+  // Handle landmark data from MediaPipe - throttle analysis, batch UI updates
   const handleLandmark = useCallback((data: any) => {
-    if (!isRecordingRef.current) {
-      return;
-    }
-    
-    if (isPausedRef.current) {
-      return;
-    }
+    if (!isRecordingRef.current) return;
+    if (isPausedRef.current) return;
 
-    // Reduced throttle to 16ms (~60fps) for ultra-low latency
-    // Most devices can handle 60fps, provides smooth real-time feedback
     const now = Date.now();
-    if (now - lastDetectionTimeRef.current < 16) {
+
+    // Throttle analysis (not every frame - reduces JS thread load)
+    if (now - lastDetectionTimeRef.current < ANALYSIS_THROTTLE_MS) {
       return;
     }
     lastDetectionTimeRef.current = now;
 
     const keypoints = convertLandmarksToKeypoints(data);
-    if (!keypoints || keypoints.length === 0) {
-      return;
+    if (!keypoints || keypoints.length === 0) return;
+
+    // Extract image landmark positions for overlay (normalized 0-1) - needed for screen placement
+    let imagePositions: Record<string, { x: number; y: number } | null> = {};
+    try {
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+      const imgLandmarks = parsed?.landmarks;
+      if (Array.isArray(imgLandmarks) && imgLandmarks.length >= 33) {
+        const idx = (name: string) => MEDIAPIPE_LANDMARK_NAMES.indexOf(name);
+        const pos = (i: number) => imgLandmarks[i] && typeof imgLandmarks[i].x === 'number'
+          ? { x: imgLandmarks[i].x, y: imgLandmarks[i].y }
+          : null;
+        imagePositions = {
+          leftElbow: pos(idx('left_elbow')),
+          rightElbow: pos(idx('right_elbow')),
+          leftShoulder: pos(idx('left_shoulder')),
+          rightShoulder: pos(idx('right_shoulder')),
+          leftHip: pos(idx('left_hip')),
+          rightHip: pos(idx('right_hip')),
+          leftKnee: pos(idx('left_knee')),
+          rightKnee: pos(idx('right_knee')),
+        };
+      }
+    } catch {
+      // Ignore position parse errors
     }
 
     // Check if this is a Barbell Curl exercise (exercise-specific logic)
     if (exerciseNameFromRoute === 'Barbell Curl') {
-      // Use barbell curl-specific analysis
       const newState = updateBarbellCurlState(keypoints, barbellCurlStateRef.current);
-      
       barbellCurlStateRef.current = newState;
 
-      // Update debug angles display
-      setDebugAngles({
-        leftElbow: newState.leftElbowAngle,
-        rightElbow: newState.rightElbowAngle,
-        leftShoulder: newState.leftShoulderAngle,
-        rightShoulder: newState.rightShoulderAngle,
-        leftHip: newState.leftHipAngle,
-        rightHip: newState.rightHipAngle,
-        leftKnee: newState.leftKneeAngle,
-        rightKnee: newState.rightKneeAngle,
-        phase: newState.phase,
-      });
-
-      // Always update rep count (even if it hasn't changed)
-      setRepCount(newState.repCount);
-      
-      if (newState.formScore > 0) {
-        setCurrentFormScore(newState.formScore);
-      }
-      
-      // Update feedback (will auto-clear after 2 seconds in the analysis logic)
-      if (newState.feedback) {
-        setFeedback(newState.feedback);
-      } else {
-        setFeedback(null);
-      }
-
-      // Update workout data when a rep is completed
+      // Accumulate UI updates - don't setState here (blocks main thread)
+      const pending = pendingUIStateRef.current ?? {};
+      pending.repCount = newState.repCount;
+      if (newState.formScore > 0) pending.formScore = newState.formScore;
+      pending.feedback = newState.feedback ?? null;
+      pending.jointOverlayData = {
+        angles: {
+          leftElbow: newState.leftElbowAngle,
+          rightElbow: newState.rightElbowAngle,
+          leftShoulder: newState.leftShoulderAngle,
+          rightShoulder: newState.rightShoulderAngle,
+          leftHip: newState.leftHipAngle,
+          rightHip: newState.rightHipAngle,
+          leftKnee: newState.leftKneeAngle,
+          rightKnee: newState.rightKneeAngle,
+        },
+        positions: imagePositions,
+      };
       if (newState.repCount > repCountRef.current) {
-        setWorkoutData(prev => ({
-          ...prev,
+        pending.workoutUpdate = {
           totalReps: newState.repCount,
-          formScores: [...prev.formScores, newState.formScore],
-        }));
+          formScore: newState.formScore,
+        };
+      }
+      pendingUIStateRef.current = pending;
+
+      // Flush immediately when rep completes; otherwise throttle to keep buttons responsive
+      const repJustCompleted = newState.repCount > repCountRef.current;
+      const throttleElapsed = now - lastUIUpdateTimeRef.current >= UI_UPDATE_INTERVAL_MS;
+      if (repJustCompleted || throttleElapsed) {
+        lastUIUpdateTimeRef.current = now;
+        flushPendingUI();
       }
     } else {
-      // Use generic exercise detection for other exercises
+      // Generic exercise detection - also throttled
       const detection = detectExercise(keypoints);
       
       if (detection.exercise && detection.angle !== null) {
@@ -298,24 +360,36 @@ export const CameraScreen: React.FC = () => {
         setExercisePhase('idle');
       }
     }
-  }, [convertLandmarksToKeypoints, exerciseNameFromRoute]);
+  }, [convertLandmarksToKeypoints, exerciseNameFromRoute, flushPendingUI]);
 
   // Memoize button handlers to prevent recreating on every render
+  const workoutDataRef = useRef(workoutData);
+  useEffect(() => {
+    workoutDataRef.current = workoutData;
+  }, [workoutData]);
+
   const handleRecordPress = useCallback(() => {
     if (isRecording) {
-      // Stop recording
+      // Flush pending UI synchronously for stop - use latest from ref/pending for accuracy
+      const pending = pendingUIStateRef.current;
+      let totalReps = repCountRef.current;
+      let formScores = workoutDataRef.current.formScores;
+      if (pending?.workoutUpdate) {
+        totalReps = pending.workoutUpdate.totalReps;
+        formScores = [...formScores, pending.workoutUpdate.formScore];
+      }
+      pendingUIStateRef.current = null;
+
       setIsRecording(false);
-      
-      // Calculate workout data
-      const avgFormScore = workoutData.formScores.length > 0
-        ? Math.round(workoutData.formScores.reduce((a, b) => a + b, 0) / workoutData.formScores.length)
+
+      const avgFormScore = formScores.length > 0
+        ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
         : 0;
 
-      // Check if this is from the Record stack (Current Workout flow)
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
         const newSet = {
           exerciseName: exerciseNameFromRoute,
-          reps: workoutData.totalReps,
+          reps: totalReps,
           weight: 0,
           formScore: avgFormScore,
         };
@@ -328,14 +402,14 @@ export const CameraScreen: React.FC = () => {
         }, 450);
       } else {
         // Original flow: navigate to SaveWorkout
-        const minutes = Math.floor(workoutData.duration / 60);
-        const seconds = workoutData.duration % 60;
+        const minutes = Math.floor(workoutDataRef.current.duration / 60);
+        const seconds = workoutDataRef.current.duration % 60;
         const durationString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
         const workoutDataToSave = {
           category,
           duration: durationString,
-          totalReps: workoutData.totalReps,
+          totalReps,
           avgFormScore,
         };
 
@@ -365,7 +439,7 @@ export const CameraScreen: React.FC = () => {
         duration: 0,
       });
     }
-  }, [isRecording, workoutData, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
+  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(!isPaused);
@@ -380,6 +454,7 @@ export const CameraScreen: React.FC = () => {
   }, [navigation]);
 
   // Memoize MediaPipe props – 3:4 portrait (taller than wide)
+  // frameLimit: 20 fps on both iOS and Android for lower latency (matches platforms)
   const mediapipeProps = useMemo(() => ({
     width: cameraDisplayWidth,
     height: cameraDisplayHeight,
@@ -393,6 +468,7 @@ export const CameraScreen: React.FC = () => {
     rightWrist: true,
     leftAnkle: true,
     rightAnkle: true,
+    frameLimit: 20,
   }), []);
 
   // Memoize display values to avoid recalculation
@@ -459,62 +535,57 @@ export const CameraScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Debug Angles Display - Only show when recording Barbell Curl */}
-        {isRecording && exerciseNameFromRoute === 'Barbell Curl' && (
-          <View style={styles.anglesDebugContainer}>
-            <View style={styles.anglesDebugCard}>
-              <Text style={styles.anglesDebugTitle}>Joint Angles (°)</Text>
-              <View style={styles.anglesGrid}>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Elbow:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftElbow?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Elbow:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightElbow?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Shoulder:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftShoulder?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Shoulder:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightShoulder?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Hip:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftHip?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Hip:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightHip?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Knee:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftKnee?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Knee:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightKnee?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>Phase:</Text>
-                  <Text style={[styles.angleValue, styles.phaseValue]}>
-                    {debugAngles.phase.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
+        {/* Joint angle labels on skeleton - only when recording Barbell Curl */}
+        {isRecording && exerciseNameFromRoute === 'Barbell Curl' && (() => {
+          const cameraTop = topBarHeight + (SCREEN_HEIGHT - topBarHeight - bottomBarHeight - cameraDisplayHeight) / 2;
+          const cameraLeft = (SCREEN_WIDTH - cameraDisplayWidth) / 2;
+          const joints: { key: keyof typeof jointOverlayData.angles; posKey: keyof typeof jointOverlayData.positions }[] = [
+            { key: 'leftElbow', posKey: 'leftElbow' },
+            { key: 'rightElbow', posKey: 'rightElbow' },
+            { key: 'leftShoulder', posKey: 'leftShoulder' },
+            { key: 'rightShoulder', posKey: 'rightShoulder' },
+            { key: 'leftHip', posKey: 'leftHip' },
+            { key: 'rightHip', posKey: 'rightHip' },
+            { key: 'leftKnee', posKey: 'leftKnee' },
+            { key: 'rightKnee', posKey: 'rightKnee' },
+          ];
+          return (
+            <View
+              style={[
+                styles.jointOverlayContainer,
+                {
+                  left: cameraLeft,
+                  top: cameraTop,
+                  width: cameraDisplayWidth,
+                  height: cameraDisplayHeight,
+                },
+              ]}
+              pointerEvents="none"
+            >
+              {joints.map(({ key, posKey }) => {
+                const angle = jointOverlayData.angles[key];
+                const pos = jointOverlayData.positions[posKey];
+                if (!pos || angle === null) return null;
+                return (
+                  <View
+                    key={key}
+                    style={[
+                      styles.jointLabel,
+                      {
+                        left: pos.x * cameraDisplayWidth - 24,
+                        top: pos.y * cameraDisplayHeight - 10,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.jointLabelText}>
+                      {angle.toFixed(0)}°
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         {/* Bottom Controls */}
         <View style={[
@@ -743,50 +814,23 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: 'center',
   },
-  anglesDebugContainer: {
+  jointOverlayContainer: {
     position: 'absolute',
-    top: 180,
-    left: SPACING.screenHorizontal,
-    right: SPACING.screenHorizontal,
-    zIndex: 9,
+    zIndex: 5,
   },
-  anglesDebugCard: {
-    backgroundColor: '#262626',
-    borderRadius: 12,
-    borderWidth: 0,
-    padding: SPACING.md,
-  },
-  anglesDebugTitle: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
-    marginBottom: SPACING.xs,
-    textAlign: 'center',
-  },
-  anglesGrid: {
-    gap: 4,
-  },
-  angleRow: {
-    flexDirection: 'row',
+  jointLabel: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 48,
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  angleLabel: {
+  jointLabelText: {
     fontSize: 11,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    flex: 1,
-  },
-  angleValue: {
-    fontSize: 12,
     fontFamily: FONTS.mono.regular,
-    color: COLORS.text,
-    flex: 1,
-    textAlign: 'right',
-  },
-  phaseValue: {
     color: COLORS.primary,
-    fontFamily: FONTS.ui.bold,
   },
 });
 

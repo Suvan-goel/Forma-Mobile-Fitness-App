@@ -24,14 +24,14 @@ export type ExerciseState = {
 type Point3D = { x: number; y: number; z?: number };
 
 /**
- * Calculate 3D angle between three points (in degrees).
- * Uses dot product for accurate angles regardless of camera angle or body orientation.
- * MediaPipe provides x, y (normalized image coords) and z (relative depth).
+ * Calculate the inner angle at joint b between segments (a-b) and (b-c).
+ * For elbow: a=shoulder, b=elbow, c=wrist gives flexion angle (small when bent, ~180° when extended).
+ * Uses dot product for accurate 3D angles.
  *
  * @param a First point (e.g., shoulder)
- * @param b Middle point (e.g., elbow) - the vertex of the angle
+ * @param b Joint/vertex (e.g., elbow)
  * @param c Third point (e.g., wrist)
- * @returns Angle in degrees (0-180)
+ * @returns Inner angle in degrees (0-180)
  */
 export function calculateAngle(
   a: Point3D,
@@ -68,6 +68,59 @@ export function calculateAngle(
   const radians = Math.acos(cosAngle);
 
   return radians * 57.29577951308232; // 180/PI -> degrees
+}
+
+/**
+ * Calculate the inner elbow angle using only X and Y (2D projection).
+ * Use this when Z/depth is unreliable (e.g. image coords with inconsistent z scale).
+ * Projects onto the XY plane - for front-facing camera this matches the visible bend.
+ *
+ * @param a First point (e.g., shoulder)
+ * @param b Joint/vertex (e.g., elbow)
+ * @param c Third point (e.g., wrist)
+ * @returns Inner angle in degrees (0-180)
+ */
+export function calculateAngle2D(
+  a: Point3D,
+  b: Point3D,
+  c: Point3D
+): number {
+  const v1x = a.x - b.x;
+  const v1y = a.y - b.y;
+
+  const v2x = c.x - b.x;
+  const v2y = c.y - b.y;
+
+  const dot = v1x * v2x + v1y * v2y;
+  const mag1 = Math.sqrt(v1x * v1x + v1y * v1y);
+  const mag2 = Math.sqrt(v2x * v2x + v2y * v2y);
+
+  if (mag1 < 1e-8 || mag2 < 1e-8) return 0;
+
+  const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
+  const radians = Math.acos(cosAngle);
+  return radians * 57.29577951308232;
+}
+
+/**
+ * Calculate angle of segment AB relative to the vertical Y-axis (for torso sway).
+ * Returns deviation from vertical in degrees (0° = upright, 90° = horizontal).
+ * Uses 3D coords; vertical axis is (0, 1, 0) assuming Y-up (MediaPipe world).
+ *
+ * @param a Start point (e.g., hip)
+ * @param b End point (e.g., shoulder)
+ * @returns Angle in degrees (0-90)
+ */
+export function calculateVerticalAngle(a: Point3D, b: Point3D): number {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const vz = (b.z ?? 0) - (a.z ?? 0);
+  const mag = Math.sqrt(vx * vx + vy * vy + vz * vz);
+  if (mag < 1e-8) return 0;
+  const cosAngle = Math.max(-1, Math.min(1, vy / mag));
+  const radians = Math.acos(cosAngle);
+  const angleDeg = radians * 57.29577951308232;
+  return angleDeg <= 90 ? angleDeg : 180 - angleDeg;
 }
 
 /**
