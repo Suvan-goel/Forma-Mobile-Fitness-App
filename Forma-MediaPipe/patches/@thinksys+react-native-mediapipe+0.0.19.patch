@@ -11,7 +11,7 @@ index ac0995b..cb0110e 100644
 +  public static int frameLimit = 20;
  }
 diff --git a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt
-index 1dc36b8..b240df3 100644
+index 1dc36b8..a86417b 100644
 --- a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt
 +++ b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt
 @@ -141,11 +141,16 @@ class PoseLandmarkerHelper(
@@ -52,6 +52,20 @@ index 1dc36b8..b240df3 100644
          )
        }
      }
+@@ -216,9 +221,10 @@ class PoseLandmarkerHelper(
+ 
+     const val DELEGATE_CPU = 0
+     const val DELEGATE_GPU = 1
+-    const val DEFAULT_POSE_DETECTION_CONFIDENCE = 0.5F
+-    const val DEFAULT_POSE_TRACKING_CONFIDENCE = 0.5F
+-    const val DEFAULT_POSE_PRESENCE_CONFIDENCE = 0.5F
++    // Lowered from 0.5 to 0.35 for better leg detection when side-on (BlazePose limitation)
++    const val DEFAULT_POSE_DETECTION_CONFIDENCE = 0.35F
++    const val DEFAULT_POSE_TRACKING_CONFIDENCE = 0.35F
++    const val DEFAULT_POSE_PRESENCE_CONFIDENCE = 0.35F
+     const val DEFAULT_NUM_POSES = 1
+     const val OTHER_ERROR = 0
+     const val GPU_ERROR = 1
 diff --git a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/TsMediapipeViewManager.java b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/TsMediapipeViewManager.java
 index 1bac227..fc3e01a 100644
 --- a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/TsMediapipeViewManager.java
@@ -260,6 +274,24 @@ index 8b61fa3..85ffea4 100644
          val reactContext = ReactContextProvider.reactApplicationContext
          reactContext?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
            ?.emit("onLandmark", jsonData)
+diff --git a/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift b/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift
+index 20abc0e..a347b53 100644
+--- a/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift
++++ b/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift
+@@ -13,9 +13,10 @@ struct DefaultConstants {
+     static let lineColor = UIColor(red: 255.0, green: 255.0, blue: 255.0, alpha: 1)
+     
+     static var numPoses: Int = 1
+-    static var minPoseDetectionConfidence: Float = 0.5
+-    static var minPosePresenceConfidence: Float = 0.5
+-    static var minTrackingConfidence: Float = 0.5
++    // Lowered from 0.5 to 0.35 for better leg detection when side-on (BlazePose limitation)
++    static var minPoseDetectionConfidence: Float = 0.35
++    static var minPosePresenceConfidence: Float = 0.35
++    static var minTrackingConfidence: Float = 0.35
+     static let model: Model = .pose_landmarker_full
+     static let delegate: PoseLandmarkerDelegate = .CPU
+     
 diff --git a/node_modules/@thinksys/react-native-mediapipe/src/index.tsx b/node_modules/@thinksys/react-native-mediapipe/src/index.tsx
 index c76f8fc..b3a9ba1 100644
 --- a/node_modules/@thinksys/react-native-mediapipe/src/index.tsx

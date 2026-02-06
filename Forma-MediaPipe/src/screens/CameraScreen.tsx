@@ -9,7 +9,14 @@ import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount, Keypoint } from '../utils/poseAnalysis';
-import { updateBarbellCurlState, initializeBarbellCurlState, BarbellCurlState } from '../utils/barbellCurlAnalysis';
+import {
+  updateBarbellCurlState,
+  initializeBarbellCurlState,
+  BarbellCurlState,
+  getRepCount,
+  getCurrentFormScore,
+  getCurrentFeedback,
+} from '../utils/barbellCurlHeuristics';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -53,36 +60,10 @@ export const CameraScreen: React.FC = () => {
   const [workoutData, setWorkoutData] = useState({
     totalReps: 0,
     formScores: [] as number[],
+    repFeedback: [] as string[],
     duration: 0,
   });
   const [feedback, setFeedback] = useState<string | null>(null);
-
-  // Joint angles and positions for skeleton overlay (Barbell Curl)
-  const [jointOverlayData, setJointOverlayData] = useState<{
-    angles: {
-      leftElbow: number | null;
-      rightElbow: number | null;
-      leftShoulder: number | null;
-      rightShoulder: number | null;
-      leftHip: number | null;
-      rightHip: number | null;
-      leftKnee: number | null;
-      rightKnee: number | null;
-    };
-    positions: {
-      leftElbow: { x: number; y: number } | null;
-      rightElbow: { x: number; y: number } | null;
-      leftShoulder: { x: number; y: number } | null;
-      rightShoulder: { x: number; y: number } | null;
-      leftHip: { x: number; y: number } | null;
-      rightHip: { x: number; y: number } | null;
-      leftKnee: { x: number; y: number } | null;
-      rightKnee: { x: number; y: number } | null;
-    };
-  }>({
-    angles: { leftElbow: null, rightElbow: null, leftShoulder: null, rightShoulder: null, leftHip: null, rightHip: null, leftKnee: null, rightKnee: null },
-    positions: { leftElbow: null, rightElbow: null, leftShoulder: null, rightShoulder: null, leftHip: null, rightHip: null, leftKnee: null, rightKnee: null },
-  });
 
   // Barbell curl specific state
   const barbellCurlStateRef = useRef<BarbellCurlState>(initializeBarbellCurlState());
@@ -118,11 +99,7 @@ export const CameraScreen: React.FC = () => {
     repCount?: number;
     formScore?: number;
     feedback?: string | null;
-    jointOverlayData?: {
-      angles: { leftElbow: number | null; rightElbow: number | null; leftShoulder: number | null; rightShoulder: number | null; leftHip: number | null; rightHip: number | null; leftKnee: number | null; rightKnee: number | null };
-      positions: Record<string, { x: number; y: number } | null>;
-    };
-    workoutUpdate?: { totalReps: number; formScore: number };
+    workoutUpdate?: { totalReps: number; formScore: number; repFeedback?: string };
   } | null>(null);
   const isRecordingRef = useRef(isRecording);
   const isPausedRef = useRef(isPaused);
@@ -147,6 +124,13 @@ export const CameraScreen: React.FC = () => {
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
+
+  // Auto-clear feedback after 2 seconds (Barbell Curl and any green messages)
+  useEffect(() => {
+    if (!feedback || exerciseNameFromRoute !== 'Barbell Curl') return;
+    const timer = setTimeout(() => setFeedback(null), 2000);
+    return () => clearTimeout(timer);
+  }, [feedback, exerciseNameFromRoute]);
 
   // Track workout duration
   useEffect(() => {
@@ -181,8 +165,7 @@ export const CameraScreen: React.FC = () => {
         typeof worldLandmarksArray[0]?.x === 'number';
       const hasImage = Array.isArray(imageLandmarksArray) && imageLandmarksArray.length >= 33;
 
-      // Barbell Curl: use image coords for elbow angle (2D xy = visible bend on camera)
-      const useImage = exerciseNameFromRoute === 'Barbell Curl' && hasImage;
+      const useImage = !hasWorld && hasImage;
       const landmarksArray = useImage
         ? imageLandmarksArray.slice(0, 33)
         : hasWorld
@@ -207,7 +190,7 @@ export const CameraScreen: React.FC = () => {
     } catch {
       return null;
     }
-  }, [exerciseNameFromRoute]);
+  }, []);
 
   // Flush pending UI updates to React state (throttled to avoid blocking main thread)
   const UI_UPDATE_INTERVAL_MS = 100; // Max 10 UI updates/sec - keeps buttons responsive
@@ -223,12 +206,14 @@ export const CameraScreen: React.FC = () => {
       if (pending.repCount !== undefined) setRepCount(pending.repCount);
       if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
       if (pending.feedback !== undefined) setFeedback(pending.feedback);
-      if (pending.jointOverlayData) setJointOverlayData(pending.jointOverlayData);
       if (pending.workoutUpdate) {
         setWorkoutData(prev => ({
           ...prev,
           totalReps: pending.workoutUpdate!.totalReps,
           formScores: [...prev.formScores, pending.workoutUpdate!.formScore],
+          repFeedback: pending.workoutUpdate!.repFeedback
+            ? [...prev.repFeedback, pending.workoutUpdate!.repFeedback]
+            : prev.repFeedback,
         }));
       }
     });
@@ -250,58 +235,26 @@ export const CameraScreen: React.FC = () => {
     const keypoints = convertLandmarksToKeypoints(data);
     if (!keypoints || keypoints.length === 0) return;
 
-    // Extract image landmark positions for overlay (normalized 0-1) - needed for screen placement
-    let imagePositions: Record<string, { x: number; y: number } | null> = {};
-    try {
-      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-      const imgLandmarks = parsed?.landmarks;
-      if (Array.isArray(imgLandmarks) && imgLandmarks.length >= 33) {
-        const idx = (name: string) => MEDIAPIPE_LANDMARK_NAMES.indexOf(name);
-        const pos = (i: number) => imgLandmarks[i] && typeof imgLandmarks[i].x === 'number'
-          ? { x: imgLandmarks[i].x, y: imgLandmarks[i].y }
-          : null;
-        imagePositions = {
-          leftElbow: pos(idx('left_elbow')),
-          rightElbow: pos(idx('right_elbow')),
-          leftShoulder: pos(idx('left_shoulder')),
-          rightShoulder: pos(idx('right_shoulder')),
-          leftHip: pos(idx('left_hip')),
-          rightHip: pos(idx('right_hip')),
-          leftKnee: pos(idx('left_knee')),
-          rightKnee: pos(idx('right_knee')),
-        };
-      }
-    } catch {
-      // Ignore position parse errors
-    }
-
     // Check if this is a Barbell Curl exercise (exercise-specific logic)
     if (exerciseNameFromRoute === 'Barbell Curl') {
       const newState = updateBarbellCurlState(keypoints, barbellCurlStateRef.current);
       barbellCurlStateRef.current = newState;
 
+      // Extract data using helper functions
+      const currentRepCount = getRepCount(newState);
+      const currentScore = getCurrentFormScore(newState);
+      const currentFeedback = getCurrentFeedback(newState);
+
       // Accumulate UI updates - don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
-      pending.repCount = newState.repCount;
-      if (newState.formScore > 0) pending.formScore = newState.formScore;
-      pending.feedback = newState.feedback ?? null;
-      pending.jointOverlayData = {
-        angles: {
-          leftElbow: newState.leftElbowAngle,
-          rightElbow: newState.rightElbowAngle,
-          leftShoulder: newState.leftShoulderAngle,
-          rightShoulder: newState.rightShoulderAngle,
-          leftHip: newState.leftHipAngle,
-          rightHip: newState.rightHipAngle,
-          leftKnee: newState.leftKneeAngle,
-          rightKnee: newState.rightKneeAngle,
-        },
-        positions: imagePositions,
-      };
-      if (newState.repCount > repCountRef.current) {
+      pending.repCount = currentRepCount;
+      if (currentScore > 0) pending.formScore = currentScore;
+      pending.feedback = currentFeedback;
+      if (currentRepCount > repCountRef.current) {
         pending.workoutUpdate = {
-          totalReps: newState.repCount,
-          formScore: newState.formScore,
+          totalReps: currentRepCount,
+          formScore: currentScore,
+          repFeedback: currentFeedback ?? 'Great rep!',
         };
       }
       pendingUIStateRef.current = pending;
@@ -387,11 +340,16 @@ export const CameraScreen: React.FC = () => {
         : 0;
 
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
+        let repFeedback = workoutDataRef.current.repFeedback;
+        if (pending?.workoutUpdate?.repFeedback) {
+          repFeedback = [...repFeedback, pending.workoutUpdate.repFeedback];
+        }
         const newSet = {
           exerciseName: exerciseNameFromRoute,
           reps: totalReps,
           weight: 0,
           formScore: avgFormScore,
+          repFeedback: repFeedback.length > 0 ? repFeedback : undefined,
         };
         addSetToExercise(exerciseId, newSet);
         // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
@@ -436,6 +394,7 @@ export const CameraScreen: React.FC = () => {
       setWorkoutData({
         totalReps: 0,
         formScores: [],
+        repFeedback: [],
         duration: 0,
       });
     }
@@ -534,58 +493,6 @@ export const CameraScreen: React.FC = () => {
             </View>
           </View>
         )}
-
-        {/* Joint angle labels on skeleton - only when recording Barbell Curl */}
-        {isRecording && exerciseNameFromRoute === 'Barbell Curl' && (() => {
-          const cameraTop = topBarHeight + (SCREEN_HEIGHT - topBarHeight - bottomBarHeight - cameraDisplayHeight) / 2;
-          const cameraLeft = (SCREEN_WIDTH - cameraDisplayWidth) / 2;
-          const joints: { key: keyof typeof jointOverlayData.angles; posKey: keyof typeof jointOverlayData.positions }[] = [
-            { key: 'leftElbow', posKey: 'leftElbow' },
-            { key: 'rightElbow', posKey: 'rightElbow' },
-            { key: 'leftShoulder', posKey: 'leftShoulder' },
-            { key: 'rightShoulder', posKey: 'rightShoulder' },
-            { key: 'leftHip', posKey: 'leftHip' },
-            { key: 'rightHip', posKey: 'rightHip' },
-            { key: 'leftKnee', posKey: 'leftKnee' },
-            { key: 'rightKnee', posKey: 'rightKnee' },
-          ];
-          return (
-            <View
-              style={[
-                styles.jointOverlayContainer,
-                {
-                  left: cameraLeft,
-                  top: cameraTop,
-                  width: cameraDisplayWidth,
-                  height: cameraDisplayHeight,
-                },
-              ]}
-              pointerEvents="none"
-            >
-              {joints.map(({ key, posKey }) => {
-                const angle = jointOverlayData.angles[key];
-                const pos = jointOverlayData.positions[posKey];
-                if (!pos || angle === null) return null;
-                return (
-                  <View
-                    key={key}
-                    style={[
-                      styles.jointLabel,
-                      {
-                        left: pos.x * cameraDisplayWidth - 24,
-                        top: pos.y * cameraDisplayHeight - 10,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.jointLabelText}>
-                      {angle.toFixed(0)}°
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          );
-        })()}
 
         {/* Bottom Controls */}
         <View style={[
@@ -813,24 +720,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textAlign: 'center',
-  },
-  jointOverlayContainer: {
-    position: 'absolute',
-    zIndex: 5,
-  },
-  jointLabel: {
-    position: 'absolute',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 48,
-    alignItems: 'center',
-  },
-  jointLabelText: {
-    fontSize: 11,
-    fontFamily: FONTS.mono.regular,
-    color: COLORS.primary,
   },
 });
 

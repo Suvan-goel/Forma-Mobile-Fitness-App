@@ -103,6 +103,70 @@ export function calculateAngle2D(
 }
 
 /**
+ * Calculate shoulder flexion angle only (sagittal plane). Excludes abduction/adduction.
+ * Projects the upper arm onto the sagittal plane (plane containing torso and perpendicular
+ * to the left-right axis), then measures the angle between torso and projected upper arm.
+ * This isolates forward/backward arm movement (flexion) from lateral movement (abduction).
+ *
+ * @param hip Same-side hip
+ * @param shoulder Same-side shoulder
+ * @param elbow Same-side elbow
+ * @param oppositeShoulder Opposite shoulder (for defining coronal axis)
+ * @returns Angle in degrees (0-180)
+ */
+export function calculateShoulderFlexionAngle(
+  hip: Point3D,
+  shoulder: Point3D,
+  elbow: Point3D,
+  oppositeShoulder: Point3D
+): number {
+  const zH = hip.z ?? 0;
+  const zS = shoulder.z ?? 0;
+  const zE = elbow.z ?? 0;
+  const zO = oppositeShoulder.z ?? 0;
+
+  // Torso vector (hip -> shoulder)
+  const torsoX = shoulder.x - hip.x;
+  const torsoY = shoulder.y - hip.y;
+  const torsoZ = zS - zH;
+
+  // Coronal axis (shoulder -> opposite shoulder) - left-right direction
+  const coronalX = oppositeShoulder.x - shoulder.x;
+  const coronalY = oppositeShoulder.y - shoulder.y;
+  const coronalZ = zO - zS;
+
+  // Upper arm (shoulder -> elbow)
+  const armX = elbow.x - shoulder.x;
+  const armY = elbow.y - shoulder.y;
+  const armZ = zE - zS;
+
+  // Normalize coronal
+  const coronalMag = Math.sqrt(coronalX * coronalX + coronalY * coronalY + coronalZ * coronalZ);
+  if (coronalMag < 1e-8) return calculateAngle(hip, shoulder, elbow);
+  const cx = coronalX / coronalMag;
+  const cy = coronalY / coronalMag;
+  const cz = coronalZ / coronalMag;
+
+  // Project upper arm onto sagittal plane (remove lateral component)
+  const dot = armX * cx + armY * cy + armZ * cz;
+  const armSagittalX = armX - dot * cx;
+  const armSagittalY = armY - dot * cy;
+  const armSagittalZ = armZ - dot * cz;
+
+  const armSagMag = Math.sqrt(armSagittalX * armSagittalX + armSagittalY * armSagittalY + armSagittalZ * armSagittalZ);
+  if (armSagMag < 1e-8) return 0;
+
+  // Angle between torso and projected upper arm (flexion only)
+  const torsoDot = torsoX * armSagittalX + torsoY * armSagittalY + torsoZ * armSagittalZ;
+  const torsoMag = Math.sqrt(torsoX * torsoX + torsoY * torsoY + torsoZ * torsoZ);
+  if (torsoMag < 1e-8) return 0;
+
+  const cosAngle = Math.max(-1, Math.min(1, torsoDot / (torsoMag * armSagMag)));
+  const radians = Math.acos(cosAngle);
+  return radians * 57.29577951308232;
+}
+
+/**
  * Calculate angle of segment AB relative to the vertical Y-axis (for torso sway).
  * Returns deviation from vertical in degrees (0° = upright, 90° = horizontal).
  * Uses 3D coords; vertical axis is (0, 1, 0) assuming Y-up (MediaPipe world).
