@@ -21,9 +21,9 @@ import {
 
 /** FSM thresholds (degrees) */
 export const THRESHOLDS = {
-  EXTENDED_ENTER: 155,
+  EXTENDED_ENTER: 150,
   EXTENDED_EXIT: 145,
-  FLEXED_ENTER: 65,
+  FLEXED_ENTER: 70,
   FLEXED_EXIT: 75,
   MIN_REP_TIME: 0.60, // seconds
   SYNC_WINDOW: 0.25, // seconds between arms
@@ -34,15 +34,15 @@ export const THRESHOLDS = {
 export const FORM_THRESHOLDS = {
   SHOULDER_WARN: 30,
   SHOULDER_FAIL: 45,
-  TORSO_WARN: 15,
-  TORSO_FAIL: 25,
+  TORSO_WARN: 8,
+  TORSO_FAIL: 15,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
-  TEMPO_UP_MIN: 0.30,
-  TEMPO_DOWN_MIN: 0.35,
-  SYMMETRY_MIN: 20,
-  SYMMETRY_ROM: 25,
+  TEMPO_UP_MIN: 0.05,
+  TEMPO_DOWN_MIN: 0.20,
+  SYMMETRY_MIN: 35,
+  SYMMETRY_ROM: 40,
 } as const;
 
 /** Smoothing parameters */
@@ -102,6 +102,7 @@ export interface AngleSet {
   rightShoulder: number;
   leftTorso: number;
   rightTorso: number;
+  torso: number; // midline (hip center -> shoulder center) for better swing detection
   leftWrist: number;
   rightWrist: number;
 }
@@ -157,6 +158,7 @@ function initRepWindow(tStart: number): RepWindow {
       rightShoulder: Infinity,
       leftTorso: Infinity,
       rightTorso: Infinity,
+      torso: Infinity,
       leftWrist: Infinity,
       rightWrist: Infinity,
     },
@@ -167,6 +169,7 @@ function initRepWindow(tStart: number): RepWindow {
       rightShoulder: -Infinity,
       leftTorso: -Infinity,
       rightTorso: -Infinity,
+      torso: -Infinity,
       leftWrist: -Infinity,
       rightWrist: -Infinity,
     },
@@ -191,6 +194,7 @@ export function initializeBarbellCurlState(): BarbellCurlState {
       rightShoulder: [],
       leftTorso: [],
       rightTorso: [],
+      torso: [],
       leftWrist: [],
       rightWrist: [],
     },
@@ -286,6 +290,30 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
     ? calculateVerticalAngle(getPoint(rightHip)!, getPoint(rightShoulder)!)
     : NaN;
 
+  // Midline torso angle (hip center -> shoulder center) - more sensitive to overall trunk swing
+  const torsoAngle =
+    leftHip &&
+    rightHip &&
+    leftShoulder &&
+    rightShoulder &&
+    isVisible(leftHip, VISIBILITY_THRESHOLD) &&
+    isVisible(rightHip, VISIBILITY_THRESHOLD) &&
+    isVisible(leftShoulder, VISIBILITY_THRESHOLD) &&
+    isVisible(rightShoulder, VISIBILITY_THRESHOLD)
+      ? calculateVerticalAngle(
+          {
+            x: (leftHip.x + rightHip.x) / 2,
+            y: (leftHip.y + rightHip.y) / 2,
+            z: ((leftHip.z ?? 0) + (rightHip.z ?? 0)) / 2,
+          },
+          {
+            x: (leftShoulder.x + rightShoulder.x) / 2,
+            y: (leftShoulder.y + rightShoulder.y) / 2,
+            z: ((leftShoulder.z ?? 0) + (rightShoulder.z ?? 0)) / 2,
+          }
+        )
+      : NaN;
+
   // Wrist angles (elbow-wrist-index as proxy for wrist angle)
   const leftWristAngle =
     leftOk && leftIndex && isVisible(leftIndex, VISIBILITY_THRESHOLD)
@@ -303,6 +331,7 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
     rightShoulder: rightShoulderAngle,
     leftTorso: leftTorsoAngle,
     rightTorso: rightTorsoAngle,
+    torso: torsoAngle,
     leftWrist: leftWristAngle,
     rightWrist: rightWristAngle,
   };
@@ -330,6 +359,7 @@ function applySmoothing(
     'rightShoulder',
     'leftTorso',
     'rightTorso',
+    'torso',
     'leftWrist',
     'rightWrist',
   ];
@@ -458,10 +488,11 @@ function evaluateForm(
     messages.push('Upper arms moving — keep elbows pinned to your sides.');
   }
 
-  // 3. Torso swing
+  // 3. Torso swing (use midline torso for better sensitivity to overall trunk lean)
+  const deltaTorso = maxAngles.torso - minAngles.torso;
   const deltaTL = maxAngles.leftTorso - minAngles.leftTorso;
   const deltaTR = maxAngles.rightTorso - minAngles.rightTorso;
-  const maxDeltaT = Math.max(deltaTL, deltaTR);
+  const maxDeltaT = Math.max(deltaTorso, deltaTL, deltaTR);
   if (maxDeltaT > FORM_THRESHOLDS.TORSO_FAIL) {
     score -= PENALTIES.TORSO_FAIL;
     messages.push('Excessive body swing — this is cheating the rep.');
@@ -554,6 +585,7 @@ export function updateBarbellCurlState(
       'rightShoulder',
       'leftTorso',
       'rightTorso',
+      'torso',
       'leftWrist',
       'rightWrist',
     ];
@@ -621,9 +653,9 @@ export function updateBarbellCurlState(
           messages,
         };
 
-        // Set feedback (first message if any, otherwise "Great rep!")
+        // Set feedback (all messages if any, otherwise "Great rep!")
         if (messages.length > 0) {
-          newState.feedback = messages[0];
+          newState.feedback = messages.join('\n');
         } else {
           newState.feedback = 'Great rep!';
         }
