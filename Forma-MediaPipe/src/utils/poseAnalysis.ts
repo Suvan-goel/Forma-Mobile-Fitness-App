@@ -188,6 +188,33 @@ export function calculateVerticalAngle(a: Point3D, b: Point3D): number {
 }
 
 /**
+ * Calculate signed angle of segment AB relative to the vertical (sagittal plane).
+ * - 0° = upright
+ * - Positive = leaning forward (in front of vertical)
+ * - Negative = leaning back (behind vertical)
+ *
+ * Shifts the atan2 result so upright maps to 0, accounting for coordinate system
+ * where upright may read as ±180°.
+ *
+ * @param a Start point (e.g., hip)
+ * @param b End point (e.g., shoulder)
+ * @returns Angle in degrees (-180 to +180)
+ */
+export function calculateSignedVerticalAngle(a: Point3D, b: Point3D): number {
+  const vy = b.y - a.y;
+  const vz = (b.z ?? 0) - (a.z ?? 0);
+  const mag = Math.sqrt(vy * vy + vz * vz);
+  if (mag < 1e-8) return 0;
+  const radians = Math.atan2(vz, vy);
+  let angleDeg = radians * 57.29577951308232; // 180/π
+  // Shift so upright (typically atan2 = ±180°) maps to 0°
+  angleDeg += 180;
+  if (angleDeg > 180) angleDeg -= 360;
+  if (angleDeg <= -180) angleDeg += 360;
+  return angleDeg;
+}
+
+/**
  * Get keypoint by name from array
  * Works with both MoveNet (17) and MediaPipe (33) keypoint arrays
  */

@@ -9,7 +9,7 @@ import {
   Keypoint,
   calculateAngle,
   calculateAngle2D,
-  calculateVerticalAngle,
+  calculateSignedVerticalAngle,
   calculateShoulderFlexionAngle,
   getKeypoint,
   isVisible,
@@ -41,8 +41,8 @@ export const FORM_THRESHOLDS = {
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
   TEMPO_UP_MIN: 0.05,
   TEMPO_DOWN_MIN: 0.20,
-  SYMMETRY_MIN: 35,
-  SYMMETRY_ROM: 40,
+  SYMMETRY_MIN: 50,
+  SYMMETRY_ROM: 55,
 } as const;
 
 /** Smoothing parameters */
@@ -282,12 +282,12 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
         )
       : NaN;
 
-  // Torso angles (hip-shoulder vertical)
+  // Torso angles (hip-shoulder, signed: + = forward, - = back)
   const leftTorsoAngle = leftOk
-    ? calculateVerticalAngle(getPoint(leftHip)!, getPoint(leftShoulder)!)
+    ? calculateSignedVerticalAngle(getPoint(leftHip)!, getPoint(leftShoulder)!)
     : NaN;
   const rightTorsoAngle = rightOk
-    ? calculateVerticalAngle(getPoint(rightHip)!, getPoint(rightShoulder)!)
+    ? calculateSignedVerticalAngle(getPoint(rightHip)!, getPoint(rightShoulder)!)
     : NaN;
 
   // Midline torso angle (hip center -> shoulder center) - more sensitive to overall trunk swing
@@ -300,7 +300,7 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
     isVisible(rightHip, VISIBILITY_THRESHOLD) &&
     isVisible(leftShoulder, VISIBILITY_THRESHOLD) &&
     isVisible(rightShoulder, VISIBILITY_THRESHOLD)
-      ? calculateVerticalAngle(
+      ? calculateSignedVerticalAngle(
           {
             x: (leftHip.x + rightHip.x) / 2,
             y: (leftHip.y + rightHip.y) / 2,
@@ -488,11 +488,9 @@ function evaluateForm(
     messages.push('Upper arms moving — keep elbows pinned to your sides.');
   }
 
-  // 3. Torso swing (use midline torso for better sensitivity to overall trunk lean)
+  // 3. Torso swing (midline torso only - hip center to shoulder center)
   const deltaTorso = maxAngles.torso - minAngles.torso;
-  const deltaTL = maxAngles.leftTorso - minAngles.leftTorso;
-  const deltaTR = maxAngles.rightTorso - minAngles.rightTorso;
-  const maxDeltaT = Math.max(deltaTorso, deltaTL, deltaTR);
+  const maxDeltaT = deltaTorso;
   if (maxDeltaT > FORM_THRESHOLDS.TORSO_FAIL) {
     score -= PENALTIES.TORSO_FAIL;
     messages.push('Excessive body swing — this is cheating the rep.');
@@ -724,4 +722,35 @@ export function getCurrentFeedback(state: BarbellCurlState): string | null {
 
 export function getRepCount(state: BarbellCurlState): number {
   return state.repCount;
+}
+
+/** Debug: returns torso angles used for swing detection (for on-screen debugging) */
+export function getTorsoDebugInfo(state: BarbellCurlState): {
+  torso: number | null;
+  leftTorso: number | null;
+  rightTorso: number | null;
+  torsoDelta: number | null;
+  leftTorsoDelta: number | null;
+  rightTorsoDelta: number | null;
+} {
+  const angles = state.displayAngles;
+  const window = state.repWindow;
+  const format = (v: number) =>
+    typeof v === 'number' && !isNaN(v) && isFinite(v) ? v : null;
+  const safeDelta = (min: number, max: number) =>
+    format(
+      min !== Infinity && max !== -Infinity ? max - min : NaN
+    );
+  return {
+    torso: format(angles?.torso ?? NaN),
+    leftTorso: format(angles?.leftTorso ?? NaN),
+    rightTorso: format(angles?.rightTorso ?? NaN),
+    torsoDelta: window ? safeDelta(window.minAngles.torso, window.maxAngles.torso) : null,
+    leftTorsoDelta: window
+      ? safeDelta(window.minAngles.leftTorso, window.maxAngles.leftTorso)
+      : null,
+    rightTorsoDelta: window
+      ? safeDelta(window.minAngles.rightTorso, window.maxAngles.rightTorso)
+      : null,
+  };
 }
