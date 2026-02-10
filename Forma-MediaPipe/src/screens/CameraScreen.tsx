@@ -89,12 +89,12 @@ export const CameraScreen: React.FC = () => {
   const [cameraMounted, setCameraMounted] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
-  // Delay mount slightly when screen gains focus so previous native camera has time to release
+  // Mount camera when screen gains focus. Short delay lets previous native camera release.
   useFocusEffect(
     useCallback(() => {
       if (isClosing) return;
       setCameraMounted(false);
-      const t = setTimeout(() => setCameraMounted(true), 400);
+      const t = setTimeout(() => setCameraMounted(true), 150);
       return () => clearTimeout(t);
     }, [isClosing])
   );
@@ -150,6 +150,17 @@ export const CameraScreen: React.FC = () => {
     const timer = setTimeout(() => setFeedback(null), 2000);
     return () => clearTimeout(timer);
   }, [feedback, exerciseNameFromRoute]);
+
+  // TTS: speak feedback when it changes (Barbell Curl only, when feedback visible)
+  useEffect(() => {
+    if (
+      feedback &&
+      exerciseNameFromRoute === 'Barbell Curl' &&
+      showFeedback
+    ) {
+      import('../services/feedbackTTS').then(({ speakFeedback: speak }) => speak(feedback));
+    }
+  }, [feedback, exerciseNameFromRoute, showFeedback]);
 
   // Track workout duration
   useEffect(() => {

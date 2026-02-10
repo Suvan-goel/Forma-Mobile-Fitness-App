@@ -53,14 +53,20 @@ export const SPACING = {
 } as const;
 
 export const FONTS = {
-  // UI Font - Inter (Sen alternative)
+  // UI Font - Inter (with system font fallback)
   ui: {
     regular: 'Inter_400Regular',
     bold: 'Inter_700Bold',
+    // Fallback to system fonts if custom fonts don't load
+    regularFallback: 'System',
+    boldFallback: 'System',
   },
-  // Numbers/HUD Font - JetBrains Mono
+  // Numbers/HUD Font - JetBrains Mono (with monospace fallback)
   mono: {
     regular: 'JetBrainsMono_400Regular',
     bold: 'JetBrainsMono_700Bold',
+    // Fallback to system monospace
+    regularFallback: 'Courier',
+    boldFallback: 'Courier',
   },
 } as const;

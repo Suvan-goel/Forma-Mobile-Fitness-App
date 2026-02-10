@@ -26,8 +26,8 @@ export const THRESHOLDS = {
   EXTENDED_EXIT: 145,
   FLEXED_ENTER: 70,
   FLEXED_EXIT: 75,
-  MIN_REP_TIME: 0.60, // seconds
-  SYNC_WINDOW: 0.25, // seconds between arms
+  MIN_REP_TIME: 0.45, // seconds
+  SYNC_WINDOW: 0.35, // seconds between arms
   ROM_MIN: 80, // degrees
 } as const;
 
@@ -499,15 +499,31 @@ function evaluateForm(
   let score = 100;
   const messages: string[] = [];
 
-  // 1. ROM
+  // 1. Flex/extend depth (feedback only — rep still counts)
+  const minFlexL = minAngles.leftElbow;
+  const minFlexR = minAngles.rightElbow;
+  const maxExtL = maxAngles.leftElbow;
+  const maxExtR = maxAngles.rightElbow;
+  const minFlex = Math.min(minFlexL, minFlexR);
+  const maxExt = Math.max(maxExtL, maxExtR);
+  if (minFlex > THRESHOLDS.FLEXED_ENTER) {
+    score -= PENALTIES.INCOMPLETE_ROM;
+    messages.push('Flex more at the top of the curl.');
+  }
+  if (maxExt < THRESHOLDS.EXTENDED_ENTER) {
+    score -= PENALTIES.INCOMPLETE_ROM;
+    messages.push('Extend fully at the bottom.');
+  }
+
+  // 2. ROM (feedback only — rep still counts)
   const romL = maxAngles.leftElbow - minAngles.leftElbow;
   const romR = maxAngles.rightElbow - minAngles.rightElbow;
-  if (romL < THRESHOLDS.ROM_MIN || romR < THRESHOLDS.ROM_MIN) {
+  if ((romL < THRESHOLDS.ROM_MIN || romR < THRESHOLDS.ROM_MIN) && messages.length === 0) {
     score -= PENALTIES.INCOMPLETE_ROM;
     messages.push('Incomplete rep — curl all the way up and fully extend.');
   }
 
-  // 2. Shoulder takeover (using shoulder angle change)
+  // 4. Shoulder takeover (using shoulder angle change)
   const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
   const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
   const maxDeltaSh = Math.max(deltaShL, deltaShR);
@@ -519,7 +535,7 @@ function evaluateForm(
     messages.push('Upper arms moving — keep elbows pinned to your sides.');
   }
 
-  // 3. Torso swing (midline torso only - hip center to shoulder center)
+  // 5. Torso swing (midline torso only - hip center to shoulder center)
   const deltaTorso = maxAngles.torso - minAngles.torso;
   const maxDeltaT = deltaTorso;
   if (maxDeltaT > FORM_THRESHOLDS.TORSO_FAIL) {
@@ -530,9 +546,9 @@ function evaluateForm(
     messages.push("Don't swing your torso — stay upright and controlled.");
   }
 
-  // 4. Wrist neutrality (disabled - no feedback)
+  // 6. Wrist neutrality (disabled - no feedback)
 
-  // 5. Tempo
+  // 7. Tempo
   const tUp = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
   const tDown =
     leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
@@ -546,7 +562,7 @@ function evaluateForm(
     messages.push("Control the lowering — don't drop the weight.");
   }
 
-  // 6. Symmetry
+  // 8. Symmetry
   const deltaMin = Math.abs(minAngles.leftElbow - minAngles.rightElbow);
   const deltaRom = Math.abs(romL - romR);
   if (deltaMin > FORM_THRESHOLDS.SYMMETRY_MIN || deltaRom > FORM_THRESHOLDS.SYMMETRY_ROM) {
@@ -641,67 +657,56 @@ export function updateBarbellCurlState(
   const rightJustFinished = prevRightState === 'DOWN' && newState.rightArm.state === 'REST';
 
   if (bothInRest && (leftJustFinished || rightJustFinished) && newState.repWindow) {
-    // Check if both arms completed valid reps
-    const leftValid = isValidRep(newState.leftArm);
-    const rightValid = isValidRep(newState.rightArm);
+    // Check sync window — rep counts even if flex/extend thresholds not met (feedback handles that)
+    const leftEndTime = newState.leftArm.tDownToRest ?? t;
+    const rightEndTime = newState.rightArm.tDownToRest ?? t;
+    const syncDelta = Math.abs(leftEndTime - rightEndTime);
 
-    if (leftValid && rightValid) {
-      // Check sync window
-      const leftEndTime = newState.leftArm.tDownToRest ?? t;
-      const rightEndTime = newState.rightArm.tDownToRest ?? t;
-      const syncDelta = Math.abs(leftEndTime - rightEndTime);
+    if (syncDelta <= THRESHOLDS.SYNC_WINDOW) {
+      // Valid synchronized rep
+      newState.repCount++;
 
-      if (syncDelta <= THRESHOLDS.SYNC_WINDOW) {
-        // Valid synchronized rep
-        newState.repCount++;
+      const romL = newState.leftArm.maxElbow - newState.leftArm.minElbow;
+      const romR = newState.rightArm.maxElbow - newState.rightArm.minElbow;
+      const tUp =
+        newState.leftArm.tUpToTop && newState.leftArm.tRestToUp
+          ? newState.leftArm.tUpToTop - newState.leftArm.tRestToUp
+          : 0;
+      const tDown =
+        newState.leftArm.tDownToRest && newState.leftArm.tTopToDown
+          ? newState.leftArm.tDownToRest - newState.leftArm.tTopToDown
+          : 0;
 
-        const romL = newState.leftArm.maxElbow - newState.leftArm.minElbow;
-        const romR = newState.rightArm.maxElbow - newState.rightArm.minElbow;
-        const tUp =
-          newState.leftArm.tUpToTop && newState.leftArm.tRestToUp
-            ? newState.leftArm.tUpToTop - newState.leftArm.tRestToUp
-            : 0;
-        const tDown =
-          newState.leftArm.tDownToRest && newState.leftArm.tTopToDown
-            ? newState.leftArm.tDownToRest - newState.leftArm.tTopToDown
-            : 0;
+      const { score, messages } = evaluateForm(
+        newState.repWindow,
+        newState.leftArm,
+        newState.rightArm
+      );
 
-        const { score, messages } = evaluateForm(
-          newState.repWindow,
-          newState.leftArm,
-          newState.rightArm
-        );
+      newState.lastRepResult = {
+        repIndex: newState.repCount,
+        romL,
+        romR,
+        tUp,
+        tDown,
+        score,
+        messages,
+      };
 
-        newState.lastRepResult = {
-          repIndex: newState.repCount,
-          romL,
-          romR,
-          tUp,
-          tDown,
-          score,
-          messages,
-        };
-
-        // Set feedback (all messages if any, otherwise "Great rep!")
-        if (messages.length > 0) {
-          newState.feedback = messages.join('\n');
-        } else {
-          newState.feedback = 'Great rep!';
-        }
-        newState.lastFeedbackTime = t;
-
-        // Reset rep window and arms
-        newState.repWindow = null;
-        newState.leftArm = initArmFSM();
-        newState.rightArm = initArmFSM();
+      // Set feedback (all messages if any, otherwise "Great rep!")
+      if (messages.length > 0) {
+        newState.feedback = messages.join('\n');
       } else {
-        // Not synced - reset
-        newState.repWindow = null;
-        newState.leftArm = initArmFSM();
-        newState.rightArm = initArmFSM();
+        newState.feedback = 'Great rep!';
       }
-    } else if (!inRep) {
-      // Both arms in REST but rep not valid or not synced - reset
+      newState.lastFeedbackTime = t;
+
+      // Reset rep window and arms
+      newState.repWindow = null;
+      newState.leftArm = initArmFSM();
+      newState.rightArm = initArmFSM();
+    } else {
+      // Not synced - reset
       newState.repWindow = null;
       newState.leftArm = initArmFSM();
       newState.rightArm = initArmFSM();
