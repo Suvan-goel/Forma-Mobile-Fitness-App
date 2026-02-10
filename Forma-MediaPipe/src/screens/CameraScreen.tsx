@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform, InteractionManager } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { FlipHorizontal, Pause, Play, Info, Dumbbell } from 'lucide-react-native';
+import { RotateCw, MessageCircle, MessageCircleOff, Pause, Play, Dumbbell } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
@@ -53,6 +53,7 @@ export const CameraScreen: React.FC = () => {
   
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(true);
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [currentFormScore, setCurrentFormScore] = useState<number | null>(null);
@@ -120,6 +121,7 @@ export const CameraScreen: React.FC = () => {
   } | null>(null);
   const isRecordingRef = useRef(isRecording);
   const isPausedRef = useRef(isPaused);
+  const lastCameraTapRef = useRef(0);
   
   // Sync refs with state
   useEffect(() => {
@@ -423,16 +425,26 @@ export const CameraScreen: React.FC = () => {
   }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 
   const handlePausePress = useCallback(() => {
-    setIsPaused(!isPaused);
-  }, [isPaused]);
+    setIsPaused(prev => !prev);
+  }, []);
+
+  const handleFeedbackTogglePress = useCallback(() => {
+    setShowFeedback(prev => !prev);
+  }, []);
 
   const handleCameraFlip = useCallback(() => {
     switchCamera();
   }, []);
 
-  const handleInfoPress = useCallback(() => {
-    (navigation as any).push('WorkoutInfo');
-  }, [navigation]);
+  const handleCameraDoubleTap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastCameraTapRef.current < 350) {
+      handleCameraFlip();
+      lastCameraTapRef.current = 0;
+    } else {
+      lastCameraTapRef.current = now;
+    }
+  }, [handleCameraFlip]);
 
   // Memoize MediaPipe props – 3:4 portrait (taller than wide)
   // frameLimit: 20 fps on both iOS and Android for lower latency (matches platforms)
@@ -476,10 +488,13 @@ export const CameraScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Camera fixed below top bar (same gap); extra space goes below for metrics */}
-      <View style={[
-        styles.cameraLetterbox,
-        { paddingTop: topBarHeight, paddingBottom: bottomBarHeight },
-      ]}>
+      <Pressable
+        style={[
+          styles.cameraLetterbox,
+          { paddingTop: topBarHeight, paddingBottom: bottomBarHeight },
+        ]}
+        onPress={handleCameraDoubleTap}
+      >
         <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
           {showCamera && (
             <RNMediapipe
@@ -488,7 +503,7 @@ export const CameraScreen: React.FC = () => {
             />
           )}
         </View>
-      </View>
+      </Pressable>
 
       {/* Overlay UI */}
       <View style={styles.overlay} pointerEvents="box-none">
@@ -503,15 +518,16 @@ export const CameraScreen: React.FC = () => {
             </Text>
           </View>
           <TouchableOpacity style={styles.flipButton} onPress={handleCameraFlip}>
-            <FlipHorizontal size={24} color={COLORS.text} />
+            <RotateCw size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>
 
-        {/* Feedback Display - Appears below exercise name */}
-        {feedback && (
+        {/* Feedback Display - Speech bubble below exercise name */}
+        {feedback && showFeedback && (
           <View style={styles.feedbackContainer}>
-            <View style={styles.feedbackCard}>
+            <View style={styles.feedbackBubble}>
               <Text style={styles.feedbackText}>{feedback}</Text>
+              <View style={styles.feedbackTail} />
             </View>
           </View>
         )}
@@ -535,7 +551,7 @@ export const CameraScreen: React.FC = () => {
                   {torsoDebug.leftTorsoDelta != null ? torsoDebug.leftTorsoDelta.toFixed(1) : '–'}° | R{' '}
                   {torsoDebug.rightTorsoDelta != null ? torsoDebug.rightTorsoDelta.toFixed(1) : '–'}°
                 </Text>
-                <Text style={styles.torsoDebugHint}>Warn &gt;8° | Fail &gt;15°</Text>
+                <Text style={styles.torsoDebugHint}>Warn &gt;12° | Fail &gt;22°</Text>
               </View>
             </View>
           )}
@@ -589,11 +605,19 @@ export const CameraScreen: React.FC = () => {
                 <View style={[styles.recordButtonInner, isRecording && styles.recordButtonInnerActive]} />
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.infoButton} 
-                onPress={handleInfoPress}
-                activeOpacity={0.8}
+                style={[
+                  styles.feedbackToggleButton,
+                  !isRecording && styles.feedbackToggleButtonDisabled
+                ]} 
+                onPress={isRecording ? handleFeedbackTogglePress : undefined}
+                activeOpacity={isRecording ? 0.8 : 1}
+                disabled={!isRecording}
               >
-                <Info size={24} color={COLORS.text} />
+                {showFeedback ? (
+                  <MessageCircle size={24} color={isRecording ? COLORS.primary : COLORS.textSecondary} />
+                ) : (
+                  <MessageCircleOff size={24} color={isRecording ? COLORS.textSecondary : COLORS.textSecondary} />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -695,11 +719,19 @@ const styles = StyleSheet.create({
     borderColor: COLORS.textSecondary,
     opacity: 0.5,
   },
-  infoButton: {
+  feedbackToggleButton: {
     width: 60,
     height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: COLORS.text,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  feedbackToggleButtonDisabled: {
+    borderColor: COLORS.textSecondary,
+    opacity: 0.5,
   },
   detectionExercise: {
     fontSize: 12,
@@ -749,22 +781,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     zIndex: 10,
   },
-  feedbackCard: {
-    backgroundColor: 'rgba(32, 215, 96, 0.95)',
-    borderRadius: 12,
+  feedbackBubble: {
+    backgroundColor: '#000000',
+    borderRadius: 16,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    paddingBottom: SPACING.md + 8,
     maxWidth: '90%',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  feedbackTail: {
+    position: 'absolute',
+    bottom: -8,
+    left: '50%',
+    marginLeft: -10,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#000000',
   },
   feedbackText: {
     fontSize: 14,
     fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    color: COLORS.primary,
     textAlign: 'center',
   },
   torsoDebugContainer: {

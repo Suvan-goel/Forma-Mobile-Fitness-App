@@ -10,6 +10,7 @@ import {
   calculateAngle,
   calculateAngle2D,
   calculateSignedVerticalAngle,
+  calculateSignedVerticalAngleSagittal,
   calculateShoulderFlexionAngle,
   getKeypoint,
   isVisible,
@@ -32,10 +33,10 @@ export const THRESHOLDS = {
 
 /** Form heuristic thresholds (degrees) - relaxed for fewer false positives */
 export const FORM_THRESHOLDS = {
-  SHOULDER_WARN: 30,
-  SHOULDER_FAIL: 45,
-  TORSO_WARN: 8,
-  TORSO_FAIL: 15,
+  SHOULDER_WARN: 45,
+  SHOULDER_FAIL: 65,
+  TORSO_WARN: 12,
+  TORSO_FAIL: 22,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
@@ -231,6 +232,9 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
   const rightHip = getKeypoint(keypoints, 'right_hip');
   const leftIndex = getKeypoint(keypoints, 'left_index');
   const rightIndex = getKeypoint(keypoints, 'right_index');
+  const nose = getKeypoint(keypoints, 'nose');
+  const leftEar = getKeypoint(keypoints, 'left_ear');
+  const rightEar = getKeypoint(keypoints, 'right_ear');
 
   const leftOk =
     leftShoulder &&
@@ -290,28 +294,55 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
     ? calculateSignedVerticalAngle(getPoint(rightHip)!, getPoint(rightShoulder)!)
     : NaN;
 
-  // Midline torso angle (hip center -> shoulder center) - more sensitive to overall trunk swing
-  const torsoAngle =
-    leftHip &&
-    rightHip &&
+  // Midline torso angle: hip center -> head (nose or mid-ear). Projected onto sagittal plane.
+  // Uses head instead of shoulder center because shoulder landmarks drift with arm movement
+  // during curls; the head stays relatively stable.
+  const hipCenter =
+    leftHip && rightHip && isVisible(leftHip, VISIBILITY_THRESHOLD) && isVisible(rightHip, VISIBILITY_THRESHOLD)
+      ? {
+          x: (leftHip.x + rightHip.x) / 2,
+          y: (leftHip.y + rightHip.y) / 2,
+          z: ((leftHip.z ?? 0) + (rightHip.z ?? 0)) / 2,
+        }
+      : null;
+  const shoulderCenter =
     leftShoulder &&
     rightShoulder &&
-    isVisible(leftHip, VISIBILITY_THRESHOLD) &&
-    isVisible(rightHip, VISIBILITY_THRESHOLD) &&
     isVisible(leftShoulder, VISIBILITY_THRESHOLD) &&
     isVisible(rightShoulder, VISIBILITY_THRESHOLD)
-      ? calculateSignedVerticalAngle(
-          {
-            x: (leftHip.x + rightHip.x) / 2,
-            y: (leftHip.y + rightHip.y) / 2,
-            z: ((leftHip.z ?? 0) + (rightHip.z ?? 0)) / 2,
-          },
-          {
-            x: (leftShoulder.x + rightShoulder.x) / 2,
-            y: (leftShoulder.y + rightShoulder.y) / 2,
-            z: ((leftShoulder.z ?? 0) + (rightShoulder.z ?? 0)) / 2,
+      ? {
+          x: (leftShoulder.x + rightShoulder.x) / 2,
+          y: (leftShoulder.y + rightShoulder.y) / 2,
+          z: ((leftShoulder.z ?? 0) + (rightShoulder.z ?? 0)) / 2,
+        }
+      : null;
+  const headPoint =
+    nose && isVisible(nose, VISIBILITY_THRESHOLD)
+      ? getPoint(nose)
+      : leftEar &&
+          rightEar &&
+          isVisible(leftEar, VISIBILITY_THRESHOLD) &&
+          isVisible(rightEar, VISIBILITY_THRESHOLD)
+        ? {
+            x: (leftEar.x + rightEar.x) / 2,
+            y: (leftEar.y + rightEar.y) / 2,
+            z: ((leftEar.z ?? 0) + (rightEar.z ?? 0)) / 2,
           }
-        )
+        : null;
+  const torsoUpperPoint = headPoint ?? shoulderCenter;
+  const torsoAngle =
+    hipCenter && torsoUpperPoint && (leftShoulder && rightShoulder)
+      ? (() => {
+          const angle = calculateSignedVerticalAngleSagittal(
+            hipCenter,
+            torsoUpperPoint,
+            getPoint(leftHip)!,
+            getPoint(rightHip)!,
+            getPoint(leftShoulder)!,
+            getPoint(rightShoulder)!
+          );
+          return Number.isNaN(angle) ? calculateSignedVerticalAngle(hipCenter, torsoUpperPoint) : angle;
+        })()
       : NaN;
 
   // Wrist angles (elbow-wrist-index as proxy for wrist angle)
