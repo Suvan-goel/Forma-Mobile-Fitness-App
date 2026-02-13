@@ -19,6 +19,8 @@ try {
   nativeModulesAvailable = false;
 }
 
+// TODO: EXPO_PUBLIC_ keys are bundled into the JS and extractable from production builds.
+// When Supabase is set up, proxy TTS requests through an Edge Function and move this key server-side.
 const ELEVENLABS_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel
 
