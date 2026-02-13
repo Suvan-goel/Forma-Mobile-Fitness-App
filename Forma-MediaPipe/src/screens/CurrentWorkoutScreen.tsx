@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     borderRadius: 8,
-    backgroundColor: 'rgba(32, 215, 96, 0.12)',
+    backgroundColor: 'rgba(0, 172, 124, 0.12)',
   },
   notesButtonText: {
     fontSize: 12,

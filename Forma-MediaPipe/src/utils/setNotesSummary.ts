@@ -10,6 +10,7 @@ const FEEDBACK_TO_IMPROVEMENT: Record<string, string> = {
   'Squeeze all the way up.': 'Achieve full range of motion at the top—contract the bicep fully before lowering.',
   'Fully extend your arms at the bottom.': 'Extend arms completely at the bottom of each rep for full stretch.',
   'Great rep!': '', // No improvement needed
+  'Good rep.': '', // No improvement needed
 };
 
 /**
@@ -24,9 +25,10 @@ export function generateSetSummary(
     return `No rep-by-rep feedback was recorded for this set. Your form score was ${formScore}/100.`;
   }
 
-  const greatRepCount = repFeedback.filter((f) => f === 'Great rep!').length;
+  const goodReps = repFeedback.filter((f) => f === 'Great rep!' || f === 'Good rep.');
+  const greatRepCount = goodReps.length;
   const totalReps = repFeedback.length;
-  const errorFeedbacks = repFeedback.filter((f) => f !== 'Great rep!');
+  const errorFeedbacks = repFeedback.filter((f) => f !== 'Great rep!' && f !== 'Good rep.');
   const uniqueErrors = [...new Set(errorFeedbacks)];
 
   // All great reps

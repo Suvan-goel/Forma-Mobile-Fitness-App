@@ -1,22 +1,29 @@
 /**
- * Feedback Text-to-Speech
+ * Text-to-Speech for exercise feedback.
  *
- * Reads out form feedback messages during barbell curls using the device's
- * built-in TTS (expo-speech). Works offline and avoids native module conflicts
- * with the camera.
+ * Uses ElevenLabs API for high-quality voice.
  */
 
-import * as Speech from 'expo-speech';
+import { speakWithElevenLabs, isElevenLabsAvailable } from './elevenlabsTTS';
 
 /**
- * Speak the given feedback text using device TTS.
+ * Speak feedback text aloud using ElevenLabs.
  */
-export function speakFeedback(text: string): void {
+export async function speakFeedback(text: string): Promise<void> {
   if (!text?.trim()) return;
 
-  Speech.speak(text.trim(), {
-    language: 'en-US',
-    pitch: 1.0,
-    rate: 0.9,
-  });
+  const cleanText = text.trim();
+
+  // Use ElevenLabs
+  if (isElevenLabsAvailable()) {
+    try {
+      await speakWithElevenLabs(cleanText);
+      return;
+    } catch (error) {
+      console.error('ElevenLabs TTS failed:', error);
+      // Don't fall back - if ElevenLabs fails, just fail silently
+    }
+  } else {
+    console.warn('ElevenLabs API key not configured');
+  }
 }

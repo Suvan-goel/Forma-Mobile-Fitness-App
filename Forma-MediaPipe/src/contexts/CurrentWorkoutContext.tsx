@@ -7,6 +7,8 @@ export interface LoggedSet {
   formScore: number;
   /** Per-rep feedback shown during the set (e.g. "Great rep!", "Don't swing your back!") */
   repFeedback?: string[];
+  /** Per-rep form scores (parallel to repFeedback, one per rep) */
+  repFormScores?: number[];
 }
 
 export interface WorkoutExercise {

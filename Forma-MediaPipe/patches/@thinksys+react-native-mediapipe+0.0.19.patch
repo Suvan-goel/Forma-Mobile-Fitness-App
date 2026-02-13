@@ -97,19 +97,16 @@ index 1bac227..fc3e01a 100644
    /**
     * Replace your React Native view with a custom fragment
     */
-@@ -350,8 +361,13 @@ public class TsMediapipeViewManager extends ViewGroupManager<FrameLayout> {
+@@ -350,8 +361,12 @@ public class TsMediapipeViewManager extends ViewGroupManager<FrameLayout> {
        public void doFrame(long frameTimeNanos) {
          try {
            manuallyLayoutChildren(view);
--          view.getViewTreeObserver().dispatchOnGlobalLayout();
--          Choreographer.getInstance().postFrameCallback(this);
-+          // Stop re-posting once fragment exists - continuous layout interferes with camera preview
++          // Only dispatch global layout before fragment exists (avoids re-triggering setupLayout)
++          // but keep re-posting so the fragment's PreviewView surface gets created via layout passes
 +          if (currentFragment == null) {
 +            view.getViewTreeObserver().dispatchOnGlobalLayout();
-+            Choreographer.getInstance().postFrameCallback(this);
-+          } else {
-+            frameCallback = null;
 +          }
++          Choreographer.getInstance().postFrameCallback(this);
          } catch (Exception e) {
            Log.e("TsMediapipe", "Error in frame callback: " + e.getMessage());
          }

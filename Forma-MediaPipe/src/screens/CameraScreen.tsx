@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Alert } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RotateCw, MessageCircle, MessageCircleOff, Pause, Play, Dumbbell } from 'lucide-react-native';
+import { RotateCw, MessageCircle, MessageCircleOff, Pause, Play, X, Volume2, VolumeX } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
@@ -54,6 +54,7 @@ export const CameraScreen: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [showFeedback, setShowFeedback] = useState(true);
+  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [currentFormScore, setCurrentFormScore] = useState<number | null>(null);
@@ -151,16 +152,19 @@ export const CameraScreen: React.FC = () => {
     return () => clearTimeout(timer);
   }, [feedback, exerciseNameFromRoute]);
 
-  // TTS: speak feedback when it changes (Barbell Curl only, when feedback visible)
+  // TTS: speak feedback when it changes (Barbell Curl only, when enabled + visible)
   useEffect(() => {
     if (
-      feedback &&
-      exerciseNameFromRoute === 'Barbell Curl' &&
-      showFeedback
+      !isTTSEnabled ||
+      !feedback ||
+      exerciseNameFromRoute !== 'Barbell Curl' ||
+      !showFeedback
     ) {
-      import('../services/feedbackTTS').then(({ speakFeedback: speak }) => speak(feedback));
+      return;
     }
-  }, [feedback, exerciseNameFromRoute, showFeedback]);
+
+    import('../services/feedbackTTS').then(({ speakFeedback: speak }) => speak(feedback));
+  }, [feedback, exerciseNameFromRoute, showFeedback, isTTSEnabled]);
 
   // Track workout duration
   useEffect(() => {
@@ -329,15 +333,17 @@ export const CameraScreen: React.FC = () => {
         // Rep completed
         if (repUpdate.repCount > repCountRef.current) {
           const formScore = repUpdate.formScore;
-          
+          const feedbackMsg = formScore >= 90 ? 'Great rep!' : 'Good rep.';
+
           setRepCount(repUpdate.repCount);
           setCurrentFormScore(formScore);
-          
+
           // Update workout data with functional update to avoid stale closures
           setWorkoutData(prev => ({
             ...prev,
             totalReps: prev.totalReps + 1,
             formScores: [...prev.formScores, formScore],
+            repFeedback: [...prev.repFeedback, feedbackMsg],
           }));
         }
       } else if (currentExerciseRef.current !== null) {
@@ -384,6 +390,7 @@ export const CameraScreen: React.FC = () => {
           weight: 0,
           formScore: avgFormScore,
           repFeedback: repFeedback.length > 0 ? repFeedback : undefined,
+          repFormScores: formScores.length > 0 ? formScores : undefined,
         };
         addSetToExercise(exerciseId, newSet);
         // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
@@ -443,6 +450,10 @@ export const CameraScreen: React.FC = () => {
     setShowFeedback(prev => !prev);
   }, []);
 
+  const handleTTSTogglePress = useCallback(() => {
+    setIsTTSEnabled(prev => !prev);
+  }, []);
+
   const handleCameraFlip = useCallback(() => {
     switchCamera();
   }, []);
@@ -456,6 +467,27 @@ export const CameraScreen: React.FC = () => {
       lastCameraTapRef.current = now;
     }
   }, [handleCameraFlip]);
+
+  const handleDiscardSetPress = useCallback(() => {
+    Alert.alert(
+      'Discard set?',
+      'Are you sure you want to discard this set? Your reps will not be saved.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, discard',
+          style: 'destructive',
+          onPress: () => {
+            setIsClosing(true);
+            setCameraMounted(false);
+            setTimeout(() => {
+              (navigation as any).navigate('CurrentWorkout');
+            }, 450);
+          },
+        },
+      ]
+    );
+  }, [navigation]);
 
   // Memoize MediaPipe props – 3:4 portrait (taller than wide)
   // frameLimit: 20 fps on both iOS and Android for lower latency (matches platforms)
@@ -520,9 +552,15 @@ export const CameraScreen: React.FC = () => {
       <View style={styles.overlay} pointerEvents="box-none">
         {/* Top Bar */}
         <View style={[styles.topBar, { paddingTop: insets.top }]}>
-          <View style={styles.weightsIconContainer}>
-            <Dumbbell size={24} color={COLORS.text} />
-          </View>
+          <TouchableOpacity
+            style={styles.discardButton}
+            onPress={handleDiscardSetPress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Discard set"
+          >
+            <X size={24} color={COLORS.text} strokeWidth={2.5} />
+          </TouchableOpacity>
           <View style={styles.exerciseTopCard}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
               {displayValues.exerciseDisplayName}
@@ -630,6 +668,22 @@ export const CameraScreen: React.FC = () => {
                   <MessageCircleOff size={24} color={isRecording ? COLORS.textSecondary : COLORS.textSecondary} />
                 )}
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.ttsToggleButton,
+                  !isTTSEnabled && styles.ttsToggleButtonOff
+                ]}
+                onPress={handleTTSTogglePress}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={isTTSEnabled ? 'Disable spoken feedback' : 'Enable spoken feedback'}
+              >
+                {isTTSEnabled ? (
+                  <Volume2 size={24} color={COLORS.primary} />
+                ) : (
+                  <VolumeX size={24} color={COLORS.textSecondary} />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -662,7 +716,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
   },
-  weightsIconContainer: {
+  discardButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -743,6 +797,20 @@ const styles = StyleSheet.create({
   feedbackToggleButtonDisabled: {
     borderColor: COLORS.textSecondary,
     opacity: 0.5,
+  },
+  ttsToggleButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: COLORS.text,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ttsToggleButtonOff: {
+    borderColor: COLORS.textSecondary,
+    opacity: 0.75,
   },
   detectionExercise: {
     fontSize: 12,

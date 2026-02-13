@@ -30,9 +30,16 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 }) => {
   const { height: windowHeight } = useWindowDimensions();
   const repFeedback = set.repFeedback ?? [];
+  const repFormScores = set.repFormScores ?? [];
   const summary = generateSetSummary(repFeedback, set.formScore, exerciseName);
 
-  const hasNotes = repFeedback.length > 0;
+  const repCount = Math.max(repFeedback.length, repFormScores.length, set.reps);
+  const hasNotes = repCount > 0;
+
+  const getRepDetails = (idx: number) => ({
+    formScore: repFormScores[idx] ?? set.formScore,
+    feedback: repFeedback[idx] ?? '—',
+  });
 
   return (
     <Modal
@@ -72,27 +79,37 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
             {hasNotes ? (
               <>
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Rep feedback</Text>
+                  <Text style={styles.sectionTitle}>Rep breakdown</Text>
                   <View style={styles.repList}>
-                    {repFeedback.map((feedback, idx) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.repRow,
-                          idx === repFeedback.length - 1 && styles.repRowLast,
-                        ]}
-                      >
-                        <Text style={styles.repNumber}>Rep {idx + 1}</Text>
-                        <Text
+                    {Array.from({ length: repCount }, (_, idx) => {
+                      const { formScore, feedback } = getRepDetails(idx);
+                      return (
+                        <View
+                          key={idx}
                           style={[
-                            styles.repFeedback,
-                            feedback === 'Great rep!' && styles.repFeedbackGood,
+                            styles.repRow,
+                            idx === repCount - 1 && styles.repRowLast,
                           ]}
                         >
-                          {feedback}
-                        </Text>
-                      </View>
-                    ))}
+                          <Text style={styles.repNumber}>Rep {idx + 1}</Text>
+                          <View style={styles.repDetails}>
+                            <Text style={styles.repFormScore}>
+                              Form: {formScore}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.repFeedback,
+                                feedback === 'Great rep!' && styles.repFeedbackGood,
+                                feedback === 'Good rep.' && styles.repFeedbackGood,
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {feedback}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
 
@@ -187,8 +204,16 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     width: 56,
   },
-  repFeedback: {
+  repDetails: {
     flex: 1,
+  },
+  repFormScore: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  repFeedback: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
