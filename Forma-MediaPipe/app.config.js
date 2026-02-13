@@ -1,4 +1,3 @@
-import 'dotenv/config';
 // Load .env so EXPO_PUBLIC_* vars are available
 require('dotenv').config();
 

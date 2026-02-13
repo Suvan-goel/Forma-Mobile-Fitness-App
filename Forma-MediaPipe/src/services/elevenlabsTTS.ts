@@ -37,8 +37,10 @@ async function initializeAudio(): Promise<void> {
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
+      interruptionModeIOS: 1, // MixWithOthers — prevents camera session interruption
       staysActiveInBackground: false,
       shouldDuckAndroid: true,
+      interruptionModeAndroid: 2, // DuckOthers
       playThroughEarpieceAndroid: false,
     });
     isInitialized = true;
@@ -84,21 +86,23 @@ async function generateSpeech(text: string): Promise<string> {
     throw new Error(`ElevenLabs API error: ${response.status}`);
   }
 
-  // Get audio as base64
-  const arrayBuffer = await response.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-  
-  // Convert to base64 (btoa is available in React Native with Hermes)
-  let binaryString = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < uint8Array.length; i += chunkSize) {
-    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-    binaryString += String.fromCharCode.apply(null, Array.from(chunk));
-  }
-  const base64Audio = btoa(binaryString);
+  // Convert response to base64 via FileReader.readAsDataURL (engine-safe: works on both JSC and Hermes)
+  const blob = await response.blob();
+  const fileUri = `${FileSystem.cacheDirectory}tts_${Date.now()}.mp3`;
+
+  const base64Audio = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      // Strip the "data:audio/mpeg;base64," prefix
+      const base64Data = dataUrl.split(',')[1];
+      resolve(base64Data);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 
   // Write to temporary file
-  const fileUri = `${FileSystem.cacheDirectory}tts_${Date.now()}.mp3`;
   await FileSystem.writeAsStringAsync(fileUri, base64Audio, {
     encoding: FileSystem.EncodingType.Base64,
   });

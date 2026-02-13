@@ -28,7 +28,6 @@
     "expo-file-system": "~18.1.11",
     "expo-font": "~13.3.2",
     "expo-linear-gradient": "~14.1.5",
-    "expo-speech": "~13.1.7",
     "expo-status-bar": "~2.2.3",
     "lucide-react-native": "^0.378.0",
     "react": "19.0.0",
