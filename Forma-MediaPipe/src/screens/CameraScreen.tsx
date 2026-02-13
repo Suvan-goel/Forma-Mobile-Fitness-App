@@ -123,6 +123,9 @@ export const CameraScreen: React.FC = () => {
   const isRecordingRef = useRef(isRecording);
   const isPausedRef = useRef(isPaused);
   const lastCameraTapRef = useRef(0);
+  // Synchronous accumulator for per-rep data — immune to InteractionManager deferral
+  const accumulatedFormScoresRef = useRef<number[]>([]);
+  const accumulatedRepFeedbackRef = useRef<string[]>([]);
   
   // Sync refs with state
   useEffect(() => {
@@ -293,6 +296,9 @@ export const CameraScreen: React.FC = () => {
           formScore: currentScore,
           repFeedback: currentFeedback ?? 'Great rep!',
         };
+        // Synchronous accumulation — immune to InteractionManager deferral race
+        accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, currentScore];
+        accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, currentFeedback ?? 'Great rep!'];
       }
       pendingUIStateRef.current = pending;
 
@@ -345,6 +351,9 @@ export const CameraScreen: React.FC = () => {
             formScores: [...prev.formScores, formScore],
             repFeedback: [...prev.repFeedback, feedbackMsg],
           }));
+          // Synchronous accumulation — immune to InteractionManager deferral race
+          accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, formScore];
+          accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, feedbackMsg];
         }
       } else if (currentExerciseRef.current !== null) {
         // No exercise detected - reset
@@ -362,28 +371,24 @@ export const CameraScreen: React.FC = () => {
 
   const handleRecordPress = useCallback(() => {
     if (isRecording) {
-      // Flush pending UI synchronously for stop - use latest from ref/pending for accuracy
+      // Read per-rep data from synchronous refs (immune to InteractionManager deferral)
       const pending = pendingUIStateRef.current;
       let totalReps = repCountRef.current;
-      let formScores = workoutDataRef.current.formScores;
       if (pending?.workoutUpdate) {
         totalReps = pending.workoutUpdate.totalReps;
-        formScores = [...formScores, pending.workoutUpdate.formScore];
       }
       pendingUIStateRef.current = null;
 
       setIsRecording(false);
       setTorsoDebug(null);
 
+      const formScores = accumulatedFormScoresRef.current;
+      const repFeedback = accumulatedRepFeedbackRef.current;
       const avgFormScore = formScores.length > 0
         ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
         : 0;
 
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
-        let repFeedback = workoutDataRef.current.repFeedback;
-        if (pending?.workoutUpdate?.repFeedback) {
-          repFeedback = [...repFeedback, pending.workoutUpdate.repFeedback];
-        }
         const newSet = {
           exerciseName: exerciseNameFromRoute,
           reps: totalReps,
@@ -439,6 +444,8 @@ export const CameraScreen: React.FC = () => {
         repFeedback: [],
         duration: 0,
       });
+      accumulatedFormScoresRef.current = [];
+      accumulatedRepFeedbackRef.current = [];
     }
   }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 

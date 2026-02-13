@@ -5,12 +5,24 @@
  */
 
 const FEEDBACK_TO_IMPROVEMENT: Record<string, string> = {
-  "Don't swing your back!": 'Reduce torso momentum—focus on controlled, isolated arm movement.',
-  'Keep your elbows pinned to your sides.': 'Minimize elbow drift by keeping elbows close to your body throughout the rep.',
-  'Squeeze all the way up.': 'Achieve full range of motion at the top—contract the bicep fully before lowering.',
-  'Fully extend your arms at the bottom.': 'Extend arms completely at the bottom of each rep for full stretch.',
-  'Great rep!': '', // No improvement needed
-  'Good rep.': '', // No improvement needed
+  // ROM issues
+  'Flex more at the top of the curl.': 'Full ROM at top — contract the bicep fully before lowering.',
+  'Extend fully at the bottom.': 'Extend arms completely at the bottom for a full stretch.',
+  'Incomplete rep — curl all the way up and fully extend.': 'Achieve complete range of motion in both directions.',
+  // Shoulder / elbow drift
+  'Too much shoulder involvement — reduce the weight.': 'Reduce weight and focus on isolating the bicep.',
+  'Upper arms moving — keep elbows pinned to your sides.': 'Minimize elbow drift — keep elbows close to your body.',
+  // Torso swing
+  'Excessive body swing — this is cheating the rep.': 'Reduce torso momentum — use strict, controlled form.',
+  "Don't swing your torso — stay upright and controlled.": 'Brace your core and keep torso stationary throughout.',
+  // Tempo
+  'Slow down — control the curl.': 'Slow the concentric phase — aim for 1-2 seconds up.',
+  "Control the lowering — don't drop the weight.": 'Slow the eccentric phase — 2-3 seconds down.',
+  // Symmetry
+  'Arms are uneven — curl both sides together.': 'Focus on symmetry — curl both arms at the same speed.',
+  // Good reps (no improvement needed)
+  'Great rep!': '',
+  'Good rep.': '',
 };
 
 /**
@@ -25,11 +37,13 @@ export function generateSetSummary(
     return `No rep-by-rep feedback was recorded for this set. Your form score was ${formScore}/100.`;
   }
 
+  // Split multi-line feedback (heuristics join issues with \n) into individual messages
+  const allMessages = repFeedback.flatMap((f) => f.split('\n').map((s) => s.trim()).filter(Boolean));
   const goodReps = repFeedback.filter((f) => f === 'Great rep!' || f === 'Good rep.');
   const greatRepCount = goodReps.length;
   const totalReps = repFeedback.length;
-  const errorFeedbacks = repFeedback.filter((f) => f !== 'Great rep!' && f !== 'Good rep.');
-  const uniqueErrors = [...new Set(errorFeedbacks)];
+  const errorMessages = allMessages.filter((m) => m !== 'Great rep!' && m !== 'Good rep.');
+  const uniqueErrors = [...new Set(errorMessages)];
 
   // All great reps
   if (greatRepCount === totalReps) {
