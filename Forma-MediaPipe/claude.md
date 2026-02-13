@@ -1,199 +1,191 @@
 # Forma Mobile - Project Context & Constraints
 
 ## 1. Core Architecture
-- **Framework:** React Native 0.79.x (Expo SDK 53 Managed Workflow), upgraded for 16KB / Google Play targetSdk 35
-- **Engine:** Hermes
+- **Framework:** React Native 0.79.6 (Expo SDK 53 Managed Workflow)
+- **iOS JS Engine:** JSC (JavaScriptCore) — NOT Hermes (see section 6)
+- **Android JS Engine:** Hermes (default)
 - **Platform:** iOS & Android
+- **New Arch:** Disabled (`newArchEnabled: false`)
 
-## 2. Critical Dependency Versions ("The Golden Standard")
-After the Expo 53 / 16KB upgrade, the canonical set is in **package.json** and aligned via `npx expo install --fix`. Key pieces:
-- **Expo:** ~53.0.0 — **React:** 19.0.0 — **React Native:** 0.79.x
-- `@thinksys/react-native-mediapipe`: ^0.0.19 (Pose detection)
-- `react-native-screens`, `react-native-gesture-handler`, etc.: use versions that `npx expo install --fix` selects for SDK 53
+## 2. Critical Dependency Versions
+Canonical set lives in `package.json`, aligned via `npx expo install --fix`. Key pieces:
+- **Expo:** ~53.0.27 — **React:** 19.0.0 — **React Native:** 0.79.6
+- `@thinksys/react-native-mediapipe`: ^0.0.19 (Pose detection — patched via `patch-package`)
+- `expo-av`: ~15.1.7 (Audio playback for TTS)
+- `expo-file-system`: ~18.1.11 (Temp file storage for TTS audio)
+- `expo-build-properties`: ~0.14.0 (iOS JSC engine override, Android SDK targets)
+- Navigation: `@react-navigation/native` ^7, `native-stack` ^7, `bottom-tabs` ^7
 - See **docs/EXPO-53-16KB-UPGRADE.md** for the full upgrade and local steps.
 
-## 3. MediaPipe Integration
-We use `@thinksys/react-native-mediapipe` for pose detection with callback-based landmark data.
-- The `RNMediapipe` component handles camera and pose detection internally
-- Landmark data is received via `onLandmark` callback (not frame processors/worklets)
-- No worklets, no Reanimated needed - pure callback-based architecture
+## 3. iOS Native Modules & Permissions
+### Modules included in iOS build
+| Module | Purpose | iOS-specific config |
+|--------|---------|---------------------|
+| `@thinksys/react-native-mediapipe` | Pose detection + camera | `NSCameraUsageDescription` in Info.plist |
+| `expo-av` | TTS audio playback | `playsInSilentModeIOS`, `interruptionModeIOS: MixWithOthers` |
+| `expo-file-system` | Temp file I/O for TTS audio cache | None |
+| `expo-font` | Custom fonts (Inter, JetBrains Mono) | None |
+| `expo-blur` | UI blur effects | None |
+| `expo-linear-gradient` | UI gradients | None |
+| `react-native-gesture-handler` | Touch/gesture handling | None |
+| `react-native-screens` | Native screen containers | None |
+| `react-native-safe-area-context` | Safe area insets | None |
+| `react-native-svg` | SVG rendering | None |
 
-### Removed Dependencies (iOS Hermes Fix)
-The following were removed to fix iOS crashes ("Cannot read property 'S' of undefined"):
-- `react-native-reanimated` - was not used in app code
-- `react-native-worklets-core` - was not used in app code
-- Corresponding Babel plugins removed from babel.config.js
+### iOS permissions (Info.plist)
+- `NSCameraUsageDescription` — Required for MediaPipe pose detection
+- No microphone permission (`expo-av` is playback-only, `allowsRecordingIOS: false`)
 
-## 4. Coding Patterns
-### MediaPipe Landmark Handling
+### Removed dependencies (iOS crash fix)
+These caused iOS crashes ("Cannot read property 'S' of undefined"):
+- `react-native-reanimated` — not used in app code
+- `react-native-worklets-core` — not used in app code
+- Corresponding Babel plugins removed from `babel.config.js`
+
+## 4. MediaPipe Integration
+We use `@thinksys/react-native-mediapipe` with callback-based landmark data.
+- `RNMediapipe` component handles camera + pose detection internally
+- Landmark data received via `onLandmark` callback (not frame processors/worklets)
+- Detection confidence lowered to 0.35 (from 0.5) for better side-on detection
+- Android-specific patches applied via `patch-package` (see `patches/` directory)
+
 ```typescript
 const handleLandmark = useCallback((data: any) => {
   const keypoints = convertLandmarksToKeypoints(data);
   if (!keypoints) return;
-
-  // Process pose data (rep counting, form analysis)
   const result = updateBarbellCurlState(keypoints, stateRef.current);
-
-  // Update React state for UI
   setRepCount(result.repCount);
   setCurrentFormScore(result.formScore);
 }, []);
-
-<RNMediapipe
-  {...mediapipeProps}
-  onLandmark={handleLandmark}
-/>
 ```
 
 ## 5. Animations
-Use React Native's built-in `Animated` API from `react-native` (NOT Reanimated):
+Use React Native's built-in `Animated` API ONLY (NOT Reanimated):
 ```typescript
 import { Animated } from 'react-native';
 ```
 
-Project: Forma
+## 6. iOS Build Constraints (CRITICAL)
 
-What this project is
+### Why iOS uses JSC, not Hermes
+RN 0.79.x has a `jsinspector-modern` bug where `LOG(FATAL)` fires on WebSocket reconnection failure, causing `abort()` in iOS debug builds. Workaround: iOS uses JSC via `expo-build-properties`. Do NOT change `jsEngine` back to Hermes until the upstream RN fix is confirmed.
 
-Forma is a mobile AI-powered fitness app that analyses exercise form using on-device pose estimation.
-Core features:
-	•	Real-time pose detection from camera
-	•	Rep counting using heuristic rules
-	•	Form feedback using joint-angle analysis
-	•	Token/reward system for consistency
-	•	Supabase backend for auth, data, and rewards
-	•	React Native (Expo) app targeting Android & iOS
+Config location: `app.json` → `plugins` → `expo-build-properties` → `ios.jsEngine: "jsc"`
 
-Primary goal: Accurate, fast, reliable form analysis with a clean UX and minimal latency.
+### Rules for cross-platform safety
+1. **Never assume Hermes globals on iOS.** `btoa()`, `atob()` are Hermes built-ins but NOT guaranteed on JSC. Use `FileReader.readAsDataURL()` for base64 encoding instead. If you must use `btoa`, add a runtime guard: `if (typeof btoa === 'undefined') throw new Error(...)`.
+2. **Never mix ESM and CJS in config files.** Expo evaluates `app.config.js`, `babel.config.js`, `metro.config.js` as CommonJS. Using `import` statements will cause a SyntaxError that blocks ALL native builds. Always use `require()` / `module.exports`.
+3. **Never add a native dependency without checking iOS impact.** Every package with native code adds pods to the iOS build. Before adding:
+   - Verify it has an Expo config plugin or supports autolinking
+   - Run `npx expo prebuild --platform ios --clean` to verify pod install succeeds
+   - Check if it requires additional Info.plist entries
+   - If it's not actually imported in code, don't add it — dead native deps bloat the binary and risk pod conflicts
+4. **Audio must not interrupt the camera.** Any audio playback (TTS, sound effects) must set `interruptionModeIOS: 1` (MixWithOthers) in `Audio.setAudioModeAsync()`. The default `DoNotMix` will interrupt the AVCaptureSession used by MediaPipe.
+5. **Test iOS in Release mode.** Due to the jsinspector bug, iOS debug builds may crash. Always verify with: `npx expo run:ios --configuration Release`
+6. **Patches in `patches/` may touch iOS native code.** The MediaPipe patch modifies `DefaultConstants.swift` (confidence thresholds). When updating `@thinksys/react-native-mediapipe`, re-verify the patch applies cleanly on both platforms.
 
-⸻
+## 7. Android Development — iOS Guard Rails
 
-Tech stack
-	•	Frontend: React Native + Expo
-	•	Camera: react-native-vision-camera
-	•	Pose: MediaPipe / MoveNet (via RN bindings / native modules)
-	•	Backend: Supabase (Auth, DB, Storage, Functions)
-	•	Language: TypeScript
-	•	State: React hooks + context (no heavy state libs unless justified)
-	•	Build: Expo dev client / EAS
-	•	Devices: Android (Galaxy S22) + iOS
+When working on Android-specific features:
 
-⸻
+### Before writing code
+- Check if the feature touches shared files (`src/`, `App.tsx`, `package.json`, config files)
+- If it does, every change must work on both JSC (iOS) and Hermes (Android)
 
-Repo structure (high level)
-	•	/app or /src: Main app code
-	•	/components: Reusable UI components
-	•	/features: Feature modules (e.g. pose, reps, feedback, rewards)
-	•	/lib: Utilities, math, helpers, heuristics
-	•	/services: Supabase, camera, model wrappers
-	•	/assets: Images, icons, models
-	•	/native: Any custom native modules / bindings
+### Dependency checklist
+- [ ] Is the package actually imported in source code? (Don't add unused deps)
+- [ ] Does it require `EXPO_PUBLIC_` env vars? (These are bundled into the client JS — security risk for API keys)
+- [ ] Does it add iOS native modules? Check with `npx expo prebuild --platform ios`
+- [ ] Is the version compatible with Expo SDK 53? Run `npx expo install --fix`
 
-(Keep things feature-oriented, not just type-oriented.)
+### API and runtime checklist
+- [ ] No `btoa()` / `atob()` calls — use `FileReader.readAsDataURL()` or a library
+- [ ] No CSS patterns that don't work in React Native (e.g., `left: '50%'` with `marginLeft` for centering)
+- [ ] `Platform.OS` checks where behavior diverges (audio config, permissions, etc.)
+- [ ] Config files use CJS only (`require` / `module.exports`, never `import`)
 
-⸻
+### Before submitting a PR
+- [ ] `npx expo config` runs without error
+- [ ] `npx expo prebuild --platform ios --clean` succeeds
+- [ ] No debug overlays visible without `__DEV__` gate
+- [ ] TypeScript compiles clean (`npx tsc --noEmit`)
 
-How to run (typical)
+## 8. React Native Best Practices
 
+### Performance (real-time CV app)
+- Avoid unnecessary re-renders — use `useCallback`, `useMemo`, refs for non-UI state
+- Avoid allocations in hot paths — use `.push()` not spread (`[...arr, item]`), prefer mutation on refs
+- Use `InteractionManager.runAfterInteractions()` to defer non-critical UI updates
+- Throttle high-frequency updates (pose data at 30fps, UI updates at ~10fps)
+- Keep heavy computation out of the render cycle — use refs + `InteractionManager`
+
+### State management
+- React hooks + context (no Redux or heavy state libs)
+- Use refs (`useRef`) for values that change frequently but don't need re-renders (frame data, accumulators)
+- Use state (`useState`) only for values that drive UI updates
+- Single source of truth — don't derive the same value from multiple refs/state
+
+### Styling
+- Use `StyleSheet.create()` — not inline objects (avoids re-allocation on every render)
+- Reference `COLORS` from `src/constants/theme.ts` — no hardcoded color values
+- Use `alignSelf: 'center'` or `Dimensions` for centering — not CSS `left: '50%'` hacks
+- Percentage-based positioning in RN is relative to parent, not viewport
+
+### Native modules
+- Wrap native module imports in `try/catch` when the module may not be available (e.g., TTS in Expo Go)
+- Use dynamic `require()` for optional native modules, with a `nativeModulesAvailable` flag
+- Set `allowsRecordingIOS: false` unless recording is needed — prevents unnecessary permission prompts
+- Always configure `interruptionModeIOS` explicitly when using `expo-av`
+
+### File and config conventions
+- All config files (`app.config.js`, `babel.config.js`, `metro.config.js`) — CJS only
+- Environment variables with `EXPO_PUBLIC_` prefix are bundled into client JS — never use for secrets in production
+- `app.json` is the source of truth for native config. `app.config.js` only wraps it with env var loading.
+
+### Code quality
+- TypeScript strict mode — use `Record<K, V>` not `{ [key: K]: V }` for mapped types
+- Gate debug UI behind `__DEV__` — never ship debug overlays to users
+- Keep heuristics/math logic in `src/utils/` separate from UI in `src/screens/`
+- Feedback auto-clear should happen in ONE place (React `useEffect` timer), not duplicated in both business logic and UI
+
+## 9. Project Structure
+```
+Forma-MediaPipe/
+  src/
+    screens/          # Screen components (CameraScreen, CurrentWorkoutScreen, etc.)
+    components/ui/    # Reusable UI components (SetNotesModal, etc.)
+    contexts/         # React contexts (CurrentWorkoutContext)
+    services/         # External service integrations (elevenlabsTTS, feedbackTTS)
+    services/api/     # API service layer (mock → Supabase migration planned)
+    utils/            # Pure logic (barbellCurlHeuristics, poseAnalysis, setNotesSummary)
+    constants/        # Theme, colors, config
+    app/              # Navigation (RootNavigator)
+  patches/            # patch-package patches for native deps
+  scripts/            # Post-install scripts for MediaPipe patches
+  docs/               # Technical documentation
+```
+
+## 10. How to Run
+```bash
 npm install
-npx expo prebuild
-npx expo run:android
+npx expo prebuild --clean
+npx expo run:android          # Android
+npx expo run:ios --configuration Release  # iOS (Release to avoid jsinspector bug)
 # or
 npx expo start --dev-client
+```
 
+## 11. Pose & Form Analysis
+- Fixed set of joint angles computed per frame
+- Rep counting via dual-arm FSM with two-arm synchronization
+- Signal smoothing: median filter (5-sample window) + EMA
+- Sagittal plane projection for angle calculations
+- Form feedback derived ONLY from angles + temporal behavior
+- Everything must be explicit, named, and explainable — no opaque magic
 
-⸻
-
-How to test
-	•	Manual testing on real device is critical (camera + performance)
-	•	Unit test pure logic (math, angles, heuristics, rep state machines)
-	•	Avoid over-testing UI; focus on correctness of detection logic
-
-⸻
-
-Coding conventions
-	•	Language: TypeScript, strict where possible
-	•	Style: Readable > clever
-	•	Prefer small, composable functions
-	•	Heuristics and thresholds must be:
-	•	Centralised
-	•	Named
-	•	Documented
-	•	Keep math / pose logic separate from UI
-	•	Avoid introducing heavy dependencies unless clearly justified
-
-⸻
-
-Important constraints (VERY IMPORTANT)
-	•	Do NOT break:
-	•	Camera performance
-	•	Real-time FPS
-	•	Rep counting stability
-	•	Do NOT:
-	•	Add unnecessary abstraction layers
-	•	Over-engineer ML pipelines (we use heuristics first)
-	•	Introduce cloud inference unless explicitly asked
-	•	Be careful with:
-	•	Coordinate systems (screen vs model space)
-	•	Angle definitions and thresholds
-	•	Frame-to-frame state transitions
-
-⸻
-
-Pose & Form Analysis Rules
-	•	We compute a fixed set of joint angles
-	•	Rep counting uses a state machine (e.g. bottom → moving → top → moving → bottom)
-	•	Form feedback is derived ONLY from those angles + temporal behavior
-	•	No “magic” hidden heuristics: everything must be explicit, named, and explainable
-	•	Prefer deterministic, debuggable logic over opaque models
-
-⸻
-
-How I want Claude to help
-	•	Prefer incremental changes over big refactors
-	•	Explain reasoning when touching:
-	•	Heuristics
-	•	Thresholds
-	•	Rep logic
-	•	Performance-sensitive code
-	•	Ask before:
-	•	Adding new dependencies
-	•	Changing architecture
-	•	Changing data models or schemas
-	•	When debugging:
-	•	First hypothesise the failure mode
-	•	Then propose instrumentation/logging
-	•	Then propose the fix
-
-⸻
-
-Current priorities (evolves over time)
-	•	Improve rep counting stability
-	•	Reduce false-positive form warnings
-	•	Improve camera + model performance
-	•	Clean up heuristics into a spec-like structure
-	•	Make feedback more actionable and less noisy
-
-⸻
-
-Performance principles
-	•	This is a real-time CV app:
-	•	Avoid unnecessary re-renders
-	•	Avoid allocations in hot paths
-	•	Prefer simple math over complex abstractions
-	•	Always consider:
-	•	FPS
-	•	Latency
-	•	Battery usage
-
-⸻
-
-Notes for the assistant
-	•	This is a product, not a research project
-	•	Simplicity, reliability, and debuggability > fancy solutions
-	•	If something seems off in pose or reps, assume:
-	•	Coordinate mismatch
-	•	Angle definition bug
-	•	Threshold too tight/loose
-	•	State machine edge case
-	•	When in doubt, ask before making big changes
+## 12. How Claude Should Help
+- Prefer incremental changes over big refactors
+- Explain reasoning when touching heuristics, thresholds, rep logic, or perf-sensitive code
+- Ask before adding dependencies, changing architecture, or changing data models
+- When debugging: hypothesise failure mode → propose logging → propose fix
+- **Always verify changes won't break iOS native builds** before suggesting them
