@@ -18,14 +18,15 @@ import { COLORS } from './src/constants/theme';
 import { RootNavigator } from './src/app/RootNavigator';
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_700Bold,
     JetBrainsMono_400Regular,
     JetBrainsMono_700Bold,
   });
 
-  if (!fontsLoaded) {
+  // Proceed if fonts loaded OR if there's an error (use system fonts as fallback)
+  if (!fontsLoaded && !fontError) {
     return (
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -36,6 +37,11 @@ export default function App() {
         </GestureHandlerRootView>
       </SafeAreaProvider>
     );
+  }
+
+  // Log font error but continue with system fonts
+  if (fontError) {
+    console.warn('Font loading failed, using system fonts:', fontError);
   }
 
   return (

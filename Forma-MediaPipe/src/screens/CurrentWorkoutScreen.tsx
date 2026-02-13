@@ -10,10 +10,11 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
+import { SetNotesModal } from '../components/ui/SetNotesModal';
 
 export type { LoggedSet };
 
@@ -43,6 +44,11 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState(contextElapsed);
   const [isPaused, setIsPaused] = useState(false);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
+  const [notesModalSet, setNotesModalSet] = useState<{
+    set: LoggedSet;
+    setIndex: number;
+    exerciseName: string;
+  } | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
@@ -272,7 +278,23 @@ export const CurrentWorkoutScreen: React.FC = () => {
                   <View style={styles.setsList}>
                     {exercise.sets.map((set, setIndex) => (
                       <View key={setIndex} style={styles.setCard}>
-                        <Text style={styles.setNumber}>Set {setIndex + 1}</Text>
+                        <View style={styles.setCardHeader}>
+                          <Text style={styles.setNumber}>Set {setIndex + 1}</Text>
+                          <TouchableOpacity
+                            style={styles.notesButton}
+                            onPress={() =>
+                              setNotesModalSet({
+                                set,
+                                setIndex: setIndex + 1,
+                                exerciseName: exercise.name,
+                              })
+                            }
+                            activeOpacity={0.7}
+                          >
+                            <FileText size={18} color={COLORS.primary} />
+                            <Text style={styles.notesButtonText}>Notes</Text>
+                          </TouchableOpacity>
+                        </View>
                         <View style={styles.setMetrics}>
                           <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Reps</Text>
@@ -306,6 +328,16 @@ export const CurrentWorkoutScreen: React.FC = () => {
           })
         )}
       </ScrollView>
+
+      {notesModalSet && (
+        <SetNotesModal
+          visible={!!notesModalSet}
+          onClose={() => setNotesModalSet(null)}
+          set={notesModalSet.set}
+          setNumber={notesModalSet.setIndex}
+          exerciseName={notesModalSet.exerciseName}
+        />
+      )}
 
       {/* Add New Exercise Button - Fixed at bottom */}
       <View style={[styles.addButtonContainer, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
@@ -473,6 +505,26 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(128, 128, 128, 0.15)',
+  },
+  setCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  notesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 172, 124, 0.12)',
+  },
+  notesButtonText: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.primary,
   },
   setHeader: {
     flexDirection: 'row',

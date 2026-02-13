@@ -1,6 +1,6 @@
 /**
  * Forma Mobile - Design System Tokens
- * Clean minimal fitness tracker with turquoise accents
+ * Clean minimal fitness tracker with teal accents
  * Based on reference design
  */
 
@@ -11,8 +11,8 @@ export const COLORS = {
   cardBackgroundLight: '#262626', // Lighter card background
 
   // Primary Actions
-  primary: '#20d760', // Green - Primary accent
-  primaryDark: '#1ab84d', // Darker green for gradients
+  primary: '#00ac7c', // Teal - Primary accent
+  primaryDark: '#00936a', // Darker teal for gradients
   
   // Secondary Colors
   orange: '#E07856', // Orange for secondary workout cards
@@ -29,7 +29,7 @@ export const COLORS = {
   inactive: '#4A5568', // Inactive elements
   
   // Chart colors
-  chartPrimary: '#20d760',
+  chartPrimary: '#00ac7c',
   chartSecondary: '#3A4550',
 } as const;
 
@@ -53,14 +53,20 @@ export const SPACING = {
 } as const;
 
 export const FONTS = {
-  // UI Font - Inter (Sen alternative)
+  // UI Font - Inter (with system font fallback)
   ui: {
     regular: 'Inter_400Regular',
     bold: 'Inter_700Bold',
+    // Fallback to system fonts if custom fonts don't load
+    regularFallback: 'System',
+    boldFallback: 'System',
   },
-  // Numbers/HUD Font - JetBrains Mono
+  // Numbers/HUD Font - JetBrains Mono (with monospace fallback)
   mono: {
     regular: 'JetBrainsMono_400Regular',
     bold: 'JetBrainsMono_700Bold',
+    // Fallback to system monospace
+    regularFallback: 'Courier',
+    boldFallback: 'Courier',
   },
 } as const;

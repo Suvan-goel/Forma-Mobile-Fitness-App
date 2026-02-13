@@ -1,0 +1,317 @@
+diff --git a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/GlobalState.java b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/GlobalState.java
+index ac0995b..cb0110e 100644
+--- a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/GlobalState.java
++++ b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/GlobalState.java
+@@ -13,4 +13,7 @@ public class GlobalState {
+   public static boolean isRightAnkleEnabled = false;
+ 
+   public static String orientation = "portrait";
++
++  /** Max frames per second to process (matches iOS frameLimit), ~20fps default for lower latency */
++  public static int frameLimit = 20;
+ }
+diff --git a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt
+index 1dc36b8..a86417b 100644
+--- a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt
++++ b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/PoseLandmarkerHelper.kt
+@@ -141,11 +141,16 @@ class PoseLandmarkerHelper(
+     }
+     val frameTime = SystemClock.uptimeMillis()
+ 
++    // Capture imageProxy values before close() - using after close() is invalid
++    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
++    val imageWidth = imageProxy.width
++    val imageHeight = imageProxy.height
++
+     // Copy out RGB bits from the frame to a bitmap buffer
+     val bitmapBuffer =
+       Bitmap.createBitmap(
+-        imageProxy.width,
+-        imageProxy.height,
++        imageWidth,
++        imageHeight,
+         Bitmap.Config.ARGB_8888
+       )
+ 
+@@ -154,15 +159,15 @@ class PoseLandmarkerHelper(
+ 
+     val matrix = Matrix().apply {
+       // Rotate the frame received from the camera to be in the same direction as it'll be shown
+-      postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
++      postRotate(rotationDegrees.toFloat())
+ 
+       // flip image if user use front camera
+       if (isFrontCamera) {
+         postScale(
+           -1f,
+           1f,
+-          imageProxy.width.toFloat(),
+-          imageProxy.height.toFloat()
++          imageWidth.toFloat(),
++          imageHeight.toFloat()
+         )
+       }
+     }
+@@ -216,9 +221,10 @@ class PoseLandmarkerHelper(
+ 
+     const val DELEGATE_CPU = 0
+     const val DELEGATE_GPU = 1
+-    const val DEFAULT_POSE_DETECTION_CONFIDENCE = 0.5F
+-    const val DEFAULT_POSE_TRACKING_CONFIDENCE = 0.5F
+-    const val DEFAULT_POSE_PRESENCE_CONFIDENCE = 0.5F
++    // Lowered from 0.5 to 0.35 for better leg detection when side-on (BlazePose limitation)
++    const val DEFAULT_POSE_DETECTION_CONFIDENCE = 0.35F
++    const val DEFAULT_POSE_TRACKING_CONFIDENCE = 0.35F
++    const val DEFAULT_POSE_PRESENCE_CONFIDENCE = 0.35F
+     const val DEFAULT_NUM_POSES = 1
+     const val OTHER_ERROR = 0
+     const val GPU_ERROR = 1
+diff --git a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/TsMediapipeViewManager.java b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/TsMediapipeViewManager.java
+index 1bac227..fc3e01a 100644
+--- a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/TsMediapipeViewManager.java
++++ b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/TsMediapipeViewManager.java
+@@ -139,7 +139,11 @@ public class TsMediapipeViewManager extends ViewGroupManager<FrameLayout> {
+   @Override
+   public void onAfterUpdateTransaction(@NonNull FrameLayout view) {
+     super.onAfterUpdateTransaction(view);
+-    setupLayout(view);
++    // Only run setupLayout when creating fragment - repeated layout on every prop update
++    // causes the camera to go black after a few seconds (likely interferes with PreviewView surface)
++    if (currentFragment == null) {
++      setupLayout(view);
++    }
+ 
+     if (currentFragment == null && propWidth > 0 && propHeight > 0) {
+       view.post(new Runnable() {
+@@ -277,6 +281,13 @@ public class TsMediapipeViewManager extends ViewGroupManager<FrameLayout> {
+     GlobalState.isRightAnkleEnabled = rightAnkle;
+   }
+ 
++  @ReactProp(name = "frameLimit")
++  public void setFrameLimitProp(View view, int frameLimit) {
++    if (frameLimit > 0 && frameLimit <= 60) {
++      GlobalState.frameLimit = frameLimit;
++    }
++  }
++
+   /**
+    * Replace your React Native view with a custom fragment
+    */
+@@ -350,8 +361,12 @@ public class TsMediapipeViewManager extends ViewGroupManager<FrameLayout> {
+       public void doFrame(long frameTimeNanos) {
+         try {
+           manuallyLayoutChildren(view);
++          // Only dispatch global layout before fragment exists (avoids re-triggering setupLayout)
++          // but keep re-posting so the fragment's PreviewView surface gets created via layout passes
++          if (currentFragment == null) {
++            view.getViewTreeObserver().dispatchOnGlobalLayout();
++          }
++          Choreographer.getInstance().postFrameCallback(this);
+         } catch (Exception e) {
+           Log.e("TsMediapipe", "Error in frame callback: " + e.getMessage());
+         }
+diff --git a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/fragment/CameraFragment.kt b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/fragment/CameraFragment.kt
+index 8b61fa3..85ffea4 100644
+--- a/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/fragment/CameraFragment.kt
++++ b/node_modules/@thinksys/react-native-mediapipe/android/src/main/java/com/tsmediapipe/fragment/CameraFragment.kt
+@@ -28,6 +28,7 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
+ import com.tsmediapipe.CameraFragmentManager
+ import com.tsmediapipe.MainViewModel
+ import com.tsmediapipe.PoseLandmarkerHelper
++import com.tsmediapipe.GlobalState
+ import com.tsmediapipe.ReactContextProvider
+ import com.tsmediapipe.databinding.FragmentMyCameraBinding
+ import java.util.concurrent.ExecutorService
+@@ -40,6 +41,9 @@ class CameraFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
+     private const val TAG = "Pose Landmarker"
+   }
+ 
++  /** Frame throttle: min ms between processed frames (matches iOS frameLimit for parity) */
++  private var lastProcessedFrameTimeMs: Long = 0
++
+   private var _fragmentCameraBinding: FragmentMyCameraBinding? = null
+   private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
+ 
+@@ -225,12 +229,22 @@ class CameraFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
+   }
+ 
+   private fun detectPose(imageProxy: ImageProxy) {
+-    if (this::poseLandmarkerHelper.isInitialized) {
+-      poseLandmarkerHelper.detectLiveStream(
+-        imageProxy = imageProxy,
+-        isFrontCamera = cameraFacing == CameraSelector.LENS_FACING_FRONT
+-      )
++    if (!this::poseLandmarkerHelper.isInitialized) return
++
++    // Throttle frames to match iOS (GlobalState.frameLimit fps) - reduces latency by avoiding queue buildup
++    val limit = GlobalState.frameLimit.coerceIn(1, 60)
++    val minIntervalMs = 1000L / limit
++    val now = System.currentTimeMillis()
++    if (now - lastProcessedFrameTimeMs < minIntervalMs) {
++      imageProxy.close()
++      return
+     }
++    lastProcessedFrameTimeMs = now
++
++    poseLandmarkerHelper.detectLiveStream(
++      imageProxy = imageProxy,
++      isFrontCamera = cameraFacing == CameraSelector.LENS_FACING_FRONT
++    )
+   }
+ 
+   fun switchCamera() {
+@@ -257,63 +271,59 @@ class CameraFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
+   override fun onResults(
+     resultBundle: PoseLandmarkerHelper.ResultBundle
+   ) {
+-    activity?.runOnUiThread {
+-      if (_fragmentCameraBinding != null) {
+-
+-        val data = resultBundle.results.first()
+-        val landmarksArray: MutableList<Map<String, Any>> = mutableListOf()
+-        val worldLandmarksArray: MutableList<Map<String, Any>> = mutableListOf()
+-
+-        val landmarks = data.landmarks()
+-        val worldLandmarks = data.worldLandmarks()
+-
+-        if (landmarks.isNotEmpty()) {
+-          for (landmark in landmarks[0]) {
+-            val landmarkData: Map<String, Any> = mapOf(
+-              "x" to landmark.x(),
+-              "y" to landmark.y(),
+-              "z" to landmark.z(),
+-              "visibility" to landmark.visibility().get(),
+-              "presence" to landmark.presence().get()
+-            )
+-            landmarksArray.add(landmarkData)
+-          }
+-        }
++    // Build landmarks and serialize JSON off main thread (onResults is called from MediaPipe background)
++    val data = resultBundle.results.first()
++    val landmarksArray: MutableList<Map<String, Any>> = mutableListOf()
++    val worldLandmarksArray: MutableList<Map<String, Any>> = mutableListOf()
++
++    val landmarks = data.landmarks()
++    val worldLandmarks = data.worldLandmarks()
++
++    if (landmarks.isNotEmpty()) {
++      for (landmark in landmarks[0]) {
++        val landmarkData: Map<String, Any> = mapOf(
++          "x" to landmark.x(),
++          "y" to landmark.y(),
++          "z" to landmark.z(),
++          "visibility" to landmark.visibility().get(),
++          "presence" to landmark.presence().get()
++        )
++        landmarksArray.add(landmarkData)
++      }
++    }
+ 
+-        worldLandmarks?.let {
+-          if (it.isNotEmpty() && it[0].size == 33) {
+-            for (worldLandmark in it[0]) {
+-              // Assuming similar structure for worldLandmark as for landmark
+-              val worldLandmarkData: Map<String, Any> = mapOf(
+-                "x" to worldLandmark.x(),
+-                "y" to worldLandmark.y(),
+-                "z" to worldLandmark.z(),
+-                "visibility" to worldLandmark.visibility().get(),
+-                "presence" to worldLandmark.presence().get()
+-              )
+-              worldLandmarksArray.add(worldLandmarkData)
+-            }
+-          }
++    worldLandmarks?.let {
++      if (it.isNotEmpty() && it[0].size == 33) {
++        for (worldLandmark in it[0]) {
++          val worldLandmarkData: Map<String, Any> = mapOf(
++            "x" to worldLandmark.x(),
++            "y" to worldLandmark.y(),
++            "z" to worldLandmark.z(),
++            "visibility" to worldLandmark.visibility().get(),
++            "presence" to worldLandmark.presence().get()
++          )
++          worldLandmarksArray.add(worldLandmarkData)
+         }
++      }
++    }
+ 
+-        val additionalData = mapOf(
+-          "height" to resultBundle.inputImageHeight,
+-          "width" to resultBundle.inputImageWidth,
+-//          "presentationTimeStamp" to resultBundle.presentationTimeStamp,
+-//          "frameNumber" to resultBundle.frameNumber,
+-//          "startTimestamp" to resultBundle.startTimestamp
+-        )
+-
+-        val swiftDict: MutableMap<String, Any> = mutableMapOf(
+-          "landmarks" to landmarksArray,
+-          "additionalData" to additionalData,
+-          "worldLandmarks" to worldLandmarksArray
+-        )
++    val additionalData = mapOf(
++      "height" to resultBundle.inputImageHeight,
++      "width" to resultBundle.inputImageWidth
++    )
+ 
++    val swiftDict: MutableMap<String, Any> = mutableMapOf(
++      "landmarks" to landmarksArray,
++      "additionalData" to additionalData,
++      "worldLandmarks" to worldLandmarksArray
++    )
+ 
+-        val gson = Gson()
+-        val jsonData = gson.toJson(swiftDict)
++    val gson = Gson()
++    val jsonData = gson.toJson(swiftDict)
+ 
++    // Only emit and overlay update need main thread
++    activity?.runOnUiThread {
++      if (_fragmentCameraBinding != null) {
+         val reactContext = ReactContextProvider.reactApplicationContext
+         reactContext?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+           ?.emit("onLandmark", jsonData)
+diff --git a/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift b/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift
+index 20abc0e..a347b53 100644
+--- a/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift
++++ b/node_modules/@thinksys/react-native-mediapipe/ios/Configurations/DefaultConstants.swift
+@@ -13,9 +13,10 @@ struct DefaultConstants {
+     static let lineColor = UIColor(red: 255.0, green: 255.0, blue: 255.0, alpha: 1)
+     
+     static var numPoses: Int = 1
+-    static var minPoseDetectionConfidence: Float = 0.5
+-    static var minPosePresenceConfidence: Float = 0.5
+-    static var minTrackingConfidence: Float = 0.5
++    // Lowered from 0.5 to 0.35 for better leg detection when side-on (BlazePose limitation)
++    static var minPoseDetectionConfidence: Float = 0.35
++    static var minPosePresenceConfidence: Float = 0.35
++    static var minTrackingConfidence: Float = 0.35
+     static let model: Model = .pose_landmarker_full
+     static let delegate: PoseLandmarkerDelegate = .CPU
+     
+diff --git a/node_modules/@thinksys/react-native-mediapipe/src/index.tsx b/node_modules/@thinksys/react-native-mediapipe/src/index.tsx
+index c76f8fc..b3a9ba1 100644
+--- a/node_modules/@thinksys/react-native-mediapipe/src/index.tsx
++++ b/node_modules/@thinksys/react-native-mediapipe/src/index.tsx
+@@ -101,18 +101,18 @@ const TsMediapipeView: React.FC<MediapipeComponentProps> = (props) => {
+   };
+ 
+   useEffect(() => {
+-    let subscription: EmitterSubscription;
++    let subscription: EmitterSubscription | undefined;
+     if (isAndroid) {
+       const mediaPipeEventEmitter = new NativeEventEmitter();
+       subscription = mediaPipeEventEmitter.addListener('onLandmark', (e) => {
+-        onLandmark && onLandmark(e);
++        onLandmark?.(e);
+       });
+     }
+ 
+     return () => {
+       subscription?.remove();
+     };
+-  }, []);
++  }, [onLandmark]);
+ 
+   return (
+     <View

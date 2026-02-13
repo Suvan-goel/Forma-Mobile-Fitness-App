@@ -24,14 +24,14 @@ export type ExerciseState = {
 type Point3D = { x: number; y: number; z?: number };
 
 /**
- * Calculate 3D angle between three points (in degrees).
- * Uses dot product for accurate angles regardless of camera angle or body orientation.
- * MediaPipe provides x, y (normalized image coords) and z (relative depth).
+ * Calculate the inner angle at joint b between segments (a-b) and (b-c).
+ * For elbow: a=shoulder, b=elbow, c=wrist gives flexion angle (small when bent, ~180° when extended).
+ * Uses dot product for accurate 3D angles.
  *
  * @param a First point (e.g., shoulder)
- * @param b Middle point (e.g., elbow) - the vertex of the angle
+ * @param b Joint/vertex (e.g., elbow)
  * @param c Third point (e.g., wrist)
- * @returns Angle in degrees (0-180)
+ * @returns Inner angle in degrees (0-180)
  */
 export function calculateAngle(
   a: Point3D,
@@ -68,6 +68,234 @@ export function calculateAngle(
   const radians = Math.acos(cosAngle);
 
   return radians * 57.29577951308232; // 180/PI -> degrees
+}
+
+/**
+ * Calculate the inner elbow angle using only X and Y (2D projection).
+ * Use this when Z/depth is unreliable (e.g. image coords with inconsistent z scale).
+ * Projects onto the XY plane - for front-facing camera this matches the visible bend.
+ *
+ * @param a First point (e.g., shoulder)
+ * @param b Joint/vertex (e.g., elbow)
+ * @param c Third point (e.g., wrist)
+ * @returns Inner angle in degrees (0-180)
+ */
+export function calculateAngle2D(
+  a: Point3D,
+  b: Point3D,
+  c: Point3D
+): number {
+  const v1x = a.x - b.x;
+  const v1y = a.y - b.y;
+
+  const v2x = c.x - b.x;
+  const v2y = c.y - b.y;
+
+  const dot = v1x * v2x + v1y * v2y;
+  const mag1 = Math.sqrt(v1x * v1x + v1y * v1y);
+  const mag2 = Math.sqrt(v2x * v2x + v2y * v2y);
+
+  if (mag1 < 1e-8 || mag2 < 1e-8) return 0;
+
+  const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
+  const radians = Math.acos(cosAngle);
+  return radians * 57.29577951308232;
+}
+
+/**
+ * Calculate shoulder flexion angle only (sagittal plane). Excludes abduction/adduction.
+ * Projects the upper arm onto the sagittal plane (plane containing torso and perpendicular
+ * to the left-right axis), then measures the angle between torso and projected upper arm.
+ * This isolates forward/backward arm movement (flexion) from lateral movement (abduction).
+ *
+ * @param hip Same-side hip
+ * @param shoulder Same-side shoulder
+ * @param elbow Same-side elbow
+ * @param oppositeShoulder Opposite shoulder (for defining coronal axis)
+ * @returns Angle in degrees (0-180)
+ */
+export function calculateShoulderFlexionAngle(
+  hip: Point3D,
+  shoulder: Point3D,
+  elbow: Point3D,
+  oppositeShoulder: Point3D
+): number {
+  const zH = hip.z ?? 0;
+  const zS = shoulder.z ?? 0;
+  const zE = elbow.z ?? 0;
+  const zO = oppositeShoulder.z ?? 0;
+
+  // Torso vector (hip -> shoulder)
+  const torsoX = shoulder.x - hip.x;
+  const torsoY = shoulder.y - hip.y;
+  const torsoZ = zS - zH;
+
+  // Coronal axis (shoulder -> opposite shoulder) - left-right direction
+  const coronalX = oppositeShoulder.x - shoulder.x;
+  const coronalY = oppositeShoulder.y - shoulder.y;
+  const coronalZ = zO - zS;
+
+  // Upper arm (shoulder -> elbow)
+  const armX = elbow.x - shoulder.x;
+  const armY = elbow.y - shoulder.y;
+  const armZ = zE - zS;
+
+  // Normalize coronal
+  const coronalMag = Math.sqrt(coronalX * coronalX + coronalY * coronalY + coronalZ * coronalZ);
+  if (coronalMag < 1e-8) return calculateAngle(hip, shoulder, elbow);
+  const cx = coronalX / coronalMag;
+  const cy = coronalY / coronalMag;
+  const cz = coronalZ / coronalMag;
+
+  // Project upper arm onto sagittal plane (remove lateral component)
+  const dot = armX * cx + armY * cy + armZ * cz;
+  const armSagittalX = armX - dot * cx;
+  const armSagittalY = armY - dot * cy;
+  const armSagittalZ = armZ - dot * cz;
+
+  const armSagMag = Math.sqrt(armSagittalX * armSagittalX + armSagittalY * armSagittalY + armSagittalZ * armSagittalZ);
+  if (armSagMag < 1e-8) return 0;
+
+  // Angle between torso and projected upper arm (flexion only)
+  const torsoDot = torsoX * armSagittalX + torsoY * armSagittalY + torsoZ * armSagittalZ;
+  const torsoMag = Math.sqrt(torsoX * torsoX + torsoY * torsoY + torsoZ * torsoZ);
+  if (torsoMag < 1e-8) return 0;
+
+  const cosAngle = Math.max(-1, Math.min(1, torsoDot / (torsoMag * armSagMag)));
+  const radians = Math.acos(cosAngle);
+  return radians * 57.29577951308232;
+}
+
+/**
+ * Calculate angle of segment AB relative to the vertical Y-axis (for torso sway).
+ * Returns deviation from vertical in degrees (0° = upright, 90° = horizontal).
+ * Uses 3D coords; vertical axis is (0, 1, 0) assuming Y-up (MediaPipe world).
+ *
+ * @param a Start point (e.g., hip)
+ * @param b End point (e.g., shoulder)
+ * @returns Angle in degrees (0-90)
+ */
+export function calculateVerticalAngle(a: Point3D, b: Point3D): number {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const vz = (b.z ?? 0) - (a.z ?? 0);
+  const mag = Math.sqrt(vx * vx + vy * vy + vz * vz);
+  if (mag < 1e-8) return 0;
+  const cosAngle = Math.max(-1, Math.min(1, vy / mag));
+  const radians = Math.acos(cosAngle);
+  const angleDeg = radians * 57.29577951308232;
+  return angleDeg <= 90 ? angleDeg : 180 - angleDeg;
+}
+
+/**
+ * Calculate signed angle of segment AB relative to the vertical (sagittal plane).
+ * - 0° = upright
+ * - Positive = leaning forward (in front of vertical)
+ * - Negative = leaning back (behind vertical)
+ *
+ * NOTE: Uses camera/world YZ plane - sensitive to body rotation (yaw).
+ * Use calculateSignedVerticalAngleSagittal for rotation-invariant torso angle.
+ *
+ * @param a Start point (e.g., hip)
+ * @param b End point (e.g., shoulder)
+ * @returns Angle in degrees (-180 to +180)
+ */
+export function calculateSignedVerticalAngle(a: Point3D, b: Point3D): number {
+  const vy = b.y - a.y;
+  const vz = (b.z ?? 0) - (a.z ?? 0);
+  const mag = Math.sqrt(vy * vy + vz * vz);
+  if (mag < 1e-8) return 0;
+  const radians = Math.atan2(vz, vy);
+  let angleDeg = radians * 57.29577951308232; // 180/π
+  // Shift so upright (typically atan2 = ±180°) maps to 0°
+  angleDeg += 180;
+  if (angleDeg > 180) angleDeg -= 360;
+  if (angleDeg <= -180) angleDeg += 360;
+  return angleDeg;
+}
+
+/**
+ * Calculate signed torso angle in the person's sagittal plane (rotation-invariant).
+ * Projects the torso vector onto the plane perpendicular to the left-right axis,
+ * then measures angle from vertical. This removes the effect of body rotation (yaw)
+ * and arm movement on the apparent torso angle.
+ *
+ * - 0° = upright
+ * - Positive = leaning forward
+ * - Negative = leaning back
+ *
+ * Works with both MediaPipe world coords (Y up) and image coords (Y typically down).
+ *
+ * @param hipCenter Midpoint of left and right hip
+ * @param shoulderCenter Midpoint of left and right shoulder
+ * @param leftHip Left hip point
+ * @param rightHip Right hip point
+ * @param leftShoulder Left shoulder point
+ * @param rightShoulder Right shoulder point
+ * @returns Angle in degrees (-90 to +90), or NaN if coronal axis is degenerate
+ */
+export function calculateSignedVerticalAngleSagittal(
+  hipCenter: Point3D,
+  shoulderCenter: Point3D,
+  leftHip: Point3D,
+  rightHip: Point3D,
+  leftShoulder: Point3D,
+  rightShoulder: Point3D
+): number {
+  // Coronal axis: left-to-right direction (perpendicular to sagittal plane)
+  const leftMid = {
+    x: (leftHip.x + leftShoulder.x) / 2,
+    y: (leftHip.y + leftShoulder.y) / 2,
+    z: ((leftHip.z ?? 0) + (leftShoulder.z ?? 0)) / 2,
+  };
+  const rightMid = {
+    x: (rightHip.x + rightShoulder.x) / 2,
+    y: (rightHip.y + rightShoulder.y) / 2,
+    z: ((rightHip.z ?? 0) + (rightShoulder.z ?? 0)) / 2,
+  };
+  let cx = rightMid.x - leftMid.x;
+  let cy = rightMid.y - leftMid.y;
+  let cz = (rightMid.z ?? 0) - (leftMid.z ?? 0);
+  const coronalMag = Math.sqrt(cx * cx + cy * cy + cz * cz);
+  if (coronalMag < 1e-8) return NaN;
+  cx /= coronalMag;
+  cy /= coronalMag;
+  cz /= coronalMag;
+
+  // Torso vector: hip center -> shoulder center
+  const tx = shoulderCenter.x - hipCenter.x;
+  const ty = shoulderCenter.y - hipCenter.y;
+  const tz = (shoulderCenter.z ?? 0) - (hipCenter.z ?? 0);
+
+  // Project torso onto sagittal plane (remove component along coronal)
+  const dot = tx * cx + ty * cy + tz * cz;
+  const sx = tx - dot * cx;
+  const sy = ty - dot * cy;
+  const sz = tz - dot * cz;
+
+  const sagMag = Math.sqrt(sx * sx + sy * sy + sz * sz);
+  if (sagMag < 1e-8) return 0;
+
+  // Vertical: Y axis. MediaPipe world = Y up; image coords = Y down.
+  // When upright, torso points toward head: shoulder has larger Y in world, smaller Y in image.
+  const upComp = ty >= 0 ? sy : -sy; // flip for Y-down (image) coords
+
+  // Horizontal-in-sagittal = cross(coronal, vertical) = cross(C, (0,1,0)) = (-cz, 0, cx)
+  const hx = -cz;
+  const hz = cx;
+  const hMag = Math.sqrt(hx * hx + hz * hz);
+  if (hMag < 1e-8) {
+    // Person facing directly toward/away - coronal aligned with vertical
+    return 0;
+  }
+  const hxN = hx / hMag;
+  const hzN = hz / hMag;
+
+  // Signed angle: atan2(forward_component, up_component) in sagittal plane
+  const fwdComp = sx * hxN + sz * hzN;
+  const radians = Math.atan2(fwdComp, Math.abs(upComp) < 1e-8 ? 1e-8 : upComp);
+  let angleDeg = radians * 57.29577951308232;
+  return Math.max(-90, Math.min(90, angleDeg));
 }
 
 /**

@@ -1,15 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Alert } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { FlipHorizontal, Pause, Play, Info, Dumbbell } from 'lucide-react-native';
+import { RotateCw, MessageCircle, MessageCircleOff, Pause, Play, X, Volume2, VolumeX } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount, Keypoint } from '../utils/poseAnalysis';
-import { updateBarbellCurlState, initializeBarbellCurlState, BarbellCurlState } from '../utils/barbellCurlAnalysis';
+import {
+  updateBarbellCurlState,
+  initializeBarbellCurlState,
+  BarbellCurlState,
+  getRepCount,
+  getCurrentFormScore,
+  getCurrentFeedback,
+  getTorsoDebugInfo,
+} from '../utils/barbellCurlHeuristics';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -45,6 +53,8 @@ export const CameraScreen: React.FC = () => {
   
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(true);
+  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [currentFormScore, setCurrentFormScore] = useState<number | null>(null);
@@ -53,32 +63,18 @@ export const CameraScreen: React.FC = () => {
   const [workoutData, setWorkoutData] = useState({
     totalReps: 0,
     formScores: [] as number[],
+    repFeedback: [] as string[],
     duration: 0,
   });
   const [feedback, setFeedback] = useState<string | null>(null);
-
-  // Debug angles display state (for UI only)
-  const [debugAngles, setDebugAngles] = useState<{
-    leftElbow: number | null;
-    rightElbow: number | null;
-    leftShoulder: number | null;
-    rightShoulder: number | null;
-    leftHip: number | null;
-    rightHip: number | null;
-    leftKnee: number | null;
-    rightKnee: number | null;
-    phase: string;
-  }>({
-    leftElbow: null,
-    rightElbow: null,
-    leftShoulder: null,
-    rightShoulder: null,
-    leftHip: null,
-    rightHip: null,
-    leftKnee: null,
-    rightKnee: null,
-    phase: 'idle',
-  });
+  const [torsoDebug, setTorsoDebug] = useState<{
+    torso: number | null;
+    leftTorso: number | null;
+    rightTorso: number | null;
+    torsoDelta: number | null;
+    leftTorsoDelta: number | null;
+    rightTorsoDelta: number | null;
+  } | null>(null);
 
   // Barbell curl specific state
   const barbellCurlStateRef = useRef<BarbellCurlState>(initializeBarbellCurlState());
@@ -94,12 +90,12 @@ export const CameraScreen: React.FC = () => {
   const [cameraMounted, setCameraMounted] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
-  // Delay mount slightly when screen gains focus so previous native camera has time to release
+  // Mount camera when screen gains focus. Short delay lets previous native camera release.
   useFocusEffect(
     useCallback(() => {
       if (isClosing) return;
       setCameraMounted(false);
-      const t = setTimeout(() => setCameraMounted(true), 400);
+      const t = setTimeout(() => setCameraMounted(true), 150);
       return () => clearTimeout(t);
     }, [isClosing])
   );
@@ -109,8 +105,27 @@ export const CameraScreen: React.FC = () => {
   const repCountRef = useRef(repCount);
   const currentExerciseRef = useRef(currentExercise);
   const lastDetectionTimeRef = useRef(0);
+  const lastUIUpdateTimeRef = useRef(0);
+  const pendingUIStateRef = useRef<{
+    repCount?: number;
+    formScore?: number;
+    feedback?: string | null;
+    torsoDebug?: {
+      torso: number | null;
+      leftTorso: number | null;
+      rightTorso: number | null;
+      torsoDelta: number | null;
+      leftTorsoDelta: number | null;
+      rightTorsoDelta: number | null;
+    } | null;
+    workoutUpdate?: { totalReps: number; formScore: number; repFeedback?: string };
+  } | null>(null);
   const isRecordingRef = useRef(isRecording);
   const isPausedRef = useRef(isPaused);
+  const lastCameraTapRef = useRef(0);
+  // Synchronous accumulator for per-rep data — immune to InteractionManager deferral
+  const accumulatedFormScoresRef = useRef<number[]>([]);
+  const accumulatedRepFeedbackRef = useRef<string[]>([]);
   
   // Sync refs with state
   useEffect(() => {
@@ -133,6 +148,27 @@ export const CameraScreen: React.FC = () => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
 
+  // Auto-clear feedback after 2 seconds (Barbell Curl and any green messages)
+  useEffect(() => {
+    if (!feedback || exerciseNameFromRoute !== 'Barbell Curl') return;
+    const timer = setTimeout(() => setFeedback(null), 2000);
+    return () => clearTimeout(timer);
+  }, [feedback, exerciseNameFromRoute]);
+
+  // TTS: speak feedback when it changes (Barbell Curl only, when enabled + visible)
+  useEffect(() => {
+    if (
+      !isTTSEnabled ||
+      !feedback ||
+      exerciseNameFromRoute !== 'Barbell Curl' ||
+      !showFeedback
+    ) {
+      return;
+    }
+
+    import('../services/feedbackTTS').then(({ speakFeedback: speak }) => speak(feedback));
+  }, [feedback, exerciseNameFromRoute, showFeedback, isTTSEnabled]);
+
   // Track workout duration
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -148,9 +184,8 @@ export const CameraScreen: React.FC = () => {
   }, [isRecording, isPaused, workoutStartTime]);
 
   // Convert MediaPipe landmark data to our Keypoint format.
-  // Prefer worldLandmarks (3D real-world coords in meters) for accurate joint angles - they have
-  // consistent scale across x,y,z and represent actual body pose. Fall back to landmarks (image
-  // coords) if worldLandmarks unavailable.
+  // For Barbell Curl: use image coords so 2D elbow angle matches the visible bend on screen.
+  // Otherwise: prefer worldLandmarks (3D) for consistent scale.
   const convertLandmarksToKeypoints = useCallback((landmarkData: any): Keypoint[] | null => {
     try {
       let parsedData = landmarkData;
@@ -161,11 +196,19 @@ export const CameraScreen: React.FC = () => {
       const worldLandmarksArray = parsedData?.worldLandmarks;
       const imageLandmarksArray = parsedData?.landmarks || parsedData;
 
-      const landmarksArray =
-        Array.isArray(worldLandmarksArray) && worldLandmarksArray.length === 33
-          ? worldLandmarksArray
-          : Array.isArray(imageLandmarksArray)
-            ? imageLandmarksArray
+      const hasWorld =
+        Array.isArray(worldLandmarksArray) &&
+        worldLandmarksArray.length >= 33 &&
+        typeof worldLandmarksArray[0]?.x === 'number';
+      const hasImage = Array.isArray(imageLandmarksArray) && imageLandmarksArray.length >= 33;
+
+      const useImage = !hasWorld && hasImage;
+      const landmarksArray = useImage
+        ? imageLandmarksArray.slice(0, 33)
+        : hasWorld
+          ? worldLandmarksArray.slice(0, 33)
+          : hasImage
+            ? imageLandmarksArray.slice(0, 33)
             : null;
 
       if (!landmarksArray) {
@@ -186,73 +229,88 @@ export const CameraScreen: React.FC = () => {
     }
   }, []);
 
-  // Handle landmark data from MediaPipe with optimized throttling
-  const handleLandmark = useCallback((data: any) => {
-    if (!isRecordingRef.current) {
-      return;
-    }
-    
-    if (isPausedRef.current) {
-      return;
-    }
+  // Flush pending UI updates to React state (throttled to avoid blocking main thread)
+  const UI_UPDATE_INTERVAL_MS = 100; // Max 10 UI updates/sec - keeps buttons responsive
+  const ANALYSIS_THROTTLE_MS = 33;   // ~30fps analysis - balance between accuracy and perf
 
-    // Reduced throttle to 16ms (~60fps) for ultra-low latency
-    // Most devices can handle 60fps, provides smooth real-time feedback
+  const flushPendingUI = useCallback(() => {
+    const pending = pendingUIStateRef.current;
+    if (!pending) return;
+    pendingUIStateRef.current = null;
+
+    // Defer state updates until after interactions (button presses) complete
+    InteractionManager.runAfterInteractions(() => {
+      if (pending.repCount !== undefined) setRepCount(pending.repCount);
+      if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
+      if (pending.feedback !== undefined) setFeedback(pending.feedback);
+      if (pending.torsoDebug !== undefined) setTorsoDebug(pending.torsoDebug);
+      if (pending.workoutUpdate) {
+        setWorkoutData(prev => ({
+          ...prev,
+          totalReps: pending.workoutUpdate!.totalReps,
+          formScores: [...prev.formScores, pending.workoutUpdate!.formScore],
+          repFeedback: pending.workoutUpdate!.repFeedback
+            ? [...prev.repFeedback, pending.workoutUpdate!.repFeedback]
+            : prev.repFeedback,
+        }));
+      }
+    });
+  }, []);
+
+  // Handle landmark data from MediaPipe - throttle analysis, batch UI updates
+  const handleLandmark = useCallback((data: any) => {
+    if (!isRecordingRef.current) return;
+    if (isPausedRef.current) return;
+
     const now = Date.now();
-    if (now - lastDetectionTimeRef.current < 16) {
+
+    // Throttle analysis (not every frame - reduces JS thread load)
+    if (now - lastDetectionTimeRef.current < ANALYSIS_THROTTLE_MS) {
       return;
     }
     lastDetectionTimeRef.current = now;
 
     const keypoints = convertLandmarksToKeypoints(data);
-    if (!keypoints || keypoints.length === 0) {
-      return;
-    }
+    if (!keypoints || keypoints.length === 0) return;
 
     // Check if this is a Barbell Curl exercise (exercise-specific logic)
     if (exerciseNameFromRoute === 'Barbell Curl') {
-      // Use barbell curl-specific analysis
       const newState = updateBarbellCurlState(keypoints, barbellCurlStateRef.current);
-      
       barbellCurlStateRef.current = newState;
 
-      // Update debug angles display
-      setDebugAngles({
-        leftElbow: newState.leftElbowAngle,
-        rightElbow: newState.rightElbowAngle,
-        leftShoulder: newState.leftShoulderAngle,
-        rightShoulder: newState.rightShoulderAngle,
-        leftHip: newState.leftHipAngle,
-        rightHip: newState.rightHipAngle,
-        leftKnee: newState.leftKneeAngle,
-        rightKnee: newState.rightKneeAngle,
-        phase: newState.phase,
-      });
+      // Extract data using helper functions
+      const currentRepCount = getRepCount(newState);
+      const currentScore = getCurrentFormScore(newState);
+      const currentFeedback = getCurrentFeedback(newState);
+      const torsoDebugInfo = getTorsoDebugInfo(newState);
 
-      // Always update rep count (even if it hasn't changed)
-      setRepCount(newState.repCount);
-      
-      if (newState.formScore > 0) {
-        setCurrentFormScore(newState.formScore);
+      // Accumulate UI updates - don't setState here (blocks main thread)
+      const pending = pendingUIStateRef.current ?? {};
+      pending.repCount = currentRepCount;
+      if (currentScore > 0) pending.formScore = currentScore;
+      pending.feedback = currentFeedback;
+      pending.torsoDebug = torsoDebugInfo;
+      if (currentRepCount > repCountRef.current) {
+        pending.workoutUpdate = {
+          totalReps: currentRepCount,
+          formScore: currentScore,
+          repFeedback: currentFeedback ?? 'Great rep!',
+        };
+        // Synchronous accumulation — immune to InteractionManager deferral race
+        accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, currentScore];
+        accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, currentFeedback ?? 'Great rep!'];
       }
-      
-      // Update feedback (will auto-clear after 2 seconds in the analysis logic)
-      if (newState.feedback) {
-        setFeedback(newState.feedback);
-      } else {
-        setFeedback(null);
-      }
+      pendingUIStateRef.current = pending;
 
-      // Update workout data when a rep is completed
-      if (newState.repCount > repCountRef.current) {
-        setWorkoutData(prev => ({
-          ...prev,
-          totalReps: newState.repCount,
-          formScores: [...prev.formScores, newState.formScore],
-        }));
+      // Flush immediately when rep completes; otherwise throttle to keep buttons responsive
+      const repJustCompleted = newState.repCount > repCountRef.current;
+      const throttleElapsed = now - lastUIUpdateTimeRef.current >= UI_UPDATE_INTERVAL_MS;
+      if (repJustCompleted || throttleElapsed) {
+        lastUIUpdateTimeRef.current = now;
+        flushPendingUI();
       }
     } else {
-      // Use generic exercise detection for other exercises
+      // Generic exercise detection - also throttled
       const detection = detectExercise(keypoints);
       
       if (detection.exercise && detection.angle !== null) {
@@ -281,16 +339,21 @@ export const CameraScreen: React.FC = () => {
         // Rep completed
         if (repUpdate.repCount > repCountRef.current) {
           const formScore = repUpdate.formScore;
-          
+          const feedbackMsg = formScore >= 90 ? 'Great rep!' : 'Good rep.';
+
           setRepCount(repUpdate.repCount);
           setCurrentFormScore(formScore);
-          
+
           // Update workout data with functional update to avoid stale closures
           setWorkoutData(prev => ({
             ...prev,
             totalReps: prev.totalReps + 1,
             formScores: [...prev.formScores, formScore],
+            repFeedback: [...prev.repFeedback, feedbackMsg],
           }));
+          // Synchronous accumulation — immune to InteractionManager deferral race
+          accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, formScore];
+          accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, feedbackMsg];
         }
       } else if (currentExerciseRef.current !== null) {
         // No exercise detected - reset
@@ -298,26 +361,41 @@ export const CameraScreen: React.FC = () => {
         setExercisePhase('idle');
       }
     }
-  }, [convertLandmarksToKeypoints, exerciseNameFromRoute]);
+  }, [convertLandmarksToKeypoints, exerciseNameFromRoute, flushPendingUI]);
 
   // Memoize button handlers to prevent recreating on every render
+  const workoutDataRef = useRef(workoutData);
+  useEffect(() => {
+    workoutDataRef.current = workoutData;
+  }, [workoutData]);
+
   const handleRecordPress = useCallback(() => {
     if (isRecording) {
-      // Stop recording
+      // Read per-rep data from synchronous refs (immune to InteractionManager deferral)
+      const pending = pendingUIStateRef.current;
+      let totalReps = repCountRef.current;
+      if (pending?.workoutUpdate) {
+        totalReps = pending.workoutUpdate.totalReps;
+      }
+      pendingUIStateRef.current = null;
+
       setIsRecording(false);
-      
-      // Calculate workout data
-      const avgFormScore = workoutData.formScores.length > 0
-        ? Math.round(workoutData.formScores.reduce((a, b) => a + b, 0) / workoutData.formScores.length)
+      setTorsoDebug(null);
+
+      const formScores = accumulatedFormScoresRef.current;
+      const repFeedback = accumulatedRepFeedbackRef.current;
+      const avgFormScore = formScores.length > 0
+        ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
         : 0;
 
-      // Check if this is from the Record stack (Current Workout flow)
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
         const newSet = {
           exerciseName: exerciseNameFromRoute,
-          reps: workoutData.totalReps,
+          reps: totalReps,
           weight: 0,
           formScore: avgFormScore,
+          repFeedback: repFeedback.length > 0 ? repFeedback : undefined,
+          repFormScores: formScores.length > 0 ? formScores : undefined,
         };
         addSetToExercise(exerciseId, newSet);
         // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
@@ -328,14 +406,14 @@ export const CameraScreen: React.FC = () => {
         }, 450);
       } else {
         // Original flow: navigate to SaveWorkout
-        const minutes = Math.floor(workoutData.duration / 60);
-        const seconds = workoutData.duration % 60;
+        const minutes = Math.floor(workoutDataRef.current.duration / 60);
+        const seconds = workoutDataRef.current.duration % 60;
         const durationString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
         const workoutDataToSave = {
           category,
           duration: durationString,
-          totalReps: workoutData.totalReps,
+          totalReps,
           avgFormScore,
         };
 
@@ -355,6 +433,7 @@ export const CameraScreen: React.FC = () => {
       setCurrentFormScore(null);
       setIsPaused(false);
       setFeedback(null);
+      setTorsoDebug(null);
       // Reset barbell curl state if starting a barbell curl
       if (exerciseNameFromRoute === 'Barbell Curl') {
         barbellCurlStateRef.current = initializeBarbellCurlState();
@@ -362,24 +441,63 @@ export const CameraScreen: React.FC = () => {
       setWorkoutData({
         totalReps: 0,
         formScores: [],
+        repFeedback: [],
         duration: 0,
       });
+      accumulatedFormScoresRef.current = [];
+      accumulatedRepFeedbackRef.current = [];
     }
-  }, [isRecording, workoutData, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
+  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 
   const handlePausePress = useCallback(() => {
-    setIsPaused(!isPaused);
-  }, [isPaused]);
+    setIsPaused(prev => !prev);
+  }, []);
+
+  const handleFeedbackTogglePress = useCallback(() => {
+    setShowFeedback(prev => !prev);
+  }, []);
+
+  const handleTTSTogglePress = useCallback(() => {
+    setIsTTSEnabled(prev => !prev);
+  }, []);
 
   const handleCameraFlip = useCallback(() => {
     switchCamera();
   }, []);
 
-  const handleInfoPress = useCallback(() => {
-    (navigation as any).push('WorkoutInfo');
+  const handleCameraDoubleTap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastCameraTapRef.current < 350) {
+      handleCameraFlip();
+      lastCameraTapRef.current = 0;
+    } else {
+      lastCameraTapRef.current = now;
+    }
+  }, [handleCameraFlip]);
+
+  const handleDiscardSetPress = useCallback(() => {
+    Alert.alert(
+      'Discard set?',
+      'Are you sure you want to discard this set? Your reps will not be saved.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, discard',
+          style: 'destructive',
+          onPress: () => {
+            setIsClosing(true);
+            setCameraMounted(false);
+            setTimeout(() => {
+              (navigation as any).navigate('CurrentWorkout');
+            }, 450);
+          },
+        },
+      ]
+    );
   }, [navigation]);
 
   // Memoize MediaPipe props – 3:4 portrait (taller than wide)
+  // frameLimit: 20 fps on both iOS and Android for lower latency (matches platforms)
   const mediapipeProps = useMemo(() => ({
     width: cameraDisplayWidth,
     height: cameraDisplayHeight,
@@ -393,6 +511,7 @@ export const CameraScreen: React.FC = () => {
     rightWrist: true,
     leftAnkle: true,
     rightAnkle: true,
+    frameLimit: 20,
   }), []);
 
   // Memoize display values to avoid recalculation
@@ -419,10 +538,13 @@ export const CameraScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Camera fixed below top bar (same gap); extra space goes below for metrics */}
-      <View style={[
-        styles.cameraLetterbox,
-        { paddingTop: topBarHeight, paddingBottom: bottomBarHeight },
-      ]}>
+      <Pressable
+        style={[
+          styles.cameraLetterbox,
+          { paddingTop: topBarHeight, paddingBottom: bottomBarHeight },
+        ]}
+        onPress={handleCameraDoubleTap}
+      >
         <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
           {showCamera && (
             <RNMediapipe
@@ -431,90 +553,64 @@ export const CameraScreen: React.FC = () => {
             />
           )}
         </View>
-      </View>
+      </Pressable>
 
       {/* Overlay UI */}
       <View style={styles.overlay} pointerEvents="box-none">
         {/* Top Bar */}
         <View style={[styles.topBar, { paddingTop: insets.top }]}>
-          <View style={styles.weightsIconContainer}>
-            <Dumbbell size={24} color={COLORS.text} />
-          </View>
+          <TouchableOpacity
+            style={styles.discardButton}
+            onPress={handleDiscardSetPress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Discard set"
+          >
+            <X size={24} color={COLORS.text} strokeWidth={2.5} />
+          </TouchableOpacity>
           <View style={styles.exerciseTopCard}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
               {displayValues.exerciseDisplayName}
             </Text>
           </View>
           <TouchableOpacity style={styles.flipButton} onPress={handleCameraFlip}>
-            <FlipHorizontal size={24} color={COLORS.text} />
+            <RotateCw size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>
 
-        {/* Feedback Display - Appears below exercise name */}
-        {feedback && (
+        {/* Feedback Display - Speech bubble below exercise name */}
+        {feedback && showFeedback && (
           <View style={styles.feedbackContainer}>
-            <View style={styles.feedbackCard}>
+            <View style={styles.feedbackBubble}>
               <Text style={styles.feedbackText}>{feedback}</Text>
+              <View style={styles.feedbackTail} />
             </View>
           </View>
         )}
 
-        {/* Debug Angles Display - Only show when recording Barbell Curl */}
-        {isRecording && exerciseNameFromRoute === 'Barbell Curl' && (
-          <View style={styles.anglesDebugContainer}>
-            <View style={styles.anglesDebugCard}>
-              <Text style={styles.anglesDebugTitle}>Joint Angles (°)</Text>
-              <View style={styles.anglesGrid}>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Elbow:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftElbow?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Elbow:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightElbow?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Shoulder:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftShoulder?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Shoulder:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightShoulder?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Hip:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftHip?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Hip:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightHip?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>L Knee:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.leftKnee?.toFixed(1) || '-'}
-                  </Text>
-                  <Text style={styles.angleLabel}>R Knee:</Text>
-                  <Text style={styles.angleValue}>
-                    {debugAngles.rightKnee?.toFixed(1) || '-'}
-                  </Text>
-                </View>
-                <View style={styles.angleRow}>
-                  <Text style={styles.angleLabel}>Phase:</Text>
-                  <Text style={[styles.angleValue, styles.phaseValue]}>
-                    {debugAngles.phase.toUpperCase()}
-                  </Text>
-                </View>
+        {/* Torso Debug - Shows angles used for swing detection (Barbell Curl only) */}
+        {exerciseNameFromRoute === 'Barbell Curl' &&
+          isRecording &&
+          torsoDebug && (
+            <View style={styles.torsoDebugContainer}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Torso Swing Debug</Text>
+                <Text style={styles.torsoDebugText}>
+                  Midline: {torsoDebug.torso != null ? torsoDebug.torso.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  L: {torsoDebug.leftTorso != null ? torsoDebug.leftTorso.toFixed(1) + '°' : '–'} | R:{' '}
+                  {torsoDebug.rightTorso != null ? torsoDebug.rightTorso.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Δ (rep): mid {torsoDebug.torsoDelta != null ? torsoDebug.torsoDelta.toFixed(1) : '–'}° | L{' '}
+                  {torsoDebug.leftTorsoDelta != null ? torsoDebug.leftTorsoDelta.toFixed(1) : '–'}° | R{' '}
+                  {torsoDebug.rightTorsoDelta != null ? torsoDebug.rightTorsoDelta.toFixed(1) : '–'}°
+                </Text>
+                <Text style={styles.torsoDebugHint}>Warn &gt;12° | Fail &gt;22°</Text>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
         {/* Bottom Controls */}
         <View style={[
@@ -565,11 +661,35 @@ export const CameraScreen: React.FC = () => {
                 <View style={[styles.recordButtonInner, isRecording && styles.recordButtonInnerActive]} />
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.infoButton} 
-                onPress={handleInfoPress}
-                activeOpacity={0.8}
+                style={[
+                  styles.feedbackToggleButton,
+                  !isRecording && styles.feedbackToggleButtonDisabled
+                ]} 
+                onPress={isRecording ? handleFeedbackTogglePress : undefined}
+                activeOpacity={isRecording ? 0.8 : 1}
+                disabled={!isRecording}
               >
-                <Info size={24} color={COLORS.text} />
+                {showFeedback ? (
+                  <MessageCircle size={24} color={isRecording ? COLORS.primary : COLORS.textSecondary} />
+                ) : (
+                  <MessageCircleOff size={24} color={isRecording ? COLORS.textSecondary : COLORS.textSecondary} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.ttsToggleButton,
+                  !isTTSEnabled && styles.ttsToggleButtonOff
+                ]}
+                onPress={handleTTSTogglePress}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={isTTSEnabled ? 'Disable spoken feedback' : 'Enable spoken feedback'}
+              >
+                {isTTSEnabled ? (
+                  <Volume2 size={24} color={COLORS.primary} />
+                ) : (
+                  <VolumeX size={24} color={COLORS.textSecondary} />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -603,7 +723,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
   },
-  weightsIconContainer: {
+  discardButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -671,11 +791,33 @@ const styles = StyleSheet.create({
     borderColor: COLORS.textSecondary,
     opacity: 0.5,
   },
-  infoButton: {
+  feedbackToggleButton: {
     width: 60,
     height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: COLORS.text,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  feedbackToggleButtonDisabled: {
+    borderColor: COLORS.textSecondary,
+    opacity: 0.5,
+  },
+  ttsToggleButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: COLORS.text,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ttsToggleButtonOff: {
+    borderColor: COLORS.textSecondary,
+    opacity: 0.75,
   },
   detectionExercise: {
     fontSize: 12,
@@ -725,68 +867,72 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     zIndex: 10,
   },
-  feedbackCard: {
-    backgroundColor: 'rgba(32, 215, 96, 0.95)',
-    borderRadius: 12,
+  feedbackBubble: {
+    backgroundColor: '#000000',
+    borderRadius: 16,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    paddingBottom: SPACING.md + 8,
     maxWidth: '90%',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  feedbackTail: {
+    position: 'absolute',
+    bottom: -8,
+    left: '50%',
+    marginLeft: -10,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#000000',
   },
   feedbackText: {
     fontSize: 14,
     fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    color: COLORS.primary,
     textAlign: 'center',
   },
-  anglesDebugContainer: {
+  torsoDebugContainer: {
     position: 'absolute',
-    top: 180,
-    left: SPACING.screenHorizontal,
-    right: SPACING.screenHorizontal,
-    zIndex: 9,
+    bottom: 180,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    zIndex: 10,
   },
-  anglesDebugCard: {
-    backgroundColor: '#262626',
-    borderRadius: 12,
-    borderWidth: 0,
-    padding: SPACING.md,
+  torsoDebugCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    maxWidth: '95%',
   },
-  anglesDebugTitle: {
+  torsoDebugTitle: {
     fontSize: 12,
     fontFamily: FONTS.ui.bold,
     color: COLORS.primary,
-    marginBottom: SPACING.xs,
-    textAlign: 'center',
+    marginBottom: 4,
   },
-  anglesGrid: {
-    gap: 4,
-  },
-  angleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  angleLabel: {
+  torsoDebugText: {
     fontSize: 11,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    flex: 1,
-  },
-  angleValue: {
-    fontSize: 12,
     fontFamily: FONTS.mono.regular,
     color: COLORS.text,
-    flex: 1,
-    textAlign: 'right',
   },
-  phaseValue: {
-    color: COLORS.primary,
-    fontFamily: FONTS.ui.bold,
+  torsoDebugHint: {
+    fontSize: 10,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+    marginTop: 4,
   },
 });
 

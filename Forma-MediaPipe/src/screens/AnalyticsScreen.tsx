@@ -117,12 +117,12 @@ const getDayColor = (date: Date): string => {
     0: '#EC4899', // Sunday - Pink/Magenta
     1: '#F59E0B', // Monday - Orange/Amber
     2: COLORS.primary, // Tuesday - Green
-    3: '#00D4BB', // Wednesday - Teal (primary)
+    3: COLORS.primary,
     4: '#8B5CF6', // Thursday - Purple
     5: '#EF4444', // Friday - Red
     6: '#3B82F6', // Saturday - Blue
   };
-  return dayColors[day] || '#00D4BB';
+  return dayColors[day] || COLORS.primary;
 };
 
 // Score Chart Component (Form, Consistency, Strength)
