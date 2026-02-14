@@ -383,9 +383,18 @@ export const CameraScreen: React.FC = () => {
 
       const formScores = accumulatedFormScoresRef.current;
       const repFeedback = accumulatedRepFeedbackRef.current;
-      const avgFormScore = formScores.length > 0
-        ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
-        : 0;
+      // Weighted average: bad reps weigh up to 3× more than perfect reps
+      let avgFormScore = 0;
+      if (formScores.length > 0) {
+        let totalWeight = 0;
+        let weightedSum = 0;
+        for (const s of formScores) {
+          const w = 1 + (100 - s) / 50; // range [1, 3]
+          totalWeight += w;
+          weightedSum += s * w;
+        }
+        avgFormScore = Math.round(weightedSum / totalWeight);
+      }
 
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
         const newSet = {

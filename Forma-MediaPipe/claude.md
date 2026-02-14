@@ -238,7 +238,36 @@ barbellCurlHeuristics.ts  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenla
 3. Add new `IssueType`s + pools only for exercise-specific issues
 4. No changes needed in `ttsCoach.ts` — it's exercise-agnostic
 
-## 13. How Claude Should Help
+## 13. Scoring System — Continuous Penalty Curves
+
+### Philosophy
+- **Visual feedback** (messages) uses discrete thresholds — unchanged
+- **Numeric score** uses continuous quadratic penalty curves — small errors produce small but real drops
+- A perfect 100 is rare and earned; a "pretty good" rep scores 85-93
+
+### Rep Score: `computeRepScore()` in `barbellCurlHeuristics.ts`
+Five penalty categories, each `min(cap, scale × max(0, x − deadzone)²)`:
+
+| Category | Max Penalty | Deadzone | Scale | Key Input |
+|---|---|---|---|---|
+| Torso swing | 35 | 3° | 0.55 | midline torso delta |
+| Shoulder movement | 30 | 10° | 0.018 | max shoulder delta (L/R) |
+| ROM shortfall | 35 | flex: 50°, ext: 140° | 0.03 each | min flex angle, max ext angle |
+| Tempo | 20 | up: 0.4s, down: 0.5s | 60/40 | concentric/eccentric time |
+| Asymmetry | 15 | 0 | 0.005/0.004 | min-angle diff, ROM diff |
+
+**Max total penalty:** 135 → worst possible rep = 0.
+
+### Set Score: Weighted Average in `CameraScreen.tsx`
+Bad reps weigh more: `weight = 1 + (100 − score) / 50` (range [1, 3]).
+A score-100 rep has weight 1; a score-0 rep has weight 3.
+
+### Rules for Modifying
+- **Never change message thresholds** when tuning scores — they are independent
+- When recalibrating, adjust `scale` or `deadzone`, not the formula shape
+- Test with: clean rep → 95-100, slightly sloppy → 85-93, obvious cheat → 50-70, terrible → 0-30
+
+## 14. How Claude Should Help
 - Prefer incremental changes over big refactors
 - Explain reasoning when touching heuristics, thresholds, rep logic, or perf-sensitive code
 - Ask before adding dependencies, changing architecture, or changing data models

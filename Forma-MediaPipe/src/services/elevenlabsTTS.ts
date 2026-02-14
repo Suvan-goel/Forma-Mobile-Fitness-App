@@ -79,7 +79,8 @@ async function generateSpeech(text: string): Promise<string> {
       model_id: 'eleven_flash_v2_5',
       voice_settings: {
         stability: 0.6,
-        similarity_boost: 0.65,
+        similarity_boost: 0.8,
+        speed: 0.75,
       },
     }),
   });
