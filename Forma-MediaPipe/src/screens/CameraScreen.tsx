@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Alert, Modal, Switch } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RotateCw, MessageCircle, MessageCircleOff, Pause, Play, X, Volume2, VolumeX } from 'lucide-react-native';
+import { RotateCw, Settings, Pause, Play, X } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
@@ -19,6 +19,7 @@ import {
   getTorsoDebugInfo,
 } from '../utils/barbellCurlHeuristics';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
+import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../services/ttsCoach';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -85,6 +86,9 @@ export const CameraScreen: React.FC = () => {
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
 
+
+  // Settings popup (feedback + TTS toggles)
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
 
   // Unmount camera before leaving so native layer can release it; avoids "Camera initialization failed" on next open
   const [cameraMounted, setCameraMounted] = useState(false);
@@ -155,19 +159,11 @@ export const CameraScreen: React.FC = () => {
     return () => clearTimeout(timer);
   }, [feedback, exerciseNameFromRoute]);
 
-  // TTS: speak feedback when it changes (Barbell Curl only, when enabled + visible)
+  // Sync TTS enabled state to ref (for use in handleLandmark without stale closures)
+  const isTTSEnabledRef = useRef(isTTSEnabled);
   useEffect(() => {
-    if (
-      !isTTSEnabled ||
-      !feedback ||
-      exerciseNameFromRoute !== 'Barbell Curl' ||
-      !showFeedback
-    ) {
-      return;
-    }
-
-    import('../services/feedbackTTS').then(({ speakFeedback: speak }) => speak(feedback));
-  }, [feedback, exerciseNameFromRoute, showFeedback, isTTSEnabled]);
+    isTTSEnabledRef.current = isTTSEnabled;
+  }, [isTTSEnabled]);
 
   // Track workout duration
   useEffect(() => {
@@ -299,6 +295,13 @@ export const CameraScreen: React.FC = () => {
         // Synchronous accumulation — immune to InteractionManager deferral race
         accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, currentScore];
         accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, currentFeedback ?? 'Great rep!'];
+
+        // TTS coaching — fire-and-forget, does not block landmark processing
+        if (isTTSEnabledRef.current) {
+          const repMessages = newState.lastRepResult?.messages ?? [];
+          const repScore = newState.lastRepResult?.score ?? 100;
+          ttsOnRepCompleted(repMessages, repScore).catch(() => {});
+        }
       }
       pendingUIStateRef.current = pending;
 
@@ -380,7 +383,6 @@ export const CameraScreen: React.FC = () => {
 
       const formScores = accumulatedFormScoresRef.current;
       const repFeedback = accumulatedRepFeedbackRef.current;
-      console.log('[handleRecordPress] STOP — totalReps:', totalReps, 'formScores:', formScores, 'repFeedback:', repFeedback);
       const avgFormScore = formScores.length > 0
         ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
         : 0;
@@ -395,6 +397,10 @@ export const CameraScreen: React.FC = () => {
           repFormScores: formScores.length > 0 ? formScores : undefined,
         };
         addSetToExercise(exerciseId, newSet);
+        // TTS: speak brief set summary
+        if (isTTSEnabledRef.current) {
+          ttsOnSetEnded(totalReps, avgFormScore).catch(() => {});
+        }
         // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
         setIsClosing(true);
         setCameraMounted(false);
@@ -443,25 +449,12 @@ export const CameraScreen: React.FC = () => {
       });
       accumulatedFormScoresRef.current = [];
       accumulatedRepFeedbackRef.current = [];
+      ttsResetCoach();
     }
   }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(prev => !prev);
-  }, []);
-
-  const handleFeedbackTogglePress = useCallback(() => {
-    setShowFeedback(prev => !prev);
-  }, []);
-
-  const handleTTSTogglePress = useCallback(() => {
-    setIsTTSEnabled(prev => {
-      if (prev) {
-        // Turning off — stop any currently playing audio
-        import('../services/elevenlabsTTS').then(({ stopSpeech }) => stopSpeech()).catch(() => {});
-      }
-      return !prev;
-    });
   }, []);
 
   const handleCameraFlip = useCallback(() => {
@@ -576,8 +569,14 @@ export const CameraScreen: React.FC = () => {
               {displayValues.exerciseDisplayName}
             </Text>
           </View>
-          <TouchableOpacity style={styles.flipButton} onPress={handleCameraFlip}>
-            <RotateCw size={24} color={COLORS.text} />
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setSettingsModalVisible(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Camera settings"
+          >
+            <Settings size={24} color={COLORS.text} strokeWidth={2} />
           </TouchableOpacity>
         </View>
 
@@ -638,7 +637,7 @@ export const CameraScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Control Buttons */}
+          {/* Control Buttons: Pause | Record | Flip camera */}
           <View style={styles.recordButtonContainer}>
             <View style={styles.buttonsRow}>
               <TouchableOpacity 
@@ -663,41 +662,69 @@ export const CameraScreen: React.FC = () => {
               >
                 <View style={[styles.recordButtonInner, isRecording && styles.recordButtonInnerActive]} />
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.feedbackToggleButton,
-                  !isRecording && styles.feedbackToggleButtonDisabled
-                ]} 
-                onPress={isRecording ? handleFeedbackTogglePress : undefined}
-                activeOpacity={isRecording ? 0.8 : 1}
-                disabled={!isRecording}
-              >
-                {showFeedback ? (
-                  <MessageCircle size={24} color={isRecording ? COLORS.primary : COLORS.textSecondary} />
-                ) : (
-                  <MessageCircleOff size={24} color={isRecording ? COLORS.textSecondary : COLORS.textSecondary} />
-                )}
-              </TouchableOpacity>
               <TouchableOpacity
-                style={[
-                  styles.ttsToggleButton,
-                  !isTTSEnabled && styles.ttsToggleButtonOff
-                ]}
-                onPress={handleTTSTogglePress}
+                style={styles.flipCameraButton}
+                onPress={handleCameraFlip}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={isTTSEnabled ? 'Disable spoken feedback' : 'Enable spoken feedback'}
+                accessibilityLabel="Flip camera"
               >
-                {isTTSEnabled ? (
-                  <Volume2 size={24} color={COLORS.primary} />
-                ) : (
-                  <VolumeX size={24} color={COLORS.textSecondary} />
-                )}
+                <RotateCw size={24} color={COLORS.text} />
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </View>
+
+      {/* Settings modal: feedback + TTS toggles */}
+      <Modal
+        visible={settingsModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSettingsModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.settingsBackdrop}
+          activeOpacity={1}
+          onPress={() => setSettingsModalVisible(false)}
+        >
+          <TouchableOpacity style={styles.settingsContent} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.settingsHeader}>
+              <Text style={styles.settingsTitle}>Camera settings</Text>
+              <TouchableOpacity
+                style={styles.settingsCloseButton}
+                onPress={() => setSettingsModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.settingsRow}>
+              <Text style={styles.settingsLabel}>Show feedback messages</Text>
+              <Switch
+                value={showFeedback}
+                onValueChange={setShowFeedback}
+                trackColor={{ false: 'rgba(128, 128, 128, 0.4)', true: COLORS.primary }}
+                thumbColor={COLORS.text}
+              />
+            </View>
+            <View style={styles.settingsRow}>
+              <Text style={styles.settingsLabel}>Spoken feedback (TTS)</Text>
+              <Switch
+                value={isTTSEnabled}
+                onValueChange={(value) => {
+                  if (!value) {
+                    ttsStopCoach();
+                  }
+                  setIsTTSEnabled(value);
+                }}
+                trackColor={{ false: 'rgba(128, 128, 128, 0.4)', true: COLORS.primary }}
+                thumbColor={COLORS.text}
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -739,7 +766,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
   },
-  flipButton: {
+  settingsButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -794,7 +821,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.textSecondary,
     opacity: 0.5,
   },
-  feedbackToggleButton: {
+  flipCameraButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
@@ -803,24 +830,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  feedbackToggleButtonDisabled: {
-    borderColor: COLORS.textSecondary,
-    opacity: 0.5,
-  },
-  ttsToggleButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: COLORS.text,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ttsToggleButtonOff: {
-    borderColor: COLORS.textSecondary,
-    opacity: 0.75,
   },
   detectionExercise: {
     fontSize: 12,
@@ -936,6 +945,53 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  // Settings modal
+  settingsBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  settingsContent: {
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    paddingBottom: SPACING.lg,
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  settingsTitle: {
+    fontSize: 18,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.text,
+    flex: 1,
+  },
+  settingsCloseButton: {
+    padding: SPACING.xs,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  settingsLabel: {
+    fontSize: 16,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.text,
+    flex: 1,
   },
 });
 

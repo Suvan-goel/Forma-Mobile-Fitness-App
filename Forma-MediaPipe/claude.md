@@ -183,9 +183,65 @@ npx expo start --dev-client
 - Form feedback derived ONLY from angles + temporal behavior
 - Everything must be explicit, named, and explainable — no opaque magic
 
-## 12. How Claude Should Help
+## 12. TTS Coaching System
+
+### Philosophy: Visual vs Voice Feedback
+- **Visual feedback** (on-screen text, SetNotesModal): detailed, every rep, all issues. Unchanged.
+- **TTS voice feedback** (ElevenLabs): coach-like, selective, one issue max per rep. Separate layer.
+- The two systems are independent — visual is driven by `feedback` state, TTS by `ttsCoach.ts`.
+
+### Architecture
+```
+barbellCurlHeuristics.ts  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenlabsTTS.ts
+(produces RepResult)         (calls onRepCompleted)  (decides what/when)  (plays audio)
+```
+
+### Key files
+- `src/services/ttsCoach.ts` — coaching engine (state, throttling, playback coordination)
+- `src/services/ttsMessagePools.ts` — message pools, priority map, feedback-to-issue mapping
+- `src/services/elevenlabsTTS.ts` — low-level ElevenLabs API + audio playback (unchanged)
+
+### Priority system
+- Each visual feedback message maps to an `IssueType` via `FEEDBACK_TO_ISSUE`
+- Each `IssueType` has a priority value (= its penalty from heuristics: 30, 25, 15, or 10)
+- When a rep has multiple issues, TTS speaks only the highest-priority one
+- Visual feedback still shows all issues
+
+### Message pools
+- Each `IssueType` has a pool of 3-4 short, coach-like voice lines
+- Positive feedback has two pools: `positive` (streaks) and `transition_good` (bad→good)
+- Pool selection uses shuffle-bag: random pick, never repeat the last-used message
+
+### When TTS speaks
+| Scenario | Speak? | What |
+|---|---|---|
+| Rep has issues | Yes (if not already speaking) | Highest-priority issue from pool |
+| Clean rep after bad rep(s) | Yes | Random from `transition_good` pool |
+| Clean rep, streak hits adaptive interval | Yes | Random from `positive` pool |
+| Clean rep, streak hasn't hit interval | No | — |
+| Set ends (stop recording) | Yes (waits for current speech) | Dynamic set summary |
+
+### Adaptive praise interval
+- Starts at every 2 clean reps
+- After 4 consecutive clean: every 3
+- After 8 consecutive clean: every 4
+- Resets to 2 when a bad rep breaks the streak
+
+### Audio overlap rules
+- If TTS is currently speaking, new per-rep messages are **dropped** (no interrupt, no queue)
+- Set summary **waits** (up to 3s) for current speech to finish before speaking
+- Voice lines are kept short (<1.5s) to minimize overlap risk
+
+### Adding a new exercise's TTS feedback
+1. Add the exercise's visual feedback strings to `FEEDBACK_TO_ISSUE` in `ttsMessagePools.ts`
+2. Reuse existing `IssueType`s where applicable (e.g. `tempo_up`, `torso_warn`)
+3. Add new `IssueType`s + pools only for exercise-specific issues
+4. No changes needed in `ttsCoach.ts` — it's exercise-agnostic
+
+## 13. How Claude Should Help
 - Prefer incremental changes over big refactors
 - Explain reasoning when touching heuristics, thresholds, rep logic, or perf-sensitive code
 - Ask before adding dependencies, changing architecture, or changing data models
 - When debugging: hypothesise failure mode → propose logging → propose fix
 - **Always verify changes won't break iOS native builds** before suggesting them
+- When adding TTS for a new exercise: add to `ttsMessagePools.ts` only, don't modify `ttsCoach.ts`
