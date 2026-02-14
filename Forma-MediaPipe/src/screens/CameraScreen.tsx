@@ -163,8 +163,7 @@ export const CameraScreen: React.FC = () => {
   }, [isRecording, isPaused, workoutStartTime]);
 
   // Convert MediaPipe landmark data to our Keypoint format.
-  // For Barbell Curl: use image coords so 2D elbow angle matches the visible bend on screen.
-  // Otherwise: prefer worldLandmarks (3D) for consistent scale.
+  // Prefer worldLandmarks (3D body-centric coords) for view-angle-robust angle calculations.
   const convertLandmarksToKeypoints = useCallback((landmarkData: any): Keypoint[] | null => {
     try {
       let parsedData = landmarkData;
