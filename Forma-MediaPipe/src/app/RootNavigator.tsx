@@ -48,7 +48,7 @@ export type RootStackParamList = {
 // Define the Record Stack Param List
 export type RecordStackParamList = {
   RecordLanding: undefined;
-  CurrentWorkout: { newSet?: LoggedSet } | undefined;
+  CurrentWorkout: { newSet?: LoggedSet; showWeightFor?: { exerciseId: string } } | undefined;
   ChooseExercise: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout?: true };
   SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number } };

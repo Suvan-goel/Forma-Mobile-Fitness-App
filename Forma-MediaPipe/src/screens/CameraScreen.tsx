@@ -399,7 +399,7 @@ export const CameraScreen: React.FC = () => {
         setIsClosing(true);
         setCameraMounted(false);
         setTimeout(() => {
-          (navigation as any).navigate('CurrentWorkout');
+          (navigation as any).navigate('CurrentWorkout', { showWeightFor: { exerciseId } });
         }, 450);
       } else {
         // Original flow: navigate to SaveWorkout

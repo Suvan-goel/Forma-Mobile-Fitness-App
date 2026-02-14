@@ -15,12 +15,13 @@ import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
+import { WeightInputModal } from '../components/ui/WeightInputModal';
 
 export type { LoggedSet };
 
 type RecordStackParamList = {
   RecordLanding: undefined;
-  CurrentWorkout: { newSet?: LoggedSet } | undefined;
+  CurrentWorkout: { newSet?: LoggedSet; showWeightFor?: { exerciseId: string } } | undefined;
   ChooseExercise: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout: true };
 };
@@ -37,6 +38,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     sets,
     addSet,
     clearSets,
+    updateSetWeight,
     setWorkoutInProgress,
     workoutElapsedSeconds: contextElapsed,
     setWorkoutElapsedSeconds,
@@ -48,6 +50,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
     set: LoggedSet;
     setIndex: number;
     exerciseName: string;
+  } | null>(null);
+  const [weightModalData, setWeightModalData] = useState<{
+    exerciseId: string;
+    exerciseName: string;
+    setIndex: number;
+    currentWeight?: number;
+    currentUnit?: 'kg' | 'lbs';
   } | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -95,17 +104,36 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setIsPaused((p) => !p);
   };
 
-  // Fallback: if Camera passed newSet via params (e.g. before context existed), add it
+  // When screen gains focus: handle newSet fallback and show weight modal only when Camera requested it
   useFocusEffect(
     React.useCallback(() => {
       if (route.params?.newSet) {
         addSet(route.params.newSet);
         navigation.setParams({ newSet: undefined });
       }
-    }, [route.params?.newSet, addSet, navigation])
+
+      // Open weight modal exactly once when returning from Camera with showWeightFor
+      const showWeightFor = route.params?.showWeightFor;
+      if (showWeightFor?.exerciseId) {
+        const exercise = exercises.find((ex) => ex.id === showWeightFor.exerciseId);
+        if (exercise && exercise.sets.length > 0) {
+          const lastSetIndex = exercise.sets.length - 1;
+          const lastSet = exercise.sets[lastSetIndex];
+          setExpandedExerciseIds((prev) => new Set(prev).add(exercise.id));
+          setWeightModalData({
+            exerciseId: exercise.id,
+            exerciseName: exercise.name,
+            setIndex: lastSetIndex,
+            currentWeight: lastSet?.weight,
+            currentUnit: lastSet?.weightUnit || 'kg',
+          });
+        }
+        navigation.setParams({ showWeightFor: undefined });
+      }
+    }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, exercises])
   );
 
-  // Auto-expand exercises when new sets are added
+  // Auto-expand exercises when new sets are added (no modal here — modal only from showWeightFor param)
   useEffect(() => {
     exercises.forEach((exercise) => {
       const prevCount = prevSetCountsRef.current.get(exercise.id) || 0;
@@ -174,6 +202,23 @@ export const CurrentWorkoutScreen: React.FC = () => {
     navigation.reset({
       index: 0,
       routes: [{ name: 'RecordLanding' }],
+    });
+  };
+
+  const handleWeightSubmit = (weight: number, unit: 'kg' | 'lbs') => {
+    if (weightModalData) {
+      updateSetWeight(weightModalData.exerciseId, weightModalData.setIndex, weight, unit);
+      setWeightModalData(null);
+    }
+  };
+
+  const handleEditWeight = (exerciseId: string, exerciseName: string, setIndex: number, currentWeight?: number, currentUnit?: 'kg' | 'lbs') => {
+    setWeightModalData({
+      exerciseId,
+      exerciseName,
+      setIndex,
+      currentWeight,
+      currentUnit: currentUnit || 'kg',
     });
   };
 
@@ -301,12 +346,18 @@ export const CurrentWorkoutScreen: React.FC = () => {
                             <Text style={styles.metricLabel}>Reps</Text>
                             <MonoText style={styles.metricValue}>{set.reps}</MonoText>
                           </View>
-                          <View style={styles.metricItem}>
+                          <TouchableOpacity
+                            style={styles.metricItem}
+                            onPress={() => handleEditWeight(exercise.id, exercise.name, setIndex, set.weight, set.weightUnit)}
+                            activeOpacity={0.7}
+                          >
                             <Text style={styles.metricLabel}>Weight</Text>
-                            <MonoText style={styles.metricValue}>
-                              {set.weight && set.weight > 0 ? `${set.weight}` : '—'}
+                            <MonoText style={[styles.metricValue, !set.weight && styles.metricValueEmpty]}>
+                              {set.weight && set.weight > 0 
+                                ? `${set.weight}${set.weightUnit || 'kg'}` 
+                                : '—'}
                             </MonoText>
-                          </View>
+                          </TouchableOpacity>
                           <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Form</Text>
                             <MonoText style={styles.metricValue}>{set.formScore}</MonoText>
@@ -337,6 +388,18 @@ export const CurrentWorkoutScreen: React.FC = () => {
           set={notesModalSet.set}
           setNumber={notesModalSet.setIndex}
           exerciseName={notesModalSet.exerciseName}
+        />
+      )}
+
+      {weightModalData && (
+        <WeightInputModal
+          visible={!!weightModalData}
+          onClose={() => setWeightModalData(null)}
+          onSubmit={handleWeightSubmit}
+          initialWeight={weightModalData.currentWeight}
+          initialUnit={weightModalData.currentUnit}
+          exerciseName={weightModalData.exerciseName}
+          setNumber={weightModalData.setIndex + 1}
         />
       )}
 
@@ -561,6 +624,9 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 18,
     color: COLORS.text,
+  },
+  metricValueEmpty: {
+    color: COLORS.textSecondary,
   },
   bottomButtonContainer: {
     paddingHorizontal: SPACING.screenHorizontal,

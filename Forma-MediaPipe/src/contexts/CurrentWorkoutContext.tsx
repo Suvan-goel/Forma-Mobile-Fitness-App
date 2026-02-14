@@ -4,6 +4,7 @@ export interface LoggedSet {
   exerciseName: string;
   reps: number;
   weight?: number;
+  weightUnit?: 'kg' | 'lbs';
   formScore: number;
   /** Per-rep feedback shown during the set (e.g. "Great rep!", "Don't swing your back!") */
   repFeedback?: string[];
@@ -26,6 +27,7 @@ type CurrentWorkoutContextValue = {
   addExercise: (exercise: { name: string; category: string }) => void;
   addSetToExercise: (exerciseId: string, set: LoggedSet) => void;
   addSet: (set: LoggedSet) => void; // Deprecated but kept for compatibility
+  updateSetWeight: (exerciseId: string, setIndex: number, weight: number, unit: 'kg' | 'lbs') => void;
   clearSets: () => void;
   setWorkoutInProgress: (value: boolean) => void;
   setWorkoutElapsedSeconds: (value: number) => void;
@@ -39,6 +41,7 @@ const defaultValue: CurrentWorkoutContextValue = {
   addExercise: () => {},
   addSetToExercise: () => {},
   addSet: () => {},
+  updateSetWeight: () => {},
   clearSets: () => {},
   setWorkoutInProgress: () => {},
   setWorkoutElapsedSeconds: () => {},
@@ -88,6 +91,25 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     });
   }, []);
 
+  const updateSetWeight = useCallback((exerciseId: string, setIndex: number, weight: number, unit: 'kg' | 'lbs') => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id === exerciseId) {
+          const updatedSets = [...ex.sets];
+          if (updatedSets[setIndex]) {
+            updatedSets[setIndex] = {
+              ...updatedSets[setIndex],
+              weight,
+              weightUnit: unit,
+            };
+          }
+          return { ...ex, sets: updatedSets };
+        }
+        return ex;
+      })
+    );
+  }, []);
+
   const clearSets = useCallback(() => {
     setExercises([]);
     setWorkoutInProgress(false);
@@ -109,6 +131,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
         addExercise,
         addSetToExercise,
         addSet,
+        updateSetWeight,
         clearSets,
         setWorkoutInProgress,
         setWorkoutElapsedSeconds,
