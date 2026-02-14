@@ -35,7 +35,7 @@ export const THRESHOLDS = {
 export const FORM_THRESHOLDS = {
   SHOULDER_WARN: 45,
   SHOULDER_FAIL: 65,
-  TORSO_WARN: 12,
+  TORSO_WARN: 10,
   TORSO_FAIL: 22,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,

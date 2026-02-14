@@ -98,7 +98,10 @@ export async function onRepCompleted(
     // ── Clean rep ──
     state.cleanStreak++;
 
-    if (state.prevRepWasBad) {
+    if (state.totalRepsInSet === 1) {
+      // First rep of the set — always speak so the user knows the coach is active
+      await trySpeak(pickFromPool(POSITIVE_POOLS.positive));
+    } else if (state.prevRepWasBad) {
       // Transition: bad → good — always acknowledge the correction
       state.prevRepWasBad = false;
       await trySpeak(pickFromPool(POSITIVE_POOLS.transition_good));
