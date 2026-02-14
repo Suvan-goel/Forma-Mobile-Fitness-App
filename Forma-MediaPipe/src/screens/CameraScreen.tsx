@@ -16,7 +16,6 @@ import {
   getRepCount,
   getCurrentFormScore,
   getCurrentFeedback,
-  getTorsoDebugInfo,
 } from '../utils/barbellCurlHeuristics';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../services/ttsCoach';
@@ -68,14 +67,6 @@ export const CameraScreen: React.FC = () => {
     duration: 0,
   });
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [torsoDebug, setTorsoDebug] = useState<{
-    torso: number | null;
-    leftTorso: number | null;
-    rightTorso: number | null;
-    torsoDelta: number | null;
-    leftTorsoDelta: number | null;
-    rightTorsoDelta: number | null;
-  } | null>(null);
 
   // Barbell curl specific state
   const barbellCurlStateRef = useRef<BarbellCurlState>(initializeBarbellCurlState());
@@ -114,14 +105,6 @@ export const CameraScreen: React.FC = () => {
     repCount?: number;
     formScore?: number;
     feedback?: string | null;
-    torsoDebug?: {
-      torso: number | null;
-      leftTorso: number | null;
-      rightTorso: number | null;
-      torsoDelta: number | null;
-      leftTorsoDelta: number | null;
-      rightTorsoDelta: number | null;
-    } | null;
     workoutUpdate?: { totalReps: number; formScore: number; repFeedback?: string };
   } | null>(null);
   const isRecordingRef = useRef(isRecording);
@@ -239,7 +222,6 @@ export const CameraScreen: React.FC = () => {
       if (pending.repCount !== undefined) setRepCount(pending.repCount);
       if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
       if (pending.feedback !== undefined) setFeedback(pending.feedback);
-      if (pending.torsoDebug !== undefined) setTorsoDebug(pending.torsoDebug);
       if (pending.workoutUpdate) {
         setWorkoutData(prev => ({
           ...prev,
@@ -278,14 +260,12 @@ export const CameraScreen: React.FC = () => {
       const currentRepCount = getRepCount(newState);
       const currentScore = getCurrentFormScore(newState);
       const currentFeedback = getCurrentFeedback(newState);
-      const torsoDebugInfo = getTorsoDebugInfo(newState);
 
       // Accumulate UI updates - don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
       pending.repCount = currentRepCount;
       if (currentScore > 0) pending.formScore = currentScore;
       pending.feedback = currentFeedback;
-      pending.torsoDebug = torsoDebugInfo;
       if (currentRepCount > accumulatedFormScoresRef.current.length) {
         pending.workoutUpdate = {
           totalReps: currentRepCount,
@@ -379,7 +359,6 @@ export const CameraScreen: React.FC = () => {
       const totalReps = accumulatedFormScoresRef.current.length;
 
       setIsRecording(false);
-      setTorsoDebug(null);
 
       const formScores = accumulatedFormScoresRef.current;
       const repFeedback = accumulatedRepFeedbackRef.current;
@@ -445,7 +424,6 @@ export const CameraScreen: React.FC = () => {
       setCurrentFormScore(null);
       setIsPaused(false);
       setFeedback(null);
-      setTorsoDebug(null);
       // Reset barbell curl state if starting a barbell curl
       if (exerciseNameFromRoute === 'Barbell Curl') {
         barbellCurlStateRef.current = initializeBarbellCurlState();
@@ -598,30 +576,6 @@ export const CameraScreen: React.FC = () => {
             </View>
           </View>
         )}
-
-        {/* Torso Debug - Shows angles used for swing detection (Barbell Curl only) */}
-        {exerciseNameFromRoute === 'Barbell Curl' &&
-          isRecording &&
-          torsoDebug && (
-            <View style={styles.torsoDebugContainer}>
-              <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Torso Swing Debug</Text>
-                <Text style={styles.torsoDebugText}>
-                  Midline: {torsoDebug.torso != null ? torsoDebug.torso.toFixed(1) + '°' : '–'}
-                </Text>
-                <Text style={styles.torsoDebugText}>
-                  L: {torsoDebug.leftTorso != null ? torsoDebug.leftTorso.toFixed(1) + '°' : '–'} | R:{' '}
-                  {torsoDebug.rightTorso != null ? torsoDebug.rightTorso.toFixed(1) + '°' : '–'}
-                </Text>
-                <Text style={styles.torsoDebugText}>
-                  Δ (rep): mid {torsoDebug.torsoDelta != null ? torsoDebug.torsoDelta.toFixed(1) : '–'}° | L{' '}
-                  {torsoDebug.leftTorsoDelta != null ? torsoDebug.leftTorsoDelta.toFixed(1) : '–'}° | R{' '}
-                  {torsoDebug.rightTorsoDelta != null ? torsoDebug.rightTorsoDelta.toFixed(1) : '–'}°
-                </Text>
-                <Text style={styles.torsoDebugHint}>Warn &gt;12° | Fail &gt;22°</Text>
-              </View>
-            </View>
-          )}
 
         {/* Bottom Controls */}
         <View style={[
@@ -921,39 +875,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
     color: COLORS.primary,
     textAlign: 'center',
-  },
-  torsoDebugContainer: {
-    position: 'absolute',
-    bottom: 180,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    zIndex: 10,
-  },
-  torsoDebugCard: {
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    borderRadius: 8,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    maxWidth: '95%',
-  },
-  torsoDebugTitle: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  torsoDebugText: {
-    fontSize: 11,
-    fontFamily: FONTS.mono.regular,
-    color: COLORS.text,
-  },
-  torsoDebugHint: {
-    fontSize: 10,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    marginTop: 4,
   },
   // Settings modal
   settingsBackdrop: {

@@ -87,7 +87,7 @@ export const ISSUE_POOLS: Record<IssueType, MessagePool> = {
       "Stay upright — don't swing.",
       'Keep your torso still.',
       'Brace your core and stay tight.',
-      'Less body English.',
+      'Less body swing.',
     ],
   },
   tempo_up: {
