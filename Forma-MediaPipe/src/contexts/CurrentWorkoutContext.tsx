@@ -28,6 +28,7 @@ type CurrentWorkoutContextValue = {
   addSetToExercise: (exerciseId: string, set: LoggedSet) => void;
   addSet: (set: LoggedSet) => void; // Deprecated but kept for compatibility
   updateSetWeight: (exerciseId: string, setIndex: number, weight: number, unit: 'kg' | 'lbs') => void;
+  removeSetFromExercise: (exerciseId: string, setIndex: number) => void;
   clearSets: () => void;
   setWorkoutInProgress: (value: boolean) => void;
   setWorkoutElapsedSeconds: (value: number) => void;
@@ -42,6 +43,7 @@ const defaultValue: CurrentWorkoutContextValue = {
   addSetToExercise: () => {},
   addSet: () => {},
   updateSetWeight: () => {},
+  removeSetFromExercise: () => {},
   clearSets: () => {},
   setWorkoutInProgress: () => {},
   setWorkoutElapsedSeconds: () => {},
@@ -110,6 +112,18 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     );
   }, []);
 
+  const removeSetFromExercise = useCallback((exerciseId: string, setIndex: number) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id === exerciseId && ex.sets.length > setIndex) {
+          const newSets = ex.sets.filter((_, i) => i !== setIndex);
+          return { ...ex, sets: newSets };
+        }
+        return ex;
+      })
+    );
+  }, []);
+
   const clearSets = useCallback(() => {
     setExercises([]);
     setWorkoutInProgress(false);
@@ -132,6 +146,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
         addSetToExercise,
         addSet,
         updateSetWeight,
+        removeSetFromExercise,
         clearSets,
         setWorkoutInProgress,
         setWorkoutElapsedSeconds,

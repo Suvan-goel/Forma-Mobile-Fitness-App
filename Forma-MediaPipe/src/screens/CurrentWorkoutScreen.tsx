@@ -10,7 +10,7 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText } from 'lucide-react-native';
+import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText, X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
@@ -39,6 +39,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     addSet,
     clearSets,
     updateSetWeight,
+    removeSetFromExercise,
     setWorkoutInProgress,
     workoutElapsedSeconds: contextElapsed,
     setWorkoutElapsedSeconds,
@@ -222,6 +223,21 @@ export const CurrentWorkoutScreen: React.FC = () => {
     });
   };
 
+  const handleDeleteSet = (exerciseId: string, exerciseName: string, setIndex: number) => {
+    Alert.alert(
+      'Delete set?',
+      `Are you sure you want to delete Set ${setIndex + 1} for ${exerciseName}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => removeSetFromExercise(exerciseId, setIndex),
+        },
+      ]
+    );
+  };
+
   const handleDiscardWorkout = () => {
     Alert.alert(
       'Discard Workout',
@@ -325,21 +341,32 @@ export const CurrentWorkoutScreen: React.FC = () => {
                       <View key={setIndex} style={styles.setCard}>
                         <View style={styles.setCardHeader}>
                           <Text style={styles.setNumber}>Set {setIndex + 1}</Text>
-                          <TouchableOpacity
-                            style={styles.notesButton}
-                            onPress={() => {
-                              console.log('[Notes] set object:', JSON.stringify(set));
-                              setNotesModalSet({
-                                set,
-                                setIndex: setIndex + 1,
-                                exerciseName: exercise.name,
-                              });
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <FileText size={18} color={COLORS.primary} />
-                            <Text style={styles.notesButtonText}>Notes</Text>
-                          </TouchableOpacity>
+                          <View style={styles.setCardHeaderActions}>
+                            <TouchableOpacity
+                              style={styles.notesButton}
+                              onPress={() => {
+                                setNotesModalSet({
+                                  set,
+                                  setIndex: setIndex + 1,
+                                  exerciseName: exercise.name,
+                                });
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <FileText size={18} color={COLORS.primary} />
+                              <Text style={styles.notesButtonText}>Notes</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.deleteSetButton}
+                              onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
+                              activeOpacity={0.7}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              accessibilityRole="button"
+                              accessibilityLabel="Delete set"
+                            >
+                              <X size={20} color={COLORS.textSecondary} strokeWidth={2.5} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         <View style={styles.setMetrics}>
                           <View style={styles.metricItem}>
@@ -576,6 +603,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: SPACING.xs,
   },
+  setCardHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
   notesButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -589,6 +621,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.ui.regular,
     color: COLORS.primary,
+  },
+  deleteSetButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: 'rgba(128, 128, 128, 0.15)',
   },
   setHeader: {
     flexDirection: 'row',
