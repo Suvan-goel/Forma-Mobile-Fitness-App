@@ -282,13 +282,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
                           <Text style={styles.setNumber}>Set {setIndex + 1}</Text>
                           <TouchableOpacity
                             style={styles.notesButton}
-                            onPress={() =>
+                            onPress={() => {
+                              console.log('[Notes] set object:', JSON.stringify(set));
                               setNotesModalSet({
                                 set,
                                 setIndex: setIndex + 1,
                                 exerciseName: exercise.name,
-                              })
-                            }
+                              });
+                            }}
                             activeOpacity={0.7}
                           >
                             <FileText size={18} color={COLORS.primary} />

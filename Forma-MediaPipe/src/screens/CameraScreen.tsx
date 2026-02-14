@@ -54,7 +54,7 @@ export const CameraScreen: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [showFeedback, setShowFeedback] = useState(true);
-  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
+  const [isTTSEnabled, setIsTTSEnabled] = useState(false);
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [currentFormScore, setCurrentFormScore] = useState<number | null>(null);
@@ -290,7 +290,7 @@ export const CameraScreen: React.FC = () => {
       if (currentScore > 0) pending.formScore = currentScore;
       pending.feedback = currentFeedback;
       pending.torsoDebug = torsoDebugInfo;
-      if (currentRepCount > repCountRef.current) {
+      if (currentRepCount > accumulatedFormScoresRef.current.length) {
         pending.workoutUpdate = {
           totalReps: currentRepCount,
           formScore: currentScore,
@@ -337,7 +337,7 @@ export const CameraScreen: React.FC = () => {
         }
 
         // Rep completed
-        if (repUpdate.repCount > repCountRef.current) {
+        if (repUpdate.repCount > accumulatedFormScoresRef.current.length) {
           const formScore = repUpdate.formScore;
           const feedbackMsg = formScore >= 90 ? 'Great rep!' : 'Good rep.';
 
@@ -372,18 +372,15 @@ export const CameraScreen: React.FC = () => {
   const handleRecordPress = useCallback(() => {
     if (isRecording) {
       // Read per-rep data from synchronous refs (immune to InteractionManager deferral)
-      const pending = pendingUIStateRef.current;
-      let totalReps = repCountRef.current;
-      if (pending?.workoutUpdate) {
-        totalReps = pending.workoutUpdate.totalReps;
-      }
       pendingUIStateRef.current = null;
+      const totalReps = accumulatedFormScoresRef.current.length;
 
       setIsRecording(false);
       setTorsoDebug(null);
 
       const formScores = accumulatedFormScoresRef.current;
       const repFeedback = accumulatedRepFeedbackRef.current;
+      console.log('[handleRecordPress] STOP — totalReps:', totalReps, 'formScores:', formScores, 'repFeedback:', repFeedback);
       const avgFormScore = formScores.length > 0
         ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
         : 0;
@@ -458,7 +455,13 @@ export const CameraScreen: React.FC = () => {
   }, []);
 
   const handleTTSTogglePress = useCallback(() => {
-    setIsTTSEnabled(prev => !prev);
+    setIsTTSEnabled(prev => {
+      if (prev) {
+        // Turning off — stop any currently playing audio
+        import('../services/elevenlabsTTS').then(({ stopSpeech }) => stopSpeech()).catch(() => {});
+      }
+      return !prev;
+    });
   }, []);
 
   const handleCameraFlip = useCallback(() => {

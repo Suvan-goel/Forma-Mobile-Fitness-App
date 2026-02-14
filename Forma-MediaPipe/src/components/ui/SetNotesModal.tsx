@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
   },
   scrollView: {
-    flex: 1,
+    // Removed flex: 1 - allows ScrollView to size naturally within maxHeight parent
   },
   scrollContent: {
     padding: SPACING.lg,
