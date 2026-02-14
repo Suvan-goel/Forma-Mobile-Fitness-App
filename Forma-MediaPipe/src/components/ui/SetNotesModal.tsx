@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
-import { X } from 'lucide-react-native';
+import { X, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_STYLE } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { generateSetSummary } from '../../utils/setNotesSummary';
@@ -35,6 +35,21 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 
   const repCount = Math.max(repFeedback.length, repFormScores.length, set.reps);
   const hasNotes = repCount > 0;
+
+  const [expandedReps, setExpandedReps] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (visible) setExpandedReps(new Set());
+  }, [visible]);
+
+  const toggleRepExpanded = useCallback((idx: number) => {
+    setExpandedReps((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }, []);
 
   const getRepDetails = (idx: number) => ({
     formScore: repFormScores[idx] ?? set.formScore,
@@ -83,6 +98,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                   <View style={styles.repList}>
                     {Array.from({ length: repCount }, (_, idx) => {
                       const { formScore, feedback } = getRepDetails(idx);
+                      const isExpanded = expandedReps.has(idx);
                       return (
                         <View
                           key={idx}
@@ -102,11 +118,24 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                                 feedback === 'Great rep!' && styles.repFeedbackGood,
                                 feedback === 'Good rep.' && styles.repFeedbackGood,
                               ]}
-                              numberOfLines={2}
+                              numberOfLines={isExpanded ? undefined : 2}
                             >
                               {feedback}
                             </Text>
                           </View>
+                          <TouchableOpacity
+                            style={styles.repExpandButton}
+                            onPress={() => toggleRepExpanded(idx)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={isExpanded ? 'Collapse feedback' : 'Expand feedback'}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp size={20} color={COLORS.textSecondary} />
+                            ) : (
+                              <ChevronDown size={20} color={COLORS.textSecondary} />
+                            )}
+                          </TouchableOpacity>
                         </View>
                       );
                     })}
@@ -206,6 +235,13 @@ const styles = StyleSheet.create({
   },
   repDetails: {
     flex: 1,
+    minWidth: 0,
+  },
+  repExpandButton: {
+    padding: SPACING.xs,
+    marginLeft: SPACING.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   repFormScore: {
     fontSize: 12,
