@@ -43,6 +43,9 @@ export const FORM_THRESHOLDS = {
   TEMPO_DOWN_MIN: 0.20,
   SYMMETRY_MIN: 50,
   SYMMETRY_ROM: 55,
+  /** Min reach ratio to consider arm fully extended at frontal view.
+   *  Below this, forearm is likely foreshortened (pointing into depth). */
+  REACH_RATIO_MIN: 0.88,
 } as const;
 
 /** Smoothing parameters */
@@ -84,15 +87,35 @@ function penaltyShoulder(delta: number): number {
 }
 
 /** ROM shortfall penalty — max 35 pts. Flex + extension sub-components.
- *  Compensates for foreshortening at oblique views. */
-function penaltyROM(minFlex: number, maxExt: number, viewAngleDeg: number): number {
+ *  Compensates for foreshortening at oblique views.
+ *  Optional reachData adds penalty for low reach ratio at frontal view. */
+function penaltyROM(
+  minFlex: number,
+  maxExt: number,
+  viewAngleDeg: number,
+  reachData?: RepWindow['reach']
+): number {
   const FLEX_TARGET = adjustFlexionThreshold(50, viewAngleDeg);
   const EXT_TARGET = adjustExtensionThreshold(140, viewAngleDeg);
   const flexShortfall = Math.max(0, minFlex - FLEX_TARGET);
   const flexPenalty = Math.min(20, 0.03 * flexShortfall * flexShortfall);
   const extShortfall = Math.max(0, EXT_TARGET - maxExt);
   const extPenalty = Math.min(20, 0.03 * extShortfall * extShortfall);
-  return Math.min(35, flexPenalty + extPenalty);
+
+  // Supplementary reach-ratio penalty (frontal only)
+  let reachPenalty = 0;
+  if (reachData) {
+    const leftOk = isFinite(reachData.maxLeftReachRatio);
+    const rightOk = isFinite(reachData.maxRightReachRatio);
+    const worstReach = Math.min(
+      leftOk ? reachData.maxLeftReachRatio : 1.0,
+      rightOk ? reachData.maxRightReachRatio : 1.0
+    );
+    const reachDeficit = Math.max(0, FORM_THRESHOLDS.REACH_RATIO_MIN - worstReach);
+    reachPenalty = Math.min(15, 500 * reachDeficit * reachDeficit);
+  }
+
+  return Math.min(35, flexPenalty + extPenalty + reachPenalty);
 }
 
 /** Tempo penalty — max 20 pts. Concentric < 0.4s or eccentric < 0.5s. */
@@ -191,7 +214,8 @@ function computeRepScore(
       ? (leftElbowOk ? maxAngles.leftElbow : 140)
       : (rightElbowOk ? maxAngles.rightElbow : 140);
   }
-  const romP = penaltyROM(isFinite(minFlex) ? minFlex : 50, isFinite(maxExt) ? maxExt : 140, viewAngle.smoothedAngleDeg);
+  const reachForPenalty = isFrontal ? repWindow.reach : undefined;
+  const romP = penaltyROM(isFinite(minFlex) ? minFlex : 50, isFinite(maxExt) ? maxExt : 140, viewAngle.smoothedAngleDeg, reachForPenalty);
 
   // Tempo penalty (use primary arm in non-frontal)
   const tempoArm = isFrontal ? leftArm : (primaryIsLeft ? leftArm : _rightArm);
@@ -250,6 +274,9 @@ export interface RepWindow {
   frameCount: number;
   /** Wrist deviation history (for duration check) */
   wristDevFrames: { left: number; right: number };
+  /** Normalized arm reach ratio — tracks max (most extended) per arm.
+   *  Used at frontal view to detect foreshortened extension the 2D angle misses. */
+  reach: { maxLeftReachRatio: number; maxRightReachRatio: number };
 }
 
 export interface AngleSet {
@@ -350,6 +377,7 @@ function initRepWindow(tStart: number): RepWindow {
     tEnd: tStart,
     frameCount: 0,
     wristDevFrames: { left: 0, right: 0 },
+    reach: { maxLeftReachRatio: -Infinity, maxRightReachRatio: -Infinity },
   };
 }
 
@@ -478,6 +506,40 @@ type Point3D = { x: number; y: number; z?: number };
 function getPoint(kp: Keypoint | null): Point3D | null {
   if (!kp) return null;
   return { x: kp.x, y: kp.y, z: kp.z };
+}
+
+/** Euclidean distance using only x, y (ignores z). */
+function dist2D(a: Point3D, b: Point3D): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Compute normalized arm reach ratio for one arm.
+ * reach = dist2D(shoulder, wrist) / (dist2D(shoulder, elbow) + dist2D(elbow, wrist))
+ *
+ * ~0.95-1.0  = arm nearly straight (full extension)
+ * ~0.70-0.85 = forearm foreshortened (pointing into depth axis)
+ */
+function computeArmReachRatio(keypoints: Keypoint[], side: 'left' | 'right'): number {
+  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
+  const elbow = getKeypoint(keypoints, `${side}_elbow`);
+  const wrist = getKeypoint(keypoints, `${side}_wrist`);
+
+  if (
+    !shoulder || !elbow || !wrist ||
+    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
+    !isVisible(elbow, VISIBILITY_THRESHOLD) ||
+    !isVisible(wrist, VISIBILITY_THRESHOLD)
+  ) {
+    return NaN;
+  }
+
+  const segmentLength = dist2D(shoulder, elbow) + dist2D(elbow, wrist);
+  if (segmentLength < 1e-6) return NaN;
+
+  return dist2D(shoulder, wrist) / segmentLength;
 }
 
 /**
@@ -754,6 +816,16 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
   return newArm;
 }
 
+/** Check if reach ratio indicates incomplete extension (frontal view only). */
+function isReachRatioLow(reach: RepWindow['reach']): boolean {
+  const leftOk = isFinite(reach.maxLeftReachRatio);
+  const rightOk = isFinite(reach.maxRightReachRatio);
+  if (!leftOk && !rightOk) return false;
+  if (leftOk && reach.maxLeftReachRatio < FORM_THRESHOLDS.REACH_RATIO_MIN) return true;
+  if (rightOk && reach.maxRightReachRatio < FORM_THRESHOLDS.REACH_RATIO_MIN) return true;
+  return false;
+}
+
 // ============================================================================
 // FORM EVALUATION
 // ============================================================================
@@ -799,7 +871,13 @@ function evaluateForm(
   if (isFinite(minFlex) && minFlex > adjFlexed) {
     messages.push('Flex more at the top of the curl.');
   }
-  if (isFinite(maxExt) && maxExt < adjExtended) {
+
+  // Extension check: 2D angle + reach ratio (frontal supplement).
+  // At frontal view, the 2D angle can be fooled when the forearm points into depth.
+  // The reach ratio catches this: shoulder-to-wrist distance is short even though angle looks straight.
+  const angleExtensionBad = isFinite(maxExt) && maxExt < adjExtended;
+  const reachExtensionBad = isFrontal && isReachRatioLow(repWindow.reach);
+  if (angleExtensionBad || reachExtensionBad) {
     messages.push('Extend fully at the bottom.');
   }
 
@@ -977,6 +1055,18 @@ export function updateBarbellCurlState(
     }
     if (rightValid && Math.abs(smoothed.rightWrist - FORM_THRESHOLDS.WRIST_NEUTRAL) > FORM_THRESHOLDS.WRIST_DEV_WARN) {
       window.wristDevFrames.right++;
+    }
+
+    // Track arm reach ratio (frontal only — detects foreshortened extension)
+    if (viewAngle.zone === 'frontal') {
+      const leftReach = computeArmReachRatio(keypoints, 'left');
+      const rightReach = computeArmReachRatio(keypoints, 'right');
+      if (!isNaN(leftReach)) {
+        window.reach.maxLeftReachRatio = Math.max(window.reach.maxLeftReachRatio, leftReach);
+      }
+      if (!isNaN(rightReach)) {
+        window.reach.maxRightReachRatio = Math.max(window.reach.maxRightReachRatio, rightReach);
+      }
     }
   }
 
