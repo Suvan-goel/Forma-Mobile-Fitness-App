@@ -183,9 +183,94 @@ npx expo start --dev-client
 - Form feedback derived ONLY from angles + temporal behavior
 - Everything must be explicit, named, and explainable — no opaque magic
 
-## 12. How Claude Should Help
+## 12. TTS Coaching System
+
+### Philosophy: Visual vs Voice Feedback
+- **Visual feedback** (on-screen text, SetNotesModal): detailed, every rep, all issues. Unchanged.
+- **TTS voice feedback** (ElevenLabs): coach-like, selective, one issue max per rep. Separate layer.
+- The two systems are independent — visual is driven by `feedback` state, TTS by `ttsCoach.ts`.
+
+### Architecture
+```
+barbellCurlHeuristics.ts  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenlabsTTS.ts
+(produces RepResult)         (calls onRepCompleted)  (decides what/when)  (plays audio)
+```
+
+### Key files
+- `src/services/ttsCoach.ts` — coaching engine (state, throttling, playback coordination)
+- `src/services/ttsMessagePools.ts` — message pools, priority map, feedback-to-issue mapping
+- `src/services/elevenlabsTTS.ts` — low-level ElevenLabs API + audio playback (unchanged)
+
+### Priority system
+- Each visual feedback message maps to an `IssueType` via `FEEDBACK_TO_ISSUE`
+- Each `IssueType` has a priority value (= its penalty from heuristics: 30, 25, 15, or 10)
+- When a rep has multiple issues, TTS speaks only the highest-priority one
+- Visual feedback still shows all issues
+
+### Message pools
+- Each `IssueType` has a pool of 3-4 short, coach-like voice lines
+- Positive feedback has two pools: `positive` (streaks) and `transition_good` (bad→good)
+- Pool selection uses shuffle-bag: random pick, never repeat the last-used message
+
+### When TTS speaks
+| Scenario | Speak? | What |
+|---|---|---|
+| Rep has issues | Yes (if not already speaking) | Highest-priority issue from pool |
+| Clean rep after bad rep(s) | Yes | Random from `transition_good` pool |
+| Clean rep, streak hits adaptive interval | Yes | Random from `positive` pool |
+| Clean rep, streak hasn't hit interval | No | — |
+| Set ends (stop recording) | Yes (waits for current speech) | Dynamic set summary |
+
+### Adaptive praise interval
+- Starts at every 2 clean reps
+- After 4 consecutive clean: every 3
+- After 8 consecutive clean: every 4
+- Resets to 2 when a bad rep breaks the streak
+
+### Audio overlap rules
+- If TTS is currently speaking, new per-rep messages are **dropped** (no interrupt, no queue)
+- Set summary **waits** (up to 3s) for current speech to finish before speaking
+- Voice lines are kept short (<1.5s) to minimize overlap risk
+
+### Adding a new exercise's TTS feedback
+1. Add the exercise's visual feedback strings to `FEEDBACK_TO_ISSUE` in `ttsMessagePools.ts`
+2. Reuse existing `IssueType`s where applicable (e.g. `tempo_up`, `torso_warn`)
+3. Add new `IssueType`s + pools only for exercise-specific issues
+4. No changes needed in `ttsCoach.ts` — it's exercise-agnostic
+
+## 13. Scoring System — Continuous Penalty Curves
+
+### Philosophy
+- **Visual feedback** (messages) uses discrete thresholds — unchanged
+- **Numeric score** uses continuous quadratic penalty curves — small errors produce small but real drops
+- A perfect 100 is rare and earned; a "pretty good" rep scores 85-93
+
+### Rep Score: `computeRepScore()` in `barbellCurlHeuristics.ts`
+Five penalty categories, each `min(cap, scale × max(0, x − deadzone)²)`:
+
+| Category | Max Penalty | Deadzone | Scale | Key Input |
+|---|---|---|---|---|
+| Torso swing | 35 | 3° | 0.55 | midline torso delta |
+| Shoulder movement | 30 | 10° | 0.018 | max shoulder delta (L/R) |
+| ROM shortfall | 35 | flex: 50°, ext: 140° | 0.03 each | min flex angle, max ext angle |
+| Tempo | 20 | up: 0.4s, down: 0.5s | 60/40 | concentric/eccentric time |
+| Asymmetry | 15 | 0 | 0.005/0.004 | min-angle diff, ROM diff |
+
+**Max total penalty:** 135 → worst possible rep = 0.
+
+### Set Score: Weighted Average in `CameraScreen.tsx`
+Bad reps weigh more: `weight = 1 + (100 − score) / 50` (range [1, 3]).
+A score-100 rep has weight 1; a score-0 rep has weight 3.
+
+### Rules for Modifying
+- **Never change message thresholds** when tuning scores — they are independent
+- When recalibrating, adjust `scale` or `deadzone`, not the formula shape
+- Test with: clean rep → 95-100, slightly sloppy → 85-93, obvious cheat → 50-70, terrible → 0-30
+
+## 14. How Claude Should Help
 - Prefer incremental changes over big refactors
 - Explain reasoning when touching heuristics, thresholds, rep logic, or perf-sensitive code
 - Ask before adding dependencies, changing architecture, or changing data models
 - When debugging: hypothesise failure mode → propose logging → propose fix
 - **Always verify changes won't break iOS native builds** before suggesting them
+- When adding TTS for a new exercise: add to `ttsMessagePools.ts` only, don't modify `ttsCoach.ts`

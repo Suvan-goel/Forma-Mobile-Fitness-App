@@ -126,7 +126,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                   No rep-by-rep feedback for this set.
                 </Text>
                 <Text style={styles.emptySubtext}>
-                  Feedback is captured for Barbell Curl. Form score: {set.formScore}/100
+                  Feedback is captured for exercises with form analysis. Form score: {set.formScore}/100
                 </Text>
               </View>
             )}
