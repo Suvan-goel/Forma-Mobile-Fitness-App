@@ -19,12 +19,12 @@ import {
 // CONSTANTS & THRESHOLDS
 // ============================================================================
 
-/** FSM thresholds (degrees) */
+/** FSM thresholds (degrees) — 3D angles are view-invariant; values match frontal-view ranges */
 export const THRESHOLDS = {
-  EXTENDED_ENTER: 150,
-  EXTENDED_EXIT: 145,
-  FLEXED_ENTER: 70,
-  FLEXED_EXIT: 75,
+  EXTENDED_ENTER: 150,  // arm extended past this → rep complete
+  EXTENDED_EXIT: 145,   // arm drops below this → start detecting upward motion
+  FLEXED_ENTER: 70,     // arm curled below this → reached top of curl
+  FLEXED_EXIT: 75,      // arm rises above this → start detecting downward motion
   MIN_REP_TIME: 0.45, // seconds
   SYNC_WINDOW: 0.35, // seconds between arms
   ROM_MIN: 80, // degrees
@@ -35,7 +35,7 @@ export const FORM_THRESHOLDS = {
   SHOULDER_WARN: 45,
   SHOULDER_FAIL: 65,
   TORSO_WARN: 10,
-  TORSO_FAIL: 22,
+  TORSO_FAIL: 20,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
@@ -71,10 +71,10 @@ const PENALTIES = {
 // All use quadratic ramps: penalty(x) = min(cap, scale * max(0, x - deadzone)²)
 // ============================================================================
 
-/** Torso swing penalty — max 35 pts. Deadzone 3° (breathing/sway noise). */
+/** Torso swing penalty — max 35 pts. Deadzone 5° (breathing/sway/noise). */
 function penaltyTorso(delta: number): number {
-  const d = Math.max(0, delta - 3);
-  return Math.min(35, 0.55 * d * d);
+  const d = Math.max(0, delta - 5);
+  return Math.min(35, 0.40 * d * d);
 }
 
 /** Shoulder movement penalty — max 30 pts. Deadzone 10° (normal stabilisation). */
@@ -83,13 +83,14 @@ function penaltyShoulder(delta: number): number {
   return Math.min(30, 0.018 * d * d);
 }
 
-/** ROM shortfall penalty — max 35 pts. Flex + extension sub-components. Adjusted for foreshortening. */
-function penaltyROM(minFlex: number, maxExt: number, viewAngle: ViewAngle): number {
-  const adjFlexTarget = 50 + viewAngle.smoothedAngleDeg * FORESHORTENING_FACTOR;
-  const adjExtTarget = 140 - viewAngle.smoothedAngleDeg * FORESHORTENING_FACTOR;
-  const flexShortfall = Math.max(0, minFlex - adjFlexTarget);
+/** ROM shortfall penalty — max 35 pts. Flex + extension sub-components.
+ *  Compensates for foreshortening at oblique views. */
+function penaltyROM(minFlex: number, maxExt: number, viewAngleDeg: number): number {
+  const FLEX_TARGET = adjustFlexionThreshold(50, viewAngleDeg);
+  const EXT_TARGET = adjustExtensionThreshold(140, viewAngleDeg);
+  const flexShortfall = Math.max(0, minFlex - FLEX_TARGET);
   const flexPenalty = Math.min(20, 0.03 * flexShortfall * flexShortfall);
-  const extShortfall = Math.max(0, adjExtTarget - maxExt);
+  const extShortfall = Math.max(0, EXT_TARGET - maxExt);
   const extPenalty = Math.min(20, 0.03 * extShortfall * extShortfall);
   return Math.min(35, flexPenalty + extPenalty);
 }
@@ -114,6 +115,27 @@ function penaltyAsymmetry(deltaMin: number, deltaRom: number): number {
   const minPenalty = Math.min(10, 0.005 * deltaMin * deltaMin);
   const romPenalty = Math.min(10, 0.004 * deltaRom * deltaRom);
   return Math.min(15, minPenalty + romPenalty);
+}
+
+// ============================================================================
+// FORESHORTENING COMPENSATION
+// At oblique camera angles, 2D-projected elbow angles are compressed:
+// a true 170° extension may project to ~145° in 2D. We relax thresholds
+// proportionally using the estimated view angle from shoulder depth.
+// Factor: cos(viewAngleDeg) → 1.0 at frontal, ~0.87 at 30°, ~0.71 at 45°
+// ============================================================================
+
+/** How much to relax extension threshold per degree of view angle. */
+const FORESHORTENING_FACTOR = 0.35; // degrees of threshold relaxation per degree of view angle
+
+/** Adjust extension threshold downward for oblique views (easier to hit). */
+function adjustExtensionThreshold(baseThreshold: number, viewAngleDeg: number): number {
+  return baseThreshold - FORESHORTENING_FACTOR * Math.min(viewAngleDeg, 50);
+}
+
+/** Adjust flexion threshold upward for oblique views (easier to hit). */
+function adjustFlexionThreshold(baseThreshold: number, viewAngleDeg: number): number {
+  return baseThreshold + FORESHORTENING_FACTOR * Math.min(viewAngleDeg, 50);
 }
 
 /** Compute a continuous rep score from raw measurements. */
@@ -169,7 +191,7 @@ function computeRepScore(
       ? (leftElbowOk ? maxAngles.leftElbow : 140)
       : (rightElbowOk ? maxAngles.rightElbow : 140);
   }
-  const romP = penaltyROM(isFinite(minFlex) ? minFlex : 50, isFinite(maxExt) ? maxExt : 140, viewAngle);
+  const romP = penaltyROM(isFinite(minFlex) ? minFlex : 50, isFinite(maxExt) ? maxExt : 140, viewAngle.smoothedAngleDeg);
 
   // Tempo penalty (use primary arm in non-frontal)
   const tempoArm = isFrontal ? leftArm : (primaryIsLeft ? leftArm : _rightArm);
@@ -448,25 +470,6 @@ function isFrameStable(keypoints: Keypoint[]): boolean {
 }
 
 // ============================================================================
-// FORESHORTENING COMPENSATION
-// ============================================================================
-
-/**
- * At oblique angles, 2D-projected elbow angles are compressed by foreshortening.
- * Extension angles appear lower, flexion angles appear higher than reality.
- * Factor: ~0.4° adjustment per degree of body rotation (empirically derived).
- */
-const FORESHORTENING_FACTOR = 0.4;
-
-function adjustExtensionThreshold(base: number, viewAngle: ViewAngle): number {
-  return base - viewAngle.smoothedAngleDeg * FORESHORTENING_FACTOR;
-}
-
-function adjustFlexionThreshold(base: number, viewAngle: ViewAngle): number {
-  return base + viewAngle.smoothedAngleDeg * FORESHORTENING_FACTOR;
-}
-
-// ============================================================================
 // ANGLE CALCULATION
 // ============================================================================
 
@@ -518,7 +521,9 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
 
   if (!leftOk && !rightOk) return null;
 
-  // Elbow angles (2D projection — FSM thresholds are tuned for XY-projected angles)
+  // Elbow angles (2D — reliable for FSM rep counting at all views)
+  // 3D angles from MediaPipe world landmarks have unreliable Z, causing missed reps.
+  // View-angle compensation for form analysis is handled separately via estimateViewAngle().
   const leftElbowAngle = leftOk
     ? calculateAngle2D(getPoint(leftShoulder)!, getPoint(leftElbow)!, getPoint(leftWrist)!)
     : NaN;
@@ -601,11 +606,11 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
             getPoint(leftShoulder)!,
             getPoint(rightShoulder)!
           );
-          return Number.isNaN(angle) ? calculateSignedVerticalAngle(hipCenter, torsoUpperPoint) : angle;
+          return Number.isNaN(angle) ? 0 : angle; // If sagittal projection fails, assume upright
         })()
       : NaN;
 
-  // Wrist angles (elbow-wrist-index as proxy for wrist angle)
+  // Wrist angles (2D — elbow-wrist-index as proxy for wrist deviation)
   const leftWristAngle =
     leftOk && leftIndex && isVisible(leftIndex, VISIBILITY_THRESHOLD)
       ? calculateAngle2D(getPoint(leftElbow)!, getPoint(leftWrist)!, getPoint(leftIndex)!)
@@ -728,6 +733,17 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
         newArm.tRestToUp !== null &&
         t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME
       ) {
+        // Normal completion: full extension reached
+        newArm.state = 'REST';
+        newArm.tRestEntry = t;
+        newArm.tDownToRest = t;
+      } else if (
+        elbowAngle < THRESHOLDS.FLEXED_EXIT &&
+        newArm.tRestToUp !== null &&
+        t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME
+      ) {
+        // Re-flexion escape: arm is curling again without full extension.
+        // Force completion — rep will be counted and penalized for incomplete ROM.
         newArm.state = 'REST';
         newArm.tRestEntry = t;
         newArm.tDownToRest = t;
@@ -736,14 +752,6 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
   }
 
   return newArm;
-}
-
-function isValidRep(arm: ArmFSM): boolean {
-  return (
-    arm.minElbow <= THRESHOLDS.FLEXED_ENTER &&
-    arm.maxElbow >= THRESHOLDS.EXTENDED_ENTER &&
-    arm.maxElbow - arm.minElbow >= THRESHOLDS.ROM_MIN
-  );
 }
 
 // ============================================================================
@@ -785,10 +793,9 @@ function evaluateForm(
       ? (leftElbowOk ? maxAngles.leftElbow : -Infinity)
       : (rightElbowOk ? maxAngles.rightElbow : -Infinity);
 
-  // 1. Flex/extend depth — adjust thresholds for 2D foreshortening at oblique angles
-  const adjFlexed = adjustFlexionThreshold(THRESHOLDS.FLEXED_ENTER, viewAngle);
-  const adjExtended = adjustExtensionThreshold(THRESHOLDS.EXTENDED_ENTER, viewAngle);
-
+  // 1. Flex/extend depth — compensate for foreshortening at oblique views
+  const adjFlexed = adjustFlexionThreshold(THRESHOLDS.FLEXED_ENTER, viewAngle.smoothedAngleDeg);
+  const adjExtended = adjustExtensionThreshold(THRESHOLDS.EXTENDED_ENTER, viewAngle.smoothedAngleDeg);
   if (isFinite(minFlex) && minFlex > adjFlexed) {
     messages.push('Flex more at the top of the curl.');
   }
@@ -796,17 +803,18 @@ function evaluateForm(
     messages.push('Extend fully at the bottom.');
   }
 
-  // 2. ROM
+  // 2. ROM — compensate for foreshortening (ROM delta also shrinks at oblique views)
   const romL = leftElbowOk ? maxAngles.leftElbow - minAngles.leftElbow : 0;
   const romR = rightElbowOk ? maxAngles.rightElbow - minAngles.rightElbow : 0;
   const primaryRom = primaryIsLeft ? romL : romR;
+  const adjRomMin = adjustExtensionThreshold(THRESHOLDS.ROM_MIN, viewAngle.smoothedAngleDeg);
 
   if (isFrontal) {
     if ((romL < THRESHOLDS.ROM_MIN || romR < THRESHOLDS.ROM_MIN) && messages.length === 0) {
       messages.push('Incomplete rep — curl all the way up and fully extend.');
     }
   } else {
-    if (primaryRom < THRESHOLDS.ROM_MIN && messages.length === 0) {
+    if (primaryRom < adjRomMin && messages.length === 0) {
       messages.push('Incomplete rep — curl all the way up and fully extend.');
     }
   }
