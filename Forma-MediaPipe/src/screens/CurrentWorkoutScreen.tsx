@@ -10,12 +10,13 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText, X } from 'lucide-react-native';
+import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText, Settings } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
+import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
 
 export type { LoggedSet };
 
@@ -59,6 +60,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     currentWeight?: number;
     currentUnit?: 'kg' | 'lbs';
   } | null>(null);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
@@ -263,33 +265,46 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header: back left; timer + pause + end grouped on same line with border */}
-      <View style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
-        <TouchableOpacity style={styles.headerButton} onPress={handleGoBack}>
-          <ChevronLeft size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <View style={styles.headerTimerGroup}>
-          <MonoText style={styles.headerTitle}>{formatStopwatch(elapsedSeconds)}</MonoText>
-          <TouchableOpacity
-            style={styles.headerTimerGroupButton}
-            onPress={handlePausePress}
-            activeOpacity={0.7}
-          >
-            {isPaused ? (
-              <Play size={20} color={COLORS.text} />
-            ) : (
-              <Pause size={20} color={COLORS.text} />
-            )}
+      {/* Header: row 1 = back | timer + pause | settings; row 2 = End Workout | Discard */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow1}>
+          <TouchableOpacity style={styles.headerButton} onPress={handleGoBack}>
+            <ChevronLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
+          <View style={styles.headerTimerGroup}>
+            <MonoText style={styles.headerTitle}>{formatStopwatch(elapsedSeconds)}</MonoText>
+            <TouchableOpacity
+              style={styles.headerTimerGroupButton}
+              onPress={handlePausePress}
+              activeOpacity={0.7}
+            >
+              {isPaused ? (
+                <Play size={20} color={COLORS.text} />
+              ) : (
+                <Pause size={20} color={COLORS.text} />
+              )}
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
-            style={styles.headerEndWorkoutButton}
+            style={styles.settingsButton}
+            onPress={() => setSettingsModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Settings size={24} color={COLORS.text} strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.headerRow2}>
+          <TouchableOpacity
+            style={styles.headerEndWorkoutButtonStandalone}
             onPress={handleEndWorkout}
             activeOpacity={0.7}
           >
             <Text style={styles.headerEndWorkoutText}>End Workout</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.headerDiscardButton}
+            style={styles.headerDiscardButtonStandalone}
             onPress={handleDiscardWorkout}
             activeOpacity={0.7}
           >
@@ -297,6 +312,11 @@ export const CurrentWorkoutScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      <CameraSettingsModal
+        visible={settingsModalVisible}
+        onClose={() => setSettingsModalVisible(false)}
+      />
 
       {/* Exercises List */}
       <ScrollView
@@ -447,28 +467,33 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: SPACING.sm,
+  },
+  headerRow1: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.sm,
     minHeight: 48,
   },
   headerTimerGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.35)',
   },
   headerButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.85,
   },
   headerTimerGroupButton: {
     width: 40,
@@ -477,9 +502,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     opacity: 0.85,
   },
-  headerEndWorkoutButton: {
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: SPACING.xs,
+  headerRow2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  headerEndWorkoutButtonStandalone: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     justifyContent: 'center',
     opacity: 0.85,
   },
@@ -488,16 +519,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
-  headerDiscardButton: {
-    width: 36,
-    height: 36,
+  headerDiscardButtonStandalone: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     opacity: 0.85,
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(128, 128, 128, 0.35)',
-    marginLeft: SPACING.xs,
-    paddingLeft: SPACING.xs,
   },
   headerTitle: {
     fontSize: 15,

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Alert, Modal, Switch } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Alert } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RotateCw, Settings, Pause, Play, X } from 'lucide-react-native';
+import { RotateCw, Settings, Pause, Play } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
@@ -18,6 +18,8 @@ import {
   getCurrentFeedback,
 } from '../utils/barbellCurlHeuristics';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
+import { useCameraSettings } from '../contexts/CameraSettingsContext';
+import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../services/ttsCoach';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -50,11 +52,10 @@ export const CameraScreen: React.FC = () => {
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
   const { addSetToExercise } = useCurrentWorkout();
-  
+  const { showFeedback, isTTSEnabled, showSkeletonOverlay } = useCameraSettings();
+
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(true);
-  const [isTTSEnabled, setIsTTSEnabled] = useState(false);
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [currentFormScore, setCurrentFormScore] = useState<number | null>(null);
@@ -479,22 +480,22 @@ export const CameraScreen: React.FC = () => {
   }, [navigation]);
 
   // Memoize MediaPipe props – 3:4 portrait (taller than wide)
-  // frameLimit: 20 fps on both iOS and Android for lower latency (matches platforms)
+  // Skeleton overlay is visual only; pose detection (onLandmark) is unaffected
   const mediapipeProps = useMemo(() => ({
     width: cameraDisplayWidth,
     height: cameraDisplayHeight,
-    face: true,
-    leftArm: true,
-    rightArm: true,
-    torso: true,
-    leftLeg: true,
-    rightLeg: true,
-    leftWrist: true,
-    rightWrist: true,
-    leftAnkle: true,
-    rightAnkle: true,
+    face: showSkeletonOverlay,
+    leftArm: showSkeletonOverlay,
+    rightArm: showSkeletonOverlay,
+    torso: showSkeletonOverlay,
+    leftLeg: showSkeletonOverlay,
+    rightLeg: showSkeletonOverlay,
+    leftWrist: showSkeletonOverlay,
+    rightWrist: showSkeletonOverlay,
+    leftAnkle: showSkeletonOverlay,
+    rightAnkle: showSkeletonOverlay,
     frameLimit: 20,
-  }), []);
+  }), [showSkeletonOverlay]);
 
   // Memoize display values to avoid recalculation
   const displayValues = useMemo(() => {
@@ -638,55 +639,11 @@ export const CameraScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Settings modal: feedback + TTS toggles */}
-      <Modal
+      <CameraSettingsModal
         visible={settingsModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSettingsModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.settingsBackdrop}
-          activeOpacity={1}
-          onPress={() => setSettingsModalVisible(false)}
-        >
-          <TouchableOpacity style={styles.settingsContent} activeOpacity={1} onPress={() => {}}>
-            <View style={styles.settingsHeader}>
-              <Text style={styles.settingsTitle}>Camera settings</Text>
-              <TouchableOpacity
-                style={styles.settingsCloseButton}
-                onPress={() => setSettingsModalVisible(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <X size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.settingsRow}>
-              <Text style={styles.settingsLabel}>Show feedback messages</Text>
-              <Switch
-                value={showFeedback}
-                onValueChange={setShowFeedback}
-                trackColor={{ false: 'rgba(128, 128, 128, 0.4)', true: COLORS.primary }}
-                thumbColor={COLORS.text}
-              />
-            </View>
-            <View style={styles.settingsRow}>
-              <Text style={styles.settingsLabel}>Spoken feedback (TTS)</Text>
-              <Switch
-                value={isTTSEnabled}
-                onValueChange={(value) => {
-                  if (!value) {
-                    ttsStopCoach();
-                  }
-                  setIsTTSEnabled(value);
-                }}
-                trackColor={{ false: 'rgba(128, 128, 128, 0.4)', true: COLORS.primary }}
-                thumbColor={COLORS.text}
-              />
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setSettingsModalVisible(false)}
+        onTTSDisable={ttsStopCoach}
+      />
     </View>
   );
 };
@@ -874,53 +831,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
     color: COLORS.primary,
     textAlign: 'center',
-  },
-  // Settings modal
-  settingsBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-  },
-  settingsContent: {
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
-    width: '100%',
-    maxWidth: 400,
-    paddingBottom: SPACING.lg,
-  },
-  settingsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
-  },
-  settingsTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
-    flex: 1,
-  },
-  settingsCloseButton: {
-    padding: SPACING.xs,
-  },
-  settingsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  settingsLabel: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
-    flex: 1,
   },
 });
 

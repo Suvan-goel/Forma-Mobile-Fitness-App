@@ -22,6 +22,7 @@ import { RecordLandingScreen } from '../screens/RecordLandingScreen';
 import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
+import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider, ScrollContext } from '../contexts/ScrollContext';
 import { AppHeader } from '../components/ui/AppHeader';
 import { COLORS, FONTS } from '../constants/theme';
@@ -121,10 +122,12 @@ const RecordStackNavigator: React.FC = memo(() => {
   );
 });
 
-// Record tab wrapper: provides current-workout state so sets persist across Camera navigation
+// Record tab wrapper: current-workout state + shared camera/workout settings
 const RecordTabWithProvider: React.FC = memo(() => (
   <CurrentWorkoutProvider>
-    <RecordStackNavigator />
+    <CameraSettingsProvider>
+      <RecordStackNavigator />
+    </CameraSettingsProvider>
   </CurrentWorkoutProvider>
 ));
 
