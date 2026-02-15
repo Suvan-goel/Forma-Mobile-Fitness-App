@@ -24,6 +24,7 @@ export const mockExercises: Exercise[] = [
   { name: 'Dumbbell Chest Fly (flat or incline)', muscleGroup: 'chest', category: 'Weightlifting' },
   { name: 'Weighted Dips (chest-leaning)', muscleGroup: 'chest', category: 'Weightlifting' },
   { name: 'Cable Fly (mid–low or high–low)', muscleGroup: 'chest', category: 'Weightlifting' },
+  { name: 'Push-Up', muscleGroup: 'chest', category: 'Calisthenics' },
   { name: 'Push-Ups (standard / deficit / weighted)', muscleGroup: 'chest', category: 'Weightlifting' },
   { name: 'Incline Barbell Bench Press', muscleGroup: 'chest', category: 'Weightlifting' },
   // Back

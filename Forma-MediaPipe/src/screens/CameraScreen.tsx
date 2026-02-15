@@ -17,10 +17,23 @@ import {
   getCurrentFormScore,
   getCurrentFeedback,
 } from '../utils/barbellCurlHeuristics';
+import {
+  updatePushupState,
+  initializePushupState,
+  PushupState,
+  getPushupRepCount,
+  getPushupFormScore,
+  getPushupFeedback,
+  getPushupDebugInfo,
+  PushupDebugInfo,
+} from '../utils/pushupHeuristics';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../services/ttsCoach';
+
+/** Exercises with dedicated heuristics (FSM-based form analysis) */
+const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -68,9 +81,19 @@ export const CameraScreen: React.FC = () => {
     duration: 0,
   });
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [torsoDebug, setTorsoDebug] = useState<{
+    torso: number | null;
+    leftTorso: number | null;
+    rightTorso: number | null;
+    torsoDelta: number | null;
+    leftTorsoDelta: number | null;
+    rightTorsoDelta: number | null;
+  } | null>(null);
+  const [pushupDebug, setPushupDebug] = useState<PushupDebugInfo | null>(null);
 
-  // Barbell curl specific state
+  // Exercise-specific state refs
   const barbellCurlStateRef = useRef<BarbellCurlState>(initializeBarbellCurlState());
+  const pushupStateRef = useRef<PushupState>(initializePushupState());
 
   const category = route.params?.category ?? 'Weightlifting';
   const exerciseNameFromRoute = (route.params as any)?.exerciseName;
@@ -116,6 +139,15 @@ export const CameraScreen: React.FC = () => {
     repCount?: number;
     formScore?: number;
     feedback?: string | null;
+    torsoDebug?: {
+      torso: number | null;
+      leftTorso: number | null;
+      rightTorso: number | null;
+      torsoDelta: number | null;
+      leftTorsoDelta: number | null;
+      rightTorsoDelta: number | null;
+    } | null;
+    pushupDebug?: PushupDebugInfo | null;
     workoutUpdate?: { totalReps: number; formScore: number; repFeedback?: string };
   } | null>(null);
   const isRecordingRef = useRef(isRecording);
@@ -146,9 +178,9 @@ export const CameraScreen: React.FC = () => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
 
-  // Auto-clear feedback after 2 seconds (Barbell Curl and any green messages)
+  // Auto-clear feedback after 2 seconds (exercises with dedicated heuristics)
   useEffect(() => {
-    if (!feedback || exerciseNameFromRoute !== 'Barbell Curl') return;
+    if (!feedback || !EXERCISES_WITH_HEURISTICS.has(exerciseNameFromRoute)) return;
     const timer = setTimeout(() => setFeedback(null), 2000);
     return () => clearTimeout(timer);
   }, [feedback, exerciseNameFromRoute]);
@@ -232,6 +264,8 @@ export const CameraScreen: React.FC = () => {
       if (pending.repCount !== undefined) setRepCount(pending.repCount);
       if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
       if (pending.feedback !== undefined) setFeedback(pending.feedback);
+      if (pending.torsoDebug !== undefined) setTorsoDebug(pending.torsoDebug);
+      if (pending.pushupDebug !== undefined) setPushupDebug(pending.pushupDebug);
       if (pending.workoutUpdate) {
         setWorkoutData(prev => ({
           ...prev,
@@ -296,6 +330,38 @@ export const CameraScreen: React.FC = () => {
       pendingUIStateRef.current = pending;
 
       // Flush immediately when rep completes; otherwise throttle to keep buttons responsive
+      const repJustCompleted = newState.repCount > repCountRef.current;
+      const throttleElapsed = now - lastUIUpdateTimeRef.current >= UI_UPDATE_INTERVAL_MS;
+      if (repJustCompleted || throttleElapsed) {
+        lastUIUpdateTimeRef.current = now;
+        flushPendingUI();
+      }
+    } else if (exerciseNameFromRoute === 'Push-Up') {
+      const newState = updatePushupState(keypoints, pushupStateRef.current);
+      pushupStateRef.current = newState;
+
+      const currentRepCount = getPushupRepCount(newState);
+      const currentScore = getPushupFormScore(newState);
+      const currentFeedback = getPushupFeedback(newState);
+      const pushupDebugInfo = getPushupDebugInfo(newState);
+
+      const pending = pendingUIStateRef.current ?? {};
+      pending.repCount = currentRepCount;
+      if (currentScore > 0) pending.formScore = currentScore;
+      pending.feedback = currentFeedback;
+      pending.torsoDebug = null;
+      pending.pushupDebug = pushupDebugInfo;
+      if (currentRepCount > repCountRef.current) {
+        pending.workoutUpdate = {
+          totalReps: currentRepCount,
+          formScore: currentScore,
+          repFeedback: currentFeedback ?? 'Great rep!',
+        };
+        accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, currentScore];
+        accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, currentFeedback ?? 'Great rep!'];
+      }
+      pendingUIStateRef.current = pending;
+
       const repJustCompleted = newState.repCount > repCountRef.current;
       const throttleElapsed = now - lastUIUpdateTimeRef.current >= UI_UPDATE_INTERVAL_MS;
       if (repJustCompleted || throttleElapsed) {
@@ -369,6 +435,8 @@ export const CameraScreen: React.FC = () => {
       const totalReps = accumulatedFormScoresRef.current.length;
 
       setIsRecording(false);
+      setTorsoDebug(null);
+      setPushupDebug(null);
 
       const formScores = accumulatedFormScoresRef.current;
       const repFeedback = accumulatedRepFeedbackRef.current;
@@ -434,9 +502,12 @@ export const CameraScreen: React.FC = () => {
       setCurrentFormScore(null);
       setIsPaused(false);
       setFeedback(null);
-      // Reset barbell curl state if starting a barbell curl
+      setTorsoDebug(null);
+      // Reset exercise-specific state
       if (exerciseNameFromRoute === 'Barbell Curl') {
         barbellCurlStateRef.current = initializeBarbellCurlState();
+      } else if (exerciseNameFromRoute === 'Push-Up') {
+        pushupStateRef.current = initializePushupState();
       }
       setWorkoutData({
         totalReps: 0,
@@ -586,6 +657,75 @@ export const CameraScreen: React.FC = () => {
             </View>
           </View>
         )}
+
+        {/* Torso Debug - Shows angles used for swing detection (Barbell Curl only) */}
+        {exerciseNameFromRoute === 'Barbell Curl' &&
+          isRecording &&
+          torsoDebug && (
+            <View style={styles.torsoDebugContainer}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Torso Swing Debug</Text>
+                <Text style={styles.torsoDebugText}>
+                  Midline: {torsoDebug.torso != null ? torsoDebug.torso.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  L: {torsoDebug.leftTorso != null ? torsoDebug.leftTorso.toFixed(1) + '°' : '–'} | R:{' '}
+                  {torsoDebug.rightTorso != null ? torsoDebug.rightTorso.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Δ (rep): mid {torsoDebug.torsoDelta != null ? torsoDebug.torsoDelta.toFixed(1) : '–'}° | L{' '}
+                  {torsoDebug.leftTorsoDelta != null ? torsoDebug.leftTorsoDelta.toFixed(1) : '–'}° | R{' '}
+                  {torsoDebug.rightTorsoDelta != null ? torsoDebug.rightTorsoDelta.toFixed(1) : '–'}°
+                </Text>
+                <Text style={styles.torsoDebugHint}>Warn &gt;12° | Fail &gt;22°</Text>
+              </View>
+            </View>
+          )}
+
+        {/* Pushup Debug - Shows all angles, FSM phase, and rep window data */}
+        {exerciseNameFromRoute === 'Push-Up' &&
+          isRecording &&
+          pushupDebug && (
+            <View style={styles.torsoDebugContainer}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Push-Up Debug</Text>
+                <Text style={styles.torsoDebugText}>
+                  Phase: {pushupDebug.phase} | Side: {pushupDebug.side}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Elbow: {pushupDebug.elbow != null ? pushupDebug.elbow.toFixed(1) + '°' : '–'}
+                  {'  '}Body: {pushupDebug.bodyAlignment != null ? pushupDebug.bodyAlignment.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  HipDev: {pushupDebug.hipDev != null ? (pushupDebug.hipDev * 100).toFixed(1) + '%' : '–'}
+                  {'  '}Head: {pushupDebug.headSpine != null ? pushupDebug.headSpine.toFixed(1) + '°' : '–'}
+                </Text>
+                {(pushupDebug.elbowMin != null || pushupDebug.bodyAngleMin != null) && (
+                  <>
+                    <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                      Rep Elbow: {pushupDebug.elbowMin != null ? pushupDebug.elbowMin.toFixed(1) : '–'}°–
+                      {pushupDebug.elbowMax != null ? pushupDebug.elbowMax.toFixed(1) : '–'}°
+                    </Text>
+                    <Text style={styles.torsoDebugText}>
+                      Rep Body: {pushupDebug.bodyAngleMin != null ? pushupDebug.bodyAngleMin.toFixed(1) : '–'}°–
+                      {pushupDebug.bodyAngleMax != null ? pushupDebug.bodyAngleMax.toFixed(1) : '–'}°
+                    </Text>
+                    <Text style={styles.torsoDebugText}>
+                      Rep HipDev: {pushupDebug.hipDevMin != null ? (pushupDebug.hipDevMin * 100).toFixed(1) : '–'}%–
+                      {pushupDebug.hipDevMax != null ? (pushupDebug.hipDevMax * 100).toFixed(1) : '–'}%
+                    </Text>
+                    <Text style={styles.torsoDebugText}>
+                      Rep Head: {pushupDebug.headSpineMin != null ? pushupDebug.headSpineMin.toFixed(1) : '–'}°–
+                      {pushupDebug.headSpineMax != null ? pushupDebug.headSpineMax.toFixed(1) : '–'}°
+                    </Text>
+                  </>
+                )}
+                <Text style={styles.torsoDebugHint}>
+                  Depth &lt;105° | Lock &gt;155° | Body 155–195° | Head ±25°
+                </Text>
+              </View>
+            </View>
+          )}
 
         {/* Bottom Controls */}
         <View style={[
