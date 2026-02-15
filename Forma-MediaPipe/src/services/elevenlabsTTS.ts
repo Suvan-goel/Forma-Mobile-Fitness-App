@@ -5,7 +5,6 @@
  * configuration to avoid conflicts with the camera.
  */
 
-// Gracefully handle missing native modules - development client needs rebuild
 let Audio: any = null;
 let FileSystem: any = null;
 let nativeModulesAvailable = false;
@@ -15,7 +14,7 @@ try {
   FileSystem = require('expo-file-system');
   nativeModulesAvailable = true;
 } catch (error) {
-  console.warn('ElevenLabs TTS: Native modules not available. Rebuild development client with: npx expo prebuild --clean && npx expo run:android');
+  console.warn('ElevenLabs TTS: Failed to load native modules:', error);
   nativeModulesAvailable = false;
 }
 
@@ -26,6 +25,29 @@ const ELEVENLABS_VOICE_ID = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m0
 
 let audioInstance: any = null;
 let isInitialized = false;
+
+/**
+ * Pure-JS base64 encoder for Uint8Array.
+ * Avoids btoa (Hermes-only) and FileReader.readAsDataURL (hangs on JSC with binary blobs).
+ */
+const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const len = bytes.length;
+  const parts: string[] = [];
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < len ? bytes[i + 1] : 0;
+    const b2 = i + 2 < len ? bytes[i + 2] : 0;
+    parts.push(
+      BASE64_CHARS[b0 >> 2] +
+      BASE64_CHARS[((b0 & 3) << 4) | (b1 >> 4)] +
+      (i + 1 < len ? BASE64_CHARS[((b1 & 15) << 2) | (b2 >> 6)] : '=') +
+      (i + 2 < len ? BASE64_CHARS[b2 & 63] : '=')
+    );
+  }
+  return parts.join('');
+}
 
 /**
  * Initialize audio session with camera-compatible settings.
@@ -89,21 +111,11 @@ async function generateSpeech(text: string): Promise<string> {
     throw new Error(`ElevenLabs API error: ${response.status}`);
   }
 
-  // Convert response to base64 via FileReader.readAsDataURL (engine-safe: works on both JSC and Hermes)
-  const blob = await response.blob();
+  // Convert response to base64 via arrayBuffer + pure JS encoder
+  // (FileReader.readAsDataURL hangs indefinitely on JSC with binary blobs)
+  const arrayBuffer = await response.arrayBuffer();
+  const base64Audio = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
   const fileUri = `${FileSystem.cacheDirectory}tts_${Date.now()}.mp3`;
-
-  const base64Audio = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      // Strip the "data:audio/mpeg;base64," prefix
-      const base64Data = dataUrl.split(',')[1];
-      resolve(base64Data);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 
   // Write to temporary file
   await FileSystem.writeAsStringAsync(fileUri, base64Audio, {
@@ -124,7 +136,7 @@ async function cleanupOldAudioFiles(): Promise<void> {
     if (!cacheDir) return;
 
     const files = await FileSystem.readDirectoryAsync(cacheDir);
-    const ttsFiles = files.filter((f) => f.startsWith('tts_') && f.endsWith('.mp3'));
+    const ttsFiles = files.filter((f: string) => f.startsWith('tts_') && f.endsWith('.mp3'));
 
     // Keep only the most recent 3 files, delete older ones
     if (ttsFiles.length > 3) {
@@ -146,7 +158,7 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
   if (!text?.trim()) return;
 
   if (!nativeModulesAvailable || !Audio) {
-    console.warn('ElevenLabs TTS: Native modules not available. TTS is disabled until development client is rebuilt.');
+    console.warn('ElevenLabs TTS: Native modules not available.');
     return;
   }
 
@@ -175,7 +187,7 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
     const { sound } = await Audio.Sound.createAsync(
       { uri: audioUri },
       { shouldPlay: true, volume: 1.0 },
-      (status) => {
+      (status: any) => {
         // Cleanup when playback finishes
         if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync().catch(() => {});
