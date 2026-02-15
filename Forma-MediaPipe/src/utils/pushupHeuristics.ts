@@ -40,6 +40,12 @@ export const THRESHOLDS = {
   /** Minimum time (seconds) in DESCENDING before a partial-rep reset can trigger.
    *  Prevents flip-flopping when hovering near the DESCENDING_ENTER threshold. */
   MIN_DESCENDING_TIME: 0.25,
+  /** Minimum body alignment angle for plank detection in IDLE gate */
+  PLANK_BODY_MIN: 165,
+  /** Maximum body alignment angle for plank detection in IDLE gate */
+  PLANK_BODY_MAX: 195,
+  /** Seconds the user must hold plank before FSM activates from IDLE */
+  PLANK_HOLD_TIME: 1.0,
 } as const;
 
 /** Form heuristic thresholds */
@@ -99,7 +105,7 @@ const VISIBILITY_THRESHOLD = 0.1;
 // TYPES
 // ============================================================================
 
-export type PushupPhase = 'PLANK' | 'DESCENDING' | 'BOTTOM' | 'ASCENDING';
+export type PushupPhase = 'IDLE' | 'PLANK' | 'DESCENDING' | 'BOTTOM' | 'ASCENDING';
 
 export interface PushupFSM {
   phase: PushupPhase;
@@ -109,6 +115,8 @@ export interface PushupFSM {
   tBottom: number | null;
   /** Timestamp when rep completed (ASCENDING -> PLANK) */
   tRepEnd: number | null;
+  /** Timestamp when user first showed valid plank pose in IDLE (null = not stable) */
+  tIdleStableSince: number | null;
 }
 
 export interface PushupRepWindow {
@@ -170,10 +178,22 @@ export interface PushupState {
 
 function initFSM(): PushupFSM {
   return {
+    phase: 'IDLE',
+    tRepStart: null,
+    tBottom: null,
+    tRepEnd: null,
+    tIdleStableSince: null,
+  };
+}
+
+/** Reset FSM to PLANK after a completed rep (skips IDLE gate). */
+function resetFSMToPlank(): PushupFSM {
+  return {
     phase: 'PLANK',
     tRepStart: null,
     tBottom: null,
     tRepEnd: null,
+    tIdleStableSince: null,
   };
 }
 
@@ -419,13 +439,33 @@ interface FSMUpdateResult {
 function updateFSM(
   currentFSM: PushupFSM,
   elbowAngle: number,
-  t: number
+  t: number,
+  bodyAlignment: number
 ): FSMUpdateResult {
   const fsm = { ...currentFSM };
   let repCompleted = false;
   let partialRep = false;
 
   switch (fsm.phase) {
+    case 'IDLE': {
+      const armsExtended = elbowAngle > THRESHOLDS.PLANK_REENTER;
+      const bodyAligned =
+        bodyAlignment >= THRESHOLDS.PLANK_BODY_MIN &&
+        bodyAlignment <= THRESHOLDS.PLANK_BODY_MAX;
+
+      if (armsExtended && bodyAligned) {
+        if (fsm.tIdleStableSince === null) {
+          fsm.tIdleStableSince = t;
+        } else if (t - fsm.tIdleStableSince >= THRESHOLDS.PLANK_HOLD_TIME) {
+          fsm.phase = 'PLANK';
+          fsm.tIdleStableSince = null;
+        }
+      } else {
+        fsm.tIdleStableSince = null;
+      }
+      break;
+    }
+
     case 'PLANK':
       if (elbowAngle < THRESHOLDS.DESCENDING_ENTER) {
         fsm.phase = 'DESCENDING';
@@ -652,7 +692,7 @@ export function updatePushupState(
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothed.elbow, t);
+  const fsmResult = updateFSM(currentState.fsm, smoothed.elbow, t, smoothed.bodyAlignment);
   newState.fsm = fsmResult.fsm;
 
   // Handle partial rep
@@ -663,8 +703,8 @@ export function updatePushupState(
     return newState;
   }
 
-  // Track rep window while not in PLANK
-  const inRep = newState.fsm.phase !== 'PLANK';
+  // Track rep window while actively in a rep (not PLANK or IDLE)
+  const inRep = newState.fsm.phase !== 'PLANK' && newState.fsm.phase !== 'IDLE';
   if (inRep && !currentState.repWindow) {
     newState.repWindow = initRepWindow(t);
   }
@@ -728,9 +768,9 @@ export function updatePushupState(
     }
     newState.lastFeedbackTime = t;
 
-    // Reset rep window and FSM timestamps
+    // Reset rep window and FSM timestamps (skip IDLE — gate only applies at start)
     newState.repWindow = null;
-    newState.fsm = initFSM();
+    newState.fsm = resetFSMToPlank();
   }
 
   // Clear feedback after 2 seconds
