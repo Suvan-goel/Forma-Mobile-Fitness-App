@@ -78,8 +78,8 @@ async function generateSpeech(text: string): Promise<string> {
       text,
       model_id: 'eleven_turbo_v2_5',
       voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.9,
+        stability: 0.45,
+        similarity_boost: 0.8,
         speed: 0.9,
       },
     }),

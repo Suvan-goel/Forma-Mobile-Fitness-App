@@ -144,6 +144,63 @@ export const POSITIVE_POOLS: Record<PositiveCategory, MessagePool> = {
 };
 
 // ============================================================================
+// SET-START POOLS — spoken once when a new set begins
+// Templates use {exercise} placeholder, replaced at runtime.
+// ============================================================================
+
+export type SetStartCategory = 'encouragement' | 'form_reminder' | 'neutral';
+
+export const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
+  encouragement: {
+    messages: [
+      "Let's go — {exercise}. You've got this!",
+      '{exercise}. Time to work!',
+      "All right. {exercise}. Let's make these count!",
+      '{exercise} — give it everything!',
+      "Here we go, {exercise}. Stay strong.",
+    ],
+  },
+  form_reminder: {
+    messages: [
+      '{exercise}. Remember, Keep those reps clean.',
+      '{exercise} coming up. Control the tempo and focus on your breathing.',
+      "{exercise}. Focus on your form — that's what matters.",
+      '{exercise}. Keep it smooth and controlled.',
+    ],
+  },
+  neutral: {
+    messages: [
+      '{exercise}. Ready when you are.',
+      'Next up: {exercise}.',
+      '{exercise} — set starting.',
+      '{exercise}. Lock in!',
+    ],
+  },
+};
+
+/** All set-start categories in rotation order. */
+export const SET_START_CATEGORIES: SetStartCategory[] = [
+  'encouragement',
+  'form_reminder',
+  'neutral',
+];
+
+/**
+ * Pick a set-start message, rotating across categories to stay fresh.
+ * Returns the message with {exercise} replaced by the actual exercise name.
+ */
+let _lastSetStartCatIdx = -1;
+
+export function pickSetStartMessage(exerciseName: string): string {
+  // Rotate category: encouragement → form_reminder → neutral → encouragement ...
+  _lastSetStartCatIdx = (_lastSetStartCatIdx + 1) % SET_START_CATEGORIES.length;
+  const category = SET_START_CATEGORIES[_lastSetStartCatIdx];
+  const pool = SET_START_POOLS[category];
+  const template = pickFromPool(pool);
+  return template.replace('{exercise}', exerciseName);
+}
+
+// ============================================================================
 // PRIORITY — higher number = more important = speak first
 // ============================================================================
 

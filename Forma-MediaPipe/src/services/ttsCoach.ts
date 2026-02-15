@@ -20,6 +20,7 @@ import {
   ISSUE_PRIORITY,
   FEEDBACK_TO_ISSUE,
   pickFromPool,
+  pickSetStartMessage,
 } from './ttsMessagePools';
 
 // ============================================================================
@@ -157,6 +158,17 @@ export async function onSetEnded(
  */
 export function resetCoachState(): void {
   state = { ...DEFAULT_STATE };
+}
+
+/**
+ * Call once when a new set begins (user taps record).
+ * Speaks a short set-start cue with the exercise name.
+ * Rotates across encouragement / form-reminder / neutral categories.
+ */
+export async function onSetStarted(exerciseName: string): Promise<void> {
+  if (!isElevenLabsAvailable()) return;
+  const message = pickSetStartMessage(exerciseName);
+  await trySpeak(message);
 }
 
 /**

@@ -10,7 +10,7 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText, Settings } from 'lucide-react-native';
+import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText, Settings, X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
@@ -265,52 +265,23 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header: row 1 = back | timer + pause | settings; row 2 = End Workout | Discard */}
+      {/* Header: back | timer | settings */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <View style={styles.headerRow1}>
-          <TouchableOpacity style={styles.headerButton} onPress={handleGoBack}>
-            <ChevronLeft size={24} color={COLORS.text} />
-          </TouchableOpacity>
-          <View style={styles.headerTimerGroup}>
-            <MonoText style={styles.headerTitle}>{formatStopwatch(elapsedSeconds)}</MonoText>
-            <TouchableOpacity
-              style={styles.headerTimerGroupButton}
-              onPress={handlePausePress}
-              activeOpacity={0.7}
-            >
-              {isPaused ? (
-                <Play size={20} color={COLORS.text} />
-              ) : (
-                <Pause size={20} color={COLORS.text} />
-              )}
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => setSettingsModalVisible(true)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Settings"
-          >
-            <Settings size={24} color={COLORS.text} strokeWidth={2} />
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.headerButton} onPress={handleGoBack}>
+          <ChevronLeft size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <View style={styles.headerTimerGroup}>
+          <MonoText style={styles.headerTitle}>{formatStopwatch(elapsedSeconds)}</MonoText>
         </View>
-        <View style={styles.headerRow2}>
-          <TouchableOpacity
-            style={styles.headerEndWorkoutButtonStandalone}
-            onPress={handleEndWorkout}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.headerEndWorkoutText}>End Workout</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerDiscardButtonStandalone}
-            onPress={handleDiscardWorkout}
-            activeOpacity={0.7}
-          >
-            <Trash2 size={18} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setSettingsModalVisible(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+        >
+          <Settings size={24} color={COLORS.text} strokeWidth={2} />
+        </TouchableOpacity>
       </View>
 
       <CameraSettingsModal
@@ -323,7 +294,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 60 },
+          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 130 },
           exercises.length === 0 && styles.scrollContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
@@ -451,10 +422,47 @@ export const CurrentWorkoutScreen: React.FC = () => {
       )}
 
       {/* Add New Exercise Button - Fixed at bottom */}
-      <View style={[styles.addButtonContainer, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+      <View style={styles.addButtonContainer}>
         <TouchableOpacity style={styles.addButton} onPress={handleAddExercise} activeOpacity={0.8}>
           <Plus size={18} color={COLORS.primary} />
           <Text style={styles.addButtonText}>Add new exercise</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Workout controls: Discard | Pause | End Workout */}
+      <View style={[styles.workoutControlsRow, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+        <TouchableOpacity
+          style={styles.workoutControlButton}
+          onPress={handleDiscardWorkout}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Discard workout"
+        >
+          <Trash2 size={20} color={COLORS.textSecondary} />
+          <Text style={styles.workoutControlLabel}>Discard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.workoutControlButton}
+          onPress={handlePausePress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={isPaused ? 'Resume workout' : 'Pause workout'}
+        >
+          {isPaused ? (
+            <Play size={20} color={COLORS.text} />
+          ) : (
+            <Pause size={20} color={COLORS.text} />
+          )}
+          <Text style={styles.workoutControlLabel}>{isPaused ? 'Resume' : 'Pause'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.workoutControlButton, styles.workoutControlButtonPrimary]}
+          onPress={handleEndWorkout}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="End workout"
+        >
+          <Text style={styles.workoutControlLabelPrimary}>End Workout</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -467,19 +475,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.sm,
-  },
-  headerRow1: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: SPACING.sm,
     minHeight: 48,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(128, 128, 128, 0.3)',
   },
   headerTimerGroup: {
-    flexDirection: 'row',
+    flex: 1,
     alignItems: 'center',
-    gap: SPACING.sm,
+    justifyContent: 'center',
     paddingVertical: SPACING.xs,
   },
   headerButton: {
@@ -495,39 +503,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     opacity: 0.85,
   },
-  headerTimerGroupButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.85,
-  },
-  headerRow2: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginTop: SPACING.xs,
-  },
-  headerEndWorkoutButtonStandalone: {
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    justifyContent: 'center',
-    opacity: 0.85,
-  },
-  headerEndWorkoutText: {
-    fontSize: 13,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
-  },
-  headerDiscardButtonStandalone: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.85,
-  },
   headerTitle: {
-    fontSize: 15,
+    fontSize: 22,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
     opacity: 0.9,
@@ -535,7 +512,42 @@ const styles = StyleSheet.create({
   addButtonContainer: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
     backgroundColor: COLORS.background,
+  },
+  workoutControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.sm,
+    backgroundColor: COLORS.background,
+    gap: SPACING.sm,
+  },
+  workoutControlButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+  },
+  workoutControlLabel: {
+    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+  },
+  workoutControlButtonPrimary: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(0, 172, 124, 0.12)',
+  },
+  workoutControlLabelPrimary: {
+    fontSize: 13,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.primary,
   },
   addButton: {
     flexDirection: 'row',

@@ -4,7 +4,7 @@ import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RotateCw, Settings, Pause, Play } from 'lucide-react-native';
+import { RotateCw, Settings, Pause, Play, X } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
@@ -20,7 +20,7 @@ import {
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
-import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../services/ttsCoach';
+import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../services/ttsCoach';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -94,6 +94,16 @@ export const CameraScreen: React.FC = () => {
       const t = setTimeout(() => setCameraMounted(true), 150);
       return () => clearTimeout(t);
     }, [isClosing])
+  );
+
+  // Speak set-start message as soon as camera screen loads
+  useFocusEffect(
+    useCallback(() => {
+      if (isTTSEnabled && exerciseNameFromRoute) {
+        ttsResetCoach();
+        ttsOnSetStarted(exerciseNameFromRoute).catch(() => {});
+      }
+    }, [isTTSEnabled, exerciseNameFromRoute])
   );
 
   // Use refs to track exercise state without triggering re-renders
