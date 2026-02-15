@@ -700,6 +700,10 @@ export const CameraScreen: React.FC = () => {
                   HipDev: {pushupDebug.hipDev != null ? (pushupDebug.hipDev * 100).toFixed(1) + '%' : '–'}
                   {'  '}Head: {pushupDebug.headSpine != null ? pushupDebug.headSpine.toFixed(1) + '°' : '–'}
                 </Text>
+                <Text style={styles.torsoDebugText}>
+                  Torso Incl: {pushupDebug.torsoInclination != null ? pushupDebug.torsoInclination.toFixed(1) + '°' : '–'}
+                  {' (65–115° = plank)'}
+                </Text>
                 {(pushupDebug.elbowMin != null || pushupDebug.bodyAngleMin != null) && (
                   <>
                     <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>

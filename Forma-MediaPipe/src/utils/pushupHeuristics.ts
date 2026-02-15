@@ -3,7 +3,7 @@
  *
  * Implements deterministic pushup detection and form coaching using
  * side-view camera with single-body FSM. Mirrors the barbellCurlHeuristics
- * pattern but tracks elbow angle, body alignment, and head position.
+ * pattern but tracks elbow angle and body alignment.
  */
 
 import {
@@ -46,6 +46,12 @@ export const THRESHOLDS = {
   PLANK_BODY_MAX: 195,
   /** Seconds the user must hold plank before FSM activates from IDLE */
   PLANK_HOLD_TIME: 1.0,
+  /** Minimum torso inclination from vertical for plank detection (degrees).
+   *  Standing ≈ 0°, planking ≈ 90°. 65° rejects upright postures. */
+  TORSO_INCLINE_MIN: 65,
+  /** Maximum torso inclination from vertical for plank detection (degrees).
+   *  Allows slight decline/incline pushups but rejects inverted poses. */
+  TORSO_INCLINE_MAX: 115,
 } as const;
 
 /** Form heuristic thresholds */
@@ -66,8 +72,6 @@ export const FORM_THRESHOLDS = {
   HIP_DEV_SAG_WARN: 0.05,
   HIP_DEV_PIKE_FAIL: 0.10,
   HIP_DEV_PIKE_WARN: 0.05,
-  // Head-spine angle deviation from baseline (~150-170° is acceptable in practice)
-  HEAD_DROP_THRESHOLD: 25, // degrees deviation from expected neutral (relaxed for real-world CV)
   // Tempo
   TEMPO_CONCENTRIC_MIN: 0.15, // seconds — ascent too fast
   TEMPO_ECCENTRIC_MIN: 0.20, // seconds — descent too fast
@@ -82,16 +86,14 @@ export const FORM_THRESHOLDS = {
  * | Depth shortfall   | 30  | 90° (minElbow)     | 0.03  | min elbow angle during rep    |
  * | Lockout shortfall | 25  | 165° (maxElbow)    | 0.10  | ideal lockout − max elbow     |
  * | Hip alignment     | 35  | ±8° from 180°      | 0.04  | worst body-angle deviation    |
- * | Head position     | 10  | ±15° from 165°     | 0.02  | head-spine deviation (advis.) |
  * | Tempo             | 20  | up: 0.3s, dn: 0.4s | 60/40 | concentric / eccentric time   |
  *
- * Max total penalty: 120 → worst possible rep = 0.
+ * Max total penalty: 110 → worst possible rep = 0.
  */
 const SCORE_CURVES = {
   DEPTH:   { deadzone: 90,  scale: 0.03, cap: 30 },
   LOCKOUT: { ideal: 165,    scale: 0.10, cap: 25 },
   HIP:     { deadzone: 8,   scale: 0.04, cap: 35, neutral: 180 },
-  HEAD:    { deadzone: 15,  scale: 0.02, cap: 10, neutral: 165 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 10 },
   TEMPO_ECCENTRIC:  { deadzone: 0.4, scale: 40, cap: 10 },
 } as const;
@@ -170,6 +172,8 @@ export interface PushupState {
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
+  /** Last computed torso inclination from vertical (for debug display) */
+  lastTorsoInclination: number | null;
 }
 
 // ============================================================================
@@ -231,6 +235,7 @@ export function initializePushupState(): PushupState {
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
+    lastTorsoInclination: null,
   };
 }
 
@@ -274,6 +279,80 @@ function calculateHipDeviation(
   // In screen coords (Y down), if shoulder is to the left and ankle to the right:
   //   positive cross = hip is below the line = sag
   return cross / abLen;
+}
+
+/**
+ * Calculate the inclination of the torso vector relative to the vertical Y-axis.
+ * Uses midpoints of both shoulders and both hips when available, falls back to
+ * the visible side's shoulder and hip.
+ *
+ * Returns degrees: 0° = standing vertical (torso aligned with Y-axis),
+ *                  90° = horizontal (plank position).
+ * Returns null if required landmarks aren't visible.
+ */
+function calculateTorsoInclination(
+  keypoints: Keypoint[],
+  visibleSide: 'left' | 'right'
+): number | null {
+  const ls = getKeypoint(keypoints, 'left_shoulder');
+  const rs = getKeypoint(keypoints, 'right_shoulder');
+  const lh = getKeypoint(keypoints, 'left_hip');
+  const rh = getKeypoint(keypoints, 'right_hip');
+
+  let shoulderX: number, shoulderY: number;
+  let hipX: number, hipY: number;
+
+  // Prefer midpoints of both sides for accuracy
+  const lsVis = isVisible(ls, VISIBILITY_THRESHOLD);
+  const rsVis = isVisible(rs, VISIBILITY_THRESHOLD);
+  const lhVis = isVisible(lh, VISIBILITY_THRESHOLD);
+  const rhVis = isVisible(rh, VISIBILITY_THRESHOLD);
+
+  if (lsVis && rsVis) {
+    shoulderX = (ls!.x + rs!.x) / 2;
+    shoulderY = (ls!.y + rs!.y) / 2;
+  } else if (lsVis) {
+    shoulderX = ls!.x;
+    shoulderY = ls!.y;
+  } else if (rsVis) {
+    shoulderX = rs!.x;
+    shoulderY = rs!.y;
+  } else {
+    // Fall back to visible side
+    const s = getKeypoint(keypoints, `${visibleSide}_shoulder`);
+    if (!s || !isVisible(s, VISIBILITY_THRESHOLD)) return null;
+    shoulderX = s.x;
+    shoulderY = s.y;
+  }
+
+  if (lhVis && rhVis) {
+    hipX = (lh!.x + rh!.x) / 2;
+    hipY = (lh!.y + rh!.y) / 2;
+  } else if (lhVis) {
+    hipX = lh!.x;
+    hipY = lh!.y;
+  } else if (rhVis) {
+    hipX = rh!.x;
+    hipY = rh!.y;
+  } else {
+    const h = getKeypoint(keypoints, `${visibleSide}_hip`);
+    if (!h || !isVisible(h, VISIBILITY_THRESHOLD)) return null;
+    hipX = h.x;
+    hipY = h.y;
+  }
+
+  // Torso vector: shoulder → hip (in screen coords, Y points down)
+  const dx = hipX - shoulderX;
+  const dy = hipY - shoulderY;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1e-8) return null;
+
+  // Angle relative to vertical Y-axis (0,1) in screen coords:
+  // cos(theta) = dot((dx,dy), (0,1)) / len = dy / len
+  const cosTheta = dy / len;
+  const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosTheta))) * (180 / Math.PI);
+
+  return angleDeg;
 }
 
 // ============================================================================
@@ -440,7 +519,8 @@ function updateFSM(
   currentFSM: PushupFSM,
   elbowAngle: number,
   t: number,
-  bodyAlignment: number
+  bodyAlignment: number,
+  torsoInclination: number | null
 ): FSMUpdateResult {
   const fsm = { ...currentFSM };
   let repCompleted = false;
@@ -452,8 +532,12 @@ function updateFSM(
       const bodyAligned =
         bodyAlignment >= THRESHOLDS.PLANK_BODY_MIN &&
         bodyAlignment <= THRESHOLDS.PLANK_BODY_MAX;
+      const torsoHorizontal =
+        torsoInclination !== null &&
+        torsoInclination >= THRESHOLDS.TORSO_INCLINE_MIN &&
+        torsoInclination <= THRESHOLDS.TORSO_INCLINE_MAX;
 
-      if (armsExtended && bodyAligned) {
+      if (armsExtended && bodyAligned && torsoHorizontal) {
         if (fsm.tIdleStableSince === null) {
           fsm.tIdleStableSince = t;
         } else if (t - fsm.tIdleStableSince >= THRESHOLDS.PLANK_HOLD_TIME) {
@@ -549,14 +633,7 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
   const worstHipDev = Math.max(sagDev, pikeDev);
   penalty += Math.min(SCORE_CURVES.HIP.cap, SCORE_CURVES.HIP.scale * worstHipDev * worstHipDev);
 
-  // 4. Head position (advisory) — head-spine should be ~165°
-  //    Deadzone: ±15° from 165° (150–180° is fine for real-world CV)
-  const headDevLow = Math.abs(repWindow.minHeadSpine - SCORE_CURVES.HEAD.neutral);
-  const headDevHigh = Math.abs(repWindow.maxHeadSpine - SCORE_CURVES.HEAD.neutral);
-  const headExcess = Math.max(0, Math.max(headDevLow, headDevHigh) - SCORE_CURVES.HEAD.deadzone);
-  penalty += Math.min(SCORE_CURVES.HEAD.cap, SCORE_CURVES.HEAD.scale * headExcess * headExcess);
-
-  // 5. Tempo — too fast in either direction
+  // 4. Tempo — too fast in either direction
   if (repWindow.tBottom !== null) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
@@ -620,14 +697,7 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
     messages.push('Hips are riding high \u2014 aim for a straight body line.');
   }
 
-  // 5. Head position (advisory — does not block rep)
-  const headDeviation = Math.abs(repWindow.minHeadSpine - 165);
-  const headDeviationMax = Math.abs(repWindow.maxHeadSpine - 165);
-  if (Math.max(headDeviation, headDeviationMax) > FORM_THRESHOLDS.HEAD_DROP_THRESHOLD) {
-    messages.push('Keep your head neutral \u2014 look at the floor just ahead of your hands.');
-  }
-
-  // 6. Tempo
+  // 5. Tempo
   if (repWindow.tBottom !== null) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
@@ -691,13 +761,19 @@ export function updatePushupState(
     return newState;
   }
 
+  // Compute torso inclination for IDLE gate (uses raw keypoints, not smoothed —
+  // the 1s hold timer provides sufficient noise filtering)
+  const torsoInclination = calculateTorsoInclination(keypoints, visibleSide);
+  newState.lastTorsoInclination = torsoInclination;
+
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothed.elbow, t, smoothed.bodyAlignment);
+  const fsmResult = updateFSM(currentState.fsm, smoothed.elbow, t, smoothed.bodyAlignment, torsoInclination);
   newState.fsm = fsmResult.fsm;
 
-  // Handle partial rep
+  // Handle partial rep — still counts but flags shallow depth
   if (fsmResult.partialRep) {
-    newState.feedback = 'Go deeper \u2014 that one didn\'t count.';
+    newState.repCount++;
+    newState.feedback = 'Go deeper \u2014 try to hit 90 degrees.';
     newState.lastFeedbackTime = t;
     newState.repWindow = null;
     return newState;
@@ -805,6 +881,8 @@ export interface PushupDebugInfo {
   bodyAlignment: number | null;
   hipDev: number | null;
   headSpine: number | null;
+  /** Torso inclination from vertical (0°=standing, 90°=plank) */
+  torsoInclination: number | null;
   // Rep window deltas (min/max during current rep)
   elbowMin: number | null;
   elbowMax: number | null;
@@ -831,6 +909,7 @@ export function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
     bodyAlignment: fmt(angles?.bodyAlignment),
     hipDev: fmt(angles?.hipDeviation),
     headSpine: fmt(angles?.headSpine),
+    torsoInclination: fmt(state.lastTorsoInclination ?? undefined),
     elbowMin: window ? fmtW(window.minElbow, window.maxElbow) && fmt(window.minElbow) : null,
     elbowMax: window ? fmtW(window.minElbow, window.maxElbow) && fmt(window.maxElbow) : null,
     bodyAngleMin: window ? fmtW(window.minBodyAngle, window.maxBodyAngle) && fmt(window.minBodyAngle) : null,
