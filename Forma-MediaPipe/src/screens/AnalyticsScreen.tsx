@@ -141,7 +141,7 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── ACTIVITY CARD ──────────────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#1A1A1A', '#0C0C0C', '#000000']}
+              colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardGradient}
@@ -167,7 +167,7 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── ACTIVE CHALLENGE CARD ──────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#1A1A1A', '#0C0C0C', '#000000']}
+              colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardGradient}
@@ -192,7 +192,7 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── WORKOUT DURATION BARS ─────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#1A1A1A', '#0C0C0C', '#000000']}
+              colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardGradient}

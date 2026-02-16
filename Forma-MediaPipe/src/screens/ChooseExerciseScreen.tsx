@@ -33,7 +33,7 @@ function getExerciseImage(exercise: Exercise): ImageSourcePropType {
   return CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
 }
 
-const CARD_COLORS: [string, string, string] = ['#27272A', '#111111', '#000000'];
+const CARD_COLORS: [string, string, string] = ['#27272A', '#121212', '#0A0A0A'];
 const GRAD_START = { x: 0, y: 0 };
 const GRAD_END = { x: 1, y: 1 };
 const IMAGE_FADE_COLORS: [string, string] = ['transparent', 'rgba(0,0,0,0.85)'];

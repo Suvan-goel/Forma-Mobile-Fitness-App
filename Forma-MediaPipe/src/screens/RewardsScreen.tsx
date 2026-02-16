@@ -21,7 +21,7 @@ const iconMap: { [key: string]: LucideIcon } = {
 
 const getIconComponent = (iconName: string): LucideIcon => iconMap[iconName] || Gift;
 
-const CARD_COLORS: [string, string, string] = ['#1F1F1F', '#0C0C0C', '#000000'];
+const CARD_COLORS: [string, string, string] = ['#1F1F1F', '#0F0F0F', '#0A0A0A'];
 const GRAD_START = { x: 0, y: 0 };
 const GRAD_END = { x: 1, y: 1 };
 const PROGRESS_COLORS: [string, string] = ['#7C3AED', '#8B5CF6'];

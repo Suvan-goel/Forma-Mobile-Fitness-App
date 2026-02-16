@@ -13,7 +13,7 @@ import { X } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useCameraSettings } from '../../contexts/CameraSettingsContext';
 
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#27272A', '#111111', '#000000'];
+const CARD_GRADIENT_COLORS: [string, string, string] = ['#27272A', '#121212', '#0A0A0A'];
 
 interface CameraSettingsModalProps {
   visible: boolean;

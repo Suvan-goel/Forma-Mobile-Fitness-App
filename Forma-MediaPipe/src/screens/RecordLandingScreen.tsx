@@ -130,7 +130,7 @@ export const RecordLandingScreen: React.FC = () => {
           /* ── Active Workout Card ── */
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#27272A', '#111111', '#000000']}
+              colors={['#27272A', '#121212', '#0A0A0A']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardGradient}
@@ -208,7 +208,7 @@ export const RecordLandingScreen: React.FC = () => {
               activeOpacity={0.82}
             >
               <LinearGradient
-                colors={['#27272A', '#111111', '#000000']}
+                colors={['#27272A', '#121212', '#0A0A0A']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.cardGradient}
@@ -229,7 +229,7 @@ export const RecordLandingScreen: React.FC = () => {
               activeOpacity={0.82}
             >
               <LinearGradient
-                colors={['#27272A', '#111111', '#000000']}
+                colors={['#27272A', '#121212', '#0A0A0A']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.cardGradient}

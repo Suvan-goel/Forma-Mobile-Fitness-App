@@ -368,7 +368,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             return (
               <View key={exercise.id} style={styles.exerciseCardOuter}>
                 <LinearGradient
-                  colors={['#1A1A1A', '#0C0C0C', '#000000']}
+                  colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.exerciseCardGradient}

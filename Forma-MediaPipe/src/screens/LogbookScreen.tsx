@@ -254,7 +254,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session }) => {
 }, (prev, next) => prev.session.id === next.session.id && prev.session.formScore === next.session.formScore);
 
 /** Stable references to avoid re-creating objects on every render */
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0C0C0C', '#000000'];
+const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
 const GRADIENT_START = { x: 0, y: 0 };
 const GRADIENT_END = { x: 1, y: 1 };
 
