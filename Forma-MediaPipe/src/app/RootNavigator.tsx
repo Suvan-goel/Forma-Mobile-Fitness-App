@@ -5,12 +5,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Video, BookOpen, BarChart2, Star, User } from 'lucide-react-native';
+import { Video, BookOpen, BarChart2, Star } from 'lucide-react-native';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
 import { LogbookScreen } from '../screens/LogbookScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { RewardsScreen } from '../screens/RewardsScreen';
-import { TrainerScreen } from '../screens/TrainerScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { CameraScreen } from '../screens/CameraScreen';
@@ -60,7 +59,6 @@ export type RootTabParamList = {
   Logbook: undefined;
   Analytics: undefined;
   Record: undefined;
-  Trainer: undefined;
   Rewards: undefined;
 };
 
@@ -74,7 +72,6 @@ const TAB_ICONS: { [key: string]: any } = {
   Logbook: BookOpen,
   Analytics: BarChart2,
   Rewards: Star,
-  Trainer: User,
 };
 
 // Custom Tab Bar Item - memoized for performance
@@ -205,9 +202,9 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
   }, [currentTab, scrollContext]);
   
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
       {/* Collapsible Header - Hidden for Record tab */}
-      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && <AppHeader />}
+      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Rewards' && <AppHeader />}
       
       {/* Tab Navigator with animated margin */}
       <Animated.View 
@@ -225,7 +222,6 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
           <Tab.Screen name="Logbook" component={LogbookScreen} />
           <Tab.Screen name="Analytics" component={AnalyticsScreen} />
           <Tab.Screen name="Record" component={RecordTabWithProvider} />
-          <Tab.Screen name="Trainer" component={TrainerScreen} />
           <Tab.Screen name="Rewards" component={RewardsScreen} />
         </Tab.Navigator>
       </Animated.View>

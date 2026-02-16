@@ -7,10 +7,11 @@
  */
 
 import React, { memo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect } from 'react-native-svg';
 import { Zap, Activity, Target, Dumbbell } from 'lucide-react-native';
-import { COLORS, FONTS, CARD_STYLE, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
 const ICON_MAP: Record<string, any> = {
   move: Zap,
@@ -82,34 +83,63 @@ export const StatCard: React.FC<StatCardProps> = memo(({ label, value, suffix, i
   const IconComponent = iconName ? ICON_MAP[iconName.toLowerCase()] : null;
 
   return (
-    <View style={[styles.card, fullWidth && styles.cardFullWidth]}>
-      <View style={styles.header}>
-        {IconComponent && (
-          <IconComponent
-            size={14}
-            color={COLORS.accent}
-            strokeWidth={1.5}
-          />
-        )}
-        <Text style={styles.label}>{label.toUpperCase()}</Text>
-      </View>
+    <View style={[styles.cardOuter, fullWidth && styles.cardFullWidth]}>
+      <LinearGradient
+        colors={['#1A1A1A', '#0C0C0C', '#000000']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.cardGradient}
+      >
+        <View style={styles.cardGlassEdge}>
+          <View style={styles.header}>
+            {IconComponent && (
+              <IconComponent
+                size={14}
+                color={COLORS.accent}
+                strokeWidth={1.5}
+              />
+            )}
+            <Text style={styles.label}>{label.toUpperCase()}</Text>
+          </View>
 
-      <View style={styles.metricRow}>
-        <Text style={styles.value}>{value}</Text>
-        {suffix && <Text style={styles.suffix}>{suffix}</Text>}
-      </View>
+          <View style={styles.metricRow}>
+            <Text style={styles.value}>{value}</Text>
+            {suffix && <Text style={styles.suffix}>{suffix}</Text>}
+          </View>
 
-      {barData && barData.length > 0 && <MicroBars data={barData} />}
+          {barData && barData.length > 0 && <MicroBars data={barData} />}
+        </View>
+      </LinearGradient>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  card: {
-    ...CARD_STYLE,
+  cardOuter: {
     flex: 1,
-    padding: SPACING.xl,
+    borderRadius: 22,
+    overflow: 'hidden',
     minHeight: 150,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  cardGradient: {
+    flex: 1,
+    borderRadius: 22,
+  },
+  cardGlassEdge: {
+    flex: 1,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SPACING.xl,
     justifyContent: 'space-between',
   },
   cardFullWidth: {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,18 +9,19 @@ import {
   Image,
   ImageSourcePropType,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Bookmark, HelpCircle, Search } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { ChevronLeft, Bookmark, Info, Search } from 'lucide-react-native';
+import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useExercises } from '../hooks';
 import { LoadingSkeleton } from '../components/ui';
-import { Exercise, MuscleGroup } from '../services/api';
+import { Exercise } from '../services/api';
 
-// Category-based images so each card shows an image matching its exercise type
 const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
   'Weightlifting': require('../assets/weightlifting_bg.png'),
   'Calisthenics': require('../assets/calisthenics_bg.png'),
@@ -31,6 +32,11 @@ const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
 function getExerciseImage(exercise: Exercise): ImageSourcePropType {
   return CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
 }
+
+const CARD_COLORS: [string, string, string] = ['#27272A', '#111111', '#000000'];
+const GRAD_START = { x: 0, y: 0 };
+const GRAD_END = { x: 1, y: 1 };
+const IMAGE_FADE_COLORS: [string, string] = ['transparent', 'rgba(0,0,0,0.85)'];
 
 type RecordStackParamList = {
   RecordLanding: undefined;
@@ -44,6 +50,92 @@ type ChooseExerciseNavigationProp = NativeStackNavigationProp<
   'ChooseExercise'
 >;
 
+/** Strict filter order */
+const FILTER_ORDER = ['all', 'chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'core'];
+const FILTER_LABELS: Record<string, string> = {
+  all: 'ALL',
+  chest: 'CHEST',
+  back: 'BACK',
+  shoulders: 'SHOULDERS',
+  biceps: 'BICEPS',
+  triceps: 'TRICEPS',
+  legs: 'LEGS',
+  core: 'CORE',
+};
+
+/* ── Filter Pill ─────────────────────────── */
+
+const FilterPill = memo(({ id, isActive, onPress }: {
+  id: string;
+  isActive: boolean;
+  onPress: (id: string) => void;
+}) => (
+  <TouchableOpacity
+    style={[styles.filterPill, isActive && styles.filterPillActive]}
+    onPress={() => onPress(id)}
+    activeOpacity={0.7}
+  >
+    <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+      {FILTER_LABELS[id] || id.toUpperCase()}
+    </Text>
+  </TouchableOpacity>
+));
+
+/* ── Exercise Card ───────────────────────── */
+
+const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
+  exercise: Exercise;
+  muscleLabel: string;
+  cardWidth: number;
+  onPress: (exercise: Exercise) => void;
+}) => (
+  <TouchableOpacity
+    style={[styles.cardOuter, { width: cardWidth }]}
+    onPress={() => onPress(exercise)}
+    activeOpacity={0.82}
+  >
+    <LinearGradient
+      colors={CARD_COLORS}
+      start={GRAD_START}
+      end={GRAD_END}
+      style={styles.cardGradient}
+    >
+      <View style={styles.cardGlassEdge}>
+        {/* Top icons */}
+        <View style={styles.cardHeader}>
+          <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
+            <Bookmark size={16} color="#52525B" strokeWidth={1.5} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
+            <Info size={16} color="#52525B" strokeWidth={1.5} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Image with gradient fade */}
+        <View style={styles.imageWrap}>
+          <Image
+            source={getExerciseImage(exercise)}
+            style={styles.exerciseImage}
+            resizeMode="cover"
+          />
+          <LinearGradient
+            colors={IMAGE_FADE_COLORS}
+            style={styles.imageFade}
+          />
+        </View>
+
+        {/* Text */}
+        <View style={styles.cardTextBlock}>
+          <Text style={styles.cardName} numberOfLines={2}>{exercise.name}</Text>
+          <Text style={styles.cardMuscle} numberOfLines={1}>{muscleLabel}</Text>
+        </View>
+      </View>
+    </LinearGradient>
+  </TouchableOpacity>
+));
+
+/* ── Main Screen ──────────────────────────── */
+
 export const ChooseExerciseScreen: React.FC = () => {
   const navigation = useNavigation<ChooseExerciseNavigationProp>();
   const insets = useSafeAreaInsets();
@@ -51,83 +143,68 @@ export const ChooseExerciseScreen: React.FC = () => {
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('all');
   const { addExercise } = useCurrentWorkout();
 
-  // Fetch exercises from API service
   const { exercises: allExercises, muscleGroups, isLoading, filterByMuscleGroup } = useExercises();
 
-  // Fixed card width so the last card in an odd row doesn't stretch full width
-  const cardWidth = (screenWidth - SPACING.md * 2 - SPACING.md) / 2;
+  const cardWidth = (screenWidth - SPACING.screenHorizontal * 2 - 12) / 2;
 
-  const handleSelectExercise = (exercise: Exercise) => {
+  const handleSelectExercise = useCallback((exercise: Exercise) => {
     addExercise({ name: exercise.name, category: exercise.category });
     navigation.navigate('CurrentWorkout');
-  };
+  }, [addExercise, navigation]);
 
-  const handleGoBack = () => {
+  const handleGoBack = useCallback(() => {
     navigation.goBack();
-  };
+  }, [navigation]);
 
-  // Filter exercises by selected muscle group
+  const handleFilterPress = useCallback((id: string) => {
+    setSelectedMuscleGroup(id);
+  }, []);
+
   const filteredExercises = useMemo(
     () => filterByMuscleGroup(selectedMuscleGroup),
     [selectedMuscleGroup, filterByMuscleGroup]
   );
 
-  const renderExerciseCard = ({ item }: { item: Exercise }) => (
-    <TouchableOpacity
-      style={[styles.exerciseCard, { width: cardWidth }]}
-      onPress={() => handleSelectExercise(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardHeader}>
-        <TouchableOpacity style={styles.cardIconButton}>
-          <Bookmark size={18} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.cardIconButton}>
-          <HelpCircle size={18} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.exerciseImageContainer}>
-        <Image
-          source={getExerciseImage(item)}
-          style={styles.exerciseImage}
-          resizeMode="cover"
-        />
-      </View>
-      
-      <View style={styles.exerciseCardTextBlock}>
-        <Text style={styles.exerciseCardName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.exerciseCardMuscle} numberOfLines={1}>
-          {muscleGroups.find(m => m.id === item.muscleGroup)?.name || item.muscleGroup}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const muscleNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    muscleGroups.forEach(m => { map[m.id] = m.name.toUpperCase(); });
+    return map;
+  }, [muscleGroups]);
 
-  // Loading state
+  const renderExerciseCard = useCallback(({ item }: { item: Exercise }) => (
+    <ExerciseCard
+      exercise={item}
+      muscleLabel={muscleNameMap[item.muscleGroup] || item.muscleGroup.toUpperCase()}
+      cardWidth={cardWidth}
+      onPress={handleSelectExercise}
+    />
+  ), [cardWidth, handleSelectExercise, muscleNameMap]);
+
+  const keyExtractor = useCallback((item: Exercise, index: number) => `${item.name}-${index}`, []);
+
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-            <ChevronLeft size={24} color={COLORS.text} />
+            <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add exercises</Text>
-          <TouchableOpacity style={styles.headerIconButton}>
-            <Search size={22} color={COLORS.text} />
+          <Text style={styles.headerTitle}>EXERCISE LIBRARY</Text>
+          <TouchableOpacity style={styles.headerIconBtn}>
+            <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
-        <View style={styles.loadingContainer}>
-          <View style={styles.muscleGroupSkeletons}>
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <LoadingSkeleton key={i} variant="circle" height={50} />
+        <View style={styles.loadingWrap}>
+          <View style={styles.pillSkeletons}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <LoadingSkeleton key={i} variant="text" height={32} style={{ width: 70, borderRadius: 16 }} />
             ))}
           </View>
           <View style={styles.cardSkeletons}>
-            <LoadingSkeleton variant="card" height={180} width={cardWidth} />
-            <LoadingSkeleton variant="card" height={180} width={cardWidth} />
-            <LoadingSkeleton variant="card" height={180} width={cardWidth} />
-            <LoadingSkeleton variant="card" height={180} width={cardWidth} />
+            <LoadingSkeleton variant="card" height={200} width={cardWidth} />
+            <LoadingSkeleton variant="card" height={200} width={cardWidth} />
+            <LoadingSkeleton variant="card" height={200} width={cardWidth} />
+            <LoadingSkeleton variant="card" height={200} width={cardWidth} />
           </View>
         </View>
       </View>
@@ -136,203 +213,244 @@ export const ChooseExerciseScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      {/* ── Header ─────────────────────────────── */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-          <ChevronLeft size={24} color={COLORS.text} />
+          <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add exercises</Text>
-        <TouchableOpacity style={styles.headerIconButton}>
-          <Search size={22} color={COLORS.text} />
+        <Text style={styles.headerTitle}>EXERCISE LIBRARY</Text>
+        <TouchableOpacity style={styles.headerIconBtn}>
+          <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
 
-      {/* Muscle Group Sliding Tab */}
-      <View style={styles.muscleGroupTabWrapper}>
+      {/* ── Filter Pills ───────────────────────── */}
+      <View style={styles.filterWrap}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.muscleGroupTab}
-          style={styles.muscleGroupTabContainer}
+          contentContainerStyle={styles.filterRow}
+          style={styles.filterScroll}
+          bounces={false}
         >
-          {muscleGroups.map((group) => (
-            <TouchableOpacity
-              key={group.id}
-              style={[
-                styles.muscleGroupTabItem,
-                selectedMuscleGroup === group.id && styles.muscleGroupTabItemActive,
-              ]}
-              onPress={() => setSelectedMuscleGroup(group.id)}
-            >
-              <Text style={styles.muscleGroupTabIcon}>{group.icon}</Text>
-            </TouchableOpacity>
+          {FILTER_ORDER.map(id => (
+            <FilterPill
+              key={id}
+              id={id}
+              isActive={selectedMuscleGroup === id}
+              onPress={handleFilterPress}
+            />
           ))}
         </ScrollView>
       </View>
 
-      {/* Exercises Subheading */}
-      <View style={styles.subheadingContainer}>
-        <Text style={styles.subheading}>
-          {selectedMuscleGroup === 'all'
-            ? 'All exercises'
-            : muscleGroups.find(m => m.id === selectedMuscleGroup)?.name ?? 'Exercises'}
-        </Text>
-        <TouchableOpacity>
-          <Bookmark size={20} color={COLORS.text} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Exercise Cards Grid */}
+      {/* ── Exercise Grid ──────────────────────── */}
       <FlatList
         data={filteredExercises}
         renderItem={renderExerciseCard}
-        keyExtractor={(item, index) => `${item.name}-${index}`}
+        keyExtractor={keyExtractor}
         numColumns={2}
-        contentContainerStyle={[
-          styles.cardsContainer,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) },
-        ]}
-        columnWrapperStyle={styles.cardRow}
+        contentContainerStyle={styles.gridContent}
+        columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
       />
     </View>
   );
 };
 
+/* ── Styles ──────────────────────────────── */
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#000000',
   },
-  loadingContainer: {
-    flex: 1,
-    padding: SPACING.screenHorizontal,
-  },
-  muscleGroupSkeletons: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  cardSkeletons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.md,
-  },
+
+  /* ── Header ──────────────────────────────── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.sm,
+    paddingBottom: 10,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#27272A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 20,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    fontFamily: FONTS.display.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    letterSpacing: 2,
   },
-  headerIconButton: {
-    width: 40,
-    height: 40,
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#27272A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  muscleGroupTabWrapper: {
-    height: 70,
-    width: '100%',
+
+  /* ── Filter Pills ──────────────────────────── */
+  filterWrap: {
+    height: 60,
+    marginTop: 20,
+    marginBottom: 16,
+    overflow: 'visible',
   },
-  muscleGroupTabContainer: {
-    height: 70,
+  filterScroll: {
+    flex: 1,
+    overflow: 'visible',
   },
-  muscleGroupTab: {
+  filterRow: {
     paddingHorizontal: SPACING.screenHorizontal,
-    height: 70,
+    gap: 8,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  filterPill: {
+    height: 34,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  muscleGroupTabItem: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.cardBackground,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: SPACING.sm,
+  filterPillActive: {
+    backgroundColor: '#8B5CF6',
+    borderColor: '#8B5CF6',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 12,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  filterPillText: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 11,
+    color: '#71717A',
+    letterSpacing: 2,
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+  },
+
+  /* ── Grid ───────────────────────────────── */
+  gridContent: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: 150,
+  },
+  gridRow: {
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  /* ── Card ───────────────────────────────── */
+  cardOuter: {
+    borderRadius: 16,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 15,
+      },
+      android: { elevation: 4 },
+    }),
   },
-  muscleGroupTabItemActive: {
-    backgroundColor: COLORS.primary,
-    opacity: 0.8,
+  cardGradient: {
+    borderRadius: 16,
   },
-  muscleGroupTabIcon: {
-    fontSize: 24,
-  },
-  subheadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.md,
-  },
-  subheading: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
-  },
-  cardsContainer: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-  },
-  cardRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  exerciseCard: {
-    ...CARD_STYLE,
-    padding: SPACING.sm,
+  cardGlassEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 8,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SPACING.xs,
+    marginBottom: 4,
   },
-  cardIconButton: {
+  cardIconBtn: {
     width: 28,
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  exerciseImageContainer: {
+
+  /* ── Image ──────────────────────────────── */
+  imageWrap: {
     width: '100%',
-    height: 120,
-    borderRadius: 12,
+    height: 110,
+    borderRadius: 10,
     overflow: 'hidden',
-    marginBottom: SPACING.sm,
+    marginBottom: 8,
   },
   exerciseImage: {
     width: '100%',
     height: '100%',
   },
-  exerciseCardTextBlock: {
-    paddingHorizontal: SPACING.sm,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.sm,
+  imageFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 40,
   },
-  exerciseCardName: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+
+  /* ── Text Block ─────────────────────────── */
+  cardTextBlock: {
+    paddingHorizontal: 4,
+    paddingBottom: 6,
+  },
+  cardName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
     marginBottom: 3,
   },
-  exerciseCardMuscle: {
-    fontSize: 12,
+  cardMuscle: {
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
+    fontSize: 10,
+    color: '#A1A1AA',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+
+  /* ── Loading ─────────────────────────────── */
+  loadingWrap: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+  },
+  pillSkeletons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  cardSkeletons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
 });

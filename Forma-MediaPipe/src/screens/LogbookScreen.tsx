@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   View,
   StyleSheet,
@@ -197,19 +197,28 @@ interface WorkoutCardProps {
   session: WorkoutSession;
 }
 
-const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
+/** Card height (content + padding) + gap between cards for getItemLayout */
+const CARD_INNER_HEIGHT = 100;
+const CARD_GAP = 14;
+const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
+
+const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const handlePress = useCallback(() => {
+    navigation.navigate('WorkoutDetails', { workoutId: session.id });
+  }, [navigation, session.id]);
 
   return (
     <TouchableOpacity
       style={styles.cardOuter}
       activeOpacity={0.82}
-      onPress={() => navigation.navigate('WorkoutDetails', { workoutId: session.id })}
+      onPress={handlePress}
     >
       <LinearGradient
-        colors={['#1A1A1A', '#0C0C0C', '#000000']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        colors={CARD_GRADIENT_COLORS}
+        start={GRADIENT_START}
+        end={GRADIENT_END}
         style={styles.cardGradient}
       >
         <View style={styles.cardGlassEdge}>
@@ -242,7 +251,12 @@ const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
       </LinearGradient>
     </TouchableOpacity>
   );
-};
+}, (prev, next) => prev.session.id === next.session.id && prev.session.formScore === next.session.formScore);
+
+/** Stable references to avoid re-creating objects on every render */
+const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0C0C0C', '#000000'];
+const GRADIENT_START = { x: 0, y: 0 };
+const GRADIENT_END = { x: 1, y: 1 };
 
 /* ── Main Screen ──────────────────────────── */
 
@@ -251,6 +265,7 @@ export const LogbookScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { onScroll } = useScroll();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const hasAnimated = useRef(false);
 
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -269,7 +284,8 @@ export const LogbookScreen: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!isLoading && !error) {
+    if (!isLoading && !error && !hasAnimated.current) {
+      hasAnimated.current = true;
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
     }
   }, [isLoading, error, fadeAnim]);
@@ -372,6 +388,12 @@ export const LogbookScreen: React.FC = () => {
   };
 
   const filteredWorkouts = getFilteredWorkouts();
+
+  const renderWorkoutCard = useCallback(({ item }: { item: WorkoutSession }) => (
+    <WorkoutCard session={item} />
+  ), []);
+
+  const keyExtractor = useCallback((item: WorkoutSession) => item.id, []);
 
   const handleSettingsPress = useCallback(() => {
     navigation.navigate('Settings');
@@ -508,13 +530,17 @@ export const LogbookScreen: React.FC = () => {
         ) : (
           <FlatList
             data={filteredWorkouts}
-            renderItem={({ item }) => <WorkoutCard session={item} />}
-            keyExtractor={(item) => item.id}
+            renderItem={renderWorkoutCard}
+            keyExtractor={keyExtractor}
             ListHeaderComponent={ListHeader}
             contentContainerStyle={[styles.listContent, { paddingBottom: 200 }]}
             showsVerticalScrollIndicator={false}
             onScroll={onScroll}
             scrollEventThrottle={16}
+            removeClippedSubviews={true}
+            initialNumToRender={5}
+            maxToRenderPerBatch={5}
+            windowSize={5}
           />
         )}
       </Animated.View>
@@ -545,7 +571,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: SPACING.sm,
+    paddingTop: 2,
     paddingBottom: SPACING.sm,
   },
   welcomeLeft: {
@@ -588,8 +614,8 @@ const styles = StyleSheet.create({
 
   /* ── Title Block ─────────────────────────── */
   titleBlock: {
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
@@ -686,6 +712,7 @@ const styles = StyleSheet.create({
 
   /* ── Workout Card ────────────────────────── */
   cardOuter: {
+    height: CARD_INNER_HEIGHT,
     borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({

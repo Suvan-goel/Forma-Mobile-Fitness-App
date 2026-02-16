@@ -5,16 +5,14 @@
 import { MuscleGroup, Exercise } from '../../api/types';
 
 export const mockMuscleGroups: MuscleGroup[] = [
-  { id: 'all', name: 'All', icon: '💪' },
-  { id: 'chest', name: 'Chest', icon: '🫁' },
-  { id: 'back', name: 'Back', icon: '🦴' },
-  { id: 'shoulders', name: 'Shoulders', icon: '💪' },
-  { id: 'biceps', name: 'Biceps', icon: '💪' },
-  { id: 'triceps', name: 'Triceps', icon: '💪' },
-  { id: 'legs', name: 'Legs', icon: '🦵' },
-  { id: 'glutes', name: 'Glutes', icon: '🍑' },
-  { id: 'calves', name: 'Calves', icon: '🦵' },
-  { id: 'core', name: 'Core', icon: '🫁' },
+  { id: 'all', name: 'All', icon: '' },
+  { id: 'chest', name: 'Chest', icon: '' },
+  { id: 'back', name: 'Back', icon: '' },
+  { id: 'shoulders', name: 'Shoulders', icon: '' },
+  { id: 'biceps', name: 'Biceps', icon: '' },
+  { id: 'triceps', name: 'Triceps', icon: '' },
+  { id: 'legs', name: 'Legs', icon: '' },
+  { id: 'core', name: 'Core', icon: '' },
 ];
 
 export const mockExercises: Exercise[] = [
@@ -57,18 +55,6 @@ export const mockExercises: Exercise[] = [
   { name: 'Leg Press', muscleGroup: 'legs', category: 'Weightlifting' },
   { name: 'Walking Lunges', muscleGroup: 'legs', category: 'Weightlifting' },
   { name: 'Leg Curl (machine)', muscleGroup: 'legs', category: 'Weightlifting' },
-  // Glutes
-  { name: 'Barbell Hip Thrust', muscleGroup: 'glutes', category: 'Weightlifting' },
-  { name: 'Bulgarian Split Squat', muscleGroup: 'glutes', category: 'Weightlifting' },
-  { name: 'Sumo Deadlift', muscleGroup: 'glutes', category: 'Weightlifting' },
-  { name: 'Cable Kickbacks', muscleGroup: 'glutes', category: 'Weightlifting' },
-  { name: 'Step-Ups', muscleGroup: 'glutes', category: 'Weightlifting' },
-  // Calves
-  { name: 'Standing Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
-  { name: 'Seated Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
-  { name: 'Donkey Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
-  { name: 'Single-Leg Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
-  { name: 'Leg Press Calf Raises', muscleGroup: 'calves', category: 'Weightlifting' },
   // Core (Abs & Obliques)
   { name: 'Hanging Leg Raises', muscleGroup: 'core', category: 'Weightlifting' },
   { name: 'Cable Crunches', muscleGroup: 'core', category: 'Weightlifting' },

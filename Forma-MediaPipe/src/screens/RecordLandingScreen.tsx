@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
-  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +19,6 @@ import {
   Pause,
   Play,
   Flag,
-  Settings,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
@@ -114,39 +112,10 @@ export const RecordLandingScreen: React.FC = () => {
     });
   };
 
-  const handleSettingsPress = () => {
-    navigation.getParent()?.getParent()?.navigate('Settings');
-  };
-
   return (
     <View style={styles.container}>
       {/* ── HEADER ──────────────────────────────── */}
-      <View style={styles.headerSection}>
-        {/* Welcome Row — matches Logbook */}
-        <View style={styles.welcomeRow}>
-          <View style={styles.welcomeLeft}>
-            <View style={styles.logoWrap}>
-              <Image
-                source={require('../assets/forma_purple_logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
-            <View>
-              <Text style={styles.welcomeLabel}>Welcome back,</Text>
-              <Text style={styles.welcomeName}>Athlete</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={handleSettingsPress}
-            activeOpacity={0.7}
-          >
-            <Settings size={20} color="#71717A" strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Title Block */}
+      <View style={[styles.headerSection, { paddingTop: insets.top + 16 }]}>
         <View style={styles.titleBlock}>
           <Text style={styles.headerTitle}>CAPTURE</Text>
           <Text style={styles.headerSubtitle}>TODAY'S SESSION</Text>
@@ -292,53 +261,8 @@ const styles = StyleSheet.create({
   headerSection: {
     paddingHorizontal: SPACING.screenHorizontal,
   },
-  welcomeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.sm,
-  },
-  welcomeLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 48,
-    height: 48,
-  },
-  welcomeLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: '#A1A1AA',
-  },
-  welcomeName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 17,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   titleBlock: {
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingBottom: 16,
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,

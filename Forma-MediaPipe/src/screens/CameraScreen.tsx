@@ -601,8 +601,9 @@ export const CameraScreen: React.FC = () => {
   const showCamera = cameraMounted && !isClosing;
 
 
-  const topBarContentHeight = insets.top + 44;
-  const gapAboveCamera = SPACING.xl;
+  const topInset = insets.top + 8;
+  const topBarContentHeight = topInset + 44;
+  const gapAboveCamera = 8;
   const topBarHeight = topBarContentHeight + gapAboveCamera;
   const bottomBarHeight = insets.bottom + SPACING.lg + 40 + SPACING.lg + 80 + SPACING.md;
 
@@ -629,7 +630,7 @@ export const CameraScreen: React.FC = () => {
       {/* Overlay UI */}
       <View style={[styles.overlay, { pointerEvents: 'box-none' }]}>
         {/* Top Bar */}
-        <View style={[styles.topBar, { paddingTop: insets.top }]}>
+        <View style={[styles.topBar, { paddingTop: topInset }]}>
           <TouchableOpacity
             style={styles.discardButton}
             onPress={handleDiscardSetPress}

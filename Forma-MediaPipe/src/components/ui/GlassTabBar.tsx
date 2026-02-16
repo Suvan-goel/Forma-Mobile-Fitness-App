@@ -11,16 +11,15 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { BookOpen, BarChart2, Video, User, Star } from 'lucide-react-native';
+import { BookOpen, BarChart2, Video, Star } from 'lucide-react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 
 // Icon + label config for each tab
 const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
   Logbook:   { icon: BookOpen,  label: 'Logbook' },
   Analytics: { icon: BarChart2,  label: 'Analytics' },
-  Record:    { icon: Video,      label: 'Video' },
-  Trainer:   { icon: User,       label: 'Profile' },
-  Rewards:   { icon: Star,       label: 'Premium' },
+  Record:    { icon: Video,      label: 'Record' },
+  Rewards:   { icon: Star,       label: 'Rewards' },
 };
 
 /** Single tab item */

@@ -285,7 +285,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── HEADER ──────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 2 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <TouchableOpacity style={styles.headerBackButton} onPress={handleGoBack} activeOpacity={0.7}>
           <ChevronLeft size={22} color="#71717A" strokeWidth={1.5} />
         </TouchableOpacity>

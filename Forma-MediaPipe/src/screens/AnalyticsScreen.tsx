@@ -12,9 +12,10 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Animated, Dimensions, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Timer, Trophy, Target } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useAnalytics } from '../hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
@@ -138,63 +139,90 @@ export const AnalyticsScreen: React.FC = () => {
           </View>
 
           {/* ── ACTIVITY CARD ──────────────────────── */}
-          <View style={styles.activityCard}>
-            <View style={styles.activityHeader}>
-              <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.activityTitle}>Total volume</Text>
-            </View>
-            <View style={styles.activityMetricRow}>
-              <View style={styles.activityBadge}>
-                <Trophy size={20} color="#A78BFA" strokeWidth={1.5} />
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={['#1A1A1A', '#0C0C0C', '#000000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <View style={styles.activityHeader}>
+                  <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.activityTitle}>Total volume</Text>
+                </View>
+                <View style={styles.activityMetricRow}>
+                  <View style={styles.activityBadge}>
+                    <Trophy size={20} color="#A78BFA" strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.activityValueWrap}>
+                    <Text style={styles.activityValue}>10,580</Text>
+                    <Text style={styles.activitySuffix}>KG</Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.activityValueWrap}>
-                <Text style={styles.activityValue}>10,580</Text>
-                <Text style={styles.activitySuffix}>KG</Text>
-              </View>
-            </View>
+            </LinearGradient>
           </View>
 
           {/* ── ACTIVE CHALLENGE CARD ──────────────── */}
-          <View style={styles.challengeCard}>
-            <View style={styles.activityHeader}>
-              <Target size={14} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.activityTitle}>Workout time</Text>
-            </View>
-            <View style={styles.challengeMetricRow}>
-              <View style={styles.challengeValueWrap}>
-                <Text style={styles.challengeValueSmall}>
-                  {workoutHours > 0 ? `${workoutHours}h ` : ''}{workoutMins}m
-                </Text>
-                <Text style={styles.activitySuffix}>this week</Text>
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={['#1A1A1A', '#0C0C0C', '#000000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <View style={styles.activityHeader}>
+                  <Target size={14} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.activityTitle}>Workout time</Text>
+                </View>
+                <View style={styles.challengeMetricRow}>
+                  <View style={styles.challengeValueWrap}>
+                    <Text style={styles.challengeValueSmall}>
+                      {workoutHours > 0 ? `${workoutHours}h ` : ''}{workoutMins}m
+                    </Text>
+                    <Text style={styles.activitySuffix}>this week</Text>
+                  </View>
+                </View>
               </View>
-            </View>
+            </LinearGradient>
           </View>
 
           {/* ── WORKOUT DURATION BARS ─────────────── */}
-          <View style={styles.weekCard}>
-            <Text style={styles.weekTitle}>THIS WEEK</Text>
-            <View style={styles.weekBarsRow}>
-              {analytics.weeklyBarData.map((d, i) => {
-                const maxVal = Math.max(...analytics.weeklyBarData.map(b => b.value), 1);
-                const h = Math.max(3, (d.value / maxVal) * 56);
-                return (
-                  <View key={i} style={styles.weekBarCol}>
-                    <View style={styles.weekBarTrack}>
-                      <View
-                        style={[
-                          styles.weekBar,
-                          {
-                            height: h,
-                            opacity: d.value > 0 ? 0.5 + (d.value / maxVal) * 0.5 : 0.08,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.weekBarLabel}>{d.day.slice(0, 1)}</Text>
-                  </View>
-                );
-              })}
-            </View>
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={['#1A1A1A', '#0C0C0C', '#000000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <Text style={styles.weekTitle}>THIS WEEK</Text>
+                <View style={styles.weekBarsRow}>
+                  {analytics.weeklyBarData.map((d, i) => {
+                    const maxVal = Math.max(...analytics.weeklyBarData.map(b => b.value), 1);
+                    const h = Math.max(3, (d.value / maxVal) * 56);
+                    return (
+                      <View key={i} style={styles.weekBarCol}>
+                        <View style={styles.weekBarTrack}>
+                          <View
+                            style={[
+                              styles.weekBar,
+                              {
+                                height: h,
+                                opacity: d.value > 0 ? 0.5 + (d.value / maxVal) * 0.5 : 0.08,
+                              },
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.weekBarLabel}>{d.day.slice(0, 1)}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </LinearGradient>
           </View>
 
           {/* paddingBottom on scrollContent handles tab bar clearance */}
@@ -224,7 +252,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.md,
+    paddingTop: 2,
     paddingBottom: 130,
   },
 
@@ -234,7 +262,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: SPACING.md,
-    paddingTop: SPACING.xs,
+    paddingTop: 0,
   },
   headerTitle: {
     fontFamily: FONTS.display.semibold,
@@ -272,12 +300,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  /* ── Activity Card ───────────────────────── */
-  activityCard: {
-    ...CARD_STYLE,
-    padding: SPACING.xl,
+  /* ── Shared Gradient Card ────────────────── */
+  cardOuter: {
+    borderRadius: 22,
+    overflow: 'hidden',
     marginBottom: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
   },
+  cardGradient: {
+    borderRadius: 22,
+  },
+  cardGlassEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SPACING.xl,
+  },
+
+  /* ── Activity Card ───────────────────────── */
   activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,11 +369,6 @@ const styles = StyleSheet.create({
   },
 
   /* ── Challenge Card ────────────────────────── */
-  challengeCard: {
-    ...CARD_STYLE,
-    padding: SPACING.xl,
-    marginBottom: 10,
-  },
   challengeMetricRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -343,11 +386,6 @@ const styles = StyleSheet.create({
   },
 
   /* ── Week Bars Card ──────────────────────── */
-  weekCard: {
-    ...CARD_STYLE,
-    padding: SPACING.xl,
-    marginBottom: 10,
-  },
   weekTitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
