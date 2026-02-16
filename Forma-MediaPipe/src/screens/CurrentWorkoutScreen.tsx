@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -57,10 +58,20 @@ const formatStopwatch = (totalSeconds: number) => {
 
 /* ── Main Screen ──────────────────────────── */
 
+const TIMER_FONT_SIZE_MAX = 72;
+const TIMER_FONT_SIZE_MIN = 44;
+const TIMER_LINE_HEIGHT_RATIO = 80 / 72;
+
 export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
   const route = useRoute<CurrentWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const timerFontSize = Math.min(
+    TIMER_FONT_SIZE_MAX,
+    Math.max(TIMER_FONT_SIZE_MIN, (windowWidth - 2 * SPACING.screenHorizontal) / 5)
+  );
+  const timerLineHeight = Math.round(timerFontSize * TIMER_LINE_HEIGHT_RATIO);
   const {
     exercises,
     sets,
@@ -308,7 +319,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
       {/* ── TIMER HERO ──────────────────────── */}
       <View style={styles.timerBlock}>
-        <MonoText bold style={styles.timerText}>
+        <MonoText bold style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerLineHeight }]}>
           {formatStopwatch(elapsedSeconds)}
         </MonoText>
         {isPaused && (
@@ -593,7 +604,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 72,
+    fontSize: TIMER_FONT_SIZE_MAX,
     color: '#FFFFFF',
     lineHeight: 80,
     letterSpacing: -2,
