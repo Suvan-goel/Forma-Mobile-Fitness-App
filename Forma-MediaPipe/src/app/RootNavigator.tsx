@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, BookOpen, BarChart2, Star, User } from 'lucide-react-native';
+import { GlassTabBar } from '../components/ui/GlassTabBar';
 import { LogbookScreen } from '../screens/LogbookScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { RewardsScreen } from '../screens/RewardsScreen';
@@ -206,7 +207,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
       {/* Collapsible Header - Hidden for Record tab */}
-      {currentTab !== 'Record' && <AppHeader />}
+      {currentTab !== 'Record' && currentTab !== 'Analytics' && <AppHeader />}
       
       {/* Tab Navigator with animated margin */}
       <Animated.View 
@@ -216,7 +217,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
         }}
       >
         <Tab.Navigator
-          tabBar={(props) => <CustomTabBar {...props} onTabChange={onTabChange} />}
+          tabBar={(props) => <GlassTabBar {...props} onTabChange={onTabChange} />}
           screenOptions={{
             headerShown: false,
           }}

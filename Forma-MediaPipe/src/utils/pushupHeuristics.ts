@@ -532,10 +532,16 @@ function updateFSM(
       const bodyAligned =
         bodyAlignment >= THRESHOLDS.PLANK_BODY_MIN &&
         bodyAlignment <= THRESHOLDS.PLANK_BODY_MAX;
+
+      // torsoInclination can be null when landmarks are momentarily lost.
+      // Treat null as "no data" — don't advance the timer, but don't reset it
+      // either. Only a definitive out-of-range reading resets.
       const torsoHorizontal =
         torsoInclination !== null &&
         torsoInclination >= THRESHOLDS.TORSO_INCLINE_MIN &&
         torsoInclination <= THRESHOLDS.TORSO_INCLINE_MAX;
+      const torsoDefinitelyNot =
+        torsoInclination !== null && !torsoHorizontal;
 
       if (armsExtended && bodyAligned && torsoHorizontal) {
         if (fsm.tIdleStableSince === null) {
@@ -544,9 +550,13 @@ function updateFSM(
           fsm.phase = 'PLANK';
           fsm.tIdleStableSince = null;
         }
-      } else {
+      } else if (!armsExtended || !bodyAligned || torsoDefinitelyNot) {
+        // Reset only on definitive failure — null torso (lost landmarks) is
+        // tolerated so jittery frames don't restart the hold timer.
         fsm.tIdleStableSince = null;
       }
+      // else: torsoInclination is null but arms/body are fine — hold timer
+      // continues without advancing (we just skip this frame).
       break;
     }
 

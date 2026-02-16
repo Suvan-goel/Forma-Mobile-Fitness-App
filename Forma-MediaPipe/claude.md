@@ -73,7 +73,7 @@ RN 0.79.x has a `jsinspector-modern` bug where `LOG(FATAL)` fires on WebSocket r
 Config location: `app.json` → `plugins` → `expo-build-properties` → `ios.jsEngine: "jsc"`
 
 ### Rules for cross-platform safety
-1. **Never assume Hermes globals on iOS.** `btoa()`, `atob()` are Hermes built-ins but NOT guaranteed on JSC. Use `FileReader.readAsDataURL()` for base64 encoding instead. If you must use `btoa`, add a runtime guard: `if (typeof btoa === 'undefined') throw new Error(...)`.
+1. **Never assume Hermes globals on iOS.** `btoa()`, `atob()` are Hermes built-ins but NOT guaranteed on JSC. `FileReader.readAsDataURL()` **hangs indefinitely on JSC with binary blobs** — do NOT use it for audio/binary data. Instead use `response.arrayBuffer()` + a pure-JS base64 encoder (see `uint8ArrayToBase64` in `elevenlabsTTS.ts`). If you must use `btoa`, add a runtime guard: `if (typeof btoa === 'undefined') throw new Error(...)`.
 2. **Never mix ESM and CJS in config files.** Expo evaluates `app.config.js`, `babel.config.js`, `metro.config.js` as CommonJS. Using `import` statements will cause a SyntaxError that blocks ALL native builds. Always use `require()` / `module.exports`.
 3. **Never add a native dependency without checking iOS impact.** Every package with native code adds pods to the iOS build. Before adding:
    - Verify it has an Expo config plugin or supports autolinking
@@ -99,7 +99,7 @@ When working on Android-specific features:
 - [ ] Is the version compatible with Expo SDK 53? Run `npx expo install --fix`
 
 ### API and runtime checklist
-- [ ] No `btoa()` / `atob()` calls — use `FileReader.readAsDataURL()` or a library
+- [ ] No `btoa()` / `atob()` calls — use `arrayBuffer()` + pure-JS base64 encoder (see `elevenlabsTTS.ts`). Do NOT use `FileReader.readAsDataURL()` for binary data (hangs on JSC).
 - [ ] No CSS patterns that don't work in React Native (e.g., `left: '50%'` with `marginLeft` for centering)
 - [ ] `Platform.OS` checks where behavior diverges (audio config, permissions, etc.)
 - [ ] Config files use CJS only (`require` / `module.exports`, never `import`)
@@ -118,6 +118,11 @@ When working on Android-specific features:
 - Use `InteractionManager.runAfterInteractions()` to defer non-critical UI updates
 - Throttle high-frequency updates (pose data at 30fps, UI updates at ~10fps)
 - Keep heavy computation out of the render cycle — use refs + `InteractionManager`
+
+### React Hooks — Rules & Pitfalls
+- **Never place hooks (`useCallback`, `useMemo`, `useState`, etc.) inside `.map()` or any loop/conditional.** This violates React's rules of hooks and causes "Rendered fewer/more hooks than expected" crashes.
+- **Never `return null` (early return) before all hooks have executed.** If a component conditionally hides itself (e.g., `if (hideTabBar) return null`), the early return MUST come AFTER all hooks (including any inside `.map()` loops). Use `display: 'none'` or render to a hidden state instead, OR move the early return below the hook calls.
+- When refactoring a component that uses `display: 'none'` to hide, do NOT convert it to an early `return null` unless you verify no hooks follow the return point.
 
 ### State management
 - React hooks + context (no Redux or heavy state libs)

@@ -1,43 +1,60 @@
 /**
  * Forma Mobile - Design System Tokens
- * Clean minimal fitness tracker with teal accents
- * Based on reference design
+ * Cyber-Minimalist — OLED black, electric violet, bold grotesk
  */
 
 export const COLORS = {
   // Backgrounds
-  background: '#000000', // App Background - Pure black
-  cardBackground: '#262626', // Card Background
-  cardBackgroundLight: '#262626', // Lighter card background
+  background: '#000000',
+  cardBackground: '#0A0A0A',
+  cardBackgroundLight: '#141414',
 
-  // Primary Actions
-  primary: '#00ac7c', // Teal - Primary accent
-  primaryDark: '#00936a', // Darker teal for gradients
-  
+  // Primary Actions — Teal (used across the app)
+  primary: '#00ac7c',
+  primaryDark: '#00936a',
+
+  // Accent — Electric Violet
+  accent: '#8B5CF6',
+  accentDark: '#7C3AED',
+
   // Secondary Colors
-  orange: '#E07856', // Orange for secondary workout cards
+  orange: '#E07856',
   orangeDark: '#D86648',
-  yellow: '#F5A623', // Yellow/Gold for progress indicators
+  yellow: '#F5A623',
 
   // Text
-  text: '#FFFFFF', // Pure White
-  textSecondary: '#8B92A0', // Muted Blue-Gray
-  textTertiary: '#5A6270', // Darker Gray
-  
+  text: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  textTertiary: '#52525B',
+
   // UI Elements
-  border: '#2A3340', // Subtle dark borders
-  inactive: '#4A5568', // Inactive elements
-  
+  border: '#1C1C1E',
+  inactive: '#4A5568',
+
   // Chart colors
   chartPrimary: '#00ac7c',
-  chartSecondary: '#3A4550',
+  chartSecondary: 'rgba(255,255,255,0.06)',
+
+  // Neon glow — UV blacklight violet
+  glowViolet: 'rgba(139, 92, 246, 0.35)',
+  glowVioletStrong: 'rgba(139, 92, 246, 0.55)',
 } as const;
 
-/** Standard card styling - #262626 background, no border, 14px radius */
+/** Editorial card — near-black stealth surface with hairline border */
 export const CARD_STYLE = {
-  backgroundColor: '#262626',
-  borderWidth: 0,
-  borderRadius: 14,
+  backgroundColor: 'rgba(255,255,255,0.04)',
+  borderWidth: 1,
+  borderColor: 'rgba(255,255,255,0.08)',
+  borderRadius: 20,
+} as const;
+
+/** Violet glow shadow for iOS — apply with spread operator */
+export const GLOW_SHADOW = {
+  shadowColor: '#8B5CF6',
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.5,
+  shadowRadius: 20,
+  elevation: 8,
 } as const;
 
 export const SPACING = {
@@ -48,24 +65,38 @@ export const SPACING = {
   xl: 24,
   xxl: 32,
   xxxl: 48,
-  /** Reduced horizontal padding for screen edges - uses more of phone width */
-  screenHorizontal: 12,
+  screenHorizontal: 16,
 } as const;
 
 export const FONTS = {
-  // UI Font - Inter (with system font fallback)
+  // Display — Space Grotesk (Modern Geometric Grotesk)
+  display: {
+    medium: 'SpaceGrotesk_500Medium',
+    semibold: 'SpaceGrotesk_600SemiBold',
+    bold: 'SpaceGrotesk_700Bold',
+    mediumFallback: 'System',
+    semiboldFallback: 'System',
+    boldFallback: 'System',
+  },
+  // Legacy Serif — Playfair Display (kept for non-analytics screens)
+  serif: {
+    regular: 'PlayfairDisplay_400Regular',
+    bold: 'PlayfairDisplay_700Bold',
+    black: 'PlayfairDisplay_900Black',
+    regularFallback: 'Georgia',
+    boldFallback: 'Georgia',
+  },
+  // UI Font — Inter (Sans-Serif)
   ui: {
     regular: 'Inter_400Regular',
     bold: 'Inter_700Bold',
-    // Fallback to system fonts if custom fonts don't load
     regularFallback: 'System',
     boldFallback: 'System',
   },
-  // Numbers/HUD Font - JetBrains Mono (with monospace fallback)
+  // Numbers/HUD — JetBrains Mono
   mono: {
     regular: 'JetBrainsMono_400Regular',
     bold: 'JetBrainsMono_700Bold',
-    // Fallback to system monospace
     regularFallback: 'Courier',
     boldFallback: 'Courier',
   },

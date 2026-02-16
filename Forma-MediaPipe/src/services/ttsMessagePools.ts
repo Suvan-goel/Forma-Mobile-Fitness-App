@@ -24,7 +24,12 @@ export type IssueType =
   | 'torso_fail'
   | 'tempo_up'
   | 'tempo_down'
-  | 'asymmetry';
+  | 'asymmetry'
+  // Pushup-specific
+  | 'depth_short'
+  | 'lockout_short'
+  | 'hip_sag'
+  | 'hip_pike';
 
 export type PositiveCategory = 'positive' | 'transition_good';
 
@@ -109,6 +114,37 @@ export const ISSUE_POOLS: Record<IssueType, MessagePool> = {
       'Even it out — both arms together.',
       'Your arms are out of sync.',
       'Match both sides.',
+    ],
+  },
+  // Pushup-specific pools
+  depth_short: {
+    messages: [
+      'Go deeper.',
+      'Get your chest closer to the floor.',
+      'Lower — aim for ninety degrees.',
+      'Not deep enough.',
+    ],
+  },
+  lockout_short: {
+    messages: [
+      'Lock out at the top.',
+      'Extend your arms fully.',
+      'Push all the way up.',
+    ],
+  },
+  hip_sag: {
+    messages: [
+      'Hips are dropping — squeeze your core.',
+      'Tighten your core — keep that body straight.',
+      'Your hips are sagging.',
+      'Brace your abs — straight line from head to heels.',
+    ],
+  },
+  hip_pike: {
+    messages: [
+      'Drop your hips down.',
+      'Your hips are too high — flatten out.',
+      'Stop piking — keep a straight body line.',
     ],
   },
 };
@@ -215,6 +251,11 @@ export const ISSUE_PRIORITY: Record<IssueType, number> = {
   tempo_up: 10,
   tempo_down: 10,
   asymmetry: 10,
+  // Pushup-specific
+  depth_short: 30,
+  lockout_short: 25,
+  hip_sag: 35,
+  hip_pike: 35,
 };
 
 // ============================================================================
@@ -223,6 +264,7 @@ export const ISSUE_PRIORITY: Record<IssueType, number> = {
 // ============================================================================
 
 export const FEEDBACK_TO_ISSUE: Record<string, IssueType> = {
+  // Barbell Curl
   'Flex more at the top of the curl.': 'incomplete_flex',
   'Extend fully at the bottom.': 'incomplete_extend',
   'Incomplete rep — curl all the way up and fully extend.': 'incomplete_rom',
@@ -233,6 +275,16 @@ export const FEEDBACK_TO_ISSUE: Record<string, IssueType> = {
   'Slow down — control the curl.': 'tempo_up',
   "Control the lowering — don't drop the weight.": 'tempo_down',
   'Arms are uneven — curl both sides together.': 'asymmetry',
+  // Push-Up
+  'Go deeper \u2014 aim for elbows at 90 degrees.': 'depth_short',
+  'Lock out your arms fully at the top.': 'lockout_short',
+  'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': 'incomplete_rom',
+  'Hips are sagging \u2014 engage your core to maintain a straight line.': 'hip_sag',
+  'Keep your hips up \u2014 your body line is dropping.': 'hip_sag',
+  'Hips are piking up \u2014 lower them to maintain a straight plank.': 'hip_pike',
+  'Hips are riding high \u2014 aim for a straight body line.': 'hip_pike',
+  'Slow down the push \u2014 control the movement.': 'tempo_up',
+  "Control the descent \u2014 don't drop into the pushup.": 'tempo_down',
 };
 
 // ============================================================================

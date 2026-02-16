@@ -14,6 +14,16 @@ import {
   JetBrainsMono_400Regular,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_700Bold,
+  PlayfairDisplay_900Black,
+} from '@expo-google-fonts/playfair-display';
+import {
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from '@expo-google-fonts/space-grotesk';
 import { COLORS } from './src/constants/theme';
 import { RootNavigator } from './src/app/RootNavigator';
 
@@ -23,6 +33,12 @@ export default function App() {
     Inter_700Bold,
     JetBrainsMono_400Regular,
     JetBrainsMono_700Bold,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_700Bold,
+    PlayfairDisplay_900Black,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
   });
 
   // Proceed if fonts loaded OR if there's an error (use system fonts as fallback)

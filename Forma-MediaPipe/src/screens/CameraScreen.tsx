@@ -359,6 +359,13 @@ export const CameraScreen: React.FC = () => {
         };
         accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, currentScore];
         accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, currentFeedback ?? 'Great rep!'];
+
+        // TTS coaching — fire-and-forget, does not block landmark processing
+        if (isTTSEnabledRef.current) {
+          const repMessages = newState.lastRepResult?.messages ?? [];
+          const repScore = newState.lastRepResult?.score ?? 100;
+          ttsOnRepCompleted(repMessages, repScore).catch(() => {});
+        }
       }
       pendingUIStateRef.current = pending;
 
@@ -620,7 +627,7 @@ export const CameraScreen: React.FC = () => {
       </Pressable>
 
       {/* Overlay UI */}
-      <View style={styles.overlay} pointerEvents="box-none">
+      <View style={[styles.overlay, { pointerEvents: 'box-none' }]}>
         {/* Top Bar */}
         <View style={[styles.topBar, { paddingTop: insets.top }]}>
           <TouchableOpacity
