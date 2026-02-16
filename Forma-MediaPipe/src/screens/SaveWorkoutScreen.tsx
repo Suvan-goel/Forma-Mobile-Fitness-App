@@ -10,14 +10,17 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
 import { saveWorkout } from '../services/workoutStorage';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
+
+const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
 
 type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
 type SaveWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'SaveWorkout'>;
@@ -112,7 +115,7 @@ export const SaveWorkoutScreen: React.FC = () => {
           onPress={handleGoBack}
           activeOpacity={0.7}
         >
-          <X size={24} color={COLORS.text} />
+          <X size={24} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
 
@@ -122,7 +125,7 @@ export const SaveWorkoutScreen: React.FC = () => {
           styles.scrollContent,
           {
             paddingBottom: Math.max(insets.bottom, SPACING.xl) + 100,
-            backgroundColor: COLORS.background, // Ensure safe-area/scroll bg stays dark.
+            backgroundColor: COLORS.background,
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -133,47 +136,59 @@ export const SaveWorkoutScreen: React.FC = () => {
         </View>
 
         <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Workout Name *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter workout name"
-              placeholderTextColor={COLORS.textSecondary}
-              value={workoutName}
-              onChangeText={setWorkoutName}
-              autoFocus
-            />
+          <View style={styles.inputCardOuter}>
+            <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inputCardGradient}>
+              <View style={styles.inputCardGlass}>
+                <Text style={styles.label}>Workout Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter workout name"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={workoutName}
+                  onChangeText={setWorkoutName}
+                  autoFocus
+                />
+              </View>
+            </LinearGradient>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Notes (Optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Add notes..."
-              placeholderTextColor={COLORS.textSecondary}
-              value={workoutDescription}
-              onChangeText={setWorkoutDescription}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
+          <View style={styles.inputCardOuter}>
+            <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inputCardGradient}>
+              <View style={styles.inputCardGlass}>
+                <Text style={styles.label}>Notes (Optional)</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Add notes..."
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={workoutDescription}
+                  onChangeText={setWorkoutDescription}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </LinearGradient>
           </View>
 
-          {/* Workout Summary Preview */}
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Workout Summary</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Duration:</Text>
-              <Text style={styles.summaryValue}>{workoutData.duration}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Reps:</Text>
-              <Text style={styles.summaryValue}>{workoutData.totalReps}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Avg Form Score:</Text>
-              <Text style={styles.summaryValue}>{workoutData.avgFormScore}%</Text>
-            </View>
+          {/* Workout Summary */}
+          <View style={styles.summaryCardOuter}>
+            <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.summaryCardGradient}>
+              <View style={styles.summaryCardGlass}>
+                <Text style={styles.summaryTitle}>Workout Summary</Text>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Duration:</Text>
+                  <Text style={styles.summaryValue}>{workoutData.duration}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Total Reps:</Text>
+                  <Text style={styles.summaryValue}>{workoutData.totalReps}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Avg Form Score:</Text>
+                  <Text style={styles.summaryValue}>{workoutData.avgFormScore}%</Text>
+                </View>
+              </View>
+            </LinearGradient>
           </View>
         </View>
       </ScrollView>
@@ -181,7 +196,7 @@ export const SaveWorkoutScreen: React.FC = () => {
       <View style={[styles.buttonContainer, {
         paddingTop: Math.max(insets.bottom, SPACING.md),
         paddingBottom: Math.max(insets.bottom, SPACING.md),
-        bottom: -insets.bottom, // Extend into bottom inset to eliminate white bar.
+        bottom: -insets.bottom,
       }]}>
         <TouchableOpacity
           style={[
@@ -192,7 +207,18 @@ export const SaveWorkoutScreen: React.FC = () => {
           disabled={!workoutName.trim()}
           activeOpacity={0.8}
         >
-          <Text style={styles.saveButtonText}>Save Workout</Text>
+          {workoutName.trim() ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.saveButtonGradient}
+            >
+              <Text style={styles.saveButtonText}>Save Workout</Text>
+            </LinearGradient>
+          ) : (
+            <Text style={styles.saveButtonText}>Save Workout</Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -227,46 +253,88 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   headerTitle: {
-    fontSize: 32,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 28,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.text,
+    letterSpacing: -0.3,
     marginBottom: SPACING.xs,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
   },
   form: {
     gap: SPACING.xl,
   },
-  inputGroup: {
+  inputCardOuter: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  inputCardGradient: {
+    borderRadius: 22,
+  },
+  inputCardGlass: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SPACING.lg,
     gap: SPACING.sm,
   },
   label: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   input: {
-    ...CARD_STYLE,
-    padding: SPACING.md,
+    backgroundColor: 'transparent',
+    padding: 0,
     fontSize: 16,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
   textArea: {
     minHeight: 100,
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.xs,
   },
-  summaryCard: {
-    ...CARD_STYLE,
+  summaryCardOuter: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  summaryCardGradient: {
+    borderRadius: 22,
+  },
+  summaryCardGlass: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: SPACING.lg,
   },
   summaryTitle: {
     fontSize: 18,
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.text,
+    letterSpacing: -0.3,
     marginBottom: SPACING.md,
   },
   summaryRow: {
@@ -281,7 +349,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 14,
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.mono.bold,
     color: COLORS.text,
   },
   buttonContainer: {
@@ -292,7 +360,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -300,20 +368,32 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   saveButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 40,
+    borderRadius: 22,
+    overflow: 'hidden',
     paddingVertical: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 56,
   },
   saveButtonDisabled: {
     backgroundColor: COLORS.border,
-    opacity: 0.5,
+    opacity: 0.6,
+  },
+  saveButtonGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
   },
   saveButtonText: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 17,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.text,
+    letterSpacing: -0.3,
   },
 });
 
