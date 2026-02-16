@@ -115,7 +115,7 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── HERO ARC GAUGE ─────────────────────── */}
           <NeonArc
             value={formScore}
-            label="Activity Score"
+            label="Form score"
             size={SCREEN_W - SPACING.screenHorizontal * 2}
           />
 
@@ -141,15 +141,15 @@ export const AnalyticsScreen: React.FC = () => {
           <View style={styles.activityCard}>
             <View style={styles.activityHeader}>
               <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.activityTitle}>MONDAY MORNING RUN</Text>
+              <Text style={styles.activityTitle}>Total volume</Text>
             </View>
             <View style={styles.activityMetricRow}>
               <View style={styles.activityBadge}>
                 <Trophy size={20} color="#A78BFA" strokeWidth={1.5} />
               </View>
               <View style={styles.activityValueWrap}>
-                <Text style={styles.activityValue}>10,58</Text>
-                <Text style={styles.activitySuffix}>Km</Text>
+                <Text style={styles.activityValue}>10,580</Text>
+                <Text style={styles.activitySuffix}>KG</Text>
               </View>
             </View>
           </View>
@@ -158,7 +158,7 @@ export const AnalyticsScreen: React.FC = () => {
           <View style={styles.challengeCard}>
             <View style={styles.activityHeader}>
               <Target size={14} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.activityTitle}>ACTIVE CHALLENGE</Text>
+              <Text style={styles.activityTitle}>Workout time</Text>
             </View>
             <View style={styles.challengeMetricRow}>
               <View style={styles.challengeValueWrap}>
