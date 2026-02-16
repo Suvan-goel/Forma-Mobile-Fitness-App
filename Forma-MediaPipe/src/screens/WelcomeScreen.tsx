@@ -18,7 +18,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         {/* Hero Section - Centered */}
         <View style={styles.heroSection}>
           <Image 
-            source={require('../assets/forma_icon.png')} 
+            source={require('../assets/forma_purple_logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />

@@ -1,27 +1,151 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  Text,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  Animated,
+  Platform,
+  Image,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
-import { ChevronRight, Clock, Dumbbell, ChevronDown, Calendar, Target } from 'lucide-react-native';
+import {
+  ChevronRight,
+  Clock,
+  Layers,
+  Calendar,
+  Settings,
+  X,
+} from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
-import { getWorkouts, SavedWorkout } from '../services/workoutStorage';
+import { getWorkouts } from '../services/workoutStorage';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts } from '../hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../services/api';
 
-// Dropdown Pill Component
-const DropdownPill = ({ 
-  label, 
-  options, 
-  selectedValue, 
-  onSelect 
-}: { 
-  label: string; 
-  options: string[]; 
+/* ── Helpers ──────────────────────────────── */
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const formatHeaderDate = (): string => {
+  const d = new Date();
+  return `${MONTH_SHORT[d.getMonth()].toUpperCase()} ${d.getDate()} \u2022 TODAY`;
+};
+
+/* ── Calendar Modal ───────────────────────── */
+
+const CalendarModal = ({
+  visible,
+  onClose,
+  onSelectDate,
+  selectedDate,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSelectDate: (date: Date) => void;
+  selectedDate: Date | null;
+}) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    const days: (Date | null)[] = [];
+    for (let i = 0; i < startingDayOfWeek; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+    return days;
+  };
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setCurrentMonth((prev) => {
+      const d = new Date(prev);
+      d.setMonth(prev.getMonth() + (direction === 'prev' ? -1 : 1));
+      return d;
+    });
+  };
+
+  const isSameDay = (a: Date | null, b: Date | null) =>
+    !!a && !!b && a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+
+  const days = getDaysInMonth(currentMonth);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+        <View style={styles.calendarContainer} onStartShouldSetResponder={() => true}>
+          <View style={styles.calendarHeader}>
+            <TouchableOpacity onPress={() => navigateMonth('prev')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.calendarNavButton}>{'\u2039'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.calendarTitle}>
+              {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </Text>
+            <TouchableOpacity onPress={() => navigateMonth('next')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.calendarNavButton}>{'\u203A'}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.calendarDaysHeader}>
+            {DAY_NAMES.map((day) => (
+              <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
+            ))}
+          </View>
+          <View style={styles.calendarGrid}>
+            {days.map((day, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.calendarDay,
+                  day && isSameDay(day, selectedDate) && styles.calendarDaySelected,
+                  !day && styles.calendarDayEmpty,
+                ]}
+                onPress={() => day && onSelectDate(day)}
+                disabled={!day}
+              >
+                {day && (
+                  <Text style={[styles.calendarDayText, isSameDay(day, selectedDate) && styles.calendarDayTextSelected]}>
+                    {day.getDate()}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity style={styles.calendarCloseButton} onPress={onClose}>
+            <Text style={styles.calendarCloseButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
+/* ── Dropdown Pill (Year/Month/Week) ──────── */
+
+const DropdownPill = ({
+  label,
+  options,
+  selectedValue,
+  onSelect,
+}: {
+  label: string;
+  options: string[];
   selectedValue: string | null;
   onSelect: (value: string) => void;
 }) => {
@@ -30,53 +154,36 @@ const DropdownPill = ({
 
   return (
     <>
-      <TouchableOpacity 
-        style={[styles.tabPill, selectedValue && styles.tabPillActive]} 
+      <TouchableOpacity
+        style={[styles.filterPill, selectedValue && styles.filterPillActive]}
         onPress={() => setIsOpen(true)}
         activeOpacity={0.7}
       >
-        <Text 
-          style={[styles.tabPillText, selectedValue && styles.tabPillTextActive]}
+        <Text
+          style={[styles.filterPillText, selectedValue && styles.filterPillTextActive]}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
           {displayValue}
         </Text>
-        <ChevronDown size={14} color={selectedValue ? COLORS.text : COLORS.textSecondary} style={{ marginLeft: 4, flexShrink: 0 }} />
       </TouchableOpacity>
 
-      <Modal
-        visible={isOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsOpen(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsOpen(false)}
-        >
+      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsOpen(false)}>
           <View style={styles.dropdownMenu}>
-            {options.map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.dropdownItem,
-                  selectedValue === option && styles.dropdownItemActive
-                ]}
-                onPress={() => {
-                  onSelect(option);
-                  setIsOpen(false);
-                }}
-              >
-                <Text style={[
-                  styles.dropdownItemText,
-                  selectedValue === option && styles.dropdownItemTextActive
-                ]}>
-                  {option}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+              {options.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[styles.dropdownItem, selectedValue === option && styles.dropdownItemActive]}
+                  onPress={() => { onSelect(option); setIsOpen(false); }}
+                >
+                  <Text style={[styles.dropdownItemText, selectedValue === option && styles.dropdownItemTextActive]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -84,197 +191,67 @@ const DropdownPill = ({
   );
 };
 
-// Simple Calendar Component
-const CalendarModal = ({ 
-  visible, 
-  onClose, 
-  onSelectDate, 
-  selectedDate 
-}: { 
-  visible: boolean; 
-  onClose: () => void; 
-  onSelectDate: (date: Date) => void;
-  selectedDate: Date | null;
-}) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                     'July', 'August', 'September', 'October', 'November', 'December'];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    const days = [];
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    // Add all days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i));
-    }
-    return days;
-  };
-  
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      if (direction === 'prev') {
-        newDate.setMonth(prev.getMonth() - 1);
-      } else {
-        newDate.setMonth(prev.getMonth() + 1);
-      }
-      return newDate;
-    });
-  };
-  
-  const isSameDay = (date1: Date | null, date2: Date | null) => {
-    if (!date1 || !date2) return false;
-    return date1.getDate() === date2.getDate() &&
-           date1.getMonth() === date2.getMonth() &&
-           date1.getFullYear() === date2.getFullYear();
-  };
-  
-  const days = getDaysInMonth(currentMonth);
-  
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity 
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <View style={styles.calendarContainer} onStartShouldSetResponder={() => true}>
-          <View style={styles.calendarHeader}>
-            <TouchableOpacity onPress={() => navigateMonth('prev')}>
-              <Text style={styles.calendarNavButton}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.calendarTitle}>
-              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            </Text>
-            <TouchableOpacity onPress={() => navigateMonth('next')}>
-              <Text style={styles.calendarNavButton}>›</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.calendarDaysHeader}>
-            {dayNames.map(day => (
-              <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
-            ))}
-          </View>
-          
-          <View style={styles.calendarGrid}>
-            {days.map((day, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.calendarDay,
-                  day && isSameDay(day, selectedDate) && styles.calendarDaySelected,
-                  !day && styles.calendarDayEmpty
-                ]}
-                onPress={() => day && onSelectDate(day)}
-                disabled={!day}
-              >
-                {day && (
-                  <Text style={[
-                    styles.calendarDayText,
-                    isSameDay(day, selectedDate) && styles.calendarDayTextSelected
-                  ]}>
-                    {day.getDate()}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.calendarCloseButton}
-            onPress={onClose}
-          >
-            <Text style={styles.calendarCloseButtonText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-};
-
-// WorkoutSession interface is now imported from '../services/api'
+/* ── Workout Card (LinearGradient surface) ── */
 
 interface WorkoutCardProps {
   session: WorkoutSession;
 }
 
-// Get category color and display name
-const getCategoryInfo = (category?: string): { color: string; name: string } | null => {
-  if (!category) return null;
-  
-  const categoryMap: { [key: string]: { color: string; name: string } } = {
-    'Weightlifting': { color: COLORS.primary, name: 'Weightlifting' },
-    'Calisthenics': { color: COLORS.orange, name: 'Calisthenics' },
-    'Mobility & Flexibility': { color: '#8B5CF6', name: 'Mobility & Flexibility' },
-    'Sport': { color: COLORS.primary, name: 'Sport' },
-  };
-  
-  return categoryMap[category] || null;
-};
-
 const WorkoutCard: React.FC<WorkoutCardProps> = ({ session }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const categoryInfo = getCategoryInfo(session.category);
-  
-  const handlePress = () => {
-    navigation.navigate('WorkoutDetails', { workoutId: session.id });
-  };
 
   return (
-    <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={handlePress}>
-      <View style={styles.cardContent}>
-        {/* Date */}
-        <Text style={styles.dateText}>
-          {session.date} {session.fullDate.getFullYear()}
-        </Text>
-
-        {/* Workout Info */}
-        <Text style={styles.workoutName}>{session.name}</Text>
-
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Dumbbell size={14} color={COLORS.textSecondary} />
-            <Text style={styles.statText}>{session.totalSets} sets</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Clock size={14} color={COLORS.textSecondary} />
-            <Text style={styles.statText}>{session.duration}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Target size={14} color={COLORS.primary} />
-            <MonoText style={styles.scoreText}>{session.formScore}</MonoText>
+    <TouchableOpacity
+      style={styles.cardOuter}
+      activeOpacity={0.82}
+      onPress={() => navigation.navigate('WorkoutDetails', { workoutId: session.id })}
+    >
+      <LinearGradient
+        colors={['#1A1A1A', '#0C0C0C', '#000000']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.cardGradient}
+      >
+        <View style={styles.cardGlassEdge}>
+          <View style={styles.cardLayout}>
+            <View style={styles.cardContent}>
+              <Text style={styles.cardDate}>
+                {session.date} {session.fullDate.getFullYear()}
+              </Text>
+              <Text style={styles.cardTitle}>{session.name}</Text>
+              <View style={styles.metaRow}>
+                <View style={styles.metaItem}>
+                  <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.metaText}>{session.totalSets} SETS</Text>
+                </View>
+                <View style={styles.metaDot} />
+                <View style={styles.metaItem}>
+                  <Clock size={12} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.metaText}>{session.duration}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.cardRight}>
+              <View style={styles.scoreBadge}>
+                <MonoText style={styles.scoreValue}>{session.formScore}</MonoText>
+              </View>
+              <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+            </View>
           </View>
         </View>
-      </View>
-
-      {/* Chevron */}
-      <ChevronRight size={20} color={COLORS.textSecondary} />
+      </LinearGradient>
     </TouchableOpacity>
   );
 };
 
+/* ── Main Screen ──────────────────────────── */
+
 export const LogbookScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { onScroll } = useScroll();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
@@ -282,163 +259,103 @@ export const LogbookScreen: React.FC = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Fetch workouts from API service
   const { workouts: mockWorkoutSessions, isLoading, error, refetch } = useWorkouts();
 
-  // Refresh workouts when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // Force re-render by updating refresh key
-      setRefreshKey(prev => prev + 1);
+      setRefreshKey((prev) => prev + 1);
       refetch();
-    }, [refetch])
+    }, [refetch]),
   );
 
-  // Get all workouts (saved + mock) - helper function
-  const getAllWorkouts = () => {
-    const savedWorkouts: WorkoutSession[] = getWorkouts().map(workout => ({
-      id: workout.id,
-      name: workout.name,
-      date: workout.date,
-      fullDate: workout.fullDate,
-      duration: workout.duration,
-      totalSets: workout.totalSets,
-      totalReps: workout.totalReps,
-      formScore: workout.formScore,
-      category: workout.category,
-    }));
+  useEffect(() => {
+    if (!isLoading && !error) {
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    }
+  }, [isLoading, error, fadeAnim]);
 
-    // Merge and sort by date (most recent first)
-    return [...savedWorkouts, ...mockWorkoutSessions].sort((a, b) =>
-      b.fullDate.getTime() - a.fullDate.getTime()
-    );
+  /* ── Data helpers ──── */
+
+  const getAllWorkouts = () => {
+    const savedWorkouts: WorkoutSession[] = getWorkouts().map((w) => ({
+      id: w.id, name: w.name, date: w.date, fullDate: w.fullDate,
+      duration: w.duration, totalSets: w.totalSets, totalReps: w.totalReps,
+      formScore: w.formScore, category: w.category,
+    }));
+    return [...savedWorkouts, ...mockWorkoutSessions].sort((a, b) => b.fullDate.getTime() - a.fullDate.getTime());
   };
 
-  // Get unique years, months, and weeks from workout sessions
   const getUniqueYears = () => {
-    const allWorkouts = getAllWorkouts();
-    const years = new Set(allWorkouts.map(session => session.fullDate.getFullYear().toString()));
+    const years = new Set(getAllWorkouts().map((s) => s.fullDate.getFullYear().toString()));
     return ['All', ...Array.from(years).sort((a, b) => parseInt(b) - parseInt(a))];
   };
 
   const getUniqueMonths = () => {
-    const allWorkouts = getAllWorkouts();
-    const months = new Set(allWorkouts.map(session => {
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                         'July', 'August', 'September', 'October', 'November', 'December'];
-      return `${monthNames[session.fullDate.getMonth()]} ${session.fullDate.getFullYear()}`;
-    }));
-    const sortedMonths = Array.from(months).sort((a, b) => {
-      const [monthA, yearA] = a.split(' ');
-      const [monthB, yearB] = b.split(' ');
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                         'July', 'August', 'September', 'October', 'November', 'December'];
-      const yearDiff = parseInt(yearB) - parseInt(yearA);
-      if (yearDiff !== 0) return yearDiff;
-      return monthNames.indexOf(monthB) - monthNames.indexOf(monthA);
+    const months = new Set(
+      getAllWorkouts().map((s) => `${MONTH_NAMES[s.fullDate.getMonth()]} ${s.fullDate.getFullYear()}`),
+    );
+    const sorted = Array.from(months).sort((a, b) => {
+      const [mA, yA] = a.split(' ');
+      const [mB, yB] = b.split(' ');
+      const yd = parseInt(yB) - parseInt(yA);
+      return yd !== 0 ? yd : MONTH_NAMES.indexOf(mB) - MONTH_NAMES.indexOf(mA);
     });
-    return ['All', ...sortedMonths];
+    return ['All', ...sorted];
   };
 
   const getUniqueWeeks = () => {
-    const allWorkouts = getAllWorkouts();
-    const weeks = new Set(allWorkouts.map(session => {
-      const date = session.fullDate;
-      const startOfWeek = new Date(date);
-      const day = startOfWeek.getDay();
-      const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-      startOfWeek.setDate(diff);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${monthNames[startOfWeek.getMonth()]} ${startOfWeek.getDate()} - ${monthNames[endOfWeek.getMonth()]} ${endOfWeek.getDate()}, ${endOfWeek.getFullYear()}`;
-    }));
-    const sortedWeeks = Array.from(weeks).sort((a, b) => {
-      const yearA = parseInt(a.split(', ')[1]);
-      const yearB = parseInt(b.split(', ')[1]);
-      return yearB - yearA;
-    });
-    return ['All', ...sortedWeeks];
+    const weeks = new Set(
+      getAllWorkouts().map((s) => {
+        const d = s.fullDate;
+        const start = new Date(d);
+        const day = start.getDay();
+        start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} - ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
+      }),
+    );
+    const sorted = Array.from(weeks).sort((a, b) => parseInt(b.split(', ')[1]) - parseInt(a.split(', ')[1]));
+    return ['All', ...sorted];
   };
 
-  // Filter workouts based on selected filters
   const getFilteredWorkouts = () => {
     let filtered = getAllWorkouts();
-    
-    // If a specific date is selected, filter by that date only
     if (selectedDate) {
-      filtered = filtered.filter(session => {
-        const sessionDate = session.fullDate;
-        return sessionDate.getDate() === selectedDate.getDate() &&
-               sessionDate.getMonth() === selectedDate.getMonth() &&
-               sessionDate.getFullYear() === selectedDate.getFullYear();
-      });
-      return filtered;
+      return filtered.filter(
+        (s) =>
+          s.fullDate.getDate() === selectedDate.getDate() &&
+          s.fullDate.getMonth() === selectedDate.getMonth() &&
+          s.fullDate.getFullYear() === selectedDate.getFullYear(),
+      );
     }
-    
-    // Otherwise, apply year/month/week filters
-    return filtered.filter(session => {
-      if (selectedYear && session.fullDate.getFullYear().toString() !== selectedYear) {
-        return false;
-      }
+    return filtered.filter((s) => {
+      if (selectedYear && s.fullDate.getFullYear().toString() !== selectedYear) return false;
       if (selectedMonth) {
-        const [monthName, year] = selectedMonth.split(' ');
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                           'July', 'August', 'September', 'October', 'November', 'December'];
-        if (session.fullDate.getMonth() !== monthNames.indexOf(monthName) || 
-            session.fullDate.getFullYear().toString() !== year) {
+        const [mn, yr] = selectedMonth.split(' ');
+        if (s.fullDate.getMonth() !== MONTH_NAMES.indexOf(mn) || s.fullDate.getFullYear().toString() !== yr)
           return false;
-        }
       }
       if (selectedWeek) {
-        const date = session.fullDate;
-        const startOfWeek = new Date(date);
-        const day = startOfWeek.getDay();
-        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-        startOfWeek.setDate(diff);
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const weekString = `${monthNames[startOfWeek.getMonth()]} ${startOfWeek.getDate()} - ${monthNames[endOfWeek.getMonth()]} ${endOfWeek.getDate()}, ${endOfWeek.getFullYear()}`;
-        if (weekString !== selectedWeek) {
-          return false;
-        }
+        const d = s.fullDate;
+        const start = new Date(d);
+        const day = start.getDay();
+        start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        const ws = `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} - ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
+        if (ws !== selectedWeek) return false;
       }
       return true;
     });
   };
 
-  const filteredWorkouts = getFilteredWorkouts();
-  const totalWorkouts = filteredWorkouts.length;
-  const totalReps = filteredWorkouts.reduce((sum, session) => sum + session.totalReps, 0);
-
   const handleFilterChange = (type: 'year' | 'month' | 'week', value: string | null) => {
-    // If "All" is selected, set the filter to null
-    const filterValue = value === 'All' ? null : value;
-    
-    let newYear = selectedYear;
-    let newMonth = selectedMonth;
-    let newWeek = selectedWeek;
-    
-    if (type === 'year') {
-      newYear = filterValue;
-      newMonth = null;
-      newWeek = null;
-    } else if (type === 'month') {
-      newMonth = filterValue;
-      newWeek = null;
-    } else if (type === 'week') {
-      newWeek = filterValue;
-    }
-    
-    setSelectedYear(newYear);
-    setSelectedMonth(newMonth);
-    setSelectedWeek(newWeek);
-    setSelectedDate(null); // Clear date selection when using other filters
+    const v = value === 'All' ? null : value;
+    if (type === 'year') { setSelectedYear(v); setSelectedMonth(null); setSelectedWeek(null); }
+    else if (type === 'month') { setSelectedMonth(v); setSelectedWeek(null); }
+    else { setSelectedWeek(v); }
+    setSelectedDate(null);
   };
 
   const handleDateSelect = (date: Date) => {
@@ -449,35 +366,108 @@ export const LogbookScreen: React.FC = () => {
     setIsCalendarOpen(false);
   };
 
-  const handleCalendarIconPress = () => {
-    setIsCalendarOpen(true);
-  };
-
   const formatSelectedDate = () => {
     if (!selectedDate) return null;
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${monthNames[selectedDate.getMonth()]} ${selectedDate.getDate()}, ${selectedDate.getFullYear()}`;
+    return `${MONTH_SHORT[selectedDate.getMonth()]} ${selectedDate.getDate()}, ${selectedDate.getFullYear()}`;
   };
 
-  // Loading state
+  const filteredWorkouts = getFilteredWorkouts();
+
+  const handleSettingsPress = useCallback(() => {
+    navigation.navigate('Settings');
+  }, [navigation]);
+
+  /* ── ListHeaderComponent — everything scrolls together ── */
+
+  const ListHeader = useCallback(() => (
+    <View>
+      {/* ── WELCOME ROW ──────────────────────── */}
+      <View style={styles.welcomeRow}>
+        <View style={styles.welcomeLeft}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View>
+            <Text style={styles.welcomeLabel}>Welcome back,</Text>
+            <Text style={styles.welcomeName}>Athlete</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
+          <Settings size={20} color="#71717A" strokeWidth={1.5} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── LOGBOOK TITLE ────────────────────── */}
+      <View style={styles.titleBlock}>
+        <Text style={styles.headerTitle}>LOGBOOK</Text>
+        <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+      </View>
+
+      {/* ── FILTER ROW ───────────────────────── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        contentContainerStyle={styles.filterRow}
+        style={styles.filterScrollView}
+        nestedScrollEnabled
+      >
+        <TouchableOpacity
+          style={[styles.calendarPill, selectedDate && styles.filterPillActive]}
+          onPress={() => setIsCalendarOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Calendar size={15} color={selectedDate ? '#FFFFFF' : '#71717A'} strokeWidth={1.5} />
+        </TouchableOpacity>
+
+        <DropdownPill label="Year" options={getUniqueYears()} selectedValue={selectedYear} onSelect={(v) => handleFilterChange('year', v)} />
+        <DropdownPill label="Month" options={getUniqueMonths()} selectedValue={selectedMonth} onSelect={(v) => handleFilterChange('month', v)} />
+        <DropdownPill label="Week" options={getUniqueWeeks()} selectedValue={selectedWeek} onSelect={(v) => handleFilterChange('week', v)} />
+      </ScrollView>
+
+      {/* ── SELECTED DATE CHIP ────────────────── */}
+      {selectedDate && (
+        <View style={styles.dateChipRow}>
+          <View style={styles.dateChip}>
+            <Text style={styles.dateChipText}>{formatSelectedDate()}</Text>
+            <TouchableOpacity
+              onPress={() => { setSelectedDate(null); setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <X size={13} color="#71717A" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
+  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, handleSettingsPress]);
+
+  /* ── Loading ──── */
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
-          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
-          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
+        <View style={styles.loadingWrap}>
+          <View style={{ marginBottom: 30 }}>
+            <LoadingSkeleton variant="text" height={40} style={{ width: 200, marginBottom: SPACING.sm }} />
+            <LoadingSkeleton variant="text" height={12} style={{ width: 130 }} />
+          </View>
+          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: 14 }} />
+          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: 14 }} />
+          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: 14 }} />
         </View>
       </View>
     );
   }
 
-  // Error state
+  /* ── Error ──── */
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={styles.errorContainer}>
+        <View style={styles.errorWrap}>
           <ErrorState message={error} onRetry={refetch} />
         </View>
       </View>
@@ -486,235 +476,357 @@ export const LogbookScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Filter Pills */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={true}
-        bounces={false}
-        contentContainerStyle={styles.tabsContainer}
-        style={styles.tabsScrollView}
-        nestedScrollEnabled={false}
-      >
-        <TouchableOpacity 
-          style={[styles.calendarIconButton, selectedDate && styles.calendarIconButtonActive]}
-          onPress={handleCalendarIconPress}
-          activeOpacity={0.7}
-        >
-          <Calendar size={18} color={selectedDate ? COLORS.text : COLORS.textSecondary} />
-        </TouchableOpacity>
-        <DropdownPill
-          label="Year"
-          options={getUniqueYears()}
-          selectedValue={selectedYear}
-          onSelect={(value) => handleFilterChange('year', value)}
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        {/* Calendar Modal (rendered outside FlatList, portaled via Modal) */}
+        <CalendarModal
+          visible={isCalendarOpen}
+          onClose={() => setIsCalendarOpen(false)}
+          onSelectDate={handleDateSelect}
+          selectedDate={selectedDate}
         />
-        <DropdownPill
-          label="Month"
-          options={getUniqueMonths()}
-          selectedValue={selectedMonth}
-          onSelect={(value) => handleFilterChange('month', value)}
-        />
-        <DropdownPill
-          label="Week"
-          options={getUniqueWeeks()}
-          selectedValue={selectedWeek}
-          onSelect={(value) => handleFilterChange('week', value)}
-        />
-      </ScrollView>
 
-      {/* Selected Date Display */}
-      {selectedDate && (
-        <View style={styles.selectedDateContainer}>
-          <Text style={styles.selectedDateText}>
-            Showing workouts for {formatSelectedDate()}
-          </Text>
-          <TouchableOpacity 
-            onPress={() => {
-              setSelectedDate(null);
-              setSelectedYear(null);
-              setSelectedMonth(null);
-              setSelectedWeek(null);
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        {filteredWorkouts.length === 0 ? (
+          /* Empty state — still show header via ScrollView */
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: SPACING.screenHorizontal }}
           >
-            <Text style={styles.clearDateText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Calendar Modal */}
-      <CalendarModal
-        visible={isCalendarOpen}
-        onClose={() => setIsCalendarOpen(false)}
-        onSelectDate={handleDateSelect}
-        selectedDate={selectedDate}
-      />
-
-      {/* Workout Sessions List or Empty State */}
-      {filteredWorkouts.length === 0 ? (
-        <View style={[styles.emptyState, selectedDate && styles.emptyStateWithDate]}>
-          <Text style={styles.emptyStateText}>
-            {selectedDate 
-              ? `No workouts completed on ${formatSelectedDate()}`
-              : 'No workouts found'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredWorkouts}
-          renderItem={({ item }) => <WorkoutCard session={item} />}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            styles.listContent,
-            selectedDate && styles.listContentWithDate,
-            {
-              paddingBottom: 200,
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-        />
-      )}
+            <ListHeader />
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>
+                {selectedDate ? 'No sessions' : 'No workouts yet'}
+              </Text>
+              <Text style={styles.emptyStateText}>
+                {selectedDate
+                  ? `Nothing recorded on ${formatSelectedDate()}`
+                  : 'Complete a workout to see it here'}
+              </Text>
+            </View>
+          </ScrollView>
+        ) : (
+          <FlatList
+            data={filteredWorkouts}
+            renderItem={({ item }) => <WorkoutCard session={item} />}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={ListHeader}
+            contentContainerStyle={[styles.listContent, { paddingBottom: 200 }]}
+            showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+          />
+        )}
+      </Animated.View>
     </View>
   );
 };
 
+/* ── Styles ──────────────────────────────── */
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#000000',
   },
-  loadingContainer: {
+  loadingWrap: {
     flex: 1,
-    padding: SPACING.screenHorizontal,
-    paddingTop: SPACING.lg,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.xl,
   },
-  errorContainer: {
+  errorWrap: {
     flex: 1,
-    padding: SPACING.screenHorizontal,
+    paddingHorizontal: SPACING.screenHorizontal,
     justifyContent: 'center',
   },
-  tabsScrollView: {
-    height: 48,
-    marginBottom: SPACING.lg,
-    zIndex: 1,
-    overflow: 'hidden',
+
+  /* ── Welcome Row ─────────────────────────── */
+  welcomeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
   },
-  tabsContainer: {
+  welcomeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 48,
+    height: 48,
+  },
+  welcomeLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: '#A1A1AA',
+  },
+  welcomeName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 17,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Title Block ─────────────────────────── */
+  titleBlock: {
+    paddingTop: 20,
+    paddingBottom: 24,
+  },
+  headerTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 40,
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    lineHeight: 46,
+  },
+  headerDate: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: '#71717A',
+    letterSpacing: 3,
+    marginTop: 6,
+  },
+
+  /* ── Filter Row ──────────────────────────── */
+  filterScrollView: {
+    maxHeight: 46,
+    marginBottom: SPACING.md,
+    marginHorizontal: -SPACING.screenHorizontal,
+  },
+  filterRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.screenHorizontal,
     gap: 8,
     alignItems: 'center',
-    height: 48,
-    paddingTop: 4,
-    paddingBottom: 4,
+    paddingVertical: 4,
   },
-  tabPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: COLORS.cardBackground,
-    flexShrink: 0,
-    justifyContent: 'center',
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'transparent',
-    minWidth: 80,
+    borderColor: '#3F3F46',
+    backgroundColor: '#000000',
   },
-  tabPillActive: {
-    backgroundColor: COLORS.cardBackground,
-    borderColor: COLORS.primary,
+  filterPillActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 14,
+      },
+      android: { elevation: 8 },
+    }),
   },
-  tabPillText: {
-    fontSize: 14,
+  filterPillText: {
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    flexShrink: 1,
+    fontSize: 12,
+    color: '#71717A',
+    letterSpacing: 0.5,
   },
-  tabPillTextActive: {
-    color: COLORS.text,
+  filterPillTextActive: {
+    color: '#FFFFFF',
     fontFamily: FONTS.ui.bold,
   },
-  calendarIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.cardBackground,
+  calendarPill: {
+    width: 36,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
-  calendarIconButtonActive: {
-    backgroundColor: COLORS.cardBackground,
-    borderColor: COLORS.primary,
+
+  /* ── Selected Date Chip ──────────────────── */
+  dateChipRow: {
+    paddingBottom: SPACING.sm,
   },
-  selectedDateContainer: {
-    position: 'absolute',
-    top: 48,
-    left: 0,
-    right: 0,
+  dateChip: {
     flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+  },
+  dateChipText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+
+  /* ── Workout Card ────────────────────────── */
+  cardOuter: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  cardGradient: {
+    borderRadius: 22,
+  },
+  cardGlassEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  cardLayout: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.md,
-    zIndex: 10,
-    backgroundColor: COLORS.background,
+    padding: 22,
   },
-  selectedDateText: {
-    fontSize: 14,
+  cardContent: {
+    flex: 1,
+    gap: 5,
+  },
+  cardDate: {
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
+    fontSize: 10,
+    color: '#52525B',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
-  clearDateText: {
+  cardTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 18,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+    marginTop: 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#3F3F46',
+  },
+  metaText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: '#A1A1AA',
+    letterSpacing: 2,
+  },
+  cardRight: {
+    alignItems: 'center',
+    gap: 12,
+    marginLeft: SPACING.md,
+  },
+  scoreBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+    minWidth: 46,
+  },
+  scoreValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+
+  /* ── List ────────────────────────────────── */
+  listContent: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 0,
+    gap: 14,
+  },
+
+  /* ── Empty State ─────────────────────────── */
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingTop: 60,
+  },
+  emptyStateTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 20,
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontFamily: FONTS.ui.regular,
     fontSize: 14,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
+    color: '#71717A',
+    textAlign: 'center',
   },
+
+  /* ── Calendar Modal ──────────────────────── */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  dropdownMenu: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 20,
-    padding: 8,
-    minWidth: 200,
-    maxHeight: 300,
-  },
-  dropdownItem: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  dropdownItemActive: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-  },
-  dropdownItemText: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
-  },
-  dropdownItemTextActive: {
-    color: COLORS.text,
-    fontFamily: FONTS.ui.bold,
   },
   calendarContainer: {
     ...CARD_STYLE,
-    padding: SPACING.lg,
-    width: '90%',
-    maxWidth: 400,
+    borderRadius: 24,
+    padding: SPACING.xl,
+    width: '88%',
+    maxWidth: 380,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 30,
+      },
+      android: { elevation: 12 },
+    }),
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -723,15 +835,16 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   calendarNavButton: {
-    fontSize: 24,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
-    paddingHorizontal: SPACING.screenHorizontal,
+    fontSize: 28,
+    fontFamily: FONTS.display.medium,
+    color: COLORS.accent,
+    paddingHorizontal: 12,
   },
   calendarTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    fontSize: 16,
+    fontFamily: FONTS.display.semibold,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
   calendarDaysHeader: {
     flexDirection: 'row',
@@ -739,11 +852,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   calendarDayHeader: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontFamily: FONTS.ui.regular,
+    color: '#52525B',
     width: 40,
     textAlign: 'center',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -757,155 +872,87 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 4,
+    margin: 3,
   },
   calendarDayEmpty: {
     opacity: 0,
   },
   calendarDaySelected: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 12,
+      },
+    }),
   },
   calendarDayText: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
+    color: '#FFFFFF',
   },
   calendarDayTextSelected: {
-    color: COLORS.background,
+    color: '#FFFFFF',
     fontFamily: FONTS.ui.bold,
   },
   calendarCloseButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 20,
-    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.accent,
+    borderRadius: 16,
+    paddingVertical: 14,
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 14,
+      },
+      android: { elevation: 6 },
+    }),
   },
   calendarCloseButtonText: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.background,
-  },
-  emptyStateWithDate: {
-    paddingTop: 60,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  summaryContainer: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    marginBottom: SPACING.lg,
-  },
-  summaryCard: {
-    ...CARD_STYLE,
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.screenHorizontal,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    letterSpacing: 1,
-  },
-  summaryValue: {
-    fontSize: 32,
-    fontFamily: FONTS.mono.bold,
-    color: COLORS.text,
-  },
-  summaryDivider: {
-    width: 1,
-    height: 50,
-    backgroundColor: COLORS.border,
-    marginHorizontal: SPACING.md,
-  },
-  listContentWithDate: {
-    paddingTop: 60,
-  },
-  listContent: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 0,
-    gap: 8,
-  },
-  card: {
-    ...CARD_STYLE,
-    padding: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cardContent: {
-    flex: 1,
-    gap: 8,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    flexWrap: 'wrap',
-  },
-  dateText: {
-    fontSize: 11,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
+    fontSize: 15,
+    fontFamily: FONTS.display.semibold,
+    color: '#FFFFFF',
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
-  categoryTag: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 8,
+
+  /* ── Dropdown Menu ───────────────────────── */
+  dropdownMenu: {
+    ...CARD_STYLE,
+    borderRadius: 20,
+    padding: 8,
+    minWidth: 200,
+    maxWidth: 320,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 24,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  dropdownItemActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     borderWidth: 1,
-    alignSelf: 'flex-start',
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
-  categoryTagText: {
-    fontSize: 11,
-    fontFamily: FONTS.ui.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  workoutName: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
-    marginTop: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 4,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statText: {
-    fontSize: 13,
+  dropdownItemText: {
+    fontSize: 14,
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
-  scoreText: {
-    fontSize: 13,
-    fontFamily: FONTS.mono.bold,
-    color: COLORS.primary,
+  dropdownItemTextActive: {
+    color: '#FFFFFF',
+    fontFamily: FONTS.ui.bold,
   },
 });

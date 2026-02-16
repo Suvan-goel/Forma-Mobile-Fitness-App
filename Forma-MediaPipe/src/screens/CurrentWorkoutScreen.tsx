@@ -6,12 +6,28 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronLeft, Dumbbell, Pause, Play, Trash2, ChevronDown, ChevronUp, FileText, Settings, X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import {
+  Plus,
+  ChevronLeft,
+  Dumbbell,
+  Pause,
+  Play,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Settings,
+  X,
+  Clock,
+  Layers,
+} from 'lucide-react-native';
+import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
@@ -29,6 +45,17 @@ type RecordStackParamList = {
 
 type CurrentWorkoutRouteProp = RouteProp<RecordStackParamList, 'CurrentWorkout'>;
 type CurrentWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'CurrentWorkout'>;
+
+/* ── Helpers ──────────────────────────────── */
+
+const formatStopwatch = (totalSeconds: number) => {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
+/* ── Main Screen ──────────────────────────── */
 
 export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
@@ -65,12 +92,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
 
-  const formatStopwatch = (totalSeconds: number) => {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
+  /* ── Timer logic ──── */
 
   useEffect(() => {
     setWorkoutInProgress(true);
@@ -107,15 +129,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setIsPaused((p) => !p);
   };
 
-  // When screen gains focus: handle newSet fallback and show weight modal only when Camera requested it
+  /* ── Focus effects ──── */
+
   useFocusEffect(
     React.useCallback(() => {
       if (route.params?.newSet) {
         addSet(route.params.newSet);
         navigation.setParams({ newSet: undefined });
       }
-
-      // Open weight modal exactly once when returning from Camera with showWeightFor
       const showWeightFor = route.params?.showWeightFor;
       if (showWeightFor?.exerciseId) {
         const exercise = exercises.find((ex) => ex.id === showWeightFor.exerciseId);
@@ -136,7 +157,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, exercises])
   );
 
-  // Auto-expand exercises when new sets are added (no modal here — modal only from showWeightFor param)
   useEffect(() => {
     exercises.forEach((exercise) => {
       const prevCount = prevSetCountsRef.current.get(exercise.id) || 0;
@@ -147,6 +167,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
       prevSetCountsRef.current.set(exercise.id, currentCount);
     });
   }, [exercises]);
+
+  /* ── Handlers ──── */
 
   const toggleExerciseExpanded = (exerciseId: string) => {
     setExpandedExerciseIds((prev) => {
@@ -178,34 +200,21 @@ export const CurrentWorkoutScreen: React.FC = () => {
       Alert.alert('No sets recorded', 'Add at least one set before ending the workout.');
       return;
     }
-
-    // Aggregate workout data
     const totalSets = sets.length;
     const totalReps = sets.reduce((sum, set) => sum + set.reps, 0);
     const avgFormScore = Math.round(
       sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
     );
-
     const category = exercises[0]?.name || 'General';
     const duration = formatStopwatch(elapsedSeconds);
-
     navigation.navigate('SaveWorkout', {
-      workoutData: {
-        category,
-        duration,
-        totalSets,
-        totalReps,
-        avgFormScore,
-      },
+      workoutData: { category, duration, totalSets, totalReps, avgFormScore },
     });
   };
 
   const handleGoBack = () => {
     setWorkoutElapsedSeconds(elapsedSeconds);
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'RecordLanding' }],
-    });
+    navigation.reset({ index: 0, routes: [{ name: 'RecordLanding' }] });
   };
 
   const handleWeightSubmit = (weight: number, unit: 'kg' | 'lbs') => {
@@ -215,7 +224,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
     }
   };
 
-  const handleEditWeight = (exerciseId: string, exerciseName: string, setIndex: number, currentWeight?: number, currentUnit?: 'kg' | 'lbs') => {
+  const handleEditWeight = (
+    exerciseId: string,
+    exerciseName: string,
+    setIndex: number,
+    currentWeight?: number,
+    currentUnit?: 'kg' | 'lbs'
+  ) => {
     setWeightModalData({
       exerciseId,
       exerciseName,
@@ -253,34 +268,36 @@ export const CurrentWorkoutScreen: React.FC = () => {
             clearSets();
             setWorkoutElapsedSeconds(0);
             setWorkoutInProgress(false);
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'RecordLanding' }],
-            });
+            navigation.reset({ index: 0, routes: [{ name: 'RecordLanding' }] });
           },
         },
       ]
     );
   };
 
+  /* ── Computed ──── */
+
+  const totalSetsCount = sets.length;
+  const totalRepsCount = sets.reduce((sum, s) => sum + s.reps, 0);
+
+  /* ── Render ──── */
+
   return (
     <View style={styles.container}>
-      {/* Header: back | timer | settings */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity style={styles.headerButton} onPress={handleGoBack}>
-          <ChevronLeft size={24} color={COLORS.text} />
+      {/* ── HEADER ──────────────────────────── */}
+      <View style={[styles.header, { paddingTop: insets.top + 2 }]}>
+        <TouchableOpacity style={styles.headerBackButton} onPress={handleGoBack} activeOpacity={0.7}>
+          <ChevronLeft size={22} color="#71717A" strokeWidth={1.5} />
         </TouchableOpacity>
-        <View style={styles.headerTimerGroup}>
-          <MonoText style={styles.headerTitle}>{formatStopwatch(elapsedSeconds)}</MonoText>
-        </View>
+
+        <Text style={styles.headerLabel}>ACTIVE SESSION</Text>
+
         <TouchableOpacity
-          style={styles.settingsButton}
+          style={styles.headerSettingsButton}
           onPress={() => setSettingsModalVisible(true)}
           activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
         >
-          <Settings size={24} color={COLORS.text} strokeWidth={2} />
+          <Settings size={18} color="#71717A" strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
 
@@ -289,116 +306,176 @@ export const CurrentWorkoutScreen: React.FC = () => {
         onClose={() => setSettingsModalVisible(false)}
       />
 
-      {/* Exercises List */}
+      {/* ── TIMER HERO ──────────────────────── */}
+      <View style={styles.timerBlock}>
+        <MonoText bold style={styles.timerText}>
+          {formatStopwatch(elapsedSeconds)}
+        </MonoText>
+        {isPaused && (
+          <View style={styles.pausedBadge}>
+            <Text style={styles.pausedBadgeText}>PAUSED</Text>
+          </View>
+        )}
+        {totalSetsCount > 0 && (
+          <View style={styles.sessionMetaRow}>
+            <View style={styles.sessionMetaItem}>
+              <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sessionMetaText}>{totalSetsCount} SETS</Text>
+            </View>
+            <View style={styles.sessionMetaDot} />
+            <View style={styles.sessionMetaItem}>
+              <Clock size={12} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sessionMetaText}>{totalRepsCount} REPS</Text>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* ── CONTENT AREA ────────────────────── */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 130 },
+          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 180 },
           exercises.length === 0 && styles.scrollContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
       >
         {exercises.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Dumbbell size={48} color={COLORS.textSecondary} strokeWidth={1} />
-            <Text style={styles.emptyStateText}>No sets yet</Text>
-            <Text style={styles.emptyStateSubtext}>Tap "Add new exercise" to get started</Text>
+          /* ── THE VOID (Empty State) ──── */
+          <View style={styles.voidState}>
+            <View style={styles.voidIconWrap}>
+              <Dumbbell size={40} color="#52525B" strokeWidth={1} />
+            </View>
+            <Text style={styles.voidTitle}>NO EXERCISES</Text>
+            <Text style={styles.voidSubtext}>Add an exercise to begin tracking</Text>
           </View>
         ) : (
+          /* ── EXERCISE CARDS ──── */
           exercises.map((exercise) => {
             const isExpanded = expandedExerciseIds.has(exercise.id);
             return (
-              <View key={exercise.id} style={styles.exerciseCard}>
-                <TouchableOpacity
-                  style={styles.exerciseCardHeader}
-                  onPress={() => toggleExerciseExpanded(exercise.id)}
-                  activeOpacity={0.7}
+              <View key={exercise.id} style={styles.exerciseCardOuter}>
+                <LinearGradient
+                  colors={['#1A1A1A', '#0C0C0C', '#000000']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.exerciseCardGradient}
                 >
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  <View style={styles.exerciseHeaderRight}>
-                    <Text style={styles.setCount}>{exercise.sets.length} sets</Text>
-                    {isExpanded ? (
-                      <ChevronUp size={20} color={COLORS.textSecondary} />
-                    ) : (
-                      <ChevronDown size={20} color={COLORS.textSecondary} />
-                    )}
-                  </View>
-                </TouchableOpacity>
-
-                {isExpanded && (
-                  <View style={styles.setsList}>
-                    {exercise.sets.map((set, setIndex) => (
-                      <View key={setIndex} style={styles.setCard}>
-                        <View style={styles.setCardHeader}>
-                          <Text style={styles.setNumber}>Set {setIndex + 1}</Text>
-                          <View style={styles.setCardHeaderActions}>
-                            <TouchableOpacity
-                              style={styles.notesButton}
-                              onPress={() => {
-                                setNotesModalSet({
-                                  set,
-                                  setIndex: setIndex + 1,
-                                  exerciseName: exercise.name,
-                                });
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <FileText size={18} color={COLORS.primary} />
-                              <Text style={styles.notesButtonText}>Notes</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.deleteSetButton}
-                              onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
-                              activeOpacity={0.7}
-                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                              accessibilityRole="button"
-                              accessibilityLabel="Delete set"
-                            >
-                              <X size={20} color={COLORS.textSecondary} strokeWidth={2.5} />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                        <View style={styles.setMetrics}>
-                          <View style={styles.metricItem}>
-                            <Text style={styles.metricLabel}>Reps</Text>
-                            <MonoText style={styles.metricValue}>{set.reps}</MonoText>
-                          </View>
-                          <TouchableOpacity
-                            style={styles.metricItem}
-                            onPress={() => handleEditWeight(exercise.id, exercise.name, setIndex, set.weight, set.weightUnit)}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.metricLabel}>Weight</Text>
-                            <MonoText style={[styles.metricValue, !set.weight && styles.metricValueEmpty]}>
-                              {set.weight && set.weight > 0 
-                                ? `${set.weight}${set.weightUnit || 'kg'}` 
-                                : '—'}
-                            </MonoText>
-                          </TouchableOpacity>
-                          <View style={styles.metricItem}>
-                            <Text style={styles.metricLabel}>Form</Text>
-                            <MonoText style={styles.metricValue}>{set.formScore}</MonoText>
-                          </View>
-                        </View>
+                  <View style={styles.exerciseCardGlassEdge}>
+                    {/* Card Header */}
+                    <TouchableOpacity
+                      style={styles.exerciseCardHeader}
+                      onPress={() => toggleExerciseExpanded(exercise.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.exerciseCardHeaderLeft}>
+                        <Text style={styles.exerciseCardName}>{exercise.name}</Text>
+                        <Text style={styles.exerciseCardMeta}>
+                          {exercise.sets.length} {exercise.sets.length === 1 ? 'SET' : 'SETS'}
+                        </Text>
                       </View>
-                    ))}
-                  </View>
-                )}
+                      <View style={styles.exerciseCardHeaderRight}>
+                        <View style={styles.exerciseSetsBadge}>
+                          <MonoText style={styles.exerciseSetsValue}>{exercise.sets.length}</MonoText>
+                        </View>
+                        {isExpanded ? (
+                          <ChevronUp size={16} color="#52525B" strokeWidth={1.5} />
+                        ) : (
+                          <ChevronDown size={16} color="#52525B" strokeWidth={1.5} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.addSetButton}
-                  onPress={() => handleAddSet(exercise)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.addSetButtonText}>Add set</Text>
-                </TouchableOpacity>
+                    {/* Expanded Sets */}
+                    {isExpanded && (
+                      <View style={styles.setsList}>
+                        {exercise.sets.map((set, setIndex) => (
+                          <View key={setIndex} style={styles.setRow}>
+                            <View style={styles.setRowHeader}>
+                              <Text style={styles.setRowLabel}>SET {setIndex + 1}</Text>
+                              <View style={styles.setRowActions}>
+                                <TouchableOpacity
+                                  style={styles.setNotesButton}
+                                  onPress={() =>
+                                    setNotesModalSet({
+                                      set,
+                                      setIndex: setIndex + 1,
+                                      exerciseName: exercise.name,
+                                    })
+                                  }
+                                  activeOpacity={0.7}
+                                >
+                                  <FileText size={14} color={COLORS.accent} strokeWidth={1.5} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.setDeleteButton}
+                                  onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
+                                  activeOpacity={0.7}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                  <X size={14} color="#52525B" strokeWidth={2} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                            <View style={styles.setMetrics}>
+                              <View style={styles.setMetricItem}>
+                                <Text style={styles.setMetricLabel}>REPS</Text>
+                                <MonoText bold style={styles.setMetricValue}>{set.reps}</MonoText>
+                              </View>
+                              <View style={styles.setMetricDivider} />
+                              <TouchableOpacity
+                                style={styles.setMetricItem}
+                                onPress={() =>
+                                  handleEditWeight(
+                                    exercise.id,
+                                    exercise.name,
+                                    setIndex,
+                                    set.weight,
+                                    set.weightUnit
+                                  )
+                                }
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.setMetricLabel}>WEIGHT</Text>
+                                <MonoText
+                                  bold
+                                  style={[styles.setMetricValue, !set.weight && styles.setMetricValueEmpty]}
+                                >
+                                  {set.weight && set.weight > 0
+                                    ? `${set.weight}${set.weightUnit || 'kg'}`
+                                    : '—'}
+                                </MonoText>
+                              </TouchableOpacity>
+                              <View style={styles.setMetricDivider} />
+                              <View style={styles.setMetricItem}>
+                                <Text style={styles.setMetricLabel}>FORM</Text>
+                                <MonoText bold style={styles.setMetricValue}>{set.formScore}</MonoText>
+                              </View>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Add Set Row */}
+                    <TouchableOpacity
+                      style={styles.addSetRow}
+                      onPress={() => handleAddSet(exercise)}
+                      activeOpacity={0.7}
+                    >
+                      <Plus size={14} color={COLORS.accent} strokeWidth={2} />
+                      <Text style={styles.addSetRowText}>Add set</Text>
+                    </TouchableOpacity>
+                  </View>
+                </LinearGradient>
               </View>
             );
           })
         )}
       </ScrollView>
 
+      {/* ── Modals ──── */}
       {notesModalSet && (
         <SetNotesModal
           visible={!!notesModalSet}
@@ -408,7 +485,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
           exerciseName={notesModalSet.exerciseName}
         />
       )}
-
       {weightModalData && (
         <WeightInputModal
           visible={!!weightModalData}
@@ -421,315 +497,441 @@ export const CurrentWorkoutScreen: React.FC = () => {
         />
       )}
 
-      {/* Add New Exercise Button - Fixed at bottom */}
-      <View style={styles.addButtonContainer}>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddExercise} activeOpacity={0.8}>
-          <Plus size={18} color={COLORS.primary} />
-          <Text style={styles.addButtonText}>Add new exercise</Text>
+      {/* ── ADD EXERCISE BUTTON (Tactile Glass Pill) ── */}
+      <View style={styles.addExerciseContainer}>
+        <TouchableOpacity style={styles.addExerciseButton} onPress={handleAddExercise} activeOpacity={0.8}>
+          <Plus size={16} color={COLORS.accent} strokeWidth={2} />
+          <Text style={styles.addExerciseText}>Add new exercise</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Workout controls: Discard | Pause | End Workout */}
-      <View style={[styles.workoutControlsRow, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+      {/* ── BOTTOM CONTROLS (Squircle Glass) ── */}
+      <View style={[styles.bottomControls, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 4 }]}>
         <TouchableOpacity
-          style={styles.workoutControlButton}
+          style={styles.controlButton}
           onPress={handleDiscardWorkout}
           activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Discard workout"
         >
-          <Trash2 size={20} color={COLORS.textSecondary} />
-          <Text style={styles.workoutControlLabel}>Discard</Text>
+          <Trash2 size={18} color="#52525B" strokeWidth={1.5} />
+          <Text style={styles.controlLabel}>Discard</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={styles.workoutControlButton}
+          style={styles.controlButton}
           onPress={handlePausePress}
           activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={isPaused ? 'Resume workout' : 'Pause workout'}
         >
           {isPaused ? (
-            <Play size={20} color={COLORS.text} />
+            <Play size={18} color="#FFFFFF" strokeWidth={1.5} />
           ) : (
-            <Pause size={20} color={COLORS.text} />
+            <Pause size={18} color="#FFFFFF" strokeWidth={1.5} />
           )}
-          <Text style={styles.workoutControlLabel}>{isPaused ? 'Resume' : 'Pause'}</Text>
+          <Text style={[styles.controlLabel, styles.controlLabelLight]}>
+            {isPaused ? 'Resume' : 'Pause'}
+          </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.workoutControlButton, styles.workoutControlButtonPrimary]}
+          style={[styles.controlButton, styles.controlButtonFinish]}
           onPress={handleEndWorkout}
           activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="End workout"
         >
-          <Text style={styles.workoutControlLabelPrimary}>End Workout</Text>
+          <Text style={styles.controlLabelFinish}>Finish</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 };
 
+/* ── Styles ──────────────────────────────── */
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#000000',
   },
+
+  /* ── Header ─────────────────────────────── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.sm,
-    minHeight: 48,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128, 128, 128, 0.3)',
+    paddingBottom: 4,
   },
-  headerTimerGroup: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xs,
-  },
-  headerButton: {
+  headerBackButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#27272A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingsButton: {
+  headerLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: '#52525B',
+    letterSpacing: 3,
+  },
+  headerSettingsButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#27272A',
     alignItems: 'center',
     justifyContent: 'center',
-    opacity: 0.85,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
-    opacity: 0.9,
-  },
-  addButtonContainer: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
-    backgroundColor: COLORS.background,
-  },
-  workoutControlsRow: {
-    flexDirection: 'row',
+
+  /* ── Timer Hero ─────────────────────────── */
+  timerBlock: {
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingTop: 8,
+    paddingBottom: 20,
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-    backgroundColor: COLORS.background,
-    gap: SPACING.sm,
   },
-  workoutControlButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.md,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(128, 128, 128, 0.35)',
+  timerText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 72,
+    color: '#FFFFFF',
+    lineHeight: 80,
+    letterSpacing: -2,
+    ...Platform.select({
+      ios: {
+        textShadowColor: 'rgba(255, 255, 255, 0.15)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 20,
+      },
+    }),
   },
-  workoutControlLabel: {
-    fontSize: 13,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
+  pausedBadge: {
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
-  workoutControlButtonPrimary: {
-    borderColor: COLORS.primary,
-    backgroundColor: 'rgba(0, 172, 124, 0.12)',
-  },
-  workoutControlLabelPrimary: {
-    fontSize: 13,
+  pausedBadgeText: {
     fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 2,
   },
-  addButton: {
+  sessionMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: 28,
-    gap: SPACING.xs,
+    gap: 6,
+    marginTop: 12,
   },
-  addButtonText: {
-    fontSize: 13,
+  sessionMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sessionMetaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#3F3F46',
+  },
+  sessionMetaText: {
     fontFamily: FONTS.ui.regular,
-    color: COLORS.primary,
+    fontSize: 10,
+    color: '#A1A1AA',
+    letterSpacing: 2,
   },
+
+  /* ── Void (Empty State) ─────────────────── */
+  voidState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  voidIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  voidTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: '#52525B',
+    letterSpacing: 3,
+    marginBottom: 6,
+  },
+  voidSubtext: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: '#3F3F46',
+  },
+
+  /* ── Scroll ─────────────────────────────── */
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
+    paddingTop: 0,
+    gap: 14,
   },
   scrollContentEmpty: {
     flexGrow: 1,
     justifyContent: 'center',
   },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xxxl * 2,
-    alignSelf: 'stretch',
+
+  /* ── Exercise Card ──────────────────────── */
+  exerciseCardOuter: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
   },
-  emptyStateText: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.md,
+  exerciseCardGradient: {
+    borderRadius: 22,
   },
-  emptyStateSubtext: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textTertiary,
-    marginTop: SPACING.xs,
-  },
-  exerciseCard: {
-    ...CARD_STYLE,
-    marginBottom: SPACING.md,
+  exerciseCardGlassEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     overflow: 'hidden',
   },
   exerciseCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: SPACING.md,
+    padding: 20,
   },
-  exerciseHeaderRight: {
+  exerciseCardHeaderLeft: {
+    flex: 1,
+    gap: 4,
+  },
+  exerciseCardName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 18,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  exerciseCardMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: '#52525B',
+    letterSpacing: 2,
+  },
+  exerciseCardHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
+    gap: 10,
+    marginLeft: SPACING.md,
   },
-  setCount: {
-    fontSize: 13,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-  },
-  setsList: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128, 128, 128, 0.2)',
-  },
-  addSetButton: {
-    paddingVertical: SPACING.sm,
+  exerciseSetsBadge: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128, 128, 128, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+    minWidth: 36,
   },
-  addSetButtonText: {
+  exerciseSetsValue: {
+    fontFamily: FONTS.mono.bold,
     fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.primary,
+    color: '#8B5CF6',
+    lineHeight: 17,
+    textAlign: 'center',
   },
-  setCard: {
-    padding: SPACING.md,
+
+  /* ── Set Rows ───────────────────────────── */
+  setsList: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  setRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128, 128, 128, 0.15)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
-  setCardHeader: {
+  setRowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.xs,
+    marginBottom: 10,
   },
-  setCardHeaderActions: {
+  setRowLabel: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 2,
+  },
+  setRowActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 8,
   },
-  notesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0, 172, 124, 0.12)',
-  },
-  notesButtonText: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.primary,
-  },
-  deleteSetButton: {
-    width: 36,
-    height: 36,
+  setNotesButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
-    backgroundColor: 'rgba(128, 128, 128, 0.15)',
   },
-  setHeader: {
-    flexDirection: 'row',
+  setDeleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  setNumber: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
-    marginBottom: SPACING.xs,
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
-    flex: 1,
+    justifyContent: 'center',
   },
   setMetrics: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metricItem: {
-    flex: 1,
     alignItems: 'center',
   },
-  metricLabel: {
-    fontSize: 12,
+  setMetricItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  setMetricDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  setMetricLabel: {
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.xs,
+    fontSize: 9,
+    color: '#52525B',
+    letterSpacing: 2,
   },
-  metricValue: {
+  setMetricValue: {
+    fontFamily: FONTS.mono.bold,
     fontSize: 18,
-    color: COLORS.text,
+    color: '#8B5CF6',
+    lineHeight: 22,
   },
-  metricValueEmpty: {
-    color: COLORS.textSecondary,
+  setMetricValueEmpty: {
+    color: '#3F3F46',
   },
-  bottomButtonContainer: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.md,
-    backgroundColor: COLORS.background,
-  },
-  endButton: {
+
+  /* ── Add Set Row ────────────────────────── */
+  addSetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.md,
-    borderRadius: 12,
-    gap: SPACING.xs,
+    gap: 6,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
   },
-  endButtonDisabled: {
-    backgroundColor: '#1E2228',
+  addSetRowText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: '#8B5CF6',
+    letterSpacing: 0.5,
   },
-  endButtonText: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.bold,
-    color: '#000000',
+
+  /* ── Add Exercise Button (Glass Pill) ──── */
+  addExerciseContainer: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xs,
+    backgroundColor: '#000000',
   },
-  endButtonTextDisabled: {
-    color: COLORS.textSecondary,
+  addExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  addExerciseText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+
+  /* ── Bottom Controls (Squircle Glass) ──── */
+  bottomControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.md,
+    backgroundColor: '#000000',
+    gap: 10,
+  },
+  controlButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  controlLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: '#52525B',
+    letterSpacing: 0.3,
+  },
+  controlLabelLight: {
+    color: '#A1A1AA',
+  },
+  controlButtonFinish: {
+    borderColor: COLORS.accent,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 14,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  controlLabelFinish: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });

@@ -876,7 +876,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     borderWidth: 4,
-    borderColor: COLORS.text,
+    borderColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#8B5CF6',
   },
   pauseButton: {
     width: 60,
@@ -941,11 +941,11 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 18,
     fontFamily: FONTS.mono.bold,
-    color: COLORS.primary,
+    color: '#8B5CF6',
     minWidth: 30,
   },
   recordButtonActive: {
-    borderColor: COLORS.primary,
+    borderColor: '#8B5CF6',
   },
   recordButtonInnerActive: {
     backgroundColor: '#FF3B30',
@@ -990,7 +990,7 @@ const styles = StyleSheet.create({
   feedbackText: {
     fontSize: 14,
     fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
+    color: '#8B5CF6',
     textAlign: 'center',
   },
 });

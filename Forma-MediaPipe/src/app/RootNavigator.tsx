@@ -207,7 +207,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
       {/* Collapsible Header - Hidden for Record tab */}
-      {currentTab !== 'Record' && currentTab !== 'Analytics' && <AppHeader />}
+      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && <AppHeader />}
       
       {/* Tab Navigator with animated margin */}
       <Animated.View 
