@@ -161,7 +161,10 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    minWidth: 40,
+    minHeight: 40,
+    borderRadius: 999,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
