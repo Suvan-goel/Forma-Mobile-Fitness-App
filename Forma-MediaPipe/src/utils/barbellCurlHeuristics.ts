@@ -34,8 +34,8 @@ export const THRESHOLDS = {
 export const FORM_THRESHOLDS = {
   SHOULDER_WARN: 45,
   SHOULDER_FAIL: 65,
-  TORSO_WARN: 10,
-  TORSO_FAIL: 20,
+  TORSO_WARN: 15,
+  TORSO_FAIL: 22,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
@@ -74,9 +74,9 @@ const PENALTIES = {
 // All use quadratic ramps: penalty(x) = min(cap, scale * max(0, x - deadzone)²)
 // ============================================================================
 
-/** Torso swing penalty — max 35 pts. Deadzone 5° (breathing/sway/noise). */
+/** Torso swing penalty — max 35 pts. Deadzone 8° (shoulder drift + breathing/sway/noise). */
 function penaltyTorso(delta: number): number {
-  const d = Math.max(0, delta - 5);
+  const d = Math.max(0, delta - 8);
   return Math.min(35, 0.40 * d * d);
 }
 
@@ -656,7 +656,16 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
             z: ((leftEar.z ?? 0) + (rightEar.z ?? 0)) / 2,
           }
         : null;
-  const torsoUpperPoint = headPoint ?? shoulderCenter;
+  // "Virtual neck" blend: 70% shoulder center + 30% head ≈ cervical spine.
+  // Pure shoulder center drifts forward during curls (deltoid rotation).
+  // Pure head is noisy (Z jitter, nodding). Blending reduces both issues.
+  const torsoUpperPoint = shoulderCenter && headPoint
+    ? {
+        x: 0.7 * shoulderCenter.x + 0.3 * headPoint.x,
+        y: 0.7 * shoulderCenter.y + 0.3 * headPoint.y,
+        z: 0.7 * (shoulderCenter.z ?? 0) + 0.3 * (headPoint.z ?? 0),
+      }
+    : shoulderCenter ?? headPoint;
   const torsoAngle =
     hipCenter && torsoUpperPoint && (leftShoulder && rightShoulder)
       ? (() => {
@@ -834,7 +843,8 @@ function evaluateForm(
   repWindow: RepWindow,
   leftArm: ArmFSM,
   rightArm: ArmFSM,
-  viewAngle: ViewAngle
+  viewAngle: ViewAngle,
+  repIndex: number = 0
 ): { score: number; messages: string[] } {
   const { minAngles, maxAngles } = repWindow;
   const messages: string[] = [];
@@ -915,11 +925,15 @@ function evaluateForm(
   }
 
   // 4. Torso swing (works at all angles — sagittal projection is rotation-invariant)
+  // First rep uses FAIL threshold only (posture adjustment from standing → curling is normal)
   const deltaTorso = maxAngles.torso - minAngles.torso;
+  const torsoWarnThreshold = repIndex === 0
+    ? FORM_THRESHOLDS.TORSO_FAIL
+    : FORM_THRESHOLDS.TORSO_WARN;
   if (isFinite(deltaTorso)) {
     if (deltaTorso > FORM_THRESHOLDS.TORSO_FAIL) {
       messages.push('Excessive body swing — this is cheating the rep.');
-    } else if (deltaTorso > FORM_THRESHOLDS.TORSO_WARN) {
+    } else if (deltaTorso > torsoWarnThreshold) {
       messages.push("Don't swing your torso — stay upright and controlled.");
     }
   }
@@ -1157,7 +1171,8 @@ function completeRep(
     newState.repWindow!,
     newState.leftArm,
     newState.rightArm,
-    viewAngle
+    viewAngle,
+    newState.repCount
   );
 
   newState.lastRepResult = {
