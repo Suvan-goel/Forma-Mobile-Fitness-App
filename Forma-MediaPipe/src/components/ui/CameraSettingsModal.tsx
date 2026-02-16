@@ -6,10 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Switch,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { X } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useCameraSettings } from '../../contexts/CameraSettingsContext';
+
+const CARD_GRADIENT_COLORS: [string, string, string] = ['#27272A', '#111111', '#000000'];
 
 interface CameraSettingsModalProps {
   visible: boolean;
@@ -51,44 +55,53 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity style={styles.content} activeOpacity={1} onPress={() => {}}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Settings</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={onClose}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <X size={24} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Show feedback messages</Text>
-            <Switch
-              value={showFeedback}
-              onValueChange={setShowFeedback}
-              trackColor={{ false: 'rgba(128, 128, 128, 0.4)', true: COLORS.primary }}
-              thumbColor={COLORS.text}
-            />
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Spoken feedback (TTS)</Text>
-            <Switch
-              value={isTTSEnabled}
-              onValueChange={handleTTSChange}
-              trackColor={{ false: 'rgba(128, 128, 128, 0.4)', true: COLORS.primary }}
-              thumbColor={COLORS.text}
-            />
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Show skeleton overlay</Text>
-            <Switch
-              value={showSkeletonOverlay}
-              onValueChange={setShowSkeletonOverlay}
-              trackColor={{ false: 'rgba(128, 128, 128, 0.4)', true: COLORS.primary }}
-              thumbColor={COLORS.text}
-            />
-          </View>
+        <TouchableOpacity style={styles.cardOuter} activeOpacity={1} onPress={() => {}}>
+          <LinearGradient
+            colors={CARD_GRADIENT_COLORS}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardGlassEdge}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Settings</Text>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={onClose}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <X size={24} color={COLORS.text} strokeWidth={1.5} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Show feedback messages</Text>
+                <Switch
+                  value={showFeedback}
+                  onValueChange={setShowFeedback}
+                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                  thumbColor={COLORS.text}
+                />
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Spoken feedback (TTS)</Text>
+                <Switch
+                  value={isTTSEnabled}
+                  onValueChange={handleTTSChange}
+                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                  thumbColor={COLORS.text}
+                />
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Show skeleton overlay</Text>
+                <Switch
+                  value={showSkeletonOverlay}
+                  onValueChange={setShowSkeletonOverlay}
+                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                  thumbColor={COLORS.text}
+                />
+              </View>
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -103,11 +116,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
   },
-  content: {
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
+  cardOuter: {
     width: '100%',
     maxWidth: 400,
+    borderRadius: 22,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  cardGradient: {
+    borderRadius: 22,
+  },
+  cardGlassEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     paddingBottom: SPACING.lg,
   },
   header: {
@@ -118,11 +148,11 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   title: {
     fontSize: 18,
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.text,
     flex: 1,
   },
