@@ -198,7 +198,7 @@ interface WorkoutCardProps {
 }
 
 /** Card height (content + padding) + gap between cards for getItemLayout */
-const CARD_INNER_HEIGHT = 100;
+const CARD_INNER_HEIGHT = 112;
 const CARD_GAP = 14;
 const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
 
@@ -738,6 +738,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 22,
+    paddingBottom: 32,
   },
   cardContent: {
     flex: 1,
@@ -762,6 +763,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginTop: 6,
+    marginBottom: 4,
   },
   metaItem: {
     flexDirection: 'row',
