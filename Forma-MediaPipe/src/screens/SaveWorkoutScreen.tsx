@@ -13,7 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
@@ -104,12 +104,16 @@ export const SaveWorkoutScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={insets.top}
+    <SafeAreaView
+      style={[styles.container, { marginBottom: -insets.bottom }]}
+      edges={['top', 'left', 'right']}
     >
-      <View style={[styles.topBar, { paddingTop: insets.top + SPACING.md }]}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={insets.top}
+      >
+      <View style={[styles.topBar, { paddingTop: SPACING.md }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={handleGoBack}
@@ -194,9 +198,8 @@ export const SaveWorkoutScreen: React.FC = () => {
       </ScrollView>
 
       <View style={[styles.buttonContainer, {
-        paddingTop: Math.max(insets.bottom, SPACING.md),
-        paddingBottom: Math.max(insets.bottom, SPACING.md),
-        bottom: -insets.bottom,
+        paddingTop: SPACING.md,
+        paddingBottom: 12,
       }]}>
         <TouchableOpacity
           style={[
@@ -221,7 +224,8 @@ export const SaveWorkoutScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -351,6 +355,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.mono.bold,
     color: COLORS.text,
+  },
+  keyboardView: {
+    flex: 1,
   },
   buttonContainer: {
     position: 'absolute',

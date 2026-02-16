@@ -115,7 +115,11 @@ const RecordStackNavigator: React.FC = memo(() => {
       <RecordStack.Screen name="CurrentWorkout" component={CurrentWorkoutScreen} />
       <RecordStack.Screen name="ChooseExercise" component={ChooseExerciseScreen} />
       <RecordStack.Screen name="Camera" component={CameraScreen} />
-      <RecordStack.Screen name="SaveWorkout" component={SaveWorkoutScreen} />
+      <RecordStack.Screen
+        name="SaveWorkout"
+        component={SaveWorkoutScreen}
+        options={{ contentStyle: { backgroundColor: COLORS.background } }}
+      />
     </RecordStack.Navigator>
   );
 });
