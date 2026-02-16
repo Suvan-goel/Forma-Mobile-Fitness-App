@@ -51,6 +51,8 @@ export const RecordLandingScreen: React.FC = () => {
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
+  const cardGap = 14;
+  const bottomPadding = navigationBarHeight + cardGap;
   const [timerPaused, setTimerPaused] = useState(false);
 
   useEffect(() => {
@@ -123,7 +125,7 @@ export const RecordLandingScreen: React.FC = () => {
       </View>
 
       {/* ── ACTION CARDS ───────────────────────── */}
-      <View style={[styles.cardsContainer, { paddingBottom: navigationBarHeight }]}>
+      <View style={[styles.cardsContainer, { paddingBottom: bottomPadding }]}>
         {workoutInProgress ? (
           /* ── Active Workout Card ── */
           <View style={styles.cardOuter}>
