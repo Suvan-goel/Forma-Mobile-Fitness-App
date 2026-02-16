@@ -1,5 +1,5 @@
-import React, { memo, useCallback, useState, useContext, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
+import React, { memo, useCallback, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -23,7 +23,7 @@ import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
-import { ScrollProvider, ScrollContext } from '../contexts/ScrollContext';
+import { ScrollProvider } from '../contexts/ScrollContext';
 import { AppHeader } from '../components/ui/AppHeader';
 import { COLORS, FONTS } from '../constants/theme';
 
@@ -188,31 +188,16 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   );
 });
 
-// Inner component that uses ScrollContext
+// Inner component — header is non-collapsible and scrolls with page content
 const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: string) => void }> = memo(({ currentTab, onTabChange }) => {
   const insets = useSafeAreaInsets();
-  const scrollContext = useContext(ScrollContext);
-  const contentMarginTop = scrollContext?.contentMarginTop;
-  
-  // Reset header whenever tab changes
-  useEffect(() => {
-    if (scrollContext?.resetHeader) {
-      scrollContext.resetHeader();
-    }
-  }, [currentTab, scrollContext]);
-  
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
-      {/* Collapsible Header - Hidden for Record tab */}
+      {/* Header - Hidden for Record tab; no collapse/sticky logic */}
       {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Rewards' && <AppHeader />}
-      
-      {/* Tab Navigator with animated margin */}
-      <Animated.View 
-        style={{ 
-          flex: 1,
-          marginTop: contentMarginTop || 0,
-        }}
-      >
+
+      <View style={{ flex: 1 }}>
         <Tab.Navigator
           tabBar={(props) => <GlassTabBar {...props} onTabChange={onTabChange} />}
           screenOptions={{
@@ -224,7 +209,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
           <Tab.Screen name="Record" component={RecordTabWithProvider} />
           <Tab.Screen name="Rewards" component={RewardsScreen} />
         </Tab.Navigator>
-      </Animated.View>
+      </View>
     </View>
   );
 });

@@ -27,65 +27,11 @@ export const ScrollProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const scrollDirection = useRef<'up' | 'down' | 'none'>('none');
   const isHeaderHidden = useRef(false);
 
+  // Collapsible header disabled: scroll handler is a no-op so header stays static and scrolls with page content
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const currentScrollY = event.nativeEvent.contentOffset.y;
-    const diff = currentScrollY - lastScrollY.current;
-    const previousDirection = scrollDirection.current;
-    
-    // Determine scroll direction
-    if (diff > 0 && currentScrollY > 0) {
-      // Scrolling down
-      scrollDirection.current = 'down';
-      if (!isHeaderHidden.current) {
-        // Hide header and collapse content space
-        Animated.parallel([
-          Animated.timing(headerTranslateY, {
-            toValue: -HEADER_MAX_SCROLL,
-            duration: ANIMATION_DURATION,
-            useNativeDriver: true,
-          }),
-          Animated.timing(contentMarginTop, {
-            toValue: -HEADER_MAX_SCROLL,
-            duration: ANIMATION_DURATION,
-            useNativeDriver: false, // marginTop cannot use native driver
-          }),
-        ]).start();
-        isHeaderHidden.current = true;
-      }
-    } else if (diff < 0) {
-      // Scrolling up
-      // Check if this is the start of an upward scroll (direction changed from down/none to up)
-      if (previousDirection !== 'up') {
-        // User just started scrolling up, remember this position
-        scrollUpStartY.current = currentScrollY;
-      }
-      
-      scrollDirection.current = 'up';
-      
-      if (isHeaderHidden.current) {
-        // Calculate how far user has scrolled up from when they started scrolling up
-        const scrolledUpAmount = scrollUpStartY.current - currentScrollY;
-        if (scrolledUpAmount >= SCROLL_UP_THRESHOLD) {
-          // Show header and expand content space
-          Animated.parallel([
-            Animated.timing(headerTranslateY, {
-              toValue: 0,
-              duration: ANIMATION_DURATION,
-              useNativeDriver: true,
-            }),
-            Animated.timing(contentMarginTop, {
-              toValue: 0,
-              duration: ANIMATION_DURATION,
-              useNativeDriver: false,
-            }),
-          ]).start();
-          isHeaderHidden.current = false;
-        }
-      }
-    }
-    
     lastScrollY.current = currentScrollY;
-  }, [headerTranslateY, contentMarginTop]);
+  }, []);
 
   const resetHeader = useCallback(() => {
     // Reset header to visible state

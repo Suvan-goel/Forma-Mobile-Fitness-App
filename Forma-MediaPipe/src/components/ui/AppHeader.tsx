@@ -1,34 +1,20 @@
-import React, { memo, useCallback, useContext } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated } from 'react-native';
+import React, { memo, useCallback } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Search, Bell, Settings } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, FONTS } from '../../constants/theme';
-import { ScrollContext } from '../../contexts/ScrollContext';
 
 export const HEADER_HEIGHT = 80; // Approximate height of the header
 
 export const AppHeader: React.FC = memo(() => {
   const navigation = useNavigation<any>();
-  
-  // Get scroll context if available (will be undefined if not wrapped in ScrollProvider)
-  const scrollContext = useContext(ScrollContext);
-  const headerTranslateY = scrollContext?.headerTranslateY;
 
   const handleSettingsPress = useCallback(() => {
     navigation.navigate('Settings');
   }, [navigation]);
 
-  const animatedStyle = headerTranslateY
-    ? { transform: [{ translateY: headerTranslateY }] }
-    : {};
-
   return (
-    <Animated.View 
-      style={[
-        styles.header,
-        animatedStyle,
-      ]}
-    >
+    <View style={styles.header}>
       <View style={styles.profileSection}>
         <View style={styles.logoContainer}>
           <Image 
@@ -53,7 +39,7 @@ export const AppHeader: React.FC = memo(() => {
           <Settings size={22} color={COLORS.text} />
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
 });
 
