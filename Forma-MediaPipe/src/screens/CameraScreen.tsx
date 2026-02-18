@@ -4,7 +4,7 @@ import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RotateCw, Settings, Pause, Play, X } from 'lucide-react-native';
+import { RotateCw, Settings, X } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
@@ -34,6 +34,9 @@ import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSet
 
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
 const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
+
+const MAX_FEED_ITEMS = 6;
+type FeedbackFeedItem = { id: number; text: string };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -79,7 +82,8 @@ export const CameraScreen: React.FC = () => {
     repFeedback: [] as string[],
     duration: 0,
   });
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackFeed, setFeedbackFeed] = useState<FeedbackFeedItem[]>([]);
+  const feedbackIdRef = useRef(0);
   const [torsoDebug, setTorsoDebug] = useState<{
     torso: number | null;
     leftTorso: number | null;
@@ -177,13 +181,6 @@ export const CameraScreen: React.FC = () => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
 
-  // Auto-clear feedback after 2 seconds (exercises with dedicated heuristics)
-  useEffect(() => {
-    if (!feedback || !EXERCISES_WITH_HEURISTICS.has(exerciseNameFromRoute)) return;
-    const timer = setTimeout(() => setFeedback(null), 2000);
-    return () => clearTimeout(timer);
-  }, [feedback, exerciseNameFromRoute]);
-
   // Sync TTS enabled state to ref (for use in handleLandmark without stale closures)
   const isTTSEnabledRef = useRef(isTTSEnabled);
   useEffect(() => {
@@ -262,10 +259,16 @@ export const CameraScreen: React.FC = () => {
     InteractionManager.runAfterInteractions(() => {
       if (pending.repCount !== undefined) setRepCount(pending.repCount);
       if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
-      if (pending.feedback !== undefined) setFeedback(pending.feedback);
       if (pending.torsoDebug !== undefined) setTorsoDebug(pending.torsoDebug);
       if (pending.pushupDebug !== undefined) setPushupDebug(pending.pushupDebug);
       if (pending.workoutUpdate) {
+        const repFeedback = pending.workoutUpdate.repFeedback?.trim() ?? '';
+        if (repFeedback !== '') {
+          setFeedbackFeed(prev => {
+            const id = feedbackIdRef.current++;
+            return [...prev.slice(-(MAX_FEED_ITEMS - 1)), { id, text: repFeedback }];
+          });
+        }
         setWorkoutData(prev => ({
           ...prev,
           totalReps: pending.workoutUpdate!.totalReps,
@@ -507,7 +510,7 @@ export const CameraScreen: React.FC = () => {
       setRepCount(0);
       setCurrentFormScore(null);
       setIsPaused(false);
-      setFeedback(null);
+      setFeedbackFeed([]);
       setTorsoDebug(null);
       // Reset exercise-specific state
       if (exerciseNameFromRoute === 'Barbell Curl') {
@@ -526,10 +529,6 @@ export const CameraScreen: React.FC = () => {
       ttsResetCoach();
     }
   }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
-
-  const handlePausePress = useCallback(() => {
-    setIsPaused(prev => !prev);
-  }, []);
 
   const handleCameraFlip = useCallback(() => {
     switchCamera();
@@ -609,30 +608,63 @@ export const CameraScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Top bar, gap, then 9:16 camera; black below; bottom controls halfway over camera bottom */}
-      <Pressable
-        style={[styles.cameraLetterbox, { paddingTop: topBarHeight + gapBelowTopBar }]}
-        onPress={handleCameraDoubleTap}
-      >
-        <View style={[
-          styles.cameraContainer,
-          {
-            width: cameraDisplayWidth,
-            height: cameraDisplayHeight,
-            borderRadius: CAMERA_BORDER_RADIUS,
-          },
-        ]}>
-          {showCamera && (
-            <RNMediapipe
-              {...mediapipeProps}
-              onLandmark={handleLandmark}
-            />
-          )}
-        </View>
-      </Pressable>
+      {/* Camera section: fixed height below status bar */}
+      <View style={[styles.cameraSection, { paddingTop: insets.top }]}>
+        <Pressable
+          style={styles.cameraLetterbox}
+          onPress={handleCameraDoubleTap}
+        >
+          <View style={[
+            styles.cameraContainer,
+            {
+              width: cameraDisplayWidth,
+              height: cameraDisplayHeight,
+              borderRadius: CAMERA_BORDER_RADIUS,
+            },
+          ]}>
+            {showCamera && (
+              <RNMediapipe
+                {...mediapipeProps}
+                onLandmark={handleLandmark}
+              />
+            )}
+          </View>
+        </Pressable>
+      </View>
 
-      {/* Overlay UI */}
-      <View style={[styles.overlay, { pointerEvents: 'box-none' }]}>
+      {/* Bottom controls: below camera, no overlap */}
+      <View style={[styles.bottomBarSection, { paddingBottom: SPACING.lg + insets.bottom }]}>
+        <View style={styles.recordButtonContainer}>
+          <View style={styles.buttonsRow}>
+            <TouchableOpacity
+              style={[styles.recordButton, isRecording && styles.recordButtonActive]}
+              onPress={handleRecordPress}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.recordButtonInner, isRecording && styles.recordButtonInnerActive]} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.flipCameraButton}
+              onPress={handleCameraFlip}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Flip camera"
+            >
+              <RotateCw size={24} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Overlay UI — only over camera (top bar, feedback, debug) */}
+      <View style={[
+        styles.overlay,
+        {
+          pointerEvents: 'box-none',
+          top: insets.top,
+          height: cameraDisplayHeight,
+        },
+      ]}>
         {/* Top Bar */}
         <View style={[styles.topBar, { paddingTop: topInset }]}>
           <TouchableOpacity
@@ -660,15 +692,46 @@ export const CameraScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Feedback Display - Speech bubble below exercise name */}
-        {feedback && showFeedback && (
-          <View style={styles.feedbackContainer}>
-            <View style={styles.feedbackBubble}>
-              <Text style={styles.feedbackText}>{feedback}</Text>
-              <View style={styles.feedbackTail} />
-            </View>
+        {/* Reps & Form overlay — on camera, above the controls */}
+        <View style={styles.metricsOverlay}>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Reps</Text>
+            <MonoText style={styles.metricValue}>
+              {displayValues.reps}
+            </MonoText>
           </View>
-        )}
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Form</Text>
+            <MonoText style={styles.metricValue}>
+              {displayValues.form}
+            </MonoText>
+          </View>
+        </View>
+
+        {/* Feedback Display - Speech bubble below exercise name */}
+        {showFeedback && (() => {
+          const items = feedbackFeed.filter(item => (item.text || '').trim() !== '');
+          if (items.length === 0) return null;
+          return (
+            <View style={styles.feedbackFeedContainer}>
+              {items.map((item, index) => {
+                // Newest = 0.9, oldest = 0; fewer items (max 4) so older messages disappear sooner
+                const t = items.length <= 1 ? 1 : index / (items.length - 1);
+                const opacity = 0.9 * t;
+                return (
+                  <View
+                    key={item.id}
+                    style={[styles.feedbackFeedItem, { opacity }]}
+                  >
+                    <Text style={styles.feedbackFeedText} numberOfLines={2}>
+                      {item.text}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })()}
 
         {/* Torso Debug - Shows angles used for swing detection (Barbell Curl only) */}
         {exerciseNameFromRoute === 'Barbell Curl' &&
@@ -743,66 +806,6 @@ export const CameraScreen: React.FC = () => {
             </View>
           )}
 
-        {/* Bottom Controls — at bottom of screen, overlapping the camera */}
-        <View style={[
-          styles.bottomBar,
-          {
-            paddingBottom: SPACING.lg + insets.bottom,
-          }
-        ]}>
-          {/* Metrics Row */}
-          <View style={[styles.metricsContainer, { marginBottom: SPACING.lg }]}>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Reps</Text>
-              <MonoText style={styles.metricValue}>
-                {displayValues.reps}
-              </MonoText>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Form</Text>
-              <MonoText style={styles.metricValue}>
-                {displayValues.form}
-              </MonoText>
-            </View>
-          </View>
-
-          {/* Control Buttons: Pause | Record | Flip camera */}
-          <View style={styles.recordButtonContainer}>
-            <View style={styles.buttonsRow}>
-              <TouchableOpacity 
-                style={[
-                  styles.pauseButton,
-                  !isRecording && styles.pauseButtonDisabled
-                ]} 
-                onPress={isRecording ? handlePausePress : undefined}
-                activeOpacity={isRecording ? 0.8 : 1}
-                disabled={!isRecording}
-              >
-                {isPaused ? (
-                  <Play size={24} color={isRecording ? COLORS.text : COLORS.textSecondary} />
-                ) : (
-                  <Pause size={24} color={isRecording ? COLORS.text : COLORS.textSecondary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.recordButton, isRecording && styles.recordButtonActive]} 
-                onPress={handleRecordPress}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.recordButtonInner, isRecording && styles.recordButtonInnerActive]} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.flipCameraButton}
-                onPress={handleCameraFlip}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Flip camera"
-              >
-                <RotateCw size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
       </View>
 
       <CameraSettingsModal
@@ -817,19 +820,30 @@ export const CameraScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    flexDirection: 'column',
+    backgroundColor: COLORS.background,
+  },
+  cameraSection: {
+    alignItems: 'center',
     backgroundColor: COLORS.background,
   },
   cameraLetterbox: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    backgroundColor: COLORS.background,
+    justifyContent: 'center',
   },
   cameraContainer: {
     overflow: 'hidden',
   },
+  bottomBarSection: {
+    alignItems: 'center',
+    paddingTop: SPACING.lg,
+    backgroundColor: COLORS.background,
+  },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    pointerEvents: 'box-none',
   },
   topBar: {
     flexDirection: 'row',
@@ -879,9 +893,9 @@ const styles = StyleSheet.create({
   },
   /* Reference style: outer thin white ring, inner white circle with thin black border */
   recordButton: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     borderWidth: 3,
     borderColor: '#FFFFFF',
     alignItems: 'center',
@@ -889,26 +903,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   recordButtonInner: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 2,
     borderColor: '#000000',
     backgroundColor: '#FFFFFF',
-  },
-  pauseButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: COLORS.text,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pauseButtonDisabled: {
-    borderColor: COLORS.textSecondary,
-    opacity: 0.5,
   },
   flipCameraButton: {
     width: 60,
@@ -937,6 +937,16 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
     marginLeft: SPACING.md,
   },
+  metricsOverlay: {
+    position: 'absolute',
+    bottom: SPACING.lg,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.xl,
+  },
   metricItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -960,48 +970,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30',
     borderColor: '#CC2F26',
   },
-  feedbackContainer: {
+  feedbackFeedContainer: {
     position: 'absolute',
-    top: 120,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
+    left: SPACING.screenHorizontal,
+    bottom: 140,
+    right: undefined,
+    maxWidth: '72%',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+    gap: 6,
     zIndex: 10,
   },
-  feedbackBubble: {
-    backgroundColor: '#000000',
-    borderRadius: 16,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    paddingBottom: SPACING.md + 8,
-    maxWidth: '90%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 6,
+  feedbackFeedItem: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
-  feedbackTail: {
-    position: 'absolute',
-    bottom: -8,
-    left: '50%',
-    marginLeft: -10,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderTopWidth: 10,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#000000',
-  },
-  feedbackText: {
-    fontSize: 14,
+  feedbackFeedText: {
+    fontSize: 13,
     fontFamily: FONTS.ui.bold,
-    color: '#8B5CF6',
-    textAlign: 'center',
+    color: '#FFFFFF',
   },
 });
 
