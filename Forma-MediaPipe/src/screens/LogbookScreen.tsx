@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { getWorkouts } from '../services/workoutStorage';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts } from '../hooks';
@@ -197,8 +197,8 @@ interface WorkoutCardProps {
   session: WorkoutSession;
 }
 
-/** Card height (content + padding) + gap between cards for getItemLayout */
-const CARD_INNER_HEIGHT = 112;
+/** Card height = content (~74px) + increased top/bottom padding (20px) + horizontal padding (16px); gap for getItemLayout */
+const CARD_INNER_HEIGHT = 114;
 const CARD_GAP = 14;
 const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
 
@@ -216,9 +216,9 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session }) => {
       onPress={handlePress}
     >
       <LinearGradient
-        colors={CARD_GRADIENT_COLORS}
-        start={GRADIENT_START}
-        end={GRADIENT_END}
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
         style={styles.cardGradient}
       >
         <View style={styles.cardGlassEdge}>
@@ -252,11 +252,6 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session }) => {
     </TouchableOpacity>
   );
 }, (prev, next) => prev.session.id === next.session.id && prev.session.formScore === next.session.formScore);
-
-/** Stable references to avoid re-creating objects on every render */
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
-const GRADIENT_START = { x: 0, y: 0 };
-const GRADIENT_END = { x: 1, y: 1 };
 
 /* ── Main Screen ──────────────────────────── */
 
@@ -710,7 +705,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  /* ── Workout Card ────────────────────────── */
+  /* ── Workout Card (matches Analytics card style) ────────────────────────── */
   cardOuter: {
     height: CARD_INNER_HEIGHT,
     borderRadius: 22,
@@ -726,19 +721,23 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    flex: 1,
     borderRadius: 22,
   },
   cardGlassEdge: {
+    flex: 1,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'flex-start',
   },
   cardLayout: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 22,
-    paddingBottom: 32,
+    alignSelf: 'stretch',
   },
   cardContent: {
     flex: 1,
@@ -747,14 +746,14 @@ const styles = StyleSheet.create({
   cardDate: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
-    color: '#52525B',
+    color: COLORS.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
   cardTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 18,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: -0.3,
     marginTop: 2,
   },
@@ -774,12 +773,12 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#3F3F46',
+    backgroundColor: COLORS.textTertiary,
   },
   metaText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
-    color: '#A1A1AA',
+    color: COLORS.textSecondary,
     letterSpacing: 2,
   },
   cardRight: {
@@ -793,15 +792,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderWidth: 1,
-    borderColor: '#8B5CF6',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     minWidth: 46,
   },
   scoreValue: {
     fontFamily: FONTS.mono.bold,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: COLORS.text,
     lineHeight: 19,
     textAlign: 'center',
   },

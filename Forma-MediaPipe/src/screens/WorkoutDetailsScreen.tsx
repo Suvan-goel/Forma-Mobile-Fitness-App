@@ -6,7 +6,7 @@ import { ChevronLeft, Target } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useWorkoutDetails } from '../hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
@@ -15,15 +15,13 @@ import { WorkoutExercise } from '../services/api';
 type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetails'>;
 type WorkoutDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetails'>;
 
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
-
 const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => {
   return (
     <View style={styles.cardOuter}>
       <LinearGradient
-        colors={CARD_GRADIENT_COLORS}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
         style={styles.cardGradient}
       >
         <View style={styles.cardGlassEdge}>

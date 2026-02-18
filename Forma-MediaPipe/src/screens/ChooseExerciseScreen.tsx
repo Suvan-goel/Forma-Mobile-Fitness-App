@@ -16,7 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useExercises } from '../hooks';
 import { LoadingSkeleton } from '../components/ui';
@@ -33,9 +33,6 @@ function getExerciseImage(exercise: Exercise): ImageSourcePropType {
   return CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
 }
 
-const CARD_COLORS: [string, string, string] = ['#27272A', '#121212', '#0A0A0A'];
-const GRAD_START = { x: 0, y: 0 };
-const GRAD_END = { x: 1, y: 1 };
 const IMAGE_FADE_COLORS: [string, string] = ['transparent', 'rgba(0,0,0,0.85)'];
 
 type RecordStackParamList = {
@@ -95,19 +92,19 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
     activeOpacity={0.82}
   >
     <LinearGradient
-      colors={CARD_COLORS}
-      start={GRAD_START}
-      end={GRAD_END}
+      colors={[...CARD_GRADIENT_COLORS]}
+      start={CARD_GRADIENT_START}
+      end={CARD_GRADIENT_END}
       style={styles.cardGradient}
     >
       <View style={styles.cardGlassEdge}>
         {/* Top icons */}
         <View style={styles.cardHeader}>
           <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
-            <Bookmark size={16} color="#52525B" strokeWidth={1.5} />
+            <Bookmark size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
-            <Info size={16} color="#52525B" strokeWidth={1.5} />
+            <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
 
@@ -363,25 +360,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  /* ── Card ───────────────────────────────── */
+  /* ── Card (analytics style) ───────────────────────────────── */
   cardOuter: {
-    borderRadius: 16,
+    borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
         shadowRadius: 15,
       },
-      android: { elevation: 4 },
+      android: { elevation: 6 },
     }),
   },
   cardGradient: {
-    borderRadius: 16,
+    borderRadius: 22,
   },
   cardGlassEdge: {
-    borderRadius: 16,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: 8,
@@ -426,14 +423,14 @@ const styles = StyleSheet.create({
   cardName: {
     fontFamily: FONTS.display.semibold,
     fontSize: 13,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: -0.2,
     marginBottom: 3,
   },
   cardMuscle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
-    color: '#A1A1AA',
+    color: COLORS.textSecondary,
     letterSpacing: 2,
     textTransform: 'uppercase',
   },

@@ -13,11 +13,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { generateSetSummary } from '../../utils/setNotesSummary';
-
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
 const MAX_FEEDBACK_LINES = 2;
 
 interface SetNotesModalProps {
@@ -92,9 +90,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
           onPress={() => {}}
         >
           <LinearGradient
-            colors={CARD_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.modalGradient}
           >
             <View style={styles.glassEdge}>
@@ -122,9 +120,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                       <Text style={styles.sectionTitle}>Rep breakdown</Text>
                       <View style={styles.repCardOuter}>
                         <LinearGradient
-                          colors={CARD_GRADIENT_COLORS}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
+                          colors={[...CARD_GRADIENT_COLORS]}
+                          start={CARD_GRADIENT_START}
+                          end={CARD_GRADIENT_END}
                           style={styles.repCardGradient}
                         >
                           <View style={styles.repCardGlass}>
@@ -192,9 +190,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                       <Text style={styles.sectionTitle}>Form summary</Text>
                       <View style={styles.summaryCardOuter}>
                         <LinearGradient
-                          colors={CARD_GRADIENT_COLORS}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
+                          colors={[...CARD_GRADIENT_COLORS]}
+                          start={CARD_GRADIENT_START}
+                          end={CARD_GRADIENT_END}
                           style={styles.summaryCardGradient}
                         >
                           <View style={styles.summaryCardGlass}>

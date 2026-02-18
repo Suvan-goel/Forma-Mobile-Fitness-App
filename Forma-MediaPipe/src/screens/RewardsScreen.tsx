@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock, LucideIcon } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useRewards } from '../hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
@@ -21,9 +21,6 @@ const iconMap: { [key: string]: LucideIcon } = {
 
 const getIconComponent = (iconName: string): LucideIcon => iconMap[iconName] || Gift;
 
-const CARD_COLORS: [string, string, string] = ['#1F1F1F', '#0F0F0F', '#0A0A0A'];
-const GRAD_START = { x: 0, y: 0 };
-const GRAD_END = { x: 1, y: 1 };
 const PROGRESS_COLORS: [string, string] = ['#7C3AED', '#8B5CF6'];
 
 /* ── Reward Card ──────────────────────────── */
@@ -39,18 +36,18 @@ const RewardCard = memo(({ reward, userPoints }: { reward: Reward; userPoints: n
       style={styles.cardOuter}
     >
       <LinearGradient
-        colors={CARD_COLORS}
-        start={GRAD_START}
-        end={GRAD_END}
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
         style={styles.cardGradient}
       >
         <View style={[styles.cardGlassEdge, !isUnlocked && styles.cardLocked]}>
           {/* Icon */}
           <View style={[styles.iconCircle, isUnlocked && styles.iconCircleActive]}>
             {isUnlocked ? (
-              <Icon size={20} color="#8B5CF6" strokeWidth={1.5} />
+              <Icon size={20} color={COLORS.accent} strokeWidth={1.5} />
             ) : (
-              <Lock size={20} color="#52525B" strokeWidth={1.5} />
+              <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
             )}
           </View>
 
@@ -271,26 +268,26 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  /* ── Reward Card ───────────────────────────── */
+  /* ── Reward Card (analytics style) ───────────────────────────── */
   cardOuter: {
-    borderRadius: 24,
+    borderRadius: 22,
     overflow: 'hidden',
     marginBottom: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
         shadowRadius: 15,
       },
-      android: { elevation: 4 },
+      android: { elevation: 6 },
     }),
   },
   cardGradient: {
-    borderRadius: 24,
+    borderRadius: 22,
   },
   cardGlassEdge: {
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     flexDirection: 'row',
@@ -324,16 +321,16 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 15,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: -0.2,
   },
   cardTitleLocked: {
-    color: '#A1A1AA',
+    color: COLORS.textSecondary,
   },
   cardDesc: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
-    color: '#52525B',
+    color: COLORS.textTertiary,
     marginTop: 2,
   },
 
@@ -358,7 +355,7 @@ const styles = StyleSheet.create({
   pointsLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
-    color: '#52525B',
+    color: COLORS.textTertiary,
     letterSpacing: 0.5,
   },
 

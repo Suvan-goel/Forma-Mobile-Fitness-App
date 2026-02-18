@@ -28,7 +28,7 @@ import {
   Clock,
   Layers,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
@@ -368,9 +368,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
             return (
               <View key={exercise.id} style={styles.exerciseCardOuter}>
                 <LinearGradient
-                  colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                  colors={[...CARD_GRADIENT_COLORS]}
+                  start={CARD_GRADIENT_START}
+                  end={CARD_GRADIENT_END}
                   style={styles.exerciseCardGradient}
                 >
                   <View style={styles.exerciseCardGlassEdge}>
@@ -391,9 +391,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
                           <MonoText style={styles.exerciseSetsValue}>{exercise.sets.length}</MonoText>
                         </View>
                         {isExpanded ? (
-                          <ChevronUp size={16} color="#52525B" strokeWidth={1.5} />
+                          <ChevronUp size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                         ) : (
-                          <ChevronDown size={16} color="#52525B" strokeWidth={1.5} />
+                          <ChevronDown size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -425,7 +425,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                   activeOpacity={0.7}
                                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 >
-                                  <X size={14} color="#52525B" strokeWidth={2} />
+                                  <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
                                 </TouchableOpacity>
                               </View>
                             </View>
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.25,
         shadowRadius: 15,
       },
       android: { elevation: 6 },
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   exerciseCardName: {
     fontFamily: FONTS.display.semibold,
     fontSize: 18,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: -0.3,
   },
   exerciseCardMeta: {

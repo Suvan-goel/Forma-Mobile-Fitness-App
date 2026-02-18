@@ -10,10 +10,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { useCameraSettings } from '../../contexts/CameraSettingsContext';
 
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#27272A', '#121212', '#0A0A0A'];
 
 interface CameraSettingsModalProps {
   visible: boolean;
@@ -57,9 +56,9 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
       >
         <TouchableOpacity style={styles.cardOuter} activeOpacity={1} onPress={() => {}}>
           <LinearGradient
-            colors={CARD_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
@@ -126,7 +125,7 @@ const styles = StyleSheet.create({
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.25,
-        shadowRadius: 20,
+        shadowRadius: 15,
       },
       android: { elevation: 6 },
     }),

@@ -15,7 +15,7 @@ import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Text, Animated, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Timer, Trophy, Target } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useAnalytics } from '../hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
@@ -141,9 +141,9 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── ACTIVITY CARD ──────────────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
@@ -167,9 +167,9 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── ACTIVE CHALLENGE CARD ──────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
@@ -192,9 +192,9 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── WORKOUT DURATION BARS ─────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
