@@ -4,7 +4,7 @@ import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RotateCw, Settings, X } from 'lucide-react-native';
+import { RotateCw, Settings, Pause, Play, X } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
@@ -530,6 +530,10 @@ export const CameraScreen: React.FC = () => {
     }
   }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 
+  const handlePausePress = useCallback(() => {
+    setIsPaused(prev => !prev);
+  }, []);
+
   const handleCameraFlip = useCallback(() => {
     switchCamera();
   }, []);
@@ -636,6 +640,21 @@ export const CameraScreen: React.FC = () => {
       <View style={[styles.bottomBarSection, { paddingBottom: SPACING.lg + insets.bottom }]}>
         <View style={styles.recordButtonContainer}>
           <View style={styles.buttonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.pauseButton,
+                !isRecording && styles.pauseButtonDisabled
+              ]}
+              onPress={isRecording ? handlePausePress : undefined}
+              activeOpacity={isRecording ? 0.8 : 1}
+              disabled={!isRecording}
+            >
+              {isPaused ? (
+                <Play size={24} color={isRecording ? COLORS.text : COLORS.textSecondary} />
+              ) : (
+                <Pause size={24} color={isRecording ? COLORS.text : COLORS.textSecondary} />
+              )}
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.recordButton, isRecording && styles.recordButtonActive]}
               onPress={handleRecordPress}
@@ -889,7 +908,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 28,
+    gap: 12,
   },
   /* Reference style: outer thin white ring, inner white circle with thin black border */
   recordButton: {
@@ -910,12 +929,23 @@ const styles = StyleSheet.create({
     borderColor: '#000000',
     backgroundColor: '#FFFFFF',
   },
+  pauseButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pauseButtonDisabled: {
+    opacity: 0.5,
+  },
   flipCameraButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    borderWidth: 2,
-    borderColor: COLORS.text,
+    borderWidth: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -973,7 +1003,7 @@ const styles = StyleSheet.create({
   feedbackFeedContainer: {
     position: 'absolute',
     left: SPACING.screenHorizontal,
-    bottom: 140,
+    bottom: SPACING.lg + 36,
     right: undefined,
     maxWidth: '72%',
     flexDirection: 'column',
