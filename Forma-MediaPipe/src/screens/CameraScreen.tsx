@@ -37,11 +37,10 @@ const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// 3:4 portrait aspect ratio (width:height) – taller than wide, like typical phone cameras
-const CAMERA_ASPECT_WIDTH = 3;
-const CAMERA_ASPECT_HEIGHT = 4;
-const cameraDisplayWidth = SCREEN_WIDTH;
-const cameraDisplayHeight = (SCREEN_WIDTH * CAMERA_ASPECT_HEIGHT) / CAMERA_ASPECT_WIDTH; // width * 4/3
+// 9:16 portrait viewfinder, full width, starts at top, rounded corners
+const CAMERA_ASPECT_WIDTH = 9;
+const CAMERA_ASPECT_HEIGHT = 16;
+const CAMERA_BORDER_RADIUS = 20;
 
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
@@ -567,8 +566,16 @@ export const CameraScreen: React.FC = () => {
     );
   }, [navigation]);
 
-  // Memoize MediaPipe props – 3:4 portrait (taller than wide)
-  // Skeleton overlay is visual only; pose detection (onLandmark) is unaffected
+  // Layout: narrow top bar, gap under it, then 9:16 camera; bottom bar halfway over camera bottom
+  const topInset = insets.top + 6;
+  const topBarContentHeight = topInset + 40;
+  const gapAboveCamera = 6;
+  const topBarHeight = topBarContentHeight + gapAboveCamera;
+  const gapBelowTopBar = 8;
+  const cameraDisplayWidth = SCREEN_WIDTH;
+  const cameraDisplayHeight = (SCREEN_WIDTH * CAMERA_ASPECT_HEIGHT) / CAMERA_ASPECT_WIDTH;
+
+  // Memoize MediaPipe props – 9:16 portrait viewfinder
   const mediapipeProps = useMemo(() => ({
     width: cameraDisplayWidth,
     height: cameraDisplayHeight,
@@ -583,7 +590,7 @@ export const CameraScreen: React.FC = () => {
     leftAnkle: showSkeletonOverlay,
     rightAnkle: showSkeletonOverlay,
     frameLimit: 20,
-  }), [showSkeletonOverlay]);
+  }), [showSkeletonOverlay, cameraDisplayWidth, cameraDisplayHeight]);
 
   // Memoize display values to avoid recalculation
   const displayValues = useMemo(() => {
@@ -600,24 +607,21 @@ export const CameraScreen: React.FC = () => {
 
   const showCamera = cameraMounted && !isClosing;
 
-
-  const topInset = insets.top + 8;
-  const topBarContentHeight = topInset + 44;
-  const gapAboveCamera = 8;
-  const topBarHeight = topBarContentHeight + gapAboveCamera;
-  const bottomBarHeight = insets.bottom + SPACING.lg + 40 + SPACING.lg + 80 + SPACING.md;
-
   return (
     <View style={styles.container}>
-      {/* Camera fixed below top bar (same gap); extra space goes below for metrics */}
+      {/* Top bar, gap, then 9:16 camera; black below; bottom controls halfway over camera bottom */}
       <Pressable
-        style={[
-          styles.cameraLetterbox,
-          { paddingTop: topBarHeight, paddingBottom: bottomBarHeight },
-        ]}
+        style={[styles.cameraLetterbox, { paddingTop: topBarHeight + gapBelowTopBar }]}
         onPress={handleCameraDoubleTap}
       >
-        <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
+        <View style={[
+          styles.cameraContainer,
+          {
+            width: cameraDisplayWidth,
+            height: cameraDisplayHeight,
+            borderRadius: CAMERA_BORDER_RADIUS,
+          },
+        ]}>
           {showCamera && (
             <RNMediapipe
               {...mediapipeProps}
@@ -739,7 +743,7 @@ export const CameraScreen: React.FC = () => {
             </View>
           )}
 
-        {/* Bottom Controls */}
+        {/* Bottom Controls — at bottom of screen, overlapping the camera */}
         <View style={[
           styles.bottomBar,
           {
@@ -817,12 +821,11 @@ const styles = StyleSheet.create({
   },
   cameraLetterbox: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     backgroundColor: COLORS.background,
   },
   cameraContainer: {
-    position: 'relative',
     overflow: 'hidden',
   },
   overlay: {
@@ -833,25 +836,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingVertical: 4,
   },
   discardButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   exerciseTopCard: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
   },
   settingsButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -870,23 +875,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.lg,
+    gap: 28,
   },
+  /* Reference style: outer thin white ring, inner white circle with thin black border */
   recordButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: '#8B5CF6',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
   recordButtonInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#8B5CF6',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   pauseButton: {
     width: 60,
@@ -946,10 +954,11 @@ const styles = StyleSheet.create({
     minWidth: 30,
   },
   recordButtonActive: {
-    borderColor: '#8B5CF6',
+    borderColor: '#FFFFFF',
   },
   recordButtonInnerActive: {
     backgroundColor: '#FF3B30',
+    borderColor: '#CC2F26',
   },
   feedbackContainer: {
     position: 'absolute',
