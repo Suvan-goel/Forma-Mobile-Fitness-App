@@ -711,19 +711,17 @@ export const CameraScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Reps & Form overlay — on camera, above the controls */}
+        {/* Reps & Form overlay — on camera, above the controls (single element) */}
         <View style={styles.metricsOverlay}>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Reps</Text>
-            <MonoText style={styles.metricValue}>
-              {displayValues.reps}
-            </MonoText>
-          </View>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Form</Text>
-            <MonoText style={styles.metricValue}>
-              {displayValues.form}
-            </MonoText>
+          <View style={styles.metricsCombined}>
+            <View style={styles.metricBlock}>
+              <Text style={styles.metricLabel}>Reps</Text>
+              <MonoText style={styles.metricValue}>{displayValues.reps}</MonoText>
+            </View>
+            <View style={styles.metricBlock}>
+              <Text style={styles.metricLabel}>Form</Text>
+              <MonoText style={styles.metricValue}>{displayValues.form}</MonoText>
+            </View>
           </View>
         </View>
 
@@ -977,16 +975,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.xl,
   },
-  metricItem: {
+  metricsCombined: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 20,
+  },
+  metricBlock: {
+    minWidth: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
   },
   metricLabel: {
     fontSize: 13,
