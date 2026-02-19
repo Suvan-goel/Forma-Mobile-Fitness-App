@@ -308,7 +308,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={() => setSettingsModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Settings size={18} color="#71717A" strokeWidth={1.5} />
+          <Settings size={18} color={COLORS.text} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 

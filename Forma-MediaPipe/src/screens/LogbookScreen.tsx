@@ -414,7 +414,7 @@ export const LogbookScreen: React.FC = () => {
           </View>
         </View>
         <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
-          <Settings size={20} color="#71717A" strokeWidth={1.5} />
+          <Settings size={20} color={COLORS.text} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 

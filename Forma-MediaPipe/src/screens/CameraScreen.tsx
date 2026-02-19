@@ -707,7 +707,7 @@ export const CameraScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Camera settings"
           >
-            <Settings size={24} color={COLORS.text} strokeWidth={2} />
+            <Settings size={24} color={COLORS.text} strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
 
@@ -734,9 +734,9 @@ export const CameraScreen: React.FC = () => {
           return (
             <View style={styles.feedbackFeedContainer}>
               {items.map((item, index) => {
-                // Newest = 0.9, oldest = 0; fewer items (max 4) so older messages disappear sooner
+                // Newest = 0.9, oldest = 0.2 min so first message doesn't vanish when second appears
                 const t = items.length <= 1 ? 1 : index / (items.length - 1);
-                const opacity = 0.9 * t;
+                const opacity = 0.2 + 0.7 * t;
                 return (
                   <View
                     key={item.id}
@@ -981,16 +981,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
   },
   metricLabel: {
     fontSize: 13,
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
+    color: COLORS.text,
   },
   metricValue: {
     fontSize: 18,
     fontFamily: FONTS.mono.bold,
-    color: '#8B5CF6',
+    color: COLORS.text,
     minWidth: 30,
   },
   recordButtonActive: {
