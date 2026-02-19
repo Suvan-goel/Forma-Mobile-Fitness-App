@@ -695,10 +695,12 @@ export const CameraScreen: React.FC = () => {
           >
             <X size={24} color={COLORS.text} strokeWidth={2.5} />
           </TouchableOpacity>
-          <View style={styles.exerciseTopCard}>
-            <Text style={styles.detectionExercise} numberOfLines={1}>
-              {displayValues.exerciseDisplayName}
-            </Text>
+          <View style={styles.exerciseTopCardWrap}>
+            <View style={styles.exerciseTopCard}>
+              <Text style={styles.detectionExercise} numberOfLines={1}>
+                {displayValues.exerciseDisplayName}
+              </Text>
+            </View>
           </View>
           <TouchableOpacity
             style={styles.settingsButton}
@@ -715,11 +717,11 @@ export const CameraScreen: React.FC = () => {
         <View style={styles.metricsOverlay}>
           <View style={styles.metricsCombined}>
             <View style={styles.metricBlock}>
-              <Text style={styles.metricLabel}>Reps</Text>
+              <Text style={styles.metricLabel}>REPS</Text>
               <MonoText style={styles.metricValue}>{displayValues.reps}</MonoText>
             </View>
             <View style={styles.metricBlock}>
-              <Text style={styles.metricLabel}>Form</Text>
+              <Text style={styles.metricLabel}>FORM</Text>
               <MonoText style={styles.metricValue}>{displayValues.form}</MonoText>
             </View>
           </View>
@@ -879,11 +881,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  exerciseTopCard: {
+  exerciseTopCardWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
+  },
+  exerciseTopCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 20,
   },
   settingsButton: {
     width: 40,
@@ -951,7 +960,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   detectionExercise: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textTransform: 'uppercase',
@@ -980,13 +989,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 20,
   },
   metricBlock: {
-    minWidth: 72,
+    width: 80,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -994,14 +1003,16 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 13,
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.ui.bold,
     color: COLORS.text,
+    textAlign: 'center',
   },
   metricValue: {
     fontSize: 18,
     fontFamily: FONTS.mono.bold,
     color: COLORS.text,
     minWidth: 30,
+    textAlign: 'center',
   },
   recordButtonActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.35)',
