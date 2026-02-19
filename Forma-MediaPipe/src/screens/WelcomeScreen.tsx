@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,19 +6,43 @@ import {
   Image,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
-import { RootStackParamList } from '../app/RootNavigator';
+import { useAuth } from '../contexts/AuthContext';
 
-type WelcomeScreenProps = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
+export const WelcomeScreen: React.FC = () => {
+  const { signInWithGoogle, signInWithApple } = useAuth();
+  const [isSigningIn, setIsSigningIn] = useState<'google' | 'apple' | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
-  const handleStartTraining = () => {
-    navigation.replace('MainTabs');
+  const handleGoogleSignIn = async () => {
+    setErrorMessage(null);
+    setIsSigningIn('google');
+    try {
+      await signInWithGoogle();
+    } catch (e: any) {
+      setErrorMessage(e?.message ?? 'Sign-in failed. Please try again.');
+    } finally {
+      setIsSigningIn(null);
+    }
   };
+
+  const handleAppleSignIn = async () => {
+    setErrorMessage(null);
+    setIsSigningIn('apple');
+    try {
+      await signInWithApple();
+    } catch (e: any) {
+      setErrorMessage(e?.message ?? 'Sign-in failed. Please try again.');
+    } finally {
+      setIsSigningIn(null);
+    }
+  };
+
+  const isBusy = isSigningIn !== null;
 
   return (
     <View style={styles.root}>
@@ -37,10 +61,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
 
           {/* ── Bottom Section ─────────────────── */}
           <View style={styles.bottomSection}>
+            {/* Google Sign-In */}
             <TouchableOpacity
-              onPress={handleStartTraining}
+              onPress={handleGoogleSignIn}
               activeOpacity={0.85}
               style={styles.buttonOuter}
+              disabled={isBusy}
             >
               <LinearGradient
                 colors={['#8B5CF6', '#7C3AED']}
@@ -48,9 +74,34 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.buttonGradient}
               >
-                <Text style={styles.buttonText}>LET'S DO THIS</Text>
+                {isSigningIn === 'google' ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.buttonText}>Continue with Google</Text>
+                )}
               </LinearGradient>
             </TouchableOpacity>
+
+            {/* Apple Sign-In */}
+            <TouchableOpacity
+              onPress={handleAppleSignIn}
+              activeOpacity={0.85}
+              style={[styles.buttonOuter, styles.appleButtonOuter]}
+              disabled={isBusy}
+            >
+              <View style={styles.appleButtonInner}>
+                {isSigningIn === 'apple' ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.buttonText}>Continue with Apple</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {errorMessage ? (
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            ) : null}
+
             <Text style={styles.footer}>
               Join thousands of athletes improving their form
             </Text>
@@ -128,11 +179,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  appleButtonOuter: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#FFFFFF',
+        shadowOpacity: 0.15,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  appleButtonInner: {
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
   buttonText: {
     fontFamily: FONTS.display.bold,
     fontSize: 15,
     color: '#FFFFFF',
     letterSpacing: 1,
+  },
+  errorText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: '#EF4444',
+    textAlign: 'center',
   },
   footer: {
     fontFamily: FONTS.ui.regular,

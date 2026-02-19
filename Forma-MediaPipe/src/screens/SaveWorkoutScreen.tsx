@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
@@ -17,7 +18,7 @@ import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
-import { saveWorkout } from '../services/workoutStorage';
+import { workoutsService } from '../services/api';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
@@ -30,26 +31,48 @@ export const SaveWorkoutScreen: React.FC = () => {
   const route = useRoute<SaveWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
   const { workoutData } = route.params;
-  const { clearSets, setWorkoutInProgress } = useCurrentWorkout();
+  const { clearSets, setWorkoutInProgress, exercises, workoutElapsedSeconds } = useCurrentWorkout();
 
   const [workoutName, setWorkoutName] = useState('');
   const [workoutDescription, setWorkoutDescription] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    if (!workoutName.trim()) {
-      return; // Don't save if name is empty
+  const handleSave = async () => {
+    if (!workoutName.trim() || isSaving) return;
+
+    setIsSaving(true);
+    try {
+      const result = await workoutsService.create({
+        name: workoutName.trim(),
+        date: new Date(),
+        durationSeconds: workoutElapsedSeconds,
+        category: workoutData.category,
+        exercises: exercises.map((ex, i) => ({
+          name: ex.name,
+          orderIndex: i,
+          sets: ex.sets.map((s, j) => ({
+            setNumber: j + 1,
+            reps: s.reps,
+            weight: s.weight ?? 0,
+            formScore: s.formScore,
+          })),
+        })),
+      });
+
+      if (!result.success) {
+        Alert.alert('Save Failed', result.error ?? 'Could not save workout. Please try again.', [
+          { text: 'OK' },
+        ]);
+        return;
+      }
+    } catch (e: any) {
+      Alert.alert('Save Failed', e?.message ?? 'Could not save workout. Please try again.', [
+        { text: 'OK' },
+      ]);
+      return;
+    } finally {
+      setIsSaving(false);
     }
-
-    // Save the workout
-    saveWorkout({
-      name: workoutName.trim(),
-      description: workoutDescription.trim() || undefined,
-      category: workoutData.category,
-      duration: workoutData.duration,
-      totalSets: workoutData.totalSets,
-      totalReps: workoutData.totalReps,
-      formScore: workoutData.avgFormScore,
-    });
 
     clearSets();
     setWorkoutInProgress(false);
@@ -204,13 +227,13 @@ export const SaveWorkoutScreen: React.FC = () => {
         <TouchableOpacity
           style={[
             styles.saveButton,
-            !workoutName.trim() && styles.saveButtonDisabled
+            (!workoutName.trim() || isSaving) && styles.saveButtonDisabled
           ]}
           onPress={handleSave}
-          disabled={!workoutName.trim()}
+          disabled={!workoutName.trim() || isSaving}
           activeOpacity={0.8}
         >
-          {workoutName.trim() ? (
+          {workoutName.trim() && !isSaving ? (
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
               start={{ x: 0, y: 0.5 }}
@@ -218,6 +241,15 @@ export const SaveWorkoutScreen: React.FC = () => {
               style={styles.saveButtonGradient}
             >
               <Text style={styles.saveButtonText}>Save Workout</Text>
+            </LinearGradient>
+          ) : isSaving ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.saveButtonGradient}
+            >
+              <ActivityIndicator color="#FFFFFF" />
             </LinearGradient>
           ) : (
             <Text style={styles.saveButtonText}>Save Workout</Text>

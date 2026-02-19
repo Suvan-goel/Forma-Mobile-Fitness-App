@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -25,6 +25,7 @@ import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutCon
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider } from '../contexts/ScrollContext';
 import { AppHeader } from '../components/ui/AppHeader';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { COLORS, FONTS } from '../constants/theme';
 
 export type CameraParams = { 
@@ -296,57 +297,79 @@ const styles = StyleSheet.create({
   },
 });
 
-// Root Stack Navigator
+// Inner navigator — conditionally renders screens based on auth state.
+// React Navigation automatically navigates to the first available screen
+// when the screen list changes (e.g. user signs in → Welcome disappears → MainTabs shown).
+const RootStackNavigator: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={COLORS.primary} size="large" />
+      </View>
+    );
+  }
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {user ? (
+        <>
+          <Stack.Screen name="MainTabs" component={AppTabs} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen
+            name="Camera"
+            component={CameraScreen}
+            options={{
+              presentation: 'fullScreenModal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen
+            name="Insights"
+            component={InsightsScreen}
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="WorkoutDetails"
+            component={WorkoutDetailsScreen}
+            options={{
+              presentation: 'card',
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="WorkoutExercises"
+            component={WorkoutExercisesScreen}
+            options={{
+              presentation: 'card',
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="WorkoutInfo"
+            component={WorkoutInfoScreen}
+            options={{
+              presentation: 'transparentModal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+        </>
+      ) : (
+        <Stack.Screen name="Welcome" component={WelcomeScreen} />
+      )}
+    </Stack.Navigator>
+  );
+};
+
+// Root Stack Navigator — wraps everything with AuthProvider
 export const RootNavigator: React.FC = () => {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="Welcome" component={WelcomeScreen} />
-      <Stack.Screen name="MainTabs" component={AppTabs} />
-      <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen 
-        name="Camera" 
-        component={CameraScreen}
-        options={{
-          presentation: 'fullScreenModal',
-          animation: 'slide_from_bottom',
-        }}
-      />
-      <Stack.Screen 
-        name="Insights" 
-        component={InsightsScreen}
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_right',
-        }}
-      />
-      <Stack.Screen 
-        name="WorkoutDetails" 
-        component={WorkoutDetailsScreen}
-        options={{
-          presentation: 'card',
-          animation: 'slide_from_right',
-        }}
-      />
-      <Stack.Screen 
-        name="WorkoutExercises" 
-        component={WorkoutExercisesScreen}
-        options={{
-          presentation: 'card',
-          animation: 'slide_from_right',
-        }}
-      />
-      <Stack.Screen 
-        name="WorkoutInfo" 
-        component={WorkoutInfoScreen}
-        options={{
-          presentation: 'transparentModal',
-          animation: 'slide_from_bottom',
-        }}
-      />
-    </Stack.Navigator>
+    <AuthProvider>
+      <RootStackNavigator />
+    </AuthProvider>
   );
 };

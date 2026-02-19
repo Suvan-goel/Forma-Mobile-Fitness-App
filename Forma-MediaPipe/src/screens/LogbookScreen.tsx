@@ -508,15 +508,11 @@ export const LogbookScreen: React.FC = () => {
         />
 
         {filteredWorkouts.length === 0 ? (
-          /* Empty state — still show header via ScrollView */
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: SPACING.screenHorizontal }}
-          >
-            <ListHeader />
-            <View style={styles.emptyState}>
+          <View style={{ flex: 1 }}>
+            <View style={{ paddingHorizontal: SPACING.screenHorizontal }}>
+              <ListHeader />
+            </View>
+            <View style={[StyleSheet.absoluteFill, styles.emptyState]}>
               <Text style={styles.emptyStateTitle}>
                 {selectedDate ? 'No sessions' : 'No workouts yet'}
               </Text>
@@ -526,7 +522,7 @@ export const LogbookScreen: React.FC = () => {
                   : 'Complete a workout to see it here'}
               </Text>
             </View>
-          </ScrollView>
+          </View>
         ) : (
           <FlatList
             data={filteredWorkouts}
@@ -819,13 +815,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
-    paddingTop: 60,
   },
   emptyStateTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 20,
     color: '#FFFFFF',
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptyStateText: {
     fontFamily: FONTS.ui.regular,

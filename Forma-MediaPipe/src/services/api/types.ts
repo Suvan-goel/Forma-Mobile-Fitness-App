@@ -1,6 +1,6 @@
 /**
  * Core TypeScript interfaces for the Forma Mobile API layer
- * These types mirror the future Supabase API structure
+ * These types mirror the Supabase DB schema
  */
 
 // Generic API response wrapper
@@ -17,6 +17,14 @@ export interface User {
   displayName: string;
   avatarUrl?: string;
   createdAt: Date;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  provider: 'google' | 'apple';
 }
 
 export interface UserStats {
@@ -62,6 +70,7 @@ export interface WorkoutSession {
   totalReps: number;
   formScore: number;
   category?: string;
+  userId?: string;
 }
 
 export interface WorkoutDetails {
@@ -70,6 +79,23 @@ export interface WorkoutDetails {
   date: string;
   duration: string;
   exercises: WorkoutExercise[];
+}
+
+export interface CreateWorkoutPayload {
+  name: string;
+  date: Date;
+  durationSeconds: number;
+  category?: string;
+  exercises: {
+    name: string;
+    orderIndex: number;
+    sets: {
+      setNumber: number;
+      reps: number;
+      weight: number;
+      formScore: number;
+    }[];
+  }[];
 }
 
 // Analytics types

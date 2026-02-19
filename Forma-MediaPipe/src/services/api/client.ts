@@ -1,14 +1,24 @@
 /**
  * API client configuration
- * Toggle between mock and real API implementations
+ * Per-service mock flags: set to false when the Supabase backend is ready
  */
 
 import { ApiResponse } from './types';
 
 export const API_CONFIG = {
-  useMock: true,
+  useMock: false,
+  services: {
+    workouts: false,  // Supabase — Phase 1
+    user: false,      // Supabase — Phase 1
+    exercises: true,  // mock — Phase 2
+    analytics: true,  // mock — Phase 2
+    rewards: true,    // mock — Phase 3
+    insights: true,   // mock — Phase 3
+    trainer: true,    // stays mock
+  },
   mockDelayMs: 300,
-  baseUrl: '', // Will be set when real API is implemented
+  supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
 } as const;
 
 /**
