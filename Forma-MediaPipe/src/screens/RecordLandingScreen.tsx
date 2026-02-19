@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -48,20 +48,21 @@ export const RecordLandingScreen: React.FC = () => {
     sets,
     workoutElapsedSeconds,
     setWorkoutElapsedSeconds,
+    workoutPaused,
+    setWorkoutPaused,
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
   const cardGap = 14;
   const bottomPadding = navigationBarHeight + cardGap;
-  const [timerPaused, setTimerPaused] = useState(false);
 
   useEffect(() => {
-    if (!workoutInProgress || timerPaused) return;
+    if (!workoutInProgress || workoutPaused) return;
     const interval = setInterval(() => {
       setWorkoutElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [workoutInProgress, timerPaused, setWorkoutElapsedSeconds]);
+  }, [workoutInProgress, workoutPaused, setWorkoutElapsedSeconds]);
 
   const handleStartWorkout = () => {
     navigation.navigate('CurrentWorkout');
@@ -87,21 +88,24 @@ export const RecordLandingScreen: React.FC = () => {
   };
 
   const handlePauseWorkout = () => {
-    setTimerPaused((p) => !p);
+    setWorkoutPaused((p) => !p);
   };
 
   const handleFinishWorkout = () => {
     if (sets.length === 0) {
-      clearSets();
+      Alert.alert(
+        'No sets recorded',
+        'Add at least one set before ending the workout.'
+      );
       return;
     }
+    const duration = formatStopwatch(workoutElapsedSeconds);
     const totalSets = sets.length;
     const totalReps = sets.reduce((sum, set) => sum + set.reps, 0);
     const avgFormScore = Math.round(
       sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
     );
     const category = sets[0]?.exerciseName || 'General';
-    const duration = formatStopwatch(workoutElapsedSeconds);
 
     navigation.navigate('SaveWorkout', {
       workoutData: {
@@ -175,14 +179,14 @@ export const RecordLandingScreen: React.FC = () => {
                     activeOpacity={0.7}
                   >
                     <View style={styles.workoutActionIconWrap}>
-                      {timerPaused ? (
+                      {workoutPaused ? (
                         <Play size={22} color={COLORS.accent} strokeWidth={1.5} />
                       ) : (
                         <Pause size={22} color={COLORS.accent} strokeWidth={1.5} />
                       )}
                     </View>
                     <Text style={styles.workoutActionLabel}>
-                      {timerPaused ? 'Resume' : 'Pause'}
+                      {workoutPaused ? 'Resume' : 'Pause'}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity

@@ -757,9 +757,9 @@ export const CameraScreen: React.FC = () => {
           );
         })()}
 
-        {/* Barbell Curl Debug - All angles used in form analysis. Visible when recording or debug mode. */}
+        {/* Barbell Curl Debug - All angles used in form analysis. Visible only when debug mode is on. */}
         {exerciseNameFromRoute === 'Barbell Curl' &&
-          (isRecording || debugMode) &&
+          debugMode &&
           barbellCurlDebug && (
             <View style={styles.torsoDebugContainer}>
               <View style={styles.torsoDebugCard}>
@@ -804,9 +804,9 @@ export const CameraScreen: React.FC = () => {
             </View>
           )}
 
-        {/* Pushup Debug - Shows all angles, FSM phase, and rep window data. Visible when recording or debug mode. */}
+        {/* Pushup Debug - Shows all angles, FSM phase, and rep window data. Visible only when debug mode is on. */}
         {exerciseNameFromRoute === 'Push-Up' &&
-          (isRecording || debugMode) &&
+          debugMode &&
           pushupDebug && (
             <View style={styles.torsoDebugContainer}>
               <View style={styles.torsoDebugCard}>

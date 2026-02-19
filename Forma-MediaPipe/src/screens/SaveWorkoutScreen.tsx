@@ -34,6 +34,13 @@ export const SaveWorkoutScreen: React.FC = () => {
   const [workoutDescription, setWorkoutDescription] = useState('');
 
   const handleSave = () => {
+    if (workoutData.totalSets === 0) {
+      Alert.alert(
+        'No sets recorded',
+        'Add at least one set before ending the workout.'
+      );
+      return;
+    }
     if (!workoutName.trim()) {
       return; // Don't save if name is empty
     }

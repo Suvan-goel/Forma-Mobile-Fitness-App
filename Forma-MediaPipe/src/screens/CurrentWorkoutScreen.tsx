@@ -82,9 +82,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setWorkoutInProgress,
     workoutElapsedSeconds: contextElapsed,
     setWorkoutElapsedSeconds,
+    workoutPaused,
+    setWorkoutPaused,
   } = useCurrentWorkout();
   const [elapsedSeconds, setElapsedSeconds] = useState(contextElapsed);
-  const [isPaused, setIsPaused] = useState(false);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
   const [notesModalSet, setNotesModalSet] = useState<{
     set: LoggedSet;
@@ -101,20 +102,26 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isPausedRef = useRef(false);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
 
-  /* ── Timer logic ──── */
+  isPausedRef.current = workoutPaused;
+
+  /* ── Timer logic: one interval; when paused we skip ticking so the display freezes ──── */
 
   useEffect(() => {
     setWorkoutInProgress(true);
     const startFrom = contextElapsed > 0 ? contextElapsed : 0;
     startTimeRef.current = Date.now() - startFrom * 1000;
     setElapsedSeconds(startFrom);
+
     intervalRef.current = setInterval(() => {
+      if (isPausedRef.current) return;
       if (startTimeRef.current !== null) {
         setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }
     }, 1000);
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -122,22 +129,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
     };
   }, [setWorkoutInProgress, contextElapsed]);
 
-  useEffect(() => {
-    if (isPaused && intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    } else if (!isPaused && intervalRef.current === null && startTimeRef.current !== null) {
-      startTimeRef.current = Date.now() - elapsedSeconds * 1000;
-      intervalRef.current = setInterval(() => {
-        if (startTimeRef.current !== null) {
-          setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
-        }
-      }, 1000);
-    }
-  }, [isPaused]);
-
   const handlePausePress = () => {
-    setIsPaused((p) => !p);
+    setWorkoutPaused((p) => {
+      const next = !p;
+      if (next) {
+        startTimeRef.current = Date.now() - elapsedSeconds * 1000;
+      }
+      return next;
+    });
   };
 
   /* ── Focus effects ──── */
@@ -322,7 +321,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         <MonoText bold style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerLineHeight }]}>
           {formatStopwatch(elapsedSeconds)}
         </MonoText>
-        {isPaused && (
+        {workoutPaused && (
           <View style={styles.pausedBadge}>
             <Text style={styles.pausedBadgeText}>PAUSED</Text>
           </View>
@@ -532,13 +531,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={handlePausePress}
           activeOpacity={0.7}
         >
-          {isPaused ? (
+          {workoutPaused ? (
             <Play size={18} color="#FFFFFF" strokeWidth={1.5} />
           ) : (
             <Pause size={18} color="#FFFFFF" strokeWidth={1.5} />
           )}
           <Text style={[styles.controlLabel, styles.controlLabelLight]}>
-            {isPaused ? 'Resume' : 'Pause'}
+            {workoutPaused ? 'Resume' : 'Pause'}
           </Text>
         </TouchableOpacity>
 
