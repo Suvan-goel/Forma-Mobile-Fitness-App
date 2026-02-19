@@ -736,8 +736,9 @@ export const CameraScreen: React.FC = () => {
           return (
             <View style={styles.feedbackFeedContainer}>
               {items.map((item, index) => {
-                // Newest = 0.9, oldest = 0.2 min so first message doesn't vanish when second appears
-                const t = items.length <= 1 ? 1 : index / (items.length - 1);
+                // Opacity by position from newest: 0th = 0.9, 1st back = 0.67, 2nd = 0.43, 3rd+ = 0.2
+                const positionFromNewest = items.length - 1 - index;
+                const t = positionFromNewest >= 3 ? 0 : 1 - positionFromNewest / 3;
                 const opacity = 0.2 + 0.7 * t;
                 return (
                   <View
