@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
 
   /* ── Card (analytics style) ───────────────────────────────── */
   cardOuter: {
-    height: 220,
+    height: 250,
     borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
   /* ── Image ──────────────────────────────── */
   imageWrap: {
     width: '100%',
-    height: 110,
+    height: 140,
     borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 8,
