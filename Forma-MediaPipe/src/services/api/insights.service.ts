@@ -12,7 +12,7 @@ export const insightsService = {
    * Get insights for a specific metric
    */
   async getInsights(metric: keyof InsightsData): Promise<ApiResponse<string[]>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.insights) {
       await mockDelay(API_CONFIG.mockDelayMs);
       const insights = mockInsightsData[metric] || [];
       return { data: insights, success: true };
@@ -24,7 +24,7 @@ export const insightsService = {
    * Get all insights for all metrics
    */
   async getAllInsights(): Promise<ApiResponse<InsightsData>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.insights) {
       await mockDelay(API_CONFIG.mockDelayMs);
       return { data: mockInsightsData, success: true };
     }

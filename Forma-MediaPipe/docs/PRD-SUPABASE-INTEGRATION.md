@@ -1,9 +1,12 @@
 # PRD: Supabase Integration for Forma Mobile
 
-**Document Version:** 1.0
-**Date:** February 6, 2026
+**Document Version:** 1.1
+**Date:** February 19, 2026
 **Author:** Product Management
-**Status:** Draft - Pending Approval
+**Status:** In Progress — Phase 1 Complete
+
+**Changelog:**
+- v1.1 (Feb 19): Amended Phase 2 — exercise picker stays on local mock data indefinitely; Phase 2 now focuses solely on real analytics derived from Supabase workout data. Removed Supabase Storage / exercise media scope.
 
 ---
 
@@ -19,14 +22,15 @@ Forma Mobile has a fully functional mock service layer (`src/services/`) with 7 
 - Simulated network delay (300ms) for realistic UX testing
 
 ### 1.3 Target State
-- **Supabase Project** provisioned with PostgreSQL database, Auth, and Storage
+- **Supabase Project** provisioned with PostgreSQL database and Auth
 - **Google + Apple OAuth** for user authentication (no email/password)
 - **Feature-flag toggle** to swap mock/real per-service incrementally
 - **Row Level Security (RLS)** so each user only accesses their own data
-- **Supabase Storage** for exercise demonstration media
+- **Real analytics** computed from actual `workout_sessions` / `workout_sets` stored in Supabase
 - **Seed script** for reference data (exercises, muscle groups, rewards catalog)
 - **No offline support** for MVP (requires internet connection)
 - **AI Trainer remains mock** (template-based responses, no Supabase integration yet)
+- **Exercise picker remains local mock** (no Supabase queries for exercises; Storage bucket not needed)
 
 ### 1.4 Success Criteria
 
@@ -37,7 +41,7 @@ Forma Mobile has a fully functional mock service layer (`src/services/`) with 7 
 | All existing screens render correctly | No visual regressions vs. mock data |
 | Mock fallback works | Setting `useMock: true` for any service reverts to mock data |
 | RLS enforced | User A cannot read/write User B's data |
-| Exercise media loads from Storage | Exercise images render from Supabase Storage URLs |
+| Analytics reflect real workouts | Form/consistency/strength trends computed from `workout_sessions` data |
 | Seed data populates cleanly | Running seed script creates all reference data without errors |
 
 ---
@@ -52,8 +56,8 @@ Forma Mobile has a fully functional mock service layer (`src/services/`) with 7 
 | **Authentication** | Google OAuth + Apple Sign-In via Supabase Auth |
 | **Database schema** | Tables for users, workouts, exercises, analytics, rewards |
 | **RLS policies** | Per-user data isolation on all tables |
-| **Service migration** | Replace mock implementations in 6 of 7 services (all except Trainer) |
-| **Storage** | Supabase Storage bucket for exercise media |
+| **Service migration** | Replace mock implementations in 3 of 7 services (workouts, user, analytics); exercises/rewards/insights follow in later phases; trainer stays mock permanently |
+| **Real analytics** | Query `workout_sessions` + `workout_sets` to compute form, consistency, and volume trends |
 | **Seed script** | SQL/JS script for reference data (exercises, muscle groups, rewards) |
 | **Auth UI** | Welcome screen update with Google/Apple sign-in buttons |
 | **Session management** | Auth context, protected routes, token refresh |
@@ -98,20 +102,19 @@ src/services/
 ├── api/
 │   ├── client.ts              # Supabase client init + feature flags
 │   ├── types.ts               # Existing types (minor additions)
-│   ├── workouts.service.ts    # Add Supabase queries
-│   ├── exercises.service.ts   # Add Supabase queries
-│   ├── analytics.service.ts   # Add Supabase queries
-│   ├── rewards.service.ts     # Add Supabase queries
-│   ├── insights.service.ts    # Add Supabase queries
-│   ├── user.service.ts        # Add Supabase queries
-│   └── trainer.service.ts     # STAYS MOCK (no changes)
+│   ├── workouts.service.ts    # Supabase (Phase 1 ✓)
+│   ├── exercises.service.ts   # STAYS MOCK permanently (local data)
+│   ├── analytics.service.ts   # Supabase (Phase 2)
+│   ├── rewards.service.ts     # Supabase (Phase 3)
+│   ├── insights.service.ts    # Supabase (Phase 3)
+│   ├── user.service.ts        # Supabase (Phase 1 ✓)
+│   └── trainer.service.ts     # STAYS MOCK permanently
 ├── mock/                      # Unchanged - kept as fallback
 │   ├── delay.ts
 │   └── data/*.mock.ts
 └── supabase/                  # NEW - Supabase-specific code
-    ├── client.ts              # createClient(), session management
-    ├── auth.ts                # OAuth helpers (Google, Apple)
-    └── storage.ts             # Storage bucket helpers
+    ├── client.ts              # createClient(), session management (Phase 1 ✓)
+    └── auth.ts                # OAuth helpers (Google, Apple) (Phase 1 ✓)
 ```
 
 ### 3.3 New: Auth Context
@@ -134,13 +137,13 @@ export const API_CONFIG = {
 
   // Per-service overrides (true = mock, false = supabase)
   services: {
-    workouts: false,   // migrated
-    exercises: false,   // migrated
-    analytics: false,   // migrated
-    rewards: false,     // migrated
-    insights: false,    // migrated
-    user: false,        // migrated
-    trainer: true,      // STAYS MOCK
+    workouts: false,   // Phase 1 ✓ — Supabase
+    user: false,       // Phase 1 ✓ — Supabase
+    analytics: true,   // Phase 2 — currently mock
+    exercises: true,   // STAYS MOCK permanently (local catalog, no DB query)
+    rewards: true,     // Phase 3 — currently mock
+    insights: true,    // Phase 3 — currently mock
+    trainer: true,     // STAYS MOCK permanently
   },
 
   mockDelayMs: 300,
@@ -493,38 +496,7 @@ OAuth redirects require deep linking. Expo config:
 
 ## 6. Storage
 
-### 6.1 Bucket Configuration
-
-| Bucket | Access | Purpose |
-|--------|--------|---------|
-| `exercise-media` | Public read | Exercise demonstration images |
-
-### 6.2 Exercise Media
-
-Exercise images will be uploaded via seed script or admin tool (not by end users):
-
-```
-exercise-media/
-├── chest/
-│   ├── barbell-bench-press.jpg
-│   ├── incline-dumbbell-press.jpg
-│   └── ...
-├── back/
-│   ├── deadlift.jpg
-│   └── ...
-└── ...
-```
-
-The `exercises.image_url` column stores the public Supabase Storage URL.
-
-### 6.3 Storage RLS
-
-```sql
--- Public read for exercise media (no auth required)
-CREATE POLICY "Public read access for exercise media"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'exercise-media');
-```
+**Out of scope for all phases.** Supabase Storage will not be used. The exercise picker loads from local mock data (`exercises.mock.ts`) and does not require exercise images from a CDN. If exercise images are ever needed, this section should be revisited as a separate feature spike.
 
 ---
 
@@ -599,26 +571,27 @@ async create(workout: {
 }): Promise<ApiResponse<WorkoutSession>>
 ```
 
-#### `exercises.service.ts` - Sprint 2
-| Method | Mock | Supabase |
-|--------|------|----------|
-| `getMuscleGroups()` | Returns mock array | `supabase.from('muscle_groups').select('*')` |
-| `getAll()` | Returns mock array | `supabase.from('exercises').select('*')` |
-| `getByMuscleGroup(group)` | Filters mock array | `.select('*').eq('muscle_group', group)` |
+#### `exercises.service.ts` - STAYS MOCK PERMANENTLY
+No Supabase migration. The exercise catalog is a fixed, known set of exercises used by the MediaPipe pose models. Loading it from a database adds network latency with no user-facing benefit. `API_CONFIG.services.exercises` remains `true` forever.
 
-No new methods needed. Read-only reference data.
+| Method | Implementation |
+|--------|---------------|
+| `getMuscleGroups()` | Always uses `mockMuscleGroups` from `exercises.mock.ts` |
+| `getAll()` | Always uses `mockExercises` from `exercises.mock.ts` |
+| `getByMuscleGroup(group)` | Always filters `mockExercises` locally |
 
-#### `analytics.service.ts` - Sprint 2
-| Method | Mock | Supabase |
-|--------|------|----------|
-| `getAnalytics(timeRange)` | Generates from base data | Query `user_analytics` table with date range filter |
-| `getMetricByTimeRange(metric, range)` | Generates from base data | `.select('*').eq('metric_type', metric).gte('recorded_at', startDate)` |
-| `getWeeklyBarData()` | Returns mock array | Aggregate `workout_sessions` by day of week |
+#### `analytics.service.ts` - Sprint 2 (real queries from existing workout data)
+No separate `user_analytics` table needed. Analytics are computed directly from `workout_sessions` and `workout_sets` that were already written during workout saves.
 
-**New method needed:**
-| Method | Purpose |
-|--------|---------|
-| `recordMetric(type, value)` | Insert daily analytics snapshot (called after workout save) |
+| Method | Supabase Implementation |
+|--------|------------------------|
+| `getAnalytics(timeRange)` | Parallel queries for form, consistency, and weekly bar data (see below) |
+| `getMetricByTimeRange('form', range)` | `SELECT date, form_score FROM workout_sessions WHERE user_id = auth.uid() AND date >= startDate ORDER BY date` |
+| `getMetricByTimeRange('consistency', range)` | Count sessions per day in range; fill gaps with 0 |
+| `getMetricByTimeRange('strength', range)` | `SELECT date, SUM(weight * reps) FROM workout_sets JOIN workout_exercises JOIN workout_sessions WHERE date >= startDate GROUP BY date ORDER BY date` |
+| `getWeeklyBarData()` | `SELECT date, duration_seconds, form_score FROM workout_sessions WHERE date >= 7 days ago` grouped by weekday |
+
+**No `recordMetric()` needed.** Data is derived on-demand from the workout tables already populated in Phase 1.
 
 #### `rewards.service.ts` - Sprint 3
 | Method | Mock | Supabase |
@@ -837,20 +810,65 @@ Currently uses `CurrentWorkoutContext` with in-memory storage. Will be updated t
 
 **Exit criteria:** User can sign in with Google/Apple, record a workout with MediaPipe, save it, and see it in Logbook after app restart.
 
-### Phase 2: Data Services (Sprint 2)
+### Phase 2: Real Analytics (Sprint 2)
 
-**Goal:** Exercises load from database, analytics are tracked.
+**Goal:** Analytics screen shows charts built from the user's actual workout history stored in Supabase. Exercise picker and exercise images stay on local mock data — no exercise DB migration.
 
 | Task | Priority | Files |
 |------|----------|-------|
-| Migrate `exercises.service.ts` | P0 | Existing file |
-| Migrate `analytics.service.ts` | P0 | Existing file |
-| Implement `recordMetric()` in analytics service | P1 | Existing file |
-| Upload exercise media to Storage bucket | P1 | Supabase Dashboard |
-| Implement `src/services/supabase/storage.ts` | P1 | New file |
-| Update `exercises.mock.ts` image references to Storage URLs | P1 | Existing file |
+| Migrate `analytics.service.ts` — form trend from `workout_sessions.form_score` | P0 | `src/services/api/analytics.service.ts` |
+| Migrate `analytics.service.ts` — consistency from session count per day | P0 | `src/services/api/analytics.service.ts` |
+| Migrate `analytics.service.ts` — strength/volume from `workout_sets` totals | P0 | `src/services/api/analytics.service.ts` |
+| Migrate `analytics.service.ts` — weekly bar chart from `workout_sessions` by weekday | P0 | `src/services/api/analytics.service.ts` |
+| Set `API_CONFIG.services.analytics = false` | P0 | `src/services/api/client.ts` |
+| Logbook cleanup — remove local `workoutStorage` merge (show Supabase only) | P1 | `src/screens/LogbookScreen.tsx` |
+| Replace hardcoded "Athlete" with `profiles.display_name` from Supabase | P1 | `src/screens/SettingsScreen.tsx` (or wherever used) |
+| Add analytics helper: `getDateRange(timeRange)` → `{ startDate, endDate }` | P2 | `src/services/api/analytics.service.ts` |
+| Handle empty-state gracefully when user has < 2 workouts | P2 | `src/screens/AnalyticsScreen.tsx` |
 
-**Exit criteria:** Exercise picker loads from Supabase, analytics screen shows real user data.
+**What is NOT in Phase 2:**
+- `exercises.service.ts` migration — stays mock permanently
+- Supabase Storage bucket — not needed
+- `user_analytics` table — not used; queries go directly to `workout_sessions`/`workout_sets`
+- `recordMetric()` — not needed; analytics are derived queries, not stored snapshots
+
+**Data queries (no new DB tables required):**
+
+```sql
+-- Form trend: average form_score per workout day
+SELECT date, form_score
+FROM workout_sessions
+WHERE user_id = auth.uid()
+  AND date >= :startDate
+ORDER BY date ASC;
+
+-- Consistency: number of workouts per day (gaps filled with 0 in-app)
+SELECT date, COUNT(*) AS session_count
+FROM workout_sessions
+WHERE user_id = auth.uid()
+  AND date >= :startDate
+GROUP BY date
+ORDER BY date ASC;
+
+-- Strength/volume: total volume (weight × reps) per workout day
+SELECT ws2.date, SUM(ws.weight * ws.reps) AS volume
+FROM workout_sets ws
+JOIN workout_exercises we ON ws.workout_exercise_id = we.id
+JOIN workout_sessions ws2 ON we.workout_session_id = ws2.id
+WHERE ws2.user_id = auth.uid()
+  AND ws2.date >= :startDate
+GROUP BY ws2.date
+ORDER BY ws2.date ASC;
+
+-- Weekly bar chart: sessions in last 7 days grouped by weekday
+SELECT date, duration_seconds, form_score
+FROM workout_sessions
+WHERE user_id = auth.uid()
+  AND date >= CURRENT_DATE - INTERVAL '6 days'
+ORDER BY date ASC;
+```
+
+**Exit criteria:** Analytics screen renders form, consistency, and strength trend charts using the authenticated user's real workout data. Switching time range (1 week / 1 month / 3 months) re-queries Supabase. Empty state shown when fewer than 2 data points exist.
 
 ### Phase 3: Rewards & Polish (Sprint 3)
 
@@ -890,11 +908,14 @@ Currently uses `CurrentWorkoutContext` with in-memory storage. Will be updated t
 - [ ] Deleting a workout cascades to exercises and sets
 - [ ] User A cannot see User B's workouts (RLS)
 
-#### Exercises & Analytics
-- [ ] Exercise picker loads from `exercises` table
-- [ ] Exercise images load from Storage
-- [ ] Analytics screen shows data from `user_analytics`
-- [ ] Time range filters work correctly
+#### Analytics
+- [ ] Analytics screen shows form trend from real `workout_sessions.form_score` values
+- [ ] Consistency chart reflects actual number of workout days
+- [ ] Strength/volume chart computed from real `workout_sets` data
+- [ ] Weekly bar chart shows sessions from the last 7 days
+- [ ] Time range filters (1 week / 1 month / 3 months) re-query Supabase correctly
+- [ ] Empty state shown when user has fewer than 2 workouts
+- [ ] Exercise picker still works correctly (local mock, unaffected)
 
 #### Rewards
 - [ ] Rewards catalog loads from `rewards` table
@@ -960,9 +981,12 @@ Create two test accounts and verify:
 
 | Category | Files | Action |
 |----------|-------|--------|
-| New files | `src/services/supabase/client.ts`, `src/services/supabase/auth.ts`, `src/services/supabase/storage.ts`, `src/contexts/AuthContext.tsx`, `scripts/migration.sql`, `scripts/seed.sql`, `.env`, `.env.example` | Create |
-| Modified files | `src/services/api/client.ts`, `src/services/api/types.ts`, all 6 service files (except trainer), `src/screens/WelcomeScreen.tsx`, `src/screens/SaveWorkoutScreen.tsx`, `src/screens/SettingsScreen.tsx`, `src/app/RootNavigator.tsx`, `app.json`, `package.json`, `.gitignore` | Edit |
-| Unchanged files | `src/services/api/trainer.service.ts`, all `src/services/mock/**` files, all other screens, all components, all hooks, all utils | No changes |
+| New files (Phase 1 ✓) | `src/services/supabase/client.ts`, `src/services/supabase/auth.ts`, `src/contexts/AuthContext.tsx`, `scripts/migration.sql`, `scripts/seed.sql`, `.env`, `.env.example` | Created |
+| Modified files (Phase 1 ✓) | `src/services/api/client.ts`, `src/services/api/types.ts`, `src/services/api/workouts.service.ts`, `src/services/api/user.service.ts`, `src/screens/WelcomeScreen.tsx`, `src/screens/SaveWorkoutScreen.tsx`, `src/app/RootNavigator.tsx`, `app.json`, `package.json`, `.gitignore` | Edited |
+| Modified files (Phase 2) | `src/services/api/analytics.service.ts`, `src/screens/LogbookScreen.tsx`, `src/screens/SettingsScreen.tsx` | To edit |
+| Modified files (Phase 3) | `src/services/api/rewards.service.ts`, `src/services/api/insights.service.ts`, `src/screens/SettingsScreen.tsx` | To edit |
+| Unchanged files (all phases) | `src/services/api/exercises.service.ts`, `src/services/api/trainer.service.ts`, all `src/services/mock/**` files, all components, all hooks, all utils | No changes |
+| Never created | `src/services/supabase/storage.ts` | Removed from scope |
 
 ### C. Decision Log
 
@@ -976,6 +1000,9 @@ Create two test accounts and verify:
 | Exercise media in Storage (not in DB) | Better performance, CDN-backed delivery, standard pattern |
 | No offline support for MVP | Significantly reduces complexity; can layer on later with AsyncStorage already installed |
 | Trainer stays mock | AI integration is a separate initiative; mock responses are sufficient for MVP |
+| Exercise picker stays local mock permanently | Exercise catalog is a fixed set tied to MediaPipe pose models; querying DB adds latency with no user benefit; images not needed for MVP |
+| No `user_analytics` table for Phase 2 | Analytics derived directly from `workout_sessions`/`workout_sets` already written in Phase 1; avoids redundant data and a separate write path |
+| No Supabase Storage | Exercise images not needed for MVP; can be reconsidered as a separate feature |
 | Save on completion (not real-time) | Simpler architecture, fewer writes, matches current UX (user taps "Save") |
 | snake_case in DB, camelCase in TS | PostgreSQL convention in DB; TypeScript convention in app; mapper functions bridge the gap |
 

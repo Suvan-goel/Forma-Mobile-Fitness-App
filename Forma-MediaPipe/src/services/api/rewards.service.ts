@@ -12,7 +12,7 @@ export const rewardsService = {
    * Get all rewards
    */
   async getRewards(): Promise<ApiResponse<Reward[]>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.rewards) {
       await mockDelay(API_CONFIG.mockDelayMs);
       return { data: mockRewards, success: true };
     }
@@ -23,7 +23,7 @@ export const rewardsService = {
    * Get user stats for points calculation
    */
   async getUserStats(): Promise<ApiResponse<UserStats>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.rewards) {
       await mockDelay(API_CONFIG.mockDelayMs);
       return { data: mockUserStats, success: true };
     }
@@ -34,7 +34,7 @@ export const rewardsService = {
    * Redeem a reward
    */
   async redeemReward(rewardId: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.rewards) {
       await mockDelay(API_CONFIG.mockDelayMs);
       const reward = mockRewards.find(r => r.id === rewardId);
       if (!reward) {

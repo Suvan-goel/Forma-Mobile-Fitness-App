@@ -16,7 +16,7 @@ export const trainerService = {
    * Get trainer progress summary
    */
   async getProgress(): Promise<ApiResponse<TrainerProgress>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.trainer) {
       await mockDelay(API_CONFIG.mockDelayMs);
       const progress = calculateProgress();
       return { data: progress, success: true };
@@ -28,7 +28,7 @@ export const trainerService = {
    * Get AI recommendations based on progress
    */
   async getRecommendations(): Promise<ApiResponse<Recommendation[]>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.trainer) {
       await mockDelay(API_CONFIG.mockDelayMs);
       const progress = calculateProgress();
       const recommendations = generateRecommendations(progress);
@@ -41,7 +41,7 @@ export const trainerService = {
    * Get AI response for a user message
    */
   async getAIResponse(message: string): Promise<ApiResponse<string>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.trainer) {
       await mockDelay(API_CONFIG.mockDelayMs * 1.5); // Slightly longer delay for "thinking"
       const progress = calculateProgress();
       const response = generateAIResponse(message, progress);

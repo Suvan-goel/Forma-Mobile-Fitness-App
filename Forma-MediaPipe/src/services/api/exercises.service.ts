@@ -12,7 +12,7 @@ export const exercisesService = {
    * Get all muscle groups
    */
   async getMuscleGroups(): Promise<ApiResponse<MuscleGroup[]>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.exercises) {
       await mockDelay(API_CONFIG.mockDelayMs);
       return { data: mockMuscleGroups, success: true };
     }
@@ -23,7 +23,7 @@ export const exercisesService = {
    * Get all exercises
    */
   async getAll(): Promise<ApiResponse<Exercise[]>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.exercises) {
       await mockDelay(API_CONFIG.mockDelayMs);
       return { data: mockExercises, success: true };
     }
@@ -34,7 +34,7 @@ export const exercisesService = {
    * Get exercises filtered by muscle group
    */
   async getByMuscleGroup(muscleGroup: string): Promise<ApiResponse<Exercise[]>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.exercises) {
       await mockDelay(API_CONFIG.mockDelayMs);
       const filtered = muscleGroup === 'all'
         ? mockExercises

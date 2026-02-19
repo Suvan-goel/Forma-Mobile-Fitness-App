@@ -18,7 +18,7 @@ export const analyticsService = {
    * Get all analytics data for a given time range
    */
   async getAnalytics(timeRange: string = '1 week'): Promise<ApiResponse<AnalyticsData>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.analytics) {
       await mockDelay(API_CONFIG.mockDelayMs);
 
       const formResult = generateDataForTimeRange(formBaseData, timeRange);
@@ -44,7 +44,7 @@ export const analyticsService = {
     metric: 'form' | 'consistency' | 'strength',
     timeRange: string
   ): Promise<ApiResponse<AnalyticsMetric>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.analytics) {
       await mockDelay(API_CONFIG.mockDelayMs);
 
       let baseData: number[];
@@ -73,7 +73,7 @@ export const analyticsService = {
    * Get weekly bar chart data
    */
   async getWeeklyBarData(): Promise<ApiResponse<WorkoutBarData[]>> {
-    if (API_CONFIG.useMock) {
+    if (API_CONFIG.services.analytics) {
       await mockDelay(API_CONFIG.mockDelayMs);
       return { data: mockWeeklyBarData, success: true };
     }
