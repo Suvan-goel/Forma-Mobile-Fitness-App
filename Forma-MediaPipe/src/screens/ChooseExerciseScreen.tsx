@@ -121,7 +121,7 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
           />
         </View>
 
-        {/* Text */}
+        {/* Text - flex so it fills remaining space below image */}
         <View style={styles.cardTextBlock}>
           <Text style={styles.cardName} numberOfLines={2}>{exercise.name}</Text>
           <Text style={styles.cardMuscle} numberOfLines={1}>{muscleLabel}</Text>
@@ -362,6 +362,7 @@ const styles = StyleSheet.create({
 
   /* ── Card (analytics style) ───────────────────────────────── */
   cardOuter: {
+    height: 220,
     borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
@@ -375,9 +376,11 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    flex: 1,
     borderRadius: 22,
   },
   cardGlassEdge: {
+    flex: 1,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -417,8 +420,10 @@ const styles = StyleSheet.create({
 
   /* ── Text Block ─────────────────────────── */
   cardTextBlock: {
+    flex: 1,
     paddingHorizontal: 4,
     paddingBottom: 6,
+    justifyContent: 'flex-end',
   },
   cardName: {
     fontFamily: FONTS.display.semibold,
