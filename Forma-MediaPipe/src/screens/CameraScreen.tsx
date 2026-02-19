@@ -1002,13 +1002,13 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   metricLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textAlign: 'center',
   },
   metricValue: {
-    fontSize: 18,
+    fontSize: 15,
     fontFamily: FONTS.mono.bold,
     color: COLORS.text,
     minWidth: 30,
