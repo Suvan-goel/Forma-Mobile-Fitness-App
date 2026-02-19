@@ -4,8 +4,9 @@ import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RotateCw, Settings, Pause, Play, X } from 'lucide-react-native';
+import { Settings, X } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
+import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount, Keypoint } from '../utils/poseAnalysis';
@@ -649,9 +650,12 @@ export const CameraScreen: React.FC = () => {
               disabled={!isRecording}
             >
               {isPaused ? (
-                <Play size={24} color={isRecording ? COLORS.text : COLORS.textSecondary} />
+                <View style={[styles.playIconTriangle, { borderLeftColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
               ) : (
-                <Pause size={24} color={isRecording ? COLORS.text : COLORS.textSecondary} />
+                <View style={styles.pauseIconBars}>
+                  <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
+                  <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
+                </View>
               )}
             </TouchableOpacity>
             <TouchableOpacity
@@ -668,7 +672,7 @@ export const CameraScreen: React.FC = () => {
               accessibilityRole="button"
               accessibilityLabel="Flip camera"
             >
-              <RotateCw size={24} color={COLORS.text} />
+              <CameraSwitchIcon width={24} height={24} color={COLORS.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -969,6 +973,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pauseIconBars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  pauseIconBar: {
+    width: 5,
+    height: 22,
+    borderRadius: 3,
+  },
+  playIconTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 14,
+    borderTopWidth: 9,
+    borderBottomWidth: 9,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    marginLeft: 4,
+  },
   pauseButtonDisabled: {
     opacity: 0.5,
   },
@@ -1044,7 +1069,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FF3B30',
     borderWidth: 0,
   },
   feedbackFeedContainer: {
