@@ -1237,6 +1237,11 @@ export function getRepCount(state: BarbellCurlState): number {
   return state.repCount;
 }
 
+const _formatAngle = (v: number) =>
+  typeof v === 'number' && !isNaN(v) && isFinite(v) ? v : null;
+const _safeDelta = (min: number, max: number) =>
+  _formatAngle(min !== Infinity && max !== -Infinity ? max - min : NaN);
+
 /** Debug: returns torso angles used for swing detection (for on-screen debugging) */
 export function getTorsoDebugInfo(state: BarbellCurlState): {
   torso: number | null;
@@ -1248,22 +1253,90 @@ export function getTorsoDebugInfo(state: BarbellCurlState): {
 } {
   const angles = state.displayAngles;
   const window = state.repWindow;
-  const format = (v: number) =>
-    typeof v === 'number' && !isNaN(v) && isFinite(v) ? v : null;
-  const safeDelta = (min: number, max: number) =>
-    format(
-      min !== Infinity && max !== -Infinity ? max - min : NaN
-    );
   return {
-    torso: format(angles?.torso ?? NaN),
-    leftTorso: format(angles?.leftTorso ?? NaN),
-    rightTorso: format(angles?.rightTorso ?? NaN),
-    torsoDelta: window ? safeDelta(window.minAngles.torso, window.maxAngles.torso) : null,
+    torso: _formatAngle(angles?.torso ?? NaN),
+    leftTorso: _formatAngle(angles?.leftTorso ?? NaN),
+    rightTorso: _formatAngle(angles?.rightTorso ?? NaN),
+    torsoDelta: window ? _safeDelta(window.minAngles.torso, window.maxAngles.torso) : null,
     leftTorsoDelta: window
-      ? safeDelta(window.minAngles.leftTorso, window.maxAngles.leftTorso)
+      ? _safeDelta(window.minAngles.leftTorso, window.maxAngles.leftTorso)
       : null,
     rightTorsoDelta: window
-      ? safeDelta(window.minAngles.rightTorso, window.maxAngles.rightTorso)
+      ? _safeDelta(window.minAngles.rightTorso, window.maxAngles.rightTorso)
       : null,
+  };
+}
+
+/** Debug: returns all angles used in Barbell Curl form analysis (for debug overlay) */
+export function getBarbellCurlDebugInfo(state: BarbellCurlState): {
+  current: {
+    leftElbow: number | null;
+    rightElbow: number | null;
+    leftShoulder: number | null;
+    rightShoulder: number | null;
+    leftTorso: number | null;
+    rightTorso: number | null;
+    torso: number | null;
+    leftWrist: number | null;
+    rightWrist: number | null;
+  };
+  repDelta: {
+    leftElbow: number | null;
+    rightElbow: number | null;
+    leftShoulder: number | null;
+    rightShoulder: number | null;
+    leftTorso: number | null;
+    rightTorso: number | null;
+    torso: number | null;
+    leftWrist: number | null;
+    rightWrist: number | null;
+  } | null;
+  viewAngle: number | null;
+  viewZone: string;
+  reachLeft: number | null;
+  reachRight: number | null;
+} {
+  const angles = state.displayAngles;
+  const window = state.repWindow;
+  const view = state.viewAngle;
+  const current = {
+    leftElbow: _formatAngle(angles?.leftElbow ?? NaN),
+    rightElbow: _formatAngle(angles?.rightElbow ?? NaN),
+    leftShoulder: _formatAngle(angles?.leftShoulder ?? NaN),
+    rightShoulder: _formatAngle(angles?.rightShoulder ?? NaN),
+    leftTorso: _formatAngle(angles?.leftTorso ?? NaN),
+    rightTorso: _formatAngle(angles?.rightTorso ?? NaN),
+    torso: _formatAngle(angles?.torso ?? NaN),
+    leftWrist: _formatAngle(angles?.leftWrist ?? NaN),
+    rightWrist: _formatAngle(angles?.rightWrist ?? NaN),
+  };
+  const repDelta = window
+    ? {
+        leftElbow: _safeDelta(window.minAngles.leftElbow, window.maxAngles.leftElbow),
+        rightElbow: _safeDelta(window.minAngles.rightElbow, window.maxAngles.rightElbow),
+        leftShoulder: _safeDelta(window.minAngles.leftShoulder, window.maxAngles.leftShoulder),
+        rightShoulder: _safeDelta(window.minAngles.rightShoulder, window.maxAngles.rightShoulder),
+        leftTorso: _safeDelta(window.minAngles.leftTorso, window.maxAngles.leftTorso),
+        rightTorso: _safeDelta(window.minAngles.rightTorso, window.maxAngles.rightTorso),
+        torso: _safeDelta(window.minAngles.torso, window.maxAngles.torso),
+        leftWrist: _safeDelta(window.minAngles.leftWrist, window.maxAngles.leftWrist),
+        rightWrist: _safeDelta(window.minAngles.rightWrist, window.maxAngles.rightWrist),
+      }
+    : null;
+  const reachLeft =
+    window?.reach?.maxLeftReachRatio != null && isFinite(window.reach.maxLeftReachRatio)
+      ? window.reach.maxLeftReachRatio
+      : null;
+  const reachRight =
+    window?.reach?.maxRightReachRatio != null && isFinite(window.reach.maxRightReachRatio)
+      ? window.reach.maxRightReachRatio
+      : null;
+  return {
+    current,
+    repDelta,
+    viewAngle: _formatAngle(view.angleDeg),
+    viewZone: view.zone,
+    reachLeft: reachLeft != null ? reachLeft : null,
+    reachRight: reachRight != null ? reachRight : null,
   };
 }

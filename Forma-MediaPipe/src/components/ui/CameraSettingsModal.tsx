@@ -30,9 +30,11 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
     showFeedback,
     isTTSEnabled,
     showSkeletonOverlay,
+    debugMode,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
+    setDebugMode,
   } = useCameraSettings();
 
   const handleTTSChange = (value: boolean) => {
@@ -40,6 +42,13 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
       onTTSDisable?.();
     }
     setIsTTSEnabled(value);
+  };
+
+  const handleDebugChange = (value: boolean) => {
+    if (value) {
+      onTTSDisable?.();
+    }
+    setDebugMode(value);
   };
 
   return (
@@ -73,28 +82,42 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
                 </TouchableOpacity>
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Show feedback messages</Text>
+                <Text style={[styles.label, debugMode && styles.labelOverridden]}>
+                  Debug mode (skeleton on, TTS off, 1 message + angles)
+                </Text>
+                <Switch
+                  value={debugMode}
+                  onValueChange={handleDebugChange}
+                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                  thumbColor={COLORS.text}
+                />
+              </View>
+              <View style={styles.row}>
+                <Text style={[styles.label, debugMode && styles.labelOverridden]}>Show feedback messages</Text>
                 <Switch
                   value={showFeedback}
                   onValueChange={setShowFeedback}
+                  disabled={debugMode}
                   trackColor={{ false: COLORS.border, true: COLORS.accent }}
                   thumbColor={COLORS.text}
                 />
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Spoken feedback (TTS)</Text>
+                <Text style={[styles.label, debugMode && styles.labelOverridden]}>Spoken feedback (TTS)</Text>
                 <Switch
                   value={isTTSEnabled}
                   onValueChange={handleTTSChange}
+                  disabled={debugMode}
                   trackColor={{ false: COLORS.border, true: COLORS.accent }}
                   thumbColor={COLORS.text}
                 />
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Show skeleton overlay</Text>
+                <Text style={[styles.label, debugMode && styles.labelOverridden]}>Show skeleton overlay</Text>
                 <Switch
                   value={showSkeletonOverlay}
                   onValueChange={setShowSkeletonOverlay}
+                  disabled={debugMode}
                   trackColor={{ false: COLORS.border, true: COLORS.accent }}
                   thumbColor={COLORS.text}
                 />
@@ -170,5 +193,9 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
     flex: 1,
+  },
+  labelOverridden: {
+    color: COLORS.textSecondary,
+    opacity: 0.8,
   },
 });
