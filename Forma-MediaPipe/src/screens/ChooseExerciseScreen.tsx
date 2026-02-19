@@ -33,8 +33,6 @@ function getExerciseImage(exercise: Exercise): ImageSourcePropType {
   return CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
 }
 
-const IMAGE_FADE_COLORS: [string, string] = ['transparent', 'rgba(0,0,0,0.85)'];
-
 type RecordStackParamList = {
   RecordLanding: undefined;
   CurrentWorkout: { newSet?: any } | undefined;
@@ -108,16 +106,12 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
           </TouchableOpacity>
         </View>
 
-        {/* Image with gradient fade */}
+        {/* Image */}
         <View style={styles.imageWrap}>
           <Image
             source={getExerciseImage(exercise)}
             style={styles.exerciseImage}
             resizeMode="cover"
-          />
-          <LinearGradient
-            colors={IMAGE_FADE_COLORS}
-            style={styles.imageFade}
           />
         </View>
 
@@ -409,13 +403,6 @@ const styles = StyleSheet.create({
   exerciseImage: {
     width: '100%',
     height: '100%',
-  },
-  imageFade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 40,
   },
 
   /* ── Text Block ─────────────────────────── */
