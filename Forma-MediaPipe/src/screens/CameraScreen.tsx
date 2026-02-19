@@ -35,7 +35,7 @@ import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSet
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
 const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
 
-const MAX_FEED_ITEMS = 6;
+const MAX_FEED_ITEMS = 4;
 type FeedbackFeedItem = { id: number; text: string };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -729,7 +729,9 @@ export const CameraScreen: React.FC = () => {
 
         {/* Feedback Display - Speech bubble below exercise name */}
         {showFeedback && (() => {
-          const items = feedbackFeed.filter(item => (item.text || '').trim() !== '');
+          const items = feedbackFeed
+            .filter(item => (item.text || '').trim() !== '')
+            .slice(-4);
           if (items.length === 0) return null;
           return (
             <View style={styles.feedbackFeedContainer}>
@@ -998,16 +1000,20 @@ const styles = StyleSheet.create({
     minWidth: 30,
   },
   recordButtonActive: {
-    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   recordButtonInnerActive: {
-    backgroundColor: '#FF3B30',
-    borderColor: '#CC2F26',
+    width: 28,
+    height: 28,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 0,
   },
   feedbackFeedContainer: {
     position: 'absolute',
     left: SPACING.screenHorizontal,
-    bottom: SPACING.lg + 36,
+    bottom: SPACING.lg + 36 + SPACING.xl,
     right: undefined,
     maxWidth: '72%',
     flexDirection: 'column',
