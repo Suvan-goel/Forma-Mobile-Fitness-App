@@ -619,7 +619,7 @@ export const CameraScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Discard set"
         >
-          <X size={24} color={COLORS.text} strokeWidth={2.5} />
+          <X size={20} color={COLORS.text} strokeWidth={2.5} />
         </TouchableOpacity>
         <View style={styles.exerciseTopCardWrap}>
           <Text style={styles.detectionExercise} numberOfLines={1}>
@@ -633,7 +633,7 @@ export const CameraScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Camera settings"
         >
-          <Settings size={24} color={COLORS.text} strokeWidth={2.5} />
+          <Settings size={20} color={COLORS.text} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
@@ -662,7 +662,7 @@ export const CameraScreen: React.FC = () => {
           const items = debugMode ? filtered.slice(-1) : filtered.slice(-4);
           if (items.length === 0) return null;
           return (
-            <View style={[styles.feedbackFeedContainer, { bottom: controlStripApproxHeight + SPACING.md }]}>
+            <View style={[styles.feedbackFeedContainer, { bottom: controlStripApproxHeight + SPACING.xs }]}>
               {items.map((item, index) => {
                 // Opacity by position from newest: 0th = 0.9, 1st back = 0.67, 2nd = 0.43, 3rd+ = 0.2
                 const positionFromNewest = items.length - 1 - index;
@@ -816,7 +816,7 @@ export const CameraScreen: React.FC = () => {
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.recordButton, isRecording && styles.recordButtonActive]}
+                style={styles.recordButton}
                 onPress={handleRecordPress}
                 activeOpacity={0.8}
               >
@@ -829,7 +829,7 @@ export const CameraScreen: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel="Flip camera"
               >
-                <CameraSwitchIcon width={24} height={24} color={COLORS.text} />
+                <CameraSwitchIcon width={20} height={20} color={COLORS.text} />
               </TouchableOpacity>
             </View>
           </View>
@@ -886,7 +886,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     paddingTop: SPACING.md,
   },
   controlStripMetrics: {
@@ -905,9 +905,9 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   discardButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
@@ -922,9 +922,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
@@ -936,13 +936,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 44,
   },
   /* Reference style: outer thin white ring, inner white circle with thin black border */
   recordButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 3,
     borderColor: '#FFFFFF',
     alignItems: 'center',
@@ -958,9 +958,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   pauseButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     alignItems: 'center',
@@ -973,34 +973,34 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pauseIconBar: {
-    width: 5,
-    height: 22,
-    borderRadius: 3,
+    width: 4,
+    height: 18,
+    borderRadius: 2,
   },
   playIconTriangle: {
     width: 0,
     height: 0,
-    borderLeftWidth: 14,
-    borderTopWidth: 9,
-    borderBottomWidth: 9,
+    borderLeftWidth: 11,
+    borderTopWidth: 7,
+    borderBottomWidth: 7,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
-    marginLeft: 4,
+    marginLeft: 3,
   },
   pauseButtonDisabled: {
     opacity: 0.5,
   },
   flipCameraButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   detectionExercise: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textTransform: 'uppercase',
@@ -1030,6 +1030,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 50,
   },
   metricBlock: {
     width: 80,
@@ -1039,26 +1042,19 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   metricLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textAlign: 'center',
   },
   metricValue: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: FONTS.mono.bold,
     color: COLORS.text,
     minWidth: 30,
     textAlign: 'center',
   },
-  recordButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-  },
   recordButtonInnerActive: {
-    width: 28,
-    height: 28,
-    borderRadius: 4,
     backgroundColor: '#FF3B30',
     borderWidth: 0,
   },
@@ -1082,7 +1078,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   feedbackFeedText: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.ui.bold,
     color: '#FFFFFF',
   },
