@@ -573,6 +573,7 @@ export const CameraScreen: React.FC = () => {
   const topBarHeight = topInset + 48;
   const cameraDisplayWidth = SCREEN_WIDTH;
   const cameraDisplayHeight = (SCREEN_WIDTH * CAMERA_ASPECT_HEIGHT) / CAMERA_ASPECT_WIDTH;
+  const controlStripApproxHeight = 165 + insets.bottom;
 
   // Memoize MediaPipe props – 9:16 portrait viewfinder
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
@@ -661,7 +662,7 @@ export const CameraScreen: React.FC = () => {
           const items = debugMode ? filtered.slice(-1) : filtered.slice(-4);
           if (items.length === 0) return null;
           return (
-            <View style={[styles.feedbackFeedContainer, { bottom: SPACING.xl + 40 }]}>
+            <View style={[styles.feedbackFeedContainer, { bottom: controlStripApproxHeight + SPACING.md }]}>
               {items.map((item, index) => {
                 // Opacity by position from newest: 0th = 0.9, 1st back = 0.67, 2nd = 0.43, 3rd+ = 0.2
                 const positionFromNewest = items.length - 1 - index;
@@ -686,7 +687,7 @@ export const CameraScreen: React.FC = () => {
         {exerciseNameFromRoute === 'Barbell Curl' &&
           debugMode &&
           barbellCurlDebug && (
-            <View style={[styles.torsoDebugContainer, { bottom: SPACING.xl + 60 }]}>
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
                 <Text style={styles.torsoDebugTitle}>Barbell Curl — Form Angles</Text>
                 <Text style={styles.torsoDebugText}>
@@ -733,7 +734,7 @@ export const CameraScreen: React.FC = () => {
         {exerciseNameFromRoute === 'Push-Up' &&
           debugMode &&
           pushupDebug && (
-            <View style={[styles.torsoDebugContainer, { bottom: SPACING.xl + 60 }]}>
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
                 <Text style={styles.torsoDebugTitle}>Push-Up Debug</Text>
                 <Text style={styles.torsoDebugText}>
@@ -892,7 +893,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   overlay: {
     position: 'absolute',
@@ -999,7 +1000,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   detectionExercise: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textTransform: 'uppercase',
@@ -1028,6 +1029,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
+    paddingVertical: SPACING.sm,
   },
   metricBlock: {
     width: 80,
@@ -1037,13 +1039,13 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textAlign: 'center',
   },
   metricValue: {
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: FONTS.mono.bold,
     color: COLORS.text,
     minWidth: 30,
