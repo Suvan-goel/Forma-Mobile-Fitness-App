@@ -568,12 +568,9 @@ export const CameraScreen: React.FC = () => {
     );
   }, [navigation]);
 
-  // Layout: narrow top bar, gap under it, then 9:16 camera; bottom bar halfway over camera bottom
+  // Layout: top bar, then 9:16 camera, then control strip. Camera and control strip meet at the same line (control starts where camera ends).
   const topInset = insets.top + 6;
-  const topBarContentHeight = topInset + 40;
-  const gapAboveCamera = 6;
-  const topBarHeight = topBarContentHeight + gapAboveCamera;
-  const gapBelowTopBar = 8;
+  const topBarHeight = topInset + 48;
   const cameraDisplayWidth = SCREEN_WIDTH;
   const cameraDisplayHeight = (SCREEN_WIDTH * CAMERA_ASPECT_HEIGHT) / CAMERA_ASPECT_WIDTH;
 
@@ -612,131 +609,59 @@ export const CameraScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Camera section: fixed height below status bar */}
-      <View style={[styles.cameraSection, { paddingTop: insets.top }]}>
-        <Pressable
-          style={styles.cameraLetterbox}
-          onPress={handleCameraDoubleTap}
+      {/* Top bar — above camera, not overlapping */}
+      <View style={[styles.topBarSection, { paddingTop: topInset, height: topBarHeight }]}>
+        <TouchableOpacity
+          style={styles.discardButton}
+          onPress={handleDiscardSetPress}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Discard set"
         >
-          <View style={[
-            styles.cameraContainer,
-            {
-              width: cameraDisplayWidth,
-              height: cameraDisplayHeight,
-              borderRadius: CAMERA_BORDER_RADIUS,
-            },
-          ]}>
-            {showCamera && (
-              <RNMediapipe
-                {...mediapipeProps}
-                onLandmark={handleLandmark}
-              />
-            )}
-          </View>
-        </Pressable>
+          <X size={24} color={COLORS.text} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <View style={styles.exerciseTopCardWrap}>
+          <Text style={styles.detectionExercise} numberOfLines={1}>
+            {displayValues.exerciseDisplayName}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setSettingsModalVisible(true)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Camera settings"
+        >
+          <Settings size={24} color={COLORS.text} strokeWidth={2.5} />
+        </TouchableOpacity>
       </View>
 
-      {/* Bottom controls: below camera, no overlap */}
-      <View style={[styles.bottomBarSection, { paddingBottom: SPACING.lg + insets.bottom }]}>
-        <View style={styles.recordButtonContainer}>
-          <View style={styles.buttonsRow}>
-            <TouchableOpacity
-              style={[
-                styles.pauseButton,
-                !isRecording && styles.pauseButtonDisabled
-              ]}
-              onPress={isRecording ? handlePausePress : undefined}
-              activeOpacity={isRecording ? 0.8 : 1}
-              disabled={!isRecording}
-            >
-              {isPaused ? (
-                <View style={[styles.playIconTriangle, { borderLeftColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
-              ) : (
-                <View style={styles.pauseIconBars}>
-                  <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
-                  <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
-                </View>
+      {/* 9:16 camera with control strip overlaying its bottom — no gap, control starts where camera starts (same container) */}
+      <View style={styles.cameraArea}>
+        <View style={[styles.cameraSection, { height: cameraDisplayHeight }]}>
+          <Pressable
+            style={styles.cameraFill}
+            onPress={handleCameraDoubleTap}
+          >
+            <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
+              {showCamera && (
+                <RNMediapipe
+                  {...mediapipeProps}
+                  onLandmark={handleLandmark}
+                />
               )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.recordButton, isRecording && styles.recordButtonActive]}
-              onPress={handleRecordPress}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.recordButtonInner, isRecording && styles.recordButtonInnerActive]} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.flipCameraButton}
-              onPress={handleCameraFlip}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Flip camera"
-            >
-              <CameraSwitchIcon width={24} height={24} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      {/* Overlay UI — only over camera (top bar, feedback, debug) */}
-      <View style={[
-        styles.overlay,
-        {
-          pointerEvents: 'box-none',
-          top: insets.top,
-          height: cameraDisplayHeight,
-        },
-      ]}>
-        {/* Top Bar */}
-        <View style={[styles.topBar, { paddingTop: topInset }]}>
-          <TouchableOpacity
-            style={styles.discardButton}
-            onPress={handleDiscardSetPress}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Discard set"
-          >
-            <X size={24} color={COLORS.text} strokeWidth={2.5} />
-          </TouchableOpacity>
-          <View style={styles.exerciseTopCardWrap}>
-            <View style={styles.exerciseTopCard}>
-              <Text style={styles.detectionExercise} numberOfLines={1}>
-                {displayValues.exerciseDisplayName}
-              </Text>
             </View>
-          </View>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => setSettingsModalVisible(true)}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Camera settings"
-          >
-            <Settings size={24} color={COLORS.text} strokeWidth={2.5} />
-          </TouchableOpacity>
-        </View>
+          </Pressable>
 
-        {/* Reps & Form overlay — on camera, above the controls (single element) */}
-        <View style={styles.metricsOverlay}>
-          <View style={styles.metricsCombined}>
-            <View style={styles.metricBlock}>
-              <Text style={styles.metricLabel}>REPS</Text>
-              <MonoText style={styles.metricValue}>{displayValues.reps}</MonoText>
-            </View>
-            <View style={styles.metricBlock}>
-              <Text style={styles.metricLabel}>FORM</Text>
-              <MonoText style={styles.metricValue}>{displayValues.form}</MonoText>
-            </View>
-          </View>
-        </View>
-
+          {/* Overlay UI over camera (feedback, debug) */}
+          <View style={[styles.overlay, { height: cameraDisplayHeight }]}>
         {/* Feedback Display - Speech bubble below exercise name. Debug: only last message. */}
         {(showFeedback || debugMode) && (() => {
           const filtered = feedbackFeed.filter(item => (item.text || '').trim() !== '');
           const items = debugMode ? filtered.slice(-1) : filtered.slice(-4);
           if (items.length === 0) return null;
           return (
-            <View style={styles.feedbackFeedContainer}>
+            <View style={[styles.feedbackFeedContainer, { bottom: SPACING.xl + 40 }]}>
               {items.map((item, index) => {
                 // Opacity by position from newest: 0th = 0.9, 1st back = 0.67, 2nd = 0.43, 3rd+ = 0.2
                 const positionFromNewest = items.length - 1 - index;
@@ -761,7 +686,7 @@ export const CameraScreen: React.FC = () => {
         {exerciseNameFromRoute === 'Barbell Curl' &&
           debugMode &&
           barbellCurlDebug && (
-            <View style={styles.torsoDebugContainer}>
+            <View style={[styles.torsoDebugContainer, { bottom: SPACING.xl + 60 }]}>
               <View style={styles.torsoDebugCard}>
                 <Text style={styles.torsoDebugTitle}>Barbell Curl — Form Angles</Text>
                 <Text style={styles.torsoDebugText}>
@@ -808,7 +733,7 @@ export const CameraScreen: React.FC = () => {
         {exerciseNameFromRoute === 'Push-Up' &&
           debugMode &&
           pushupDebug && (
-            <View style={styles.torsoDebugContainer}>
+            <View style={[styles.torsoDebugContainer, { bottom: SPACING.xl + 60 }]}>
               <View style={styles.torsoDebugCard}>
                 <Text style={styles.torsoDebugTitle}>Push-Up Debug</Text>
                 <Text style={styles.torsoDebugText}>
@@ -853,6 +778,62 @@ export const CameraScreen: React.FC = () => {
             </View>
           )}
 
+          </View>
+
+          {/* Control strip — overlays bottom of 9:16 camera (same container, no gap) */}
+          <View style={[styles.controlStrip, { paddingBottom: insets.bottom + SPACING.sm }]}>
+            <View style={styles.controlStripMetrics}>
+            <View style={styles.metricsCombined}>
+              <View style={styles.metricBlock}>
+                <Text style={styles.metricLabel}>REPS</Text>
+                <MonoText style={styles.metricValue}>{displayValues.reps}</MonoText>
+              </View>
+              <View style={styles.metricBlock}>
+                <Text style={styles.metricLabel}>FORM</Text>
+                <MonoText style={styles.metricValue}>{displayValues.form}</MonoText>
+              </View>
+            </View>
+          </View>
+          <View style={styles.recordButtonContainer}>
+            <View style={styles.buttonsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.pauseButton,
+                  !isRecording && styles.pauseButtonDisabled
+                ]}
+                onPress={isRecording ? handlePausePress : undefined}
+                activeOpacity={isRecording ? 0.8 : 1}
+                disabled={!isRecording}
+              >
+                {isPaused ? (
+                  <View style={[styles.playIconTriangle, { borderLeftColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
+                ) : (
+                  <View style={styles.pauseIconBars}>
+                    <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
+                    <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.recordButton, isRecording && styles.recordButtonActive]}
+                onPress={handleRecordPress}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.recordButtonInner, isRecording && styles.recordButtonInnerActive]} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.flipCameraButton}
+                onPress={handleCameraFlip}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Flip camera"
+              >
+                <CameraSwitchIcon width={24} height={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          </View>
+        </View>
       </View>
 
       <CameraSettingsModal
@@ -870,34 +851,57 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     backgroundColor: COLORS.background,
   },
-  cameraSection: {
+  topBarSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingVertical: 4,
     backgroundColor: COLORS.background,
   },
-  cameraLetterbox: {
+  cameraArea: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  cameraSection: {
+    width: '100%',
+    position: 'relative',
+  },
+  cameraFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cameraContainer: {
     overflow: 'hidden',
   },
-  bottomBarSection: {
+  controlStrip: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    paddingTop: SPACING.md,
+  },
+  controlStripMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: SPACING.lg,
-    backgroundColor: COLORS.background,
+    marginBottom: SPACING.sm,
   },
   overlay: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
     pointerEvents: 'box-none',
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: 4,
+    zIndex: 5,
   },
   discardButton: {
     width: 40,
@@ -915,10 +919,6 @@ const styles = StyleSheet.create({
   exerciseTopCard: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 20,
   },
   settingsButton: {
     width: 40,
@@ -928,15 +928,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
   recordButtonContainer: {
-    marginBottom: SPACING.md,
     alignItems: 'center',
   },
   buttonsRow: {
@@ -1036,10 +1028,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 20,
   },
   metricBlock: {
     width: 80,
