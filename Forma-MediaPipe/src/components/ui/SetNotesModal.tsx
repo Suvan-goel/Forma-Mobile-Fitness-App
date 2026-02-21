@@ -114,6 +114,14 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
               >
+                {set.durationSeconds != null && set.durationSeconds > 0 ? (
+                  <View style={styles.durationRow}>
+                    <Text style={styles.durationLabel}>Duration</Text>
+                    <Text style={styles.durationValue}>
+                      {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
+                    </Text>
+                  </View>
+                ) : null}
                 {hasNotes ? (
                   <>
                     <View style={styles.section}>
@@ -279,6 +287,26 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.lg,
     paddingBottom: SPACING.xxl,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 12,
+  },
+  durationLabel: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+  },
+  durationValue: {
+    fontSize: 14,
+    fontFamily: FONTS.mono.bold,
+    color: COLORS.text,
   },
   section: {
     marginBottom: SPACING.xl,

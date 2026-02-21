@@ -6,6 +6,8 @@ export interface LoggedSet {
   weight?: number;
   weightUnit?: 'kg' | 'lbs';
   formScore: number;
+  /** Set duration in seconds (from camera timer). Shown in set notes. */
+  durationSeconds?: number;
   /** Per-rep feedback shown during the set (e.g. "Great rep!", "Don't swing your back!") */
   repFeedback?: string[];
   /** Per-rep form scores (parallel to repFeedback, one per rep) */

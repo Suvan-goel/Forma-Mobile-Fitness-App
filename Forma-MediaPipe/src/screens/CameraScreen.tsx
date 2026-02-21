@@ -462,11 +462,13 @@ export const CameraScreen: React.FC = () => {
       }
 
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
+        const durationSeconds = workoutDataRef.current.duration;
         const newSet = {
           exerciseName: exerciseNameFromRoute,
           reps: totalReps,
           weight: 0,
           formScore: avgFormScore,
+          durationSeconds: durationSeconds > 0 ? durationSeconds : undefined,
           repFeedback: repFeedback.length > 0 ? repFeedback : undefined,
           repFormScores: formScores.length > 0 ? formScores : undefined,
         };
@@ -598,13 +600,18 @@ export const CameraScreen: React.FC = () => {
     const formDisplay = repCount > 0 && currentFormScore !== null
       ? Number(currentFormScore).toFixed(1)
       : '-';
+    const totalSeconds = workoutData.duration;
+    const timerDisplay = isRecording
+      ? `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, '0')}`
+      : '-';
     const values = {
       reps: repCount > 0 ? repCount : '-',
       form: formDisplay,
+      timer: timerDisplay,
       exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
     };
     return values;
-  }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute]);
+  }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute, workoutData.duration, isRecording]);
 
   const showCamera = cameraMounted && !isClosing;
 
@@ -792,6 +799,10 @@ export const CameraScreen: React.FC = () => {
               <View style={styles.metricBlock}>
                 <Text style={styles.metricLabel}>FORM</Text>
                 <MonoText style={styles.metricValue}>{displayValues.form}</MonoText>
+              </View>
+              <View style={styles.metricBlock}>
+                <Text style={styles.metricLabel}>TIME</Text>
+                <MonoText style={styles.metricValue}>{displayValues.timer}</MonoText>
               </View>
             </View>
           </View>
@@ -1029,17 +1040,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 50,
+    gap: SPACING.sm,
   },
   metricBlock: {
-    width: 80,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 50,
   },
   metricLabel: {
     fontSize: 11,
