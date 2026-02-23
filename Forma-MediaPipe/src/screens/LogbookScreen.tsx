@@ -26,9 +26,9 @@ import {
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
-import { getWorkouts } from '../services/workoutStorage';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts } from '../hooks';
+import { useAuth } from '../contexts/AuthContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../services/api';
 
@@ -274,7 +274,11 @@ export const LogbookScreen: React.FC = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const { workouts: mockWorkoutSessions, isLoading, error, refetch } = useWorkouts();
+  const { workouts, isLoading, error, refetch } = useWorkouts();
+  const { user } = useAuth();
+  const displayName = user?.user_metadata?.full_name
+    ?? user?.user_metadata?.name
+    ?? 'Athlete';
 
   useFocusEffect(
     React.useCallback(() => {
@@ -292,23 +296,14 @@ export const LogbookScreen: React.FC = () => {
 
   /* ── Data helpers ──── */
 
-  const getAllWorkouts = () => {
-    const savedWorkouts: WorkoutSession[] = getWorkouts().map((w) => ({
-      id: w.id, name: w.name, date: w.date, fullDate: w.fullDate,
-      duration: w.duration, totalSets: w.totalSets, totalReps: w.totalReps,
-      formScore: w.formScore, category: w.category,
-    }));
-    return [...savedWorkouts, ...mockWorkoutSessions].sort((a, b) => b.fullDate.getTime() - a.fullDate.getTime());
-  };
-
   const getUniqueYears = () => {
-    const years = new Set(getAllWorkouts().map((s) => s.fullDate.getFullYear().toString()));
+    const years = new Set(workouts.map((s) => s.fullDate.getFullYear().toString()));
     return ['All', ...Array.from(years).sort((a, b) => parseInt(b) - parseInt(a))];
   };
 
   const getUniqueMonths = () => {
     const months = new Set(
-      getAllWorkouts().map((s) => `${MONTH_NAMES[s.fullDate.getMonth()]} ${s.fullDate.getFullYear()}`),
+      workouts.map((s) => `${MONTH_NAMES[s.fullDate.getMonth()]} ${s.fullDate.getFullYear()}`),
     );
     const sorted = Array.from(months).sort((a, b) => {
       const [mA, yA] = a.split(' ');
@@ -321,7 +316,7 @@ export const LogbookScreen: React.FC = () => {
 
   const getUniqueWeeks = () => {
     const weeks = new Set(
-      getAllWorkouts().map((s) => {
+      workouts.map((s) => {
         const d = s.fullDate;
         const start = new Date(d);
         const day = start.getDay();
@@ -336,7 +331,7 @@ export const LogbookScreen: React.FC = () => {
   };
 
   const getFilteredWorkouts = () => {
-    let filtered = getAllWorkouts();
+    let filtered = [...workouts];
     if (selectedDate) {
       return filtered.filter(
         (s) =>
@@ -415,7 +410,7 @@ export const LogbookScreen: React.FC = () => {
           </View>
           <View>
             <Text style={styles.welcomeLabel}>Welcome back,</Text>
-            <Text style={styles.welcomeName}>Athlete</Text>
+            <Text style={styles.welcomeName}>{displayName}</Text>
           </View>
         </View>
         <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>

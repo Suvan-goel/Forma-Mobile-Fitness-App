@@ -81,6 +81,19 @@ export const AnalyticsScreen: React.FC = () => {
     );
   }
 
+  if (analytics.formData.values.length < 2) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>No data yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Complete at least 2 workouts to see your analytics.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   const formScore = analytics.formData.values[analytics.formData.values.length - 1] || 0;
   const consistencyScore = analytics.consistencyData.values[analytics.consistencyData.values.length - 1] || 0;
   const strengthScore = analytics.strengthData.values[analytics.strengthData.values.length - 1] || 0;
@@ -246,6 +259,26 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.screenHorizontal,
     justifyContent: 'center',
+  },
+  emptyWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+  },
+  emptyTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 22,
+    color: COLORS.text,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   scroll: {
     flex: 1,
