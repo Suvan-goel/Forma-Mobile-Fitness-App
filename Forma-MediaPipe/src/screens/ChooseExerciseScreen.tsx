@@ -132,14 +132,14 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
           />
         </View>
 
-        {/* Spacer: fills remaining space so all cards same height; acts as padding above text */}
-        <View style={styles.cardSpacer} />
-
-        {/* Text at bottom */}
+        {/* Text (directly under image) */}
         <View style={styles.cardTextBlock}>
           <Text style={styles.cardName} numberOfLines={2}>{exercise.name}</Text>
           <Text style={styles.cardMuscle} numberOfLines={1}>{muscleLabel}</Text>
         </View>
+
+        {/* Spacer: fills remaining space below text so all cards same height (padding under text) */}
+        <View style={styles.cardSpacer} />
       </View>
     </LinearGradient>
   </TouchableOpacity>
@@ -158,7 +158,7 @@ export const ChooseExerciseScreen: React.FC = () => {
 
   const cardWidth = (screenWidth - SPACING.screenHorizontal * 2 - 12) / 2;
   const imageSize = cardWidth - 16;
-  const cardHeight = 32 + imageSize + 8 + 56;
+  const cardHeight = 32 + imageSize + 8 + 52 + 24;
 
   const handleSelectExercise = useCallback((exercise: Exercise) => {
     addExercise({ name: exercise.name, category: exercise.category });
@@ -437,8 +437,8 @@ const styles = StyleSheet.create({
   /* ── Text Block ─────────────────────────── */
   cardTextBlock: {
     paddingHorizontal: 4,
-    paddingBottom: 6,
-    paddingTop: 4,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   cardName: {
     fontFamily: FONTS.display.semibold,
