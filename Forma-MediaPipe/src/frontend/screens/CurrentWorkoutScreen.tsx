@@ -42,6 +42,7 @@ type RecordStackParamList = {
   CurrentWorkout: { newSet?: LoggedSet; showWeightFor?: { exerciseId: string } } | undefined;
   ChooseExercise: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout: true };
+  SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number } };
 };
 
 type CurrentWorkoutRouteProp = RouteProp<RecordStackParamList, 'CurrentWorkout'>;

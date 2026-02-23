@@ -132,7 +132,7 @@ When working on Android-specific features:
 
 ### Styling
 - Use `StyleSheet.create()` — not inline objects (avoids re-allocation on every render)
-- Reference `COLORS` from `src/constants/theme.ts` — no hardcoded color values
+- Reference `COLORS` from `src/frontend/constants/theme.ts` — no hardcoded color values
 - Use `alignSelf: 'center'` or `Dimensions` for centering — not CSS `left: '50%'` hacks
 - Percentage-based positioning in RN is relative to parent, not viewport
 
@@ -150,25 +150,55 @@ When working on Android-specific features:
 ### Code quality
 - TypeScript strict mode — use `Record<K, V>` not `{ [key: K]: V }` for mapped types
 - Gate debug UI behind `__DEV__` — never ship debug overlays to users
-- Keep heuristics/math logic in `src/utils/` separate from UI in `src/screens/`
+- Keep heuristics/math logic in `src/utils/` separate from UI in `src/frontend/screens/`
 - Feedback auto-clear should happen in ONE place (React `useEffect` timer), not duplicated in both business logic and UI
 
-## 9. Project Structure
+## 9. Project Structure — Frontend / Backend Separation
+
+The codebase is split so frontend (UI) and backend (data/services) can be developed on **separate branches with zero file overlap**. This is enforced by folder structure and import rules.
+
 ```
 Forma-MediaPipe/
   src/
-    screens/          # Screen components (CameraScreen, CurrentWorkoutScreen, etc.)
-    components/ui/    # Reusable UI components (SetNotesModal, etc.)
-    contexts/         # React contexts (CurrentWorkoutContext)
-    services/         # External service integrations (elevenlabsTTS, feedbackTTS)
-    services/api/     # API service layer (mock → Supabase migration planned)
-    utils/            # Pure logic (barbellCurlHeuristics, poseAnalysis, setNotesSummary)
-    constants/        # Theme, colors, config
-    app/              # Navigation (RootNavigator)
-  patches/            # patch-package patches for native deps
-  scripts/            # Post-install scripts for MediaPipe patches
-  docs/               # Technical documentation
+    frontend/                    # ── UI layer (screens, components, styling) ──
+      app/                       # Navigation (RootNavigator)
+      assets/                    # Images, icons, SVGs
+      components/                # Reusable UI (GlassTabBar, SetNotesModal, etc.)
+        ui/
+        typography/
+        icons/
+      constants/                 # Theme, colors, fonts, spacing
+      contexts/                  # UI-only state (CurrentWorkout, CameraSettings, Scroll)
+      screens/                   # All screen components
+    backend/                     # ── Data layer (API, services, auth) ──
+      contexts/                  # Auth state (AuthContext wraps Supabase)
+      hooks/                     # Public API for frontend (useWorkouts, useSaveWorkout, etc.)
+      services/                  # Internal implementation
+        api/                     # Service layer + types (mock ↔ Supabase swap)
+        supabase/                # Supabase client + auth helpers
+        mock/                    # Mock data for development
+        (ttsCoach, elevenlabsTTS, etc.)
+    utils/                       # Shared pure logic (heuristics, pose analysis)
+  patches/                       # patch-package patches for native deps
+  scripts/                       # Post-install scripts for MediaPipe patches
+  docs/                          # Technical documentation
 ```
+
+### Import boundary rules (CRITICAL)
+
+These rules exist to prevent merge conflicts between frontend and backend branches. **Never violate them.**
+
+1. **Screens and components MUST NOT import directly from `backend/services/`.** All data access goes through `backend/hooks/` (e.g. `useSaveWorkout`, `useWorkouts`). The one exception is importing **types** from `backend/services/api` (e.g. `WorkoutSession`, `Exercise`) for prop typing.
+2. **Backend files (`hooks/`, `services/`, `backend/contexts/`) MUST NOT import from `frontend/`.** Data flows one way: backend exposes hooks → frontend consumes them.
+3. **`utils/` is shared** — both frontend and backend may import from it. Utils must contain only pure logic (no React, no service calls, no side effects).
+4. **`frontend/contexts/`** holds UI-only state (CurrentWorkout, CameraSettings, Scroll) with no service imports. **`backend/contexts/`** holds auth state that wraps Supabase.
+5. **When adding a new data feature:**
+   - Add the service method in `backend/services/api/`
+   - Create a hook in `backend/hooks/` that wraps it
+   - Export from `backend/hooks/index.ts`
+   - Import the hook in the screen — never the service directly
+6. **When adding a new screen or UI component:** only touch files under `frontend/`. If it needs data, import an existing hook from `backend/hooks/`.
+7. **CameraScreen exception:** CameraScreen imports `backend/services/ttsCoach` directly for real-time TTS coaching. This is acceptable due to performance requirements (fire-and-forget calls at 30fps). Do not use this as precedent for other screens.
 
 ## 10. How to Run
 ```bash
@@ -202,9 +232,9 @@ barbellCurlHeuristics.ts  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenla
 ```
 
 ### Key files
-- `src/services/ttsCoach.ts` — coaching engine (state, throttling, playback coordination)
-- `src/services/ttsMessagePools.ts` — message pools, priority map, feedback-to-issue mapping
-- `src/services/elevenlabsTTS.ts` — low-level ElevenLabs API + audio playback (unchanged)
+- `src/backend/services/ttsCoach.ts` — coaching engine (state, throttling, playback coordination)
+- `src/backend/services/ttsMessagePools.ts` — message pools, priority map, feedback-to-issue mapping
+- `src/backend/services/elevenlabsTTS.ts` — low-level ElevenLabs API + audio playback (unchanged)
 
 ### Priority system
 - Each visual feedback message maps to an `IssueType` via `FEEDBACK_TO_ISSUE`
@@ -278,4 +308,5 @@ A score-100 rep has weight 1; a score-0 rep has weight 3.
 - Ask before adding dependencies, changing architecture, or changing data models
 - When debugging: hypothesise failure mode → propose logging → propose fix
 - **Always verify changes won't break iOS native builds** before suggesting them
-- When adding TTS for a new exercise: add to `ttsMessagePools.ts` only, don't modify `ttsCoach.ts`
+- When adding TTS for a new exercise: add to `backend/services/ttsMessagePools.ts` only, don't modify `ttsCoach.ts`
+- **Always respect the frontend/backend boundary** — see section 9. Never add service imports to screens; create or use a hook instead.

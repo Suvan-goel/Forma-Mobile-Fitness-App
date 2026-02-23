@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Timer, Trophy, Target } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useAnalytics } from '../hooks';
+import { useAnalytics } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { NeonArc } from '../components/ui/NeonArc';
 import { StatCard } from '../components/ui/StatCard';

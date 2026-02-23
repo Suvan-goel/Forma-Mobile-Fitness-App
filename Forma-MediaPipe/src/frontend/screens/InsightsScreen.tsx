@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Sparkles } from 'lucide-react-native';
@@ -6,7 +6,8 @@ import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
-import { insightsService, InsightsData } from '../services/api';
+import { InsightsData } from '../../backend/services/api';
+import { useInsights } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 
 type InsightsScreenRouteProp = RouteProp<RootStackParamList, 'Insights'>;
@@ -18,32 +19,7 @@ export const InsightsScreen: React.FC = () => {
   const route = useRoute<InsightsScreenRouteProp>();
   const { metric } = route.params;
 
-  // Local state for insights
-  const [insights, setInsights] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch insights from service
-  const fetchInsights = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await insightsService.getInsights(metric as keyof InsightsData);
-      if (response.success) {
-        setInsights(response.data);
-      } else {
-        setError(response.error || 'Failed to fetch insights');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [metric]);
-
-  useEffect(() => {
-    fetchInsights();
-  }, [fetchInsights]);
+  const { insights, isLoading, error, refetch: fetchInsights } = useInsights(metric as keyof InsightsData);
 
   // Loading state
   if (isLoading) {

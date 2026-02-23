@@ -311,7 +311,7 @@ export function getKeypoint(keypoints: Keypoint[], name: string): Keypoint | nul
  * MediaPipe uses visibility scores (0-1), lower threshold for better detection
  * Optimized inline for performance
  */
-export function isVisible(keypoint: Keypoint | null, threshold = 0.8): boolean {
+export function isVisible(keypoint: Keypoint | null, threshold = 0.8): keypoint is Keypoint {
   return keypoint !== null && keypoint.score > threshold;
 }
 

@@ -3,8 +3,10 @@
  */
 
 export { useWorkouts, useWorkoutDetails } from './useWorkouts';
+export { useSaveWorkout } from './useSaveWorkout';
 export { useExercises } from './useExercises';
 export { useAnalytics } from './useAnalytics';
+export { useInsights } from './useInsights';
 export { useTrainer } from './useTrainer';
 export { useRewards } from './useRewards';
 export { useUser } from './useUser';

@@ -18,7 +18,7 @@ import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
-import { workoutsService } from '../services/api';
+import { useSaveWorkout } from '../../backend/hooks';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 
 type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
@@ -33,7 +33,7 @@ export const SaveWorkoutScreen: React.FC = () => {
 
   const [workoutName, setWorkoutName] = useState('');
   const [workoutDescription, setWorkoutDescription] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const { isSaving, error: saveError, saveWorkout } = useSaveWorkout();
 
   const handleSave = async () => {
     if (workoutData.totalSets === 0) {
@@ -45,38 +45,18 @@ export const SaveWorkoutScreen: React.FC = () => {
     }
     if (!workoutName.trim() || isSaving) return;
 
-    setIsSaving(true);
-    try {
-      const result = await workoutsService.create({
-        name: workoutName.trim(),
-        date: new Date(),
-        durationSeconds: workoutElapsedSeconds,
-        category: workoutData.category,
-        exercises: exercises.map((ex, i) => ({
-          name: ex.name,
-          orderIndex: i,
-          sets: ex.sets.map((s, j) => ({
-            setNumber: j + 1,
-            reps: s.reps,
-            weight: s.weight ?? 0,
-            formScore: s.formScore,
-          })),
-        })),
-      });
+    const success = await saveWorkout({
+      name: workoutName,
+      durationSeconds: workoutElapsedSeconds,
+      category: workoutData.category,
+      exercises,
+    });
 
-      if (!result.success) {
-        Alert.alert('Save Failed', result.error ?? 'Could not save workout. Please try again.', [
-          { text: 'OK' },
-        ]);
-        return;
-      }
-    } catch (e: any) {
-      Alert.alert('Save Failed', e?.message ?? 'Could not save workout. Please try again.', [
+    if (!success) {
+      Alert.alert('Save Failed', saveError ?? 'Could not save workout. Please try again.', [
         { text: 'OK' },
       ]);
       return;
-    } finally {
-      setIsSaving(false);
     }
 
     clearSets();

@@ -14,9 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Send, Bot, TrendingUp, Target, AlertCircle, CheckCircle2 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useTrainer } from '../hooks';
+import { useTrainer } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
-import { ChatMessage, Recommendation } from '../services/api';
+import { ChatMessage, Recommendation } from '../../backend/services/api';
 
 const RecommendationCard: React.FC<{ recommendation: Recommendation }> = ({ recommendation }) => {
   const Icon = recommendation.type === 'success' ? CheckCircle2 

@@ -34,7 +34,7 @@ type CurrentWorkoutContextValue = {
   removeSetFromExercise: (exerciseId: string, setIndex: number) => void;
   clearSets: () => void;
   setWorkoutInProgress: (value: boolean) => void;
-  setWorkoutElapsedSeconds: (value: number) => void;
+  setWorkoutElapsedSeconds: (value: number | ((prev: number) => number)) => void;
   setWorkoutPaused: (value: boolean | ((prev: boolean) => boolean)) => void;
 };
 

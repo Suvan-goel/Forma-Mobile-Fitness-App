@@ -25,7 +25,7 @@ import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutCon
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider } from '../contexts/ScrollContext';
 import { AppHeader } from '../components/ui/AppHeader';
-import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { AuthProvider, useAuth } from '../../backend/contexts/AuthContext';
 import { COLORS, FONTS } from '../constants/theme';
 
 export type CameraParams = { 
