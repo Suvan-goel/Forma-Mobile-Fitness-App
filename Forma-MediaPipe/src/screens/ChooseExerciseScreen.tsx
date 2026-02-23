@@ -158,7 +158,9 @@ export const ChooseExerciseScreen: React.FC = () => {
 
   const cardWidth = (screenWidth - SPACING.screenHorizontal * 2 - 12) / 2;
   const imageSize = cardWidth - 16;
-  const cardHeight = 32 + imageSize + 8 + 52 + 24;
+  const textBlockHeight = 60;
+  const bottomPadding = 24;
+  const cardHeight = 32 + imageSize + 8 + textBlockHeight + bottomPadding;
 
   const handleSelectExercise = useCallback((exercise: Exercise) => {
     addExercise({ name: exercise.name, category: exercise.category });
@@ -431,14 +433,14 @@ const styles = StyleSheet.create({
   },
   cardSpacer: {
     flex: 1,
-    minHeight: 8,
+    minHeight: 20,
   },
 
   /* ── Text Block ─────────────────────────── */
   cardTextBlock: {
     paddingHorizontal: 4,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 14,
   },
   cardName: {
     fontFamily: FONTS.display.semibold,
