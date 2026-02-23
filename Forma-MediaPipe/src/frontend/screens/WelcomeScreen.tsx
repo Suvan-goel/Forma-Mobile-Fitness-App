@@ -11,7 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../backend/contexts/AuthContext';
 
 export const WelcomeScreen: React.FC = () => {
   const { signInWithGoogle, signInWithApple } = useAuth();

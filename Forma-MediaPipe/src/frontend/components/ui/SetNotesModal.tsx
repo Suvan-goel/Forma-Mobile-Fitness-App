@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { X, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
-import { generateSetSummary } from '../../utils/setNotesSummary';
+import { generateSetSummary } from '../../../utils/setNotesSummary';
 const MAX_FEEDBACK_LINES = 2;
 
 interface SetNotesModalProps {

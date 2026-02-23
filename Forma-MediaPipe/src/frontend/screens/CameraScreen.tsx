@@ -9,7 +9,7 @@ import { COLORS, FONTS, SPACING } from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
-import { detectExercise, updateRepCount, Keypoint } from '../utils/poseAnalysis';
+import { detectExercise, updateRepCount, Keypoint } from '../../utils/poseAnalysis';
 import {
   updateBarbellCurlState,
   initializeBarbellCurlState,
@@ -18,7 +18,7 @@ import {
   getCurrentFormScore,
   getCurrentFeedback,
   getBarbellCurlDebugInfo,
-} from '../utils/barbellCurlHeuristics';
+} from '../../utils/barbellCurlHeuristics';
 import {
   updatePushupState,
   initializePushupState,
@@ -28,11 +28,11 @@ import {
   getPushupFeedback,
   getPushupDebugInfo,
   PushupDebugInfo,
-} from '../utils/pushupHeuristics';
+} from '../../utils/pushupHeuristics';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
-import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../services/ttsCoach';
+import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
 const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);

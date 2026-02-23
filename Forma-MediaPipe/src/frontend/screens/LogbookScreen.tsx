@@ -27,10 +27,10 @@ import {
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts } from '../hooks';
-import { useAuth } from '../contexts/AuthContext';
+import { useWorkouts } from '../../backend/hooks';
+import { useAuth } from '../../backend/contexts/AuthContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
-import { WorkoutSession } from '../services/api';
+import { WorkoutSession } from '../../backend/services/api';
 
 /* ── Helpers ──────────────────────────────── */
 

@@ -11,9 +11,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock, LucideIcon } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useRewards } from '../hooks';
+import { useRewards } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
-import { Reward } from '../services/api';
+import { Reward } from '../../backend/services/api';
 
 const iconMap: { [key: string]: LucideIcon } = {
   Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock,

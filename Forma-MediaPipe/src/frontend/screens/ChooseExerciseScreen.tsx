@@ -18,9 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
-import { useExercises } from '../hooks';
+import { useExercises } from '../../backend/hooks';
 import { LoadingSkeleton } from '../components/ui';
-import { Exercise } from '../services/api';
+import { Exercise } from '../../backend/services/api';
 
 const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
   'Weightlifting': require('../assets/weightlifting_bg.png'),

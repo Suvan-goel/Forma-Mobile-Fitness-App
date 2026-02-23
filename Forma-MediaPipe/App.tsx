@@ -24,8 +24,8 @@ import {
   SpaceGrotesk_600SemiBold,
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
-import { COLORS } from './src/constants/theme';
-import { RootNavigator } from './src/app/RootNavigator';
+import { COLORS } from './src/frontend/constants/theme';
+import { RootNavigator } from './src/frontend/app/RootNavigator';
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({

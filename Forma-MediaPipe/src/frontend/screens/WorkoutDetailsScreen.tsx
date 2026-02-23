@@ -8,9 +8,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
-import { useWorkoutDetails } from '../hooks';
+import { useWorkoutDetails } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
-import { WorkoutExercise } from '../services/api';
+import { WorkoutExercise } from '../../backend/services/api';
 
 type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetails'>;
 type WorkoutDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetails'>;
