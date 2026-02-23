@@ -94,14 +94,15 @@ const FilterPill = memo(({ id, isActive, onPress }: {
 
 /* ── Exercise Card ───────────────────────── */
 
-const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
+const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPress }: {
   exercise: Exercise;
   muscleLabel: string;
   cardWidth: number;
+  cardHeight: number;
   onPress: (exercise: Exercise) => void;
 }) => (
   <TouchableOpacity
-    style={[styles.cardOuter, { width: cardWidth }]}
+    style={[styles.cardOuter, { width: cardWidth, height: cardHeight }]}
     onPress={() => onPress(exercise)}
     activeOpacity={0.82}
   >
@@ -131,7 +132,10 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
           />
         </View>
 
-        {/* Text - flex so it fills remaining space below image */}
+        {/* Spacer: fills remaining space so all cards same height; acts as padding above text */}
+        <View style={styles.cardSpacer} />
+
+        {/* Text at bottom */}
         <View style={styles.cardTextBlock}>
           <Text style={styles.cardName} numberOfLines={2}>{exercise.name}</Text>
           <Text style={styles.cardMuscle} numberOfLines={1}>{muscleLabel}</Text>
@@ -153,6 +157,8 @@ export const ChooseExerciseScreen: React.FC = () => {
   const { exercises: allExercises, muscleGroups, isLoading, filterByMuscleGroup } = useExercises();
 
   const cardWidth = (screenWidth - SPACING.screenHorizontal * 2 - 12) / 2;
+  const imageSize = cardWidth - 16;
+  const cardHeight = 32 + imageSize + 8 + 56;
 
   const handleSelectExercise = useCallback((exercise: Exercise) => {
     addExercise({ name: exercise.name, category: exercise.category });
@@ -183,9 +189,10 @@ export const ChooseExerciseScreen: React.FC = () => {
       exercise={item}
       muscleLabel={muscleNameMap[item.muscleGroup] || item.muscleGroup.toUpperCase()}
       cardWidth={cardWidth}
+      cardHeight={cardHeight}
       onPress={handleSelectExercise}
     />
-  ), [cardWidth, handleSelectExercise, muscleNameMap]);
+  ), [cardWidth, cardHeight, handleSelectExercise, muscleNameMap]);
 
   const keyExtractor = useCallback((item: Exercise, index: number) => `${item.name}-${index}`, []);
 
@@ -385,9 +392,11 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    flex: 1,
     borderRadius: 22,
   },
   cardGlassEdge: {
+    flex: 1,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -419,6 +428,10 @@ const styles = StyleSheet.create({
   exerciseImage: {
     width: '100%',
     height: '100%',
+  },
+  cardSpacer: {
+    flex: 1,
+    minHeight: 8,
   },
 
   /* ── Text Block ─────────────────────────── */
