@@ -17,6 +17,7 @@ import { COLORS, FONTS } from '../../constants/theme';
 interface NeonArcProps {
   value: number;
   label: string;
+  displayValue?: string;
   size?: number;
   strokeWidth?: number;
 }
@@ -44,6 +45,7 @@ const ARC_SWEEP = ARC_END - ARC_START;
 export const NeonArc: React.FC<NeonArcProps> = memo(({
   value,
   label,
+  displayValue,
   size = 280,
   strokeWidth = 12,
 }) => {
@@ -133,7 +135,7 @@ export const NeonArc: React.FC<NeonArcProps> = memo(({
 
       {/* Centre text — Space Grotesk SemiBold */}
       <View style={[styles.centerText, { top: textCenterY - 52 }]}>
-        <Text style={styles.valueText}>{value}</Text>
+        <Text style={styles.valueText}>{displayValue ?? value}</Text>
         <View style={{ height: 8 }} />
         <Text style={styles.labelText}>{label.toUpperCase()}</Text>
         <View style={styles.stars}>

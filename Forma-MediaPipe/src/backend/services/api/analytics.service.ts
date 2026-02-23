@@ -28,7 +28,8 @@ function toDateStr(date: Date): string {
  * Parse a YYYY-MM-DD string as local midnight (avoids UTC-offset shifting).
  */
 function parseLocalDate(dateStr: string): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const [y, m, d] = datePart.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 
@@ -38,7 +39,7 @@ function parseLocalDate(dateStr: string): Date {
  */
 export function getDateRange(timeRange: string): { startDate: string; endDate: string } {
   const today = new Date();
-  const endDate = toDateStr(today);
+  const endDate = toDateStr(today) + 'T23:59:59.999Z';
 
   let daysBack: number;
   switch (timeRange) {
@@ -119,7 +120,9 @@ export const analyticsService = {
     }
 
     // Build a sorted array of session date strings for the window scan
-    const allSessionDates = (consistencyRows ?? []).map((r) => r.date as string);
+    const allSessionDates = (consistencyRows ?? []).map((r) =>
+      (r.date as string).split('T')[0],
+    );
 
     const consistencyValues: number[] = [];
     const consistencyDates: Date[] = [];
@@ -170,7 +173,7 @@ export const analyticsService = {
           0,
         );
       }, 0);
-      const ds = session.date as string;
+      const ds = (session.date as string).split('T')[0];
       volumeByDate[ds] = (volumeByDate[ds] || 0) + vol;
     });
 

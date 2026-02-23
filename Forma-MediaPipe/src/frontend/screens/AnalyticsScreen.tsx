@@ -26,9 +26,8 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 const formatHeaderDate = (): string => {
   const d = new Date();
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
 };
 
 const generateMicroBars = (count: number, seed: number): number[] => {
@@ -81,22 +80,22 @@ export const AnalyticsScreen: React.FC = () => {
     );
   }
 
-  if (analytics.formData.values.length < 2) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>No data yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Complete at least 2 workouts to see your analytics.
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  const hasData = analytics.formData.values.length > 0;
 
-  const formScore = analytics.formData.values[analytics.formData.values.length - 1] || 0;
-  const consistencyScore = analytics.consistencyData.values[analytics.consistencyData.values.length - 1] || 0;
-  const strengthScore = analytics.strengthData.values[analytics.strengthData.values.length - 1] || 0;
+  const formScore = hasData
+    ? Math.round(analytics.formData.values.reduce((sum, v) => sum + v, 0) / analytics.formData.values.length)
+    : 0;
+  const consistencyScore = hasData
+    ? analytics.consistencyData.values[analytics.consistencyData.values.length - 1] || 0
+    : 0;
+  const strengthScore = hasData
+    ? analytics.strengthData.values[analytics.strengthData.values.length - 1] || 0
+    : 0;
+
+  const totalVolume = analytics.strengthData.values.reduce((sum, v) => sum + v, 0);
+  const formattedVolume = totalVolume >= 1000
+    ? `${(totalVolume / 1000).toFixed(1).replace(/\.0$/, '')}k`
+    : String(totalVolume);
 
   const totalMinutes = analytics.weeklyBarData.reduce((sum, d) => sum + d.value, 0);
   const workoutHours = Math.floor(totalMinutes / 60);
@@ -117,19 +116,15 @@ export const AnalyticsScreen: React.FC = () => {
         >
           {/* ── HEADER ─────────────────────────────── */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.headerTitle}>Current State</Text>
-              <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
-            </View>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>A</Text>
-            </View>
+            <Text style={styles.headerTitle}>ANALYTICS</Text>
+            <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
           </View>
 
           {/* ── HERO ARC GAUGE ─────────────────────── */}
           <NeonArc
             value={formScore}
             label="Form score"
+            displayValue={hasData ? undefined : '--'}
             size={SCREEN_W - SPACING.screenHorizontal * 2}
           />
 
@@ -137,14 +132,14 @@ export const AnalyticsScreen: React.FC = () => {
           <View style={styles.bentoRow}>
             <StatCard
               label="Move"
-              value="220"
+              value={hasData ? '--' : '--'}
               suffix="/ 750 Kcal"
               iconName="move"
               barData={moveBars}
             />
             <StatCard
               label="Exercise"
-              value="40"
+              value={hasData ? String(totalMinutes) : '--'}
               suffix="/ 60 Min"
               iconName="exercise"
               barData={exerciseBars}
@@ -169,7 +164,7 @@ export const AnalyticsScreen: React.FC = () => {
                     <Trophy size={20} color="#A78BFA" strokeWidth={1.5} />
                   </View>
                   <View style={styles.activityValueWrap}>
-                    <Text style={styles.activityValue}>10,580</Text>
+                    <Text style={styles.activityValue}>{hasData ? formattedVolume : '--'}</Text>
                     <Text style={styles.activitySuffix}>KG</Text>
                   </View>
                 </View>
@@ -193,7 +188,7 @@ export const AnalyticsScreen: React.FC = () => {
                 <View style={styles.challengeMetricRow}>
                   <View style={styles.challengeValueWrap}>
                     <Text style={styles.challengeValueSmall}>
-                      {workoutHours > 0 ? `${workoutHours}h ` : ''}{workoutMins}m
+                      {hasData ? (workoutHours > 0 ? `${workoutHours}h ` : '') + `${workoutMins}m` : '--'}
                     </Text>
                     <Text style={styles.activitySuffix}>this week</Text>
                   </View>
@@ -260,26 +255,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     justifyContent: 'center',
   },
-  emptyWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-  },
-  emptyTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 22,
-    color: COLORS.text,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
   scroll: {
     flex: 1,
   },
@@ -291,39 +266,22 @@ const styles = StyleSheet.create({
 
   /* ── Header ──────────────────────────────── */
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.md,
-    paddingTop: 0,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
   headerTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 26,
-    color: COLORS.text,
-    lineHeight: 32,
-    letterSpacing: -0.5,
+    fontFamily: FONTS.display.bold,
+    fontSize: 40,
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    lineHeight: 46,
   },
   headerDate: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1.5,
-    borderColor: COLORS.accent,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: FONTS.display.medium,
-    fontSize: 15,
-    color: COLORS.accent,
+    fontSize: 11,
+    color: '#71717A',
+    letterSpacing: 3,
+    marginTop: 6,
   },
 
   /* ── Bento Grid ──────────────────────────── */

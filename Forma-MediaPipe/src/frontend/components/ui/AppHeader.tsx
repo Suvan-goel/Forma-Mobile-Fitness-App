@@ -18,7 +18,7 @@ export const AppHeader: React.FC = memo(() => {
       <View style={styles.profileSection}>
         <View style={styles.logoContainer}>
           <Image 
-            source={require('../../assets/forma_icon_turquoise.png')} 
+            source={require('../../assets/forma_icon_turquoise.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />
