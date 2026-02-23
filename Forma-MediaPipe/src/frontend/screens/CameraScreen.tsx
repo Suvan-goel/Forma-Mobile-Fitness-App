@@ -40,11 +40,10 @@ const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
 const MAX_FEED_ITEMS = 4;
 type FeedbackFeedItem = { id: number; text: string };
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Use 'screen' height to include the Android navigation bar area (avoids black bar at bottom)
+const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
-// 9:16 portrait viewfinder, full width, starts at top, rounded corners
-const CAMERA_ASPECT_WIDTH = 9;
-const CAMERA_ASPECT_HEIGHT = 16;
 const CAMERA_BORDER_RADIUS = 20;
 
 // Camera can be called from either the root stack or the record stack
@@ -570,14 +569,14 @@ export const CameraScreen: React.FC = () => {
     );
   }, [navigation]);
 
-  // Layout: top bar, then 9:16 camera, then control strip. Camera and control strip meet at the same line (control starts where camera ends).
+  // Layout: camera fills entire screen; top bar and controls overlay on top.
   const topInset = insets.top + 6;
   const topBarHeight = topInset + 48;
+  const cameraDisplayHeight = SCREEN_HEIGHT;
   const cameraDisplayWidth = SCREEN_WIDTH;
-  const cameraDisplayHeight = (SCREEN_WIDTH * CAMERA_ASPECT_HEIGHT) / CAMERA_ASPECT_WIDTH;
   const controlStripApproxHeight = 165 + insets.bottom;
 
-  // Memoize MediaPipe props – 9:16 portrait viewfinder
+  // Memoize MediaPipe props — camera fills full available height
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
   const mediapipeProps = useMemo(() => ({
     width: cameraDisplayWidth,
@@ -617,34 +616,7 @@ export const CameraScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Top bar — above camera, not overlapping */}
-      <View style={[styles.topBarSection, { paddingTop: topInset, height: topBarHeight }]}>
-        <TouchableOpacity
-          style={styles.discardButton}
-          onPress={handleDiscardSetPress}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Discard set"
-        >
-          <X size={20} color={COLORS.text} strokeWidth={2.5} />
-        </TouchableOpacity>
-        <View style={styles.exerciseTopCardWrap}>
-          <Text style={styles.detectionExercise} numberOfLines={1}>
-            {displayValues.exerciseDisplayName}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => setSettingsModalVisible(true)}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Camera settings"
-        >
-          <Settings size={20} color={COLORS.text} strokeWidth={2.5} />
-        </TouchableOpacity>
-      </View>
-
-      {/* 9:16 camera with control strip overlaying its bottom — no gap, control starts where camera starts (same container) */}
+      {/* Camera fills entire screen */}
       <View style={styles.cameraArea}>
         <View style={[styles.cameraSection, { height: cameraDisplayHeight }]}>
           <Pressable
@@ -661,8 +633,35 @@ export const CameraScreen: React.FC = () => {
             </View>
           </Pressable>
 
-          {/* Overlay UI over camera (feedback, debug) */}
+          {/* Overlay UI over camera (top bar, feedback, debug, controls) */}
           <View style={[styles.overlay, { height: cameraDisplayHeight }]}>
+        {/* Top bar — overlays top of camera */}
+        <View style={[styles.topBarSection, { paddingTop: topInset, height: topBarHeight }]}>
+          <TouchableOpacity
+            style={styles.discardButton}
+            onPress={handleDiscardSetPress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Discard set"
+          >
+            <X size={20} color={COLORS.text} strokeWidth={2.5} />
+          </TouchableOpacity>
+          <View style={styles.exerciseTopCardWrap}>
+            <Text style={styles.detectionExercise} numberOfLines={1}>
+              {displayValues.exerciseDisplayName}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setSettingsModalVisible(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Camera settings"
+          >
+            <Settings size={20} color={COLORS.text} strokeWidth={2.5} />
+          </TouchableOpacity>
+        </View>
+
         {/* Feedback Display - Speech bubble below exercise name. Debug: only last message. */}
         {(showFeedback || debugMode) && (() => {
           const filtered = feedbackFeed.filter(item => (item.text || '').trim() !== '');
@@ -869,7 +868,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 4,
-    backgroundColor: COLORS.background,
   },
   cameraArea: {
     flex: 1,
