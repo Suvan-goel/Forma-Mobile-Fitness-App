@@ -576,7 +576,7 @@ export const CameraScreen: React.FC = () => {
   const cameraDisplayWidth = SCREEN_WIDTH;
   const controlStripApproxHeight = 165 + insets.bottom;
 
-  // Memoize MediaPipe props — camera fills full available height
+  // Memoize MediaPipe props — native PreviewView uses fillCenter to handle aspect ratio centering
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
   const mediapipeProps = useMemo(() => ({
     width: cameraDisplayWidth,
@@ -868,6 +868,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   cameraArea: {
     flex: 1,
