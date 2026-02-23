@@ -28,7 +28,7 @@ import {
   Clock,
   Layers,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
@@ -82,9 +82,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setWorkoutInProgress,
     workoutElapsedSeconds: contextElapsed,
     setWorkoutElapsedSeconds,
+    workoutPaused,
+    setWorkoutPaused,
   } = useCurrentWorkout();
   const [elapsedSeconds, setElapsedSeconds] = useState(contextElapsed);
-  const [isPaused, setIsPaused] = useState(false);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
   const [notesModalSet, setNotesModalSet] = useState<{
     set: LoggedSet;
@@ -101,20 +102,26 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isPausedRef = useRef(false);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
 
-  /* ── Timer logic ──── */
+  isPausedRef.current = workoutPaused;
+
+  /* ── Timer logic: one interval; when paused we skip ticking so the display freezes ──── */
 
   useEffect(() => {
     setWorkoutInProgress(true);
     const startFrom = contextElapsed > 0 ? contextElapsed : 0;
     startTimeRef.current = Date.now() - startFrom * 1000;
     setElapsedSeconds(startFrom);
+
     intervalRef.current = setInterval(() => {
+      if (isPausedRef.current) return;
       if (startTimeRef.current !== null) {
         setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }
     }, 1000);
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -122,22 +129,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
     };
   }, [setWorkoutInProgress, contextElapsed]);
 
-  useEffect(() => {
-    if (isPaused && intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    } else if (!isPaused && intervalRef.current === null && startTimeRef.current !== null) {
-      startTimeRef.current = Date.now() - elapsedSeconds * 1000;
-      intervalRef.current = setInterval(() => {
-        if (startTimeRef.current !== null) {
-          setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
-        }
-      }, 1000);
-    }
-  }, [isPaused]);
-
   const handlePausePress = () => {
-    setIsPaused((p) => !p);
+    setWorkoutPaused((p) => {
+      const next = !p;
+      if (next) {
+        startTimeRef.current = Date.now() - elapsedSeconds * 1000;
+      }
+      return next;
+    });
   };
 
   /* ── Focus effects ──── */
@@ -308,7 +307,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={() => setSettingsModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Settings size={18} color="#71717A" strokeWidth={1.5} />
+          <Settings size={18} color={COLORS.text} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
@@ -322,7 +321,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         <MonoText bold style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerLineHeight }]}>
           {formatStopwatch(elapsedSeconds)}
         </MonoText>
-        {isPaused && (
+        {workoutPaused && (
           <View style={styles.pausedBadge}>
             <Text style={styles.pausedBadgeText}>PAUSED</Text>
           </View>
@@ -368,9 +367,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
             return (
               <View key={exercise.id} style={styles.exerciseCardOuter}>
                 <LinearGradient
-                  colors={['#1A1A1A', '#0F0F0F', '#0A0A0A']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                  colors={[...CARD_GRADIENT_COLORS]}
+                  start={CARD_GRADIENT_START}
+                  end={CARD_GRADIENT_END}
                   style={styles.exerciseCardGradient}
                 >
                   <View style={styles.exerciseCardGlassEdge}>
@@ -391,9 +390,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
                           <MonoText style={styles.exerciseSetsValue}>{exercise.sets.length}</MonoText>
                         </View>
                         {isExpanded ? (
-                          <ChevronUp size={16} color="#52525B" strokeWidth={1.5} />
+                          <ChevronUp size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                         ) : (
-                          <ChevronDown size={16} color="#52525B" strokeWidth={1.5} />
+                          <ChevronDown size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -425,7 +424,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                   activeOpacity={0.7}
                                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 >
-                                  <X size={14} color="#52525B" strokeWidth={2} />
+                                  <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
                                 </TouchableOpacity>
                               </View>
                             </View>
@@ -532,13 +531,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={handlePausePress}
           activeOpacity={0.7}
         >
-          {isPaused ? (
+          {workoutPaused ? (
             <Play size={18} color="#FFFFFF" strokeWidth={1.5} />
           ) : (
             <Pause size={18} color="#FFFFFF" strokeWidth={1.5} />
           )}
           <Text style={[styles.controlLabel, styles.controlLabelLight]}>
-            {isPaused ? 'Resume' : 'Pause'}
+            {workoutPaused ? 'Resume' : 'Pause'}
           </Text>
         </TouchableOpacity>
 
@@ -707,7 +706,7 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.25,
         shadowRadius: 15,
       },
       android: { elevation: 6 },
@@ -735,7 +734,7 @@ const styles = StyleSheet.create({
   exerciseCardName: {
     fontFamily: FONTS.display.semibold,
     fontSize: 18,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: -0.3,
   },
   exerciseCardMeta: {

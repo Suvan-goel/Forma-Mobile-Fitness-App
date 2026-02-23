@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -20,7 +20,7 @@ import {
   Play,
   Flag,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 
@@ -48,20 +48,21 @@ export const RecordLandingScreen: React.FC = () => {
     sets,
     workoutElapsedSeconds,
     setWorkoutElapsedSeconds,
+    workoutPaused,
+    setWorkoutPaused,
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
   const cardGap = 14;
   const bottomPadding = navigationBarHeight + cardGap;
-  const [timerPaused, setTimerPaused] = useState(false);
 
   useEffect(() => {
-    if (!workoutInProgress || timerPaused) return;
+    if (!workoutInProgress || workoutPaused) return;
     const interval = setInterval(() => {
       setWorkoutElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [workoutInProgress, timerPaused, setWorkoutElapsedSeconds]);
+  }, [workoutInProgress, workoutPaused, setWorkoutElapsedSeconds]);
 
   const handleStartWorkout = () => {
     navigation.navigate('CurrentWorkout');
@@ -87,21 +88,24 @@ export const RecordLandingScreen: React.FC = () => {
   };
 
   const handlePauseWorkout = () => {
-    setTimerPaused((p) => !p);
+    setWorkoutPaused((p) => !p);
   };
 
   const handleFinishWorkout = () => {
     if (sets.length === 0) {
-      clearSets();
+      Alert.alert(
+        'No sets recorded',
+        'Add at least one set before ending the workout.'
+      );
       return;
     }
+    const duration = formatStopwatch(workoutElapsedSeconds);
     const totalSets = sets.length;
     const totalReps = sets.reduce((sum, set) => sum + set.reps, 0);
     const avgFormScore = Math.round(
       sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
     );
     const category = sets[0]?.exerciseName || 'General';
-    const duration = formatStopwatch(workoutElapsedSeconds);
 
     navigation.navigate('SaveWorkout', {
       workoutData: {
@@ -130,9 +134,9 @@ export const RecordLandingScreen: React.FC = () => {
           /* ── Active Workout Card ── */
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={['#27272A', '#121212', '#0A0A0A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
@@ -142,7 +146,7 @@ export const RecordLandingScreen: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <View style={styles.activeTimerSection}>
-                    <Timer size={36} color="#8B5CF6" strokeWidth={1} />
+                    <Timer size={36} color={COLORS.accent} strokeWidth={1} />
                     <MonoText style={styles.timerText}>
                       {formatStopwatch(workoutElapsedSeconds)}
                     </MonoText>
@@ -175,14 +179,14 @@ export const RecordLandingScreen: React.FC = () => {
                     activeOpacity={0.7}
                   >
                     <View style={styles.workoutActionIconWrap}>
-                      {timerPaused ? (
-                        <Play size={22} color="#8B5CF6" strokeWidth={1.5} />
+                      {workoutPaused ? (
+                        <Play size={22} color={COLORS.accent} strokeWidth={1.5} />
                       ) : (
-                        <Pause size={22} color="#8B5CF6" strokeWidth={1.5} />
+                        <Pause size={22} color={COLORS.accent} strokeWidth={1.5} />
                       )}
                     </View>
                     <Text style={styles.workoutActionLabel}>
-                      {timerPaused ? 'Resume' : 'Pause'}
+                      {workoutPaused ? 'Resume' : 'Pause'}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -191,7 +195,7 @@ export const RecordLandingScreen: React.FC = () => {
                     activeOpacity={0.7}
                   >
                     <View style={styles.workoutActionIconWrap}>
-                      <Flag size={22} color="#8B5CF6" strokeWidth={1.5} />
+                      <Flag size={22} color={COLORS.accent} strokeWidth={1.5} />
                     </View>
                     <Text style={styles.workoutActionLabel}>Finish</Text>
                   </TouchableOpacity>
@@ -208,14 +212,14 @@ export const RecordLandingScreen: React.FC = () => {
               activeOpacity={0.82}
             >
               <LinearGradient
-                colors={['#27272A', '#121212', '#0A0A0A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
                 style={styles.cardGradient}
               >
                 <View style={styles.cardGlassEdge}>
                   <View style={styles.cardInner}>
-                    <Plus size={32} color="#8B5CF6" strokeWidth={1.5} />
+                    <Plus size={32} color={COLORS.accent} strokeWidth={1.5} />
                     <Text style={styles.cardTitle}>New Session</Text>
                   </View>
                 </View>
@@ -229,16 +233,16 @@ export const RecordLandingScreen: React.FC = () => {
               activeOpacity={0.82}
             >
               <LinearGradient
-                colors={['#27272A', '#121212', '#0A0A0A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
                 style={styles.cardGradient}
               >
                 <View style={styles.cardGlassEdge}>
                   <View style={styles.cardInner}>
                     <LayoutTemplate
                       size={32}
-                      color="#8B5CF6"
+                      color={COLORS.accent}
                       strokeWidth={1.5}
                     />
                     <Text style={styles.cardTitle}>Templates</Text>
@@ -269,14 +273,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 40,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: 2,
     lineHeight: 46,
   },
   headerSubtitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
-    color: '#71717A',
+    color: COLORS.textTertiary,
     letterSpacing: 3,
     marginTop: 6,
   },
@@ -298,7 +302,7 @@ const styles = StyleSheet.create({
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.25,
-        shadowRadius: 20,
+        shadowRadius: 15,
       },
       android: { elevation: 6 },
     }),
@@ -322,7 +326,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 24,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: -0.3,
   },
 

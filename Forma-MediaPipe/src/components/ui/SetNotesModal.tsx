@@ -13,11 +13,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { generateSetSummary } from '../../utils/setNotesSummary';
-
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
 const MAX_FEEDBACK_LINES = 2;
 
 interface SetNotesModalProps {
@@ -92,9 +90,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
           onPress={() => {}}
         >
           <LinearGradient
-            colors={CARD_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.modalGradient}
           >
             <View style={styles.glassEdge}>
@@ -116,15 +114,23 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
               >
+                {set.durationSeconds != null && set.durationSeconds > 0 ? (
+                  <View style={styles.durationRow}>
+                    <Text style={styles.durationLabel}>Duration</Text>
+                    <Text style={styles.durationValue}>
+                      {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
+                    </Text>
+                  </View>
+                ) : null}
                 {hasNotes ? (
                   <>
                     <View style={styles.section}>
                       <Text style={styles.sectionTitle}>Rep breakdown</Text>
                       <View style={styles.repCardOuter}>
                         <LinearGradient
-                          colors={CARD_GRADIENT_COLORS}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
+                          colors={[...CARD_GRADIENT_COLORS]}
+                          start={CARD_GRADIENT_START}
+                          end={CARD_GRADIENT_END}
                           style={styles.repCardGradient}
                         >
                           <View style={styles.repCardGlass}>
@@ -192,9 +198,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                       <Text style={styles.sectionTitle}>Form summary</Text>
                       <View style={styles.summaryCardOuter}>
                         <LinearGradient
-                          colors={CARD_GRADIENT_COLORS}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
+                          colors={[...CARD_GRADIENT_COLORS]}
+                          start={CARD_GRADIENT_START}
+                          end={CARD_GRADIENT_END}
                           style={styles.summaryCardGradient}
                         >
                           <View style={styles.summaryCardGlass}>
@@ -281,6 +287,26 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.lg,
     paddingBottom: SPACING.xxl,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 12,
+  },
+  durationLabel: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+  },
+  durationValue: {
+    fontSize: 14,
+    fontFamily: FONTS.mono.bold,
+    color: COLORS.text,
   },
   section: {
     marginBottom: SPACING.xl,

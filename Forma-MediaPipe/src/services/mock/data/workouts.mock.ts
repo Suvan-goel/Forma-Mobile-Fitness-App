@@ -1,5 +1,5 @@
 /**
- * Mock workout data extracted from LogbookScreen and WorkoutDetailsScreen
+ * Mock workout data – exercises limited to the 10 supported in the app
  */
 
 import { WorkoutSession, WorkoutDetails } from '../../api/types';
@@ -76,30 +76,29 @@ export const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
     exercises: [
       {
         id: '1',
-        name: 'Bench Press',
+        name: 'Push-Up',
         sets: [
-          { setNumber: 1, reps: 8, weight: 225, formScore: 88 },
-          { setNumber: 2, reps: 8, weight: 225, formScore: 87 },
-          { setNumber: 3, reps: 6, weight: 225, formScore: 85 },
-          { setNumber: 4, reps: 6, weight: 225, formScore: 86 },
+          { setNumber: 1, reps: 12, weight: 0, formScore: 88 },
+          { setNumber: 2, reps: 12, weight: 0, formScore: 87 },
+          { setNumber: 3, reps: 10, weight: 0, formScore: 85 },
         ],
       },
       {
         id: '2',
-        name: 'Overhead Press',
+        name: 'Cable Pushdowns',
         sets: [
-          { setNumber: 1, reps: 8, weight: 135, formScore: 90 },
-          { setNumber: 2, reps: 8, weight: 135, formScore: 89 },
-          { setNumber: 3, reps: 6, weight: 135, formScore: 88 },
+          { setNumber: 1, reps: 12, weight: 50, formScore: 90 },
+          { setNumber: 2, reps: 10, weight: 50, formScore: 89 },
+          { setNumber: 3, reps: 10, weight: 50, formScore: 88 },
         ],
       },
       {
         id: '3',
-        name: 'Incline Dumbbell Press',
+        name: 'Standing Dumbbell Lateral Raises',
         sets: [
-          { setNumber: 1, reps: 10, weight: 70, formScore: 85 },
-          { setNumber: 2, reps: 10, weight: 70, formScore: 84 },
-          { setNumber: 3, reps: 8, weight: 70, formScore: 83 },
+          { setNumber: 1, reps: 10, weight: 15, formScore: 85 },
+          { setNumber: 2, reps: 10, weight: 15, formScore: 84 },
+          { setNumber: 3, reps: 8, weight: 15, formScore: 83 },
         ],
       },
     ],
@@ -122,20 +121,20 @@ export const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
       },
       {
         id: '2',
-        name: 'Romanian Deadlift',
+        name: 'Leg Extensions',
         sets: [
-          { setNumber: 1, reps: 10, weight: 225, formScore: 88 },
-          { setNumber: 2, reps: 10, weight: 225, formScore: 87 },
-          { setNumber: 3, reps: 8, weight: 225, formScore: 89 },
+          { setNumber: 1, reps: 12, weight: 120, formScore: 88 },
+          { setNumber: 2, reps: 12, weight: 120, formScore: 87 },
+          { setNumber: 3, reps: 10, weight: 120, formScore: 89 },
         ],
       },
       {
         id: '3',
-        name: 'Leg Press',
+        name: 'Lying Leg Curl',
         sets: [
-          { setNumber: 1, reps: 15, weight: 315, formScore: 80 },
-          { setNumber: 2, reps: 15, weight: 315, formScore: 81 },
-          { setNumber: 3, reps: 12, weight: 315, formScore: 82 },
+          { setNumber: 1, reps: 12, weight: 90, formScore: 80 },
+          { setNumber: 2, reps: 12, weight: 90, formScore: 81 },
+          { setNumber: 3, reps: 10, weight: 90, formScore: 82 },
         ],
       },
     ],
@@ -148,29 +147,29 @@ export const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
     exercises: [
       {
         id: '1',
-        name: 'Deadlift',
+        name: 'Barbell Curl',
         sets: [
-          { setNumber: 1, reps: 8, weight: 275, formScore: 85 },
-          { setNumber: 2, reps: 8, weight: 275, formScore: 86 },
-          { setNumber: 3, reps: 6, weight: 275, formScore: 84 },
+          { setNumber: 1, reps: 10, weight: 65, formScore: 85 },
+          { setNumber: 2, reps: 10, weight: 65, formScore: 86 },
+          { setNumber: 3, reps: 8, weight: 65, formScore: 84 },
         ],
       },
       {
         id: '2',
-        name: 'Pull-ups',
+        name: 'Cable Lat Pulldowns',
         sets: [
-          { setNumber: 1, reps: 10, weight: 0, formScore: 88 },
-          { setNumber: 2, reps: 8, weight: 0, formScore: 87 },
-          { setNumber: 3, reps: 8, weight: 0, formScore: 86 },
+          { setNumber: 1, reps: 10, weight: 100, formScore: 88 },
+          { setNumber: 2, reps: 8, weight: 100, formScore: 87 },
+          { setNumber: 3, reps: 8, weight: 100, formScore: 86 },
         ],
       },
       {
         id: '3',
-        name: 'Dips',
+        name: 'Cable Row',
         sets: [
-          { setNumber: 1, reps: 12, weight: 0, formScore: 82 },
-          { setNumber: 2, reps: 10, weight: 0, formScore: 83 },
-          { setNumber: 3, reps: 10, weight: 0, formScore: 84 },
+          { setNumber: 1, reps: 12, weight: 80, formScore: 82 },
+          { setNumber: 2, reps: 10, weight: 80, formScore: 83 },
+          { setNumber: 3, reps: 10, weight: 80, formScore: 84 },
         ],
       },
     ],
@@ -183,15 +182,15 @@ export const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
     exercises: [
       {
         id: '1',
-        name: 'Hip Flexor Stretch',
+        name: 'Machine Ab Crunches',
         sets: [
-          { setNumber: 1, reps: 1, weight: 0, formScore: 75 },
-          { setNumber: 2, reps: 1, weight: 0, formScore: 76 },
+          { setNumber: 1, reps: 15, weight: 0, formScore: 75 },
+          { setNumber: 2, reps: 15, weight: 0, formScore: 76 },
         ],
       },
       {
         id: '2',
-        name: 'Shoulder Mobility',
+        name: 'Push-Up',
         sets: [
           { setNumber: 1, reps: 10, weight: 0, formScore: 78 },
           { setNumber: 2, reps: 10, weight: 0, formScore: 79 },
@@ -207,20 +206,20 @@ export const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
     exercises: [
       {
         id: '1',
-        name: 'Barbell Row',
+        name: 'Cable Row',
         sets: [
-          { setNumber: 1, reps: 8, weight: 185, formScore: 90 },
-          { setNumber: 2, reps: 8, weight: 185, formScore: 91 },
-          { setNumber: 3, reps: 6, weight: 185, formScore: 89 },
+          { setNumber: 1, reps: 8, weight: 120, formScore: 90 },
+          { setNumber: 2, reps: 8, weight: 120, formScore: 91 },
+          { setNumber: 3, reps: 6, weight: 120, formScore: 89 },
         ],
       },
       {
         id: '2',
-        name: 'Lat Pulldown',
+        name: 'Cable Lat Pulldowns',
         sets: [
-          { setNumber: 1, reps: 10, weight: 150, formScore: 88 },
-          { setNumber: 2, reps: 10, weight: 150, formScore: 87 },
-          { setNumber: 3, reps: 8, weight: 150, formScore: 89 },
+          { setNumber: 1, reps: 10, weight: 100, formScore: 88 },
+          { setNumber: 2, reps: 10, weight: 100, formScore: 87 },
+          { setNumber: 3, reps: 8, weight: 100, formScore: 89 },
         ],
       },
     ],
@@ -233,16 +232,16 @@ export const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
     exercises: [
       {
         id: '1',
-        name: 'Running',
+        name: 'Push-Up',
         sets: [
-          { setNumber: 1, reps: 1, weight: 0, formScore: 78 },
+          { setNumber: 1, reps: 25, weight: 0, formScore: 78 },
         ],
       },
       {
         id: '2',
-        name: 'Rowing',
+        name: 'Machine Ab Crunches',
         sets: [
-          { setNumber: 1, reps: 500, weight: 0, formScore: 80 },
+          { setNumber: 1, reps: 30, weight: 0, formScore: 80 },
         ],
       },
     ],

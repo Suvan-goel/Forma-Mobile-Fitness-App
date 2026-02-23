@@ -16,7 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useExercises } from '../hooks';
 import { LoadingSkeleton } from '../components/ui';
@@ -29,14 +29,25 @@ const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
 };
 const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
 
-function getExerciseImage(exercise: Exercise): ImageSourcePropType {
-  return CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
-}
+/**
+ * Per-exercise card images (src/assets/exercises/).
+ */
+const EXERCISE_IMAGE_MAP: Record<string, ImageSourcePropType> = {
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+};
 
-const CARD_COLORS: [string, string, string] = ['#27272A', '#121212', '#0A0A0A'];
-const GRAD_START = { x: 0, y: 0 };
-const GRAD_END = { x: 1, y: 1 };
-const IMAGE_FADE_COLORS: [string, string] = ['transparent', 'rgba(0,0,0,0.85)'];
+function getExerciseImage(exercise: Exercise): ImageSourcePropType {
+  return EXERCISE_IMAGE_MAP[exercise.name] ?? CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
+}
 
 type RecordStackParamList = {
   RecordLanding: undefined;
@@ -83,52 +94,52 @@ const FilterPill = memo(({ id, isActive, onPress }: {
 
 /* ── Exercise Card ───────────────────────── */
 
-const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
+const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPress }: {
   exercise: Exercise;
   muscleLabel: string;
   cardWidth: number;
+  cardHeight: number;
   onPress: (exercise: Exercise) => void;
 }) => (
   <TouchableOpacity
-    style={[styles.cardOuter, { width: cardWidth }]}
+    style={[styles.cardOuter, { width: cardWidth, height: cardHeight }]}
     onPress={() => onPress(exercise)}
     activeOpacity={0.82}
   >
     <LinearGradient
-      colors={CARD_COLORS}
-      start={GRAD_START}
-      end={GRAD_END}
+      colors={[...CARD_GRADIENT_COLORS]}
+      start={CARD_GRADIENT_START}
+      end={CARD_GRADIENT_END}
       style={styles.cardGradient}
     >
       <View style={styles.cardGlassEdge}>
         {/* Top icons */}
         <View style={styles.cardHeader}>
           <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
-            <Bookmark size={16} color="#52525B" strokeWidth={1.5} />
+            <Bookmark size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
-            <Info size={16} color="#52525B" strokeWidth={1.5} />
+            <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
 
-        {/* Image with gradient fade */}
+        {/* Image */}
         <View style={styles.imageWrap}>
           <Image
             source={getExerciseImage(exercise)}
             style={styles.exerciseImage}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={IMAGE_FADE_COLORS}
-            style={styles.imageFade}
+            resizeMode="contain"
           />
         </View>
 
-        {/* Text */}
+        {/* Text (directly under image) */}
         <View style={styles.cardTextBlock}>
           <Text style={styles.cardName} numberOfLines={2}>{exercise.name}</Text>
           <Text style={styles.cardMuscle} numberOfLines={1}>{muscleLabel}</Text>
         </View>
+
+        {/* Spacer: fills remaining space below text so all cards same height (padding under text) */}
+        <View style={styles.cardSpacer} />
       </View>
     </LinearGradient>
   </TouchableOpacity>
@@ -146,6 +157,10 @@ export const ChooseExerciseScreen: React.FC = () => {
   const { exercises: allExercises, muscleGroups, isLoading, filterByMuscleGroup } = useExercises();
 
   const cardWidth = (screenWidth - SPACING.screenHorizontal * 2 - 12) / 2;
+  const imageSize = cardWidth - 16;
+  const textBlockHeight = 60;
+  const bottomPadding = 24;
+  const cardHeight = 32 + imageSize + 8 + textBlockHeight + bottomPadding;
 
   const handleSelectExercise = useCallback((exercise: Exercise) => {
     addExercise({ name: exercise.name, category: exercise.category });
@@ -176,9 +191,10 @@ export const ChooseExerciseScreen: React.FC = () => {
       exercise={item}
       muscleLabel={muscleNameMap[item.muscleGroup] || item.muscleGroup.toUpperCase()}
       cardWidth={cardWidth}
+      cardHeight={cardHeight}
       onPress={handleSelectExercise}
     />
-  ), [cardWidth, handleSelectExercise, muscleNameMap]);
+  ), [cardWidth, cardHeight, handleSelectExercise, muscleNameMap]);
 
   const keyExtractor = useCallback((item: Exercise, index: number) => `${item.name}-${index}`, []);
 
@@ -363,25 +379,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  /* ── Card ───────────────────────────────── */
+  /* ── Card (analytics style) ───────────────────────────────── */
   cardOuter: {
-    borderRadius: 16,
+    borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
         shadowRadius: 15,
       },
-      android: { elevation: 4 },
+      android: { elevation: 6 },
     }),
   },
   cardGradient: {
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 22,
   },
   cardGlassEdge: {
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: 8,
@@ -401,39 +419,40 @@ const styles = StyleSheet.create({
   /* ── Image ──────────────────────────────── */
   imageWrap: {
     width: '100%',
-    height: 110,
+    aspectRatio: 1,
     borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.0)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseImage: {
     width: '100%',
     height: '100%',
   },
-  imageFade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 40,
+  cardSpacer: {
+    flex: 1,
+    minHeight: 20,
   },
 
   /* ── Text Block ─────────────────────────── */
   cardTextBlock: {
     paddingHorizontal: 4,
-    paddingBottom: 6,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
   cardName: {
     fontFamily: FONTS.display.semibold,
     fontSize: 13,
-    color: '#FFFFFF',
+    color: COLORS.text,
     letterSpacing: -0.2,
     marginBottom: 3,
   },
   cardMuscle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
-    color: '#A1A1AA',
+    color: COLORS.textSecondary,
     letterSpacing: 2,
     textTransform: 'uppercase',
   },

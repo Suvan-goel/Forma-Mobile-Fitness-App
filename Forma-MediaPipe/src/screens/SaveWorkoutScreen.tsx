@@ -16,12 +16,10 @@ import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-naviga
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
 import { workoutsService } from '../services/api';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
-
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
 
 type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
 type SaveWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'SaveWorkout'>;
@@ -38,6 +36,13 @@ export const SaveWorkoutScreen: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
+    if (workoutData.totalSets === 0) {
+      Alert.alert(
+        'No sets recorded',
+        'Add at least one set before ending the workout.'
+      );
+      return;
+    }
     if (!workoutName.trim() || isSaving) return;
 
     setIsSaving(true);
@@ -164,7 +169,7 @@ export const SaveWorkoutScreen: React.FC = () => {
 
         <View style={styles.form}>
           <View style={styles.inputCardOuter}>
-            <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inputCardGradient}>
+            <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.inputCardGradient}>
               <View style={styles.inputCardGlass}>
                 <Text style={styles.label}>Workout Name *</Text>
                 <TextInput
@@ -180,7 +185,7 @@ export const SaveWorkoutScreen: React.FC = () => {
           </View>
 
           <View style={styles.inputCardOuter}>
-            <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inputCardGradient}>
+            <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.inputCardGradient}>
               <View style={styles.inputCardGlass}>
                 <Text style={styles.label}>Notes (Optional)</Text>
                 <TextInput
@@ -199,7 +204,7 @@ export const SaveWorkoutScreen: React.FC = () => {
 
           {/* Workout Summary */}
           <View style={styles.summaryCardOuter}>
-            <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.summaryCardGradient}>
+            <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.summaryCardGradient}>
               <View style={styles.summaryCardGlass}>
                 <Text style={styles.summaryTitle}>Workout Summary</Text>
                 <View style={styles.summaryRow}>

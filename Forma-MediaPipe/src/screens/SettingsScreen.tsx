@@ -3,9 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform } from '
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, User, Bell, Lock, HelpCircle, LogOut } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS } from '../constants/theme';
-
-const CARD_GRADIENT_COLORS: [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -39,7 +37,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         {/* Account Section */}
         <Text style={styles.sectionTitle}>ACCOUNT</Text>
         <View style={styles.cardOuter}>
-          <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
+          <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
             <View style={styles.cardGlass}>
               <SettingItem icon={User} label="Profile" />
               <SettingItem icon={Bell} label="Notifications" />
@@ -51,7 +49,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         {/* Support Section */}
         <Text style={styles.sectionTitle}>SUPPORT</Text>
         <View style={styles.cardOuter}>
-          <LinearGradient colors={CARD_GRADIENT_COLORS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
+          <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
             <View style={styles.cardGlass}>
               <SettingItem icon={HelpCircle} label="Help Center" isLast />
             </View>

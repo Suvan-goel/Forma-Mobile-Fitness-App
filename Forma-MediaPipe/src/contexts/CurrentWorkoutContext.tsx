@@ -6,6 +6,8 @@ export interface LoggedSet {
   weight?: number;
   weightUnit?: 'kg' | 'lbs';
   formScore: number;
+  /** Set duration in seconds (from camera timer). Shown in set notes. */
+  durationSeconds?: number;
   /** Per-rep feedback shown during the set (e.g. "Great rep!", "Don't swing your back!") */
   repFeedback?: string[];
   /** Per-rep form scores (parallel to repFeedback, one per rep) */
@@ -24,6 +26,7 @@ type CurrentWorkoutContextValue = {
   sets: LoggedSet[]; // Derived from exercises for backward compatibility
   workoutInProgress: boolean;
   workoutElapsedSeconds: number;
+  workoutPaused: boolean;
   addExercise: (exercise: { name: string; category: string }) => void;
   addSetToExercise: (exerciseId: string, set: LoggedSet) => void;
   addSet: (set: LoggedSet) => void; // Deprecated but kept for compatibility
@@ -32,6 +35,7 @@ type CurrentWorkoutContextValue = {
   clearSets: () => void;
   setWorkoutInProgress: (value: boolean) => void;
   setWorkoutElapsedSeconds: (value: number) => void;
+  setWorkoutPaused: (value: boolean | ((prev: boolean) => boolean)) => void;
 };
 
 const defaultValue: CurrentWorkoutContextValue = {
@@ -39,6 +43,7 @@ const defaultValue: CurrentWorkoutContextValue = {
   sets: [],
   workoutInProgress: false,
   workoutElapsedSeconds: 0,
+  workoutPaused: false,
   addExercise: () => {},
   addSetToExercise: () => {},
   addSet: () => {},
@@ -47,6 +52,7 @@ const defaultValue: CurrentWorkoutContextValue = {
   clearSets: () => {},
   setWorkoutInProgress: () => {},
   setWorkoutElapsedSeconds: () => {},
+  setWorkoutPaused: () => {},
 };
 
 const CurrentWorkoutContext = createContext<CurrentWorkoutContextValue>(defaultValue);
@@ -55,6 +61,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
   const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
   const [workoutInProgress, setWorkoutInProgress] = useState(false);
   const [workoutElapsedSeconds, setWorkoutElapsedSeconds] = useState(0);
+  const [workoutPaused, setWorkoutPaused] = useState(false);
 
   const addExercise = useCallback((exercise: { name: string; category: string }) => {
     const newExercise: WorkoutExercise = {
@@ -128,6 +135,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     setExercises([]);
     setWorkoutInProgress(false);
     setWorkoutElapsedSeconds(0);
+    setWorkoutPaused(false);
   }, []);
 
   // Flatten exercises to sets for backward compatibility
@@ -142,6 +150,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
         sets,
         workoutInProgress,
         workoutElapsedSeconds,
+        workoutPaused,
         addExercise,
         addSetToExercise,
         addSet,
@@ -150,6 +159,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
         clearSets,
         setWorkoutInProgress,
         setWorkoutElapsedSeconds,
+        setWorkoutPaused,
       }}
     >
       {children}

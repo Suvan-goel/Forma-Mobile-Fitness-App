@@ -40,12 +40,24 @@ export const COLORS = {
   glowVioletStrong: 'rgba(139, 92, 246, 0.55)',
 } as const;
 
-/** Editorial card — near-black stealth surface with hairline border */
-export const CARD_STYLE = {
-  backgroundColor: 'rgba(255,255,255,0.04)',
+/** Analytics-style gradient for all cards (same border, gradient, and colors across app) */
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
+export const CARD_GRADIENT_START = { x: 0, y: 0 } as const;
+export const CARD_GRADIENT_END = { x: 1, y: 1 } as const;
+
+/** Card glass edge — thin light border (matches Analytics) */
+export const CARD_GLASS_BORDER = {
   borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.08)',
-  borderRadius: 20,
+  borderColor: 'rgba(255, 255, 255, 0.1)',
+  borderRadius: 22,
+} as const;
+
+/** Editorial card — analytics-style surface (same border and dark background for flat cards) */
+export const CARD_STYLE = {
+  backgroundColor: '#1A1A1A',
+  borderWidth: 1,
+  borderColor: 'rgba(255, 255, 255, 0.1)',
+  borderRadius: 22,
 } as const;
 
 /** Violet glow shadow for iOS — apply with spread operator */

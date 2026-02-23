@@ -36,7 +36,7 @@ export const AppHeader: React.FC = memo(() => {
           <Bell size={22} color={COLORS.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconButton} onPress={handleSettingsPress}>
-          <Settings size={22} color={COLORS.text} />
+          <Settings size={22} color={COLORS.text} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
     </View>

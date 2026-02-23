@@ -22,48 +22,24 @@ const iconMap: { [key: string]: any } = {
   'Sport': Award,
 };
 
-// Exercise data for each workout type
+// Exercise data for each workout type – 10 supported exercises only
 const workoutExercises: { [key: string]: string[] } = {
   'Weightlifting': [
-    'Bench Press',
-    'Squat',
-    'Deadlift',
-    'Overhead Press',
-    'Barbell Row',
-    'Bicep Curl',
-    'Tricep Extension',
-    'Leg Press',
+    'Cable Pushdowns',
+    'Barbell Curl',
+    'Machine Ab Crunches',
+    'Barbell Squat',
+    'Leg Extensions',
+    'Lying Leg Curl',
+    'Cable Lat Pulldowns',
+    'Standing Dumbbell Lateral Raises',
+    'Cable Row',
   ],
   'Calisthenics': [
-    'Push-ups',
-    'Pull-ups',
-    'Dips',
-    'Squats',
-    'Lunges',
-    'Plank',
-    'Burpees',
-    'Mountain Climbers',
+    'Push-Up',
   ],
-  'Mobility & Flexibility': [
-    'Hip Flexor Stretch',
-    'Hamstring Stretch',
-    'Shoulder Mobility',
-    'Spinal Twist',
-    'Pigeon Pose',
-    'Downward Dog',
-    'Cat-Cow Stretch',
-    'Quad Stretch',
-  ],
-  'Sport': [
-    'Running',
-    'Cycling',
-    'Swimming',
-    'Tennis',
-    'Basketball',
-    'Soccer',
-    'Yoga',
-    'Pilates',
-  ],
+  'Mobility & Flexibility': [],
+  'Sport': [],
 };
 
 const recordingInstructions = [
