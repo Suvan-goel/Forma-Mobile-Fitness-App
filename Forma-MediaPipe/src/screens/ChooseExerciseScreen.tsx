@@ -29,8 +29,24 @@ const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
 };
 const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
 
+/**
+ * Per-exercise card images (src/assets/exercises/).
+ */
+const EXERCISE_IMAGE_MAP: Record<string, ImageSourcePropType> = {
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+};
+
 function getExerciseImage(exercise: Exercise): ImageSourcePropType {
-  return CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
+  return EXERCISE_IMAGE_MAP[exercise.name] ?? CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
 }
 
 type RecordStackParamList = {
@@ -111,7 +127,7 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, onPress }: {
           <Image
             source={getExerciseImage(exercise)}
             style={styles.exerciseImage}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         </View>
 
@@ -356,7 +372,6 @@ const styles = StyleSheet.create({
 
   /* ── Card (analytics style) ───────────────────────────────── */
   cardOuter: {
-    height: 250,
     borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
@@ -370,11 +385,9 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
-    flex: 1,
     borderRadius: 22,
   },
   cardGlassEdge: {
-    flex: 1,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -395,10 +408,13 @@ const styles = StyleSheet.create({
   /* ── Image ──────────────────────────────── */
   imageWrap: {
     width: '100%',
-    height: 140,
+    aspectRatio: 1,
     borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.0)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseImage: {
     width: '100%',
@@ -407,10 +423,9 @@ const styles = StyleSheet.create({
 
   /* ── Text Block ─────────────────────────── */
   cardTextBlock: {
-    flex: 1,
     paddingHorizontal: 4,
     paddingBottom: 6,
-    justifyContent: 'flex-end',
+    paddingTop: 4,
   },
   cardName: {
     fontFamily: FONTS.display.semibold,

@@ -20,14 +20,16 @@ const category = {
 };
 
 const exercises = [
-  'Bench Press',
-  'Squat',
-  'Deadlift',
-  'Overhead Press',
-  'Barbell Row',
-  'Bicep Curl',
-  'Tricep Extension',
-  'Leg Press',
+  'Push-Up',
+  'Cable Pushdowns',
+  'Barbell Curl',
+  'Machine Ab Crunches',
+  'Barbell Squat',
+  'Leg Extensions',
+  'Lying Leg Curl',
+  'Cable Lat Pulldowns',
+  'Standing Dumbbell Lateral Raises',
+  'Cable Row',
 ];
 
 // Day colors from logbook page (faded for backgrounds, full for icons)
