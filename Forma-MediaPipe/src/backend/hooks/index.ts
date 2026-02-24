@@ -2,7 +2,7 @@
  * Custom Hooks - Barrel export
  */
 
-export { useWorkouts, useWorkoutDetails } from './useWorkouts';
+export { useWorkouts, useWorkoutDetails, useDeleteWorkout } from './useWorkouts';
 export { useSaveWorkout } from './useSaveWorkout';
 export { useExercises } from './useExercises';
 export { useAnalytics } from './useAnalytics';

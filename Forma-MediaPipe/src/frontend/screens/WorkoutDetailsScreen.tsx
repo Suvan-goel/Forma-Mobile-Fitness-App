@@ -1,14 +1,14 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Target } from 'lucide-react-native';
+import { ChevronLeft, Target, Trash2 } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
-import { useWorkoutDetails } from '../../backend/hooks';
+import { useWorkoutDetails, useDeleteWorkout } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutExercise } from '../../backend/services/api';
 
@@ -64,6 +64,29 @@ export const WorkoutDetailsScreen: React.FC = () => {
   const { workoutId } = route.params;
 
   const { workout, isLoading, error, refetch } = useWorkoutDetails(workoutId);
+  const { deleteWorkout, isDeleting } = useDeleteWorkout();
+
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      'Delete Workout?',
+      'This can\'t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await deleteWorkout(workoutId);
+            if (success) {
+              navigation.goBack();
+            } else {
+              Alert.alert('Error', 'Failed to delete workout. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  }, [deleteWorkout, workoutId, navigation]);
 
   // Loading state
   if (isLoading) {
@@ -125,7 +148,14 @@ export const WorkoutDetailsScreen: React.FC = () => {
           <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{workout.name}</Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity
+          onPress={handleDelete}
+          disabled={isDeleting}
+          style={[styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
+          activeOpacity={0.7}
+        >
+          <Trash2 size={20} color="#EF4444" strokeWidth={1.5} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -190,6 +220,12 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 24 + SPACING.sm * 2,
+  },
+  deleteButton: {
+    padding: SPACING.sm,
+  },
+  deleteButtonDisabled: {
+    opacity: 0.4,
   },
   scrollView: {
     flex: 1,
