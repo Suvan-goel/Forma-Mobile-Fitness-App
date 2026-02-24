@@ -227,8 +227,8 @@ npx expo start --dev-client
 
 ### Architecture
 ```
-barbellCurlHeuristics.ts  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenlabsTTS.ts
-(produces RepResult)         (calls onRepCompleted)  (decides what/when)  (plays audio)
+ExerciseDefinition.update()  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenlabsTTS.ts
+(produces ExerciseState)        (calls onRepCompleted)  (decides what/when)  (plays audio)
 ```
 
 ### Key files
@@ -268,10 +268,7 @@ barbellCurlHeuristics.ts  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenla
 - Voice lines are kept short (<1.5s) to minimize overlap risk
 
 ### Adding a new exercise's TTS feedback
-1. Add the exercise's visual feedback strings to `FEEDBACK_TO_ISSUE` in `ttsMessagePools.ts`
-2. Reuse existing `IssueType`s where applicable (e.g. `tempo_up`, `torso_warn`)
-3. Add new `IssueType`s + pools only for exercise-specific issues
-4. No changes needed in `ttsCoach.ts` — it's exercise-agnostic
+TTS config is declared in the exercise's `ExerciseDefinition.ttsConfig` and merged into the global maps automatically at registration time. See section 14 for the full exercise creation guide. No changes needed in `ttsCoach.ts` or `ttsMessagePools.ts` — both are exercise-agnostic.
 
 ## 13. Scoring System — Continuous Penalty Curves
 
@@ -280,7 +277,7 @@ barbellCurlHeuristics.ts  →  CameraScreen.tsx  →  ttsCoach.ts  →  elevenla
 - **Numeric score** uses continuous quadratic penalty curves — small errors produce small but real drops
 - A perfect 100 is rare and earned; a "pretty good" rep scores 85-93
 
-### Rep Score: `computeRepScore()` in `barbellCurlHeuristics.ts`
+### Rep Score: `computeRepScore()` in barbell curl definition
 Five penalty categories, each `min(cap, scale × max(0, x − deadzone)²)`:
 
 | Category | Max Penalty | Deadzone | Scale | Key Input |
@@ -302,11 +299,123 @@ A score-100 rep has weight 1; a score-0 rep has weight 3.
 - When recalibrating, adjust `scale` or `deadzone`, not the formula shape
 - Test with: clean rep → 95-100, slightly sloppy → 85-93, obvious cheat → 50-70, terrible → 0-30
 
-## 14. How Claude Should Help
+## 14. Adding a New Exercise
+
+All exercise logic lives under `src/utils/exercises/`. CameraScreen is exercise-agnostic — it uses the `ExerciseRegistry` to look up the active exercise by name and delegates all processing to the definition's `update()` function. **No changes to CameraScreen are required when adding a new exercise.**
+
+### File structure
+
+```
+src/utils/exercises/
+  types.ts                    # ExerciseState, RepResult, ExerciseDefinition interfaces
+  ExerciseRegistry.ts         # Registry singleton (register/get/has/list)
+  index.ts                    # Public re-exports
+  shared/                     # Reusable primitives
+    SmoothedAngleTracker.ts   # Median filter + EMA smoothing
+    WarmupGate.ts             # Visibility-based stability gate
+    scoring.ts                # computePenalty() + computeScore()
+    RepWindowTracker.ts       # Min/max/delta accumulator for rep windows
+  definitions/                # One file per exercise
+    barbellCurl.ts            # Barbell curl definition
+    pushup.ts                 # Push-up definition
+    register.ts               # Imports all definitions and registers them
+```
+
+### Step-by-step: adding a new exercise
+
+**1. Create the definition file** at `src/utils/exercises/definitions/<exerciseName>.ts`
+
+Export a single `ExerciseDefinition` object. All internal types, constants, and functions must be **module-private** (not exported). Example skeleton:
+
+```typescript
+import type { Keypoint } from '../../poseAnalysis';
+import type { ExerciseDefinition, ExerciseState } from '../types';
+
+// -- All types, constants, helpers are private to this module --
+interface MyExerciseState { /* ... */ }
+function initializeState(): MyExerciseState { /* ... */ }
+function updateState(keypoints: Keypoint[], state: MyExerciseState): MyExerciseState { /* ... */ }
+
+export const myExerciseDefinition: ExerciseDefinition = {
+  name: 'My Exercise',           // Must match the exercise name from the route
+  requiredView: 'side',          // 'front' | 'side' | 'any'
+  createState: () => ({
+    repCount: 0,
+    lastRepResult: null,
+    feedback: null,
+    feedbackTimestamp: null,
+    debugInfo: {},
+    _internal: initializeState(),
+  }),
+  update: (keypoints, currentState) => {
+    const internal = currentState._internal as MyExerciseState;
+    const newInternal = updateState(keypoints, internal);
+    // Map internal state to framework ExerciseState
+    return {
+      repCount: newInternal.repCount,
+      lastRepResult: /* map to { repIndex, score, messages } or null */,
+      feedback: newInternal.feedback,
+      feedbackTimestamp: newInternal.feedbackTimestamp,
+      debugInfo: /* cast internal debug info to Record<string, unknown> */,
+      _internal: newInternal,
+    };
+  },
+  ttsConfig: {
+    feedbackToIssue: {
+      // Map each visual feedback string → issue type
+      'Your feedback message here.': 'issue_type',
+    },
+    // Optional: define new issue types with TTS voice pools
+    issueDefinitions: [
+      { issueType: 'my_new_issue', priority: 25, messages: ['Short coach cue 1.', 'Short coach cue 2.'] },
+    ],
+  },
+  summaryConfig: {
+    // Map each visual feedback string → improvement suggestion for set summary
+    'Your feedback message here.': 'Explanation of how to improve.',
+  },
+};
+```
+
+**2. Register the definition** in `src/utils/exercises/definitions/register.ts`:
+
+```typescript
+import { myExerciseDefinition } from './myExercise';
+// ... at the bottom:
+registerExercise(myExerciseDefinition);
+```
+
+That's it. The `registerExercise()` helper handles:
+- Adding the definition to `ExerciseRegistry`
+- Merging `ttsConfig` into the global `FEEDBACK_TO_ISSUE`, `ISSUE_POOLS`, and `ISSUE_PRIORITY` maps
+- Merging `summaryConfig` into the global `FEEDBACK_TO_IMPROVEMENT` map
+
+**3. (Optional) Add debug UI** in `CameraScreen.tsx`
+
+If you want a debug overlay for the new exercise, add a conditional JSX block in the debug UI section (search for "Debug" in CameraScreen). Read from the generic `exerciseDebug` state and cast via `as any`:
+
+```tsx
+{exerciseNameFromRoute === 'My Exercise' && debugMode && exerciseDebug && (() => {
+  const d = exerciseDebug as any;
+  return (<View>...</View>);
+})()}
+```
+
+### Rules
+
+- **One export per definition file** — only the `ExerciseDefinition` object. Everything else is private.
+- **Reuse shared primitives** from `exercises/shared/` (SmoothedAngleTracker, WarmupGate, scoring, RepWindowTracker) instead of reimplementing.
+- **Reuse existing issue types** (e.g. `tempo_up`, `hip_sag`) when the feedback concept is the same. Only create new issue types for truly exercise-specific issues.
+- **No changes to CameraScreen business logic.** The registry handles everything. Debug UI is the only exercise-specific code allowed in CameraScreen.
+- **No changes to `ttsCoach.ts` or `ttsMessagePools.ts`.** TTS config is declared in the definition and merged at registration time.
+- **`update()` must be pure and fast** — it runs at ~30fps. No async calls, no allocations in hot paths, prefer mutation on the internal state object.
+- **The `name` field must match the route's `exerciseName` exactly.** CameraScreen looks up the definition by `ExerciseRegistry.get(exerciseNameFromRoute)`.
+
+## 15. How Claude Should Help
 - Prefer incremental changes over big refactors
 - Explain reasoning when touching heuristics, thresholds, rep logic, or perf-sensitive code
 - Ask before adding dependencies, changing architecture, or changing data models
 - When debugging: hypothesise failure mode → propose logging → propose fix
 - **Always verify changes won't break iOS native builds** before suggesting them
-- When adding TTS for a new exercise: add to `backend/services/ttsMessagePools.ts` only, don't modify `ttsCoach.ts`
+- When adding a new exercise: follow section 14. No changes to CameraScreen business logic, ttsCoach, or ttsMessagePools needed.
 - **Always respect the frontend/backend boundary** — see section 9. Never add service imports to screens; create or use a hook instead.
