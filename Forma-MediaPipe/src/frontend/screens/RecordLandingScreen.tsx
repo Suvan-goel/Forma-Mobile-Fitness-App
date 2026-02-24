@@ -140,64 +140,91 @@ export const RecordLandingScreen: React.FC = () => {
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
+                {/* ── Status pill ── */}
+                <View style={styles.activeHeader}>
+                  <View style={styles.statusPill}>
+                    <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
+                    <Text style={styles.statusPillText}>
+                      {workoutPaused ? 'PAUSED' : 'IN PROGRESS'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* ── Timer ── */}
                 <TouchableOpacity
                   style={styles.activeCardContent}
                   onPress={handleResumeWorkout}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.activeTimerSection}>
-                    <Timer size={36} color={COLORS.accent} strokeWidth={1} />
-                    <MonoText style={styles.timerText}>
-                      {formatStopwatch(workoutElapsedSeconds)}
-                    </MonoText>
-                  </View>
-                  <Text style={styles.activeLabel}>Workout in progress</Text>
-                  <Text style={styles.activeSubtext}>
-                    {sets.length > 0
-                      ? `${sets.length} set${sets.length === 1 ? '' : 's'} \u2022 Tap to resume`
-                      : 'Tap to resume'}
-                  </Text>
+                  <MonoText style={styles.timerText}>
+                    {formatStopwatch(workoutElapsedSeconds)}
+                  </MonoText>
+
+                  {/* ── Stats row ── */}
+                  {sets.length > 0 && (
+                    <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{sets.length}</Text>
+                        <Text style={styles.statLabel}>
+                          {sets.length === 1 ? 'SET' : 'SETS'}
+                        </Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>
+                          {sets.reduce((sum, set) => sum + set.reps, 0)}
+                        </Text>
+                        <Text style={styles.statLabel}>REPS</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  <Text style={styles.activeSubtext}>Tap to resume</Text>
                 </TouchableOpacity>
+
+                {/* ── Action buttons ── */}
                 <View style={styles.workoutActions}>
                   <TouchableOpacity
                     style={styles.workoutActionButton}
                     onPress={handleDiscardWorkout}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.workoutActionIconWrap}>
+                    <View style={[styles.workoutActionIconWrap, styles.discardIconWrap]}>
                       <Trash2
-                        size={22}
+                        size={18}
                         color={COLORS.textTertiary}
                         strokeWidth={1.5}
                       />
                     </View>
-                    <Text style={styles.workoutActionLabel}>Discard</Text>
+                    <Text style={[styles.workoutActionLabel, styles.discardLabel]}>Discard</Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
                     style={styles.workoutActionButton}
                     onPress={handlePauseWorkout}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.workoutActionIconWrap}>
+                    <View style={[styles.workoutActionIconWrap, styles.pauseIconWrap]}>
                       {workoutPaused ? (
-                        <Play size={22} color={COLORS.accent} strokeWidth={1.5} />
+                        <Play size={18} color={COLORS.accent} strokeWidth={1.5} />
                       ) : (
-                        <Pause size={22} color={COLORS.accent} strokeWidth={1.5} />
+                        <Pause size={18} color={COLORS.accent} strokeWidth={1.5} />
                       )}
                     </View>
                     <Text style={styles.workoutActionLabel}>
                       {workoutPaused ? 'Resume' : 'Pause'}
                     </Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
                     style={styles.workoutActionButton}
                     onPress={handleFinishWorkout}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.workoutActionIconWrap}>
-                      <Flag size={22} color={COLORS.accent} strokeWidth={1.5} />
+                    <View style={[styles.workoutActionIconWrap, styles.finishIconWrap]}>
+                      <Flag size={18} color={'#34D399'} strokeWidth={1.5} />
                     </View>
-                    <Text style={styles.workoutActionLabel}>Finish</Text>
+                    <Text style={[styles.workoutActionLabel, styles.finishLabel]}>Finish</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -331,37 +358,89 @@ const styles = StyleSheet.create({
   },
 
   /* ── Active Workout Card ─────────────────── */
+  activeHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34D399',
+  },
+  statusDotPaused: {
+    backgroundColor: COLORS.yellow,
+  },
+  statusPillText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 1.5,
+  },
   activeCardContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: SPACING.lg,
-  },
-  activeTimerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 12,
+    paddingVertical: 20,
   },
   timerText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 32,
-    color: '#8B5CF6',
-    lineHeight: 38,
+    fontSize: 44,
+    color: COLORS.text,
+    lineHeight: 52,
+    letterSpacing: 2,
   },
-  activeLabel: {
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  statItem: {
+    alignItems: 'center',
+    minWidth: 48,
+  },
+  statValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 20,
+    color: COLORS.text,
+    lineHeight: 24,
+  },
+  statLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: '#A1A1AA',
-    marginBottom: 4,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   activeSubtext: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: '#52525B',
+    color: COLORS.textTertiary,
     letterSpacing: 0.5,
+    marginTop: 14,
   },
 
   /* ── Workout Actions ─────────────────────── */
@@ -370,27 +449,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-evenly',
     alignSelf: 'stretch',
-    paddingVertical: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   workoutActionButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
   workoutActionIconWrap: {
-    width: 28,
-    height: 28,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  discardIconWrap: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  pauseIconWrap: {
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+  },
+  finishIconWrap: {
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
+    borderColor: 'rgba(52, 211, 153, 0.15)',
   },
   workoutActionLabel: {
     fontSize: 11,
     fontFamily: FONTS.ui.regular,
-    color: '#71717A',
-    marginTop: 6,
+    color: COLORS.textSecondary,
     textAlign: 'center',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+  },
+  discardLabel: {
+    color: COLORS.textTertiary,
+  },
+  finishLabel: {
+    color: '#34D399',
   },
 });
