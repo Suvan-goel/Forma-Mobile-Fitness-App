@@ -9,9 +9,9 @@ export const COLORS = {
   cardBackground: '#0A0A0A',
   cardBackgroundLight: '#141414',
 
-  // Primary Actions — Teal (used across the app)
-  primary: '#00ac7c',
-  primaryDark: '#00936a',
+  // Primary Actions — Electric Violet (used across the app)
+  primary: '#8B5CF6',
+  primaryDark: '#7C3AED',
 
   // Accent — Electric Violet
   accent: '#8B5CF6',
@@ -32,7 +32,7 @@ export const COLORS = {
   inactive: '#4A5568',
 
   // Chart colors
-  chartPrimary: '#00ac7c',
+  chartPrimary: '#8B5CF6',
   chartSecondary: 'rgba(255,255,255,0.06)',
 
   // Neon glow — UV blacklight violet
