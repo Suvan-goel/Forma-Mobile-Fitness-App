@@ -15,6 +15,7 @@ import { mergeSummaryConfig } from '../../setNotesSummary';
 import type { ExerciseDefinition } from '../types';
 import { barbellCurlDefinition } from './barbellCurl';
 import { cablePushdownDefinition } from './cablePushdown';
+import { cableRowDefinition } from './cableRow';
 import { lateralRaiseDefinition } from './lateralRaise';
 import { pushupDefinition } from './pushup';
 
@@ -28,5 +29,6 @@ function registerExercise(definition: ExerciseDefinition): void {
 // ── Register all exercises ──
 registerExercise(barbellCurlDefinition);
 registerExercise(cablePushdownDefinition);
+registerExercise(cableRowDefinition);
 registerExercise(lateralRaiseDefinition);
 registerExercise(pushupDefinition);
