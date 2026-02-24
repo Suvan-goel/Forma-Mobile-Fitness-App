@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Alert, Animated, Switch } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Alert, Animated, Switch, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -26,7 +26,8 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { useAuth } from '../../backend/contexts/AuthContext';
-import { useWorkoutPreferences } from '../../backend/hooks';
+import { useWorkoutPreferences, useUser } from '../../backend/hooks';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -34,7 +35,8 @@ interface SettingsScreenProps {
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { signOut, user } = useAuth();
+  const { signOut, user: authUser } = useAuth();
+  const { user: profileUser, refetch: refetchUser } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
 
@@ -45,6 +47,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       useNativeDriver: true,
     }).start();
   }, [fadeAnim]);
+
+  // Refresh profile data when screen gains focus (e.g. after editing profile)
+  useFocusEffect(
+    React.useCallback(() => {
+      refetchUser();
+    }, [refetchUser]),
+  );
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -63,22 +72,26 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     ]);
   };
 
-  const userEmail = user?.email ?? '';
-  const userInitial = (user?.user_metadata?.full_name?.[0] ?? user?.email?.[0] ?? 'A').toUpperCase();
+  const displayName = profileUser?.displayName ?? authUser?.user_metadata?.full_name ?? 'Athlete';
+  const userEmail = profileUser?.email ?? authUser?.email ?? '';
+  const userInitial = (displayName[0] ?? 'A').toUpperCase();
+  const avatarUrl = profileUser?.avatarUrl;
 
   const SettingItem = ({
     icon: Icon,
     label,
     onPress,
+    isFirst,
     isLast,
   }: {
     icon: any;
     label: string;
     onPress?: () => void;
+    isFirst?: boolean;
     isLast?: boolean;
   }) => (
     <TouchableOpacity
-      style={[styles.settingItem, isLast && styles.settingItemLast]}
+      style={[styles.settingItem, isFirst && styles.settingItemFirst, isLast && styles.settingItemLast]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -97,15 +110,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     label,
     value,
     onToggle,
+    isFirst,
     isLast,
   }: {
     icon: any;
     label: string;
     value: boolean;
     onToggle: (v: boolean) => void;
+    isFirst?: boolean;
     isLast?: boolean;
   }) => (
-    <View style={[styles.settingItem, isLast && styles.settingItemLast]}>
+    <View style={[styles.settingItem, isFirst && styles.settingItemFirst, isLast && styles.settingItemLast]}>
       <View style={styles.settingLeft}>
         <View style={styles.settingIconBadge}>
           <Icon size={16} color="#A78BFA" strokeWidth={1.5} />
@@ -153,17 +168,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             >
               <View style={styles.cardGlassEdge}>
                 <View style={styles.profileRow}>
-                  <LinearGradient
-                    colors={['#8B5CF6', '#7C3AED']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.avatarGradient}
-                  >
-                    <Text style={styles.avatarText}>{userInitial}</Text>
-                  </LinearGradient>
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <LinearGradient
+                      colors={['#8B5CF6', '#7C3AED']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.avatarGradient}
+                    >
+                      <Text style={styles.avatarText}>{userInitial}</Text>
+                    </LinearGradient>
+                  )}
                   <View style={styles.profileInfo}>
                     <Text style={styles.profileName} numberOfLines={1}>
-                      {user?.user_metadata?.full_name ?? 'Athlete'}
+                      {displayName}
                     </Text>
                     {userEmail ? (
                       <View style={styles.emailRow}>
@@ -192,7 +211,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
-                <SettingItem icon={User} label="Profile" onPress={() => navigation.navigate('ProfileSettings')} />
+                <SettingItem icon={User} label="Profile" onPress={() => navigation.navigate('ProfileSettings')} isFirst />
                 <SettingItem icon={Bell} label="Notifications" onPress={() => navigation.navigate('NotificationSettings')} />
                 <SettingItem icon={Lock} label="Privacy" onPress={() => navigation.navigate('PrivacySettings')} isLast />
               </View>
@@ -217,6 +236,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   label="Visual Feedback"
                   value={prefs.showFeedback}
                   onToggle={(v) => updatePref('showFeedback', v)}
+                  isFirst
                 />
                 <ToggleItem
                   icon={Volume2}
@@ -248,7 +268,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
-                <SettingItem icon={HelpCircle} label="Help Center" onPress={() => navigation.navigate('HelpCenter')} isLast />
+                <SettingItem icon={HelpCircle} label="Help Center" onPress={() => navigation.navigate('HelpCenter')} isFirst isLast />
               </View>
             </LinearGradient>
           </View>
@@ -324,6 +344,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  avatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
   },
   avatarGradient: {
     width: 52,
@@ -411,6 +436,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  settingItemFirst: {
+    paddingTop: 0,
   },
   settingItemLast: {
     borderBottomWidth: 0,

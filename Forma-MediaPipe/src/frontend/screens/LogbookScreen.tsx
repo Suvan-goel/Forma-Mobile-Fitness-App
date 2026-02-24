@@ -28,7 +28,7 @@ import CogIcon from '../components/icons/CogIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts } from '../../backend/hooks';
+import { useWorkouts, useUser } from '../../backend/hooks';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../../backend/services/api';
@@ -286,7 +286,9 @@ export const LogbookScreen: React.FC = () => {
 
   const { workouts, isLoading, error, refetch } = useWorkouts();
   const { user } = useAuth();
-  const displayName = user?.user_metadata?.full_name
+  const { user: profileUser, refetch: refetchUser } = useUser();
+  const displayName = profileUser?.displayName
+    ?? user?.user_metadata?.full_name
     ?? user?.user_metadata?.name
     ?? 'Athlete';
 
@@ -294,7 +296,8 @@ export const LogbookScreen: React.FC = () => {
     React.useCallback(() => {
       setRefreshKey((prev) => prev + 1);
       refetch();
-    }, [refetch]),
+      refetchUser();
+    }, [refetch, refetchUser]),
   );
 
   useEffect(() => {

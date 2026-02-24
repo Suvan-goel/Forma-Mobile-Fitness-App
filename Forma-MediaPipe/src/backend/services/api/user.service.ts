@@ -119,6 +119,14 @@ export const userService = {
       return { data: {} as User, success: false, error: error?.message ?? 'Update failed' };
     }
 
+    // Sync auth metadata so it persists across app restarts
+    const metadataUpdate: Record<string, string> = {};
+    if (updates.displayName) metadataUpdate.full_name = updates.displayName;
+    if (updates.avatarUrl) metadataUpdate.avatar_url = updates.avatarUrl;
+    if (Object.keys(metadataUpdate).length > 0) {
+      await supabase.auth.updateUser({ data: metadataUpdate });
+    }
+
     return {
       data: {
         id: profile.id,

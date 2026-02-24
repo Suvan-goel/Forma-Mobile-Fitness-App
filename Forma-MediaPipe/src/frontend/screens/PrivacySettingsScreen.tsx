@@ -143,7 +143,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
             >
               <View style={styles.cardGlassEdge}>
                 <Text style={styles.storageText}>
-                  Your workout data is stored securely in our cloud database. Pose detection runs entirely on your device — no video or camera frames ever leave your phone.
+                  Your workout data is stored securely in our cloud database. Pose detection runs entirely on your device - no video or camera frames ever leave your phone.
                 </Text>
                 <View style={styles.storageDivider} />
                 <Text style={styles.storageText}>
