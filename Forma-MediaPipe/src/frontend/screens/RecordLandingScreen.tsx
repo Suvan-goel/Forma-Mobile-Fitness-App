@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   /* ── Card ─────────────────────────────────── */
   cardOuter: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -309,11 +309,11 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
   },
   cardGlassEdge: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },

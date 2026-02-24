@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#09090B',
-    borderRadius: 22,
+    borderRadius: 19,
     width: '100%',
     maxWidth: 400,
     paddingBottom: SPACING.lg,
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   skipButton: {
     flex: 1,
     paddingVertical: SPACING.md,
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   submitButton: {
     flex: 1,
     paddingVertical: SPACING.md,
-    borderRadius: 22,
+    borderRadius: 19,
     backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',

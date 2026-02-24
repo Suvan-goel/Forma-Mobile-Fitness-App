@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   repCardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -333,10 +333,10 @@ const styles = StyleSheet.create({
     }),
   },
   repCardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   repCardGlass: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     overflow: 'hidden',
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   summaryCardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -406,10 +406,10 @@ const styles = StyleSheet.create({
     }),
   },
   summaryCardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   summaryCardGlass: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: SPACING.lg,

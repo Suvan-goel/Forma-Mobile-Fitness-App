@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   cardOuter: {
     width: '100%',
     maxWidth: 400,
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -154,10 +154,10 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   cardGlassEdge: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     paddingBottom: SPACING.lg,

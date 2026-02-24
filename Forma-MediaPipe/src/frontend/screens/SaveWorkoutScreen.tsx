@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xl,
   },
   inputCardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -302,10 +302,10 @@ const styles = StyleSheet.create({
     }),
   },
   inputCardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   inputCardGlass: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: SPACING.lg,
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xs,
   },
   summaryCardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -343,10 +343,10 @@ const styles = StyleSheet.create({
     }),
   },
   summaryCardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   summaryCardGlass: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: SPACING.lg,
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   saveButton: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     paddingVertical: SPACING.lg,
     alignItems: 'center',
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 22,
+    borderRadius: 19,
   },
   saveButtonText: {
     fontSize: 17,

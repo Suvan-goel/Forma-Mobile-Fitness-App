@@ -664,7 +664,7 @@ const styles = StyleSheet.create({
   voidIconWrap: {
     width: 80,
     height: 80,
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
 
   /* ── Exercise Card ──────────────────────── */
   exerciseCardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -714,10 +714,10 @@ const styles = StyleSheet.create({
     }),
   },
   exerciseCardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   exerciseCardGlassEdge: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     overflow: 'hidden',
@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 16,
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
