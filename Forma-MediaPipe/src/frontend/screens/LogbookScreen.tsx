@@ -23,8 +23,8 @@ import {
   Calendar,
   X,
   Check,
+  Menu,
 } from 'lucide-react-native';
-import CogIcon from '../components/icons/CogIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
@@ -435,7 +435,7 @@ export const LogbookScreen: React.FC = () => {
           </View>
         </View>
         <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
-          <CogIcon size={22} color={COLORS.text} />
+          <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
 
@@ -615,13 +615,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
   },
 
   /* ── Title Block ─────────────────────────── */

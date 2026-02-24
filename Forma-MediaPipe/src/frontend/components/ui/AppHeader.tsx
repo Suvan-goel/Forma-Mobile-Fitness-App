@@ -1,7 +1,6 @@
 import React, { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Search, Bell } from 'lucide-react-native';
-import CogIcon from '../icons/CogIcon';
+import { Search, Bell, Menu } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, FONTS } from '../../constants/theme';
 import { useUser } from '../../../backend/hooks';
@@ -44,7 +43,7 @@ export const AppHeader: React.FC = memo(() => {
           <Bell size={22} color={COLORS.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconButton} onPress={handleSettingsPress}>
-          <CogIcon size={24} color={COLORS.text} />
+          <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
     </View>
