@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
 
   /* ── Reward Card (analytics style) ───────────────────────────── */
   cardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     marginBottom: 12,
     ...Platform.select({
@@ -284,10 +284,10 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   cardGlassEdge: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     flexDirection: 'row',
