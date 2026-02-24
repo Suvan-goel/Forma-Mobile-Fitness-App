@@ -19,6 +19,7 @@ import { cableRowDefinition } from './cableRow';
 import { latPulldownDefinition } from './latPulldown';
 import { lateralRaiseDefinition } from './lateralRaise';
 import { legExtensionsDefinition } from './legExtensions';
+import { lyingLegCurlDefinition } from './lyingLegCurl';
 import { machineAbCrunchDefinition } from './machineAbCrunch';
 import { pushupDefinition } from './pushup';
 
@@ -36,5 +37,6 @@ registerExercise(cableRowDefinition);
 registerExercise(latPulldownDefinition);
 registerExercise(lateralRaiseDefinition);
 registerExercise(legExtensionsDefinition);
+registerExercise(lyingLegCurlDefinition);
 registerExercise(machineAbCrunchDefinition);
 registerExercise(pushupDefinition);
