@@ -79,6 +79,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     addSet,
     clearSets,
     updateSetWeight,
+    removeExercise,
     removeSetFromExercise,
     setWorkoutInProgress,
     workoutElapsedSeconds: contextElapsed,
@@ -251,6 +252,21 @@ export const CurrentWorkoutScreen: React.FC = () => {
     });
   };
 
+  const handleDeleteExercise = (exerciseId: string, exerciseName: string, setCount: number) => {
+    Alert.alert(
+      'Remove exercise?',
+      `Remove ${exerciseName}${setCount > 0 ? ` and its ${setCount} ${setCount === 1 ? 'set' : 'sets'}` : ''}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => removeExercise(exerciseId),
+        },
+      ]
+    );
+  };
+
   const handleDeleteSet = (exerciseId: string, exerciseName: string, setIndex: number) => {
     Alert.alert(
       'Delete set?',
@@ -395,6 +411,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
                         ) : (
                           <ChevronDown size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                         )}
+                        <TouchableOpacity
+                          onPress={() => handleDeleteExercise(exercise.id, exercise.name, exercise.sets.length)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <X size={16} color={COLORS.textTertiary} strokeWidth={2} />
+                        </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
 
@@ -523,8 +546,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={handleDiscardWorkout}
           activeOpacity={0.7}
         >
-          <Trash2 size={18} color="#52525B" strokeWidth={1.5} />
-          <Text style={styles.controlLabel}>Discard</Text>
+          <Trash2 size={18} color="#FFFFFF" strokeWidth={1.5} />
+          <Text style={[styles.controlLabel, styles.controlLabelLight]}>Discard</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

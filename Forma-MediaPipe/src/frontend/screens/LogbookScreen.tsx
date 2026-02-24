@@ -231,7 +231,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session }) => {
               <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
                   <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.metaText}>{session.totalSets} SETS</Text>
+                  <Text style={styles.metaText}>{session.totalSets} {session.totalSets === 1 ? 'SET' : 'SETS'}</Text>
                 </View>
                 <View style={styles.metaDot} />
                 <View style={styles.metaItem}>
@@ -510,7 +510,7 @@ export const LogbookScreen: React.FC = () => {
             <View style={{ paddingHorizontal: SPACING.screenHorizontal }}>
               <ListHeader />
             </View>
-            <View style={[StyleSheet.absoluteFill, styles.emptyState]}>
+            <View style={[StyleSheet.absoluteFill, styles.emptyState]} pointerEvents="none">
               <Text style={styles.emptyStateTitle}>
                 {selectedDate ? 'No sessions' : 'No workouts yet'}
               </Text>
@@ -654,10 +654,10 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 14,
+        shadowOpacity: 0.35,
+        shadowRadius: 6,
       },
-      android: { elevation: 8 },
+      android: { elevation: 4 },
     }),
   },
   filterPillText: {
