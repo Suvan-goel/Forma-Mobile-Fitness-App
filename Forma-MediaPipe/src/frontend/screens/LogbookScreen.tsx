@@ -22,6 +22,7 @@ import {
   Layers,
   Calendar,
   X,
+  Check,
 } from 'lucide-react-native';
 import CogIcon from '../components/icons/CogIcon';
 import { MonoText } from '../components/typography/MonoText';
@@ -169,20 +170,34 @@ const DropdownPill = ({
       </TouchableOpacity>
 
       <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsOpen(false)}>
-          <View style={styles.dropdownMenu}>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
-              {options.map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[styles.dropdownItem, selectedValue === option && styles.dropdownItemActive]}
-                  onPress={() => { onSelect(option); setIsOpen(false); }}
-                >
-                  <Text style={[styles.dropdownItemText, selectedValue === option && styles.dropdownItemTextActive]}>
-                    {option}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+        <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={() => setIsOpen(false)}>
+          <View style={styles.dropdownSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.dropdownHandleWrap}>
+              <View style={styles.dropdownHandle} />
+            </View>
+            <Text style={styles.dropdownTitle}>{label}</Text>
+            <View style={styles.dropdownDivider} />
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.dropdownScroll}>
+              {options.map((option) => {
+                const isSelected = selectedValue === option || (option === 'All' && !selectedValue);
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                    onPress={() => { onSelect(option); setIsOpen(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>
+                      {option}
+                    </Text>
+                    {isSelected && (
+                      <View style={styles.dropdownCheckWrap}>
+                        <Check size={16} color={COLORS.accent} strokeWidth={2.5} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -648,17 +663,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   filterPillActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.35,
-        shadowRadius: 6,
-      },
-      android: { elevation: 4 },
-    }),
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   filterPillText: {
     fontFamily: FONTS.ui.regular,
@@ -668,7 +674,6 @@ const styles = StyleSheet.create({
   },
   filterPillTextActive: {
     color: '#FFFFFF',
-    fontFamily: FONTS.ui.bold,
   },
   calendarPill: {
     width: 36,
@@ -946,40 +951,87 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* ── Dropdown Menu ───────────────────────── */
-  dropdownMenu: {
-    ...CARD_STYLE,
-    borderRadius: 20,
-    padding: 8,
-    minWidth: 200,
-    maxWidth: 320,
+  /* ── Dropdown Bottom Sheet ──────────────── */
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  dropdownSheet: {
+    backgroundColor: '#141414',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingBottom: 40,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 8 },
+        shadowOffset: { width: 0, height: -8 },
         shadowOpacity: 0.25,
-        shadowRadius: 24,
+        shadowRadius: 30,
       },
-      android: { elevation: 8 },
+      android: { elevation: 12 },
     }),
   },
+  dropdownHandleWrap: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  dropdownHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  dropdownTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: '#A1A1AA',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    paddingVertical: 14,
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginHorizontal: 20,
+  },
+  dropdownScroll: {
+    maxHeight: 340,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
   dropdownItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginVertical: 2,
   },
   dropdownItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
   },
   dropdownItemText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: FONTS.ui.regular,
-    color: '#FFFFFF',
+    color: '#A1A1AA',
   },
   dropdownItemTextActive: {
     color: '#FFFFFF',
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.semibold,
+  },
+  dropdownCheckWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
 });
