@@ -129,17 +129,17 @@ export const RecordLandingScreen: React.FC = () => {
       </View>
 
       {/* ── ACTION CARDS ───────────────────────── */}
-      <View style={[styles.cardsContainer, { paddingBottom: bottomPadding }]}>
+      <View style={[styles.cardsContainer, { paddingBottom: bottomPadding }, workoutInProgress && styles.cardsContainerCentered]}>
         {workoutInProgress ? (
           /* ── Active Workout Card ── */
-          <View style={styles.cardOuter}>
+          <View style={styles.activeCardOuter}>
             <LinearGradient
               colors={[...CARD_GRADIENT_COLORS]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
+              style={[styles.cardGradient, { flex: undefined }]}
             >
-              <View style={styles.cardGlassEdge}>
+              <View style={[styles.cardGlassEdge, { flex: undefined }]}>
                 {/* ── Status pill ── */}
                 <View style={styles.activeHeader}>
                   <View style={styles.statusPill}>
@@ -318,6 +318,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     gap: 14,
   },
+  cardsContainerCentered: {
+    justifyContent: 'center',
+  },
 
   /* ── Card ─────────────────────────────────── */
   cardOuter: {
@@ -358,6 +361,19 @@ const styles = StyleSheet.create({
   },
 
   /* ── Active Workout Card ─────────────────── */
+  activeCardOuter: {
+    borderRadius: 19,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
+  },
   activeHeader: {
     paddingHorizontal: 24,
     paddingTop: 20,
@@ -390,18 +406,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   activeCardContent: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingTop: 32,
+    paddingBottom: 28,
   },
   timerText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 44,
+    fontSize: 48,
     color: COLORS.text,
-    lineHeight: 52,
-    letterSpacing: 2,
+    lineHeight: 56,
+    letterSpacing: 3,
   },
   statsRow: {
     flexDirection: 'row',
@@ -449,8 +464,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-evenly',
     alignSelf: 'stretch',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
