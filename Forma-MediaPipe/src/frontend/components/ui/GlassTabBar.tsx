@@ -40,7 +40,7 @@ const GlassTabItem = memo(({ routeName, isFocused, onPress }: {
       <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
         <Icon
           size={20}
-          color={isFocused ? COLORS.background : COLORS.textSecondary}
+          color={isFocused ? '#FFFFFF' : COLORS.textSecondary}
         />
       </View>
       <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
@@ -169,13 +169,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrapActive: {
-    backgroundColor: COLORS.accent,
-    // Neon glow behind active icon
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 6,
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
+    borderWidth: 1.5,
+    borderColor: COLORS.accent,
   },
   tabLabel: {
     fontFamily: FONTS.ui.regular,
