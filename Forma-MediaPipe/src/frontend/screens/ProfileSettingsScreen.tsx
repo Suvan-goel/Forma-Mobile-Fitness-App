@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera, Mail, Calendar } from 'lucide-react-native';
+import { ChevronLeft, Camera, Mail, Calendar, User, Shield } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   COLORS,
@@ -122,10 +122,8 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+            <ChevronLeft size={20} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>PROFILE</Text>
-          <View style={styles.placeholder} />
         </View>
 
         <ScrollView
@@ -134,33 +132,48 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Page Title */}
+          <View style={styles.titleSection}>
+            <Text style={styles.pageTitle}>Profile</Text>
+            <Text style={styles.pageSubtitle}>Manage your personal information</Text>
+          </View>
+
           {/* Avatar */}
           <View style={styles.avatarSection}>
             <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.7} disabled={isUpdating}>
               <View style={styles.avatarContainer}>
-                {user?.avatarUrl ? (
-                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-                ) : (
-                  <LinearGradient
-                    colors={['#8B5CF6', '#7C3AED']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.avatarGradient}
-                  >
-                    <Text style={styles.avatarText}>{userInitial}</Text>
-                  </LinearGradient>
-                )}
+                <View style={styles.avatarRing}>
+                  {user?.avatarUrl ? (
+                    <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <LinearGradient
+                      colors={['#8B5CF6', '#7C3AED']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.avatarGradient}
+                    >
+                      <Text style={styles.avatarText}>{userInitial}</Text>
+                    </LinearGradient>
+                  )}
+                </View>
                 <View style={styles.cameraIconBadge}>
                   <Camera size={14} color={COLORS.text} strokeWidth={1.5} />
                 </View>
               </View>
             </TouchableOpacity>
+            <Text style={styles.tapToChange}>Tap to change photo</Text>
             {isUpdating && (
               <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.sm }} />
             )}
           </View>
 
-          {/* Display Name */}
+          {/* Display Name Section */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBadge}>
+              <User size={12} color="#A78BFA" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.sectionTitle}>Display Name</Text>
+          </View>
           <View style={styles.cardOuter}>
             <LinearGradient
               colors={[...CARD_GRADIENT_COLORS]}
@@ -169,7 +182,6 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
-                <Text style={styles.fieldLabel}>Display Name</Text>
                 <TextInput
                   style={styles.textInput}
                   value={displayName}
@@ -196,8 +208,14 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
             </LinearGradient>
           </View>
 
-          {/* Email (read-only) */}
-          <View style={[styles.cardOuter, { marginTop: SPACING.md }]}>
+          {/* Account Details Section */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBadge}>
+              <Shield size={12} color="#A78BFA" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.sectionTitle}>Account</Text>
+          </View>
+          <View style={styles.cardOuter}>
             <LinearGradient
               colors={[...CARD_GRADIENT_COLORS]}
               start={CARD_GRADIENT_START}
@@ -206,7 +224,9 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
             >
               <View style={styles.cardGlassEdge}>
                 <View style={styles.infoRow}>
-                  <Mail size={16} color="#A78BFA" strokeWidth={1.5} />
+                  <View style={styles.infoIconBadge}>
+                    <Mail size={14} color="#A78BFA" strokeWidth={1.5} />
+                  </View>
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Email</Text>
                     <Text style={styles.infoValue}>{user?.email ?? ''}</Text>
@@ -216,7 +236,9 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                   <>
                     <View style={styles.separator} />
                     <View style={styles.infoRow}>
-                      <Calendar size={16} color="#A78BFA" strokeWidth={1.5} />
+                      <View style={styles.infoIconBadge}>
+                        <Calendar size={14} color="#A78BFA" strokeWidth={1.5} />
+                      </View>
                       <View style={styles.infoContent}>
                         <Text style={styles.infoLabel}>Member Since</Text>
                         <Text style={styles.infoValue}>{joinDate}</Text>
@@ -242,13 +264,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+
+  /* ── Header ──────────────────────────────── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.sm,
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.md,
   },
   backButton: {
     width: 40,
@@ -260,28 +283,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 20,
-    color: COLORS.text,
-    letterSpacing: 2,
-  },
-  placeholder: {
-    width: 40,
-  },
+
+  /* ── Scroll ─────────────────────────────── */
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.xxxl,
+    paddingBottom: SPACING.xxxl + 40,
   },
+
+  /* ── Page Title ──────────────────────────── */
+  titleSection: {
+    marginBottom: SPACING.xxl,
+  },
+  pageTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 28,
+    color: COLORS.text,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  pageSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+
+  /* ── Avatar ──────────────────────────────── */
   avatarSection: {
     alignItems: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.xxl,
   },
   avatarContainer: {
     position: 'relative',
+  },
+  avatarRing: {
+    borderRadius: 36,
+    padding: 3,
+    borderWidth: 2,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
   },
   avatarImage: {
     width: 96,
@@ -304,16 +346,49 @@ const styles = StyleSheet.create({
   cameraIconBadge: {
     position: 'absolute',
     bottom: 0,
-    right: 0,
+    right: -2,
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: COLORS.background,
   },
+  tapToChange: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    marginTop: SPACING.sm + 2,
+    letterSpacing: 0.3,
+  },
+
+  /* ── Section Headers ───────────────────── */
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm + 2,
+  },
+  sectionIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+
+  /* ── Shared Gradient Card ────────────── */
   cardOuter: {
     borderRadius: 19,
     overflow: 'hidden',
@@ -321,10 +396,10 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
   cardGradient: {
@@ -333,32 +408,26 @@ const styles = StyleSheet.create({
   cardGlassEdge: {
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     padding: SPACING.lg,
     overflow: 'hidden',
   },
-  fieldLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: SPACING.xs,
-  },
+
+  /* ── Text Input ──────────────────────── */
   textInput: {
     fontFamily: FONTS.ui.regular,
     fontSize: 16,
     color: COLORS.text,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    paddingVertical: SPACING.sm,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: SPACING.sm + 2,
   },
   saveButton: {
     alignSelf: 'flex-end',
     marginTop: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 999,
     backgroundColor: COLORS.primary,
   },
   saveButtonText: {
@@ -367,11 +436,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
+
+  /* ── Info Rows ───────────────────────── */
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 4,
+    gap: 14,
+    paddingVertical: 6,
+  },
+  infoIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   infoContent: {
     flex: 1,
@@ -381,18 +460,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
     letterSpacing: 0.5,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   infoValue: {
     fontFamily: FONTS.ui.regular,
     fontSize: 15,
     color: COLORS.text,
+    letterSpacing: 0.1,
   },
   separator: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    marginVertical: SPACING.sm,
+    marginVertical: SPACING.sm + 2,
   },
+
+  /* ── Error ──────────────────────────── */
   errorText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,

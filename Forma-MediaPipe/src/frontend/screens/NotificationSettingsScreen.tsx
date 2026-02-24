@@ -66,10 +66,8 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+            <ChevronLeft size={20} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>NOTIFICATIONS</Text>
-          <View style={styles.placeholder} />
         </View>
 
         <ScrollView
@@ -77,12 +75,20 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Description */}
-          <View style={styles.descriptionCard}>
-            <Bell size={20} color="#A78BFA" strokeWidth={1.5} />
-            <Text style={styles.descriptionText}>
+          {/* Page Title */}
+          <View style={styles.titleSection}>
+            <Text style={styles.pageTitle}>Notifications</Text>
+            <Text style={styles.pageSubtitle}>
               Control when Forma sends you notifications during your workout.
             </Text>
+          </View>
+
+          {/* Alerts Section */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBadge}>
+              <Bell size={12} color="#A78BFA" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.sectionTitle}>Alerts</Text>
           </View>
 
           {/* Rest Timer Notification */}
@@ -102,7 +108,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                     <View style={styles.toggleInfo}>
                       <Text style={styles.toggleLabel}>Rest Timer</Text>
                       <Text style={styles.toggleDescription}>
-                        Get notified when your rest timer finishes between sets
+                        Get notified when your rest period finishes between sets
                       </Text>
                     </View>
                   </View>
@@ -118,10 +124,13 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
             </LinearGradient>
           </View>
 
-          {/* More coming soon */}
-          <Text style={styles.footerNote}>
-            More notification options coming soon.
-          </Text>
+          {/* Footer */}
+          <View style={styles.footerContainer}>
+            <View style={styles.footerDot} />
+            <Text style={styles.footerNote}>
+              More notification options coming soon
+            </Text>
+          </View>
         </ScrollView>
       </Animated.View>
     </View>
@@ -133,13 +142,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+
+  /* ── Header ──────────────────────────────── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.sm,
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.md,
   },
   backButton: {
     width: 40,
@@ -151,40 +161,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 20,
-    color: COLORS.text,
-    letterSpacing: 2,
-  },
-  placeholder: {
-    width: 40,
-  },
+
+  /* ── Scroll ─────────────────────────────── */
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.xxxl,
+    paddingBottom: SPACING.xxxl + 40,
   },
-  descriptionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: SPACING.md,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.12)',
-    marginBottom: SPACING.xl,
+
+  /* ── Page Title ──────────────────────────── */
+  titleSection: {
+    marginBottom: SPACING.xxl,
   },
-  descriptionText: {
-    flex: 1,
+  pageTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 28,
+    color: COLORS.text,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  pageSubtitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 14,
     color: COLORS.textSecondary,
     lineHeight: 20,
   },
+
+  /* ── Section Headers ───────────────────── */
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: SPACING.sm + 2,
+  },
+  sectionIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+
+  /* ── Shared Gradient Card ────────────── */
   cardOuter: {
     borderRadius: 19,
     overflow: 'hidden',
@@ -192,10 +220,10 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
   cardGradient: {
@@ -204,10 +232,12 @@ const styles = StyleSheet.create({
   cardGlassEdge: {
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     padding: SPACING.lg,
     overflow: 'hidden',
   },
+
+  /* ── Toggle Row ──────────────────────── */
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,14 +246,14 @@ const styles = StyleSheet.create({
   toggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     flex: 1,
     marginRight: SPACING.md,
   },
   iconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -236,19 +266,33 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0.1,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   toggleDescription: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    lineHeight: 16,
+    lineHeight: 17,
+  },
+
+  /* ── Footer ──────────────────────────── */
+  footerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: SPACING.xxl,
+  },
+  footerDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.textTertiary,
   },
   footerNote: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    textAlign: 'center',
-    marginTop: SPACING.xl,
+    letterSpacing: 0.3,
   },
 });
