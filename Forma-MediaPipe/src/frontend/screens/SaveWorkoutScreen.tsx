@@ -207,7 +207,7 @@ export const SaveWorkoutScreen: React.FC = () => {
 
       <View style={[styles.buttonContainer, {
         paddingTop: SPACING.md,
-        paddingBottom: 12,
+        paddingBottom: Math.max(insets.bottom, 12) + 12,
       }]}>
         <TouchableOpacity
           style={[
