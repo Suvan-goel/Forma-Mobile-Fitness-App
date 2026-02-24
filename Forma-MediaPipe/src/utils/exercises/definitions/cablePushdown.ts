@@ -51,7 +51,7 @@ const FORM_THRESHOLDS = {
   /** Min elbow angle above which starting flexion is insufficient */
   FLEXION_FAIL: 95,
   /** Shoulder angle delta above which elbows are drifting */
-  ELBOW_DRIFT_WARN: 15,
+  ELBOW_DRIFT_WARN: 20,
   /** Torso deviation from vertical above which there is excessive lean */
   TORSO_LEAN_WARN: 12,
   /** Concentric (push down) too fast threshold (seconds) */
@@ -77,7 +77,7 @@ const FORM_THRESHOLDS = {
 const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 0.06 } as PenaltyConfig,
   FLEXION_ROM:   { cap: 20, deadzone: 0, scale: 0.04 } as PenaltyConfig,
-  ELBOW_DRIFT:   { cap: 25, deadzone: 10, scale: 0.03 } as PenaltyConfig,
+  ELBOW_DRIFT:   { cap: 25, deadzone: 15, scale: 0.03 } as PenaltyConfig,
   TORSO_LEAN:    { cap: 25, deadzone: 5, scale: 0.15 } as PenaltyConfig,
   TEMPO_PUSH:    { cap: 12, deadzone: 0.3, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 8,  deadzone: 0.4, scale: 40 } as PenaltyConfig,
@@ -147,6 +147,8 @@ interface CablePushdownState {
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
+  /** Minimum smoothed elbow angle observed during REST phase (pre-seeds rep window) */
+  restMinElbow: number;
 }
 
 interface CablePushdownDebugInfo {
@@ -214,6 +216,7 @@ function initializeCablePushdownState(): CablePushdownState {
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
+    restMinElbow: Infinity,
   };
 }
 
@@ -555,10 +558,20 @@ function updateCablePushdownState(
   const fsmResult = updateFSM(currentState.fsm, smoothedElbow, t);
   newState.fsm = fsmResult.fsm;
 
+  // Track minimum elbow angle during REST (captures true starting bent position)
+  if (newState.fsm.phase === 'REST' && !isNaN(smoothedElbow)) {
+    newState.restMinElbow = Math.min(newState.restMinElbow, smoothedElbow);
+  }
+
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
     newState.repWindow = initRepWindow(t);
+    // Pre-seed minElbow with the resting bent angle so flexion ROM is measured correctly
+    if (currentState.restMinElbow !== Infinity) {
+      newState.repWindow.minElbow = currentState.restMinElbow;
+    }
+    newState.restMinElbow = Infinity; // Reset for next rep
   }
 
   if (newState.repWindow && inRep) {

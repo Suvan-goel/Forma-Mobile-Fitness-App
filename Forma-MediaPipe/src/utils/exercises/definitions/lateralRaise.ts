@@ -49,26 +49,54 @@ const THRESHOLDS = {
 /** Form heuristic thresholds (discrete -- for visual feedback messages) */
 const FORM_THRESHOLDS = {
   /** Max abduction should reach at least this for good ROM */
-  ROM_MIN: 70,
+  ROM_MIN: 80,
   /** Elbow angle below this triggers "keep arms straighter" */
   ELBOW_BEND_WARN: 140,
   /** Torso lateral lean above this triggers "stay upright" */
   TORSO_LEAN_WARN: 8,
   /** Abduction difference between arms above this triggers asymmetry */
   ASYMMETRY_WARN: 18,
-  /** Tempo thresholds (seconds) */
-  TEMPO_RAISE_MIN: 0.3,
+  /** Eccentric tempo threshold (seconds) -- concentric is not checked */
   TEMPO_LOWER_MIN: 0.4,
+  /** Shoulder shrug percentage (torso height compression) */
+  SHRUG_WARN: 6,
 } as const;
 
-/** Continuous penalty curve configs for scoring */
+/** Ideal targets used by the scoring system (separate from penalty deadzones) */
+const IDEAL = {
+  /** Shoulder-level abduction (degrees) */
+  MAX_ABDUCTION: 85,
+  /** Nearly straight arm (degrees) */
+  MIN_ELBOW_ANGLE: 160,
+  /** Controlled eccentric time (seconds) */
+  ECCENTRIC_TIME: 0.7,
+} as const;
+
+/**
+ * Continuous penalty curve configs for scoring.
+ *
+ * Formula: min(cap, scale × max(0, value − deadzone)²)
+ * "value" is the measured deviation from ideal (computed in computeRepWindowScore).
+ * "deadzone" is the tolerance before penalty kicks in (NOT the ideal target).
+ *
+ * | Category     | Cap | Deadzone | Scale | Input                                |
+ * |--------------|-----|----------|-------|--------------------------------------|
+ * | ROM          | 30  | 5°       | 0.25  | ideal 85° − maxAbduction             |
+ * | Elbow bend   | 20  | 10°      | 0.10  | ideal 160° − minElbowAngle           |
+ * | Torso lean   | 25  | 5°       | 0.20  | maxTorsoLean from vertical            |
+ * | Tempo lower  | 15  | 0.1s     | 100   | ideal 0.7s − actual eccentric time   |
+ * | Asymmetry    | 15  | 10°      | 0.04  | maxAbductionDiff between arms        |
+ * | Shrug        | 20  | 3%       | 0.50  | torso height compression percentage  |
+ *
+ * Max total penalty: 125 → worst possible rep = 0.
+ */
 const PENALTY_CONFIGS = {
-  ROM: { cap: 30, deadzone: 75, scale: 0.04 } as PenaltyConfig,
-  ELBOW_BEND: { cap: 20, deadzone: 150, scale: 0.02 } as PenaltyConfig,
-  TORSO_LEAN: { cap: 25, deadzone: 5, scale: 0.20 } as PenaltyConfig,
-  TEMPO_RAISE: { cap: 10, deadzone: 0.4, scale: 50 } as PenaltyConfig,
-  TEMPO_LOWER: { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
-  ASYMMETRY: { cap: 15, deadzone: 10, scale: 0.015 } as PenaltyConfig,
+  ROM:         { cap: 30, deadzone: 5,   scale: 0.25 } as PenaltyConfig,
+  ELBOW_BEND:  { cap: 20, deadzone: 10,  scale: 0.10 } as PenaltyConfig,
+  TORSO_LEAN:  { cap: 25, deadzone: 5,   scale: 0.20 } as PenaltyConfig,
+  TEMPO_LOWER: { cap: 15, deadzone: 0.1, scale: 100  } as PenaltyConfig,
+  ASYMMETRY:   { cap: 15, deadzone: 10,  scale: 0.04 } as PenaltyConfig,
+  SHRUG:       { cap: 20, deadzone: 3,   scale: 0.50 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -95,6 +123,10 @@ interface RepWindow {
   minElbowAngle: number;
   /** Max torso lateral lean during the rep */
   maxTorsoLean: number;
+  /** Baseline torso height at rep start (for shrug detection) */
+  baselineTorsoHeight: number | null;
+  /** Max shoulder shrug as percentage of torso height compression */
+  maxShrugPct: number;
   /** Frame count */
   frameCount: number;
 }
@@ -150,6 +182,7 @@ interface LateralRaiseDebugInfo {
   maxAbductionDiff: number | null;
   minElbow: number | null;
   maxTorsoLean: number | null;
+  shrugPct: number | null;
 }
 
 // ============================================================================
@@ -199,6 +232,8 @@ function initRepWindow(tStart: number): RepWindow {
     maxAbductionDiff: 0,
     minElbowAngle: 180,
     maxTorsoLean: 0,
+    baselineTorsoHeight: null,
+    maxShrugPct: 0,
     frameCount: 0,
   };
 }
@@ -327,39 +362,31 @@ function updateFSM(
 function computeRepWindowScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM shortfall -- higher maxAbduction is better (closer to 90 degrees)
-  //    Penalty = how far below 75 the max abduction is
-  const romShortfall = Math.max(0, PENALTY_CONFIGS.ROM.deadzone - repWindow.maxAbduction);
+  // 1. ROM shortfall -- ideal is 85° (shoulder level). FSM ensures ≥70° so range is 0-15°.
+  const romShortfall = Math.max(0, IDEAL.MAX_ABDUCTION - repWindow.maxAbduction);
   penalties.push({ value: romShortfall, config: PENALTY_CONFIGS.ROM });
 
-  // 2. Elbow bend -- higher minElbowAngle is better (straighter arm)
-  //    Penalty = how far below 150 the min elbow angle is
-  const elbowBendExcess = Math.max(0, PENALTY_CONFIGS.ELBOW_BEND.deadzone - repWindow.minElbowAngle);
+  // 2. Elbow bend -- ideal is 160° (slight bend OK). Lower = more bend = worse.
+  const elbowBendExcess = Math.max(0, IDEAL.MIN_ELBOW_ANGLE - repWindow.minElbowAngle);
   penalties.push({ value: elbowBendExcess, config: PENALTY_CONFIGS.ELBOW_BEND });
 
-  // 3. Torso lean -- lower is better
+  // 3. Torso lean -- lower is better (deadzone handles small amounts)
   penalties.push({ value: repWindow.maxTorsoLean, config: PENALTY_CONFIGS.TORSO_LEAN });
 
-  // 4. Tempo (raise) -- concentric time deficit
-  if (repWindow.tTop !== null) {
-    const tRaise = repWindow.tTop - repWindow.tStart;
-    if (tRaise > 0 && tRaise < PENALTY_CONFIGS.TEMPO_RAISE.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_RAISE.deadzone - tRaise;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_RAISE });
-    }
-  }
-
-  // 5. Tempo (lower) -- eccentric time deficit
+  // 4. Eccentric tempo only -- no penalty for concentric speed
   if (repWindow.tTop !== null) {
     const tLower = repWindow.tEnd - repWindow.tTop;
-    if (tLower > 0 && tLower < PENALTY_CONFIGS.TEMPO_LOWER.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_LOWER.deadzone - tLower;
+    if (tLower > 0 && tLower < IDEAL.ECCENTRIC_TIME) {
+      const deficit = IDEAL.ECCENTRIC_TIME - tLower;
       penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_LOWER });
     }
   }
 
-  // 6. Asymmetry -- max abduction difference between arms
+  // 5. Asymmetry -- max abduction difference between arms
   penalties.push({ value: repWindow.maxAbductionDiff, config: PENALTY_CONFIGS.ASYMMETRY });
+
+  // 6. Shoulder shrug -- torso height compression percentage
+  penalties.push({ value: repWindow.maxShrugPct, config: PENALTY_CONFIGS.SHRUG });
 
   return computeScore(penalties);
 }
@@ -391,20 +418,17 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Even it out \u2014 raise both arms to the same height.');
   }
 
-  // 5. Tempo (raise)
-  if (repWindow.tTop !== null) {
-    const tRaise = repWindow.tTop - repWindow.tStart;
-    if (tRaise > 0 && tRaise < FORM_THRESHOLDS.TEMPO_RAISE_MIN) {
-      messages.push('Slow down the raise \u2014 control the lift.');
-    }
-  }
-
-  // 6. Tempo (lower)
+  // 5. Eccentric tempo only (no concentric check)
   if (repWindow.tTop !== null) {
     const tLower = repWindow.tEnd - repWindow.tTop;
     if (tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN) {
       messages.push('Control the descent \u2014 lower the weights slowly.');
     }
+  }
+
+  // 6. Shoulder shrug
+  if (repWindow.maxShrugPct > FORM_THRESHOLDS.SHRUG_WARN) {
+    messages.push('Relax your traps \u2014 don\'t shrug the weight up.');
   }
 
   return messages;
@@ -522,6 +546,22 @@ function updateLateralRaiseState(
     // Max torso lean
     w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
 
+    // Shoulder shrug detection via torso height compression
+    if (allTorsoVisible) {
+      const midShoulderY = (ls!.y + rs!.y) / 2;
+      const midHipY = (lh!.y + rh!.y) / 2;
+      const torsoHeight = midHipY - midShoulderY; // positive when upright
+      if (torsoHeight > 0.01) {
+        if (w.baselineTorsoHeight === null) {
+          w.baselineTorsoHeight = torsoHeight;
+        }
+        const compression = (w.baselineTorsoHeight - torsoHeight) / w.baselineTorsoHeight * 100;
+        if (compression > 0) {
+          w.maxShrugPct = Math.max(w.maxShrugPct, compression);
+        }
+      }
+    }
+
     // Record TOP timestamp
     if (state.phase === 'TOP' && w.tTop === null) {
       w.tTop = t;
@@ -589,6 +629,7 @@ function getDebugInfo(state: LateralRaiseState): LateralRaiseDebugInfo {
     maxAbductionDiff: w ? fmt(w.maxAbductionDiff) : null,
     minElbow: w ? (w.minElbowAngle < 180 ? fmt(w.minElbowAngle) : null) : null,
     maxTorsoLean: w ? fmt(w.maxTorsoLean) : null,
+    shrugPct: w ? fmt(w.maxShrugPct) : null,
   };
 }
 
@@ -638,8 +679,8 @@ export const lateralRaiseDefinition: ExerciseDefinition = {
       'Keep your arms straighter \u2014 avoid excessive elbow bend.': 'elbow_bend',
       'Stay upright \u2014 avoid swaying or leaning.': 'torso_warn',
       'Even it out \u2014 raise both arms to the same height.': 'asymmetry',
-      'Slow down the raise \u2014 control the lift.': 'tempo_up',
       'Control the descent \u2014 lower the weights slowly.': 'tempo_down',
+      'Relax your traps \u2014 don\'t shrug the weight up.': 'shoulder_shrug',
     },
     issueDefinitions: [
       {
@@ -660,6 +701,15 @@ export const lateralRaiseDefinition: ExerciseDefinition = {
           'Keep arms extended.',
         ],
       },
+      {
+        issueType: 'shoulder_shrug',
+        priority: 20,
+        messages: [
+          'Relax your shoulders down.',
+          'Don\'t shrug, lead with your elbows.',
+          'Keep your traps relaxed.',
+        ],
+      },
     ],
   },
 
@@ -672,9 +722,9 @@ export const lateralRaiseDefinition: ExerciseDefinition = {
       'Brace your core and avoid using momentum to swing the weights up.',
     'Even it out \u2014 raise both arms to the same height.':
       'Focus on raising both arms evenly \u2014 consider using a mirror to check symmetry.',
-    'Slow down the raise \u2014 control the lift.':
-      'Slow the concentric phase \u2014 aim for 1-2 seconds up.',
     'Control the descent \u2014 lower the weights slowly.':
       'Slow the eccentric phase \u2014 aim for 2-3 seconds down.',
+    'Relax your traps \u2014 don\'t shrug the weight up.':
+      'Focus on leading with your elbows, not your shoulders. If you\'re shrugging, the weight may be too heavy.',
   },
 };
