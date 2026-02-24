@@ -63,16 +63,22 @@ export const workoutsService = {
   /**
    * Get all workout sessions
    */
-  async getAll(): Promise<ApiResponse<WorkoutSession[]>> {
+  async getAll(userId?: string): Promise<ApiResponse<WorkoutSession[]>> {
     if (API_CONFIG.services.workouts) {
       await mockDelay(API_CONFIG.mockDelayMs);
       return { data: mockWorkoutSessions, success: true };
     }
 
-    const { data, error } = await supabase
+    await supabase.auth.getSession();
+
+    let query = supabase
       .from('workout_sessions')
       .select('*')
       .order('date', { ascending: false });
+
+    if (userId) query = query.eq('user_id', userId);
+
+    const { data, error } = await query;
 
     if (error) return { data: [], success: false, error: error.message };
     return { data: (data ?? []).map(mapWorkoutSessionRow), success: true };
@@ -101,18 +107,24 @@ export const workoutsService = {
   /**
    * Get recent workouts with a limit
    */
-  async getRecent(limit: number = 5): Promise<ApiResponse<WorkoutSession[]>> {
+  async getRecent(limit: number = 5, userId?: string): Promise<ApiResponse<WorkoutSession[]>> {
     if (API_CONFIG.services.workouts) {
       await mockDelay(API_CONFIG.mockDelayMs);
       const recent = mockWorkoutSessions.slice(0, limit);
       return { data: recent, success: true };
     }
 
-    const { data, error } = await supabase
+    await supabase.auth.getSession();
+
+    let query = supabase
       .from('workout_sessions')
       .select('*')
       .order('date', { ascending: false })
       .limit(limit);
+
+    if (userId) query = query.eq('user_id', userId);
+
+    const { data, error } = await query;
 
     if (error) return { data: [], success: false, error: error.message };
     return { data: (data ?? []).map(mapWorkoutSessionRow), success: true };

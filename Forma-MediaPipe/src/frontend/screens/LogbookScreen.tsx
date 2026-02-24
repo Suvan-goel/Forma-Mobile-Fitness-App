@@ -309,19 +309,28 @@ export const LogbookScreen: React.FC = () => {
     return ['All', ...sorted];
   };
 
+  const formatWeekLabel = (start: Date, end: Date): string => {
+    if (start.getMonth() === end.getMonth()) {
+      return `${MONTH_SHORT[start.getMonth()]} ${start.getDate()}–${end.getDate()}, ${end.getFullYear()}`;
+    }
+    return `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
+  };
+
   const getUniqueWeeks = () => {
-    const weeks = new Set(
-      workouts.map((s) => {
-        const d = s.fullDate;
-        const start = new Date(d);
-        const day = start.getDay();
-        start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
-        const end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        return `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} - ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
-      }),
-    );
-    const sorted = Array.from(weeks).sort((a, b) => parseInt(b.split(', ')[1]) - parseInt(a.split(', ')[1]));
+    const weekMap = new Map<string, number>();
+    workouts.forEach((s) => {
+      const d = s.fullDate;
+      const start = new Date(d);
+      const day = start.getDay();
+      start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const label = formatWeekLabel(start, end);
+      if (!weekMap.has(label)) weekMap.set(label, start.getTime());
+    });
+    const sorted = Array.from(weekMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([label]) => label);
     return ['All', ...sorted];
   };
 
@@ -349,8 +358,7 @@ export const LogbookScreen: React.FC = () => {
         start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
-        const ws = `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} - ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
-        if (ws !== selectedWeek) return false;
+        if (formatWeekLabel(start, end) !== selectedWeek) return false;
       }
       return true;
     });
@@ -456,7 +464,7 @@ export const LogbookScreen: React.FC = () => {
         </View>
       )}
     </View>
-  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, handleSettingsPress]);
+  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, handleSettingsPress, workouts]);
 
   /* ── Loading ──── */
   if (isLoading) {

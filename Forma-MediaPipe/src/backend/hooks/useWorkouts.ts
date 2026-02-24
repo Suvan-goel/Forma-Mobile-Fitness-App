@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { workoutsService, WorkoutSession, WorkoutDetails } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UseWorkoutsReturn {
   workouts: WorkoutSession[];
@@ -20,15 +21,16 @@ interface UseWorkoutDetailsReturn {
 }
 
 export const useWorkouts = (): UseWorkoutsReturn => {
+  const { user, isLoading: authLoading } = useAuth();
   const [workouts, setWorkouts] = useState<WorkoutSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchWorkouts = useCallback(async () => {
+  const fetchWorkouts = useCallback(async (uid: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await workoutsService.getAll();
+      const response = await workoutsService.getAll(uid);
       if (response.success) {
         setWorkouts(response.data);
       } else {
@@ -42,10 +44,19 @@ export const useWorkouts = (): UseWorkoutsReturn => {
   }, []);
 
   useEffect(() => {
-    fetchWorkouts();
-  }, [fetchWorkouts]);
+    if (!authLoading && user) {
+      fetchWorkouts(user.id);
+    } else if (!authLoading && !user) {
+      setWorkouts([]);
+      setIsLoading(false);
+    }
+  }, [authLoading, user, fetchWorkouts]);
 
-  return { workouts, isLoading, error, refetch: fetchWorkouts };
+  const refetch = useCallback(async () => {
+    if (user) await fetchWorkouts(user.id);
+  }, [user, fetchWorkouts]);
+
+  return { workouts, isLoading: isLoading || authLoading, error, refetch };
 };
 
 export const useWorkoutDetails = (workoutId: string): UseWorkoutDetailsReturn => {
