@@ -14,6 +14,8 @@ import { mergeTTSConfig } from '../../../backend/services/ttsMessagePools';
 import { mergeSummaryConfig } from '../../setNotesSummary';
 import type { ExerciseDefinition } from '../types';
 import { barbellCurlDefinition } from './barbellCurl';
+import { cablePushdownDefinition } from './cablePushdown';
+import { lateralRaiseDefinition } from './lateralRaise';
 import { pushupDefinition } from './pushup';
 
 /** Register an exercise and merge its TTS + summary configs into the global maps. */
@@ -25,4 +27,6 @@ function registerExercise(definition: ExerciseDefinition): void {
 
 // ── Register all exercises ──
 registerExercise(barbellCurlDefinition);
+registerExercise(cablePushdownDefinition);
+registerExercise(lateralRaiseDefinition);
 registerExercise(pushupDefinition);

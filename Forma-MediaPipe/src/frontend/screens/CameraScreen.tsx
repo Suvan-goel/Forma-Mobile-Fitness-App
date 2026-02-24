@@ -9,7 +9,8 @@ import { COLORS, FONTS, SPACING } from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
-import { detectExercise, updateRepCount, Keypoint } from '../../utils/poseAnalysis';
+import { detectExercise, updateRepCount } from '../../utils/poseAnalysis';
+import type { Keypoint } from '../../utils/poseAnalysis';
 import '../../utils/exercises/definitions/register';
 import { ExerciseRegistry } from '../../utils/exercises';
 import type { ExerciseState } from '../../utils/exercises';
@@ -70,6 +71,11 @@ export const CameraScreen: React.FC = () => {
 
   // Unified exercise state ref — populated via ExerciseRegistry on mount and recording start
   const exerciseStateRef = useRef<ExerciseState | null>(null);
+
+  // __DEV__-only: landmark recording refs (auto-record when set recording starts/stops)
+  const isRecordingLandmarksRef = useRef(false);
+  const landmarkBufferRef = useRef<Array<{ timestamp: number; keypoints: Keypoint[] }>>([]);
+  const landmarkRecordingStartRef = useRef(0);
 
   const category = route.params?.category ?? 'Weightlifting';
   const exerciseNameFromRoute = (route.params as any)?.exerciseName;
@@ -276,6 +282,14 @@ export const CameraScreen: React.FC = () => {
     const keypoints = convertLandmarksToKeypoints(data);
     if (!keypoints || keypoints.length === 0) return;
 
+    // __DEV__-only: buffer keypoints for landmark recording
+    if (__DEV__ && isRecordingLandmarksRef.current) {
+      landmarkBufferRef.current.push({
+        timestamp: Date.now() - landmarkRecordingStartRef.current,
+        keypoints,
+      });
+    }
+
     // Registry-based exercise processing (handles all registered exercises uniformly)
     const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (exerciseDef && exerciseStateRef.current) {
@@ -385,6 +399,33 @@ export const CameraScreen: React.FC = () => {
       setIsRecording(false);
       setExerciseDebug(null);
 
+      // __DEV__-only: dump landmark recording to Metro console
+      if (__DEV__) {
+        isRecordingLandmarksRef.current = false;
+        if (landmarkBufferRef.current.length > 0) {
+          const recording = {
+            exerciseName: exerciseNameFromRoute || 'Unknown',
+            metadata: {
+              recordedAt: new Date().toISOString(),
+              duration: (Date.now() - landmarkRecordingStartRef.current) / 1000,
+              description: `${repCount} reps`,
+              expectedReps: repCount,
+              expectedScoreRange: [0, 100],
+            },
+            frames: landmarkBufferRef.current,
+          };
+          const json = JSON.stringify(recording);
+          console.log('=== LANDMARK_RECORDING_START ===');
+          const CHUNK = 4000;
+          for (let i = 0; i < json.length; i += CHUNK) {
+            console.log(json.slice(i, i + CHUNK));
+          }
+          console.log('=== LANDMARK_RECORDING_END ===');
+          console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
+        }
+        landmarkBufferRef.current = [];
+      }
+
       const formScores = accumulatedFormScoresRef.current;
       const repFeedback = accumulatedRepFeedbackRef.current;
       // Weighted average: bad reps weigh up to 3× more than perfect reps
@@ -466,6 +507,13 @@ export const CameraScreen: React.FC = () => {
       accumulatedFormScoresRef.current = [];
       accumulatedRepFeedbackRef.current = [];
       ttsResetCoach();
+
+      // __DEV__-only: start landmark recording
+      if (__DEV__) {
+        landmarkRecordingStartRef.current = Date.now();
+        landmarkBufferRef.current = [];
+        isRecordingLandmarksRef.current = true;
+      }
     }
   }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
 

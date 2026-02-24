@@ -18,7 +18,7 @@ import { COLORS, FONTS } from '../../constants/theme';
 const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
   Logbook:   { icon: BookOpen,  label: 'Logbook' },
   Analytics: { icon: BarChart2,  label: 'Analytics' },
-  Record:    { icon: Video,      label: 'Record' },
+  Record:    { icon: Video,      label: 'Capture' },
   Rewards:   { icon: Star,       label: 'Rewards' },
 };
 
