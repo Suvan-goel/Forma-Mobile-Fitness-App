@@ -133,6 +133,8 @@ interface LatPulldownState {
   /** Warmup gate */
   warmupGate: WarmupGate;
   warmedUp: boolean;
+  /** Max avg elbow observed during REST (pre-pull extension) */
+  restMaxAvgElbow: number;
   /** Current smoothed values (for debug) */
   smoothedLeftElbow: number;
   smoothedRightElbow: number;
@@ -181,6 +183,7 @@ function initializeState(): LatPulldownState {
       visibilityThreshold: 0.2,
     }),
     warmedUp: false,
+    restMaxAvgElbow: -Infinity,
     smoothedLeftElbow: 180,
     smoothedRightElbow: 180,
     smoothedAvgElbow: 180,
@@ -460,6 +463,11 @@ function updateLatPulldownState(
   state.smoothedAvgElbow = smoothedAvgElbow;
   state.smoothedTorsoLean = smoothedTorsoLean;
 
+  // -- Track max elbow during REST (pre-pull extension) --
+  if (state.phase === 'REST') {
+    state.restMaxAvgElbow = Math.max(state.restMaxAvgElbow, smoothedAvgElbow);
+  }
+
   // -- FSM update --
   const fsmResult = updateFSM(state.phase, smoothedAvgElbow, t, state.tRepStart);
   const prevPhase = state.phase;
@@ -469,8 +477,10 @@ function updateLatPulldownState(
   if (prevPhase === 'REST' && state.phase === 'PULLING') {
     state.tRepStart = t;
     state.repWindow = initRepWindow(t);
-    // Record initial max avg elbow (starting position)
-    state.repWindow.maxAvgElbow = smoothedAvgElbow;
+    // Seed maxAvgElbow from the pre-pull extended position observed during REST
+    state.repWindow.maxAvgElbow = state.restMaxAvgElbow;
+    // Reset for next rep's REST phase
+    state.restMaxAvgElbow = -Infinity;
   }
 
   // -- Accumulate rep window while in a rep --
