@@ -47,7 +47,7 @@ export default function App() {
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={COLORS.accent} />
             <StatusBar style="light" />
           </View>
         </GestureHandlerRootView>
