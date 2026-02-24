@@ -16,6 +16,7 @@ import type { ExerciseDefinition } from '../types';
 import { barbellCurlDefinition } from './barbellCurl';
 import { cablePushdownDefinition } from './cablePushdown';
 import { lateralRaiseDefinition } from './lateralRaise';
+import { legExtensionsDefinition } from './legExtensions';
 import { pushupDefinition } from './pushup';
 
 /** Register an exercise and merge its TTS + summary configs into the global maps. */
@@ -29,4 +30,5 @@ function registerExercise(definition: ExerciseDefinition): void {
 registerExercise(barbellCurlDefinition);
 registerExercise(cablePushdownDefinition);
 registerExercise(lateralRaiseDefinition);
+registerExercise(legExtensionsDefinition);
 registerExercise(pushupDefinition);
