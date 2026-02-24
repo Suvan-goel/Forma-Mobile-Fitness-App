@@ -6,7 +6,7 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { X } from 'lucide-react-native';
 import CogIcon from '../components/icons/CogIcon';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import { COLORS, FONTS, SPACING, getScoreColor } from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
 import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
@@ -681,7 +681,7 @@ export const CameraScreen: React.FC = () => {
                     key={item.id}
                     style={[styles.feedbackFeedItem, { opacity }]}
                   >
-                    <Text style={styles.feedbackFeedText} numberOfLines={2}>
+                    <Text style={[styles.feedbackFeedText, (item.text === 'Great rep!' || item.text === 'Good rep.') && styles.feedbackFeedTextGood]} numberOfLines={2}>
                       {item.text}
                     </Text>
                   </View>
@@ -799,7 +799,7 @@ export const CameraScreen: React.FC = () => {
               </View>
               <View style={styles.metricBlock}>
                 <Text style={styles.metricLabel}>FORM</Text>
-                <MonoText style={styles.metricValue}>{displayValues.form}</MonoText>
+                <MonoText style={[styles.metricValue, currentFormScore != null && repCount > 0 && { color: getScoreColor(currentFormScore) }]}>{displayValues.form}</MonoText>
               </View>
               <View style={styles.metricBlock}>
                 <Text style={styles.metricLabel}>TIME</Text>
@@ -1090,6 +1090,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.ui.bold,
     color: '#FFFFFF',
+  },
+  feedbackFeedTextGood: {
+    color: '#34D399',
   },
   torsoDebugContainer: {
     position: 'absolute',

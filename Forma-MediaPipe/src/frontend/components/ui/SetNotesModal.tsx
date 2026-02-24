@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, ChevronDown, ChevronUp, Clock, TrendingUp } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { generateSetSummary } from '../../../utils/setNotesSummary';
 const MAX_FEEDBACK_LINES = 2;
@@ -25,13 +25,6 @@ interface SetNotesModalProps {
   setNumber: number;
   exerciseName: string;
 }
-
-const getScoreColor = (score: number): string => {
-  if (score >= 90) return '#34D399';   // emerald
-  if (score >= 75) return COLORS.accent;
-  if (score >= 50) return COLORS.yellow;
-  return COLORS.orange;
-};
 
 export const SetNotesModal: React.FC<SetNotesModalProps> = ({
   visible,

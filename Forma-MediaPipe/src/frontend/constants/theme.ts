@@ -69,6 +69,13 @@ export const GLOW_SHADOW = {
   elevation: 8,
 } as const;
 
+export const getScoreColor = (score: number): string => {
+  if (score >= 90) return '#34D399';   // emerald
+  if (score >= 75) return '#8B5CF6';   // violet
+  if (score >= 50) return '#F5A623';   // yellow
+  return '#E07856';                    // orange
+};
+
 export const SPACING = {
   xs: 4,
   sm: 8,

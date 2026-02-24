@@ -27,7 +27,7 @@ import {
   Layers,
   Flag,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
 import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
@@ -486,7 +486,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                               <View style={styles.setMetricDivider} />
                               <View style={styles.setMetricItem}>
                                 <Text style={styles.setMetricLabel}>FORM</Text>
-                                <MonoText bold style={styles.setMetricValue}>{set.formScore}</MonoText>
+                                <MonoText bold style={[styles.setMetricValue, { color: getScoreColor(set.formScore) }]}>{set.formScore}</MonoText>
                               </View>
                             </View>
                           </View>
