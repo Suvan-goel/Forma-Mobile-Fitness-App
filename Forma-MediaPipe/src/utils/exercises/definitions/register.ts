@@ -17,6 +17,7 @@ import { barbellCurlDefinition } from './barbellCurl';
 import { cablePushdownDefinition } from './cablePushdown';
 import { latPulldownDefinition } from './latPulldown';
 import { lateralRaiseDefinition } from './lateralRaise';
+import { machineAbCrunchDefinition } from './machineAbCrunch';
 import { pushupDefinition } from './pushup';
 
 /** Register an exercise and merge its TTS + summary configs into the global maps. */
@@ -31,4 +32,5 @@ registerExercise(barbellCurlDefinition);
 registerExercise(cablePushdownDefinition);
 registerExercise(latPulldownDefinition);
 registerExercise(lateralRaiseDefinition);
+registerExercise(machineAbCrunchDefinition);
 registerExercise(pushupDefinition);
