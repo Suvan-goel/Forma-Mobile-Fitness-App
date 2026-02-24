@@ -1062,6 +1062,9 @@ const styles = StyleSheet.create({
   recordButtonInnerActive: {
     backgroundColor: '#FF3B30',
     borderWidth: 0,
+    width: 61,
+    height: 61,
+    borderRadius: 30.5,
   },
   feedbackFeedContainer: {
     position: 'absolute',
