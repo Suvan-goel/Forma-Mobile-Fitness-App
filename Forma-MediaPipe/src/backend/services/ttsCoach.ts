@@ -14,7 +14,6 @@
 
 import { speakWithElevenLabs, isElevenLabsAvailable } from './elevenlabsTTS';
 import {
-  IssueType,
   ISSUE_POOLS,
   POSITIVE_POOLS,
   ISSUE_PRIORITY,
@@ -39,7 +38,7 @@ interface CoachState {
   /** Total reps in current set (for summary) */
   totalRepsInSet: number;
   /** Last issue type spoken (for variety tracking) */
-  lastSpokenIssue: IssueType | null;
+  lastSpokenIssue: string | null;
 }
 
 const DEFAULT_STATE: CoachState = {
@@ -76,7 +75,7 @@ export async function onRepCompleted(
   // Map visual feedback strings to issue types
   const issues = feedbackMessages
     .map((msg) => FEEDBACK_TO_ISSUE[msg])
-    .filter((issue): issue is IssueType => issue !== undefined);
+    .filter((issue): issue is string => issue !== undefined);
 
   if (issues.length > 0) {
     // ── Bad rep ──

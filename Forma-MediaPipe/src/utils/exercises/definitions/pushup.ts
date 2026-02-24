@@ -1,9 +1,10 @@
 /**
- * Pushup Heuristics - Forma Specification
+ * Push-Up Exercise Definition
  *
- * Implements deterministic pushup detection and form coaching using
- * side-view camera with single-body FSM. Mirrors the barbellCurlHeuristics
- * pattern but tracks elbow angle and body alignment.
+ * Wraps the existing pushupHeuristics logic into the ExerciseDefinition
+ * interface. All heuristics, FSM, scoring, and form evaluation code is
+ * copied here verbatim and made module-private. The only export is
+ * `pushupDefinition`.
  */
 
 import {
@@ -12,23 +13,29 @@ import {
   calculateAngle2D,
   getKeypoint,
   isVisible,
-} from './poseAnalysis';
+} from '../../poseAnalysis';
+
+import type {
+  ExerciseDefinition,
+  ExerciseState,
+  RepResult as FrameworkRepResult,
+} from '../types';
 
 // ============================================================================
-// CONSTANTS & THRESHOLDS
+// CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
 /** FSM thresholds (degrees) */
-export const THRESHOLDS = {
+const THRESHOLDS = {
   /** Elbow angle below which we transition PLANK -> DESCENDING */
   DESCENDING_ENTER: 150,
   /** Elbow angle above which we transition ASCENDING -> PLANK.
-   *  A fully extended arm reads 155-170° in 2D CV depending on camera angle
-   *  and whether the user hyperextends. 155° accepts a "soft lockout" (e.g.
-   *  164.2° observed) while still requiring meaningful extension from BOTTOM. */
+   *  A fully extended arm reads 155-170 in 2D CV depending on camera angle
+   *  and whether the user hyperextends. 155 accepts a "soft lockout" (e.g.
+   *  164.2 observed) while still requiring meaningful extension from BOTTOM. */
   PLANK_REENTER: 155,
   /** Elbow angle below which we reach BOTTOM.
-   *  Relaxed from 95° to 105° — a physical 90° often reads 96-100° in 2D
+   *  Relaxed from 95 to 105 -- a physical 90 often reads 96-100 in 2D
    *  camera projection due to foreshortening and landmark jitter. */
   BOTTOM_ENTER: 105,
   /** Elbow angle above which we leave BOTTOM (hysteresis above BOTTOM_ENTER) */
@@ -47,7 +54,7 @@ export const THRESHOLDS = {
   /** Seconds the user must hold plank before FSM activates from IDLE */
   PLANK_HOLD_TIME: 1.0,
   /** Minimum torso inclination from vertical for plank detection (degrees).
-   *  Standing ≈ 0°, planking ≈ 90°. 65° rejects upright postures. */
+   *  Standing = 0, planking = 90. 65 rejects upright postures. */
   TORSO_INCLINE_MIN: 65,
   /** Maximum torso inclination from vertical for plank detection (degrees).
    *  Allows slight decline/incline pushups but rejects inverted poses. */
@@ -55,11 +62,11 @@ export const THRESHOLDS = {
 } as const;
 
 /** Form heuristic thresholds */
-export const FORM_THRESHOLDS = {
-  // Depth (aligned with BOTTOM_ENTER — if the FSM accepted it, only penalize beyond this)
-  DEPTH_FAIL: 110, // min elbow > 110° means insufficient depth
-  // Lockout (aligned with PLANK_REENTER — penalize only if clearly short of extension)
-  LOCKOUT_FAIL: 150, // max elbow < 150° means incomplete lockout
+const FORM_THRESHOLDS = {
+  // Depth (aligned with BOTTOM_ENTER -- if the FSM accepted it, only penalize beyond this)
+  DEPTH_FAIL: 110, // min elbow > 110 means insufficient depth
+  // Lockout (aligned with PLANK_REENTER -- penalize only if clearly short of extension)
+  LOCKOUT_FAIL: 150, // max elbow < 150 means incomplete lockout
   // ROM
   ROM_MIN: 60, // minimum ROM in degrees
   // Hip alignment (shoulder-hip-ankle angle)
@@ -73,22 +80,22 @@ export const FORM_THRESHOLDS = {
   HIP_DEV_PIKE_FAIL: 0.10,
   HIP_DEV_PIKE_WARN: 0.05,
   // Tempo
-  TEMPO_CONCENTRIC_MIN: 0.15, // seconds — ascent too fast
-  TEMPO_ECCENTRIC_MIN: 0.20, // seconds — descent too fast
+  TEMPO_CONCENTRIC_MIN: 0.15, // seconds -- ascent too fast
+  TEMPO_ECCENTRIC_MIN: 0.20, // seconds -- descent too fast
 } as const;
 
 /**
  * Continuous penalty curve parameters for `computePushupRepScore()`.
- * Each category: min(cap, scale × max(0, x − deadzone)²)
+ * Each category: min(cap, scale * max(0, x - deadzone)^2)
  *
  * | Category          | Cap | Deadzone           | Scale | Key Input                     |
  * |-------------------|-----|--------------------|-------|-------------------------------|
- * | Depth shortfall   | 30  | 90° (minElbow)     | 0.03  | min elbow angle during rep    |
- * | Lockout shortfall | 25  | 165° (maxElbow)    | 0.10  | ideal lockout − max elbow     |
- * | Hip alignment     | 35  | ±8° from 180°      | 0.04  | worst body-angle deviation    |
+ * | Depth shortfall   | 30  | 90 (minElbow)      | 0.03  | min elbow angle during rep    |
+ * | Lockout shortfall | 25  | 165 (maxElbow)     | 0.10  | ideal lockout - max elbow     |
+ * | Hip alignment     | 35  | +/-8 from 180      | 0.04  | worst body-angle deviation    |
  * | Tempo             | 20  | up: 0.3s, dn: 0.4s | 60/40 | concentric / eccentric time   |
  *
- * Max total penalty: 110 → worst possible rep = 0.
+ * Max total penalty: 110 -> worst possible rep = 0.
  */
 const SCORE_CURVES = {
   DEPTH:   { deadzone: 90,  scale: 0.03, cap: 30 },
@@ -104,12 +111,12 @@ const EMA_ALPHA = 0.3;
 const VISIBILITY_THRESHOLD = 0.1;
 
 // ============================================================================
-// TYPES
+// TYPES (module-private)
 // ============================================================================
 
-export type PushupPhase = 'IDLE' | 'PLANK' | 'DESCENDING' | 'BOTTOM' | 'ASCENDING';
+type PushupPhase = 'IDLE' | 'PLANK' | 'DESCENDING' | 'BOTTOM' | 'ASCENDING';
 
-export interface PushupFSM {
+interface PushupFSM {
   phase: PushupPhase;
   /** Timestamp when rep started (PLANK -> DESCENDING) */
   tRepStart: number | null;
@@ -121,7 +128,7 @@ export interface PushupFSM {
   tIdleStableSince: number | null;
 }
 
-export interface PushupRepWindow {
+interface PushupRepWindow {
   /** Min/max elbow angle during rep */
   minElbow: number;
   maxElbow: number;
@@ -142,16 +149,16 @@ export interface PushupRepWindow {
   frameCount: number;
 }
 
-export interface PushupAngles {
+interface PushupAngles {
   elbow: number;
   bodyAlignment: number;
   hipDeviation: number; // normalized: positive = sag, negative = pike
   headSpine: number;
 }
 
-export interface SmoothedPushupAngles extends PushupAngles {}
+interface SmoothedPushupAngles extends PushupAngles {}
 
-export interface RepResult {
+interface RepResult {
   repIndex: number;
   rom: number;
   tDown: number; // eccentric (descent)
@@ -160,7 +167,7 @@ export interface RepResult {
   messages: string[];
 }
 
-export interface PushupState {
+interface PushupState {
   fsm: PushupFSM;
   repCount: number;
   repWindow: PushupRepWindow | null;
@@ -174,6 +181,33 @@ export interface PushupState {
   visibleSide: 'left' | 'right';
   /** Last computed torso inclination from vertical (for debug display) */
   lastTorsoInclination: number | null;
+}
+
+/** Debug info for on-screen pushup diagnostics */
+interface PushupDebugInfo {
+  phase: PushupPhase;
+  side: 'left' | 'right';
+  elbow: number | null;
+  bodyAlignment: number | null;
+  hipDev: number | null;
+  headSpine: number | null;
+  /** Torso inclination from vertical (0=standing, 90=plank) */
+  torsoInclination: number | null;
+  // Rep window deltas (min/max during current rep)
+  elbowMin: number | null;
+  elbowMax: number | null;
+  bodyAngleMin: number | null;
+  bodyAngleMax: number | null;
+  hipDevMin: number | null;
+  hipDevMax: number | null;
+  headSpineMin: number | null;
+  headSpineMax: number | null;
+}
+
+interface FSMUpdateResult {
+  fsm: PushupFSM;
+  repCompleted: boolean;
+  partialRep: boolean;
 }
 
 // ============================================================================
@@ -218,7 +252,7 @@ function initRepWindow(tStart: number): PushupRepWindow {
   };
 }
 
-export function initializePushupState(): PushupState {
+function initializePushupState(): PushupState {
   return {
     fsm: initFSM(),
     repCount: 0,
@@ -286,8 +320,8 @@ function calculateHipDeviation(
  * Uses midpoints of both shoulders and both hips when available, falls back to
  * the visible side's shoulder and hip.
  *
- * Returns degrees: 0° = standing vertical (torso aligned with Y-axis),
- *                  90° = horizontal (plank position).
+ * Returns degrees: 0 = standing vertical (torso aligned with Y-axis),
+ *                  90 = horizontal (plank position).
  * Returns null if required landmarks aren't visible.
  */
 function calculateTorsoInclination(
@@ -341,7 +375,7 @@ function calculateTorsoInclination(
     hipY = h.y;
   }
 
-  // Torso vector: shoulder → hip (in screen coords, Y points down)
+  // Torso vector: shoulder -> hip (in screen coords, Y points down)
   const dx = hipX - shoulderX;
   const dy = hipY - shoulderY;
   const len = Math.sqrt(dx * dx + dy * dy);
@@ -407,7 +441,7 @@ function calculatePushupAngles(
 
   if (!hasArm) return null;
 
-  // Elbow angle (2D — side view, XY plane captures flexion)
+  // Elbow angle (2D -- side view, XY plane captures flexion)
   const elbowAngle = calculateAngle2D(
     getPoint(shoulder)!,
     getPoint(elbow)!,
@@ -509,12 +543,6 @@ function applySmoothing(
 // FSM LOGIC
 // ============================================================================
 
-interface FSMUpdateResult {
-  fsm: PushupFSM;
-  repCompleted: boolean;
-  partialRep: boolean;
-}
-
 function updateFSM(
   currentFSM: PushupFSM,
   elbowAngle: number,
@@ -534,7 +562,7 @@ function updateFSM(
         bodyAlignment <= THRESHOLDS.PLANK_BODY_MAX;
 
       // torsoInclination can be null when landmarks are momentarily lost.
-      // Treat null as "no data" — don't advance the timer, but don't reset it
+      // Treat null as "no data" -- don't advance the timer, but don't reset it
       // either. Only a definitive out-of-range reading resets.
       const torsoHorizontal =
         torsoInclination !== null &&
@@ -551,11 +579,11 @@ function updateFSM(
           fsm.tIdleStableSince = null;
         }
       } else if (!armsExtended || !bodyAligned || torsoDefinitelyNot) {
-        // Reset only on definitive failure — null torso (lost landmarks) is
+        // Reset only on definitive failure -- null torso (lost landmarks) is
         // tolerated so jittery frames don't restart the hold timer.
         fsm.tIdleStableSince = null;
       }
-      // else: torsoInclination is null but arms/body are fine — hold timer
+      // else: torsoInclination is null but arms/body are fine -- hold timer
       // continues without advancing (we just skip this frame).
       break;
     }
@@ -578,7 +606,7 @@ function updateFSM(
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_DESCENDING_TIME
       ) {
-        // Returned to extension without reaching depth — partial rep
+        // Returned to extension without reaching depth -- partial rep
         // (debounced: must have been descending for MIN_DESCENDING_TIME to avoid
         //  flip-flopping when the user hovers near the DESCENDING_ENTER threshold)
         fsm.phase = 'PLANK';
@@ -619,23 +647,23 @@ function updateFSM(
  * Compute a continuous pushup rep score.
  * Small errors produce small but real drops; a perfect 100 is rare and earned.
  *
- * Each category: min(cap, scale × max(0, x − deadzone)²)
+ * Each category: min(cap, scale * max(0, x - deadzone)^2)
  */
 function computePushupRepScore(repWindow: PushupRepWindow): number {
   let penalty = 0;
 
-  // 1. Depth shortfall — lower minElbow is better (closer to 90°)
-  //    At 90°: 0, at 95°: 0.75, at 100°: 3, at 105°: 6.75, at 110°: 12
+  // 1. Depth shortfall -- lower minElbow is better (closer to 90)
+  //    At 90: 0, at 95: 0.75, at 100: 3, at 105: 6.75, at 110: 12
   const depthExcess = Math.max(0, repWindow.minElbow - SCORE_CURVES.DEPTH.deadzone);
   penalty += Math.min(SCORE_CURVES.DEPTH.cap, SCORE_CURVES.DEPTH.scale * depthExcess * depthExcess);
 
-  // 2. Lockout shortfall — higher maxElbow is better (closer to 170°+)
-  //    At 165°+: 0, at 160°: 2.5, at 155°: 10, at 150°: 22.5
+  // 2. Lockout shortfall -- higher maxElbow is better (closer to 170+)
+  //    At 165+: 0, at 160: 2.5, at 155: 10, at 150: 22.5
   const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxElbow);
   penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
 
-  // 3. Hip alignment — body should be ~180° (straight line)
-  //    Deadzone: ±8° from 180° (172–188° is fine)
+  // 3. Hip alignment -- body should be ~180 (straight line)
+  //    Deadzone: +/-8 from 180 (172-188 is fine)
   //    Sag (minBodyAngle < 172) and pike (maxBodyAngle > 188) measured independently;
   //    worst direction drives the penalty.
   const sagDev = Math.max(0, (SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone) - repWindow.minBodyAngle);
@@ -643,7 +671,7 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
   const worstHipDev = Math.max(sagDev, pikeDev);
   penalty += Math.min(SCORE_CURVES.HIP.cap, SCORE_CURVES.HIP.scale * worstHipDev * worstHipDev);
 
-  // 4. Tempo — too fast in either direction
+  // 4. Tempo -- too fast in either direction
   if (repWindow.tBottom !== null) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
@@ -667,7 +695,7 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
 
 /**
  * Generate visual feedback messages using discrete thresholds.
- * These are independent of the continuous score — a rep can score 92 and
+ * These are independent of the continuous score -- a rep can score 92 and
  * still surface an actionable message.
  */
 function generateFormMessages(repWindow: PushupRepWindow): string[] {
@@ -689,7 +717,7 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
     messages.push('Incomplete rep \u2014 full range of motion from lockout to 90 degrees.');
   }
 
-  // 4. Hip alignment — dual metric cross-check
+  // 4. Hip alignment -- dual metric cross-check
   const minBody = repWindow.minBodyAngle;
   const maxBody = repWindow.maxBodyAngle;
   const minDev = repWindow.minHipDev;
@@ -725,9 +753,9 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
 
 /**
  * Evaluate a completed pushup rep.
- * - `score`: continuous quadratic penalty curves (small errors → small drops)
+ * - `score`: continuous quadratic penalty curves (small errors -> small drops)
  * - `messages`: discrete threshold-based feedback (actionable coaching cues)
- * The two systems are independent per CLAUDE.md §13.
+ * The two systems are independent per CLAUDE.md section 13.
  */
 function evaluateForm(
   repWindow: PushupRepWindow
@@ -741,7 +769,7 @@ function evaluateForm(
 // UPDATE LOGIC
 // ============================================================================
 
-export function updatePushupState(
+function updatePushupState(
   keypoints: Keypoint[],
   currentState: PushupState
 ): PushupState {
@@ -771,7 +799,7 @@ export function updatePushupState(
     return newState;
   }
 
-  // Compute torso inclination for IDLE gate (uses raw keypoints, not smoothed —
+  // Compute torso inclination for IDLE gate (uses raw keypoints, not smoothed --
   // the 1s hold timer provides sufficient noise filtering)
   const torsoInclination = calculateTorsoInclination(keypoints, visibleSide);
   newState.lastTorsoInclination = torsoInclination;
@@ -780,7 +808,7 @@ export function updatePushupState(
   const fsmResult = updateFSM(currentState.fsm, smoothed.elbow, t, smoothed.bodyAlignment, torsoInclination);
   newState.fsm = fsmResult.fsm;
 
-  // Handle partial rep — still counts but flags shallow depth
+  // Handle partial rep -- still counts but flags shallow depth
   if (fsmResult.partialRep) {
     newState.repCount++;
     newState.feedback = 'Go deeper \u2014 try to hit 90 degrees.';
@@ -854,7 +882,7 @@ export function updatePushupState(
     }
     newState.lastFeedbackTime = t;
 
-    // Reset rep window and FSM timestamps (skip IDLE — gate only applies at start)
+    // Reset rep window and FSM timestamps (skip IDLE -- gate only applies at start)
     newState.repWindow = null;
     newState.fsm = resetFSMToPlank();
   }
@@ -868,45 +896,12 @@ export function updatePushupState(
 }
 
 // ============================================================================
-// UI HELPERS
+// DEBUG INFO
 // ============================================================================
 
-export function getPushupRepCount(state: PushupState): number {
-  return state.repCount;
-}
-
-export function getPushupFormScore(state: PushupState): number {
-  return state.lastRepResult?.score ?? 0;
-}
-
-export function getPushupFeedback(state: PushupState): string | null {
-  return state.feedback;
-}
-
-/** Debug info for on-screen pushup diagnostics */
-export interface PushupDebugInfo {
-  phase: PushupPhase;
-  side: 'left' | 'right';
-  elbow: number | null;
-  bodyAlignment: number | null;
-  hipDev: number | null;
-  headSpine: number | null;
-  /** Torso inclination from vertical (0°=standing, 90°=plank) */
-  torsoInclination: number | null;
-  // Rep window deltas (min/max during current rep)
-  elbowMin: number | null;
-  elbowMax: number | null;
-  bodyAngleMin: number | null;
-  bodyAngleMax: number | null;
-  hipDevMin: number | null;
-  hipDevMax: number | null;
-  headSpineMin: number | null;
-  headSpineMax: number | null;
-}
-
-export function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
+function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
   const angles = state.displayAngles;
-  const window = state.repWindow;
+  const repWin = state.repWindow;
   const fmt = (v: number | undefined): number | null =>
     v !== undefined && !isNaN(v) && isFinite(v) ? v : null;
   const fmtW = (min: number, max: number): number | null =>
@@ -920,13 +915,80 @@ export function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
     hipDev: fmt(angles?.hipDeviation),
     headSpine: fmt(angles?.headSpine),
     torsoInclination: fmt(state.lastTorsoInclination ?? undefined),
-    elbowMin: window ? fmtW(window.minElbow, window.maxElbow) && fmt(window.minElbow) : null,
-    elbowMax: window ? fmtW(window.minElbow, window.maxElbow) && fmt(window.maxElbow) : null,
-    bodyAngleMin: window ? fmtW(window.minBodyAngle, window.maxBodyAngle) && fmt(window.minBodyAngle) : null,
-    bodyAngleMax: window ? fmtW(window.minBodyAngle, window.maxBodyAngle) && fmt(window.maxBodyAngle) : null,
-    hipDevMin: window ? fmtW(window.minHipDev, window.maxHipDev) && fmt(window.minHipDev) : null,
-    hipDevMax: window ? fmtW(window.minHipDev, window.maxHipDev) && fmt(window.maxHipDev) : null,
-    headSpineMin: window ? fmtW(window.minHeadSpine, window.maxHeadSpine) && fmt(window.minHeadSpine) : null,
-    headSpineMax: window ? fmtW(window.minHeadSpine, window.maxHeadSpine) && fmt(window.maxHeadSpine) : null,
+    elbowMin: repWin ? fmtW(repWin.minElbow, repWin.maxElbow) && fmt(repWin.minElbow) : null,
+    elbowMax: repWin ? fmtW(repWin.minElbow, repWin.maxElbow) && fmt(repWin.maxElbow) : null,
+    bodyAngleMin: repWin ? fmtW(repWin.minBodyAngle, repWin.maxBodyAngle) && fmt(repWin.minBodyAngle) : null,
+    bodyAngleMax: repWin ? fmtW(repWin.minBodyAngle, repWin.maxBodyAngle) && fmt(repWin.maxBodyAngle) : null,
+    hipDevMin: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.minHipDev) : null,
+    hipDevMax: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.maxHipDev) : null,
+    headSpineMin: repWin ? fmtW(repWin.minHeadSpine, repWin.maxHeadSpine) && fmt(repWin.minHeadSpine) : null,
+    headSpineMax: repWin ? fmtW(repWin.minHeadSpine, repWin.maxHeadSpine) && fmt(repWin.maxHeadSpine) : null,
   };
 }
+
+// ============================================================================
+// EXERCISE DEFINITION (the only export)
+// ============================================================================
+
+export const pushupDefinition: ExerciseDefinition = {
+  name: 'Push-Up',
+  requiredView: 'side',
+
+  createState: (): ExerciseState => ({
+    repCount: 0,
+    lastRepResult: null,
+    feedback: null,
+    feedbackTimestamp: null,
+    debugInfo: {},
+    _internal: initializePushupState(),
+  }),
+
+  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+    const internal = state._internal as PushupState;
+    const newInternal = updatePushupState(keypoints, internal);
+
+    // Map internal RepResult to framework RepResult
+    const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
+      ? {
+          repIndex: newInternal.lastRepResult.repIndex,
+          score: newInternal.lastRepResult.score,
+          messages: newInternal.lastRepResult.messages,
+        }
+      : null;
+
+    return {
+      repCount: newInternal.repCount,
+      lastRepResult,
+      feedback: newInternal.feedback,
+      feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
+      debugInfo: getPushupDebugInfo(newInternal) as unknown as Record<string, unknown>,
+      _internal: newInternal,
+    };
+  },
+
+  ttsConfig: {
+    feedbackToIssue: {
+      'Go deeper \u2014 aim for elbows at 90 degrees.': 'depth_short',
+      'Lock out your arms fully at the top.': 'lockout_short',
+      'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': 'incomplete_rom',
+      'Hips are sagging \u2014 engage your core to maintain a straight line.': 'hip_sag',
+      'Keep your hips up \u2014 your body line is dropping.': 'hip_sag',
+      'Hips are piking up \u2014 lower them to maintain a straight plank.': 'hip_pike',
+      'Hips are riding high \u2014 aim for a straight body line.': 'hip_pike',
+      'Slow down the push \u2014 control the movement.': 'tempo_up',
+      "Control the descent \u2014 don't drop into the pushup.": 'tempo_down',
+    },
+  },
+
+  summaryConfig: {
+    'Go deeper \u2014 aim for elbows at 90 degrees.': 'Focus on hitting full depth each rep.',
+    'Lock out your arms fully at the top.': 'Fully extend at the top of each rep for complete range of motion.',
+    'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': 'Achieve complete range of motion in both directions.',
+    'Hips are sagging \u2014 engage your core to maintain a straight line.': 'Strengthen your core \u2014 try planks as an accessory exercise.',
+    'Keep your hips up \u2014 your body line is dropping.': 'Focus on maintaining a rigid plank throughout each rep.',
+    'Hips are piking up \u2014 lower them to maintain a straight plank.': 'Think about pushing the ground away while keeping your body rigid.',
+    'Hips are riding high \u2014 aim for a straight body line.': 'Keep your body in a straight line from head to heels.',
+    'Slow down the push \u2014 control the movement.': 'Slow the concentric phase \u2014 aim for 1-2 seconds up.',
+    "Control the descent \u2014 don't drop into the pushup.": 'Slow the eccentric phase \u2014 2-3 seconds down.',
+  },
+};

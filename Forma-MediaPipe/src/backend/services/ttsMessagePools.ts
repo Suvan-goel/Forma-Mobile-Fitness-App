@@ -5,15 +5,16 @@
  * Visual feedback (on-screen) is separate and unchanged — this file
  * only controls what the TTS voice says.
  *
- * To add a new exercise:
- * 1. Define its feedback strings → IssueType mapping in FEEDBACK_TO_ISSUE
- * 2. Reuse existing IssueType pools or add new ones to ISSUE_POOLS
+ * Base issue types and their pools are defined here. Exercise-specific
+ * FEEDBACK_TO_ISSUE entries are registered dynamically by each exercise
+ * definition via mergeTTSConfig().
  */
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
+/** Known issue types — new exercises may add additional string keys via mergeTTSConfig. */
 export type IssueType =
   | 'incomplete_flex'
   | 'incomplete_extend'
@@ -25,7 +26,6 @@ export type IssueType =
   | 'tempo_up'
   | 'tempo_down'
   | 'asymmetry'
-  // Pushup-specific
   | 'depth_short'
   | 'lockout_short'
   | 'hip_sag'
@@ -39,9 +39,10 @@ export interface MessagePool {
 
 // ============================================================================
 // ISSUE POOLS — short, punchy, coach-like
+// Base pools shared across exercises. New pools can be added via mergeTTSConfig.
 // ============================================================================
 
-export const ISSUE_POOLS: Record<IssueType, MessagePool> = {
+export const ISSUE_POOLS: Record<string, MessagePool> = {
   incomplete_flex: {
     messages: [
       'Squeeze harder at the top.',
@@ -116,7 +117,6 @@ export const ISSUE_POOLS: Record<IssueType, MessagePool> = {
       'Match both sides.',
     ],
   },
-  // Pushup-specific pools
   depth_short: {
     messages: [
       'Go deeper.',
@@ -238,9 +238,10 @@ export function pickSetStartMessage(exerciseName: string): string {
 
 // ============================================================================
 // PRIORITY — higher number = more important = speak first
+// Base priorities for known issue types. New priorities added via mergeTTSConfig.
 // ============================================================================
 
-export const ISSUE_PRIORITY: Record<IssueType, number> = {
+export const ISSUE_PRIORITY: Record<string, number> = {
   incomplete_flex: 30,
   incomplete_extend: 30,
   incomplete_rom: 30,
@@ -251,7 +252,6 @@ export const ISSUE_PRIORITY: Record<IssueType, number> = {
   tempo_up: 10,
   tempo_down: 10,
   asymmetry: 10,
-  // Pushup-specific
   depth_short: 30,
   lockout_short: 25,
   hip_sag: 35,
@@ -260,32 +260,41 @@ export const ISSUE_PRIORITY: Record<IssueType, number> = {
 
 // ============================================================================
 // FEEDBACK STRING → ISSUE TYPE MAPPING
-// Maps the exact visual feedback strings from barbellCurlHeuristics.ts
+// Populated dynamically by exercise definitions via mergeTTSConfig().
 // ============================================================================
 
-export const FEEDBACK_TO_ISSUE: Record<string, IssueType> = {
-  // Barbell Curl
-  'Flex more at the top of the curl.': 'incomplete_flex',
-  'Extend fully at the bottom.': 'incomplete_extend',
-  'Incomplete rep — curl all the way up and fully extend.': 'incomplete_rom',
-  'Too much shoulder involvement — reduce the weight.': 'shoulder_fail',
-  'Upper arms moving — keep elbows pinned to your sides.': 'shoulder_warn',
-  'Excessive body swing — this is cheating the rep.': 'torso_fail',
-  "Don't swing your torso — stay upright and controlled.": 'torso_warn',
-  'Slow down — control the curl.': 'tempo_up',
-  "Control the lowering — don't drop the weight.": 'tempo_down',
-  'Arms are uneven — curl both sides together.': 'asymmetry',
-  // Push-Up
-  'Go deeper \u2014 aim for elbows at 90 degrees.': 'depth_short',
-  'Lock out your arms fully at the top.': 'lockout_short',
-  'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': 'incomplete_rom',
-  'Hips are sagging \u2014 engage your core to maintain a straight line.': 'hip_sag',
-  'Keep your hips up \u2014 your body line is dropping.': 'hip_sag',
-  'Hips are piking up \u2014 lower them to maintain a straight plank.': 'hip_pike',
-  'Hips are riding high \u2014 aim for a straight body line.': 'hip_pike',
-  'Slow down the push \u2014 control the movement.': 'tempo_up',
-  "Control the descent \u2014 don't drop into the pushup.": 'tempo_down',
-};
+export const FEEDBACK_TO_ISSUE: Record<string, string> = {};
+
+// ============================================================================
+// MERGE — called by exercise registration to add feedback→issue mappings
+// ============================================================================
+
+/**
+ * Merge exercise-specific TTS configuration into the global maps.
+ * Called once per exercise at registration time (module load).
+ *
+ * - feedbackToIssue entries are added to FEEDBACK_TO_ISSUE
+ * - issueDefinitions (if any) are added to ISSUE_POOLS and ISSUE_PRIORITY
+ *   only if the issue type doesn't already exist (no overwrites)
+ */
+export function mergeTTSConfig(config: {
+  feedbackToIssue: Record<string, string>;
+  issueDefinitions?: Array<{ issueType: string; priority: number; messages: string[] }>;
+}): void {
+  for (const [feedback, issueType] of Object.entries(config.feedbackToIssue)) {
+    FEEDBACK_TO_ISSUE[feedback] = issueType;
+  }
+  if (config.issueDefinitions) {
+    for (const def of config.issueDefinitions) {
+      if (!ISSUE_POOLS[def.issueType]) {
+        ISSUE_POOLS[def.issueType] = { messages: def.messages };
+      }
+      if (ISSUE_PRIORITY[def.issueType] === undefined) {
+        ISSUE_PRIORITY[def.issueType] = def.priority;
+      }
+    }
+  }
+}
 
 // ============================================================================
 // POOL SELECTION — shuffle-bag, never repeat last

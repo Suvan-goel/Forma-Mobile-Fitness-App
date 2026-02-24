@@ -1,8 +1,9 @@
 /**
- * Barbell Curl Heuristics - Forma Specification
+ * Barbell Curl — Exercise Definition (Exercise Framework)
  *
- * Implements deterministic barbell curl detection and form coaching using ONLY
- * 8 precomputed joint angles. Uses per-arm FSM with two-arm synchronization.
+ * Wraps the existing barbell curl heuristics into the ExerciseDefinition interface.
+ * All logic is copied from barbellCurlHeuristics.ts and kept module-private.
+ * The only export is `barbellCurlDefinition`.
  */
 
 import {
@@ -13,25 +14,27 @@ import {
   calculateShoulderFlexionAngle,
   getKeypoint,
   isVisible,
-} from './poseAnalysis';
+} from '../../poseAnalysis';
+
+import type { ExerciseDefinition, ExerciseState, RepResult as FrameworkRepResult } from '../types';
 
 // ============================================================================
-// CONSTANTS & THRESHOLDS
+// CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
 /** FSM thresholds (degrees) — 3D angles are view-invariant; values match frontal-view ranges */
-export const THRESHOLDS = {
-  EXTENDED_ENTER: 150,  // arm extended past this → rep complete
-  EXTENDED_EXIT: 145,   // arm drops below this → start detecting upward motion
-  FLEXED_ENTER: 70,     // arm curled below this → reached top of curl
-  FLEXED_EXIT: 75,      // arm rises above this → start detecting downward motion
+const THRESHOLDS = {
+  EXTENDED_ENTER: 150,  // arm extended past this -> rep complete
+  EXTENDED_EXIT: 145,   // arm drops below this -> start detecting upward motion
+  FLEXED_ENTER: 70,     // arm curled below this -> reached top of curl
+  FLEXED_EXIT: 75,      // arm rises above this -> start detecting downward motion
   MIN_REP_TIME: 0.45, // seconds
   SYNC_WINDOW: 0.35, // seconds between arms
   ROM_MIN: 80, // degrees
 } as const;
 
 /** Form heuristic thresholds (degrees) - relaxed for fewer false positives */
-export const FORM_THRESHOLDS = {
+const FORM_THRESHOLDS = {
   SHOULDER_WARN: 45,
   SHOULDER_FAIL: 65,
   TORSO_WARN: 15,
@@ -58,7 +61,7 @@ const WARMUP_REQUIRED = 12;          // ~0.6s at 20fps
 const WARMUP_VISIBILITY_MIN = 0.3;   // avg visibility of 8 key joints must exceed this
 
 /** Scoring penalties (legacy — kept for reference) */
-const PENALTIES = {
+const _PENALTIES = {
   INCOMPLETE_ROM: 30,
   SHOULDER_WARN: 15,
   SHOULDER_FAIL: 25,
@@ -71,16 +74,16 @@ const PENALTIES = {
 
 // ============================================================================
 // CONTINUOUS PENALTY FUNCTIONS
-// All use quadratic ramps: penalty(x) = min(cap, scale * max(0, x - deadzone)²)
+// All use quadratic ramps: penalty(x) = min(cap, scale * max(0, x - deadzone)^2)
 // ============================================================================
 
-/** Torso swing penalty — max 35 pts. Deadzone 8° (shoulder drift + breathing/sway/noise). */
+/** Torso swing penalty — max 35 pts. Deadzone 8deg (shoulder drift + breathing/sway/noise). */
 function penaltyTorso(delta: number): number {
   const d = Math.max(0, delta - 8);
   return Math.min(35, 0.40 * d * d);
 }
 
-/** Shoulder movement penalty — max 30 pts. Deadzone 10° (normal stabilisation). */
+/** Shoulder movement penalty — max 30 pts. Deadzone 10deg (normal stabilisation). */
 function penaltyShoulder(delta: number): number {
   const d = Math.max(0, delta - 10);
   return Math.min(30, 0.018 * d * d);
@@ -142,14 +145,10 @@ function penaltyAsymmetry(deltaMin: number, deltaRom: number): number {
 
 // ============================================================================
 // FORESHORTENING COMPENSATION
-// At oblique camera angles, 2D-projected elbow angles are compressed:
-// a true 170° extension may project to ~145° in 2D. We relax thresholds
-// proportionally using the estimated view angle from shoulder depth.
-// Factor: cos(viewAngleDeg) → 1.0 at frontal, ~0.87 at 30°, ~0.71 at 45°
 // ============================================================================
 
 /** How much to relax extension threshold per degree of view angle. */
-const FORESHORTENING_FACTOR = 0.35; // degrees of threshold relaxation per degree of view angle
+const FORESHORTENING_FACTOR = 0.35;
 
 /** Adjust extension threshold downward for oblique views (easier to hit). */
 function adjustExtensionThreshold(baseThreshold: number, viewAngleDeg: number): number {
@@ -244,12 +243,12 @@ function computeRepScore(
 }
 
 // ============================================================================
-// TYPES
+// TYPES (module-private)
 // ============================================================================
 
-export type ArmState = 'REST' | 'UP' | 'TOP' | 'DOWN';
+type ArmState = 'REST' | 'UP' | 'TOP' | 'DOWN';
 
-export interface ArmFSM {
+interface ArmFSM {
   state: ArmState;
   /** Time when transitioned to REST (for MIN_REP_TIME check) */
   tRestEntry: number | null;
@@ -263,7 +262,7 @@ export interface ArmFSM {
   tDownToRest: number | null;
 }
 
-export interface RepWindow {
+interface RepWindow {
   /** Rolling min/max for all 8 angles during the rep */
   minAngles: AngleSet;
   maxAngles: AngleSet;
@@ -279,7 +278,7 @@ export interface RepWindow {
   reach: { maxLeftReachRatio: number; maxRightReachRatio: number };
 }
 
-export interface AngleSet {
+interface AngleSet {
   leftElbow: number;
   rightElbow: number;
   leftShoulder: number;
@@ -291,9 +290,10 @@ export interface AngleSet {
   rightWrist: number;
 }
 
-export interface SmoothedAngles extends AngleSet {}
+interface SmoothedAngles extends AngleSet {}
 
-export interface RepResult {
+/** Exercise-specific RepResult (richer than framework RepResult) */
+interface RepResult {
   repIndex: number;
   romL: number;
   romR: number;
@@ -303,10 +303,10 @@ export interface RepResult {
   messages: string[];
 }
 
-export type ViewZone = 'frontal' | 'oblique' | 'side';
+type ViewZone = 'frontal' | 'oblique' | 'side';
 
-export interface ViewAngle {
-  /** Estimated rotation from frontal, 0° = facing camera, 90° = side */
+interface ViewAngle {
+  /** Estimated rotation from frontal, 0deg = facing camera, 90deg = side */
   angleDeg: number;
   /** Smoothed angle (EMA) for stable zone classification */
   smoothedAngleDeg: number;
@@ -316,7 +316,7 @@ export interface ViewAngle {
   primarySide: 'left' | 'right' | 'both';
 }
 
-export interface BarbellCurlState {
+interface BarbellCurlState {
   leftArm: ArmFSM;
   rightArm: ArmFSM;
   repCount: number;
@@ -381,7 +381,7 @@ function initRepWindow(tStart: number): RepWindow {
   };
 }
 
-export function initializeBarbellCurlState(): BarbellCurlState {
+function initializeBarbellCurlState(): BarbellCurlState {
   return {
     leftArm: initArmFSM(),
     rightArm: initArmFSM(),
@@ -413,8 +413,8 @@ export function initializeBarbellCurlState(): BarbellCurlState {
 // ============================================================================
 
 const VIEW_ANGLE_EMA = 0.25; // Smoothing for view angle (lower = more stable)
-const FRONTAL_MAX = 20;      // 0-20° = frontal
-const OBLIQUE_MAX = 55;      // 20-55° = oblique, 55+ = side
+const FRONTAL_MAX = 20;      // 0-20deg = frontal
+const OBLIQUE_MAX = 55;      // 20-55deg = oblique, 55+ = side
 
 /**
  * Estimate how rotated the user is from frontal view using shoulder geometry.
@@ -442,7 +442,7 @@ function estimateViewAngle(
   const dx = Math.abs(rightShoulder.x - leftShoulder.x);
   const dz = Math.abs((rightShoulder.z ?? 0) - (leftShoulder.z ?? 0));
 
-  // atan2(depth, width) → 0° when flat (frontal), 90° when one shoulder behind the other
+  // atan2(depth, width) -> 0deg when flat (frontal), 90deg when one shoulder behind the other
   const rawAngleDeg = Math.atan2(dz, dx) * 57.29577951308232;
 
   // EMA smooth to avoid jitter
@@ -584,8 +584,6 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
   if (!leftOk && !rightOk) return null;
 
   // Elbow angles (2D — reliable for FSM rep counting at all views)
-  // 3D angles from MediaPipe world landmarks have unreliable Z, causing missed reps.
-  // View-angle compensation for form analysis is handled separately via estimateViewAngle().
   const leftElbowAngle = leftOk
     ? calculateAngle2D(getPoint(leftShoulder)!, getPoint(leftElbow)!, getPoint(leftWrist)!)
     : NaN;
@@ -593,7 +591,7 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
     ? calculateAngle2D(getPoint(rightShoulder)!, getPoint(rightElbow)!, getPoint(rightWrist)!)
     : NaN;
 
-  // Shoulder angles (flexion only) - project upper arm onto sagittal plane, exclude abduction/adduction
+  // Shoulder angles (flexion only) - project upper arm onto sagittal plane
   const leftShoulderAngle =
     leftOk && rightShoulder && isVisible(rightShoulder, VISIBILITY_THRESHOLD)
       ? calculateShoulderFlexionAngle(
@@ -622,8 +620,6 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
     : NaN;
 
   // Midline torso angle: hip center -> head (nose or mid-ear). Projected onto sagittal plane.
-  // Uses head instead of shoulder center because shoulder landmarks drift with arm movement
-  // during curls; the head stays relatively stable.
   const hipCenter =
     leftHip && rightHip && isVisible(leftHip, VISIBILITY_THRESHOLD) && isVisible(rightHip, VISIBILITY_THRESHOLD)
       ? {
@@ -656,9 +652,7 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
             z: ((leftEar.z ?? 0) + (rightEar.z ?? 0)) / 2,
           }
         : null;
-  // "Virtual neck" blend: 70% shoulder center + 30% head ≈ cervical spine.
-  // Pure shoulder center drifts forward during curls (deltoid rotation).
-  // Pure head is noisy (Z jitter, nodding). Blending reduces both issues.
+  // "Virtual neck" blend: 70% shoulder center + 30% head
   const torsoUpperPoint = shoulderCenter && headPoint
     ? {
         x: 0.7 * shoulderCenter.x + 0.3 * headPoint.x,
@@ -677,7 +671,7 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
             getPoint(leftShoulder)!,
             getPoint(rightShoulder)!
           );
-          return Number.isNaN(angle) ? 0 : angle; // If sagittal projection fails, assume upright
+          return Number.isNaN(angle) ? 0 : angle;
         })()
       : NaN;
 
@@ -851,12 +845,10 @@ function evaluateForm(
   const isFrontal = viewAngle.zone === 'frontal';
   const isSide = viewAngle.zone === 'side';
 
-  // Helper: get elbow values based on view — use primary arm only for non-frontal
   const leftElbowOk = isFinite(minAngles.leftElbow) && isFinite(maxAngles.leftElbow);
   const rightElbowOk = isFinite(minAngles.rightElbow) && isFinite(maxAngles.rightElbow);
   const primaryIsLeft = viewAngle.primarySide !== 'right';
 
-  // For frontal: use both arms as before. For oblique/side: use primary arm only.
   const minFlex = isFrontal
     ? Math.min(
         leftElbowOk ? minAngles.leftElbow : Infinity,
@@ -883,15 +875,13 @@ function evaluateForm(
   }
 
   // Extension check: 2D angle + reach ratio (frontal supplement).
-  // At frontal view, the 2D angle can be fooled when the forearm points into depth.
-  // The reach ratio catches this: shoulder-to-wrist distance is short even though angle looks straight.
   const angleExtensionBad = isFinite(maxExt) && maxExt < adjExtended;
   const reachExtensionBad = isFrontal && isReachRatioLow(repWindow.reach);
   if (angleExtensionBad || reachExtensionBad) {
     messages.push('Extend fully at the bottom.');
   }
 
-  // 2. ROM — compensate for foreshortening (ROM delta also shrinks at oblique views)
+  // 2. ROM — compensate for foreshortening
   const romL = leftElbowOk ? maxAngles.leftElbow - minAngles.leftElbow : 0;
   const romR = rightElbowOk ? maxAngles.rightElbow - minAngles.rightElbow : 0;
   const primaryRom = primaryIsLeft ? romL : romR;
@@ -911,7 +901,6 @@ function evaluateForm(
   const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
   const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
   if (!isSide) {
-    // Use only finite values (NaN shoulder means that side's data is missing)
     const shValues: number[] = [];
     if (isFinite(deltaShL)) shValues.push(deltaShL);
     if (isFinite(deltaShR)) shValues.push(deltaShR);
@@ -925,7 +914,6 @@ function evaluateForm(
   }
 
   // 4. Torso swing (works at all angles — sagittal projection is rotation-invariant)
-  // First rep uses FAIL threshold only (posture adjustment from standing → curling is normal)
   const deltaTorso = maxAngles.torso - minAngles.torso;
   const torsoWarnThreshold = repIndex === 0
     ? FORM_THRESHOLDS.TORSO_FAIL
@@ -962,7 +950,7 @@ function evaluateForm(
     }
   }
 
-  // ── Score: continuous penalty curves ──
+  // Score: continuous penalty curves
   const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle);
 
   return { score, messages };
@@ -972,13 +960,13 @@ function evaluateForm(
 // UPDATE LOGIC
 // ============================================================================
 
-export function updateBarbellCurlState(
+function updateBarbellCurlState(
   keypoints: Keypoint[],
   currentState: BarbellCurlState
 ): BarbellCurlState {
   const t = Date.now() / 1000; // seconds
 
-  // Estimate view angle (Fix 1)
+  // Estimate view angle
   const viewAngle = estimateViewAngle(keypoints, currentState.viewAngle.smoothedAngleDeg);
 
   // Calculate raw angles
@@ -1013,7 +1001,7 @@ export function updateBarbellCurlState(
     return newState;
   }
 
-  // Determine which arms have valid elbow angles (Fix 2: single-arm fallback)
+  // Determine which arms have valid elbow angles
   const leftValid = !isNaN(smoothed.leftElbow);
   const rightValid = !isNaN(smoothed.rightElbow);
 
@@ -1047,7 +1035,7 @@ export function updateBarbellCurlState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update min/max for all angles (NaN-safe — only updates if value is valid)
+    // Update min/max for all angles (NaN-safe)
     const keys: (keyof AngleSet)[] = [
       'leftElbow', 'rightElbow',
       'leftShoulder', 'rightShoulder',
@@ -1084,9 +1072,9 @@ export function updateBarbellCurlState(
     }
   }
 
-  // ── Rep completion logic ──
+  // Rep completion logic
   if (viewAngle.zone === 'frontal' && !isSingleArm) {
-    // FRONTAL MODE: unchanged two-arm sync logic
+    // FRONTAL MODE: two-arm sync logic
     const bothInRest = newState.leftArm.state === 'REST' && newState.rightArm.state === 'REST';
     const leftJustFinished = prevLeftState === 'DOWN' && newState.leftArm.state === 'REST';
     const rightJustFinished = prevRightState === 'DOWN' && newState.rightArm.state === 'REST';
@@ -1132,13 +1120,10 @@ function getPrimaryArm(
   leftValid: boolean,
   rightValid: boolean
 ): 'left' | 'right' {
-  // If only one arm is valid, use that one
   if (leftValid && !rightValid) return 'left';
   if (rightValid && !leftValid) return 'right';
-  // Both valid — use the side facing the camera
   if (viewAngle.primarySide === 'left') return 'left';
   if (viewAngle.primarySide === 'right') return 'right';
-  // Default to left
   return 'left';
 }
 
@@ -1199,76 +1184,15 @@ function completeRep(
 }
 
 // ============================================================================
-// UI HELPERS
+// DEBUG HELPERS (module-private — exposed via debugInfo in ExerciseState)
 // ============================================================================
-
-export function getDisplayAnglesForUI(state: BarbellCurlState): {
-  leftElbow: number | null;
-  rightElbow: number | null;
-  leftShoulder: number | null;
-  rightShoulder: number | null;
-  leftHip: number | null;
-  rightHip: number | null;
-  leftKnee: number | null;
-  rightKnee: number | null;
-} {
-  const angles = state.displayAngles;
-  return {
-    leftElbow: angles?.leftElbow ?? null,
-    rightElbow: angles?.rightElbow ?? null,
-    leftShoulder: angles?.leftShoulder ?? null,
-    rightShoulder: angles?.rightShoulder ?? null,
-    leftHip: null, // Not tracked
-    rightHip: null,
-    leftKnee: null,
-    rightKnee: null,
-  };
-}
-
-export function getCurrentFormScore(state: BarbellCurlState): number {
-  return state.lastRepResult?.score ?? 0;
-}
-
-export function getCurrentFeedback(state: BarbellCurlState): string | null {
-  return state.feedback;
-}
-
-export function getRepCount(state: BarbellCurlState): number {
-  return state.repCount;
-}
 
 const _formatAngle = (v: number) =>
   typeof v === 'number' && !isNaN(v) && isFinite(v) ? v : null;
 const _safeDelta = (min: number, max: number) =>
   _formatAngle(min !== Infinity && max !== -Infinity ? max - min : NaN);
 
-/** Debug: returns torso angles used for swing detection (for on-screen debugging) */
-export function getTorsoDebugInfo(state: BarbellCurlState): {
-  torso: number | null;
-  leftTorso: number | null;
-  rightTorso: number | null;
-  torsoDelta: number | null;
-  leftTorsoDelta: number | null;
-  rightTorsoDelta: number | null;
-} {
-  const angles = state.displayAngles;
-  const window = state.repWindow;
-  return {
-    torso: _formatAngle(angles?.torso ?? NaN),
-    leftTorso: _formatAngle(angles?.leftTorso ?? NaN),
-    rightTorso: _formatAngle(angles?.rightTorso ?? NaN),
-    torsoDelta: window ? _safeDelta(window.minAngles.torso, window.maxAngles.torso) : null,
-    leftTorsoDelta: window
-      ? _safeDelta(window.minAngles.leftTorso, window.maxAngles.leftTorso)
-      : null,
-    rightTorsoDelta: window
-      ? _safeDelta(window.minAngles.rightTorso, window.maxAngles.rightTorso)
-      : null,
-  };
-}
-
-/** Debug: returns all angles used in Barbell Curl form analysis (for debug overlay) */
-export function getBarbellCurlDebugInfo(state: BarbellCurlState): {
+function getBarbellCurlDebugInfo(state: BarbellCurlState): {
   current: {
     leftElbow: number | null;
     rightElbow: number | null;
@@ -1340,3 +1264,72 @@ export function getBarbellCurlDebugInfo(state: BarbellCurlState): {
     reachRight: reachRight != null ? reachRight : null,
   };
 }
+
+// ============================================================================
+// EXERCISE DEFINITION — the only export
+// ============================================================================
+
+export const barbellCurlDefinition: ExerciseDefinition = {
+  name: 'Barbell Curl',
+  requiredView: 'front',
+
+  createState: (): ExerciseState => ({
+    repCount: 0,
+    lastRepResult: null,
+    feedback: null,
+    feedbackTimestamp: null,
+    debugInfo: {},
+    _internal: initializeBarbellCurlState(),
+  }),
+
+  update: (keypoints, state) => {
+    const internal = state._internal as BarbellCurlState;
+    const newInternal = updateBarbellCurlState(keypoints, internal);
+
+    // Map internal RepResult to framework RepResult
+    const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
+      ? {
+          repIndex: newInternal.lastRepResult.repIndex,
+          score: newInternal.lastRepResult.score,
+          messages: newInternal.lastRepResult.messages,
+        }
+      : null;
+
+    return {
+      repCount: newInternal.repCount,
+      lastRepResult,
+      feedback: newInternal.feedback,
+      feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
+      debugInfo: getBarbellCurlDebugInfo(newInternal) as Record<string, unknown>,
+      _internal: newInternal,
+    };
+  },
+
+  ttsConfig: {
+    feedbackToIssue: {
+      'Flex more at the top of the curl.': 'incomplete_flex',
+      'Extend fully at the bottom.': 'incomplete_extend',
+      'Incomplete rep — curl all the way up and fully extend.': 'incomplete_rom',
+      'Too much shoulder involvement — reduce the weight.': 'shoulder_fail',
+      'Upper arms moving — keep elbows pinned to your sides.': 'shoulder_warn',
+      'Excessive body swing — this is cheating the rep.': 'torso_fail',
+      "Don't swing your torso — stay upright and controlled.": 'torso_warn',
+      'Slow down — control the curl.': 'tempo_up',
+      "Control the lowering — don't drop the weight.": 'tempo_down',
+      'Arms are uneven — curl both sides together.': 'asymmetry',
+    },
+  },
+
+  summaryConfig: {
+    'Flex more at the top of the curl.': 'Full ROM at top — contract the bicep fully before lowering.',
+    'Extend fully at the bottom.': 'Extend arms completely at the bottom for a full stretch.',
+    'Incomplete rep — curl all the way up and fully extend.': 'Achieve complete range of motion in both directions.',
+    'Too much shoulder involvement — reduce the weight.': 'Reduce weight and focus on isolating the bicep.',
+    'Upper arms moving — keep elbows pinned to your sides.': 'Minimize elbow drift — keep elbows close to your body.',
+    'Excessive body swing — this is cheating the rep.': 'Reduce torso momentum — use strict, controlled form.',
+    "Don't swing your torso — stay upright and controlled.": 'Brace your core and keep torso stationary throughout.',
+    'Slow down — control the curl.': 'Slow the concentric phase — aim for 1-2 seconds up.',
+    "Control the lowering — don't drop the weight.": 'Slow the eccentric phase — 2-3 seconds down.',
+    'Arms are uneven — curl both sides together.': 'Focus on symmetry — curl both arms at the same speed.',
+  },
+};
