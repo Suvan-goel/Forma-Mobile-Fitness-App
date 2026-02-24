@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
 
   /* ── Shared Gradient Card ────────────── */
   cardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     marginBottom: 2,
     ...Platform.select({
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   cardGlassEdge: {
     borderRadius: 22,

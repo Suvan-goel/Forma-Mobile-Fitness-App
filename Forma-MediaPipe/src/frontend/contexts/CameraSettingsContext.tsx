@@ -17,7 +17,7 @@ type CameraSettingsContextValue = CameraSettings & {
 const defaultSettings: CameraSettings = {
   showFeedback: true,
   isTTSEnabled: false,
-  showSkeletonOverlay: true,
+  showSkeletonOverlay: false,
   debugMode: false,
 };
 

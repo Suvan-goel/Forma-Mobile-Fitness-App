@@ -12,8 +12,8 @@ import {
   TextLayoutEventData,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import { X, ChevronDown, ChevronUp, Clock, TrendingUp } from 'lucide-react-native';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { generateSetSummary } from '../../../utils/setNotesSummary';
 const MAX_FEEDBACK_LINES = 2;
@@ -43,6 +43,10 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 
   const [expandedReps, setExpandedReps] = useState<Set<number>>(new Set());
   const [overflowedReps, setOverflowedReps] = useState<Set<number>>(new Set());
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  const maxModalHeight = windowHeight * 0.75;
+  const scrollMaxHeight = headerHeight > 0 ? maxModalHeight - headerHeight : undefined;
 
   useEffect(() => {
     if (visible) {
@@ -85,128 +89,151 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
         onPress={onClose}
       >
         <TouchableOpacity
-          style={[styles.modalContent, { maxHeight: windowHeight * 0.7 }]}
+          style={[styles.modalContent, { maxHeight: windowHeight * 0.75 }]}
           activeOpacity={1}
           onPress={() => {}}
         >
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.modalGradient}
-          >
-            <View style={styles.glassEdge}>
+          <View style={styles.glassEdge}>
+            <LinearGradient
+              colors={['#1C1C1E', '#141414', '#0E0E0E']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={styles.modalGradient}
+              onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+            >
+              {/* Drag handle */}
+              <View style={styles.handleContainer}>
+                <View style={styles.handle} />
+              </View>
+
+              {/* Header */}
               <View style={styles.header}>
-                <Text style={styles.title} numberOfLines={2}>
-                  Set {setNumber} notes — {exerciseName}
-                </Text>
+                <View style={styles.headerLeft}>
+                  <Text style={styles.title}>Set {setNumber}</Text>
+                  <Text style={styles.subtitle} numberOfLines={1}>{exerciseName}</Text>
+                </View>
                 <TouchableOpacity
                   style={styles.closeButton}
                   onPress={onClose}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <X size={24} color={COLORS.text} strokeWidth={1.5} />
+                  <X size={18} color={COLORS.textSecondary} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-              >
-                {set.durationSeconds != null && set.durationSeconds > 0 ? (
-                  <View style={styles.durationRow}>
-                    <Text style={styles.durationLabel}>Duration</Text>
-                    <Text style={styles.durationValue}>
-                      {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
-                    </Text>
-                  </View>
-                ) : null}
+              {/* Stats bar */}
+              {(set.durationSeconds != null && set.durationSeconds > 0 || hasNotes) && (
+                <View style={styles.statsBar}>
+                  {set.durationSeconds != null && set.durationSeconds > 0 && (
+                    <View style={styles.statItem}>
+                      <Clock size={13} color={COLORS.textTertiary} strokeWidth={2} />
+                      <Text style={styles.statValue}>
+                        {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
+                      </Text>
+                    </View>
+                  )}
+                  {hasNotes && (
+                    <View style={styles.statItem}>
+                      <TrendingUp size={13} color={COLORS.textTertiary} strokeWidth={2} />
+                      <Text style={styles.statValue}>
+                        {repCount} rep{repCount !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  )}
+                  {hasNotes && (
+                    <View style={styles.statItem}>
+                      <View style={[styles.scoreDot, { backgroundColor: getScoreColor(set.formScore) }]} />
+                      <Text style={[styles.statValue, { color: getScoreColor(set.formScore) }]}>
+                        {set.formScore}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </LinearGradient>
+
+            <ScrollView
+              style={[styles.scrollView, scrollMaxHeight != null && { maxHeight: scrollMaxHeight }]}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces
+            >
                 {hasNotes ? (
                   <>
+                    {/* Rep breakdown */}
                     <View style={styles.section}>
                       <Text style={styles.sectionTitle}>Rep breakdown</Text>
-                      <View style={styles.repCardOuter}>
-                        <LinearGradient
-                          colors={[...CARD_GRADIENT_COLORS]}
-                          start={CARD_GRADIENT_START}
-                          end={CARD_GRADIENT_END}
-                          style={styles.repCardGradient}
-                        >
-                          <View style={styles.repCardGlass}>
-                            {Array.from({ length: repCount }, (_, idx) => {
-                              const { formScore, feedback } = getRepDetails(idx);
-                              const isExpanded = expandedReps.has(idx);
-                              const showExpand = overflowedReps.has(idx) || isExpanded;
-                              return (
-                                <View
-                                  key={idx}
-                                  style={[
-                                    styles.repRow,
-                                    idx === repCount - 1 && styles.repRowLast,
-                                  ]}
-                                >
-                                  <Text style={styles.repNumber}>Rep {idx + 1}</Text>
-                                  <View style={styles.repDetails}>
-                                    <Text style={styles.repFormScore}>
-                                      Form: {formScore}
-                                    </Text>
-                                    {/* Hidden text to measure real line count for overflow */}
-                                    <Text
-                                      style={[styles.repFeedback, styles.repFeedbackMeasure]}
-                                      onTextLayout={(e) => handleFeedbackLayout(idx, e)}
-                                      pointerEvents="none"
-                                    >
-                                      {feedback}
-                                    </Text>
-                                    <Text
-                                      style={[
-                                        styles.repFeedback,
-                                        (feedback === 'Great rep!' || feedback === 'Good rep.') && styles.repFeedbackGood,
-                                      ]}
-                                      numberOfLines={isExpanded ? undefined : MAX_FEEDBACK_LINES}
-                                    >
-                                      {feedback}
+                      <View style={styles.repList}>
+                        {Array.from({ length: repCount }, (_, idx) => {
+                          const { formScore, feedback } = getRepDetails(idx);
+                          const isExpanded = expandedReps.has(idx);
+                          const showExpand = overflowedReps.has(idx) || isExpanded;
+                          const isGoodRep = feedback === 'Great rep!' || feedback === 'Good rep.';
+                          const scoreColor = getScoreColor(formScore);
+
+                          return (
+                            <View
+                              key={idx}
+                              style={[
+                                styles.repRow,
+                                idx === repCount - 1 && styles.repRowLast,
+                              ]}
+                            >
+                              <View style={styles.repHeader}>
+                                <View style={styles.repLabelRow}>
+                                  <Text style={styles.repNumber}>{idx + 1}</Text>
+                                  <View style={[styles.scoreBadge, { backgroundColor: `${scoreColor}15` }]}>
+                                    <Text style={[styles.scoreBadgeText, { color: scoreColor }]}>
+                                      {formScore}
                                     </Text>
                                   </View>
-                                  {showExpand ? (
-                                    <TouchableOpacity
-                                      style={styles.repExpandButton}
-                                      onPress={() => toggleRepExpanded(idx)}
-                                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                      accessibilityRole="button"
-                                      accessibilityLabel={isExpanded ? 'Collapse feedback' : 'Expand feedback'}
-                                    >
-                                      {isExpanded ? (
-                                        <ChevronUp size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-                                      ) : (
-                                        <ChevronDown size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-                                      )}
-                                    </TouchableOpacity>
-                                  ) : (
-                                    <View style={styles.repExpandButton} />
-                                  )}
                                 </View>
-                              );
-                            })}
-                          </View>
-                        </LinearGradient>
+                                {showExpand && (
+                                  <TouchableOpacity
+                                    style={styles.repExpandButton}
+                                    onPress={() => toggleRepExpanded(idx)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={isExpanded ? 'Collapse feedback' : 'Expand feedback'}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronUp size={16} color={COLORS.textTertiary} strokeWidth={2} />
+                                    ) : (
+                                      <ChevronDown size={16} color={COLORS.textTertiary} strokeWidth={2} />
+                                    )}
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                              <View style={styles.repFeedbackContainer}>
+                                {/* Hidden text to measure real line count for overflow */}
+                                <Text
+                                  style={[styles.repFeedback, styles.repFeedbackMeasure]}
+                                  onTextLayout={(e) => handleFeedbackLayout(idx, e)}
+                                  pointerEvents="none"
+                                >
+                                  {feedback}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.repFeedback,
+                                    isGoodRep && styles.repFeedbackGood,
+                                  ]}
+                                  numberOfLines={isExpanded ? undefined : MAX_FEEDBACK_LINES}
+                                >
+                                  {feedback}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })}
                       </View>
                     </View>
 
+                    {/* Form summary */}
                     <View style={styles.section}>
-                      <Text style={styles.sectionTitle}>Form summary</Text>
-                      <View style={styles.summaryCardOuter}>
-                        <LinearGradient
-                          colors={[...CARD_GRADIENT_COLORS]}
-                          start={CARD_GRADIENT_START}
-                          end={CARD_GRADIENT_END}
-                          style={styles.summaryCardGradient}
-                        >
-                          <View style={styles.summaryCardGlass}>
-                            <Text style={styles.summaryText}>{summary}</Text>
-                          </View>
-                        </LinearGradient>
+                      <Text style={styles.sectionTitle}>Summary</Text>
+                      <View style={styles.summaryCard}>
+                        <Text style={styles.summaryText}>{summary}</Text>
                       </View>
                     </View>
                   </>
@@ -220,9 +247,8 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                     </Text>
                   </View>
                 )}
-              </ScrollView>
-            </View>
-          </LinearGradient>
+            </ScrollView>
+          </View>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -232,193 +258,196 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
       },
-      android: { elevation: 8 },
+      android: { elevation: 10 },
     }),
   },
   modalGradient: {
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingBottom: SPACING.xl,
-    maxHeight: '100%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   glassEdge: {
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     overflow: 'hidden',
+    backgroundColor: '#0E0E0E',
+  },
+  handleContainer: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  headerLeft: {
+    flex: 1,
+    marginRight: SPACING.md,
   },
   title: {
-    fontSize: 17,
-    fontFamily: FONTS.display.semibold,
+    fontSize: 22,
+    fontFamily: FONTS.display.bold,
     color: COLORS.text,
-    flex: 1,
-    letterSpacing: -0.3,
-    marginRight: SPACING.sm,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   closeButton: {
-    padding: SPACING.xs,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsBar: {
+    flexDirection: 'row',
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.md,
+    gap: SPACING.lg,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statValue: {
+    fontSize: 12,
+    fontFamily: FONTS.mono.regular,
+    color: COLORS.textSecondary,
+  },
+  scoreDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   scrollView: {},
   scrollContent: {
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xs,
     paddingBottom: SPACING.xxl,
-  },
-  durationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 12,
-  },
-  durationLabel: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-  },
-  durationValue: {
-    fontSize: 14,
-    fontFamily: FONTS.mono.bold,
-    color: COLORS.text,
   },
   section: {
     marginBottom: SPACING.xl,
   },
   sectionTitle: {
     fontSize: 11,
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.ui.bold,
     color: COLORS.textTertiary,
     marginBottom: SPACING.sm,
     textTransform: 'uppercase',
-    letterSpacing: 2,
+    letterSpacing: 1.5,
   },
-  repCardOuter: {
-    borderRadius: 22,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  repCardGradient: {
-    borderRadius: 22,
-  },
-  repCardGlass: {
-    borderRadius: 22,
+  repList: {
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     overflow: 'hidden',
   },
   repRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  repNumber: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    width: 52,
-    letterSpacing: 0.5,
-  },
-  repDetails: {
-    flex: 1,
-    minWidth: 0,
-    position: 'relative',
-  },
-  repExpandButton: {
-    width: 32,
-    padding: SPACING.xs,
-    marginLeft: SPACING.xs,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  repFormScore: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.accent,
-    marginBottom: 2,
-  },
-  repFeedback: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
-    lineHeight: 20,
-  },
-  repFeedbackMeasure: {
-    position: 'absolute',
-    opacity: 0,
-    left: 0,
-    right: 0,
-  },
-  repFeedbackGood: {
-    color: COLORS.accent,
-    fontFamily: FONTS.ui.bold,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
   repRowLast: {
     borderBottomWidth: 0,
   },
-  summaryCardOuter: {
-    borderRadius: 22,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
-      },
-      android: { elevation: 6 },
-    }),
+  repHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  summaryCardGradient: {
-    borderRadius: 22,
+  repLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
-  summaryCardGlass: {
-    borderRadius: 22,
+  repNumber: {
+    fontSize: 13,
+    fontFamily: FONTS.display.semibold,
+    color: COLORS.textSecondary,
+    width: 20,
+  },
+  scoreBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  scoreBadgeText: {
+    fontSize: 11,
+    fontFamily: FONTS.mono.bold,
+  },
+  repFeedbackContainer: {
+    paddingLeft: 28,
+    position: 'relative',
+  },
+  repExpandButton: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  repFeedback: {
+    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+    lineHeight: 19,
+  },
+  repFeedbackMeasure: {
+    position: 'absolute',
+    opacity: 0,
+    left: 28,
+    right: 0,
+  },
+  repFeedbackGood: {
+    color: '#34D399',
+  },
+  summaryCard: {
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: SPACING.lg,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: SPACING.md,
   },
   summaryText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
-    lineHeight: 22,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
   },
   emptyState: {
     alignItems: 'center',

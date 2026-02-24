@@ -117,7 +117,7 @@ export const StatCard: React.FC<StatCardProps> = memo(({ label, value, suffix, i
 const styles = StyleSheet.create({
   cardOuter: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     minHeight: 150,
     ...Platform.select({
@@ -132,11 +132,11 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
   },
   cardGlassEdge: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: SPACING.xl,

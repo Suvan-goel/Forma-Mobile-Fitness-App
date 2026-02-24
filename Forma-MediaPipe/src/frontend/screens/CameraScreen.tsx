@@ -4,9 +4,11 @@ import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Settings, X } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import { X } from 'lucide-react-native';
+import CogIcon from '../components/icons/CogIcon';
+import { COLORS, FONTS, SPACING, getScoreColor } from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
+import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount } from '../../utils/poseAnalysis';
@@ -19,7 +21,10 @@ import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 
-const MAX_FEED_ITEMS = 4;
+/** Exercises with dedicated heuristics (FSM-based form analysis) */
+const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
+
+const MAX_FEED_ITEMS = 5;
 type FeedbackFeedItem = { id: number; text: string };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -631,7 +636,7 @@ export const CameraScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Discard set"
           >
-            <X size={20} color={COLORS.text} strokeWidth={2.5} />
+            <X size={18} color={COLORS.text} strokeWidth={2.5} />
           </TouchableOpacity>
           <View style={styles.exerciseTopCardWrap}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
@@ -645,28 +650,28 @@ export const CameraScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Camera settings"
           >
-            <Settings size={20} color={COLORS.text} strokeWidth={2.5} />
+            <CogIcon size={22} color={COLORS.text} />
           </TouchableOpacity>
         </View>
 
         {/* Feedback Display - Speech bubble below exercise name. Debug: only last message. */}
         {(showFeedback || debugMode) && (() => {
           const filtered = feedbackFeed.filter(item => (item.text || '').trim() !== '');
-          const items = debugMode ? filtered.slice(-1) : filtered.slice(-4);
+          const items = debugMode ? filtered.slice(-1) : filtered.slice(-5);
           if (items.length === 0) return null;
           return (
-            <View style={[styles.feedbackFeedContainer, { bottom: controlStripApproxHeight + SPACING.xs }]}>
+            <View style={[styles.feedbackFeedContainer, { bottom: controlStripApproxHeight - 4 }]}>
               {items.map((item, index) => {
-                // Opacity by position from newest: 0th = 0.9, 1st back = 0.67, 2nd = 0.43, 3rd+ = 0.2
+                // Opacity by position from newest: newest = 0.9, fading to 0.15 for oldest
                 const positionFromNewest = items.length - 1 - index;
-                const t = positionFromNewest >= 3 ? 0 : 1 - positionFromNewest / 3;
-                const opacity = 0.2 + 0.7 * t;
+                const t = positionFromNewest >= 4 ? 0 : 1 - positionFromNewest / 4;
+                const opacity = 0.15 + 0.75 * t;
                 return (
                   <View
                     key={item.id}
                     style={[styles.feedbackFeedItem, { opacity }]}
                   >
-                    <Text style={styles.feedbackFeedText} numberOfLines={2}>
+                    <Text style={[styles.feedbackFeedText, (item.text === 'Great rep!' || item.text === 'Good rep.') && styles.feedbackFeedTextGood]} numberOfLines={2}>
                       {item.text}
                     </Text>
                   </View>
@@ -790,7 +795,7 @@ export const CameraScreen: React.FC = () => {
               </View>
               <View style={styles.metricBlock}>
                 <Text style={styles.metricLabel}>FORM</Text>
-                <MonoText style={styles.metricValue}>{displayValues.form}</MonoText>
+                <MonoText style={[styles.metricValue, currentFormScore != null && repCount > 0 && { color: getScoreColor(currentFormScore) }]}>{displayValues.form}</MonoText>
               </View>
               <View style={styles.metricBlock}>
                 <Text style={styles.metricLabel}>TIME</Text>
@@ -812,10 +817,7 @@ export const CameraScreen: React.FC = () => {
                 {isPaused ? (
                   <View style={[styles.playIconTriangle, { borderLeftColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
                 ) : (
-                  <View style={styles.pauseIconBars}>
-                    <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
-                    <View style={[styles.pauseIconBar, { backgroundColor: isRecording ? COLORS.text : COLORS.textSecondary }]} />
-                  </View>
+                  <PauseIcon size={20} color={isRecording ? COLORS.text : COLORS.textSecondary} />
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -832,7 +834,7 @@ export const CameraScreen: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel="Flip camera"
               >
-                <CameraSwitchIcon width={20} height={20} color={COLORS.text} />
+                <CameraSwitchIcon width={24} height={24} color={COLORS.text} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1003,7 +1005,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   detectionExercise: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
     textTransform: 'uppercase',
@@ -1084,6 +1086,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.ui.bold,
     color: '#FFFFFF',
+  },
+  feedbackFeedTextGood: {
+    color: '#34D399',
   },
   torsoDebugContainer: {
     position: 'absolute',

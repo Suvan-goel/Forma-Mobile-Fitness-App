@@ -9,9 +9,9 @@ export const COLORS = {
   cardBackground: '#0A0A0A',
   cardBackgroundLight: '#141414',
 
-  // Primary Actions — Teal (used across the app)
-  primary: '#00ac7c',
-  primaryDark: '#00936a',
+  // Primary Actions — Electric Violet (used across the app)
+  primary: '#8B5CF6',
+  primaryDark: '#7C3AED',
 
   // Accent — Electric Violet
   accent: '#8B5CF6',
@@ -32,7 +32,7 @@ export const COLORS = {
   inactive: '#4A5568',
 
   // Chart colors
-  chartPrimary: '#00ac7c',
+  chartPrimary: '#8B5CF6',
   chartSecondary: 'rgba(255,255,255,0.06)',
 
   // Neon glow — UV blacklight violet
@@ -41,7 +41,7 @@ export const COLORS = {
 } as const;
 
 /** Analytics-style gradient for all cards (same border, gradient, and colors across app) */
-export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#1A1A1A', '#0F0F0F', '#0A0A0A'];
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#1A1A1A', '#111111', '#0E0E0E'];
 export const CARD_GRADIENT_START = { x: 0, y: 0 } as const;
 export const CARD_GRADIENT_END = { x: 1, y: 1 } as const;
 
@@ -49,7 +49,7 @@ export const CARD_GRADIENT_END = { x: 1, y: 1 } as const;
 export const CARD_GLASS_BORDER = {
   borderWidth: 1,
   borderColor: 'rgba(255, 255, 255, 0.1)',
-  borderRadius: 22,
+  borderRadius: 19,
 } as const;
 
 /** Editorial card — analytics-style surface (same border and dark background for flat cards) */
@@ -57,7 +57,7 @@ export const CARD_STYLE = {
   backgroundColor: '#1A1A1A',
   borderWidth: 1,
   borderColor: 'rgba(255, 255, 255, 0.1)',
-  borderRadius: 22,
+  borderRadius: 19,
 } as const;
 
 /** Violet glow shadow for iOS — apply with spread operator */
@@ -68,6 +68,13 @@ export const GLOW_SHADOW = {
   shadowRadius: 20,
   elevation: 8,
 } as const;
+
+export const getScoreColor = (score: number): string => {
+  if (score >= 90) return '#34D399';   // emerald
+  if (score >= 75) return '#8B5CF6';   // violet
+  if (score >= 50) return '#F5A623';   // yellow
+  return '#E07856';                    // orange
+};
 
 export const SPACING = {
   xs: 4,

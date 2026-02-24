@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
   },
   /* ── Gradient exercise cards (match Logbook / app cards) ── */
   cardOuter: {
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     marginBottom: SPACING.md,
     ...Platform.select({
@@ -236,10 +236,10 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
-    borderRadius: 22,
+    borderRadius: 19,
   },
   cardGlassEdge: {
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: SPACING.lg,

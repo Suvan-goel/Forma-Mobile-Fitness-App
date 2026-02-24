@@ -21,9 +21,9 @@ import {
   Clock,
   Layers,
   Calendar,
-  Settings,
   X,
 } from 'lucide-react-native';
+import CogIcon from '../components/icons/CogIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
@@ -198,7 +198,7 @@ interface WorkoutCardProps {
 }
 
 /** Card height = content (~74px) + increased top/bottom padding (20px) + horizontal padding (16px); gap for getItemLayout */
-const CARD_INNER_HEIGHT = 114;
+const CARD_INNER_HEIGHT = 122;
 const CARD_GAP = 14;
 const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
 
@@ -417,7 +417,7 @@ export const LogbookScreen: React.FC = () => {
           </View>
         </View>
         <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
-          <Settings size={20} color={COLORS.text} strokeWidth={2.5} />
+          <CogIcon size={22} color={COLORS.text} />
         </TouchableOpacity>
       </View>
 
@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
   filterPill: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: '#3F3F46',
     backgroundColor: '#000000',
@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
   calendarPill: {
     width: 36,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: '#3F3F46',
     backgroundColor: '#000000',
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
   /* ── Workout Card (matches Analytics card style) ────────────────────────── */
   cardOuter: {
     height: CARD_INNER_HEIGHT,
-    borderRadius: 22,
+    borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -721,14 +721,14 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
   },
   cardGlassEdge: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingVertical: SPACING.lg,
+    paddingVertical: SPACING.xl,
     paddingHorizontal: SPACING.md,
     alignItems: 'flex-start',
   },
@@ -926,7 +926,7 @@ const styles = StyleSheet.create({
   },
   calendarCloseButton: {
     backgroundColor: COLORS.accent,
-    borderRadius: 16,
+    borderRadius: 19,
     paddingVertical: 14,
     alignItems: 'center',
     ...Platform.select({
