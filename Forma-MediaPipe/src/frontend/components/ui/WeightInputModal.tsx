@@ -7,9 +7,11 @@ import {
   StyleSheet,
   TextInput,
   Keyboard,
+  Platform,
 } from 'react-native';
-import { X } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { X, Weight } from 'lucide-react-native';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 
 interface WeightInputModalProps {
   visible: boolean;
@@ -75,79 +77,116 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
         }}
       >
         <TouchableOpacity
-          style={styles.modalContent}
+          style={styles.cardOuter}
           activeOpacity={1}
           onPress={() => {}}
         >
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              {initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Add Weight'}
-            </Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={handleSkip}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <X size={24} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
-
-          {exerciseName && setNumber && (
-            <Text style={styles.subtitle}>
-              {exerciseName} • Set {setNumber}
-            </Text>
-          )}
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              value={weight}
-              onChangeText={setWeight}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={COLORS.textTertiary}
-              autoFocus
-              selectTextOnFocus
-            />
-            
-            <View style={styles.unitToggle}>
-              <TouchableOpacity
-                style={[styles.unitButton, unit === 'kg' && styles.unitButtonActive]}
-                onPress={() => setUnit('kg')}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.unitText, unit === 'kg' && styles.unitTextActive]}>
-                  kg
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardGlassEdge}>
+              {/* Header */}
+              <View style={styles.header}>
+                <Text style={styles.title}>
+                  {initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Log Weight'}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.unitButton, unit === 'lbs' && styles.unitButtonActive]}
-                onPress={() => setUnit('lbs')}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.unitText, unit === 'lbs' && styles.unitTextActive]}>
-                  lbs
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={handleSkip}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+                </TouchableOpacity>
+              </View>
+
+              {exerciseName && setNumber && (
+                <Text style={styles.subtitle}>
+                  {exerciseName} • Set {setNumber}
                 </Text>
-              </TouchableOpacity>
+              )}
+
+              {/* Weight input section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>WEIGHT</Text>
+
+                <View style={styles.inputRow}>
+                  <View style={styles.rowIcon}>
+                    <Weight
+                      size={18}
+                      color={COLORS.accent}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="decimal-pad"
+                    placeholder="0"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoFocus
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.inputUnitHint}>
+                    {unit}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Unit toggle section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>UNIT</Text>
+
+                <View style={styles.unitToggle}>
+                  <TouchableOpacity
+                    style={[styles.unitButton, unit === 'kg' && styles.unitButtonActive]}
+                    onPress={() => setUnit('kg')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.unitText, unit === 'kg' && styles.unitTextActive]}>
+                      kg
+                    </Text>
+                    <Text style={[styles.unitDescription, unit === 'kg' && styles.unitDescriptionActive]}>
+                      Kilograms
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.unitButton, unit === 'lbs' && styles.unitButtonActive]}
+                    onPress={() => setUnit('lbs')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.unitText, unit === 'lbs' && styles.unitTextActive]}>
+                      lbs
+                    </Text>
+                    <Text style={[styles.unitDescription, unit === 'lbs' && styles.unitDescriptionActive]}>
+                      Pounds
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Action buttons */}
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={styles.skipButton}
+                  onPress={handleSkip}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.skipButtonText}>Skip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.submitButton}
+                  onPress={handleSubmit}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.submitButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.skipButton}
-              onPress={handleSkip}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.skipButtonText}>Skip</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleSubmit}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.submitButtonText}>Save</Text>
-            </TouchableOpacity>
-          </View>
+          </LinearGradient>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -157,17 +196,31 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
   },
-  modalContent: {
-    backgroundColor: '#09090B',
-    borderRadius: 19,
+  cardOuter: {
     width: '100%',
-    maxWidth: 400,
-    paddingBottom: SPACING.lg,
+    maxWidth: 380,
+    borderRadius: 19,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  cardGradient: {
+    borderRadius: 19,
+  },
+  cardGlassEdge: {
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -177,93 +230,140 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
-    paddingBottom: SPACING.sm,
+    paddingBottom: SPACING.xs,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: FONTS.display.semibold,
     color: COLORS.text,
-    flex: 1,
     letterSpacing: -0.3,
   },
   closeButton: {
-    padding: SPACING.xs,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   subtitle: {
     fontSize: 12,
     fontFamily: FONTS.ui.regular,
-    color: '#52525B',
+    color: COLORS.textTertiary,
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
-    letterSpacing: 1,
+    paddingBottom: SPACING.sm,
+    letterSpacing: 0.5,
   },
-  inputContainer: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+  section: {
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xs,
+    marginHorizontal: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.5,
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.xs,
+  },
+  rowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   input: {
-    fontSize: 48,
+    flex: 1,
+    fontSize: 36,
     fontFamily: FONTS.mono.bold,
-    color: '#8B5CF6',
-    textAlign: 'center',
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 2,
-    borderBottomColor: '#8B5CF6',
-    marginBottom: SPACING.lg,
+    color: COLORS.accent,
+    paddingVertical: SPACING.xs,
+  },
+  inputUnitHint: {
+    fontSize: 14,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+    marginLeft: SPACING.sm,
   },
   unitToggle: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    justifyContent: 'center',
+    paddingHorizontal: SPACING.xs,
+    paddingBottom: SPACING.sm,
   },
   unitButton: {
     flex: 1,
-    paddingVertical: SPACING.md,
-    borderRadius: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   unitButtonActive: {
-    borderColor: '#8B5CF6',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
   },
   unitText: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONTS.ui.bold,
-    color: '#52525B',
+    color: COLORS.textTertiary,
+    lineHeight: 20,
   },
   unitTextActive: {
-    color: '#8B5CF6',
+    color: COLORS.accent,
+  },
+  unitDescription: {
+    fontSize: 11,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+    opacity: 0.6,
+    marginTop: 1,
+  },
+  unitDescriptionActive: {
+    color: COLORS.textSecondary,
+    opacity: 1,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: SPACING.md,
+    gap: SPACING.sm,
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.lg,
   },
   skipButton: {
     flex: 1,
-    paddingVertical: SPACING.md,
-    borderRadius: 19,
+    paddingVertical: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   skipButtonText: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
-    color: '#A1A1AA',
+    color: COLORS.textSecondary,
   },
   submitButton: {
-    flex: 1,
-    paddingVertical: SPACING.md,
-    borderRadius: 19,
-    backgroundColor: '#8B5CF6',
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
