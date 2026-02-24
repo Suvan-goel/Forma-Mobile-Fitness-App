@@ -21,9 +21,9 @@ import {
   Clock,
   Layers,
   Calendar,
-  Settings,
   X,
 } from 'lucide-react-native';
+import CogIcon from '../components/icons/CogIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
@@ -409,7 +409,7 @@ export const LogbookScreen: React.FC = () => {
           </View>
         </View>
         <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
-          <Settings size={20} color={COLORS.text} strokeWidth={2.5} />
+          <CogIcon size={22} color={COLORS.text} />
         </TouchableOpacity>
       </View>
 

@@ -17,18 +17,18 @@ import {
   Plus,
   ChevronLeft,
   Dumbbell,
-  Pause,
   Play,
   Trash2,
   ChevronDown,
   ChevronUp,
   FileText,
-  Settings,
   X,
   Clock,
   Layers,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import CogIcon from '../components/icons/CogIcon';
+import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
@@ -308,7 +308,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={() => setSettingsModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Settings size={18} color={COLORS.text} strokeWidth={2.5} />
+          <CogIcon size={20} color={COLORS.text} />
         </TouchableOpacity>
       </View>
 
@@ -535,7 +535,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           {workoutPaused ? (
             <Play size={18} color="#FFFFFF" strokeWidth={1.5} />
           ) : (
-            <Pause size={18} color="#FFFFFF" strokeWidth={1.5} />
+            <PauseIcon size={18} color="#FFFFFF" />
           )}
           <Text style={[styles.controlLabel, styles.controlLabelLight]}>
             {workoutPaused ? 'Resume' : 'Pause'}
