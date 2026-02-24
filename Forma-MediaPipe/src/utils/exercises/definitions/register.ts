@@ -22,6 +22,7 @@ import { legExtensionsDefinition } from './legExtensions';
 import { lyingLegCurlDefinition } from './lyingLegCurl';
 import { machineAbCrunchDefinition } from './machineAbCrunch';
 import { pushupDefinition } from './pushup';
+import { squatDefinition } from './squat';
 
 /** Register an exercise and merge its TTS + summary configs into the global maps. */
 function registerExercise(definition: ExerciseDefinition): void {
@@ -40,3 +41,4 @@ registerExercise(legExtensionsDefinition);
 registerExercise(lyingLegCurlDefinition);
 registerExercise(machineAbCrunchDefinition);
 registerExercise(pushupDefinition);
+registerExercise(squatDefinition);
