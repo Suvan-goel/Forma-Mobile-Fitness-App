@@ -10,3 +10,6 @@ export { useInsights } from './useInsights';
 export { useTrainer } from './useTrainer';
 export { useRewards } from './useRewards';
 export { useUser } from './useUser';
+export { useWorkoutPreferences } from './useWorkoutPreferences';
+export { useNotificationPreferences } from './useNotificationPreferences';
+export { useUpdateUser } from './useUpdateUser';

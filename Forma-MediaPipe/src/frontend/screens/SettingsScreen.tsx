@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Alert, Animated } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Alert, Animated, Switch } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -12,6 +12,10 @@ import {
   LogOut,
   Shield,
   Mail,
+  SlidersHorizontal,
+  Eye,
+  Volume2,
+  Bone,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -22,6 +26,7 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { useAuth } from '../../backend/contexts/AuthContext';
+import { useWorkoutPreferences } from '../../backend/hooks';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -31,6 +36,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const insets = useSafeAreaInsets();
   const { signOut, user } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { prefs, updatePref } = useWorkoutPreferences();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -84,6 +90,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       </View>
       <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
     </TouchableOpacity>
+  );
+
+  const ToggleItem = ({
+    icon: Icon,
+    label,
+    value,
+    onToggle,
+    isLast,
+  }: {
+    icon: any;
+    label: string;
+    value: boolean;
+    onToggle: (v: boolean) => void;
+    isLast?: boolean;
+  }) => (
+    <View style={[styles.settingItem, isLast && styles.settingItemLast]}>
+      <View style={styles.settingLeft}>
+        <View style={styles.settingIconBadge}>
+          <Icon size={16} color="#A78BFA" strokeWidth={1.5} />
+        </View>
+        <Text style={styles.settingLabel}>{label}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: 'rgba(139, 92, 246, 0.4)' }}
+        thumbColor={value ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+      />
+    </View>
   );
 
   return (
@@ -157,9 +192,45 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
-                <SettingItem icon={User} label="Profile" />
-                <SettingItem icon={Bell} label="Notifications" />
-                <SettingItem icon={Lock} label="Privacy" isLast />
+                <SettingItem icon={User} label="Profile" onPress={() => navigation.navigate('ProfileSettings')} />
+                <SettingItem icon={Bell} label="Notifications" onPress={() => navigation.navigate('NotificationSettings')} />
+                <SettingItem icon={Lock} label="Privacy" onPress={() => navigation.navigate('PrivacySettings')} isLast />
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* ── WORKOUT PREFERENCES SECTION ──────────── */}
+          <View style={styles.sectionHeader}>
+            <SlidersHorizontal size={14} color={COLORS.accent} strokeWidth={1.5} />
+            <Text style={styles.sectionTitle}>Workout</Text>
+          </View>
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <ToggleItem
+                  icon={Eye}
+                  label="Visual Feedback"
+                  value={prefs.showFeedback}
+                  onToggle={(v) => updatePref('showFeedback', v)}
+                />
+                <ToggleItem
+                  icon={Volume2}
+                  label="Voice Coaching (TTS)"
+                  value={prefs.isTTSEnabled}
+                  onToggle={(v) => updatePref('isTTSEnabled', v)}
+                />
+                <ToggleItem
+                  icon={Bone}
+                  label="Skeleton Overlay"
+                  value={prefs.showSkeletonOverlay}
+                  onToggle={(v) => updatePref('showSkeletonOverlay', v)}
+                  isLast
+                />
               </View>
             </LinearGradient>
           </View>
@@ -177,7 +248,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
-                <SettingItem icon={HelpCircle} label="Help Center" isLast />
+                <SettingItem icon={HelpCircle} label="Help Center" onPress={() => navigation.navigate('HelpCenter')} isLast />
               </View>
             </LinearGradient>
           </View>

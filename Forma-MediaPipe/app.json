@@ -18,7 +18,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.forma.dev.allahham.12345.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app requires camera access to process video frames for MediaPipe pose detection."
+        "NSCameraUsageDescription": "This app requires camera access to process video frames for MediaPipe pose detection.",
+        "NSPhotoLibraryUsageDescription": "Choose a profile photo from your photo library."
       }
     },
     "android": {
@@ -57,6 +58,14 @@
     "plugins": [
       "expo-font",
       "expo-web-browser",
+      "expo-image-picker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#8B5CF6"
+        }
+      ],
       [
         "expo-build-properties",
         {

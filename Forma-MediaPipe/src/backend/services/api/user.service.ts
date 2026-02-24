@@ -56,6 +56,40 @@ export const userService = {
   },
 
   /**
+   * Upload avatar image to Supabase Storage
+   */
+  async uploadAvatar(localUri: string): Promise<ApiResponse<string>> {
+    if (API_CONFIG.services.user) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: localUri, success: true };
+    }
+
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
+      return { data: '', success: false, error: 'Not authenticated' };
+    }
+
+    try {
+      const fileName = `${authUser.id}/${Date.now()}.jpg`;
+      const response = await fetch(localUri);
+      const arrayBuffer = await response.arrayBuffer();
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+
+      if (uploadError) {
+        return { data: '', success: false, error: uploadError.message };
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      return { data: publicUrl, success: true };
+    } catch (err) {
+      return { data: '', success: false, error: err instanceof Error ? err.message : 'Upload failed' };
+    }
+  },
+
+  /**
    * Update user profile
    */
   async updateUser(updates: Partial<User>): Promise<ApiResponse<User>> {
