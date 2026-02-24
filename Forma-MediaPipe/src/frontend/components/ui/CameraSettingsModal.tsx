@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X } from 'lucide-react-native';
+import { X, MessageSquareText, AudioLines, Bone, Bug } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { useCameraSettings } from '../../contexts/CameraSettingsContext';
 
@@ -71,6 +71,7 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
+              {/* Header */}
               <View style={styles.header}>
                 <Text style={styles.title}>Settings</Text>
                 <TouchableOpacity
@@ -78,49 +79,124 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
                   onPress={onClose}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <X size={24} color={COLORS.text} strokeWidth={1.5} />
+                  <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
                 </TouchableOpacity>
               </View>
-              <View style={styles.row}>
-                <Text style={[styles.label, debugMode && styles.labelOverridden]}>
-                  Debug mode (skeleton on, TTS off, 1 message + angles)
-                </Text>
-                <Switch
-                  value={debugMode}
-                  onValueChange={handleDebugChange}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
+
+              {/* Feedback section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>FEEDBACK</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <MessageSquareText
+                      size={18}
+                      color={debugMode ? COLORS.textTertiary : COLORS.accent}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDisabled]}>
+                      Form messages
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
+                      On-screen feedback during reps
+                    </Text>
+                  </View>
+                  <Switch
+                    value={showFeedback}
+                    onValueChange={setShowFeedback}
+                    disabled={debugMode}
+                    trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                    thumbColor={COLORS.text}
+                  />
+                </View>
+
+                <View style={styles.separator} />
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <AudioLines
+                      size={18}
+                      color={debugMode ? COLORS.textTertiary : COLORS.accent}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDisabled]}>
+                      Voice coaching
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
+                      Spoken cues via text-to-speech
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isTTSEnabled}
+                    onValueChange={handleTTSChange}
+                    disabled={debugMode}
+                    trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                    thumbColor={COLORS.text}
+                  />
+                </View>
               </View>
-              <View style={styles.row}>
-                <Text style={[styles.label, debugMode && styles.labelOverridden]}>Show feedback messages</Text>
-                <Switch
-                  value={showFeedback}
-                  onValueChange={setShowFeedback}
-                  disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
+
+              {/* Display section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>DISPLAY</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <Bone
+                      size={18}
+                      color={debugMode ? COLORS.textTertiary : COLORS.accent}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDisabled]}>
+                      Skeleton overlay
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
+                      Show detected pose landmarks
+                    </Text>
+                  </View>
+                  <Switch
+                    value={showSkeletonOverlay}
+                    onValueChange={setShowSkeletonOverlay}
+                    disabled={debugMode}
+                    trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                    thumbColor={COLORS.text}
+                  />
+                </View>
               </View>
-              <View style={styles.row}>
-                <Text style={[styles.label, debugMode && styles.labelOverridden]}>Spoken feedback (TTS)</Text>
-                <Switch
-                  value={isTTSEnabled}
-                  onValueChange={handleTTSChange}
-                  disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
-              </View>
-              <View style={styles.row}>
-                <Text style={[styles.label, debugMode && styles.labelOverridden]}>Show skeleton overlay</Text>
-                <Switch
-                  value={showSkeletonOverlay}
-                  onValueChange={setShowSkeletonOverlay}
-                  disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
+
+              {/* Developer section */}
+              <View style={[styles.section, styles.sectionLast]}>
+                <Text style={styles.sectionLabel}>DEVELOPER</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <Bug
+                      size={18}
+                      color={debugMode ? COLORS.orange : COLORS.textSecondary}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDebugActive]}>
+                      Debug mode
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDebugActive]}>
+                      Skeleton on, TTS off, shows angles
+                    </Text>
+                  </View>
+                  <Switch
+                    value={debugMode}
+                    onValueChange={handleDebugChange}
+                    trackColor={{ false: COLORS.border, true: COLORS.orange }}
+                    thumbColor={COLORS.text}
+                  />
+                </View>
               </View>
             </View>
           </LinearGradient>
@@ -133,24 +209,24 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
   },
   cardOuter: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 380,
     borderRadius: 19,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
       },
-      android: { elevation: 6 },
+      android: { elevation: 8 },
     }),
   },
   cardGradient: {
@@ -160,7 +236,6 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingBottom: SPACING.lg,
   },
   header: {
     flexDirection: 'row',
@@ -168,34 +243,88 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
-    paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    paddingBottom: SPACING.sm,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: FONTS.display.semibold,
     color: COLORS.text,
-    flex: 1,
+    letterSpacing: -0.3,
   },
   closeButton: {
-    padding: SPACING.xs,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  section: {
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xs,
+    marginHorizontal: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  sectionLast: {
+    paddingBottom: SPACING.md,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.5,
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.xs,
+  },
+  rowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rowText: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    marginLeft: 46,
   },
   label: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
-    flex: 1,
+    lineHeight: 20,
   },
-  labelOverridden: {
+  labelDisabled: {
+    color: COLORS.textTertiary,
+  },
+  labelDebugActive: {
+    color: COLORS.orange,
+  },
+  description: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
-    opacity: 0.8,
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  descriptionDisabled: {
+    color: COLORS.textTertiary,
+    opacity: 0.7,
+  },
+  descriptionDebugActive: {
+    color: COLORS.textSecondary,
   },
 });
