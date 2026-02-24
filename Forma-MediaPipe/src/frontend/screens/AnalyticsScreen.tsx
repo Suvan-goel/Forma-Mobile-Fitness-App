@@ -102,7 +102,9 @@ export const AnalyticsScreen: React.FC = () => {
   const workoutMins = totalMinutes % 60;
 
   const moveBars = generateMicroBars(18, formScore);
-  const exerciseBars = generateMicroBars(20, strengthScore);
+  const weeklyValues = analytics.weeklyBarData.map(d => d.value);
+  const weeklyMax = Math.max(...weeklyValues, 1);
+  const exerciseBars = weeklyValues.map(v => v > 0 ? Math.max(10, Math.round((v / weeklyMax) * 100)) : 0);
 
   return (
     <View style={styles.container}>

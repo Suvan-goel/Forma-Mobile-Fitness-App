@@ -920,11 +920,11 @@ Exercises chosen for beta MVP based on:
 | 1 | **Barbell Curl** (existing) | Front | Elbow, shoulder, torso | ROM, shoulder takeover, torso swing, tempo, symmetry | High — two-arm sync, view angle compensation |
 | 2 | **Push-Up** (existing) | Side | Elbow, body alignment, hip | Depth, lockout, hip sag/pike, tempo | Medium — idle gate, partial rep escape |
 | 3 | **Overhead Press** | Front | Elbow, torso | Lockout, torso lean, ROM, tempo, symmetry | Medium — similar to curl but inverted motion |
-| 4 | **Squat** | Side | Knee, hip, torso | Depth, knee tracking, torso lean, tempo | Medium — needs hip/knee angle, torso forward lean |
-| 5 | **Romanian Deadlift (RDL)** | Side | Hip hinge, knee, torso | Hip hinge depth, back rounding, knee softness, tempo | Medium — hip hinge angle is primary driver |
-| 6 | **Lateral Raise** | Front | Shoulder abduction, elbow, torso | ROM (raise height), elbow bend, torso lean/momentum, symmetry | Low-Medium — shoulder abduction angle as driver |
-| 7 | **Tricep Overhead Extension** | Side | Elbow, shoulder, torso | ROM (full extension), elbow flare, torso stability, tempo | Low — single angle driver, similar FSM to curl |
-| 8 | **Hammer Curl** | Front | Elbow, shoulder, torso | Identical to barbell curl form checks (ROM, shoulder, torso, tempo, symmetry) | Low — reuse barbell curl logic with threshold tweaks |
+| 4 | **Lat Pulldown** | Front | Elbow, shoulder, torso | ROM (full pull/extension), elbow flare, torso lean, tempo, symmetry | Medium — vertical pull pattern, elbow + shoulder angles |
+| 5 | **Cable Pushdowns** | Side | Elbow, shoulder, torso | ROM (full extension), elbow flare, torso lean/momentum, tempo | Low — single angle driver, similar FSM to curl |
+| 6 | **Barbell Squat** | Side | Knee, hip, torso | Depth, knee tracking, torso lean, tempo | Medium — needs hip/knee angle, torso forward lean |
+| 7 | **Standing Dumbbell Lateral Raises** | Front | Shoulder abduction, elbow, torso | ROM (raise height), elbow bend, torso lean/momentum, symmetry | Low-Medium — shoulder abduction angle as driver |
+| 8 | **Romanian Deadlift (RDL)** | Side | Hip hinge, knee, torso | Hip hinge depth, back rounding, knee softness, tempo | Medium — hip hinge angle is primary driver |
 | 9 | **Bent-Over Row** | Side | Elbow, torso angle, shoulder | Torso angle maintenance, ROM (pull height), tempo, momentum | Medium — torso angle is a prerequisite, not a penalty |
 | 10 | **Plank Hold** (isometric) | Side | Body alignment, hip | Hip sag/pike, hold duration, stability | Low — no reps, time-based scoring |
 
@@ -932,12 +932,12 @@ Exercises chosen for beta MVP based on:
 
 **Can reuse barbell curl FSM pattern (UP→TOP→DOWN cycles):**
 - Overhead Press (inverted — push up instead of curl up)
-- Hammer Curl (nearly identical — different wrist orientation, same angles)
-- Tricep Extension (single-angle driver: elbow)
-- Lateral Raise (shoulder abduction angle as driver)
+- Lat Pulldown (vertical pull, elbow angle as driver)
+- Cable Pushdowns (single-angle driver: elbow)
+- Standing Dumbbell Lateral Raises (shoulder abduction angle as driver)
 
 **Can reuse push-up FSM pattern (body-position-gated, single-side view):**
-- Squat (knee angle drives phases, torso lean is form check)
+- Barbell Squat (knee angle drives phases, torso lean is form check)
 - RDL (hip angle drives phases)
 - Bent-Over Row (torso angle prerequisite + elbow angle for rep counting)
 
@@ -949,11 +949,11 @@ Exercises chosen for beta MVP based on:
 | Exercise | Estimated LOC | Estimated Time | Notes |
 |----------|---------------|----------------|-------|
 | Overhead Press | 250-300 | 1.5 days | Reuse curl FSM pattern inverted |
-| Squat | 300-350 | 2 days | New angle set (knee, hip), side-view |
+| Lat Pulldown | 250-300 | 1.5 days | Vertical pull, front-view, symmetry |
+| Cable Pushdowns | 200-250 | 1 day | Single angle driver, similar FSM to curl |
+| Barbell Squat | 300-350 | 2 days | New angle set (knee, hip), side-view |
+| Standing Dumbbell Lateral Raises | 200-250 | 1 day | Simple raise/lower, shoulder abduction angle |
 | RDL | 250-300 | 1.5 days | Hip hinge focus, similar to squat structure |
-| Lateral Raise | 200-250 | 1 day | Simple raise/lower, shoulder abduction angle |
-| Tricep Extension | 200-250 | 1 day | Single angle driver, very similar to curl |
-| Hammer Curl | 150-200 | 0.5 days | Fork barbell curl, adjust thresholds only |
 | Bent-Over Row | 300-350 | 2 days | Torso prerequisite angle + pull detection |
 | Plank Hold | 200-250 | 1.5 days | New pattern (isometric), simpler FSM |
 
@@ -998,10 +998,10 @@ Compare without framework: ~8,000-10,000 lines, ~25-30 dev-days
 
 | Step | Exercise | Priority | Notes |
 |------|----------|----------|-------|
-| 2.1 | Hammer Curl | High — lowest effort | Near-fork of barbell curl, validates "similar exercise" path |
-| 2.2 | Tricep Extension | High | Simple FSM, validates side-view single-angle path |
-| 2.3 | Squat | High — most requested | New angle set, validates framework with different body mechanics |
-| 2.4 | Lateral Raise | Medium | Validates shoulder abduction detection |
+| 2.1 | Lat Pulldown | High | Vertical pull, validates front-view two-arm path |
+| 2.2 | Cable Pushdowns | High | Simple FSM, validates single-angle driver path |
+| 2.3 | Barbell Squat | High — most requested | New angle set, validates framework with different body mechanics |
+| 2.4 | Standing Dumbbell Lateral Raises | Medium | Validates shoulder abduction detection |
 
 **Per exercise:**
 1. Write definition file in `definitions/`
