@@ -25,6 +25,7 @@ import {
   X,
   Clock,
   Layers,
+  Flag,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
@@ -508,47 +509,48 @@ export const CurrentWorkoutScreen: React.FC = () => {
         />
       )}
 
-      {/* ── ADD EXERCISE BUTTON (Tactile Glass Pill) ── */}
-      <View style={styles.addExerciseContainer}>
+      {/* ── BOTTOM PANEL ── */}
+      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 4 }]}>
+        {/* Add Exercise */}
         <TouchableOpacity style={styles.addExerciseButton} onPress={handleAddExercise} activeOpacity={0.8}>
-          <Plus size={16} color={COLORS.accent} strokeWidth={2} />
-          <Text style={styles.addExerciseText}>Add new exercise</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── BOTTOM CONTROLS (Squircle Glass) ── */}
-      <View style={[styles.bottomControls, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 4 }]}>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={handleDiscardWorkout}
-          activeOpacity={0.7}
-        >
-          <Trash2 size={18} color="#52525B" strokeWidth={1.5} />
-          <Text style={styles.controlLabel}>Discard</Text>
+          <Plus size={15} color={COLORS.accent} strokeWidth={2.5} />
+          <Text style={styles.addExerciseText}>Add exercise</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={handlePausePress}
-          activeOpacity={0.7}
-        >
-          {workoutPaused ? (
-            <Play size={18} color="#FFFFFF" strokeWidth={1.5} />
-          ) : (
-            <PauseIcon size={18} color="#FFFFFF" />
-          )}
-          <Text style={[styles.controlLabel, styles.controlLabelLight]}>
-            {workoutPaused ? 'Resume' : 'Pause'}
-          </Text>
-        </TouchableOpacity>
+        {/* Controls Row */}
+        <View style={styles.controlsRow}>
+          <TouchableOpacity
+            style={styles.controlDiscardButton}
+            onPress={handleDiscardWorkout}
+            activeOpacity={0.7}
+          >
+            <Trash2 size={16} color="#52525B" strokeWidth={1.5} />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.controlButton, styles.controlButtonFinish]}
-          onPress={handleEndWorkout}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.controlLabelFinish}>Finish</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.controlPauseButton}
+            onPress={handlePausePress}
+            activeOpacity={0.7}
+          >
+            {workoutPaused ? (
+              <Play size={17} color="#FFFFFF" strokeWidth={1.5} />
+            ) : (
+              <PauseIcon size={17} color="#A1A1AA" />
+            )}
+            <Text style={styles.controlPauseLabel}>
+              {workoutPaused ? 'Resume' : 'Pause'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.controlFinishButton}
+            onPress={handleEndWorkout}
+            activeOpacity={0.7}
+          >
+            <Flag size={15} color="#FFFFFF" strokeWidth={1.5} />
+            <Text style={styles.controlFinishLabel}>Finish</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -861,88 +863,90 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* ── Add Exercise Button (Glass Pill) ──── */
-  addExerciseContainer: {
+  /* ── Bottom Panel ─────────────────────── */
+  bottomPanel: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.xs,
+    paddingTop: 12,
     backgroundColor: '#000000',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 10,
   },
   addExerciseButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 50,
+    gap: 7,
+    paddingVertical: 13,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#8B5CF6',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-    }),
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
   },
   addExerciseText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: '#FFFFFF',
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.accent,
     letterSpacing: 0.3,
   },
-
-  /* ── Bottom Controls (Squircle Glass) ──── */
-  bottomControls: {
+  controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.md,
-    backgroundColor: '#000000',
     gap: 10,
   },
-  controlButton: {
+  controlDiscardButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlPauseButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 16,
-    borderRadius: 19,
+    height: 48,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
-  controlLabel: {
+  controlPauseLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
-    color: '#52525B',
+    color: '#A1A1AA',
     letterSpacing: 0.3,
   },
-  controlLabelLight: {
-    color: '#A1A1AA',
-  },
-  controlButtonFinish: {
-    borderColor: COLORS.accent,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+  controlFinishButton: {
+    flex: 1.4,
+    flexDirection: 'row' as const,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 14,
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
-  controlLabelFinish: {
+  controlFinishLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 15,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: -0.3,
   },
 });
