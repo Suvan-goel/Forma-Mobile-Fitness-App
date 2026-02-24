@@ -81,6 +81,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     clearSets,
     updateSetWeight,
     removeSetFromExercise,
+    removeExercise,
     setWorkoutInProgress,
     workoutElapsedSeconds: contextElapsed,
     setWorkoutElapsedSeconds,
@@ -267,6 +268,21 @@ export const CurrentWorkoutScreen: React.FC = () => {
     );
   };
 
+  const handleDeleteExercise = (exerciseId: string, exerciseName: string, setCount: number) => {
+    Alert.alert(
+      'Delete exercise?',
+      `Are you sure you want to remove ${exerciseName}${setCount > 0 ? ` and its ${setCount} ${setCount === 1 ? 'set' : 'sets'}` : ''}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => removeExercise(exerciseId),
+        },
+      ]
+    );
+  };
+
   const handleDiscardWorkout = () => {
     Alert.alert(
       'Discard Workout',
@@ -388,6 +404,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
                         </Text>
                       </View>
                       <View style={styles.exerciseCardHeaderRight}>
+                        <TouchableOpacity
+                          style={styles.exerciseDeleteButton}
+                          onPress={() => handleDeleteExercise(exercise.id, exercise.name, exercise.sets.length)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Trash2 size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                        </TouchableOpacity>
                         <View style={styles.exerciseSetsBadge}>
                           <MonoText style={styles.exerciseSetsValue}>{exercise.sets.length}</MonoText>
                         </View>
@@ -751,6 +775,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginLeft: SPACING.md,
+  },
+  exerciseDeleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseSetsBadge: {
     alignItems: 'center',
