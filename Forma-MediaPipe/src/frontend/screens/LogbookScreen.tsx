@@ -10,6 +10,8 @@ import {
   Animated,
   Platform,
   Image,
+  PanResponder,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +30,7 @@ import {
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts, useUser } from '../../backend/hooks';
+import { useWorkouts, useUser, useDeleteWorkout } from '../../backend/hooks';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../../backend/services/api';
@@ -210,63 +212,135 @@ const DropdownPill = ({
 
 interface WorkoutCardProps {
   session: WorkoutSession;
+  onDelete: (id: string) => void;
 }
 
 /** Card height = content (~74px) + increased top/bottom padding (20px) + horizontal padding (16px); gap for getItemLayout */
 const CARD_INNER_HEIGHT = 122;
 const CARD_GAP = 14;
 const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
+const DELETE_AREA_WIDTH = 72;
 
-const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session }) => {
+const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isSwipeOpen = useRef(false);
+
+  const closeSwipe = useCallback(() => {
+    isSwipeOpen.current = false;
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+  }, [translateX]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+        return Math.abs(dx) > Math.abs(dy) * 2 && Math.abs(dx) > 8;
+      },
+      onPanResponderGrant: () => {
+        translateX.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
+        const newValue = startOffset + gestureState.dx;
+        translateX.setValue(Math.min(0, Math.max(newValue, -DELETE_AREA_WIDTH)));
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
+        const projected = startOffset + gestureState.dx;
+        const shouldOpen = projected < -(DELETE_AREA_WIDTH / 2);
+        isSwipeOpen.current = shouldOpen;
+        Animated.spring(translateX, {
+          toValue: shouldOpen ? -DELETE_AREA_WIDTH : 0,
+          useNativeDriver: true,
+          bounciness: 4,
+        }).start();
+      },
+    })
+  ).current;
 
   const handlePress = useCallback(() => {
+    if (isSwipeOpen.current) {
+      closeSwipe();
+      return;
+    }
     navigation.navigate('WorkoutDetails', { workoutId: session.id });
-  }, [navigation, session.id]);
+  }, [navigation, session.id, closeSwipe]);
+
+  const handleDelete = useCallback(() => {
+    closeSwipe();
+    Alert.alert(
+      'Delete Workout?',
+      "This can't be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => onDelete(session.id) },
+      ],
+    );
+  }, [onDelete, session.id, closeSwipe]);
 
   return (
-    <TouchableOpacity
-      style={styles.cardOuter}
-      activeOpacity={0.82}
-      onPress={handlePress}
-    >
-      <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
-        start={CARD_GRADIENT_START}
-        end={CARD_GRADIENT_END}
-        style={styles.cardGradient}
+    <View style={styles.swipeContainer}>
+      {/* Delete button revealed when card slides left */}
+      <View style={styles.deleteArea}>
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
+          <X size={20} color="#EF4444" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Swipeable card */}
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
       >
-        <View style={styles.cardGlassEdge}>
-          <View style={styles.cardLayout}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardDate}>
-                {session.date} {session.fullDate.getFullYear()}
-              </Text>
-              <Text style={styles.cardTitle}>{session.name}</Text>
-              <View style={styles.metaRow}>
-                <View style={styles.metaItem}>
-                  <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.metaText}>{session.totalSets} {session.totalSets === 1 ? 'SET' : 'SETS'}</Text>
+        <TouchableOpacity
+          style={styles.cardOuter}
+          activeOpacity={0.82}
+          onPress={handlePress}
+        >
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardGlassEdge}>
+              <View style={styles.cardLayout}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardDate}>
+                    {session.date} {session.fullDate.getFullYear()}
+                  </Text>
+                  <Text style={styles.cardTitle}>{session.name}</Text>
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaItem}>
+                      <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.metaText}>{session.totalSets} {session.totalSets === 1 ? 'SET' : 'SETS'}</Text>
+                    </View>
+                    <View style={styles.metaDot} />
+                    <View style={styles.metaItem}>
+                      <Clock size={12} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.metaText}>{session.duration}</Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.metaDot} />
-                <View style={styles.metaItem}>
-                  <Clock size={12} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.metaText}>{session.duration}</Text>
+                <View style={styles.cardRight}>
+                  <View style={styles.scoreBadge}>
+                    <MonoText style={styles.scoreValue}>{session.formScore}</MonoText>
+                  </View>
+                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
               </View>
             </View>
-            <View style={styles.cardRight}>
-              <View style={styles.scoreBadge}>
-                <MonoText style={styles.scoreValue}>{session.formScore}</MonoText>
-              </View>
-              <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
-}, (prev, next) => prev.session.id === next.session.id && prev.session.formScore === next.session.formScore);
+}, (prev, next) =>
+  prev.session.id === next.session.id &&
+  prev.session.formScore === next.session.formScore &&
+  prev.onDelete === next.onDelete,
+);
 
 /* ── Main Screen ──────────────────────────── */
 
@@ -285,6 +359,7 @@ export const LogbookScreen: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { workouts, isLoading, error, refetch } = useWorkouts();
+  const { deleteWorkout } = useDeleteWorkout();
   const { user } = useAuth();
   const { user: profileUser, refetch: refetchUser } = useUser();
   const displayName = profileUser?.displayName
@@ -405,9 +480,18 @@ export const LogbookScreen: React.FC = () => {
 
   const filteredWorkouts = getFilteredWorkouts();
 
+  const handleDelete = useCallback(async (id: string) => {
+    const success = await deleteWorkout(id);
+    if (success) {
+      refetch();
+    } else {
+      Alert.alert('Error', 'Failed to delete workout. Please try again.');
+    }
+  }, [deleteWorkout, refetch]);
+
   const renderWorkoutCard = useCallback(({ item }: { item: WorkoutSession }) => (
-    <WorkoutCard session={item} />
-  ), []);
+    <WorkoutCard session={item} onDelete={handleDelete} />
+  ), [handleDelete]);
 
   const keyExtractor = useCallback((item: WorkoutSession) => item.id, []);
 
@@ -704,6 +788,35 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#FFFFFF',
     letterSpacing: 1,
+  },
+
+  /* ── Swipe-to-Delete ─────────────────────── */
+  swipeContainer: {
+    height: CARD_INNER_HEIGHT,
+  },
+  deleteArea: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 12,
+  },
+  deleteButton: {
+    width: 48,
+    height: 82,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
+      },
+    }),
   },
 
   /* ── Workout Card (matches Analytics card style) ────────────────────────── */

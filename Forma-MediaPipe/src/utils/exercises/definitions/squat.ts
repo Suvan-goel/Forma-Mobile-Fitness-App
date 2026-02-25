@@ -32,7 +32,7 @@ import type {
 /** FSM thresholds (degrees) */
 const THRESHOLDS = {
   /** Knee angle below which we transition STANDING -> DESCENDING */
-  DESCENDING_ENTER: 155,
+  DESCENDING_ENTER: 148,
   /** Knee angle below which we reach BOTTOM */
   BOTTOM_ENTER: 110,
   /** Knee angle above which we leave BOTTOM (hysteresis) */
@@ -40,17 +40,23 @@ const THRESHOLDS = {
   /** Knee angle above which we transition ASCENDING -> STANDING (rep complete) */
   STANDING_REENTER: 160,
   /** Minimum time (seconds) for a rep to count */
-  MIN_REP_TIME: 0.6,
+  MIN_REP_TIME: 0.8,
   /** Partial rep: if in DESCENDING and knee returns above this without hitting BOTTOM */
-  PARTIAL_REP_RESET: 155,
+  PARTIAL_REP_RESET: 150,
   /** Minimum time in DESCENDING before partial-rep reset can trigger */
-  MIN_DESCENDING_TIME: 0.3,
+  MIN_DESCENDING_TIME: 0.5,
   /** Minimum knee angle for standing detection in IDLE gate */
   IDLE_STANDING_MIN: 160,
   /** Seconds user must hold standing pose before FSM activates from IDLE */
   STANDING_HOLD_TIME: 0.8,
   /** Maximum torso inclination from vertical for standing detection (degrees) */
   TORSO_INCLINE_MAX_IDLE: 25,
+  /** Minimum ROM (degrees) for a partial rep to count */
+  MIN_PARTIAL_ROM: 20,
+  /** Minimum ROM (degrees) for a full rep to count */
+  MIN_REP_ROM: 35,
+  /** Minimum frames in rep window for a rep to count */
+  MIN_REP_FRAMES: 8,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
@@ -63,7 +69,7 @@ const FORM_THRESHOLDS = {
   // ROM
   ROM_MIN: 50,        // minimum ROM in degrees (max - min knee angle)
   // Torso lean (forward lean from vertical, via hip-shoulder vector)
-  TORSO_LEAN_WARN: 45, // max torso lean > 45 degrees
+  TORSO_LEAN_WARN: 50, // max torso lean > 50 degrees
   TORSO_LEAN_FAIL: 55, // max torso lean > 55 degrees
   // Tempo
   TEMPO_CONCENTRIC_MIN: 0.3,  // ascent too fast (seconds)
@@ -586,7 +592,10 @@ function updateSquatState(
 ): SquatState {
   const t = Date.now() / 1000;
 
-  const visibleSide = selectVisibleSide(keypoints);
+  // Only update visible side in IDLE/STANDING — lock it during active rep phases
+  // to prevent mid-rep side switching that corrupts angle measurements.
+  const inActiveRep = currentState.fsm.phase !== 'IDLE' && currentState.fsm.phase !== 'STANDING';
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
 
   const rawAngles = calculateSquatAngles(keypoints, visibleSide);
   if (!rawAngles) {
@@ -609,11 +618,30 @@ function updateSquatState(
   const fsmResult = updateFSM(currentState.fsm, smoothed.knee, t, smoothed.torsoLean);
   newState.fsm = fsmResult.fsm;
 
-  // Handle partial rep
+  // Handle partial rep — only count if meaningful ROM was achieved
   if (fsmResult.partialRep) {
-    newState.repCount++;
-    newState.feedback = 'Squat deeper \u2014 try to reach parallel.';
-    newState.lastFeedbackTime = t;
+    const partialROM = newState.repWindow
+      ? newState.repWindow.maxKnee - newState.repWindow.minKnee
+      : 0;
+    const partialFrames = newState.repWindow?.frameCount ?? 0;
+
+    if (partialROM >= THRESHOLDS.MIN_PARTIAL_ROM && partialFrames >= THRESHOLDS.MIN_REP_FRAMES) {
+      newState.repCount++;
+      const messages = ['Squat deeper \u2014 aim to get your thighs parallel.'];
+      // Score partial reps low (30-45 range) based on how much ROM was achieved
+      const score = Math.max(0, Math.min(45, Math.round(15 + partialROM * 0.75)));
+      newState.lastRepResult = {
+        repIndex: newState.repCount,
+        rom: partialROM,
+        tDown: 0,
+        tUp: 0,
+        score,
+        messages,
+      };
+      newState.feedback = messages[0];
+      newState.lastFeedbackTime = t;
+    }
+    // Either way, reset the rep window and let FSM return to STANDING
     newState.repWindow = null;
     return newState;
   }
@@ -644,9 +672,17 @@ function updateSquatState(
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    const rom = newState.repWindow.maxKnee - newState.repWindow.minKnee;
+
+    // Validate: require minimum ROM and frame count to prevent noise-driven reps
+    if (rom < THRESHOLDS.MIN_REP_ROM || newState.repWindow.frameCount < THRESHOLDS.MIN_REP_FRAMES) {
+      newState.repWindow = null;
+      newState.fsm = resetFSMToStanding();
+      return newState;
+    }
+
     newState.repCount++;
 
-    const rom = newState.repWindow.maxKnee - newState.repWindow.minKnee;
     const tDown = newState.repWindow.tBottom
       ? newState.repWindow.tBottom - newState.repWindow.tStart
       : 0;
