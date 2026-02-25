@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -26,6 +26,7 @@ import {
   Clock,
   Layers,
   Flag,
+  Timer,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
@@ -35,6 +36,18 @@ import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext'
 import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
 import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
+import { useCameraSettings } from '../contexts/CameraSettingsContext';
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export type { LoggedSet };
 
@@ -103,10 +116,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
     currentUnit?: 'kg' | 'lbs';
   } | null>(null);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPausedRef = useRef(false);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
+  const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { restTimerEnabled, restTimerDurationSeconds } = useCameraSettings();
 
   isPausedRef.current = workoutPaused;
 
@@ -142,6 +158,48 @@ export const CurrentWorkoutScreen: React.FC = () => {
     });
   };
 
+  /* ── Rest timer logic ──── */
+
+  const startRestTimer = useCallback(() => {
+    if (!restTimerEnabled || restTimerDurationSeconds <= 0) return;
+    // Clear any existing rest timer
+    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+
+    const endTime = Date.now() + restTimerDurationSeconds * 1000;
+    setRestSecondsLeft(restTimerDurationSeconds);
+
+    restIntervalRef.current = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+      setRestSecondsLeft(remaining);
+      if (remaining <= 0) {
+        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+        restIntervalRef.current = null;
+        setRestSecondsLeft(null);
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Rest Complete',
+            body: 'Time to start your next set!',
+            sound: 'default',
+          },
+          trigger: null,
+        });
+      }
+    }, 1000);
+  }, [restTimerEnabled, restTimerDurationSeconds]);
+
+  const cancelRestTimer = useCallback(() => {
+    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    restIntervalRef.current = null;
+    setRestSecondsLeft(null);
+  }, []);
+
+  // Clean up rest timer on unmount
+  useEffect(() => {
+    return () => {
+      if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    };
+  }, []);
+
   /* ── Focus effects ──── */
 
   useFocusEffect(
@@ -152,6 +210,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
       }
       const showWeightFor = route.params?.showWeightFor;
       if (showWeightFor?.exerciseId) {
+        startRestTimer();
         const exercise = exercises.find((ex) => ex.id === showWeightFor.exerciseId);
         if (exercise && exercise.sets.length > 0) {
           const lastSetIndex = exercise.sets.length - 1;
@@ -358,6 +417,33 @@ export const CurrentWorkoutScreen: React.FC = () => {
           </View>
         )}
       </View>
+
+      {/* ── REST TIMER BAR ──────────────────── */}
+      {restSecondsLeft !== null && (
+        <View style={styles.restTimerBar}>
+          <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
+          <View style={styles.restTimerProgress}>
+            <View style={styles.restTimerTrack}>
+              <View
+                style={[
+                  styles.restTimerFill,
+                  { width: `${(restSecondsLeft / restTimerDurationSeconds) * 100}%` },
+                ]}
+              />
+            </View>
+          </View>
+          <MonoText bold style={styles.restTimerText}>
+            {Math.floor(restSecondsLeft / 60)}:{(restSecondsLeft % 60).toString().padStart(2, '0')}
+          </MonoText>
+          <TouchableOpacity
+            onPress={cancelRestTimer}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
+          >
+            <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── CONTENT AREA ────────────────────── */}
       <ScrollView
@@ -686,6 +772,41 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#A1A1AA',
     letterSpacing: 2,
+  },
+
+  /* ── Rest Timer Bar ──────────────────────── */
+  restTimerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  restTimerProgress: {
+    flex: 1,
+  },
+  restTimerTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    overflow: 'hidden',
+  },
+  restTimerFill: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.accent,
+  },
+  restTimerText: {
+    fontSize: 14,
+    color: COLORS.accent,
+    minWidth: 36,
+    textAlign: 'right',
   },
 
   /* ── Void (Empty State) ─────────────────── */

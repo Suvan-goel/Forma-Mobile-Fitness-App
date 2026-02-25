@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,156 @@ import {
   Platform,
   Animated,
   BackHandler,
+  Alert,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, MessageSquareText, AudioLines, Bone, Bug } from 'lucide-react-native';
+import { X, MessageSquareText, AudioLines, Bone, Bug, Timer } from 'lucide-react-native';
+import * as Notifications from 'expo-notifications';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { useCameraSettings } from '../../contexts/CameraSettingsContext';
+import { MonoText } from '../typography/MonoText';
 
+/* ── Scroll Wheel Picker ─────────────────── */
+
+const ITEM_HEIGHT = 36;
+const VISIBLE_ITEMS = 3;
+const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+
+interface WheelColumnProps {
+  values: number[];
+  selected: number;
+  onValueChange: (value: number) => void;
+  pad?: boolean;
+}
+
+const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChange, pad = true }) => {
+  const scrollRef = useRef<ScrollView>(null);
+  const isUserScrolling = useRef(false);
+  const selectedIndex = values.indexOf(selected);
+
+  // Scroll to selected value when it changes externally (not from user scroll)
+  useEffect(() => {
+    if (!isUserScrolling.current && selectedIndex >= 0) {
+      scrollRef.current?.scrollTo({ y: selectedIndex * ITEM_HEIGHT, animated: false });
+    }
+  }, [selectedIndex]);
+
+  const handleMomentumEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
+    const clamped = Math.max(0, Math.min(index, values.length - 1));
+    if (values[clamped] !== selected) {
+      onValueChange(values[clamped]);
+    }
+    isUserScrolling.current = false;
+  }, [values, selected, onValueChange]);
+
+  const handleScrollBegin = useCallback(() => {
+    isUserScrolling.current = true;
+  }, []);
+
+  return (
+    <View style={wheelStyles.columnWrapper}>
+      {/* Gradient fades at top and bottom */}
+      <View style={wheelStyles.fadeTop} pointerEvents="none" />
+      <View style={wheelStyles.fadeBottom} pointerEvents="none" />
+      {/* Selection highlight */}
+      <View style={wheelStyles.selectionHighlight} pointerEvents="none" />
+      <ScrollView
+        ref={scrollRef}
+        style={wheelStyles.column}
+        contentContainerStyle={{
+          paddingVertical: ITEM_HEIGHT, // one item of padding top and bottom
+        }}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={ITEM_HEIGHT}
+        decelerationRate="fast"
+        onScrollBeginDrag={handleScrollBegin}
+        onMomentumScrollEnd={handleMomentumEnd}
+      >
+        {values.map((val) => {
+          const isSelected = val === selected;
+          return (
+            <View key={val} style={wheelStyles.item}>
+              <MonoText
+                bold={isSelected}
+                style={[
+                  wheelStyles.itemText,
+                  isSelected && wheelStyles.itemTextSelected,
+                ]}
+              >
+                {pad ? val.toString().padStart(2, '0') : val.toString()}
+              </MonoText>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
+
+const MINUTES = Array.from({ length: 11 }, (_, i) => i); // 0–10
+const SECONDS = Array.from({ length: 12 }, (_, i) => i * 5); // 0, 5, 10, ... 55
+
+const wheelStyles = StyleSheet.create({
+  columnWrapper: {
+    height: WHEEL_HEIGHT,
+    width: 52,
+    overflow: 'hidden',
+  },
+  column: {
+    height: WHEEL_HEIGHT,
+  },
+  item: {
+    height: ITEM_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemText: {
+    fontSize: 18,
+    color: COLORS.textTertiary,
+  },
+  itemTextSelected: {
+    fontSize: 20,
+    color: COLORS.accent,
+  },
+  fadeTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: ITEM_HEIGHT,
+    zIndex: 2,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 0,
+  },
+  fadeBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: ITEM_HEIGHT,
+    zIndex: 2,
+    backgroundColor: 'transparent',
+  },
+  selectionHighlight: {
+    position: 'absolute',
+    top: ITEM_HEIGHT,
+    left: 0,
+    right: 0,
+    height: ITEM_HEIGHT,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+    borderRadius: 0,
+    zIndex: 1,
+  },
+});
+
+/* ── Settings Modal ──────────────────────── */
 
 interface CameraSettingsModalProps {
   visible: boolean;
@@ -32,13 +176,22 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
     isTTSEnabled,
     showSkeletonOverlay,
     debugMode,
+    restTimerEnabled,
+    restTimerDurationSeconds,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
     setDebugMode,
+    setRestTimerEnabled,
+    setRestTimerDurationSeconds,
   } = useCameraSettings();
 
   const opacity = useRef(new Animated.Value(0)).current;
+
+  const currentMinutes = Math.floor(restTimerDurationSeconds / 60);
+  const currentSeconds = restTimerDurationSeconds % 60;
+  // Snap seconds to nearest 5 for the wheel
+  const snappedSeconds = Math.round(currentSeconds / 5) * 5;
 
   useEffect(() => {
     Animated.timing(opacity, {
@@ -71,6 +224,30 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
     }
     setDebugMode(value);
   };
+
+  const handleRestTimerToggle = async (value: boolean) => {
+    if (value) {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Notifications Disabled',
+          'Enable notifications in your device settings to use the rest timer alert.'
+        );
+        return;
+      }
+    }
+    setRestTimerEnabled(value);
+  };
+
+  const handleMinutesChange = useCallback((min: number) => {
+    const newTotal = min * 60 + snappedSeconds;
+    setRestTimerDurationSeconds(Math.max(5, newTotal)); // minimum 5 seconds
+  }, [snappedSeconds, setRestTimerDurationSeconds]);
+
+  const handleSecondsChange = useCallback((sec: number) => {
+    const newTotal = currentMinutes * 60 + sec;
+    setRestTimerDurationSeconds(Math.max(5, newTotal)); // minimum 5 seconds
+  }, [currentMinutes, setRestTimerDurationSeconds]);
 
   if (!visible) return null;
 
@@ -186,6 +363,54 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
                   thumbColor={COLORS.text}
                 />
               </View>
+            </View>
+
+            {/* Rest Timer section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>REST TIMER</Text>
+
+              <View style={styles.row}>
+                <View style={styles.rowIcon}>
+                  <Timer
+                    size={18}
+                    color={restTimerEnabled ? COLORS.accent : COLORS.textSecondary}
+                    strokeWidth={1.5}
+                  />
+                </View>
+                <View style={styles.rowText}>
+                  <Text style={styles.label}>Rest timer</Text>
+                  <Text style={styles.description}>Countdown between sets</Text>
+                </View>
+                <Switch
+                  value={restTimerEnabled}
+                  onValueChange={handleRestTimerToggle}
+                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                  thumbColor={COLORS.text}
+                />
+              </View>
+
+              {restTimerEnabled && (
+                <>
+                  <View style={styles.separator} />
+                  <View style={styles.wheelRow}>
+                    <WheelColumn
+                      values={MINUTES}
+                      selected={currentMinutes}
+                      onValueChange={handleMinutesChange}
+                    />
+                    <MonoText bold style={styles.wheelColon}>:</MonoText>
+                    <WheelColumn
+                      values={SECONDS}
+                      selected={snappedSeconds}
+                      onValueChange={handleSecondsChange}
+                    />
+                  </View>
+                  <View style={styles.wheelLabels}>
+                    <Text style={styles.wheelLabelText}>min</Text>
+                    <Text style={styles.wheelLabelText}>sec</Text>
+                  </View>
+                </>
+              )}
             </View>
 
             {/* Developer section */}
@@ -344,5 +569,30 @@ const styles = StyleSheet.create({
   },
   descriptionDebugActive: {
     color: COLORS.textSecondary,
+  },
+  wheelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    gap: 4,
+  },
+  wheelColon: {
+    fontSize: 22,
+    color: COLORS.accent,
+    marginBottom: 2,
+  },
+  wheelLabels: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 48,
+    paddingBottom: 8,
+  },
+  wheelLabelText: {
+    fontSize: 10,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
 });
