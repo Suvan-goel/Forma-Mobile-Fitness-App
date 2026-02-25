@@ -805,9 +805,12 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
       } else if (
         elbowAngle < THRESHOLDS.FLEXED_EXIT &&
         newArm.tRestToUp !== null &&
-        t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME
+        t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME &&
+        newArm.tTopToDown !== null && t - newArm.tTopToDown >= FORM_THRESHOLDS.TEMPO_DOWN_MIN
       ) {
         // Re-flexion escape: arm is curling again without full extension.
+        // Guard: must have been in DOWN for >= TEMPO_DOWN_MIN to avoid noise spikes at the TOP
+        // triggering a false completion with near-zero tDown.
         // Force completion — rep will be counted and penalized for incomplete ROM.
         newArm.state = 'REST';
         newArm.tRestEntry = t;
@@ -937,7 +940,7 @@ function evaluateForm(
   if (tUp < FORM_THRESHOLDS.TEMPO_UP_MIN && tUp > 0) {
     messages.push('Slow down — control the curl.');
   }
-  if (tDown < FORM_THRESHOLDS.TEMPO_DOWN_MIN && tDown > 0) {
+  if (tDown >= 0.05 && tDown < FORM_THRESHOLDS.TEMPO_DOWN_MIN) {
     messages.push("Control the lowering — don't drop the weight.");
   }
 
@@ -1030,7 +1033,13 @@ function updateBarbellCurlState(
     newState.repWindow = initRepWindow(t);
   }
 
-  if (newState.repWindow && inRep) {
+  // Include the transition frame (DOWN→REST): the angle that triggered completion
+  // must be recorded so evaluateForm sees the actual peak extension, not the prior frame.
+  const leftWasInRep = leftValid && currentState.leftArm.state !== 'REST';
+  const rightWasInRep = rightValid && currentState.rightArm.state !== 'REST';
+  const shouldAccumulate = inRep || leftWasInRep || rightWasInRep;
+
+  if (newState.repWindow && shouldAccumulate) {
     const window = newState.repWindow;
     window.tEnd = t;
     window.frameCount++;
