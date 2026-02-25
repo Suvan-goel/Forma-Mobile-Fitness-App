@@ -87,3 +87,26 @@ export const useWorkoutDetails = (workoutId: string): UseWorkoutDetailsReturn =>
 
   return { workout, isLoading, error, refetch: fetchWorkout };
 };
+
+interface UseDeleteWorkoutReturn {
+  deleteWorkout: (id: string) => Promise<boolean>;
+  isDeleting: boolean;
+}
+
+export const useDeleteWorkout = (): UseDeleteWorkoutReturn => {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const deleteWorkout = useCallback(async (id: string): Promise<boolean> => {
+    setIsDeleting(true);
+    try {
+      const response = await workoutsService.delete(id);
+      return response.success;
+    } catch {
+      return false;
+    } finally {
+      setIsDeleting(false);
+    }
+  }, []);
+
+  return { deleteWorkout, isDeleting };
+};

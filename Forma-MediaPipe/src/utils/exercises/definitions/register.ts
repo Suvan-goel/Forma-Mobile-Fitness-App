@@ -15,8 +15,14 @@ import { mergeSummaryConfig } from '../../setNotesSummary';
 import type { ExerciseDefinition } from '../types';
 import { barbellCurlDefinition } from './barbellCurl';
 import { cablePushdownDefinition } from './cablePushdown';
+import { cableRowDefinition } from './cableRow';
+import { latPulldownDefinition } from './latPulldown';
 import { lateralRaiseDefinition } from './lateralRaise';
+import { legExtensionsDefinition } from './legExtensions';
+import { lyingLegCurlDefinition } from './lyingLegCurl';
+import { machineAbCrunchDefinition } from './machineAbCrunch';
 import { pushupDefinition } from './pushup';
+import { squatDefinition } from './squat';
 
 /** Register an exercise and merge its TTS + summary configs into the global maps. */
 function registerExercise(definition: ExerciseDefinition): void {
@@ -28,5 +34,11 @@ function registerExercise(definition: ExerciseDefinition): void {
 // ── Register all exercises ──
 registerExercise(barbellCurlDefinition);
 registerExercise(cablePushdownDefinition);
+registerExercise(cableRowDefinition);
+registerExercise(latPulldownDefinition);
 registerExercise(lateralRaiseDefinition);
+registerExercise(legExtensionsDefinition);
+registerExercise(lyingLegCurlDefinition);
+registerExercise(machineAbCrunchDefinition);
 registerExercise(pushupDefinition);
+registerExercise(squatDefinition);

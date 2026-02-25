@@ -13,6 +13,10 @@ import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { RewardsScreen } from '../screens/RewardsScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { ProfileSettingsScreen } from '../screens/ProfileSettingsScreen';
+import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
+import { PrivacySettingsScreen } from '../screens/PrivacySettingsScreen';
+import { HelpCenterScreen } from '../screens/HelpCenterScreen';
 import { CameraScreen } from '../screens/CameraScreen';
 import { InsightsScreen } from '../screens/InsightsScreen';
 import { WorkoutDetailsScreen } from '../screens/WorkoutDetailsScreen';
@@ -42,6 +46,10 @@ export type RootStackParamList = {
   Welcome: undefined;
   MainTabs: { screen?: string } | undefined;
   Settings: undefined;
+  ProfileSettings: undefined;
+  NotificationSettings: undefined;
+  PrivacySettings: undefined;
+  HelpCenter: undefined;
   Camera: CameraParams;
   Insights: { metric: string };
   WorkoutDetails: { workoutId: string };
@@ -337,6 +345,26 @@ const RootStackNavigator: React.FC = () => {
         <>
           <Stack.Screen name="MainTabs" component={AppTabs} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen
+            name="ProfileSettings"
+            component={ProfileSettingsScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="NotificationSettings"
+            component={NotificationSettingsScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="PrivacySettings"
+            component={PrivacySettingsScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="HelpCenter"
+            component={HelpCenterScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
           <Stack.Screen
             name="Camera"
             component={CameraScreen}

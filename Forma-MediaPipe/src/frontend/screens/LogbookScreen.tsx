@@ -23,12 +23,12 @@ import {
   Calendar,
   X,
   Check,
+  Menu,
 } from 'lucide-react-native';
-import CogIcon from '../components/icons/CogIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts } from '../../backend/hooks';
+import { useWorkouts, useUser } from '../../backend/hooks';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../../backend/services/api';
@@ -286,7 +286,9 @@ export const LogbookScreen: React.FC = () => {
 
   const { workouts, isLoading, error, refetch } = useWorkouts();
   const { user } = useAuth();
-  const displayName = user?.user_metadata?.full_name
+  const { user: profileUser, refetch: refetchUser } = useUser();
+  const displayName = profileUser?.displayName
+    ?? user?.user_metadata?.full_name
     ?? user?.user_metadata?.name
     ?? 'Athlete';
 
@@ -294,7 +296,8 @@ export const LogbookScreen: React.FC = () => {
     React.useCallback(() => {
       setRefreshKey((prev) => prev + 1);
       refetch();
-    }, [refetch]),
+      refetchUser();
+    }, [refetch, refetchUser]),
   );
 
   useEffect(() => {
@@ -432,7 +435,7 @@ export const LogbookScreen: React.FC = () => {
           </View>
         </View>
         <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
-          <CogIcon size={22} color={COLORS.text} />
+          <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
 
@@ -612,13 +615,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
   },
 
   /* ── Title Block ─────────────────────────── */

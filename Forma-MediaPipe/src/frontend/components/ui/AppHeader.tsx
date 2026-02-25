@@ -1,14 +1,20 @@
 import React, { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Search, Bell } from 'lucide-react-native';
-import CogIcon from '../icons/CogIcon';
+import { Search, Bell, Menu } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, FONTS } from '../../constants/theme';
+import { useUser } from '../../../backend/hooks';
+import { useAuth } from '../../../backend/contexts/AuthContext';
 
 export const HEADER_HEIGHT = 80; // Approximate height of the header
 
 export const AppHeader: React.FC = memo(() => {
   const navigation = useNavigation<any>();
+  const { user: profileUser } = useUser();
+  const { user: authUser } = useAuth();
+  const displayName = profileUser?.displayName
+    ?? authUser?.user_metadata?.full_name
+    ?? 'Athlete';
 
   const handleSettingsPress = useCallback(() => {
     navigation.navigate('Settings');
@@ -18,7 +24,7 @@ export const AppHeader: React.FC = memo(() => {
     <View style={styles.header}>
       <View style={styles.profileSection}>
         <View style={styles.logoContainer}>
-          <Image 
+          <Image
             source={require('../../assets/forma_icon_turquoise.png')}
             style={styles.logoImage}
             resizeMode="contain"
@@ -26,7 +32,7 @@ export const AppHeader: React.FC = memo(() => {
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.welcomeText}>Welcome back,</Text>
-          <Text style={styles.userName}>Athlete</Text>
+          <Text style={styles.userName}>{displayName}</Text>
         </View>
       </View>
       <View style={styles.headerIcons}>
@@ -37,7 +43,7 @@ export const AppHeader: React.FC = memo(() => {
           <Bell size={22} color={COLORS.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconButton} onPress={handleSettingsPress}>
-          <CogIcon size={24} color={COLORS.text} />
+          <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
     </View>

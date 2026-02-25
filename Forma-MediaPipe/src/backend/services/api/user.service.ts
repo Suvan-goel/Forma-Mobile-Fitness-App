@@ -56,6 +56,40 @@ export const userService = {
   },
 
   /**
+   * Upload avatar image to Supabase Storage
+   */
+  async uploadAvatar(localUri: string): Promise<ApiResponse<string>> {
+    if (API_CONFIG.services.user) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: localUri, success: true };
+    }
+
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
+      return { data: '', success: false, error: 'Not authenticated' };
+    }
+
+    try {
+      const fileName = `${authUser.id}/${Date.now()}.jpg`;
+      const response = await fetch(localUri);
+      const arrayBuffer = await response.arrayBuffer();
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+
+      if (uploadError) {
+        return { data: '', success: false, error: uploadError.message };
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      return { data: publicUrl, success: true };
+    } catch (err) {
+      return { data: '', success: false, error: err instanceof Error ? err.message : 'Upload failed' };
+    }
+  },
+
+  /**
    * Update user profile
    */
   async updateUser(updates: Partial<User>): Promise<ApiResponse<User>> {
@@ -83,6 +117,14 @@ export const userService = {
 
     if (error || !profile) {
       return { data: {} as User, success: false, error: error?.message ?? 'Update failed' };
+    }
+
+    // Sync auth metadata so it persists across app restarts
+    const metadataUpdate: Record<string, string> = {};
+    if (updates.displayName) metadataUpdate.full_name = updates.displayName;
+    if (updates.avatarUrl) metadataUpdate.avatar_url = updates.avatarUrl;
+    if (Object.keys(metadataUpdate).length > 0) {
+      await supabase.auth.updateUser({ data: metadataUpdate });
     }
 
     return {
