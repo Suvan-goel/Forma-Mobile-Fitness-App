@@ -681,7 +681,7 @@ export const CameraScreen: React.FC = () => {
           );
         })()}
 
-        {/* Barbell Curl Debug - All angles used in form analysis. Visible only when debug mode is on. */}
+        {/* Barbell Curl Debug */}
         {exerciseNameFromRoute === 'Barbell Curl' &&
           debugMode &&
           exerciseDebug && (() => {
@@ -689,7 +689,10 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Barbell Curl — Form Angles</Text>
+                <Text style={styles.torsoDebugTitle}>Barbell Curl</Text>
+                <Text style={styles.torsoDebugText}>
+                  L: {d.leftArmState ?? '–'} | R: {d.rightArmState ?? '–'}
+                </Text>
                 <Text style={styles.torsoDebugText}>
                   Elbow L: {d.current?.leftElbow != null ? d.current.leftElbow.toFixed(1) + '°' : '–'} | R: {d.current?.rightElbow != null ? d.current.rightElbow.toFixed(1) + '°' : '–'}
                 </Text>
@@ -697,14 +700,11 @@ export const CameraScreen: React.FC = () => {
                   Shoulder L: {d.current?.leftShoulder != null ? d.current.leftShoulder.toFixed(1) + '°' : '–'} | R: {d.current?.rightShoulder != null ? d.current.rightShoulder.toFixed(1) + '°' : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Torso mid: {d.current?.torso != null ? d.current.torso.toFixed(1) + '°' : '–'} | L: {d.current?.leftTorso != null ? d.current.leftTorso.toFixed(1) + '°' : '–'} | R: {d.current?.rightTorso != null ? d.current.rightTorso.toFixed(1) + '°' : '–'}
-                </Text>
-                <Text style={styles.torsoDebugText}>
-                  Wrist L: {d.current?.leftWrist != null ? d.current.leftWrist.toFixed(1) + '°' : '–'} | R: {d.current?.rightWrist != null ? d.current.rightWrist.toFixed(1) + '°' : '–'}
+                  Torso: {d.current?.torso != null ? d.current.torso.toFixed(1) + '°' : '–'}
                 </Text>
                 {d.repDelta && (
                   <>
-                    <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>Δ this rep:</Text>
+                    <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>Δ rep:</Text>
                     <Text style={styles.torsoDebugText}>
                       Elbow L/R: {d.repDelta.leftElbow != null ? d.repDelta.leftElbow.toFixed(1) : '–'}° / {d.repDelta.rightElbow != null ? d.repDelta.rightElbow.toFixed(1) : '–'}°
                     </Text>
@@ -712,26 +712,17 @@ export const CameraScreen: React.FC = () => {
                       Shoulder L/R: {d.repDelta.leftShoulder != null ? d.repDelta.leftShoulder.toFixed(1) : '–'}° / {d.repDelta.rightShoulder != null ? d.repDelta.rightShoulder.toFixed(1) : '–'}°
                     </Text>
                     <Text style={styles.torsoDebugText}>
-                      Torso mid/L/R: {d.repDelta.torso != null ? d.repDelta.torso.toFixed(1) : '–'}° / {d.repDelta.leftTorso != null ? d.repDelta.leftTorso.toFixed(1) : '–'}° / {d.repDelta.rightTorso != null ? d.repDelta.rightTorso.toFixed(1) : '–'}°
-                    </Text>
-                    <Text style={styles.torsoDebugText}>
-                      Wrist L/R: {d.repDelta.leftWrist != null ? d.repDelta.leftWrist.toFixed(1) : '–'}° / {d.repDelta.rightWrist != null ? d.repDelta.rightWrist.toFixed(1) : '–'}°
+                      Torso Δ: {d.repDelta.torso != null ? d.repDelta.torso.toFixed(1) : '–'}°
                     </Text>
                   </>
                 )}
-                <Text style={styles.torsoDebugText}>
-                  View: {d.viewAngle != null ? d.viewAngle.toFixed(0) : '–'}° ({d.viewZone})
-                </Text>
-                <Text style={styles.torsoDebugText}>
-                  Reach L/R: {d.reachLeft != null ? (d.reachLeft * 100).toFixed(0) + '%' : '–'} / {d.reachRight != null ? (d.reachRight * 100).toFixed(0) + '%' : '–'}
-                </Text>
-                <Text style={styles.torsoDebugHint}>Torso warn &gt;12° fail &gt;22° | Shoulder warn 45° fail 65° | Wrist ~180°</Text>
+                <Text style={styles.torsoDebugHint}>Torso warn &gt;12° fail &gt;22° | Shoulder fail &gt;65°</Text>
               </View>
             </View>
             );
           })()}
 
-        {/* Pushup Debug - Shows all angles, FSM phase, and rep window data. Visible only when debug mode is on. */}
+        {/* Push-Up Debug */}
         {exerciseNameFromRoute === 'Push-Up' &&
           debugMode &&
           exerciseDebug && (() => {
@@ -739,45 +730,268 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Push-Up Debug</Text>
+                <Text style={styles.torsoDebugTitle}>Push-Up</Text>
                 <Text style={styles.torsoDebugText}>
-                  Phase: {d.phase} | Side: {d.side}
+                  {d.phase} | Side: {d.side}
                 </Text>
                 <Text style={styles.torsoDebugText}>
                   Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
                   {'  '}Body: {d.bodyAlignment != null ? d.bodyAlignment.toFixed(1) + '°' : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  HipDev: {d.hipDev != null ? (d.hipDev * 100).toFixed(1) + '%' : '–'}
-                  {'  '}Head: {d.headSpine != null ? d.headSpine.toFixed(1) + '°' : '–'}
+                  Torso Incl: {d.torsoInclination != null ? d.torsoInclination.toFixed(1) + '°' : '–'}
+                  {'  '}HipDev: {d.hipDev != null ? (d.hipDev * 100).toFixed(1) + '%' : '–'}
+                </Text>
+                {d.elbowMin != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Elbow: {d.elbowMin.toFixed(1)}°–{d.elbowMax != null ? d.elbowMax.toFixed(1) : '–'}°
+                    {'  '}HipDev: {d.hipDevMax != null ? (d.hipDevMax * 100).toFixed(1) : '–'}%
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Bottom &lt;105° | Lock &gt;155° | Body 155–195° | Incl 65–115°</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Barbell Squat Debug */}
+        {exerciseNameFromRoute === 'Barbell Squat' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Barbell Squat</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | Side: {d.side}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Torso Incl: {d.torsoInclination != null ? d.torsoInclination.toFixed(1) + '°' : '–'}
-                  {' (65–115° = plank)'}
+                  Knee: {d.knee != null ? d.knee.toFixed(1) + '°' : '–'}
+                  {'  '}Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
                 </Text>
-                {(d.elbowMin != null || d.bodyAngleMin != null) && (
-                  <>
-                    <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                      Rep Elbow: {d.elbowMin != null ? d.elbowMin.toFixed(1) : '–'}°–
-                      {d.elbowMax != null ? d.elbowMax.toFixed(1) : '–'}°
-                    </Text>
-                    <Text style={styles.torsoDebugText}>
-                      Rep Body: {d.bodyAngleMin != null ? d.bodyAngleMin.toFixed(1) : '–'}°–
-                      {d.bodyAngleMax != null ? d.bodyAngleMax.toFixed(1) : '–'}°
-                    </Text>
-                    <Text style={styles.torsoDebugText}>
-                      Rep HipDev: {d.hipDevMin != null ? (d.hipDevMin * 100).toFixed(1) : '–'}%–
-                      {d.hipDevMax != null ? (d.hipDevMax * 100).toFixed(1) : '–'}%
-                    </Text>
-                    <Text style={styles.torsoDebugText}>
-                      Rep Head: {d.headSpineMin != null ? d.headSpineMin.toFixed(1) : '–'}°–
-                      {d.headSpineMax != null ? d.headSpineMax.toFixed(1) : '–'}°
-                    </Text>
-                  </>
+                <Text style={styles.torsoDebugText}>
+                  Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.kneeMin != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Knee: {d.kneeMin.toFixed(1)}°–{d.kneeMax != null ? d.kneeMax.toFixed(1) : '–'}°
+                    {'  '}Max Torso: {d.maxTorsoLean != null ? d.maxTorsoLean.toFixed(1) : '–'}°
+                  </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>
-                  Depth &lt;105° | Lock &gt;155° | Body 155–195° | Head ±25°
+                <Text style={styles.torsoDebugHint}>Bottom &lt;110° | Stand &gt;160° | Torso warn 50° fail 55°</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Cable Pushdown Debug */}
+        {exerciseNameFromRoute === 'Cable Pushdowns' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Cable Pushdown</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
+                <Text style={styles.torsoDebugText}>
+                  Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
+                  {'  '}Shoulder: {d.shoulderAngle != null ? d.shoulderAngle.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Torso dev: {d.torsoDev != null ? d.torsoDev.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.elbowMin != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Elbow: {d.elbowMin.toFixed(1)}°–{d.elbowMax != null ? d.elbowMax.toFixed(1) : '–'}°
+                    {'  '}Shoulder Δ: {d.shoulderDelta != null ? d.shoulderDelta.toFixed(1) : '–'}°
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Push &gt;155° | Start &lt;100° | Drift warn 20° | Torso warn 12°</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Cable Row Debug */}
+        {exerciseNameFromRoute === 'Cable Row' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Cable Row</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
+                  {'  '}Shoulder: {d.shoulderAngle != null ? d.shoulderAngle.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Torso dev: {d.torsoDev != null ? d.torsoDev.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.elbowMin != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Elbow: {d.elbowMin.toFixed(1)}°–{d.elbowMax != null ? d.elbowMax.toFixed(1) : '–'}°
+                    {'  '}Shoulder Δ: {d.shoulderDelta != null ? d.shoulderDelta.toFixed(1) : '–'}°
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Pull &lt;90° | Extend &gt;140° | Retract &gt;12° | Torso warn 15°</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Lat Pulldown Debug */}
+        {exerciseNameFromRoute === 'Cable Lat Pulldowns' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Lat Pulldown</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Elbow L: {d.leftElbow != null ? d.leftElbow.toFixed(1) + '°' : '–'} | R: {d.rightElbow != null ? d.rightElbow.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Avg: {d.avgElbow != null ? d.avgElbow.toFixed(1) + '°' : '–'}
+                  {'  '}Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.minAvgElbow != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Avg: {d.minAvgElbow.toFixed(1)}°–{d.maxAvgElbow != null ? d.maxAvgElbow.toFixed(1) : '–'}°
+                    {'  '}Diff: {d.maxElbowDiff != null ? d.maxElbowDiff.toFixed(1) : '–'}°
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Pull &lt;85° | Extend &gt;135° | Asym warn 20° | Torso warn 15°</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Lateral Raise Debug */}
+        {exerciseNameFromRoute === 'Standing Dumbbell Lateral Raises' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Lateral Raise</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Abd L: {d.leftAbduction != null ? d.leftAbduction.toFixed(1) + '°' : '–'} | R: {d.rightAbduction != null ? d.rightAbduction.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Avg: {d.avgAbduction != null ? d.avgAbduction.toFixed(1) + '°' : '–'}
+                  {'  '}Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
+                  {'  '}Shrug: {d.shrugPct != null ? (d.shrugPct * 100).toFixed(1) + '%' : '–'}
+                </Text>
+                {d.maxAbduction != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Max Abd: {d.maxAbduction.toFixed(1)}°
+                    {'  '}Asym: {d.maxAbductionDiff != null ? d.maxAbductionDiff.toFixed(1) : '–'}°
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Top &gt;70° | Full ROM &gt;80° | Lean warn 8° | Shrug warn 6%</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Leg Extension Debug */}
+        {exerciseNameFromRoute === 'Leg Extensions' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Leg Extension</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Knee: {d.knee != null ? d.knee.toFixed(1) + '°' : '–'}
+                  {'  '}Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Torso dev: {d.torsoDev != null ? d.torsoDev.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.kneeMin != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Knee: {d.kneeMin.toFixed(1)}°–{d.kneeMax != null ? d.kneeMax.toFixed(1) : '–'}°
+                    {'  '}Hip Δ: {d.hipDelta != null ? d.hipDelta.toFixed(1) : '–'}°
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Extend &gt;155° | Start &lt;105° | Hip lift warn 18°</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Lying Leg Curl Debug */}
+        {exerciseNameFromRoute === 'Lying Leg Curl' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Lying Leg Curl</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Knee: {d.knee != null ? d.knee.toFixed(1) + '°' : '–'}
+                  {'  '}Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.kneeMin != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Knee: {d.kneeMin.toFixed(1)}°–{d.kneeMax != null ? d.kneeMax.toFixed(1) : '–'}°
+                    {'  '}Hip Δ: {d.hipDelta != null ? d.hipDelta.toFixed(1) : '–'}°
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Curl &lt;80° | Extend &gt;140° | Hip lift warn 12°</Text>
+              </View>
+            </View>
+            );
+          })()}
+
+        {/* Machine Ab Crunch Debug */}
+        {exerciseNameFromRoute === 'Machine Ab Crunches' &&
+          debugMode &&
+          exerciseDebug && (() => {
+            const d = exerciseDebug as any;
+            return (
+            <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Machine Ab Crunch</Text>
+                <Text style={styles.torsoDebugText}>
+                  {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                  {'  '}Neck: {d.neckAngle != null ? d.neckAngle.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.minHipAngle != null && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Rep Hip: {d.minHipAngle.toFixed(1)}°–{d.maxHipAngle != null ? d.maxHipAngle.toFixed(1) : '–'}°
+                    {'  '}Max Neck: {d.maxNeckForward != null ? d.maxNeckForward.toFixed(1) : '–'}°
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Crunch &lt;115° | Extend &gt;145° | Neck warn 30°</Text>
               </View>
             </View>
             );

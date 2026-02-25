@@ -28,8 +28,8 @@ const THRESHOLDS = {
   EXTENDED_EXIT: 145,   // arm drops below this -> start detecting upward motion
   FLEXED_ENTER: 70,     // arm curled below this -> reached top of curl
   FLEXED_EXIT: 75,      // arm rises above this -> start detecting downward motion
-  MIN_REP_TIME: 0.45, // seconds
-  SYNC_WINDOW: 0.35, // seconds between arms
+  MIN_REP_TIME: 0.25, // seconds
+  SYNC_WINDOW: 0.50, // seconds between arms
   ROM_MIN: 80, // degrees
 } as const;
 
@@ -52,8 +52,8 @@ const FORM_THRESHOLDS = {
 } as const;
 
 /** Smoothing parameters */
-const MEDIAN_WINDOW = 5;
-const EMA_ALPHA = 0.3;
+const MEDIAN_WINDOW = 3;
+const EMA_ALPHA = 0.5;
 const VISIBILITY_THRESHOLD = 0.15;
 
 /** Warm-up: require N consecutive stable frames before enabling FSM */
@@ -1193,46 +1193,31 @@ const _safeDelta = (min: number, max: number) =>
   _formatAngle(min !== Infinity && max !== -Infinity ? max - min : NaN);
 
 function getBarbellCurlDebugInfo(state: BarbellCurlState): {
+  leftArmState: string;
+  rightArmState: string;
   current: {
     leftElbow: number | null;
     rightElbow: number | null;
     leftShoulder: number | null;
     rightShoulder: number | null;
-    leftTorso: number | null;
-    rightTorso: number | null;
     torso: number | null;
-    leftWrist: number | null;
-    rightWrist: number | null;
   };
   repDelta: {
     leftElbow: number | null;
     rightElbow: number | null;
     leftShoulder: number | null;
     rightShoulder: number | null;
-    leftTorso: number | null;
-    rightTorso: number | null;
     torso: number | null;
-    leftWrist: number | null;
-    rightWrist: number | null;
   } | null;
-  viewAngle: number | null;
-  viewZone: string;
-  reachLeft: number | null;
-  reachRight: number | null;
 } {
   const angles = state.displayAngles;
   const window = state.repWindow;
-  const view = state.viewAngle;
   const current = {
     leftElbow: _formatAngle(angles?.leftElbow ?? NaN),
     rightElbow: _formatAngle(angles?.rightElbow ?? NaN),
     leftShoulder: _formatAngle(angles?.leftShoulder ?? NaN),
     rightShoulder: _formatAngle(angles?.rightShoulder ?? NaN),
-    leftTorso: _formatAngle(angles?.leftTorso ?? NaN),
-    rightTorso: _formatAngle(angles?.rightTorso ?? NaN),
     torso: _formatAngle(angles?.torso ?? NaN),
-    leftWrist: _formatAngle(angles?.leftWrist ?? NaN),
-    rightWrist: _formatAngle(angles?.rightWrist ?? NaN),
   };
   const repDelta = window
     ? {
@@ -1240,28 +1225,14 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
         rightElbow: _safeDelta(window.minAngles.rightElbow, window.maxAngles.rightElbow),
         leftShoulder: _safeDelta(window.minAngles.leftShoulder, window.maxAngles.leftShoulder),
         rightShoulder: _safeDelta(window.minAngles.rightShoulder, window.maxAngles.rightShoulder),
-        leftTorso: _safeDelta(window.minAngles.leftTorso, window.maxAngles.leftTorso),
-        rightTorso: _safeDelta(window.minAngles.rightTorso, window.maxAngles.rightTorso),
         torso: _safeDelta(window.minAngles.torso, window.maxAngles.torso),
-        leftWrist: _safeDelta(window.minAngles.leftWrist, window.maxAngles.leftWrist),
-        rightWrist: _safeDelta(window.minAngles.rightWrist, window.maxAngles.rightWrist),
       }
     : null;
-  const reachLeft =
-    window?.reach?.maxLeftReachRatio != null && isFinite(window.reach.maxLeftReachRatio)
-      ? window.reach.maxLeftReachRatio
-      : null;
-  const reachRight =
-    window?.reach?.maxRightReachRatio != null && isFinite(window.reach.maxRightReachRatio)
-      ? window.reach.maxRightReachRatio
-      : null;
   return {
+    leftArmState: state.leftArm.state,
+    rightArmState: state.rightArm.state,
     current,
     repDelta,
-    viewAngle: _formatAngle(view.angleDeg),
-    viewZone: view.zone,
-    reachLeft: reachLeft != null ? reachLeft : null,
-    reachRight: reachRight != null ? reachRight : null,
   };
 }
 
