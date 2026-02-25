@@ -36,7 +36,7 @@ const SLIDES: SlideData[] = [
     id: '2',
     superHeader: 'Achieve',
     header: 'PRECISION',
-    subtext: 'Real-time tracking brackets lock onto your joints to measure what matters.',
+    subtext: 'Turn good reps into perfect ones with instant corrections.',
   },
   {
     id: '3',

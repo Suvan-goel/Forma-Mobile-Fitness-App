@@ -60,6 +60,7 @@ export type RootStackParamList = {
   WorkoutDetails: { workoutId: string };
   WorkoutExercises: { category: string; color: string; iconName: string };
   WorkoutInfo: undefined;
+  Onboarding: undefined;
 };
 
 // Define the Record Stack Param List
@@ -320,6 +321,11 @@ const styles = StyleSheet.create({
   },
 });
 
+// Dev-only: wrapper so OnboardingFlow can be pushed onto the stack while logged in
+const OnboardingDevScreen: React.FC<{ navigation: any }> = ({ navigation }) => (
+  <OnboardingFlow onOnboardingComplete={() => navigation.goBack()} />
+);
+
 // Inner navigator — conditionally renders screens based on auth + onboarding state.
 // React Navigation automatically navigates to the first available screen
 // when the screen list changes (e.g. user signs in → Welcome disappears → MainTabs shown).
@@ -422,6 +428,11 @@ const RootStackNavigator: React.FC = () => {
               presentation: 'transparentModal',
               animation: 'slide_from_bottom',
             }}
+          />
+          <Stack.Screen
+            name="Onboarding"
+            component={OnboardingDevScreen}
+            options={{ animation: 'slide_from_bottom' }}
           />
         </>
       ) : (

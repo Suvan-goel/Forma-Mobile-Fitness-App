@@ -16,19 +16,41 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ── Step Data ───────────────────────────────────────────────
 
+interface OptionConfig {
+  label: string;
+  subtext?: string;
+}
+
 interface StepConfig {
   question: string;
-  options: string[];
+  options: OptionConfig[];
 }
 
 const STEPS: StepConfig[] = [
   {
     question: 'What is your primary focus?',
-    options: ['Building muscle', 'Just starting working out', 'Perfecting form', 'Other'],
+    options: [
+      { label: 'Building muscle' },
+      { label: 'Just starting working out' },
+      { label: 'Perfecting form' },
+      { label: 'Other' },
+    ],
   },
   {
     question: 'How many days a week do you train?',
-    options: ['1-2 Days', '3-4 Days', '5+ Days'],
+    options: [
+      { label: '1-2 Days' },
+      { label: '3-4 Days' },
+      { label: '5+ Days' },
+    ],
+  },
+  {
+    question: 'How long have you been training?',
+    options: [
+      { label: 'Just starting', subtext: 'Learning the basics' },
+      { label: '1–2 years', subtext: 'Consistent routine' },
+      { label: '3+ years', subtext: 'Highly experienced' },
+    ],
   },
 ];
 
@@ -36,11 +58,12 @@ const STEPS: StepConfig[] = [
 
 interface GlassSlabProps {
   label: string;
+  subtext?: string;
   isSelected: boolean;
   onPress: () => void;
 }
 
-const GlassSlab: React.FC<GlassSlabProps> = ({ label, isSelected, onPress }) => {
+const GlassSlab: React.FC<GlassSlabProps> = ({ label, subtext, isSelected, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = useCallback(() => {
@@ -63,9 +86,16 @@ const GlassSlab: React.FC<GlassSlabProps> = ({ label, isSelected, onPress }) => 
             isSelected && slabStyles.slabSelected,
           ]}
         >
-          <Text style={[slabStyles.label, isSelected && slabStyles.labelSelected]}>
-            {label}
-          </Text>
+          <View style={slabStyles.labelContainer}>
+            <Text style={[slabStyles.label, isSelected && slabStyles.labelSelected]}>
+              {label}
+            </Text>
+            {subtext ? (
+              <Text style={[slabStyles.subtext, isSelected && slabStyles.subtextSelected]}>
+                {subtext}
+              </Text>
+            ) : null}
+          </View>
           {isSelected && (
             <View style={slabStyles.checkCircle}>
               <View style={slabStyles.checkDot} />
@@ -82,7 +112,7 @@ const slabStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 22,
+    paddingVertical: 20,
     paddingHorizontal: 24,
     borderRadius: 16,
     borderWidth: 1,
@@ -92,14 +122,25 @@ const slabStyles = StyleSheet.create({
     borderColor: COLORS.primary,
     backgroundColor: 'rgba(139, 92, 246, 0.15)',
   },
+  labelContainer: {
+    flex: 1,
+    gap: 3,
+  },
   label: {
     fontFamily: FONTS.display.semibold,
     fontSize: 17,
     color: COLORS.textSecondary,
-    flex: 1,
   },
   labelSelected: {
     color: COLORS.text,
+  },
+  subtext: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.25)',
+  },
+  subtextSelected: {
+    color: 'rgba(167,139,250,0.7)',
   },
   checkCircle: {
     width: 22,
@@ -109,6 +150,7 @@ const slabStyles = StyleSheet.create({
     borderColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 12,
   },
   checkDot: {
     width: 10,
@@ -121,7 +163,7 @@ const slabStyles = StyleSheet.create({
 // ── Main Component ──────────────────────────────────────────
 
 interface OnboardingQuestionsProps {
-  onComplete: (answers: { goal: string; frequency: string }) => void;
+  onComplete: (answers: { goal: string; frequency: string; experience: string }) => void;
 }
 
 export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComplete }) => {
@@ -129,6 +171,7 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
   const [stepIndex, setStepIndex] = useState(0);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [selectedFrequency, setSelectedFrequency] = useState<string | null>(null);
+  const [selectedExperience, setSelectedExperience] = useState<string | null>(null);
 
   // Animated values
   const progressWidth = useRef(new Animated.Value(0.25)).current;
@@ -136,26 +179,25 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
   const contentTranslateX = useRef(new Animated.Value(0)).current;
 
   const currentStep = STEPS[stepIndex];
-  const selected = stepIndex === 0 ? selectedGoal : selectedFrequency;
+  const selected =
+    stepIndex === 0 ? selectedGoal :
+    stepIndex === 1 ? selectedFrequency :
+    selectedExperience;
 
   const animateTransition = useCallback(
     (nextStep: number, callback: () => void) => {
-      // Fade out + slide left
       Animated.parallel([
         Animated.timing(contentOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
         Animated.timing(contentTranslateX, { toValue: -30, duration: 150, useNativeDriver: true }),
       ]).start(() => {
         callback();
-        // Reset position to right side
         contentTranslateX.setValue(30);
-        // Fade in + slide from right
         Animated.parallel([
           Animated.timing(contentOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
           Animated.timing(contentTranslateX, { toValue: 0, duration: 200, useNativeDriver: true }),
         ]).start();
       });
-      // Progress bar
-      const targetProgress = (nextStep + 1) / STEPS.length * 0.5 + 0.25;
+      const targetProgress = ((nextStep + 1) / STEPS.length) * 0.5 + 0.25;
       Animated.timing(progressWidth, {
         toValue: targetProgress,
         duration: 300,
@@ -171,22 +213,26 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
 
       if (stepIndex === 0) {
         setSelectedGoal(option);
-        // Auto-advance after 200ms
         setTimeout(() => {
           animateTransition(1, () => setStepIndex(1));
         }, 200);
-      } else {
+      } else if (stepIndex === 1) {
         setSelectedFrequency(option);
-        // Complete after 200ms
+        setTimeout(() => {
+          animateTransition(2, () => setStepIndex(2));
+        }, 200);
+      } else {
+        setSelectedExperience(option);
         setTimeout(() => {
           onComplete({
-            goal: selectedGoal ?? option,
-            frequency: option,
+            goal: selectedGoal ?? '',
+            frequency: selectedFrequency ?? '',
+            experience: option,
           });
         }, 200);
       }
     },
-    [stepIndex, selectedGoal, animateTransition, onComplete],
+    [stepIndex, selectedGoal, selectedFrequency, animateTransition, onComplete],
   );
 
   const progressBarWidth = progressWidth.interpolate({
@@ -230,19 +276,16 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
         <View style={styles.optionsContainer}>
           {currentStep.options.map((option) => (
             <GlassSlab
-              key={option}
-              label={option}
-              isSelected={selected === option}
-              onPress={() => handleSelect(option)}
+              key={option.label}
+              label={option.label}
+              subtext={option.subtext}
+              isSelected={selected === option.label}
+              onPress={() => handleSelect(option.label)}
             />
           ))}
         </View>
       </Animated.View>
 
-      {/* Subtle hint text */}
-      <View style={styles.hintContainer}>
-        <Text style={styles.hintText}>Tap to select</Text>
-      </View>
     </View>
   );
 };
@@ -286,15 +329,5 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     gap: 14,
-  },
-  hintContainer: {
-    paddingBottom: 24,
-    alignItems: 'center',
-  },
-  hintText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
   },
 });

@@ -52,7 +52,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComp
   }, [transitionTo]);
 
   const handleQuestionsComplete = useCallback(
-    (_answers: { goal: string; frequency: string }) => {
+    (_answers: { goal: string; frequency: string; experience: string }) => {
       // Answers can be sent to backend later if needed
       transitionTo('interstitial');
     },

@@ -17,6 +17,7 @@ import {
   Volume2,
   Bone,
   UserRound,
+  RefreshCcw,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -301,6 +302,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </LinearGradient>
           </View>
 
+          {/* ── BACK TO ONBOARDING ──────────────────── */}
+          <TouchableOpacity
+            style={styles.devOnboardingOuter}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('Onboarding')}
+          >
+            <View style={styles.devOnboardingInner}>
+              <View style={styles.devOnboardingIconBadge}>
+                <RefreshCcw size={14} color="#F59E0B" strokeWidth={1.5} />
+              </View>
+              <Text style={styles.devOnboardingText}>Back to Onboarding</Text>
+            </View>
+          </TouchableOpacity>
+
           {/* ── LOGOUT ──────────────────────────────── */}
           <TouchableOpacity
             style={styles.logoutOuter}
@@ -527,6 +542,48 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#EF4444',
     letterSpacing: 0.5,
+  },
+
+  /* ── Dev: Back to Onboarding ───────────── */
+  devOnboardingOuter: {
+    marginTop: SPACING.xxl,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(245, 158, 11, 0.04)',
+    overflow: 'hidden',
+  },
+  devOnboardingInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+  },
+  devOnboardingIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devOnboardingText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: '#F59E0B',
+    letterSpacing: 0.3,
+  },
+  devBadge: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 9,
+    color: 'rgba(245, 158, 11, 0.5)',
+    letterSpacing: 1.5,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
 
   /* ── Version ───────────────────────────── */
