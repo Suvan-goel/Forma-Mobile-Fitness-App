@@ -10,6 +10,7 @@ import {
   BackHandler,
   Alert,
   ScrollView,
+  Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -19,6 +20,10 @@ import * as Notifications from 'expo-notifications';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { useCameraSettings } from '../../contexts/CameraSettingsContext';
 import { MonoText } from '../typography/MonoText';
+
+// Header: paddingTop(20) + title(~26) + paddingBottom(8) ≈ 54px
+const HEADER_HEIGHT = 56;
+const SECTIONS_MAX_HEIGHT = Dimensions.get('window').height * 0.75 - HEADER_HEIGHT;
 
 /* ── Scroll Wheel Picker ─────────────────── */
 
@@ -74,6 +79,7 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChan
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
+        nestedScrollEnabled
         onScrollBeginDrag={handleScrollBegin}
         onMomentumScrollEnd={handleMomentumEnd}
       >
@@ -266,7 +272,7 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
           style={styles.cardGradient}
         >
           <View style={styles.cardGlassEdge}>
-            {/* Header */}
+            {/* Header — fixed, never scrolls */}
             <View style={styles.header}>
               <Text style={styles.title}>Settings</Text>
               <TouchableOpacity
@@ -278,169 +284,176 @@ export const CameraSettingsModal: React.FC<CameraSettingsModalProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* Feedback section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>FEEDBACK</Text>
+            {/* Scrollable sections */}
+            <ScrollView
+              style={styles.sectionsScroll}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {/* Feedback section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>FEEDBACK</Text>
 
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <MessageSquareText
-                    size={18}
-                    color={debugMode ? COLORS.textTertiary : COLORS.accent}
-                    strokeWidth={1.5}
-                  />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDisabled]}>
-                    Form messages
-                  </Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
-                    On-screen feedback during reps
-                  </Text>
-                </View>
-                <Switch
-                  value={showFeedback}
-                  onValueChange={setShowFeedback}
-                  disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
-              </View>
-
-              <View style={styles.separator} />
-
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <AudioLines
-                    size={18}
-                    color={debugMode ? COLORS.textTertiary : COLORS.accent}
-                    strokeWidth={1.5}
-                  />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDisabled]}>
-                    Voice coaching
-                  </Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
-                    Spoken cues via text-to-speech
-                  </Text>
-                </View>
-                <Switch
-                  value={isTTSEnabled}
-                  onValueChange={handleTTSChange}
-                  disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
-              </View>
-            </View>
-
-            {/* Display section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>DISPLAY</Text>
-
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <Bone
-                    size={18}
-                    color={debugMode ? COLORS.textTertiary : COLORS.accent}
-                    strokeWidth={1.5}
-                  />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDisabled]}>
-                    Skeleton overlay
-                  </Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
-                    Show detected pose landmarks
-                  </Text>
-                </View>
-                <Switch
-                  value={showSkeletonOverlay}
-                  onValueChange={setShowSkeletonOverlay}
-                  disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
-              </View>
-            </View>
-
-            {/* Rest Timer section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>REST TIMER</Text>
-
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <Timer
-                    size={18}
-                    color={restTimerEnabled ? COLORS.accent : COLORS.textSecondary}
-                    strokeWidth={1.5}
-                  />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={styles.label}>Rest timer</Text>
-                  <Text style={styles.description}>Countdown between sets</Text>
-                </View>
-                <Switch
-                  value={restTimerEnabled}
-                  onValueChange={handleRestTimerToggle}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
-                />
-              </View>
-
-              {restTimerEnabled && (
-                <>
-                  <View style={styles.separator} />
-                  <View style={styles.wheelRow}>
-                    <WheelColumn
-                      values={MINUTES}
-                      selected={currentMinutes}
-                      onValueChange={handleMinutesChange}
-                    />
-                    <MonoText bold style={styles.wheelColon}>:</MonoText>
-                    <WheelColumn
-                      values={SECONDS}
-                      selected={snappedSeconds}
-                      onValueChange={handleSecondsChange}
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <MessageSquareText
+                      size={18}
+                      color={debugMode ? COLORS.textTertiary : COLORS.accent}
+                      strokeWidth={1.5}
                     />
                   </View>
-                  <View style={styles.wheelLabels}>
-                    <Text style={styles.wheelLabelText}>min</Text>
-                    <Text style={styles.wheelLabelText}>sec</Text>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDisabled]}>
+                      Form messages
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
+                      On-screen feedback during reps
+                    </Text>
                   </View>
-                </>
-              )}
-            </View>
-
-            {/* Developer section */}
-            <View style={[styles.section, styles.sectionLast]}>
-              <Text style={styles.sectionLabel}>DEVELOPER</Text>
-
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <Bug
-                    size={18}
-                    color={debugMode ? COLORS.orange : COLORS.textSecondary}
-                    strokeWidth={1.5}
+                  <Switch
+                    value={showFeedback}
+                    onValueChange={setShowFeedback}
+                    disabled={debugMode}
+                    trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                    thumbColor={COLORS.text}
                   />
                 </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDebugActive]}>
-                    Debug mode
-                  </Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDebugActive]}>
-                    Skeleton on, TTS off, shows angles
-                  </Text>
+
+                <View style={styles.separator} />
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <AudioLines
+                      size={18}
+                      color={debugMode ? COLORS.textTertiary : COLORS.accent}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDisabled]}>
+                      Voice coaching
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
+                      Spoken cues via text-to-speech
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isTTSEnabled}
+                    onValueChange={handleTTSChange}
+                    disabled={debugMode}
+                    trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                    thumbColor={COLORS.text}
+                  />
                 </View>
-                <Switch
-                  value={debugMode}
-                  onValueChange={handleDebugChange}
-                  trackColor={{ false: COLORS.border, true: COLORS.orange }}
-                  thumbColor={COLORS.text}
-                />
               </View>
-            </View>
+
+              {/* Display section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>DISPLAY</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <Bone
+                      size={18}
+                      color={debugMode ? COLORS.textTertiary : COLORS.accent}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDisabled]}>
+                      Skeleton overlay
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
+                      Show detected pose landmarks
+                    </Text>
+                  </View>
+                  <Switch
+                    value={showSkeletonOverlay}
+                    onValueChange={setShowSkeletonOverlay}
+                    disabled={debugMode}
+                    trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                    thumbColor={COLORS.text}
+                  />
+                </View>
+              </View>
+
+              {/* Rest Timer section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>REST TIMER</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <Timer
+                      size={18}
+                      color={restTimerEnabled ? COLORS.accent : COLORS.textSecondary}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={styles.label}>Rest timer</Text>
+                    <Text style={styles.description}>Countdown between sets</Text>
+                  </View>
+                  <Switch
+                    value={restTimerEnabled}
+                    onValueChange={handleRestTimerToggle}
+                    trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                    thumbColor={COLORS.text}
+                  />
+                </View>
+
+                {restTimerEnabled && (
+                  <>
+                    <View style={styles.separator} />
+                    <View style={styles.wheelRow}>
+                      <WheelColumn
+                        values={MINUTES}
+                        selected={currentMinutes}
+                        onValueChange={handleMinutesChange}
+                      />
+                      <MonoText bold style={styles.wheelColon}>:</MonoText>
+                      <WheelColumn
+                        values={SECONDS}
+                        selected={snappedSeconds}
+                        onValueChange={handleSecondsChange}
+                      />
+                    </View>
+                    <View style={styles.wheelLabels}>
+                      <Text style={styles.wheelLabelText}>min</Text>
+                      <Text style={styles.wheelLabelText}>sec</Text>
+                    </View>
+                  </>
+                )}
+              </View>
+
+              {/* Developer section */}
+              <View style={[styles.section, styles.sectionLast]}>
+                <Text style={styles.sectionLabel}>DEVELOPER</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.rowIcon}>
+                    <Bug
+                      size={18}
+                      color={debugMode ? COLORS.orange : COLORS.textSecondary}
+                      strokeWidth={1.5}
+                    />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.label, debugMode && styles.labelDebugActive]}>
+                      Debug mode
+                    </Text>
+                    <Text style={[styles.description, debugMode && styles.descriptionDebugActive]}>
+                      Skeleton on, TTS off, shows angles
+                    </Text>
+                  </View>
+                  <Switch
+                    value={debugMode}
+                    onValueChange={handleDebugChange}
+                    trackColor={{ false: COLORS.border, true: COLORS.orange }}
+                    thumbColor={COLORS.text}
+                  />
+                </View>
+              </View>
+            </ScrollView>
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -479,6 +492,9 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  sectionsScroll: {
+    maxHeight: SECTIONS_MAX_HEIGHT,
   },
   header: {
     flexDirection: 'row',
