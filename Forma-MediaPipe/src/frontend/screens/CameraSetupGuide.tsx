@@ -163,7 +163,8 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
 
   // Animation values
   const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;       // 0 → 1 → 2
+  const slideAnim = useRef(new Animated.Value(0)).current;       // 0 → 1 → 2 (native driver: opacity + transform)
+  const dotAnim = useRef(new Animated.Value(0)).current;         // 0 → 1 → 2 (JS driver: width)
   const bracketPulse = useRef(new Animated.Value(1)).current;
   const phoneGlow = useRef(new Animated.Value(0.25)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
@@ -258,12 +259,19 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const next = currentSlide + 1;
     setCurrentSlide(next);
-    Animated.timing(slideAnim, {
-      toValue: next,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  }, [currentSlide, slideAnim]);
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: next,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(dotAnim, {
+        toValue: next,
+        duration: 400,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [currentSlide, slideAnim, dotAnim]);
 
   const handleOpenCamera = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -281,13 +289,13 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
   const s2Opacity = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [0, 0, 1] });
   const s2Tx = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [30, 30, 0] });
 
-  // Pagination dots (3)
-  const dot0W = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [20, 6, 6] });
-  const dot0Op = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.3, 0.3] });
-  const dot1W = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [6, 20, 6] });
-  const dot1Op = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [0.3, 1, 0.3] });
-  const dot2W = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [6, 6, 20] });
-  const dot2Op = slideAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [0.3, 0.3, 1] });
+  // Pagination dots (3) — driven by dotAnim (JS driver) because width is a layout property
+  const dot0W = dotAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [20, 6, 6] });
+  const dot0Op = dotAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.3, 0.3] });
+  const dot1W = dotAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [6, 20, 6] });
+  const dot1Op = dotAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [0.3, 1, 0.3] });
+  const dot2W = dotAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [6, 6, 20] });
+  const dot2Op = dotAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [0.3, 0.3, 1] });
 
   // CTA glow
   const glowOp = buttonGlow.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.8] });
