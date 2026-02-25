@@ -1,10 +1,11 @@
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video, BookOpen, BarChart2, Star } from 'lucide-react-native';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
 import { LogbookScreen } from '../screens/LogbookScreen';
@@ -21,6 +22,7 @@ import { WorkoutInfoScreen } from '../screens/WorkoutInfoScreen';
 import { RecordLandingScreen } from '../screens/RecordLandingScreen';
 import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
+import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlow';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider } from '../contexts/ScrollContext';
@@ -297,18 +299,36 @@ const styles = StyleSheet.create({
   },
 });
 
-// Inner navigator — conditionally renders screens based on auth state.
+// Inner navigator — conditionally renders screens based on auth + onboarding state.
 // React Navigation automatically navigates to the first available screen
 // when the screen list changes (e.g. user signs in → Welcome disappears → MainTabs shown).
 const RootStackNavigator: React.FC = () => {
   const { user, isLoading } = useAuth();
+  const [hasOnboarded, setHasOnboarded] = useState<boolean | null>(null);
 
-  if (isLoading) {
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_STORAGE_KEY).then((value) => {
+      setHasOnboarded(value === 'true');
+    }).catch(() => {
+      setHasOnboarded(false);
+    });
+  }, []);
+
+  const handleOnboardingComplete = useCallback(() => {
+    setHasOnboarded(true);
+  }, []);
+
+  if (isLoading || hasOnboarded === null) {
     return (
       <View style={{ flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={COLORS.primary} size="large" />
       </View>
     );
+  }
+
+  // Not logged in + never onboarded → show onboarding flow
+  if (!user && !hasOnboarded) {
+    return <OnboardingFlow onOnboardingComplete={handleOnboardingComplete} />;
   }
 
   return (

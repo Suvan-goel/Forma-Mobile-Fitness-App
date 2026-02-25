@@ -52,6 +52,7 @@ function mapWorkoutDetailsRow(row: any): WorkoutDetails {
         reps: s.reps,
         weight: s.weight,
         formScore: Math.round(s.form_score),
+        notes: s.notes ?? undefined,
       })),
     })),
   };
@@ -189,6 +190,7 @@ export const workoutsService = {
             reps: s.reps,
             weight: s.weight,
             form_score: s.formScore,
+            notes: s.notes ?? null,
           }))
         );
       }

@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import { workoutsService, CreateWorkoutPayload } from '../services/api';
+import { generateSetSummary } from '../../utils/setNotesSummary';
 
 interface WorkoutExerciseInput {
   name: string;
@@ -12,6 +13,8 @@ interface WorkoutExerciseInput {
     reps: number;
     weight?: number;
     formScore: number;
+    repFeedback?: string[];
+    repFormScores?: number[];
   }[];
 }
 
@@ -49,6 +52,9 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
             reps: s.reps,
             weight: s.weight ?? 0,
             formScore: s.formScore,
+            notes: s.repFeedback && s.repFeedback.length > 0
+              ? generateSetSummary(s.repFeedback, s.formScore, ex.name)
+              : undefined,
           })),
         })),
       };

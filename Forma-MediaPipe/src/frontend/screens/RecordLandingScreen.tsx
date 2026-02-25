@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   LayoutTemplate,
   Plus,
@@ -23,8 +25,11 @@ import {
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
+import { CameraSetupGuide } from './CameraSetupGuide';
 
 import type { RecordStackParamList } from '../app/RootNavigator';
+
+const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -55,6 +60,22 @@ export const RecordLandingScreen: React.FC = () => {
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
   const cardGap = 14;
   const bottomPadding = navigationBarHeight + cardGap;
+
+  // ── Camera Setup Guide (first-visit gate) ──
+  const [showSetupGuide, setShowSetupGuide] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(CAMERA_SETUP_SEEN_KEY).then((value) => {
+      setShowSetupGuide(value !== 'true');
+    }).catch(() => {
+      setShowSetupGuide(false);
+    });
+  }, []);
+
+  const handleGuideComplete = useCallback(() => {
+    AsyncStorage.setItem(CAMERA_SETUP_SEEN_KEY, 'true');
+    setShowSetupGuide(false);
+  }, []);
 
   useEffect(() => {
     if (!workoutInProgress || workoutPaused) return;
@@ -117,6 +138,16 @@ export const RecordLandingScreen: React.FC = () => {
       },
     });
   };
+
+  // Show camera setup guide on first visit (Modal covers the tab bar)
+  if (showSetupGuide === null) return <View style={styles.container} />;
+  if (showSetupGuide) {
+    return (
+      <Modal visible animationType="none" statusBarTranslucent>
+        <CameraSetupGuide onComplete={handleGuideComplete} />
+      </Modal>
+    );
+  }
 
   return (
     <View style={styles.container}>
