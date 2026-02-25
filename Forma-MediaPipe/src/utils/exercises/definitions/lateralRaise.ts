@@ -52,14 +52,22 @@ const FORM_THRESHOLDS = {
   ROM_MIN: 80,
   /** Elbow angle below this triggers "keep arms straighter" */
   ELBOW_BEND_WARN: 140,
-  /** Torso lateral lean above this triggers "stay upright" */
-  TORSO_LEAN_WARN: 8,
+  /** Torso lateral lean above this triggers "stay upright" (lowered: 8→6 to catch mild sway) */
+  TORSO_LEAN_WARN: 6,
   /** Abduction difference between arms above this triggers asymmetry */
   ASYMMETRY_WARN: 18,
-  /** Eccentric tempo threshold (seconds) -- concentric is not checked */
-  TEMPO_LOWER_MIN: 0.4,
-  /** Shoulder shrug percentage (torso height compression) */
-  SHRUG_WARN: 6,
+  /**
+   * Eccentric tempo threshold (seconds).
+   * Measured from TOP→LOWERING transition (65°) to rep end (25°) — ~40° of travel.
+   * A natural controlled lower covers this in ~0.4–0.6s, so only flag clearly dropped reps.
+   */
+  TEMPO_LOWER_MIN: 0.35,
+  /**
+   * Shoulder elevation (shrug) as percentage of torso height.
+   * Measured as how much shoulders RISE above the rest-state baseline.
+   * Raised from 6→8 to account for ~3–5% of natural shoulder rise during abduction.
+   */
+  SHRUG_WARN: 8,
 } as const;
 
 /** Ideal targets used by the scoring system (separate from penalty deadzones) */
@@ -68,8 +76,8 @@ const IDEAL = {
   MAX_ABDUCTION: 85,
   /** Nearly straight arm (degrees) */
   MIN_ELBOW_ANGLE: 160,
-  /** Controlled eccentric time (seconds) */
-  ECCENTRIC_TIME: 0.7,
+  /** Controlled eccentric time (seconds) — ideal for scoring, not the feedback cutoff */
+  ECCENTRIC_TIME: 0.55,
 } as const;
 
 /**
@@ -79,24 +87,24 @@ const IDEAL = {
  * "value" is the measured deviation from ideal (computed in computeRepWindowScore).
  * "deadzone" is the tolerance before penalty kicks in (NOT the ideal target).
  *
- * | Category     | Cap | Deadzone | Scale | Input                                |
- * |--------------|-----|----------|-------|--------------------------------------|
- * | ROM          | 30  | 5°       | 0.25  | ideal 85° − maxAbduction             |
- * | Elbow bend   | 20  | 10°      | 0.10  | ideal 160° − minElbowAngle           |
- * | Torso lean   | 25  | 5°       | 0.20  | maxTorsoLean from vertical            |
- * | Tempo lower  | 15  | 0.1s     | 100   | ideal 0.7s − actual eccentric time   |
- * | Asymmetry    | 15  | 10°      | 0.04  | maxAbductionDiff between arms        |
- * | Shrug        | 20  | 3%       | 0.50  | torso height compression percentage  |
+ * | Category     | Cap | Deadzone | Scale | Input                                         |
+ * |--------------|-----|----------|-------|-----------------------------------------------|
+ * | ROM          | 30  | 5°       | 0.25  | ideal 85° − maxAbduction                      |
+ * | Elbow bend   | 20  | 10°      | 0.10  | ideal 160° − minElbowAngle                    |
+ * | Torso lean   | 25  | 3°       | 0.20  | maxTorsoLean from vertical (tightened: 5→3)   |
+ * | Tempo lower  | 15  | 0.05s    | 100   | ideal 0.7s − actual eccentric time (tightened)|
+ * | Asymmetry    | 15  | 10°      | 0.04  | maxAbductionDiff between arms                 |
+ * | Shrug        | 20  | 5%       | 0.50  | shoulder elevation % above rest baseline      |
  *
  * Max total penalty: 125 → worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  ROM:         { cap: 30, deadzone: 5,   scale: 0.25 } as PenaltyConfig,
-  ELBOW_BEND:  { cap: 20, deadzone: 10,  scale: 0.10 } as PenaltyConfig,
-  TORSO_LEAN:  { cap: 25, deadzone: 5,   scale: 0.20 } as PenaltyConfig,
-  TEMPO_LOWER: { cap: 15, deadzone: 0.1, scale: 100  } as PenaltyConfig,
-  ASYMMETRY:   { cap: 15, deadzone: 10,  scale: 0.04 } as PenaltyConfig,
-  SHRUG:       { cap: 20, deadzone: 3,   scale: 0.50 } as PenaltyConfig,
+  ROM:         { cap: 30, deadzone: 5,    scale: 0.25 } as PenaltyConfig,
+  ELBOW_BEND:  { cap: 20, deadzone: 10,   scale: 0.10 } as PenaltyConfig,
+  TORSO_LEAN:  { cap: 25, deadzone: 3,    scale: 0.20 } as PenaltyConfig,
+  TEMPO_LOWER: { cap: 15, deadzone: 0.12, scale: 100  } as PenaltyConfig,
+  ASYMMETRY:   { cap: 15, deadzone: 10,   scale: 0.04 } as PenaltyConfig,
+  SHRUG:       { cap: 20, deadzone: 5,    scale: 0.50 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -111,6 +119,8 @@ interface RepWindow {
   /** Timestamps */
   tStart: number;
   tTop: number | null;
+  /** Timestamp of the TOP→LOWERING transition — the true eccentric start */
+  tLoweringStart: number | null;
   tEnd: number;
   /** Max abduction reached (average of both arms) */
   maxAbduction: number;
@@ -150,6 +160,12 @@ interface LateralRaiseState {
   warmupGate: WarmupGate;
   /** Whether warmup has been passed */
   warmedUp: boolean;
+  /**
+   * Torso height (midHipY − midShoulderY) captured during REST.
+   * Used as the shrug baseline so we measure shoulder ELEVATION above rest,
+   * not torso height compression (which was incorrectly signed and noisy).
+   */
+  restTorsoHeight: number | null;
   /** Current smoothed values (for debug) */
   smoothedLeftAbduction: number;
   smoothedRightAbduction: number;
@@ -210,6 +226,7 @@ function initializeState(): LateralRaiseState {
       ],
     }),
     warmedUp: false,
+    restTorsoHeight: null,
     smoothedLeftAbduction: 0,
     smoothedRightAbduction: 0,
     smoothedAvgAbduction: 0,
@@ -221,10 +238,11 @@ function initializeState(): LateralRaiseState {
   };
 }
 
-function initRepWindow(tStart: number): RepWindow {
+function initRepWindow(tStart: number, baselineTorsoHeight: number | null): RepWindow {
   return {
     tStart,
     tTop: null,
+    tLoweringStart: null,
     tEnd: tStart,
     maxAbduction: 0,
     maxLeftAbduction: 0,
@@ -232,7 +250,7 @@ function initRepWindow(tStart: number): RepWindow {
     maxAbductionDiff: 0,
     minElbowAngle: 180,
     maxTorsoLean: 0,
-    baselineTorsoHeight: null,
+    baselineTorsoHeight,
     maxShrugPct: 0,
     frameCount: 0,
   };
@@ -373,9 +391,11 @@ function computeRepWindowScore(repWindow: RepWindow): number {
   // 3. Torso lean -- lower is better (deadzone handles small amounts)
   penalties.push({ value: repWindow.maxTorsoLean, config: PENALTY_CONFIGS.TORSO_LEAN });
 
-  // 4. Eccentric tempo only -- no penalty for concentric speed
-  if (repWindow.tTop !== null) {
-    const tLower = repWindow.tEnd - repWindow.tTop;
+  // 4. Eccentric tempo only -- no penalty for concentric speed.
+  // Use tLoweringStart (TOP→LOWERING transition) not tTop, so we measure only the
+  // actual descent phase and don't inflate the time with the concentric + hold at peak.
+  if (repWindow.tLoweringStart !== null) {
+    const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < IDEAL.ECCENTRIC_TIME) {
       const deficit = IDEAL.ECCENTRIC_TIME - tLower;
       penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_LOWER });
@@ -418,9 +438,10 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Even it out \u2014 raise both arms to the same height.');
   }
 
-  // 5. Eccentric tempo only (no concentric check)
-  if (repWindow.tTop !== null) {
-    const tLower = repWindow.tEnd - repWindow.tTop;
+  // 5. Eccentric tempo only (no concentric check).
+  // Measured from TOP→LOWERING transition to rep end — excludes the concentric + top hold.
+  if (repWindow.tLoweringStart !== null) {
+    const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN) {
       messages.push('Control the descent \u2014 lower the weights slowly.');
     }
@@ -519,10 +540,27 @@ function updateLateralRaiseState(
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
+  // -- Capture rest-state torso height baseline (used for shrug detection) --
+  // Updated every frame in REST so it reflects the true relaxed shoulder position
+  // just before the rep starts.
+  if (state.phase === 'REST' && allTorsoVisible) {
+    const midShoulderY = (ls!.y + rs!.y) / 2;
+    const midHipY = (lh!.y + rh!.y) / 2;
+    const torsoH = midHipY - midShoulderY;
+    if (torsoH > 0.01) {
+      state.restTorsoHeight = torsoH;
+    }
+  }
+
   // -- Track rep start --
   if (prevPhase === 'REST' && state.phase === 'RAISING') {
     state.tRepStart = t;
-    state.repWindow = initRepWindow(t);
+    state.repWindow = initRepWindow(t, state.restTorsoHeight);
+  }
+
+  // -- Track TOP→LOWERING transition (true eccentric start) --
+  if (prevPhase === 'TOP' && state.phase === 'LOWERING' && state.repWindow) {
+    state.repWindow.tLoweringStart = t;
   }
 
   // -- Accumulate rep window while in a rep --
@@ -546,18 +584,27 @@ function updateLateralRaiseState(
     // Max torso lean
     w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
 
-    // Shoulder shrug detection via torso height compression
+    // Shoulder shrug detection via shoulder ELEVATION above rest baseline.
+    //
+    // When shrugging, shoulders RISE (midShoulderY decreases in image coords where Y=0
+    // is the top). This makes torsoHeight = midHipY − midShoulderY INCREASE.
+    // elevation = (current − baseline) / baseline × 100 is therefore POSITIVE when
+    // shrugging, which is the correct sign.
+    //
+    // The old formula used (baseline − current), which produced a NEGATIVE value for
+    // shrugging and fired spuriously on noise/sway instead.
     if (allTorsoVisible) {
       const midShoulderY = (ls!.y + rs!.y) / 2;
       const midHipY = (lh!.y + rh!.y) / 2;
-      const torsoHeight = midHipY - midShoulderY; // positive when upright
+      const torsoHeight = midHipY - midShoulderY; // increases when shoulders rise
       if (torsoHeight > 0.01) {
+        // Seed baseline from rest-state height (captured before rep started) if available.
         if (w.baselineTorsoHeight === null) {
           w.baselineTorsoHeight = torsoHeight;
         }
-        const compression = (w.baselineTorsoHeight - torsoHeight) / w.baselineTorsoHeight * 100;
-        if (compression > 0) {
-          w.maxShrugPct = Math.max(w.maxShrugPct, compression);
+        const elevation = (torsoHeight - w.baselineTorsoHeight) / w.baselineTorsoHeight * 100;
+        if (elevation > 0) {
+          w.maxShrugPct = Math.max(w.maxShrugPct, elevation);
         }
       }
     }
