@@ -1,8 +1,8 @@
-import React, { useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Target, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronDown, Target, Trash2 } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
@@ -16,6 +16,12 @@ type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetai
 type WorkoutDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetails'>;
 
 const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => {
+  const [expandedSets, setExpandedSets] = useState<Record<number, boolean>>({});
+
+  const toggleSetNotes = (setNumber: number) => {
+    setExpandedSets((prev) => ({ ...prev, [setNumber]: !prev[setNumber] }));
+  };
+
   return (
     <View style={styles.cardOuter}>
       <LinearGradient
@@ -40,15 +46,36 @@ const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => 
 
           {/* Sets */}
           {exercise.sets.map((set) => (
-            <View key={set.setNumber} style={styles.setRow}>
-              <Text style={styles.setCell}>{set.setNumber}</Text>
-              <Text style={styles.setCell}>{set.reps}</Text>
-              <Text style={styles.setCell}>
-                {set.weight > 0 ? `${set.weight} lbs` : '-'}
-              </Text>
-              <MonoText style={[styles.setCell, styles.scoreCell]}>
-                {set.formScore}
-              </MonoText>
+            <View key={set.setNumber}>
+              <TouchableOpacity
+                style={styles.setRow}
+                activeOpacity={set.notes ? 0.6 : 1}
+                onPress={() => set.notes ? toggleSetNotes(set.setNumber) : undefined}
+              >
+                <Text style={styles.setCell}>{set.setNumber}</Text>
+                <Text style={styles.setCell}>{set.reps}</Text>
+                <Text style={styles.setCell}>
+                  {set.weight > 0 ? `${set.weight} lbs` : '-'}
+                </Text>
+                <View style={styles.scoreCellRow}>
+                  <MonoText style={[styles.setCell, styles.scoreCell]}>
+                    {set.formScore}
+                  </MonoText>
+                  {set.notes && (
+                    <ChevronDown
+                      size={12}
+                      color={COLORS.textTertiary}
+                      strokeWidth={1.5}
+                      style={expandedSets[set.setNumber] ? { transform: [{ rotate: '180deg' }] } : undefined}
+                    />
+                  )}
+                </View>
+              </TouchableOpacity>
+              {set.notes && expandedSets[set.setNumber] && (
+                <View style={styles.notesContainer}>
+                  <Text style={styles.notesText}>{set.notes}</Text>
+                </View>
+              )}
             </View>
           ))}
         </View>
@@ -325,6 +352,26 @@ const styles = StyleSheet.create({
   scoreCell: {
     fontFamily: FONTS.mono.bold,
     color: COLORS.accent,
+  },
+  scoreCellRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  notesContainer: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  notesText: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
   },
 });
 

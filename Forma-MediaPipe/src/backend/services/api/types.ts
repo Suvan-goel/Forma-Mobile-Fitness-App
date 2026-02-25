@@ -52,6 +52,7 @@ export interface WorkoutSet {
   reps: number;
   weight: number;
   formScore: number;
+  notes?: string;
 }
 
 export interface WorkoutExercise {
@@ -94,6 +95,7 @@ export interface CreateWorkoutPayload {
       reps: number;
       weight: number;
       formScore: number;
+      notes?: string;
     }[];
   }[];
 }
