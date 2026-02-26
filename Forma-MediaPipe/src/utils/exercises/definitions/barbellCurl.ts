@@ -53,6 +53,10 @@ const FORM_THRESHOLDS = {
   /** Min reach ratio to consider arm fully extended at frontal view.
    *  Below this, forearm is likely foreshortened (pointing into depth). */
   REACH_RATIO_MIN: 0.88,
+  /** Elbow flare: angle of the upper arm from vertical in the frontal plane.
+   *  0° = elbow directly below shoulder; higher = more lateral flare. */
+  ELBOW_FLARE_WARN: 30, // degrees — elbows drifting outward
+  ELBOW_FLARE_FAIL: 45, // degrees — significant elbow flare
 } as const;
 
 /** Smoothing parameters */
@@ -138,6 +142,13 @@ function penaltyTempo(tUp: number, tDown: number): number {
     downPenalty = Math.min(10, 40 * deficit * deficit);
   }
   return Math.min(20, upPenalty + downPenalty);
+}
+
+/** Elbow flare penalty — max 20 pts. Deadzone 15deg (some natural abduction is normal).
+ *  At 30deg (warn threshold): ~5pts. At 45deg (fail threshold): ~20pts. */
+function penaltyElbowFlare(maxFlareDeg: number): number {
+  const d = Math.max(0, maxFlareDeg - 15);
+  return Math.min(20, 0.022 * d * d);
 }
 
 /** Asymmetry penalty — max 15 pts. Min-angle + ROM asymmetry. */
@@ -247,7 +258,19 @@ function computeRepScore(
     asymmetryP = penaltyAsymmetry(deltaMin, deltaRom);
   }
 
-  const total = torsoP + shoulderP + romP + tempoP + asymmetryP;
+  // Elbow flare penalty (frontal only)
+  let elbowFlareP = 0;
+  if (isFrontal) {
+    const leftFlareOk = isFinite(repWindow.elbowFlare.maxLeftFlareDeg);
+    const rightFlareOk = isFinite(repWindow.elbowFlare.maxRightFlareDeg);
+    const maxFlare = Math.max(
+      leftFlareOk ? repWindow.elbowFlare.maxLeftFlareDeg : 0,
+      rightFlareOk ? repWindow.elbowFlare.maxRightFlareDeg : 0,
+    );
+    elbowFlareP = penaltyElbowFlare(maxFlare);
+  }
+
+  const total = torsoP + shoulderP + romP + tempoP + asymmetryP + elbowFlareP;
   return Math.max(0, Math.min(100, Math.round(100 - total)));
 }
 
@@ -288,6 +311,9 @@ interface RepWindow {
   /** Normalized arm reach ratio — tracks max (most extended) per arm.
    *  Used at frontal view to detect foreshortened extension the 2D angle misses. */
   reach: { maxLeftReachRatio: number; maxRightReachRatio: number };
+  /** Max elbow flare angle (upper arm from vertical, coronal plane) per arm during the rep.
+   *  Frontal view only — lateral deviation is most accurate when facing the camera. */
+  elbowFlare: { maxLeftFlareDeg: number; maxRightFlareDeg: number };
 }
 
 interface AngleSet {
@@ -391,6 +417,7 @@ function initRepWindow(tStart: number): RepWindow {
     frameCount: 0,
     wristDevFrames: { left: 0, right: 0 },
     reach: { maxLeftReachRatio: -Infinity, maxRightReachRatio: -Infinity },
+    elbowFlare: { maxLeftFlareDeg: -Infinity, maxRightFlareDeg: -Infinity },
   };
 }
 
@@ -553,6 +580,27 @@ function computeArmReachRatio(keypoints: Keypoint[], side: 'left' | 'right'): nu
   if (segmentLength < 1e-6) return NaN;
 
   return dist2D(shoulder, wrist) / segmentLength;
+}
+
+/**
+ * Compute elbow flare angle for one arm: angle of the upper arm from vertical in the
+ * frontal (coronal) plane. 0° = elbow directly below shoulder; increases as elbow flares out.
+ */
+function computeElbowFlareDeg(keypoints: Keypoint[], side: 'left' | 'right'): number {
+  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
+  const elbow = getKeypoint(keypoints, `${side}_elbow`);
+
+  if (
+    !shoulder || !elbow ||
+    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
+    !isVisible(elbow, VISIBILITY_THRESHOLD)
+  ) return NaN;
+
+  const dx = Math.abs(elbow.x - shoulder.x);
+  const dy = Math.abs(elbow.y - shoulder.y);
+  if (dx < 1e-6 && dy < 1e-6) return 0;
+
+  return Math.atan2(dx, dy) * 57.29577951308232;
 }
 
 /**
@@ -943,6 +991,21 @@ function evaluateForm(
     }
   }
 
+  // 3b. Elbow flare (frontal only — lateral deviation is most detectable head-on)
+  if (isFrontal) {
+    const leftFlareOk = isFinite(repWindow.elbowFlare.maxLeftFlareDeg);
+    const rightFlareOk = isFinite(repWindow.elbowFlare.maxRightFlareDeg);
+    const maxFlare = Math.max(
+      leftFlareOk ? repWindow.elbowFlare.maxLeftFlareDeg : 0,
+      rightFlareOk ? repWindow.elbowFlare.maxRightFlareDeg : 0,
+    );
+    if (maxFlare > FORM_THRESHOLDS.ELBOW_FLARE_FAIL) {
+      messages.push("Keep your elbows in — don't flare them out to the sides.");
+    } else if (maxFlare > FORM_THRESHOLDS.ELBOW_FLARE_WARN) {
+      messages.push('Tuck your elbows in — they\'re drifting outward.');
+    }
+  }
+
   // 4. Torso swing (works at all angles — sagittal projection is rotation-invariant)
   const deltaTorso = maxAngles.torso - minAngles.torso;
   const torsoWarnThreshold = repIndex === 0
@@ -1120,6 +1183,16 @@ function updateBarbellCurlState(
       }
       if (!isNaN(rightReach)) {
         window.reach.maxRightReachRatio = Math.max(window.reach.maxRightReachRatio, rightReach);
+      }
+
+      // Track elbow flare (frontal only — lateral deviation is visible facing the camera)
+      const leftFlare = computeElbowFlareDeg(keypoints, 'left');
+      const rightFlare = computeElbowFlareDeg(keypoints, 'right');
+      if (!isNaN(leftFlare)) {
+        window.elbowFlare.maxLeftFlareDeg = Math.max(window.elbowFlare.maxLeftFlareDeg, leftFlare);
+      }
+      if (!isNaN(rightFlare)) {
+        window.elbowFlare.maxRightFlareDeg = Math.max(window.elbowFlare.maxRightFlareDeg, rightFlare);
       }
     }
   }
@@ -1340,6 +1413,8 @@ export const barbellCurlDefinition: ExerciseDefinition = {
       'Slow down — control the curl.': 'tempo_up',
       "Control the lowering — don't drop the weight.": 'tempo_down',
       'Arms are uneven — curl both sides together.': 'asymmetry',
+      "Keep your elbows in — don't flare them out to the sides.": 'elbow_flare',
+      "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
     },
   },
 
@@ -1354,5 +1429,7 @@ export const barbellCurlDefinition: ExerciseDefinition = {
     'Slow down — control the curl.': 'Slow the concentric phase — aim for 1-2 seconds up.',
     "Control the lowering — don't drop the weight.": 'Slow the eccentric phase — 2-3 seconds down.',
     'Arms are uneven — curl both sides together.': 'Focus on symmetry — curl both arms at the same speed.',
+    "Keep your elbows in — don't flare them out to the sides.": 'Keep elbows pinned to your sides — flaring reduces bicep isolation.',
+    "Tuck your elbows in — they're drifting outward.": 'Focus on keeping elbows close to your body throughout the curl.',
   },
 };
