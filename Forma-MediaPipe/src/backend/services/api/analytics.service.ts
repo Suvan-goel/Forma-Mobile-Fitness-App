@@ -349,12 +349,13 @@ export const analyticsService = {
     const today = new Date();
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(today.getDate() - 6);
+    const todayEndOfDay = toDateStr(today) + 'T23:59:59.999Z';
 
     const { data: weekRows, error: weekErr } = await supabase
       .from('workout_sessions')
       .select('date, duration_seconds')
       .gte('date', toDateStr(sevenDaysAgo))
-      .lte('date', toDateStr(today));
+      .lte('date', todayEndOfDay);
 
     if (weekErr) {
       return { data: {} as AnalyticsData, success: false, error: weekErr.message };
