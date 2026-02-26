@@ -99,7 +99,7 @@ export const RecordLandingScreen: React.FC = () => {
   };
 
   const handleChooseTemplate = () => {
-    navigation.navigate('ChooseExercise');
+    navigation.navigate('WorkoutTemplates');
   };
 
   const handleDiscardWorkout = () => {
