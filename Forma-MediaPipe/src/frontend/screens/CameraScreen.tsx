@@ -18,7 +18,6 @@ import { ExerciseRegistry } from '../../utils/exercises';
 import type { ExerciseState } from '../../utils/exercises';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
-import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
@@ -88,9 +87,6 @@ export const CameraScreen: React.FC = () => {
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
 
-
-  // Settings popup (feedback + TTS toggles)
-  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
 
   // Unmount camera before leaving so native layer can release it; avoids "Camera initialization failed" on next open
   const [cameraMounted, setCameraMounted] = useState(false);
@@ -645,7 +641,7 @@ export const CameraScreen: React.FC = () => {
           </View>
           <TouchableOpacity
             style={styles.settingsButton}
-            onPress={() => setSettingsModalVisible(true)}
+            onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Camera settings"
@@ -1056,11 +1052,6 @@ export const CameraScreen: React.FC = () => {
         </View>
       </View>
 
-      <CameraSettingsModal
-        visible={settingsModalVisible}
-        onClose={() => setSettingsModalVisible(false)}
-        onTTSDisable={ttsStopCoach}
-      />
     </View>
   );
 };

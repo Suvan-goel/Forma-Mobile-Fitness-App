@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 2,
+    paddingTop: 8,
     paddingBottom: 130,
   },
 

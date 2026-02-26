@@ -133,6 +133,12 @@ export const RewardsScreen: React.FC = () => {
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
+        {/* ── HEADER ─────────────────────────────── */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>REWARDS</Text>
+          <Text style={styles.headerSubtitle}>EARN & REDEEM</Text>
+        </View>
+
         {/* ── HERO SCORE ─────────────────────────── */}
         <View style={styles.heroSection}>
           <Text style={styles.heroValue}>{userPoints}</Text>
@@ -198,8 +204,28 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
+    paddingTop: 8,
     paddingBottom: 150,
+  },
+
+  /* ── Header ────────────────────────────────── */
+  header: {
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 40,
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    lineHeight: 46,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: '#71717A',
+    letterSpacing: 3,
+    marginTop: 6,
   },
 
   /* ── Hero Score ────────────────────────────── */

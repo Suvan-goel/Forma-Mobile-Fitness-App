@@ -62,7 +62,8 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
     (focusedRouteName === 'ChooseExercise' ||
      focusedRouteName === 'Camera' ||
      focusedRouteName === 'CurrentWorkout' ||
-     focusedRouteName === 'SaveWorkout');
+     focusedRouteName === 'SaveWorkout' ||
+     focusedRouteName === 'WorkoutSettings');
 
   // Notify parent of tab changes
   React.useEffect(() => {

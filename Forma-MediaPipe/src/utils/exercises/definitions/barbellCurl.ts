@@ -47,7 +47,7 @@ const FORM_THRESHOLDS = {
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
   TEMPO_UP_MIN: 0.05,
-  TEMPO_DOWN_MIN: 0.20,
+  TEMPO_DOWN_MIN: 0.15,
   SYMMETRY_MIN: 50,
   SYMMETRY_ROM: 55,
   /** Min reach ratio to consider arm fully extended at frontal view.

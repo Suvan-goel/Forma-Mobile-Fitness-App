@@ -26,6 +26,7 @@ import { WorkoutInfoScreen } from '../screens/WorkoutInfoScreen';
 import { RecordLandingScreen } from '../screens/RecordLandingScreen';
 import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
+import { CameraSettingsScreen } from '../screens/CameraSettingsScreen';
 import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlow';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
@@ -64,6 +65,7 @@ export type RecordStackParamList = {
   ChooseExercise: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout?: true };
   SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number } };
+  WorkoutSettings: undefined;
 };
 
 export type RootTabParamList = {
@@ -131,6 +133,7 @@ const RecordStackNavigator: React.FC = memo(() => {
         component={SaveWorkoutScreen}
         options={{ contentStyle: { backgroundColor: COLORS.background } }}
       />
+      <RecordStack.Screen name="WorkoutSettings" component={CameraSettingsScreen} options={{ headerShown: false }} />
     </RecordStack.Navigator>
   );
 });
@@ -149,7 +152,7 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   const insets = useSafeAreaInsets();
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
-  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'Camera' || focusedRouteName === 'CurrentWorkout' || focusedRouteName === 'SaveWorkout');
+  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'Camera' || focusedRouteName === 'CurrentWorkout' || focusedRouteName === 'SaveWorkout' || focusedRouteName === 'WorkoutSettings');
 
   // Notify parent of tab changes
   React.useEffect(() => {

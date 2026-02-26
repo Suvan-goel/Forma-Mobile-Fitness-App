@@ -35,7 +35,6 @@ import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
-import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useNotificationPreferences } from '../../backend/hooks';
 import * as Notifications from 'expo-notifications';
@@ -116,7 +115,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     currentWeight?: number;
     currentUnit?: 'kg' | 'lbs';
   } | null>(null);
-  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -387,17 +385,12 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.headerSettingsButton}
-          onPress={() => setSettingsModalVisible(true)}
+          onPress={() => navigation.navigate('WorkoutSettings')}
           activeOpacity={0.7}
         >
           <CogIcon size={20} color={COLORS.text} />
         </TouchableOpacity>
       </View>
-
-      <CameraSettingsModal
-        visible={settingsModalVisible}
-        onClose={() => setSettingsModalVisible(false)}
-      />
 
       {/* ── TIMER HERO ──────────────────────── */}
       <View style={styles.timerBlock}>
