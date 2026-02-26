@@ -38,6 +38,7 @@ interface WheelColumnProps {
 const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChange, pad = true }) => {
   const scrollRef = useRef<ScrollView>(null);
   const isUserScrolling = useRef(false);
+  const dragEndTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const selectedIndex = values.indexOf(selected);
 
   useEffect(() => {
@@ -46,8 +47,11 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChan
     }
   }, [selectedIndex]);
 
-  const handleMomentumEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
+  // Shared commit: rounds y to nearest item and fires onValueChange.
+  // Math.round gives the same target that snapToInterval will snap to,
+  // so this is safe to call from both onScrollEndDrag and onMomentumScrollEnd.
+  const commitY = useCallback((y: number) => {
+    const index = Math.round(y / ITEM_HEIGHT);
     const clamped = Math.max(0, Math.min(index, values.length - 1));
     if (values[clamped] !== selected) {
       onValueChange(values[clamped]);
@@ -55,9 +59,34 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChan
     isUserScrolling.current = false;
   }, [values, selected, onValueChange]);
 
-  const handleScrollBegin = useCallback(() => {
+  const handleScrollBeginDrag = useCallback(() => {
     isUserScrolling.current = true;
+    // Cancel any pending no-momentum commit from a previous drag
+    if (dragEndTimer.current) clearTimeout(dragEndTimer.current);
   }, []);
+
+  // onScrollEndDrag fires when the user lifts their finger.
+  // If momentum follows, onMomentumScrollBegin will cancel this timer.
+  // If there is no momentum (slow drag with fast decelerationRate), this
+  // fires after 50 ms and commits the position — fixing the case where
+  // onMomentumScrollEnd never fires.
+  const handleScrollEndDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    dragEndTimer.current = setTimeout(() => {
+      commitY(y);
+    }, 50);
+  }, [commitY]);
+
+  const handleMomentumScrollBegin = useCallback(() => {
+    // Momentum started after drag end — cancel the fallback timer and let
+    // onMomentumScrollEnd handle the final position instead.
+    if (dragEndTimer.current) clearTimeout(dragEndTimer.current);
+  }, []);
+
+  const handleMomentumScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (dragEndTimer.current) clearTimeout(dragEndTimer.current);
+    commitY(e.nativeEvent.contentOffset.y);
+  }, [commitY]);
 
   return (
     <View style={wheelStyles.columnWrapper}>
@@ -67,13 +96,15 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChan
       <ScrollView
         ref={scrollRef}
         style={wheelStyles.column}
-        contentContainerStyle={{ paddingVertical: ITEM_HEIGHT }}
+        contentContainerStyle={wheelStyles.columnContent}
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
         nestedScrollEnabled
-        onScrollBeginDrag={handleScrollBegin}
-        onMomentumScrollEnd={handleMomentumEnd}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onScrollEndDrag={handleScrollEndDrag}
+        onMomentumScrollBegin={handleMomentumScrollBegin}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
       >
         {values.map((val) => {
           const isSelected = val === selected;
@@ -107,6 +138,9 @@ const wheelStyles = StyleSheet.create({
   },
   column: {
     height: WHEEL_HEIGHT,
+  },
+  columnContent: {
+    paddingVertical: ITEM_HEIGHT,
   },
   item: {
     height: ITEM_HEIGHT,
@@ -455,37 +489,42 @@ export const CameraSettingsScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setIsTimerModalVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setIsTimerModalVisible(false)}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>REST DURATION</Text>
-              <View style={styles.wheelRow}>
-                <WheelColumn
-                  values={MINUTES}
-                  selected={pendingMinutes}
-                  onValueChange={setPendingMinutes}
-                />
-                <MonoText bold style={styles.wheelColon}>:</MonoText>
-                <WheelColumn
-                  values={SECONDS}
-                  selected={pendingSeconds}
-                  onValueChange={setPendingSeconds}
-                />
-              </View>
-              <View style={styles.wheelLabels}>
-                <Text style={styles.wheelLabelText}>min</Text>
-                <Text style={styles.wheelLabelText}>sec</Text>
-              </View>
-              <TouchableOpacity style={styles.modalDoneButton} onPress={handleTimerModalDone} activeOpacity={0.8}>
-                <Text style={styles.modalDoneText}>Done</Text>
-              </TouchableOpacity>
+        {/*
+         * Backdrop and card are SIBLINGS, not nested.
+         * This prevents the backdrop TouchableOpacity from wrapping the
+         * WheelColumn ScrollViews, which would cause it to briefly hold
+         * the gesture and make scrolling feel unresponsive.
+         */}
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setIsTimerModalVisible(false)}
+            activeOpacity={1}
+          />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>REST DURATION</Text>
+            <View style={styles.wheelRow}>
+              <WheelColumn
+                values={MINUTES}
+                selected={pendingMinutes}
+                onValueChange={setPendingMinutes}
+              />
+              <MonoText bold style={styles.wheelColon}>:</MonoText>
+              <WheelColumn
+                values={SECONDS}
+                selected={pendingSeconds}
+                onValueChange={setPendingSeconds}
+              />
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+            <View style={styles.wheelLabels}>
+              <Text style={styles.wheelLabelText}>min</Text>
+              <Text style={styles.wheelLabelText}>sec</Text>
+            </View>
+            <TouchableOpacity style={styles.modalDoneButton} onPress={handleTimerModalDone} activeOpacity={0.8}>
+              <Text style={styles.modalDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
