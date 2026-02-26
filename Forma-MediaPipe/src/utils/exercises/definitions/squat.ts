@@ -73,7 +73,7 @@ const FORM_THRESHOLDS = {
   TORSO_LEAN_FAIL: 55, // max torso lean > 55 degrees
   // Tempo
   TEMPO_CONCENTRIC_MIN: 0.3,  // ascent too fast (seconds)
-  TEMPO_ECCENTRIC_MIN: 0.4,   // descent too fast (seconds)
+  TEMPO_ECCENTRIC_MIN: 0.8,   // descent too fast (seconds) — measured from DESCENDING_ENTER to ASCENDING_ENTER
 } as const;
 
 /**
@@ -94,7 +94,7 @@ const SCORE_CURVES = {
   LOCKOUT: { ideal: 165,    scale: 0.08,  cap: 20 },
   TORSO:   { deadzone: 35,  scale: 0.06,  cap: 30 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 8 },
-  TEMPO_ECCENTRIC:  { deadzone: 0.4, scale: 40, cap: 7 },
+  TEMPO_ECCENTRIC:  { deadzone: 0.8, scale: 40, cap: 7 },
 } as const;
 
 /** Smoothing parameters */
@@ -665,7 +665,14 @@ function updateSquatState(
       window.maxTorsoLean = Math.max(window.maxTorsoLean, smoothed.torsoLean);
     }
 
-    if (newState.fsm.phase === 'BOTTOM' && window.tBottom === null) {
+    // Set tBottom at the BOTTOM→ASCENDING transition (knee starts rising above BOTTOM_EXIT).
+    // This captures the full eccentric duration (148° → actual bottom → 118°), rather than
+    // stopping the timer mid-descent when the knee first crosses BOTTOM_ENTER (110°).
+    if (
+      currentState.fsm.phase === 'BOTTOM' &&
+      newState.fsm.phase === 'ASCENDING' &&
+      window.tBottom === null
+    ) {
       window.tBottom = t;
     }
   }
