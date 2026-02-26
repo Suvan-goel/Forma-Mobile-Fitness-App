@@ -154,7 +154,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const handlePausePress = () => {
     setWorkoutPaused((p) => {
       const next = !p;
-      if (next) {
+      if (!next) {
+        // Resuming: shift startTimeRef forward by the pause duration so the
+        // interval calculates elapsed time correctly without jumping.
         startTimeRef.current = Date.now() - elapsedSeconds * 1000;
       }
       return next;
