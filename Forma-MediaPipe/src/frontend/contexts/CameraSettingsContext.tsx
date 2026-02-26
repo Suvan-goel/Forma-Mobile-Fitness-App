@@ -10,6 +10,7 @@ export type CameraSettings = {
   debugMode: boolean;
   restTimerEnabled: boolean;
   restTimerDurationSeconds: number;
+  selectedTrainerId: string;
 };
 
 type CameraSettingsContextValue = CameraSettings & {
@@ -19,6 +20,7 @@ type CameraSettingsContextValue = CameraSettings & {
   setDebugMode: (value: boolean) => void;
   setRestTimerEnabled: (value: boolean) => void;
   setRestTimerDurationSeconds: (value: number) => void;
+  setSelectedTrainerId: (id: string) => void;
 };
 
 const defaultSettings: CameraSettings = {
@@ -28,6 +30,7 @@ const defaultSettings: CameraSettings = {
   debugMode: false,
   restTimerEnabled: false,
   restTimerDurationSeconds: 90,
+  selectedTrainerId: 'marcus',
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
@@ -39,6 +42,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const [debugMode, setDebugMode] = useState(defaultSettings.debugMode);
   const [restTimerEnabled, setRestTimerEnabledRaw] = useState(defaultSettings.restTimerEnabled);
   const [restTimerDurationSeconds, setRestTimerDurationSecondsRaw] = useState(defaultSettings.restTimerDurationSeconds);
+  const [selectedTrainerId, setSelectedTrainerIdRaw] = useState(defaultSettings.selectedTrainerId);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -51,11 +55,12 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         if (typeof saved.showSkeletonOverlay === 'boolean') setShowSkeletonOverlayRaw(saved.showSkeletonOverlay);
         if (typeof saved.restTimerEnabled === 'boolean') setRestTimerEnabledRaw(saved.restTimerEnabled);
         if (typeof saved.restTimerDurationSeconds === 'number') setRestTimerDurationSecondsRaw(saved.restTimerDurationSeconds);
+        if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
       } catch { /* ignore corrupt data */ }
     });
   }, []);
 
-  const persistSetting = useCallback((key: string, value: boolean | number) => {
+  const persistSetting = useCallback((key: string, value: boolean | number | string) => {
     AsyncStorage.getItem(CAMERA_SETTINGS_KEY).then((raw) => {
       const current = raw ? JSON.parse(raw) : {};
       AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...current, [key]: value }));
@@ -87,6 +92,11 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     persistSetting('restTimerDurationSeconds', value);
   }, [persistSetting]);
 
+  const setSelectedTrainerId = useCallback((id: string) => {
+    setSelectedTrainerIdRaw(id);
+    persistSetting('selectedTrainerId', id);
+  }, [persistSetting]);
+
   return (
     <CameraSettingsContext.Provider
       value={{
@@ -96,12 +106,14 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         debugMode,
         restTimerEnabled,
         restTimerDurationSeconds,
+        selectedTrainerId,
         setShowFeedback,
         setIsTTSEnabled,
         setShowSkeletonOverlay,
         setDebugMode,
         setRestTimerEnabled,
         setRestTimerDurationSeconds,
+        setSelectedTrainerId,
       }}
     >
       {children}

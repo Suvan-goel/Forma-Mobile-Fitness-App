@@ -12,15 +12,18 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, Animated, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Animated, Dimensions, Platform, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Timer, Trophy, Target } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useAnalytics } from '../../backend/hooks';
+import { useAnalytics, useUser } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { NeonArc } from '../components/ui/NeonArc';
 import { StatCard } from '../components/ui/StatCard';
+import type { RootStackParamList } from '../app/RootNavigator';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -42,6 +45,8 @@ const generateMicroBars = (count: number, seed: number): number[] => {
 export const AnalyticsScreen: React.FC = () => {
   const { onScroll } = useScroll();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user: profileUser } = useUser();
 
   const { analytics, isLoading, error, refetch } = useAnalytics('1 week');
 
@@ -118,8 +123,30 @@ export const AnalyticsScreen: React.FC = () => {
         >
           {/* ── HEADER ─────────────────────────────── */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>ANALYTICS</Text>
-            <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+            <View>
+              <Text style={styles.headerTitle}>ANALYTICS</Text>
+              <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ProfileSettings')}
+              activeOpacity={0.7}
+              style={styles.avatarButton}
+            >
+              {profileUser?.avatarUrl ? (
+                <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <LinearGradient
+                  colors={['#8B5CF6', '#7C3AED']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.avatarGradient}
+                >
+                  <Text style={styles.avatarInitial}>
+                    {(profileUser?.displayName?.[0] ?? 'A').toUpperCase()}
+                  </Text>
+                </LinearGradient>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* ── HERO ARC GAUGE ─────────────────────── */}
@@ -270,6 +297,33 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 8,
     paddingBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginTop: 5,
+  },
+  avatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,

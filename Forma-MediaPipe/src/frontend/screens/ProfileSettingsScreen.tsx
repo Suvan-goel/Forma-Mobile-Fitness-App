@@ -37,7 +37,8 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   const { updateProfile, uploadAvatar, isUpdating, error } = useUpdateUser();
 
   const [displayName, setDisplayName] = useState('');
-  const [hasNameChanged, setHasNameChanged] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -50,21 +51,42 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName);
+      const parts = user.displayName.trim().split(/\s+/);
+      setFirstName(parts[0] ?? '');
+      setLastName(parts.slice(1).join(' '));
     }
   }, [user]);
 
-  const handleNameChange = (text: string) => {
-    setDisplayName(text);
-    setHasNameChanged(text !== user?.displayName);
+  const originalFirst = user?.displayName.trim().split(/\s+/)[0] ?? '';
+  const originalLast = user?.displayName.trim().split(/\s+/).slice(1).join(' ') ?? '';
+  const hasNameChanged = firstName.trim() !== originalFirst || lastName.trim() !== originalLast;
+  const hasDisplayNameChanged = displayName.trim() !== (user?.displayName ?? '');
+
+  const handleSaveDisplayName = async () => {
+    if (!hasDisplayNameChanged || !displayName.trim()) return;
+    const result = await updateProfile({ displayName: displayName.trim() });
+    if (result.success) {
+      await refetch();
+      Alert.alert('Success', 'Display name updated.');
+    } else {
+      Alert.alert('Error', result.error ?? 'Failed to update display name.');
+    }
   };
 
   const handleSaveName = async () => {
-    if (!hasNameChanged || !displayName.trim()) return;
-    const result = await updateProfile({ displayName: displayName.trim() });
+    const trimmedFirst = firstName.trim();
+    if (!trimmedFirst) {
+      Alert.alert('First name required', 'Please enter your first name.');
+      return;
+    }
+    const newDisplayName = lastName.trim()
+      ? `${trimmedFirst} ${lastName.trim()}`
+      : trimmedFirst;
+    if (newDisplayName === user?.displayName) return;
+    const result = await updateProfile({ displayName: newDisplayName });
     if (result.success) {
-      setHasNameChanged(false);
       await refetch();
-      Alert.alert('Success', 'Display name updated.');
+      Alert.alert('Success', 'Name updated.');
     } else {
       Alert.alert('Error', result.error ?? 'Failed to update name.');
     }
@@ -185,13 +207,80 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                 <TextInput
                   style={styles.textInput}
                   value={displayName}
-                  onChangeText={handleNameChange}
-                  placeholder="Enter your name"
+                  onChangeText={setDisplayName}
+                  placeholder="Enter your display name"
                   placeholderTextColor={COLORS.textTertiary}
                   autoCapitalize="words"
                   returnKeyType="done"
-                  onSubmitEditing={handleSaveName}
+                  onSubmitEditing={handleSaveDisplayName}
                 />
+                {hasDisplayNameChanged && (
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={handleSaveDisplayName}
+                    activeOpacity={0.7}
+                    disabled={isUpdating}
+                  >
+                    <Text style={styles.saveButtonText}>
+                      {isUpdating ? 'Saving...' : 'Save'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* Name Section */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBadge}>
+              <User size={12} color="#A78BFA" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.sectionTitle}>Name</Text>
+          </View>
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIconBadge}>
+                    <User size={14} color="#A78BFA" strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>First name</Text>
+                    <TextInput
+                      style={styles.nameInput}
+                      value={firstName}
+                      onChangeText={setFirstName}
+                      placeholder="First name"
+                      placeholderTextColor={COLORS.textTertiary}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                    />
+                  </View>
+                </View>
+                <View style={styles.separator} />
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIconBadge}>
+                    <User size={14} color="#A78BFA" strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Last name</Text>
+                    <TextInput
+                      style={styles.nameInput}
+                      value={lastName}
+                      onChangeText={setLastName}
+                      placeholder="Last name"
+                      placeholderTextColor={COLORS.textTertiary}
+                      autoCapitalize="words"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSaveName}
+                    />
+                  </View>
+                </View>
                 {hasNameChanged && (
                   <TouchableOpacity
                     style={styles.saveButton}
@@ -320,7 +409,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatarRing: {
-    borderRadius: 36,
+    borderRadius: 9999,
     padding: 3,
     borderWidth: 2,
     borderColor: 'rgba(139, 92, 246, 0.25)',
@@ -328,12 +417,12 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: 96,
     height: 96,
-    borderRadius: 32,
+    borderRadius: 48,
   },
   avatarGradient: {
     width: 96,
     height: 96,
-    borderRadius: 32,
+    borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -421,6 +510,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.08)',
     paddingVertical: SPACING.sm + 2,
+  },
+  nameInput: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
+    color: COLORS.text,
+    letterSpacing: 0.1,
+    paddingVertical: 2,
+    marginTop: 2,
   },
   saveButton: {
     alignSelf: 'flex-end',

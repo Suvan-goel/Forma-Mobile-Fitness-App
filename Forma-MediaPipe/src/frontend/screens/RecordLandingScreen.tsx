@@ -7,6 +7,7 @@ import {
   Alert,
   Platform,
   Modal,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -27,7 +28,8 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 import { CameraSetupGuide } from './CameraSetupGuide';
 
-import type { RecordStackParamList } from '../app/RootNavigator';
+import type { RecordStackParamList, RootStackParamList } from '../app/RootNavigator';
+import { useUser } from '../../backend/hooks';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
 
@@ -47,7 +49,9 @@ const formatStopwatch = (totalSeconds: number) => {
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
+  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const { user: profileUser } = useUser();
   const {
     workoutInProgress,
     sets,
@@ -157,6 +161,26 @@ export const RecordLandingScreen: React.FC = () => {
           <Text style={styles.headerTitle}>CAPTURE</Text>
           <Text style={styles.headerSubtitle}>TODAY'S SESSION</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => rootNavigation.navigate('ProfileSettings')}
+          activeOpacity={0.7}
+          style={styles.avatarButton}
+        >
+          {profileUser?.avatarUrl ? (
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarGradient}
+            >
+              <Text style={styles.avatarInitial}>
+                {(profileUser?.displayName?.[0] ?? 'A').toUpperCase()}
+              </Text>
+            </LinearGradient>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* ── ACTION CARDS ───────────────────────── */}
@@ -324,9 +348,36 @@ const styles = StyleSheet.create({
   /* ── Header ──────────────────────────────── */
   headerSection: {
     paddingHorizontal: SPACING.screenHorizontal,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   titleBlock: {
     paddingBottom: 16,
+  },
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginTop: 5,
+  },
+  avatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,

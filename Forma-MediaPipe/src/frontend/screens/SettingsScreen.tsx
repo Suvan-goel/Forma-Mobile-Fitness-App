@@ -16,6 +16,7 @@ import {
   Eye,
   Volume2,
   Bone,
+  UserRound,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -255,6 +256,30 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </LinearGradient>
           </View>
 
+          {/* ── YOUR TRAINER SECTION ──────────────── */}
+          <View style={styles.sectionHeader}>
+            <UserRound size={14} color={COLORS.accent} strokeWidth={1.5} />
+            <Text style={styles.sectionTitle}>Your Trainer</Text>
+          </View>
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <SettingItem
+                  icon={UserRound}
+                  label="Trainer"
+                  onPress={() => navigation.navigate('TrainerPicker')}
+                  isFirst
+                  isLast
+                />
+              </View>
+            </LinearGradient>
+          </View>
+
           {/* ── SUPPORT SECTION ─────────────────────── */}
           <View style={styles.sectionHeader}>
             <HelpCircle size={14} color={COLORS.accent} strokeWidth={1.5} />
@@ -348,12 +373,12 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: 52,
     height: 52,
-    borderRadius: 16,
+    borderRadius: 26,
   },
   avatarGradient: {
     width: 52,
     height: 52,
-    borderRadius: 16,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },

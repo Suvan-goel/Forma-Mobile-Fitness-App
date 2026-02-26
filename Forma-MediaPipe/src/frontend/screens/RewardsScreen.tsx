@@ -6,14 +6,18 @@ import {
   Text,
   TouchableOpacity,
   Platform,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock, LucideIcon } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useRewards } from '../../backend/hooks';
+import { useRewards, useUser } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { Reward } from '../../backend/services/api';
+import type { RootStackParamList } from '../app/RootNavigator';
 
 const iconMap: { [key: string]: LucideIcon } = {
   Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock,
@@ -95,6 +99,8 @@ const RewardCard = memo(({ reward, userPoints }: { reward: Reward; userPoints: n
 
 export const RewardsScreen: React.FC = () => {
   const { onScroll } = useScroll();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user: profileUser } = useUser();
   const { rewards, userStats, userPoints, isLoading, error, refetch } = useRewards();
 
   if (isLoading) {
@@ -135,8 +141,30 @@ export const RewardsScreen: React.FC = () => {
       >
         {/* ── HEADER ─────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>REWARDS</Text>
-          <Text style={styles.headerSubtitle}>EARN & REDEEM</Text>
+          <View>
+            <Text style={styles.headerTitle}>REWARDS</Text>
+            <Text style={styles.headerSubtitle}>EARN & REDEEM</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ProfileSettings')}
+            activeOpacity={0.7}
+            style={styles.avatarButton}
+          >
+            {profileUser?.avatarUrl ? (
+              <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <LinearGradient
+                colors={['#8B5CF6', '#7C3AED']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatarGradient}
+              >
+                <Text style={styles.avatarInitial}>
+                  {(profileUser?.displayName?.[0] ?? 'A').toUpperCase()}
+                </Text>
+              </LinearGradient>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* ── HERO SCORE ─────────────────────────── */}
@@ -212,6 +240,33 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 8,
     paddingBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginTop: 5,
+  },
+  avatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,

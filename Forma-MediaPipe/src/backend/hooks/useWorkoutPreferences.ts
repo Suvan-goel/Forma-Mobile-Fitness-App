@@ -12,12 +12,14 @@ interface WorkoutPreferences {
   showFeedback: boolean;
   isTTSEnabled: boolean;
   showSkeletonOverlay: boolean;
+  selectedTrainerId: string;
 }
 
 const defaults: WorkoutPreferences = {
   showFeedback: true,
   isTTSEnabled: false,
   showSkeletonOverlay: false,
+  selectedTrainerId: 'marcus',
 };
 
 export function useWorkoutPreferences() {
@@ -33,6 +35,7 @@ export function useWorkoutPreferences() {
             showFeedback: typeof parsed.showFeedback === 'boolean' ? parsed.showFeedback : defaults.showFeedback,
             isTTSEnabled: typeof parsed.isTTSEnabled === 'boolean' ? parsed.isTTSEnabled : defaults.isTTSEnabled,
             showSkeletonOverlay: typeof parsed.showSkeletonOverlay === 'boolean' ? parsed.showSkeletonOverlay : defaults.showSkeletonOverlay,
+            selectedTrainerId: typeof parsed.selectedTrainerId === 'string' ? parsed.selectedTrainerId : defaults.selectedTrainerId,
           });
         } catch { /* ignore corrupt data */ }
       }
@@ -40,12 +43,14 @@ export function useWorkoutPreferences() {
     });
   }, []);
 
+  // Merges only the changed key into the full stored JSON to avoid silently dropping
+  // camera-only keys (debugMode, restTimerEnabled, restTimerDurationSeconds, etc.)
   const updatePref = useCallback(<K extends keyof WorkoutPreferences>(key: K, value: WorkoutPreferences[K]) => {
-    setPrefs((prev) => {
-      const next = { ...prev, [key]: value };
-      AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+    setPrefs((prev) => ({ ...prev, [key]: value }));
+    AsyncStorage.getItem(CAMERA_SETTINGS_KEY).then((raw) => {
+      const stored = raw ? JSON.parse(raw) : {};
+      return AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...stored, [key]: value }));
+    }).catch(() => {});
   }, []);
 
   return { prefs, updatePref, isLoading };

@@ -12,13 +12,14 @@ import {
   NativeScrollEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, MessageSquareText, AudioLines, Bone, Bug, Timer } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, MessageSquareText, AudioLines, Bone, Bug, Timer, UserRound } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { MonoText } from '../components/typography/MonoText';
+import { TRAINERS } from '../constants/trainers';
 
 /* ── Scroll Wheel Picker ─────────────────── */
 
@@ -163,6 +164,7 @@ export const CameraSettingsScreen: React.FC = () => {
     debugMode,
     restTimerEnabled,
     restTimerDurationSeconds,
+    selectedTrainerId,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
@@ -170,6 +172,8 @@ export const CameraSettingsScreen: React.FC = () => {
     setRestTimerEnabled,
     setRestTimerDurationSeconds,
   } = useCameraSettings();
+
+  const currentTrainerName = TRAINERS.find((t) => t.id === selectedTrainerId)?.name ?? 'Maya';
 
   const currentMinutes = Math.floor(restTimerDurationSeconds / 60);
   const currentSeconds = restTimerDurationSeconds % 60;
@@ -281,6 +285,34 @@ export const CameraSettingsScreen: React.FC = () => {
                   trackColor={{ false: COLORS.border, true: COLORS.accent }}
                   thumbColor={COLORS.text}
                 />
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Trainer */}
+        <TouchableOpacity
+          style={styles.sectionOuter}
+          activeOpacity={0.7}
+          onPress={() => (navigation as any).navigate('TrainerPicker')}
+        >
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.sectionGradient}
+          >
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionLabel}>YOUR TRAINER</Text>
+              <View style={styles.row}>
+                <View style={styles.rowIcon}>
+                  <UserRound size={18} color={COLORS.accent} strokeWidth={1.5} />
+                </View>
+                <View style={styles.rowText}>
+                  <Text style={styles.label}>Trainer</Text>
+                  <Text style={styles.description}>{currentTrainerName}</Text>
+                </View>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
               </View>
             </View>
           </LinearGradient>

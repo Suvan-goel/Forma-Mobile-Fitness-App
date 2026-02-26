@@ -21,7 +21,14 @@ try {
 // TODO: EXPO_PUBLIC_ keys are bundled into the JS and extractable from production builds.
 // When Supabase is set up, proxy TTS requests through an Edge Function and move this key server-side.
 const ELEVENLABS_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
-const ELEVENLABS_VOICE_ID = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel
+let activeVoiceId = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default: Rachel
+
+/**
+ * Override the active voice ID at runtime (e.g. when the user selects a trainer).
+ */
+export function setActiveVoiceId(id: string): void {
+  activeVoiceId = id;
+}
 
 let audioInstance: any = null;
 let isInitialized = false;
@@ -86,7 +93,7 @@ async function generateSpeech(text: string): Promise<string> {
     throw new Error('ElevenLabs API key not configured');
   }
 
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`;
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${activeVoiceId}`;
 
   // Fetch audio from ElevenLabs
   const response = await fetch(url, {

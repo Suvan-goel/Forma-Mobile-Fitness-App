@@ -19,6 +19,8 @@ import type { ExerciseState } from '../../utils/exercises';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
+import { setActiveVoiceId } from '../../backend/services/elevenlabsTTS';
+import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
 const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
@@ -54,7 +56,7 @@ export const CameraScreen: React.FC = () => {
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
   const { addSetToExercise } = useCurrentWorkout();
-  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode } = useCameraSettings();
+  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId } = useCameraSettings();
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -111,6 +113,12 @@ export const CameraScreen: React.FC = () => {
       }
     }, [debugMode, isTTSEnabled, exerciseNameFromRoute])
   );
+
+  // Keep ElevenLabs voice ID in sync with the selected trainer
+  useEffect(() => {
+    const trainer = TRAINERS.find((t) => t.id === selectedTrainerId) ?? TRAINERS.find((t) => t.id === DEFAULT_TRAINER_ID)!;
+    setActiveVoiceId(trainer.voiceId);
+  }, [selectedTrainerId]);
 
   // Use refs to track exercise state without triggering re-renders
   const exercisePhaseRef = useRef(exercisePhase);
