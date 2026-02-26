@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   FlatList,
   Image,
   ImageSourcePropType,
+  TextInput,
   useWindowDimensions,
   Platform,
 } from 'react-native';
@@ -15,10 +16,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Bookmark, Info, Search } from 'lucide-react-native';
+import { ChevronLeft, Bookmark, Info, Search, X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
-import { useExercises } from '../../backend/hooks';
+import { useExercises, useFavouriteExercises } from '../../backend/hooks';
 import { LoadingSkeleton } from '../components/ui';
 import { Exercise } from '../../backend/services/api';
 
@@ -61,9 +62,10 @@ type ChooseExerciseNavigationProp = NativeStackNavigationProp<
   'ChooseExercise'
 >;
 
-/** Strict filter order */
-const FILTER_ORDER = ['all', 'chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'core'];
+/** Strict filter order — 'favourites' is a special synthetic tab */
+const FILTER_ORDER = ['favourites', 'all', 'chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'core'];
 const FILTER_LABELS: Record<string, string> = {
+  favourites: 'FAVOURITES',
   all: 'ALL',
   chest: 'CHEST',
   back: 'BACK',
@@ -94,12 +96,14 @@ const FilterPill = memo(({ id, isActive, onPress }: {
 
 /* ── Exercise Card ───────────────────────── */
 
-const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPress }: {
+const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPress, isFavourited, onToggleFavourite }: {
   exercise: Exercise;
   muscleLabel: string;
   cardWidth: number;
   cardHeight: number;
   onPress: (exercise: Exercise) => void;
+  isFavourited: boolean;
+  onToggleFavourite: (name: string) => void;
 }) => (
   <TouchableOpacity
     style={[styles.cardOuter, { width: cardWidth, height: cardHeight }]}
@@ -115,8 +119,17 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
       <View style={styles.cardGlassEdge}>
         {/* Top icons */}
         <View style={styles.cardHeader}>
-          <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
-            <Bookmark size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+          <TouchableOpacity
+            style={styles.cardIconBtn}
+            activeOpacity={0.6}
+            onPress={() => onToggleFavourite(exercise.name)}
+          >
+            <Bookmark
+              size={16}
+              color={isFavourited ? '#8B5CF6' : COLORS.textTertiary}
+              fill={isFavourited ? '#8B5CF6' : 'transparent'}
+              strokeWidth={1.5}
+            />
           </TouchableOpacity>
           <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
             <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -152,9 +165,13 @@ export const ChooseExerciseScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('all');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
   const { addExercise } = useCurrentWorkout();
 
   const { exercises: allExercises, muscleGroups, isLoading, filterByMuscleGroup } = useExercises();
+  const { isFavourite, toggleFavourite } = useFavouriteExercises();
 
   const cardWidth = (screenWidth - SPACING.screenHorizontal * 2 - 12) / 2;
   const imageSize = cardWidth - 16;
@@ -175,10 +192,33 @@ export const ChooseExerciseScreen: React.FC = () => {
     setSelectedMuscleGroup(id);
   }, []);
 
-  const filteredExercises = useMemo(
-    () => filterByMuscleGroup(selectedMuscleGroup),
-    [selectedMuscleGroup, filterByMuscleGroup]
-  );
+  const handleToggleSearch = useCallback(() => {
+    setShowSearch(prev => {
+      if (prev) {
+        setSearchQuery('');
+      }
+      return !prev;
+    });
+  }, []);
+
+  const filteredExercises = useMemo(() => {
+    let result: Exercise[];
+
+    if (selectedMuscleGroup === 'favourites') {
+      result = allExercises.filter(ex => isFavourite(ex.name));
+    } else {
+      result = filterByMuscleGroup(selectedMuscleGroup);
+    }
+
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        ex => ex.name.toLowerCase().includes(q) || ex.muscleGroup.toLowerCase().includes(q),
+      );
+    }
+
+    return result;
+  }, [selectedMuscleGroup, filterByMuscleGroup, allExercises, isFavourite, searchQuery]);
 
   const muscleNameMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -193,8 +233,10 @@ export const ChooseExerciseScreen: React.FC = () => {
       cardWidth={cardWidth}
       cardHeight={cardHeight}
       onPress={handleSelectExercise}
+      isFavourited={isFavourite(item.name)}
+      onToggleFavourite={toggleFavourite}
     />
-  ), [cardWidth, cardHeight, handleSelectExercise, muscleNameMap]);
+  ), [cardWidth, cardHeight, handleSelectExercise, muscleNameMap, isFavourite, toggleFavourite]);
 
   const keyExtractor = useCallback((item: Exercise, index: number) => `${item.name}-${index}`, []);
 
@@ -235,10 +277,39 @@ export const ChooseExerciseScreen: React.FC = () => {
           <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>EXERCISE LIBRARY</Text>
-        <TouchableOpacity style={styles.headerIconBtn}>
-          <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
+        <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleSearch}>
+          {showSearch
+            ? <X size={20} color="#FFFFFF" strokeWidth={1.5} />
+            : <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
+          }
         </TouchableOpacity>
       </View>
+
+      {/* ── Search Bar (shown when active) ─────── */}
+      {showSearch && (
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrap}>
+            <Search size={15} color={COLORS.textTertiary} strokeWidth={1.5} style={styles.searchIcon} />
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search exercises..."
+              placeholderTextColor={COLORS.textTertiary}
+              autoFocus
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.6} style={styles.searchClear}>
+                <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* ── Filter Pills ───────────────────────── */}
       <View style={styles.filterWrap}>
@@ -273,6 +344,15 @@ export const ChooseExerciseScreen: React.FC = () => {
         initialNumToRender={6}
         maxToRenderPerBatch={6}
         windowSize={5}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyText}>
+              {selectedMuscleGroup === 'favourites'
+                ? 'No favourites yet.\nTap the bookmark on any exercise to save it here.'
+                : 'No exercises found.'}
+            </Text>
+          </View>
+        }
       />
     </View>
   );
@@ -315,6 +395,38 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#27272A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Search Bar ──────────────────────────── */
+  searchRow: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: 8,
+  },
+  searchInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141414',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    height: 42,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: COLORS.text,
+    paddingVertical: 0,
+  },
+  searchClear: {
+    paddingLeft: 8,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -455,6 +567,21 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     letterSpacing: 2,
     textTransform: 'uppercase',
+  },
+
+  /* ── Empty State ─────────────────────────── */
+  emptyWrap: {
+    flex: 1,
+    paddingTop: 60,
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    lineHeight: 22,
   },
 
   /* ── Loading ─────────────────────────────── */

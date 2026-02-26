@@ -13,3 +13,4 @@ export { useUser } from './useUser';
 export { useWorkoutPreferences } from './useWorkoutPreferences';
 export { useNotificationPreferences } from './useNotificationPreferences';
 export { useUpdateUser } from './useUpdateUser';
+export { useFavouriteExercises } from './useFavouriteExercises';
