@@ -132,6 +132,33 @@ export const RewardsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* ── HEADER ─────────────────────────────── */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>REWARDS</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ProfileSettings')}
+          activeOpacity={0.7}
+          style={styles.avatarButton}
+        >
+          {profileUser?.avatarUrl ? (
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+          ) : profileUser ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarGradient}
+            >
+              <Text style={styles.avatarInitial}>
+                {profileUser.displayName[0].toUpperCase()}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.avatarPlaceholder} />
+          )}
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -139,35 +166,7 @@ export const RewardsScreen: React.FC = () => {
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
-        {/* ── HEADER ─────────────────────────────── */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>REWARDS</Text>
-            <Text style={styles.headerSubtitle}>EARN & REDEEM</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ProfileSettings')}
-            activeOpacity={0.7}
-            style={styles.avatarButton}
-          >
-            {profileUser?.avatarUrl ? (
-              <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
-            ) : profileUser ? (
-              <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.avatarGradient}
-              >
-                <Text style={styles.avatarInitial}>
-                  {profileUser.displayName[0].toUpperCase()}
-                </Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.avatarPlaceholder} />
-            )}
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.headerSubtitle}>EARN & REDEEM</Text>
 
         {/* ── HERO SCORE ─────────────────────────── */}
         <View style={styles.heroSection}>
@@ -234,14 +233,15 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 8,
+    paddingTop: 0,
     paddingBottom: 150,
   },
 
   /* ── Header ────────────────────────────────── */
   header: {
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingTop: 6,
+    paddingBottom: 8,
+    paddingHorizontal: SPACING.screenHorizontal,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
@@ -288,7 +288,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#71717A',
     letterSpacing: 3,
-    marginTop: 6,
+    marginTop: 0,
+    marginBottom: 20,
   },
 
   /* ── Hero Score ────────────────────────────── */

@@ -505,26 +505,6 @@ export const LogbookScreen: React.FC = () => {
 
   const ListHeader = useCallback(() => (
     <View>
-      {/* ── WELCOME ROW ──────────────────────── */}
-      <View style={styles.welcomeRow}>
-        <View style={styles.welcomeLeft}>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View>
-            <Text style={styles.welcomeLabel}>Welcome back,</Text>
-            <Text style={styles.welcomeName}>{displayName}</Text>
-          </View>
-        </View>
-        <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
-          <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
-        </TouchableOpacity>
-      </View>
-
       {/* ── LOGBOOK TITLE ────────────────────── */}
       <View style={styles.titleBlock}>
         <Text style={styles.headerTitle}>LOGBOOK</Text>
@@ -568,7 +548,7 @@ export const LogbookScreen: React.FC = () => {
         </View>
       )}
     </View>
-  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, handleSettingsPress, workouts]);
+  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, workouts]);
 
   /* ── Loading ──── */
   if (isLoading) {
@@ -608,6 +588,26 @@ export const LogbookScreen: React.FC = () => {
           onSelectDate={handleDateSelect}
           selectedDate={selectedDate}
         />
+
+        {/* ── WELCOME ROW (sticky) ──────────────── */}
+        <View style={styles.welcomeRow}>
+          <View style={styles.welcomeLeft}>
+            <View style={styles.logoWrap}>
+              <Image
+                source={require('../assets/forma_purple_logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+            <View>
+              <Text style={styles.welcomeLabel}>Welcome back,</Text>
+              <Text style={styles.welcomeName}>{displayName}</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
+            <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
+          </TouchableOpacity>
+        </View>
 
         {filteredWorkouts.length === 0 ? (
           <View style={{ flex: 1 }}>
@@ -671,6 +671,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 2,
     paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   welcomeLeft: {
     flexDirection: 'row',
