@@ -15,3 +15,5 @@ export { GlassTabBar } from './GlassTabBar';
 export { TimeRangeSelector, TIME_RANGE_OPTIONS } from './TimeRangeSelector';
 export { TrendChart } from './TrendChart';
 export { SummaryStrip } from './SummaryStrip';
+export { SetupGuideButton } from './SetupGuideButton';
+export { CameraGuideModal } from './CameraGuideModal';
