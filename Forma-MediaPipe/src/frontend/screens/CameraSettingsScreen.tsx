@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Switch,
   Platform,
   ScrollView,
+  Modal,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -202,15 +203,23 @@ export const CameraSettingsScreen: React.FC = () => {
     setRestTimerEnabled(value);
   };
 
-  const handleMinutesChange = useCallback((min: number) => {
-    const newTotal = min * 60 + snappedSeconds;
-    setRestTimerDurationSeconds(Math.max(5, newTotal));
-  }, [snappedSeconds, setRestTimerDurationSeconds]);
+  const [isTimerModalVisible, setIsTimerModalVisible] = useState(false);
+  const [pendingMinutes, setPendingMinutes] = useState(currentMinutes);
+  const [pendingSeconds, setPendingSeconds] = useState(snappedSeconds);
 
-  const handleSecondsChange = useCallback((sec: number) => {
-    const newTotal = currentMinutes * 60 + sec;
+  const openTimerModal = useCallback(() => {
+    setPendingMinutes(currentMinutes);
+    setPendingSeconds(snappedSeconds);
+    setIsTimerModalVisible(true);
+  }, [currentMinutes, snappedSeconds]);
+
+  const handleTimerModalDone = useCallback(() => {
+    const newTotal = pendingMinutes * 60 + pendingSeconds;
     setRestTimerDurationSeconds(Math.max(5, newTotal));
-  }, [currentMinutes, setRestTimerDurationSeconds]);
+    setIsTimerModalVisible(false);
+  }, [pendingMinutes, pendingSeconds, setRestTimerDurationSeconds]);
+
+  const formattedDuration = `${currentMinutes}:${snappedSeconds.toString().padStart(2, '0')}`;
 
   return (
     <View style={styles.container}>
@@ -390,22 +399,11 @@ export const CameraSettingsScreen: React.FC = () => {
               {restTimerEnabled && (
                 <>
                   <View style={styles.separator} />
-                  <View style={styles.wheelRow}>
-                    <WheelColumn
-                      values={MINUTES}
-                      selected={currentMinutes}
-                      onValueChange={handleMinutesChange}
-                    />
-                    <MonoText bold style={styles.wheelColon}>:</MonoText>
-                    <WheelColumn
-                      values={SECONDS}
-                      selected={snappedSeconds}
-                      onValueChange={handleSecondsChange}
-                    />
-                  </View>
-                  <View style={styles.wheelLabels}>
-                    <Text style={styles.wheelLabelText}>min</Text>
-                    <Text style={styles.wheelLabelText}>sec</Text>
+                  <View style={styles.restTimerValueRow}>
+                    <MonoText bold style={styles.restTimerValueText}>{formattedDuration}</MonoText>
+                    <TouchableOpacity style={styles.changeButton} onPress={openTimerModal} activeOpacity={0.7}>
+                      <Text style={styles.changeButtonText}>Change</Text>
+                    </TouchableOpacity>
                   </View>
                 </>
               )}
@@ -449,6 +447,46 @@ export const CameraSettingsScreen: React.FC = () => {
           </LinearGradient>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Rest Timer Duration Modal */}
+      <Modal
+        visible={isTimerModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsTimerModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsTimerModalVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>REST DURATION</Text>
+              <View style={styles.wheelRow}>
+                <WheelColumn
+                  values={MINUTES}
+                  selected={pendingMinutes}
+                  onValueChange={setPendingMinutes}
+                />
+                <MonoText bold style={styles.wheelColon}>:</MonoText>
+                <WheelColumn
+                  values={SECONDS}
+                  selected={pendingSeconds}
+                  onValueChange={setPendingSeconds}
+                />
+              </View>
+              <View style={styles.wheelLabels}>
+                <Text style={styles.wheelLabelText}>min</Text>
+                <Text style={styles.wheelLabelText}>sec</Text>
+              </View>
+              <TouchableOpacity style={styles.modalDoneButton} onPress={handleTimerModalDone} activeOpacity={0.8}>
+                <Text style={styles.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -608,5 +646,80 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+
+  /* ── Rest Timer Value Row ─────────────────── */
+  restTimerValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.xs,
+  },
+  restTimerValueText: {
+    fontSize: 22,
+    color: COLORS.accent,
+  },
+  changeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  },
+  changeButtonText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.accent,
+    letterSpacing: 0.3,
+  },
+
+  /* ── Timer Modal ──────────────────────────── */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: 260,
+    backgroundColor: '#111113',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 24,
+    paddingBottom: 20,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.5,
+        shadowRadius: 24,
+      },
+      android: { elevation: 12 },
+    }),
+  },
+  modalTitle: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.5,
+    marginBottom: 16,
+  },
+  modalDoneButton: {
+    marginTop: 20,
+    paddingHorizontal: 40,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: COLORS.accent,
+  },
+  modalDoneText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
 });
