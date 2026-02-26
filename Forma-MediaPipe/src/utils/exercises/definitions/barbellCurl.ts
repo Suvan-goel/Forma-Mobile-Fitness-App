@@ -31,6 +31,10 @@ const THRESHOLDS = {
   MIN_REP_TIME: 0.25, // seconds
   SYNC_WINDOW: 0.50, // seconds between arms
   ROM_MIN: 80, // degrees
+  /** Min seconds the arm must be in DOWN state before normal (full-extension) completion.
+   *  Filters pose-estimation noise spikes that briefly push the elbow angle above 150°
+   *  mid-lowering, which would otherwise produce a near-zero tDown and cascade reps. */
+  MIN_DOWN_GUARD: 0.10,
 } as const;
 
 /** Form heuristic thresholds (degrees) - relaxed for fewer false positives */
@@ -216,16 +220,21 @@ function computeRepScore(
   const reachForPenalty = isFrontal ? repWindow.reach : undefined;
   const romP = penaltyROM(isFinite(minFlex) ? minFlex : 50, isFinite(maxExt) ? maxExt : 140, viewAngle.smoothedAngleDeg, reachForPenalty);
 
-  // Tempo penalty (use primary arm in non-frontal)
-  const tempoArm = isFrontal ? leftArm : (primaryIsLeft ? leftArm : _rightArm);
-  const tUp =
-    tempoArm.tUpToTop && tempoArm.tRestToUp
-      ? tempoArm.tUpToTop - tempoArm.tRestToUp
-      : 0;
-  const tDown =
-    tempoArm.tDownToRest && tempoArm.tTopToDown
-      ? tempoArm.tDownToRest - tempoArm.tTopToDown
-      : 0;
+  // Tempo penalty — average across both arms in frontal mode (mirrors evaluateForm logic)
+  const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
+  const tUpR = _rightArm.tUpToTop && _rightArm.tRestToUp ? _rightArm.tUpToTop - _rightArm.tRestToUp : 0;
+  const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
+  const tDownR = _rightArm.tDownToRest && _rightArm.tTopToDown ? _rightArm.tDownToRest - _rightArm.tTopToDown : 0;
+  let tUp: number;
+  let tDown: number;
+  if (isFrontal) {
+    tUp   = tUpL > 0 && tUpR > 0   ? (tUpL + tUpR) / 2   : Math.max(tUpL, tUpR);
+    tDown = tDownL > 0 && tDownR > 0 ? (tDownL + tDownR) / 2 : Math.max(tDownL, tDownR);
+  } else {
+    const tempoArm = primaryIsLeft ? leftArm : _rightArm;
+    tUp   = tempoArm.tUpToTop   && tempoArm.tRestToUp  ? tempoArm.tUpToTop   - tempoArm.tRestToUp  : 0;
+    tDown = tempoArm.tDownToRest && tempoArm.tTopToDown ? tempoArm.tDownToRest - tempoArm.tTopToDown : 0;
+  }
   const tempoP = penaltyTempo(tUp, tDown);
 
   // Asymmetry penalty (only frontal — can't compare when one arm is occluded)
@@ -260,6 +269,9 @@ interface ArmFSM {
   tUpToTop: number | null;
   tTopToDown: number | null;
   tDownToRest: number | null;
+  /** Guard: arm must reach full extension (>= EXTENDED_EXIT) while in REST before a new rep
+   *  can start. Prevents cascade false reps after a premature noise-spike completion. */
+  hasReachedExtension: boolean;
 }
 
 interface RepWindow {
@@ -346,6 +358,7 @@ function initArmFSM(): ArmFSM {
     tUpToTop: null,
     tTopToDown: null,
     tDownToRest: null,
+    hasReachedExtension: false,
   };
 }
 
@@ -763,12 +776,21 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
 
   switch (arm.state) {
     case 'REST':
-      if (elbowAngle < THRESHOLDS.EXTENDED_EXIT) {
+      // Track whether the arm has returned to full extension since the last rep.
+      // This prevents the cascade false-rep pattern: a noise spike at 150° causes a
+      // premature completion mid-lowering, the FSMs reset, and the arm (still at ~100°)
+      // would immediately re-enter UP. Requiring the arm to reach EXTENDED_EXIT first
+      // forces the user to complete the lowering before the next rep can start.
+      if (elbowAngle >= THRESHOLDS.EXTENDED_EXIT) {
+        newArm.hasReachedExtension = true;
+      }
+      if (newArm.hasReachedExtension && elbowAngle < THRESHOLDS.EXTENDED_EXIT) {
         newArm.state = 'UP';
         newArm.tRestEntry = null;
         newArm.tRestToUp = t;
         newArm.minElbow = elbowAngle;
         newArm.maxElbow = elbowAngle;
+        newArm.hasReachedExtension = false;
       }
       break;
 
@@ -796,7 +818,12 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
       if (
         elbowAngle > THRESHOLDS.EXTENDED_ENTER &&
         newArm.tRestToUp !== null &&
-        t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME
+        t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME &&
+        // Require a minimum dwell in DOWN before completing — filters noise spikes that
+        // briefly push the angle above 150° mid-lowering, which would produce a near-zero
+        // tDown and trigger a false 'Control the lowering' message. The re-flexion escape
+        // below has had this guard since it was introduced; now the normal path does too.
+        (newArm.tTopToDown === null || t - newArm.tTopToDown >= THRESHOLDS.MIN_DOWN_GUARD)
       ) {
         // Normal completion: full extension reached
         newArm.state = 'REST';
@@ -931,11 +958,27 @@ function evaluateForm(
 
   // 5. Wrist neutrality (disabled - no feedback)
 
-  // 6. Tempo (use primary arm in non-frontal)
-  const tempoArm = isFrontal ? leftArm : (primaryIsLeft ? leftArm : rightArm);
-  const tUp = tempoArm.tUpToTop && tempoArm.tRestToUp ? tempoArm.tUpToTop - tempoArm.tRestToUp : 0;
-  const tDown =
-    tempoArm.tDownToRest && tempoArm.tTopToDown ? tempoArm.tDownToRest - tempoArm.tTopToDown : 0;
+  // 6. Tempo — average across both arms in frontal mode.
+  // Hardcoding left-arm-only in frontal mode ignores the right arm entirely; if the left arm
+  // happens to be slightly faster (asymmetric biomechanics or noisier detection), it fires
+  // false positives regardless of how controlled the right arm is. Averaging requires BOTH
+  // arms to be fast before flagging. When only one arm has valid timestamps, fall back to
+  // that arm's data (Math.max of 0 and the valid value = the valid value).
+  const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
+  const tUpR = rightArm.tUpToTop && rightArm.tRestToUp ? rightArm.tUpToTop - rightArm.tRestToUp : 0;
+  const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
+  const tDownR = rightArm.tDownToRest && rightArm.tTopToDown ? rightArm.tDownToRest - rightArm.tTopToDown : 0;
+
+  let tUp: number;
+  let tDown: number;
+  if (isFrontal) {
+    tUp   = tUpL > 0 && tUpR > 0   ? (tUpL + tUpR) / 2   : Math.max(tUpL, tUpR);
+    tDown = tDownL > 0 && tDownR > 0 ? (tDownL + tDownR) / 2 : Math.max(tDownL, tDownR);
+  } else {
+    const tempoArm = primaryIsLeft ? leftArm : rightArm;
+    tUp   = tempoArm.tUpToTop   && tempoArm.tRestToUp  ? tempoArm.tUpToTop   - tempoArm.tRestToUp  : 0;
+    tDown = tempoArm.tDownToRest && tempoArm.tTopToDown ? tempoArm.tDownToRest - tempoArm.tTopToDown : 0;
+  }
 
   if (tUp < FORM_THRESHOLDS.TEMPO_UP_MIN && tUp > 0) {
     messages.push('Slow down — control the curl.');
