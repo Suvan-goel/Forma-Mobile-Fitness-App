@@ -12,3 +12,6 @@ export { RetryButton } from './RetryButton';
 export { NeonArc } from './NeonArc';
 export { StatCard } from './StatCard';
 export { GlassTabBar } from './GlassTabBar';
+export { TimeRangeSelector, TIME_RANGE_OPTIONS } from './TimeRangeSelector';
+export { TrendChart } from './TrendChart';
+export { SummaryStrip } from './SummaryStrip';

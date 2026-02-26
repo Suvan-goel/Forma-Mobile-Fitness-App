@@ -113,11 +113,24 @@ export interface WorkoutBarData {
   value: number;
 }
 
+export interface AnalyticsSummary {
+  workoutCount: number;
+  totalReps: number;
+  avgRepsPerWorkout: number;
+  totalDurationMinutes: number;
+  streakDays: number;
+  mostTrainedExercise: string | null;
+  personalBest: { exercise: string; weight: number } | null;
+  formTrendDirection: 'up' | 'down' | 'flat';
+  formTrendPercent: number;
+}
+
 export interface AnalyticsData {
   formData: AnalyticsMetric;
   consistencyData: AnalyticsMetric;
   strengthData: AnalyticsMetric;
   weeklyBarData: WorkoutBarData[];
+  summary: AnalyticsSummary;
 }
 
 // Trainer types

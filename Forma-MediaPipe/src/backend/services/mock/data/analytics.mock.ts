@@ -2,7 +2,7 @@
  * Mock analytics data extracted from AnalyticsScreen
  */
 
-import { WorkoutBarData } from '../../api/types';
+import { WorkoutBarData, AnalyticsSummary } from '../../api/types';
 
 // Base data arrays for each metric (used for time range generation)
 export const formBaseData = [72, 75, 78, 82, 80, 85, 87];
@@ -54,6 +54,10 @@ export const generateDataForTimeRange = (
       numPoints = 52;
       daysBack = 365;
       break;
+    case 'All Time':
+      numPoints = 100;
+      daysBack = 730;
+      break;
     default:
       numPoints = 7;
       daysBack = 7;
@@ -82,4 +86,33 @@ export const generateDataForTimeRange = (
   dates[dates.length - 1] = today;
 
   return { values: data, dates };
+};
+
+/**
+ * Generate mock summary data scaled by time range
+ */
+export const generateMockSummary = (timeRange: string): AnalyticsSummary => {
+  const multipliers: Record<string, number> = {
+    '1 week': 1,
+    '4 weeks': 4,
+    '3 months': 12,
+    'Year': 52,
+    'All Time': 100,
+  };
+  const m = multipliers[timeRange] || 1;
+
+  const workoutCount = Math.round(3 * m);
+  const totalReps = Math.round(150 * m);
+
+  return {
+    workoutCount,
+    totalReps,
+    avgRepsPerWorkout: workoutCount > 0 ? Math.round(totalReps / workoutCount) : 0,
+    totalDurationMinutes: Math.round(45 * m),
+    streakDays: Math.min(Math.round(2 * m), 30),
+    mostTrainedExercise: 'Barbell Curl',
+    personalBest: { exercise: 'Barbell Curl', weight: 40 },
+    formTrendDirection: 'up',
+    formTrendPercent: 5.2,
+  };
 };

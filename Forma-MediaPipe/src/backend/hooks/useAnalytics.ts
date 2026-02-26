@@ -9,6 +9,7 @@ interface UseAnalyticsReturn {
   analytics: AnalyticsData | null;
   isLoading: boolean;
   error: string | null;
+  currentTimeRange: string;
   refetch: (timeRange?: string) => Promise<void>;
 }
 
@@ -44,5 +45,5 @@ export const useAnalytics = (initialTimeRange: string = '1 week'): UseAnalyticsR
     fetchAnalytics();
   }, [fetchAnalytics]);
 
-  return { analytics, isLoading, error, refetch: fetchAnalytics };
+  return { analytics, isLoading, error, currentTimeRange, refetch: fetchAnalytics };
 };

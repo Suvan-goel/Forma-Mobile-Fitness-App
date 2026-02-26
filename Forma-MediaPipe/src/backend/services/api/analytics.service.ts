@@ -2,7 +2,7 @@
  * Analytics service - handles all analytics-related API calls
  */
 
-import { ApiResponse, AnalyticsData, AnalyticsMetric, WorkoutBarData } from './types';
+import { ApiResponse, AnalyticsData, AnalyticsMetric, AnalyticsSummary, WorkoutBarData } from './types';
 import { API_CONFIG } from './client';
 import { mockDelay } from '../mock/delay';
 import {
@@ -11,6 +11,7 @@ import {
   strengthBaseData,
   mockWeeklyBarData,
   generateDataForTimeRange,
+  generateMockSummary,
 } from '../mock/data/analytics.mock';
 import { supabase } from '../supabase/client';
 
@@ -48,12 +49,172 @@ export function getDateRange(timeRange: string): { startDate: string; endDate: s
     case '3 months': daysBack = 90;  break; // ~91 days
     case '6 months': daysBack = 181; break;
     case 'Year':     daysBack = 364; break;
+    case 'All Time': daysBack = 730; break;
     default:         daysBack = 6;
   }
 
   const start = new Date(today);
   start.setDate(today.getDate() - daysBack);
   return { startDate: toDateStr(start), endDate };
+}
+
+/**
+ * Compute form trend direction by comparing first-half vs second-half averages.
+ */
+function computeFormTrend(formData: AnalyticsMetric): { direction: 'up' | 'down' | 'flat'; percent: number } {
+  const vals = formData.values;
+  if (vals.length < 2) return { direction: 'flat', percent: 0 };
+
+  const mid = Math.floor(vals.length / 2);
+  const firstHalf = vals.slice(0, mid);
+  const secondHalf = vals.slice(mid);
+  const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+  const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+
+  if (avgFirst === 0) return { direction: avgSecond > 0 ? 'up' : 'flat', percent: 0 };
+
+  const pct = Math.round(((avgSecond - avgFirst) / avgFirst) * 1000) / 10;
+  const direction = pct > 1 ? 'up' : pct < -1 ? 'down' : 'flat';
+  return { direction, percent: Math.abs(pct) };
+}
+
+/**
+ * Compute summary stats from Supabase data.
+ */
+async function computeSupabaseSummary(
+  startDate: string,
+  endDate: string,
+  formData: AnalyticsMetric,
+): Promise<AnalyticsSummary> {
+  const trend = computeFormTrend(formData);
+
+  // Run independent queries in parallel
+  const [countResult, repResult, exerciseResult, pbResult, streakResult, durationResult] = await Promise.all([
+    // Workout count
+    supabase
+      .from('workout_sessions')
+      .select('*', { count: 'exact', head: true })
+      .gte('date', startDate)
+      .lte('date', endDate),
+
+    // Total reps
+    supabase
+      .from('workout_sessions')
+      .select('workout_exercises(workout_sets(reps))')
+      .gte('date', startDate)
+      .lte('date', endDate),
+
+    // Exercise frequency
+    supabase
+      .from('workout_sessions')
+      .select('workout_exercises(name)')
+      .gte('date', startDate)
+      .lte('date', endDate),
+
+    // Personal best (highest weight)
+    supabase
+      .from('workout_sessions')
+      .select('workout_exercises(name, workout_sets(weight))')
+      .gte('date', startDate)
+      .lte('date', endDate),
+
+    // Streak — all session dates ordered descending
+    supabase
+      .from('workout_sessions')
+      .select('date')
+      .lte('date', endDate)
+      .order('date', { ascending: false }),
+
+    // Total duration for selected time range
+    supabase
+      .from('workout_sessions')
+      .select('duration_seconds')
+      .gte('date', startDate)
+      .lte('date', endDate),
+  ]);
+
+  // Workout count
+  const workoutCount = countResult.count ?? 0;
+
+  // Total reps
+  let totalReps = 0;
+  (repResult.data ?? []).forEach((session: any) => {
+    (session.workout_exercises ?? []).forEach((ex: any) => {
+      (ex.workout_sets ?? []).forEach((set: any) => {
+        totalReps += set.reps ?? 0;
+      });
+    });
+  });
+
+  // Most trained exercise
+  const exerciseFreq: Record<string, number> = {};
+  (exerciseResult.data ?? []).forEach((session: any) => {
+    (session.workout_exercises ?? []).forEach((ex: any) => {
+      if (ex.name) {
+        exerciseFreq[ex.name] = (exerciseFreq[ex.name] || 0) + 1;
+      }
+    });
+  });
+  const sortedExercises = Object.entries(exerciseFreq).sort((a, b) => b[1] - a[1]);
+  const mostTrainedExercise = sortedExercises.length > 0 ? sortedExercises[0][0] : null;
+
+  // Personal best
+  let personalBest: { exercise: string; weight: number } | null = null;
+  let maxWeight = 0;
+  (pbResult.data ?? []).forEach((session: any) => {
+    (session.workout_exercises ?? []).forEach((ex: any) => {
+      (ex.workout_sets ?? []).forEach((set: any) => {
+        if ((set.weight ?? 0) > maxWeight) {
+          maxWeight = set.weight;
+          personalBest = { exercise: ex.name, weight: set.weight };
+        }
+      });
+    });
+  });
+
+  // Streak — count consecutive days with workouts going backwards from today
+  let streakDays = 0;
+  if (streakResult.data && streakResult.data.length > 0) {
+    const uniqueDates = [...new Set(
+      streakResult.data.map((r: any) => (r.date as string).split('T')[0]),
+    )].sort().reverse();
+
+    const todayStr = toDateStr(new Date());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStr = toDateStr(yesterdayDate);
+
+    // Streak must start from today or yesterday
+    if (uniqueDates[0] === todayStr || uniqueDates[0] === yesterdayStr) {
+      let expectedDate = parseLocalDate(uniqueDates[0]);
+      for (const dateStr of uniqueDates) {
+        if (dateStr === toDateStr(expectedDate)) {
+          streakDays++;
+          expectedDate.setDate(expectedDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    }
+  }
+
+  // Total duration in minutes for the selected time range
+  let totalDurationMinutes = 0;
+  (durationResult.data ?? []).forEach((session: any) => {
+    totalDurationMinutes += Math.round((session.duration_seconds ?? 0) / 60);
+  });
+
+  return {
+    workoutCount,
+    totalReps,
+    avgRepsPerWorkout: workoutCount > 0 ? Math.round(totalReps / workoutCount) : 0,
+    totalDurationMinutes,
+    streakDays,
+    mostTrainedExercise,
+    personalBest,
+    formTrendDirection: trend.direction,
+    formTrendPercent: trend.percent,
+  };
 }
 
 // ── Service ────────────────────────────────────────────────────
@@ -77,6 +238,7 @@ export const analyticsService = {
           consistencyData: { values: consistencyResult.values, dates: consistencyResult.dates },
           strengthData: { values: strengthResult.values, dates: strengthResult.dates },
           weeklyBarData: mockWeeklyBarData,
+          summary: generateMockSummary(timeRange),
         },
         success: true,
       };
@@ -211,8 +373,11 @@ export const analyticsService = {
       value: durationByDay[dayIdx] || 0,
     }));
 
+    // 5. Summary — workout count, total reps, most trained exercise, personal best, streak
+    const summary = await computeSupabaseSummary(startDate, endDate, formData);
+
     return {
-      data: { formData, consistencyData, strengthData, weeklyBarData },
+      data: { formData, consistencyData, strengthData, weeklyBarData, summary },
       success: true,
     };
   },
