@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
@@ -14,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
-import { X } from 'lucide-react-native';
+import { ChevronLeft, X } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
 import { useSaveWorkout } from '../../backend/hooks';
@@ -88,14 +87,15 @@ export const SaveWorkoutScreen: React.FC = () => {
   };
 
   const handleGoBack = () => {
+    navigation.goBack();
+  };
+
+  const handleDiscardWorkout = () => {
     showAlert(
       'Discard Workout?',
       'Are you sure you want to discard this workout? This action cannot be undone.',
       [
-        {
-          text: 'No',
-          style: 'cancel',
-        },
+        { text: 'No', style: 'cancel' },
         {
           text: 'Yes',
           style: 'destructive',
@@ -117,16 +117,20 @@ export const SaveWorkoutScreen: React.FC = () => {
       style={[styles.container, { marginBottom: -insets.bottom }]}
       edges={['top', 'left', 'right']}
     >
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top}
-      >
       <View style={[styles.topBar, { paddingTop: SPACING.md }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={handleGoBack}
           activeOpacity={0.7}
+          accessibilityLabel="Back to workout"
+        >
+          <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleDiscardWorkout}
+          activeOpacity={0.7}
+          accessibilityLabel="Discard workout"
         >
           <X size={24} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
@@ -137,11 +141,12 @@ export const SaveWorkoutScreen: React.FC = () => {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingBottom: Math.max(insets.bottom, SPACING.xl) + 100,
+            paddingBottom: 96, // clearance so last content can scroll above sticky button bar (only bottom padding is on button bar)
             backgroundColor: COLORS.background,
           },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Save Workout</Text>
@@ -206,10 +211,8 @@ export const SaveWorkoutScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      <View style={[styles.buttonContainer, {
-        paddingTop: SPACING.md,
-        paddingBottom: Math.max(insets.bottom, 12) + 12,
-      }]}>
+      <View style={[styles.buttonContainer, { paddingBottom: Math.max(insets.bottom, SPACING.sm) + SPACING.xl }]}>
+        {/* Single place for bottom inset; avoids double padding with scroll content. */}
         <TouchableOpacity
           style={[
             styles.saveButton,
@@ -242,7 +245,6 @@ export const SaveWorkoutScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -253,6 +255,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: SPACING.sm,
     zIndex: 10,
@@ -374,23 +379,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.bold,
     color: COLORS.text,
   },
-  keyboardView: {
-    flex: 1,
-  },
   buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    paddingTop: SPACING.md,
     paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
   },
   saveButton: {
     borderRadius: 19,

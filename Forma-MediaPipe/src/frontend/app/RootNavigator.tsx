@@ -125,6 +125,7 @@ const RecordStackNavigator: React.FC = memo(() => {
     <RecordStack.Navigator
       screenOptions={{
         headerShown: false,
+        contentStyle: { backgroundColor: COLORS.background },
       }}
     >
       <RecordStack.Screen name="RecordLanding" component={RecordLandingScreen} />
@@ -134,7 +135,10 @@ const RecordStackNavigator: React.FC = memo(() => {
       <RecordStack.Screen
         name="SaveWorkout"
         component={SaveWorkoutScreen}
-        options={{ contentStyle: { backgroundColor: COLORS.background } }}
+        options={{
+          contentStyle: { backgroundColor: COLORS.background },
+          // No navigator option to disable bottom safe area; strip is filled by contentStyle background.
+        }}
       />
       <RecordStack.Screen name="WorkoutSettings" component={CameraSettingsScreen} options={{ headerShown: false }} />
     </RecordStack.Navigator>
