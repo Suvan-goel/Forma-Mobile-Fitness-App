@@ -41,13 +41,13 @@ const THRESHOLDS = {
 const FORM_THRESHOLDS = {
   SHOULDER_WARN: 45,
   SHOULDER_FAIL: 65,
-  TORSO_WARN: 15,
-  TORSO_FAIL: 22,
+  TORSO_WARN: 12,
+  TORSO_FAIL: 18,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
   TEMPO_UP_MIN: 0.05,
-  TEMPO_DOWN_MIN: 0.20,
+  TEMPO_DOWN_MIN: 0.12,
   SYMMETRY_MIN: 50,
   SYMMETRY_ROM: 55,
   /** Min reach ratio to consider arm fully extended at frontal view.
