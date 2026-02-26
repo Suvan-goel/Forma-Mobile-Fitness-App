@@ -62,8 +62,8 @@ type ChooseExerciseNavigationProp = NativeStackNavigationProp<
   'ChooseExercise'
 >;
 
-/** Strict filter order — 'favourites' is a special synthetic tab */
-const FILTER_ORDER = ['favourites', 'all', 'chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'core'];
+/** Strict filter order — 'all' first, then 'favourites' (special synthetic tab), then categories */
+const FILTER_ORDER = ['all', 'favourites', 'chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'core'];
 const FILTER_LABELS: Record<string, string> = {
   favourites: 'FAVOURITES',
   all: 'ALL',
