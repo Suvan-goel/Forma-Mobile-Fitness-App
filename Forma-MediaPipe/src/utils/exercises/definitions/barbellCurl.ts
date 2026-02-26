@@ -47,7 +47,7 @@ const FORM_THRESHOLDS = {
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
   TEMPO_UP_MIN: 0.05,
-  TEMPO_DOWN_MIN: 0.12,
+  TEMPO_DOWN_MIN: 0.20,
   SYMMETRY_MIN: 50,
   SYMMETRY_ROM: 55,
   /** Min reach ratio to consider arm fully extended at frontal view.
@@ -618,9 +618,6 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
   const rightHip = getKeypoint(keypoints, 'right_hip');
   const leftIndex = getKeypoint(keypoints, 'left_index');
   const rightIndex = getKeypoint(keypoints, 'right_index');
-  const nose = getKeypoint(keypoints, 'nose');
-  const leftEar = getKeypoint(keypoints, 'left_ear');
-  const rightEar = getKeypoint(keypoints, 'right_ear');
 
   const leftOk =
     leftShoulder &&
@@ -700,33 +697,12 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
           z: ((leftShoulder.z ?? 0) + (rightShoulder.z ?? 0)) / 2,
         }
       : null;
-  const headPoint =
-    nose && isVisible(nose, VISIBILITY_THRESHOLD)
-      ? getPoint(nose)
-      : leftEar &&
-          rightEar &&
-          isVisible(leftEar, VISIBILITY_THRESHOLD) &&
-          isVisible(rightEar, VISIBILITY_THRESHOLD)
-        ? {
-            x: (leftEar.x + rightEar.x) / 2,
-            y: (leftEar.y + rightEar.y) / 2,
-            z: ((leftEar.z ?? 0) + (rightEar.z ?? 0)) / 2,
-          }
-        : null;
-  // "Virtual neck" blend: 70% shoulder center + 30% head
-  const torsoUpperPoint = shoulderCenter && headPoint
-    ? {
-        x: 0.7 * shoulderCenter.x + 0.3 * headPoint.x,
-        y: 0.7 * shoulderCenter.y + 0.3 * headPoint.y,
-        z: 0.7 * (shoulderCenter.z ?? 0) + 0.3 * (headPoint.z ?? 0),
-      }
-    : shoulderCenter ?? headPoint;
   const torsoAngle =
-    hipCenter && torsoUpperPoint && (leftShoulder && rightShoulder)
+    hipCenter && shoulderCenter && leftShoulder && rightShoulder
       ? (() => {
           const angle = calculateSignedVerticalAngleSagittal(
             hipCenter,
-            torsoUpperPoint,
+            shoulderCenter,
             getPoint(leftHip)!,
             getPoint(rightHip)!,
             getPoint(leftShoulder)!,
