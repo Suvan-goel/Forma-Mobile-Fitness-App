@@ -247,13 +247,11 @@ export const RecordLandingScreen: React.FC = () => {
                     onPress={handleDiscardWorkout}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.workoutActionIconWrap, styles.discardIconWrap]}>
-                      <Trash2
-                        size={18}
-                        color={COLORS.textTertiary}
-                        strokeWidth={1.5}
-                      />
-                    </View>
+                    <Trash2
+                      size={18}
+                      color={COLORS.textTertiary}
+                      strokeWidth={1.5}
+                    />
                     <Text style={[styles.workoutActionLabel, styles.discardLabel]}>Discard</Text>
                   </TouchableOpacity>
 
@@ -262,13 +260,11 @@ export const RecordLandingScreen: React.FC = () => {
                     onPress={handlePauseWorkout}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.workoutActionIconWrap, styles.pauseIconWrap]}>
-                      {workoutPaused ? (
-                        <Play size={18} color={COLORS.accent} strokeWidth={1.5} />
-                      ) : (
-                        <Pause size={18} color={COLORS.accent} strokeWidth={1.5} />
-                      )}
-                    </View>
+                    {workoutPaused ? (
+                      <Play size={18} color={COLORS.accent} strokeWidth={1.5} />
+                    ) : (
+                      <Pause size={18} color={COLORS.accent} strokeWidth={1.5} />
+                    )}
                     <Text style={styles.workoutActionLabel}>
                       {workoutPaused ? 'Resume' : 'Pause'}
                     </Text>
@@ -279,9 +275,7 @@ export const RecordLandingScreen: React.FC = () => {
                     onPress={handleFinishWorkout}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.workoutActionIconWrap, styles.finishIconWrap]}>
-                      <Flag size={18} color={'#34D399'} strokeWidth={1.5} />
-                    </View>
+                    <Flag size={18} color={'#34D399'} strokeWidth={1.5} />
                     <Text style={[styles.workoutActionLabel, styles.finishLabel]}>Finish</Text>
                   </TouchableOpacity>
                 </View>
@@ -565,28 +559,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-  },
-  workoutActionIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  discardIconWrap: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  pauseIconWrap: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-  },
-  finishIconWrap: {
-    backgroundColor: 'rgba(52, 211, 153, 0.08)',
-    borderColor: 'rgba(52, 211, 153, 0.15)',
   },
   workoutActionLabel: {
     fontSize: 11,
