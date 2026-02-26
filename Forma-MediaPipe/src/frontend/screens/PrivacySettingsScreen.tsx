@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  Alert,
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +27,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
 } from '../constants/theme';
+import { useAlert } from '../contexts/AlertContext';
 
 interface PrivacySettingsScreenProps {
   navigation: any;
@@ -59,6 +59,7 @@ const DataItem = ({
 
 export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -70,7 +71,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
   }, [fadeAnim]);
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showAlert(
       'Delete Account',
       'To delete your account and all associated data, please contact us at support@forma.app. We will process your request within 48 hours.',
       [{ text: 'OK' }],

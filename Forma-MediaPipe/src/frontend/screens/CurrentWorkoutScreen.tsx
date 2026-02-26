@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Platform,
   useWindowDimensions,
 } from 'react-native';
@@ -37,6 +36,7 @@ import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useNotificationPreferences } from '../../backend/hooks';
+import { useAlert } from '../contexts/AlertContext';
 import * as Notifications from 'expo-notifications';
 
 Notifications.setNotificationHandler({
@@ -81,6 +81,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
   const route = useRoute<CurrentWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const { width: windowWidth } = useWindowDimensions();
   const timerFontSize = Math.min(
     TIMER_FONT_SIZE_MAX,
@@ -273,7 +274,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   const handleEndWorkout = () => {
     if (sets.length === 0) {
-      Alert.alert('No sets recorded', 'Add at least one set before ending the workout.');
+      showAlert('No sets recorded', 'Add at least one set before ending the workout.');
       return;
     }
     const totalSets = sets.length;
@@ -317,7 +318,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   };
 
   const handleDeleteExercise = (exerciseId: string, exerciseName: string, setCount: number) => {
-    Alert.alert(
+    showAlert(
       'Remove exercise?',
       `Remove ${exerciseName}${setCount > 0 ? ` and its ${setCount} ${setCount === 1 ? 'set' : 'sets'}` : ''}? This cannot be undone.`,
       [
@@ -332,7 +333,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   };
 
   const handleDeleteSet = (exerciseId: string, exerciseName: string, setIndex: number) => {
-    Alert.alert(
+    showAlert(
       'Delete set?',
       `Are you sure you want to delete Set ${setIndex + 1} for ${exerciseName}? This cannot be undone.`,
       [
@@ -347,7 +348,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   };
 
   const handleDiscardWorkout = () => {
-    Alert.alert(
+    showAlert(
       'Discard Workout',
       'Are you sure? This will delete all recorded sets and cannot be undone.',
       [

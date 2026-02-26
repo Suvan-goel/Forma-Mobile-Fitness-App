@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Alert, Animated, Switch, Image } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Animated, Switch, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -28,6 +28,7 @@ import {
 } from '../constants/theme';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useWorkoutPreferences, useUser } from '../../backend/hooks';
+import { useAlert } from '../contexts/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 
 interface SettingsScreenProps {
@@ -36,6 +37,7 @@ interface SettingsScreenProps {
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const { signOut, user: authUser } = useAuth();
   const { user: profileUser, refetch: refetchUser } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -57,7 +59,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   );
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+    showAlert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
@@ -66,7 +68,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           try {
             await signOut();
           } catch (error) {
-            Alert.alert('Error', 'Failed to log out. Please try again.');
+            showAlert('Error', 'Failed to log out. Please try again.');
           }
         },
       },

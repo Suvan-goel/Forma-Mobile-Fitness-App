@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Switch,
   Platform,
-  Alert,
   ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -18,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
+import { useAlert } from '../contexts/AlertContext';
 import { MonoText } from '../components/typography/MonoText';
 import { TRAINERS } from '../constants/trainers';
 
@@ -157,6 +157,7 @@ const wheelStyles = StyleSheet.create({
 export const CameraSettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { showAlert } = useAlert();
   const {
     showFeedback,
     isTTSEnabled,
@@ -191,7 +192,7 @@ export const CameraSettingsScreen: React.FC = () => {
     if (value) {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Notifications Disabled',
           'Enable notifications in your device settings to use the rest timer alert.'
         );

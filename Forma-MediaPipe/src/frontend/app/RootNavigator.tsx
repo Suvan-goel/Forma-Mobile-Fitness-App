@@ -32,6 +32,7 @@ import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlo
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider } from '../contexts/ScrollContext';
+import { AlertProvider } from '../contexts/AlertContext';
 import { AppHeader } from '../components/ui/AppHeader';
 import { AuthProvider, useAuth } from '../../backend/contexts/AuthContext';
 import { COLORS, FONTS } from '../constants/theme';
@@ -427,7 +428,9 @@ const RootStackNavigator: React.FC = () => {
 export const RootNavigator: React.FC = () => {
   return (
     <AuthProvider>
-      <RootStackNavigator />
+      <AlertProvider>
+        <RootStackNavigator />
+      </AlertProvider>
     </AuthProvider>
   );
 };

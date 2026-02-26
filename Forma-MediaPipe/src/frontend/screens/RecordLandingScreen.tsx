@@ -4,7 +4,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  Alert,
   Platform,
   Modal,
   Image,
@@ -30,6 +29,7 @@ import { CameraSetupGuide } from './CameraSetupGuide';
 
 import type { RecordStackParamList, RootStackParamList } from '../app/RootNavigator';
 import { useUser } from '../../backend/hooks';
+import { useAlert } from '../contexts/AlertContext';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
 
@@ -50,6 +50,7 @@ const formatStopwatch = (totalSeconds: number) => {
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
   const { user: profileUser } = useUser();
   const {
@@ -102,7 +103,7 @@ export const RecordLandingScreen: React.FC = () => {
   };
 
   const handleDiscardWorkout = () => {
-    Alert.alert(
+    showAlert(
       'Discard workout',
       'Are you sure? This will clear all sets and time.',
       [
@@ -118,7 +119,7 @@ export const RecordLandingScreen: React.FC = () => {
 
   const handleFinishWorkout = () => {
     if (sets.length === 0) {
-      Alert.alert(
+      showAlert(
         'No sets recorded',
         'Add at least one set before ending the workout.'
       );

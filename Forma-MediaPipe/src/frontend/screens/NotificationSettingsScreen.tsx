@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  Alert,
   Animated,
   Switch,
 } from 'react-native';
@@ -23,6 +22,7 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { useNotificationPreferences } from '../../backend/hooks';
+import { useAlert } from '../contexts/AlertContext';
 
 interface NotificationSettingsScreenProps {
   navigation: any;
@@ -30,6 +30,7 @@ interface NotificationSettingsScreenProps {
 
 export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { prefs, updatePref, isLoading } = useNotificationPreferences();
 
@@ -45,7 +46,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
     if (value) {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Notifications Disabled',
           'To receive rest timer notifications, please enable notifications for Forma in your device settings.',
         );

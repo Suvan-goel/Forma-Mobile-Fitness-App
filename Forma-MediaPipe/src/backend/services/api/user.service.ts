@@ -48,6 +48,8 @@ export const userService = {
         id: profile.id,
         email: profile.email,
         displayName: profile.display_name,
+        firstName: profile.first_name ?? undefined,
+        lastName: profile.last_name ?? undefined,
         avatarUrl: profile.avatar_url ?? undefined,
         createdAt: new Date(profile.created_at),
       },
@@ -104,13 +106,15 @@ export const userService = {
       return { data: {} as User, success: false, error: 'Not authenticated' };
     }
 
+    const dbUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.displayName !== undefined) dbUpdate.display_name = updates.displayName;
+    if (updates.firstName !== undefined) dbUpdate.first_name = updates.firstName;
+    if (updates.lastName !== undefined) dbUpdate.last_name = updates.lastName;
+    if (updates.avatarUrl !== undefined) dbUpdate.avatar_url = updates.avatarUrl;
+
     const { data: profile, error } = await supabase
       .from('profiles')
-      .update({
-        display_name: updates.displayName,
-        avatar_url: updates.avatarUrl,
-        updated_at: new Date().toISOString(),
-      })
+      .update(dbUpdate)
       .eq('id', authUser.id)
       .select()
       .single();
@@ -132,6 +136,8 @@ export const userService = {
         id: profile.id,
         email: profile.email,
         displayName: profile.display_name,
+        firstName: profile.first_name ?? undefined,
+        lastName: profile.last_name ?? undefined,
         avatarUrl: profile.avatar_url ?? undefined,
         createdAt: new Date(profile.created_at),
       },

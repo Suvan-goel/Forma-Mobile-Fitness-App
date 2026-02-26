@@ -11,7 +11,6 @@ import {
   Platform,
   Image,
   PanResponder,
-  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +30,7 @@ import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts, useUser, useDeleteWorkout } from '../../backend/hooks';
+import { useAlert } from '../contexts/AlertContext';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../../backend/services/api';
@@ -223,6 +223,7 @@ const DELETE_AREA_WIDTH = 72;
 
 const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { showAlert } = useAlert();
   const translateX = useRef(new Animated.Value(0)).current;
   const isSwipeOpen = useRef(false);
 
@@ -269,7 +270,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => 
 
   const handleDelete = useCallback(() => {
     closeSwipe();
-    Alert.alert(
+    showAlert(
       'Delete Workout?',
       "This can't be undone.",
       [
@@ -277,7 +278,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => 
         { text: 'Delete', style: 'destructive', onPress: () => onDelete(session.id) },
       ],
     );
-  }, [onDelete, session.id, closeSwipe]);
+  }, [onDelete, session.id, closeSwipe, showAlert]);
 
   return (
     <View style={styles.swipeContainer}>
@@ -358,6 +359,7 @@ export const LogbookScreen: React.FC = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const { showAlert } = useAlert();
   const { workouts, isLoading, error, refetch } = useWorkouts();
   const { deleteWorkout } = useDeleteWorkout();
   const { user } = useAuth();
@@ -485,9 +487,9 @@ export const LogbookScreen: React.FC = () => {
     if (success) {
       refetch();
     } else {
-      Alert.alert('Error', 'Failed to delete workout. Please try again.');
+      showAlert('Error', 'Failed to delete workout. Please try again.');
     }
-  }, [deleteWorkout, refetch]);
+  }, [deleteWorkout, refetch, showAlert]);
 
   const renderWorkoutCard = useCallback(({ item }: { item: WorkoutSession }) => (
     <WorkoutCard session={item} onDelete={handleDelete} />

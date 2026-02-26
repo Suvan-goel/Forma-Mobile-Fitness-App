@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  Alert,
   Animated,
   TextInput,
   ActivityIndicator,
@@ -25,6 +24,7 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { useUser, useUpdateUser } from '../../backend/hooks';
+import { useAlert } from '../contexts/AlertContext';
 
 interface ProfileSettingsScreenProps {
   navigation: any;
@@ -32,6 +32,7 @@ interface ProfileSettingsScreenProps {
 
 export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { user, isLoading: userLoading, refetch } = useUser();
   const { updateProfile, uploadAvatar, isUpdating, error } = useUpdateUser();
@@ -51,15 +52,14 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName);
-      const parts = user.displayName.trim().split(/\s+/);
-      setFirstName(parts[0] ?? '');
-      setLastName(parts.slice(1).join(' '));
+      setFirstName(user.firstName ?? '');
+      setLastName(user.lastName ?? '');
     }
   }, [user]);
 
-  const originalFirst = user?.displayName.trim().split(/\s+/)[0] ?? '';
-  const originalLast = user?.displayName.trim().split(/\s+/).slice(1).join(' ') ?? '';
-  const hasNameChanged = firstName.trim() !== originalFirst || lastName.trim() !== originalLast;
+  const hasNameChanged =
+    firstName.trim() !== (user?.firstName ?? '') ||
+    lastName.trim() !== (user?.lastName ?? '');
   const hasDisplayNameChanged = displayName.trim() !== (user?.displayName ?? '');
 
   const handleSaveDisplayName = async () => {
@@ -67,35 +67,31 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
     const result = await updateProfile({ displayName: displayName.trim() });
     if (result.success) {
       await refetch();
-      Alert.alert('Success', 'Display name updated.');
+      showAlert('Success', 'Display name updated.');
     } else {
-      Alert.alert('Error', result.error ?? 'Failed to update display name.');
+      showAlert('Error', result.error ?? 'Failed to update display name.');
     }
   };
 
   const handleSaveName = async () => {
     const trimmedFirst = firstName.trim();
     if (!trimmedFirst) {
-      Alert.alert('First name required', 'Please enter your first name.');
+      showAlert('First name required', 'Please enter your first name.');
       return;
     }
-    const newDisplayName = lastName.trim()
-      ? `${trimmedFirst} ${lastName.trim()}`
-      : trimmedFirst;
-    if (newDisplayName === user?.displayName) return;
-    const result = await updateProfile({ displayName: newDisplayName });
+    const result = await updateProfile({ firstName: trimmedFirst, lastName: lastName.trim() });
     if (result.success) {
       await refetch();
-      Alert.alert('Success', 'Name updated.');
+      showAlert('Success', 'Name updated.');
     } else {
-      Alert.alert('Error', result.error ?? 'Failed to update name.');
+      showAlert('Error', result.error ?? 'Failed to update name.');
     }
   };
 
   const handlePickAvatar = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert(
+      showAlert(
         'Permission Required',
         'Please allow photo library access in your device settings to change your avatar.',
       );
@@ -116,7 +112,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
       await updateProfile({ avatarUrl: uploadResult.data });
       await refetch();
     } else {
-      Alert.alert('Error', uploadResult.error ?? 'Failed to upload avatar.');
+      showAlert('Error', uploadResult.error ?? 'Failed to upload avatar.');
     }
   };
 

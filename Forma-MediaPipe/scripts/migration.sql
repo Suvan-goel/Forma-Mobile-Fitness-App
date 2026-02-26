@@ -15,11 +15,17 @@ create table if not exists profiles (
   id           uuid primary key references auth.users(id) on delete cascade,
   email        text not null,
   display_name text not null default '',
+  first_name   text,
+  last_name    text,
   avatar_url   text,
   provider     text not null default 'google',
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
+
+-- Add first_name/last_name to existing profiles table (idempotent)
+alter table profiles add column if not exists first_name text;
+alter table profiles add column if not exists last_name  text;
 
 -- user_stats: rolling aggregate stats per user
 create table if not exists user_stats (

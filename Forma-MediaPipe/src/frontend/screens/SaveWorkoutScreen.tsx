@@ -8,7 +8,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,12 +19,14 @@ import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD
 import { RecordStackParamList } from '../app/RootNavigator';
 import { useSaveWorkout } from '../../backend/hooks';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
+import { useAlert } from '../contexts/AlertContext';
 
 type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
 type SaveWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'SaveWorkout'>;
 
 export const SaveWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<SaveWorkoutNavigationProp>();
+  const { showAlert } = useAlert();
   const route = useRoute<SaveWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
   const { workoutData } = route.params;
@@ -37,7 +38,7 @@ export const SaveWorkoutScreen: React.FC = () => {
 
   const handleSave = async () => {
     if (workoutData.totalSets === 0) {
-      Alert.alert(
+      showAlert(
         'No sets recorded',
         'Add at least one set before ending the workout.'
       );
@@ -53,7 +54,7 @@ export const SaveWorkoutScreen: React.FC = () => {
     });
 
     if (!success) {
-      Alert.alert('Save Failed', saveError ?? 'Could not save workout. Please try again.', [
+      showAlert('Save Failed', saveError ?? 'Could not save workout. Please try again.', [
         { text: 'OK' },
       ]);
       return;
@@ -87,7 +88,7 @@ export const SaveWorkoutScreen: React.FC = () => {
   };
 
   const handleGoBack = () => {
-    Alert.alert(
+    showAlert(
       'Discard Workout?',
       'Are you sure you want to discard this workout? This action cannot be undone.',
       [

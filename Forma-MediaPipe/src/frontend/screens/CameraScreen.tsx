@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -18,6 +18,7 @@ import { ExerciseRegistry } from '../../utils/exercises';
 import type { ExerciseState } from '../../utils/exercises';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
+import { useAlert } from '../contexts/AlertContext';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 import { setActiveVoiceId } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
@@ -55,6 +56,7 @@ export const CameraScreen: React.FC = () => {
   const navigation = useNavigation<CameraScreenNavigationProp>();
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const { addSetToExercise } = useCurrentWorkout();
   const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId } = useCameraSettings();
 
@@ -545,7 +547,7 @@ export const CameraScreen: React.FC = () => {
   }, [handleCameraFlip]);
 
   const handleDiscardSetPress = useCallback(() => {
-    Alert.alert(
+    showAlert(
       'Discard set?',
       'Are you sure you want to discard this set? Your reps will not be saved.',
       [
