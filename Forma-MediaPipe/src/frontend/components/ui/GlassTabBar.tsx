@@ -60,6 +60,7 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
   const hideTabBar =
     currentTabRoute?.name === 'Record' &&
     (focusedRouteName === 'ChooseExercise' ||
+     focusedRouteName === 'WorkoutTemplates' ||
      focusedRouteName === 'Camera' ||
      focusedRouteName === 'CurrentWorkout' ||
      focusedRouteName === 'SaveWorkout' ||
