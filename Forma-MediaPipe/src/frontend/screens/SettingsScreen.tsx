@@ -78,7 +78,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const displayName = profileUser?.displayName ?? authUser?.user_metadata?.full_name ?? 'Athlete';
   const userEmail = profileUser?.email ?? authUser?.email ?? '';
   const userInitial = (displayName[0] ?? 'A').toUpperCase();
-  const avatarUrl = profileUser?.avatarUrl;
 
   const SettingItem = ({
     icon: Icon,
@@ -171,9 +170,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             >
               <View style={styles.cardGlassEdge}>
                 <View style={styles.profileRow}>
-                  {avatarUrl ? (
-                    <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-                  ) : (
+                  {profileUser?.avatarUrl ? (
+                    <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+                  ) : profileUser ? (
                     <LinearGradient
                       colors={['#8B5CF6', '#7C3AED']}
                       start={{ x: 0, y: 0 }}
@@ -182,6 +181,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                     >
                       <Text style={styles.avatarText}>{userInitial}</Text>
                     </LinearGradient>
+                  ) : (
+                    <View style={styles.avatarPlaceholder} />
                   )}
                   <View style={styles.profileInfo}>
                     <Text style={styles.profileName} numberOfLines={1}>
@@ -383,6 +384,12 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#000000',
   },
   avatarText: {
     fontFamily: FONTS.display.bold,

@@ -163,7 +163,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                 <View style={styles.avatarRing}>
                   {user?.avatarUrl ? (
                     <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-                  ) : (
+                  ) : user ? (
                     <LinearGradient
                       colors={['#8B5CF6', '#7C3AED']}
                       start={{ x: 0, y: 0 }}
@@ -172,6 +172,8 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                     >
                       <Text style={styles.avatarText}>{userInitial}</Text>
                     </LinearGradient>
+                  ) : (
+                    <View style={styles.avatarPlaceholder} />
                   )}
                 </View>
                 <View style={styles.cameraIconBadge}>
@@ -421,6 +423,12 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarPlaceholder: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#000000',
   },
   avatarText: {
     fontFamily: FONTS.display.bold,

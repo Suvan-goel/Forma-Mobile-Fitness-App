@@ -134,7 +134,7 @@ export const AnalyticsScreen: React.FC = () => {
             >
               {profileUser?.avatarUrl ? (
                 <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
-              ) : (
+              ) : profileUser ? (
                 <LinearGradient
                   colors={['#8B5CF6', '#7C3AED']}
                   start={{ x: 0, y: 0 }}
@@ -142,9 +142,11 @@ export const AnalyticsScreen: React.FC = () => {
                   style={styles.avatarGradient}
                 >
                   <Text style={styles.avatarInitial}>
-                    {(profileUser?.displayName?.[0] ?? 'A').toUpperCase()}
+                    {profileUser.displayName[0].toUpperCase()}
                   </Text>
                 </LinearGradient>
+              ) : (
+                <View style={styles.avatarPlaceholder} />
               )}
             </TouchableOpacity>
           </View>
@@ -319,6 +321,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#000000',
   },
   avatarInitial: {
     fontFamily: FONTS.display.bold,
