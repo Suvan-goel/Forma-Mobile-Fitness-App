@@ -60,13 +60,6 @@
       "expo-web-browser",
       "expo-image-picker",
       [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#8B5CF6"
-        }
-      ],
-      [
         "expo-build-properties",
         {
           "ios": {

@@ -12,7 +12,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bell, Timer } from 'lucide-react-native';
-import * as Notifications from 'expo-notifications';
 import {
   COLORS,
   SPACING,
@@ -22,7 +21,6 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { useNotificationPreferences } from '../../backend/hooks';
-import { useAlert } from '../contexts/AlertContext';
 
 interface NotificationSettingsScreenProps {
   navigation: any;
@@ -30,7 +28,6 @@ interface NotificationSettingsScreenProps {
 
 export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { prefs, updatePref, isLoading } = useNotificationPreferences();
 
@@ -42,17 +39,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
     }).start();
   }, [fadeAnim]);
 
-  const handleRestTimerToggle = async (value: boolean) => {
-    if (value) {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        showAlert(
-          'Notifications Disabled',
-          'To receive rest timer notifications, please enable notifications for Forma in your device settings.',
-        );
-        return;
-      }
-    }
+  const handleRestTimerToggle = (value: boolean) => {
     updatePref('restTimerEnabled', value);
   };
 

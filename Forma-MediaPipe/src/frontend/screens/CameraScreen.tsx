@@ -19,7 +19,6 @@ import type { ExerciseState } from '../../utils/exercises';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
-import { CameraSettingsModal } from '../components/ui/CameraSettingsModal';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
 import { CameraGuideModal } from '../components/ui/CameraGuideModal';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
@@ -138,9 +137,6 @@ export const CameraScreen: React.FC = () => {
   const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
 
-
-  // Settings popup (feedback + TTS toggles)
-  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
 
   // Setup guide modal
   const [guideModalVisible, setGuideModalVisible] = useState(false);
@@ -1130,12 +1126,6 @@ export const CameraScreen: React.FC = () => {
           </View>
         </View>
       </View>
-
-      <CameraSettingsModal
-        visible={settingsModalVisible}
-        onClose={() => setSettingsModalVisible(false)}
-        onTTSDisable={ttsStopCoach}
-      />
 
       {guideData && (
         <CameraGuideModal

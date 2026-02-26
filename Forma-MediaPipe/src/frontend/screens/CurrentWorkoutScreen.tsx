@@ -35,19 +35,7 @@ import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext'
 import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
-import { useNotificationPreferences } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
-import * as Notifications from 'expo-notifications';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
 
 export type { LoggedSet };
 
@@ -123,11 +111,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { restTimerEnabled, restTimerDurationSeconds } = useCameraSettings();
-  const { prefs: notifPrefs } = useNotificationPreferences();
-  const notifEnabledRef = useRef(notifPrefs.restTimerEnabled);
-
   isPausedRef.current = workoutPaused;
-  notifEnabledRef.current = notifPrefs.restTimerEnabled;
 
   /* ── Timer logic: one interval; when paused we skip ticking so the display freezes ──── */
 
@@ -180,16 +164,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
         if (restIntervalRef.current) clearInterval(restIntervalRef.current);
         restIntervalRef.current = null;
         setRestSecondsLeft(null);
-        if (notifEnabledRef.current) {
-          Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Rest Complete',
-              body: 'Time to start your next set!',
-              sound: 'default',
-            },
-            trigger: null,
-          });
-        }
       }
     }, 1000);
   }, [restTimerEnabled, restTimerDurationSeconds]);
