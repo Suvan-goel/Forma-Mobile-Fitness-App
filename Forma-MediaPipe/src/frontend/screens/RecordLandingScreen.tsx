@@ -157,7 +157,7 @@ export const RecordLandingScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── HEADER ──────────────────────────────── */}
-      <View style={[styles.headerSection, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.headerSection, { paddingTop: insets.top + 6 }]}>
         <View style={styles.titleBlock}>
           <Text style={styles.headerTitle}>CAPTURE</Text>
           <Text style={styles.headerSubtitle}>TODAY'S SESSION</Text>
