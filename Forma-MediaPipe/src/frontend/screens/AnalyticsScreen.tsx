@@ -65,6 +65,7 @@ export const AnalyticsScreen: React.FC = () => {
   const { user: profileUser } = useUser();
 
   const [selectedTimeRange, setSelectedTimeRange] = useState('1 week');
+  const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
   const { analytics, isLoading, error, refetch } = useAnalytics('1 week');
 
   const handleTimeRangeChange = useCallback((range: string) => {
@@ -349,13 +350,26 @@ export const AnalyticsScreen: React.FC = () => {
               style={styles.cardGradient}
             >
               <View style={styles.cardGlassEdge}>
-                <Text style={styles.weekTitle}>{periodLabel}</Text>
+                <View style={styles.weekTitleRow}>
+                  <Text style={styles.weekTitle}>{periodLabel}</Text>
+                  {selectedBarIndex !== null && analytics.weeklyBarData[selectedBarIndex].value > 0 && (
+                    <Text style={styles.weekBarTooltip}>
+                      {analytics.weeklyBarData[selectedBarIndex].day} — {analytics.weeklyBarData[selectedBarIndex].value}m
+                    </Text>
+                  )}
+                </View>
                 <View style={styles.weekBarsRow}>
                   {analytics.weeklyBarData.map((d, i) => {
                     const maxVal = Math.max(...analytics.weeklyBarData.map(b => b.value), 1);
                     const h = Math.max(3, (d.value / maxVal) * 56);
+                    const isSelected = selectedBarIndex === i;
                     return (
-                      <View key={i} style={styles.weekBarCol}>
+                      <TouchableOpacity
+                        key={i}
+                        style={styles.weekBarCol}
+                        activeOpacity={0.7}
+                        onPress={() => setSelectedBarIndex(isSelected ? null : i)}
+                      >
                         <View style={styles.weekBarTrack}>
                           <View
                             style={[
@@ -363,12 +377,16 @@ export const AnalyticsScreen: React.FC = () => {
                               {
                                 height: h,
                                 opacity: d.value > 0 ? 0.5 + (d.value / maxVal) * 0.5 : 0.08,
+                                backgroundColor: isSelected ? '#A78BFA' : COLORS.accent,
                               },
                             ]}
                           />
                         </View>
-                        <Text style={styles.weekBarLabel}>{d.day.slice(0, 1)}</Text>
-                      </View>
+                        <Text style={[
+                          styles.weekBarLabel,
+                          isSelected && { color: COLORS.text },
+                        ]}>{d.day.slice(0, 1)}</Text>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -587,12 +605,17 @@ const styles = StyleSheet.create({
   },
 
   /* ── Week Bars Card ──────────────────────── */
+  weekTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 26,
+  },
   weekTitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
     color: COLORS.textTertiary,
     letterSpacing: 2,
-    marginBottom: 14,
   },
   weekBarsRow: {
     flexDirection: 'row',
@@ -617,6 +640,12 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 1.5,
     backgroundColor: COLORS.accent,
+  },
+  weekBarTooltip: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 0.5,
   },
   weekBarLabel: {
     fontFamily: FONTS.ui.regular,
