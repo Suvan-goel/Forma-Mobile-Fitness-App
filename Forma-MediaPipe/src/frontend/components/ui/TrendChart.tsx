@@ -181,13 +181,21 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
           {svgContent ? (
             <Svg width={chartWidth} height={height}>
               <Defs>
-                <SvgGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor="rgba(139,92,246,0.25)" />
-                  <Stop offset="1" stopColor="rgba(139,92,246,0)" />
+                {/* userSpaceOnUse + pixel coords so gradient renders correctly on native (objectBoundingBox can show solid fill) */}
+                <SvgGradient
+                  id="areaGrad"
+                  x1={padLeft}
+                  y1={padTop}
+                  x2={padLeft}
+                  y2={padTop + graphH}
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <Stop offset="0" stopColor="#8B5CF6" stopOpacity="0.25" />
+                  <Stop offset="1" stopColor="#8B5CF6" stopOpacity="0" />
                 </SvgGradient>
               </Defs>
 
-              {/* Area fill */}
+              {/* Area fill — faded purple under the line */}
               <Path d={svgContent.areaPath} fill="url(#areaGrad)" />
 
               {/* Line */}
