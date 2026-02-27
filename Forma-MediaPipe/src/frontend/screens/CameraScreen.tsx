@@ -20,54 +20,10 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
-import { CameraGuideModal } from '../components/ui/CameraGuideModal';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 import { setActiveVoiceId } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
-
-/** Per-exercise setup instructions for the CameraGuideModal */
-const EXERCISE_SETUP_DATA: Record<string, { keySetup: string; reasonText: string }> = {
-  'Barbell Curl': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks both arms for bilateral curl symmetry and elbow drift.',
-  },
-  'Barbell Squat': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks knee depth, hip hinge angle, and torso forward lean from the side.',
-  },
-  'Push-Up': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks shoulder-hip-ankle alignment and elbow angle from the side.',
-  },
-  'Cable Pushdowns': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks elbow extension angle and upper arm drift from the side.',
-  },
-  'Cable Row': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks elbow pull angle and shoulder retraction from the side.',
-  },
-  'Standing Dumbbell Lateral Raises': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks bilateral arm abduction and shrug detection from the front.',
-  },
-  'Cable Lat Pulldowns': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks both arms for bilateral elbow angle and torso lean.',
-  },
-  'Leg Extensions': {
-    keySetup: 'Camera perpendicular while seated',
-    reasonText: 'Tracks knee extension angle and detects hip lift from the side.',
-  },
-  'Lying Leg Curl': {
-    keySetup: 'Camera perpendicular while prone',
-    reasonText: 'Tracks knee flexion angle and detects hip lift from the side.',
-  },
-  'Machine Ab Crunches': {
-    keySetup: 'Camera perpendicular while seated',
-    reasonText: 'Tracks torso flexion angle and neck position from the side.',
-  },
-};
+import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
 const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
@@ -138,8 +94,7 @@ export const CameraScreen: React.FC = () => {
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
 
 
-  // Setup guide modal
-  const [guideModalVisible, setGuideModalVisible] = useState(false);
+  // Setup guide screen data
   const guideData = useMemo(() => {
     if (!exerciseNameFromRoute) return null;
     const def = ExerciseRegistry.has(exerciseNameFromRoute)
@@ -707,7 +662,17 @@ export const CameraScreen: React.FC = () => {
             >
               <X size={18} color={COLORS.text} strokeWidth={2.5} />
             </TouchableOpacity>
-            <SetupGuideButton onPress={() => setGuideModalVisible(true)} />
+            <SetupGuideButton onPress={() => {
+              if (guideData) {
+                (navigation as any).navigate('ExerciseGuide', {
+                  exerciseName: exerciseNameFromRoute ?? '',
+                  category,
+                  viewType: guideData.viewType,
+                  keySetup: guideData.keySetup,
+                  reasonText: guideData.reasonText,
+                });
+              }
+            }} />
           </View>
           <View style={styles.exerciseTopCardWrap}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
@@ -1129,16 +1094,6 @@ export const CameraScreen: React.FC = () => {
         </View>
       </View>
 
-      {guideData && (
-        <CameraGuideModal
-          visible={guideModalVisible}
-          exerciseName={exerciseNameFromRoute ?? ''}
-          viewType={guideData.viewType}
-          keySetup={guideData.keySetup}
-          reasonText={guideData.reasonText}
-          onClose={() => setGuideModalVisible(false)}
-        />
-      )}
     </View>
   );
 };

@@ -467,14 +467,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
                         </Text>
                       </View>
                       <View style={styles.exerciseCardHeaderRight}>
-                        <TouchableOpacity
-                          style={styles.exerciseDeleteButton}
-                          onPress={() => handleDeleteExercise(exercise.id, exercise.name, exercise.sets.length)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Trash2 size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        </TouchableOpacity>
                         <View style={styles.exerciseSetsBadge}>
                           <MonoText style={styles.exerciseSetsValue}>{exercise.sets.length}</MonoText>
                         </View>
@@ -488,7 +480,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                           activeOpacity={0.7}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                          <X size={16} color={COLORS.textTertiary} strokeWidth={2} />
+                          <Trash2 size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                         </TouchableOpacity>
                       </View>
                     </TouchableOpacity>

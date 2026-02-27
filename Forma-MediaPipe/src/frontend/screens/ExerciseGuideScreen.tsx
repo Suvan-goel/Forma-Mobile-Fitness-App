@@ -1,0 +1,430 @@
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { COLORS, FONTS, SPACING } from '../constants/theme';
+import { ArchetypeVisual, VIEW_TYPE_LABEL } from '../components/ui/CameraGuideVisuals';
+import { EXERCISE_PERFORM_DATA } from '../constants/exerciseGuideData';
+import type { RecordStackParamList } from '../app/RootNavigator';
+
+type GuideRouteProp = RouteProp<RecordStackParamList, 'ExerciseGuide'>;
+
+type TabKey = 'record' | 'perform';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'record', label: 'RECORD' },
+  { key: 'perform', label: 'PERFORM' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab Pill
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TabPill: React.FC<{
+  label: string;
+  isActive: boolean;
+  onPress: () => void;
+}> = ({ label, isActive, onPress }) => (
+  <TouchableOpacity
+    style={[styles.pill, isActive && styles.pillActive]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Record Tab Content
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RecordTabContent: React.FC<{
+  viewType: string;
+  keySetup: string;
+  reasonText: string;
+}> = ({ viewType, keySetup, reasonText }) => (
+  <View style={styles.tabContent}>
+    {/* Visual stage */}
+    <View style={styles.visualStage}>
+      <Text style={styles.viewTypeLabel}>
+        {VIEW_TYPE_LABEL[viewType] ?? 'SIDE VIEW'}
+      </Text>
+      <ArchetypeVisual viewType={viewType} />
+    </View>
+
+    {/* Instructions */}
+    <View style={styles.instructionsSection}>
+      <Text style={styles.keySetup}>{keySetup}</Text>
+      <Text style={styles.reasonText}>{reasonText}</Text>
+    </View>
+  </View>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Perform Tab Content
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PerformTabContent: React.FC<{
+  exerciseName: string;
+}> = ({ exerciseName }) => {
+  const performData = EXERCISE_PERFORM_DATA[exerciseName] ?? {
+    steps: ['Position yourself correctly and perform the exercise with controlled form.'],
+    commonMistakes: [],
+  };
+
+  return (
+    <View style={styles.tabContent}>
+      {/* Image placeholder */}
+      <View style={styles.imagePlaceholder}>
+        <Text style={styles.imagePlaceholderText}>Exercise demo</Text>
+      </View>
+
+      {/* How to Perform */}
+      <View style={styles.instructionsSection}>
+        <Text style={styles.sectionHeader}>HOW TO PERFORM</Text>
+        {performData.steps.map((step, i) => (
+          <View key={i} style={styles.stepRow}>
+            <Text style={styles.stepNumber}>{i + 1}</Text>
+            <Text style={styles.stepText}>{step}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Common Mistakes */}
+      {performData.commonMistakes.length > 0 && (
+        <View style={styles.mistakesSection}>
+          <Text style={styles.sectionHeader}>COMMON MISTAKES</Text>
+          {performData.commonMistakes.map((mistake, i) => (
+            <View key={i} style={styles.mistakeRow}>
+              <View style={styles.bulletDot} />
+              <Text style={styles.mistakeText}>{mistake}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Screen
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ExerciseGuideScreen: React.FC = () => {
+  const navigation = useNavigation();
+  const route = useRoute<GuideRouteProp>();
+  const insets = useSafeAreaInsets();
+  const { exerciseName, viewType, keySetup, reasonText } = route.params;
+
+  const [activeTab, setActiveTab] = useState<TabKey>('record');
+
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.goBack();
+  }, [navigation]);
+
+  const handleGotIt = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.goBack();
+  }, [navigation]);
+
+  return (
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={handleBack}
+          style={styles.backButton}
+          activeOpacity={0.6}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ChevronLeft size={22} color={COLORS.text} strokeWidth={2} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {exerciseName.toUpperCase()}
+        </Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      {/* Tab Switcher */}
+      <View style={styles.tabBar}>
+        {TABS.map((tab) => (
+          <TabPill
+            key={tab.key}
+            label={tab.label}
+            isActive={activeTab === tab.key}
+            onPress={() => setActiveTab(tab.key)}
+          />
+        ))}
+      </View>
+
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {activeTab === 'record' ? (
+          <RecordTabContent
+            viewType={viewType}
+            keySetup={keySetup}
+            reasonText={reasonText}
+          />
+        ) : (
+          <PerformTabContent exerciseName={exerciseName} />
+        )}
+      </ScrollView>
+
+      {/* CTA Button */}
+      <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, SPACING.xxl) }]}>
+        <TouchableOpacity onPress={handleGotIt} activeOpacity={0.85}>
+          <LinearGradient
+            colors={['#8B5CF6', '#7C3AED']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[
+              styles.ctaButton,
+              Platform.OS === 'ios' && {
+                shadowColor: COLORS.primary,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 20,
+              },
+            ]}
+          >
+            <Text style={styles.ctaText}>Got it</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  /* ── Header ── */
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    fontFamily: FONTS.mono.bold,
+    fontSize: 13,
+    color: COLORS.text,
+    letterSpacing: 2,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  headerSpacer: {
+    width: 36,
+  },
+
+  /* ── Tab Switcher ── */
+  tabBar: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+  },
+  pill: {
+    flex: 1,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
+  },
+  pillText: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12,
+    letterSpacing: 2,
+    color: '#71717A',
+  },
+  pillTextActive: {
+    color: '#FFFFFF',
+  },
+
+  /* ── Scroll ── */
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: SPACING.lg,
+  },
+
+  /* ── Tab content shared ── */
+  tabContent: {
+    paddingHorizontal: SPACING.xl,
+  },
+
+  /* ── Record tab: visual stage ── */
+  visualStage: {
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.lg,
+    marginBottom: SPACING.sm,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  viewTypeLabel: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 11,
+    color: COLORS.primary,
+    letterSpacing: 4,
+    marginBottom: 16,
+  },
+
+  /* ── Shared instructions section ── */
+  instructionsSection: {
+    paddingTop: SPACING.md,
+  },
+  keySetup: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 22,
+    color: COLORS.primary,
+    letterSpacing: -0.3,
+    lineHeight: 30,
+    marginBottom: 10,
+  },
+  reasonText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    lineHeight: 22,
+  },
+
+  /* ── Perform tab: image placeholder ── */
+  imagePlaceholder: {
+    height: 200,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  imagePlaceholderText: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    letterSpacing: 1,
+  },
+
+  /* ── Section headers ── */
+  sectionHeader: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 11,
+    color: COLORS.primary,
+    letterSpacing: 3,
+    marginBottom: SPACING.md,
+    marginTop: SPACING.xs,
+  },
+
+  /* ── Steps ── */
+  stepRow: {
+    flexDirection: 'row',
+    marginBottom: SPACING.md,
+    alignItems: 'flex-start',
+  },
+  stepNumber: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 14,
+    color: COLORS.primary,
+    width: 24,
+    opacity: 0.7,
+  },
+  stepText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
+    color: COLORS.text,
+    lineHeight: 22,
+    flex: 1,
+    opacity: 0.85,
+  },
+
+  /* ── Mistakes ── */
+  mistakesSection: {
+    paddingTop: SPACING.lg,
+  },
+  mistakeRow: {
+    flexDirection: 'row',
+    marginBottom: SPACING.sm + 4,
+    alignItems: 'flex-start',
+  },
+  bulletDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.textSecondary,
+    marginTop: 8,
+    marginRight: 12,
+  },
+  mistakeText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    flex: 1,
+  },
+
+  /* ── CTA ── */
+  ctaContainer: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+  },
+  ctaButton: {
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaText: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
+    color: COLORS.text,
+    letterSpacing: 0.5,
+  },
+});

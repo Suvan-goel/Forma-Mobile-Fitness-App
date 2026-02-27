@@ -22,6 +22,10 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useExercises, useFavouriteExercises } from '../../backend/hooks';
 import { LoadingSkeleton } from '../components/ui';
 import { Exercise } from '../../backend/services/api';
+import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
+import { ExerciseRegistry } from '../../utils/exercises';
+import '../../utils/exercises/definitions/register';
+import { RecordStackParamList } from '../app/RootNavigator';
 
 const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
   'Weightlifting': require('../assets/weightlifting_bg.png'),
@@ -49,13 +53,6 @@ const EXERCISE_IMAGE_MAP: Record<string, ImageSourcePropType> = {
 function getExerciseImage(exercise: Exercise): ImageSourcePropType {
   return EXERCISE_IMAGE_MAP[exercise.name] ?? CATEGORY_IMAGES[exercise.category] ?? DEFAULT_EXERCISE_IMAGE;
 }
-
-type RecordStackParamList = {
-  RecordLanding: undefined;
-  CurrentWorkout: { newSet?: any } | undefined;
-  ChooseExercise: undefined;
-  Camera: { exerciseName: string; category: string; returnToCurrentWorkout: true };
-};
 
 type ChooseExerciseNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -96,7 +93,7 @@ const FilterPill = memo(({ id, isActive, onPress }: {
 
 /* ── Exercise Card ───────────────────────── */
 
-const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPress, isFavourited, onToggleFavourite }: {
+const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPress, isFavourited, onToggleFavourite, onInfoPress }: {
   exercise: Exercise;
   muscleLabel: string;
   cardWidth: number;
@@ -104,6 +101,7 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
   onPress: (exercise: Exercise) => void;
   isFavourited: boolean;
   onToggleFavourite: (name: string) => void;
+  onInfoPress: (exercise: Exercise) => void;
 }) => (
   <TouchableOpacity
     style={[styles.cardOuter, { width: cardWidth, height: cardHeight }]}
@@ -131,7 +129,7 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
               strokeWidth={1.5}
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6}>
+          <TouchableOpacity style={styles.cardIconBtn} activeOpacity={0.6} onPress={() => onInfoPress(exercise)}>
             <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
@@ -184,6 +182,23 @@ export const ChooseExerciseScreen: React.FC = () => {
     navigation.navigate('CurrentWorkout');
   }, [addExercise, navigation]);
 
+  const handleInfoPress = useCallback((exercise: Exercise) => {
+    const def = ExerciseRegistry.has(exercise.name) ? ExerciseRegistry.get(exercise.name) : null;
+    const viewMap = { front: 'FRONT', side: 'SIDE', any: 'ANY' } as const;
+    const viewType = def ? viewMap[def.requiredView] : 'SIDE';
+    const setup = EXERCISE_SETUP_DATA[exercise.name] ?? {
+      keySetup: 'Position camera to capture full body',
+      reasonText: 'Ensures all key joints are visible for tracking.',
+    };
+    navigation.navigate('ExerciseGuide', {
+      exerciseName: exercise.name,
+      category: exercise.category,
+      viewType,
+      keySetup: setup.keySetup,
+      reasonText: setup.reasonText,
+    });
+  }, [navigation]);
+
   const handleGoBack = useCallback(() => {
     navigation.goBack();
   }, [navigation]);
@@ -235,8 +250,9 @@ export const ChooseExerciseScreen: React.FC = () => {
       onPress={handleSelectExercise}
       isFavourited={isFavourite(item.name)}
       onToggleFavourite={toggleFavourite}
+      onInfoPress={handleInfoPress}
     />
-  ), [cardWidth, cardHeight, handleSelectExercise, muscleNameMap, isFavourite, toggleFavourite]);
+  ), [cardWidth, cardHeight, handleSelectExercise, muscleNameMap, isFavourite, toggleFavourite, handleInfoPress]);
 
   const keyExtractor = useCallback((item: Exercise, index: number) => `${item.name}-${index}`, []);
 

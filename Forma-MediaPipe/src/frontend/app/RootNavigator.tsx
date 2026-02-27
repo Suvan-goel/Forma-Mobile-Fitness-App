@@ -29,6 +29,7 @@ import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
 import { WorkoutTemplatesScreen } from '../screens/WorkoutTemplatesScreen';
 import { CameraSettingsScreen } from '../screens/CameraSettingsScreen';
+import { ExerciseGuideScreen } from '../screens/ExerciseGuideScreen';
 import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlow';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
@@ -60,6 +61,13 @@ export type RootStackParamList = {
   WorkoutDetails: { workoutId: string };
   WorkoutExercises: { category: string; color: string; iconName: string };
   WorkoutInfo: undefined;
+  ExerciseGuide: {
+    exerciseName: string;
+    category: string;
+    viewType: 'SIDE' | 'FRONT' | 'ANY';
+    keySetup: string;
+    reasonText: string;
+  };
   Onboarding: undefined;
 };
 
@@ -70,6 +78,13 @@ export type RecordStackParamList = {
   ChooseExercise: undefined;
   WorkoutTemplates: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout?: true };
+  ExerciseGuide: {
+    exerciseName: string;
+    category: string;
+    viewType: 'SIDE' | 'FRONT' | 'ANY';
+    keySetup: string;
+    reasonText: string;
+  };
   SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number } };
   WorkoutSettings: undefined;
 };
@@ -136,6 +151,7 @@ const RecordStackNavigator: React.FC = memo(() => {
       <RecordStack.Screen name="ChooseExercise" component={ChooseExerciseScreen} />
       <RecordStack.Screen name="WorkoutTemplates" component={WorkoutTemplatesScreen} />
       <RecordStack.Screen name="Camera" component={CameraScreen} />
+      <RecordStack.Screen name="ExerciseGuide" component={ExerciseGuideScreen} />
       <RecordStack.Screen
         name="SaveWorkout"
         component={SaveWorkoutScreen}
@@ -163,7 +179,7 @@ const CustomTabBar = memo(({ state, descriptors, navigation, onTabChange }: any)
   const insets = useSafeAreaInsets();
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
-  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'WorkoutTemplates' || focusedRouteName === 'Camera' || focusedRouteName === 'CurrentWorkout' || focusedRouteName === 'SaveWorkout' || focusedRouteName === 'WorkoutSettings');
+  const hideTabBar = currentTabRoute?.name === 'Record' && (focusedRouteName === 'ChooseExercise' || focusedRouteName === 'WorkoutTemplates' || focusedRouteName === 'Camera' || focusedRouteName === 'CurrentWorkout' || focusedRouteName === 'SaveWorkout' || focusedRouteName === 'WorkoutSettings' || focusedRouteName === 'ExerciseGuide');
 
   // Notify parent of tab changes
   React.useEffect(() => {
@@ -396,6 +412,11 @@ const RootStackNavigator: React.FC = () => {
               presentation: 'fullScreenModal',
               animation: 'slide_from_bottom',
             }}
+          />
+          <Stack.Screen
+            name="ExerciseGuide"
+            component={ExerciseGuideScreen}
+            options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
             name="Insights"
