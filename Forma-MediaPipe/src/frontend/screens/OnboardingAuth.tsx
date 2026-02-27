@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -196,18 +195,13 @@ export const OnboardingAuth: React.FC = () => {
               activeOpacity={0.85}
               disabled={isBusy}
             >
-              <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.googleButtonInner}
-              >
+              <View style={styles.googleButtonInner}>
                 {isSigningIn === 'google' ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.buttonText}>Continue with Google</Text>
                 )}
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </Animated.View>
 
@@ -300,6 +294,9 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   buttonText: {
     fontFamily: FONTS.display.bold,
