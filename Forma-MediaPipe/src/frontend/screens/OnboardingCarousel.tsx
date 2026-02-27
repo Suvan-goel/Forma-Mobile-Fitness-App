@@ -335,7 +335,7 @@ const slideStyles = StyleSheet.create({
   },
   header: {
     fontFamily: FONTS.display.bold,
-    fontSize: 62,
+    fontSize: 55,
     color: COLORS.text,
     letterSpacing: -2,
     lineHeight: 66,
