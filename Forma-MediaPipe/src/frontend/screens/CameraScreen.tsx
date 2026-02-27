@@ -697,22 +697,24 @@ export const CameraScreen: React.FC = () => {
           <View style={[styles.overlay, { height: cameraDisplayHeight }]}>
         {/* Top bar — overlays top of camera */}
         <View style={[styles.topBarSection, { paddingTop: topInset, height: topBarHeight }]}>
-          <TouchableOpacity
-            style={styles.discardButton}
-            onPress={handleDiscardSetPress}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Discard set"
-          >
-            <X size={18} color={COLORS.text} strokeWidth={2.5} />
-          </TouchableOpacity>
+          <View style={styles.headerLeftGroup}>
+            <TouchableOpacity
+              style={styles.discardButton}
+              onPress={handleDiscardSetPress}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Discard set"
+            >
+              <X size={18} color={COLORS.text} strokeWidth={2.5} />
+            </TouchableOpacity>
+            <SetupGuideButton onPress={() => setGuideModalVisible(true)} />
+          </View>
           <View style={styles.exerciseTopCardWrap}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
               {displayValues.exerciseDisplayName}
             </Text>
           </View>
           <View style={styles.headerRightGroup}>
-            <SetupGuideButton onPress={() => setGuideModalVisible(true)} />
             <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
@@ -1146,6 +1148,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     backgroundColor: COLORS.background,
+  },
+  headerLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   topBarSection: {
     flexDirection: 'row',
