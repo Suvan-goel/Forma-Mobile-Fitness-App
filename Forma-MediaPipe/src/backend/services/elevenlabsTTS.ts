@@ -53,6 +53,7 @@ export function setActiveVoiceSettings(settings: ActiveVoiceSettings): void {
 
 let audioInstance: any = null;
 let isInitialized = false;
+let speechGeneration = 0; // Incremented on every speakWithElevenLabs call; used to cancel stale fetches
 
 /**
  * Pure-JS base64 encoder for Uint8Array.
@@ -191,6 +192,9 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
     return;
   }
 
+  // Claim this generation; any in-flight fetch with an older generation will be discarded
+  const generation = ++speechGeneration;
+
   try {
     // Initialize audio session
     await initializeAudio();
@@ -208,6 +212,9 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
 
     // Generate speech from ElevenLabs (downloads to temp file)
     const audioUri = await generateSpeech(text.trim());
+
+    // A newer speakWithElevenLabs call was made while we were fetching — discard this result
+    if (generation !== speechGeneration) return;
 
     // Cleanup old files asynchronously (don't block playback)
     cleanupOldAudioFiles().catch(() => {});
@@ -235,6 +242,7 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
  * Stop any currently playing speech.
  */
 export async function stopSpeech(): Promise<void> {
+  speechGeneration++; // Cancel any in-flight fetch
   if (!nativeModulesAvailable || !audioInstance) return;
 
   try {
