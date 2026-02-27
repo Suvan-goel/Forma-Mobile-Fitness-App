@@ -9,7 +9,6 @@ import {
   Animated,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
   Path,
@@ -510,14 +509,9 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
         >
           <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
             <TouchableOpacity onPress={handleGetStarted} activeOpacity={0.85}>
-              <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.ctaButton}
-              >
+              <View style={styles.ctaButton}>
                 <Text style={styles.ctaText}>Get Started</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -560,11 +554,14 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   ctaText: {
     fontFamily: FONTS.display.bold,
     fontSize: 17,
-    color: COLORS.text,
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
 });

@@ -226,22 +226,9 @@ export const ExerciseGuideScreen: React.FC = () => {
       {/* CTA Button */}
       <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, SPACING.xxl) }]}>
         <TouchableOpacity onPress={handleGotIt} activeOpacity={0.85}>
-          <LinearGradient
-            colors={['#8B5CF6', '#7C3AED']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={[
-              styles.ctaButton,
-              Platform.OS === 'ios' && {
-                shadowColor: COLORS.primary,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.5,
-                shadowRadius: 20,
-              },
-            ]}
-          >
+          <View style={styles.ctaButton}>
             <Text style={styles.ctaText}>Got it</Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -497,11 +484,14 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   ctaText: {
     fontFamily: FONTS.display.bold,
     fontSize: 17,
-    color: COLORS.text,
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
 });
