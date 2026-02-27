@@ -662,17 +662,21 @@ export const CameraScreen: React.FC = () => {
             >
               <X size={18} color={COLORS.text} strokeWidth={2.5} />
             </TouchableOpacity>
-            <SetupGuideButton onPress={() => {
-              if (guideData) {
-                (navigation as any).navigate('ExerciseGuide', {
-                  exerciseName: exerciseNameFromRoute ?? '',
-                  category,
-                  viewType: guideData.viewType,
-                  keySetup: guideData.keySetup,
-                  reasonText: guideData.reasonText,
-                });
-              }
-            }} />
+            <View style={styles.setupGuideButtonWrapper}>
+              <SetupGuideButton
+                onPress={() => {
+                  if (guideData) {
+                    (navigation as any).navigate('ExerciseGuide', {
+                      exerciseName: exerciseNameFromRoute ?? '',
+                      category,
+                      viewType: guideData.viewType,
+                      keySetup: guideData.keySetup,
+                      reasonText: guideData.reasonText,
+                    });
+                  }
+                }}
+              />
+            </View>
           </View>
           <View style={styles.exerciseTopCardWrap}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
@@ -1107,7 +1111,12 @@ const styles = StyleSheet.create({
   headerLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginRight: SPACING.md,
+  },
+  setupGuideButtonWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: SPACING.md,
   },
   topBarSection: {
     flexDirection: 'row',

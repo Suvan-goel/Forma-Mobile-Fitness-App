@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -18,6 +20,19 @@ import { EXERCISE_PERFORM_DATA } from '../constants/exerciseGuideData';
 import type { RecordStackParamList } from '../app/RootNavigator';
 
 type GuideRouteProp = RouteProp<RecordStackParamList, 'ExerciseGuide'>;
+
+const EXERCISE_PERFORM_IMAGES: Record<string, ImageSourcePropType> = {
+  'Barbell Curl':                     require('../assets/exercises/barbell_curl_double.png'),
+  'Barbell Squat':                    require('../assets/exercises/barbell_squat_double.png'),
+  'Push-Up':                          require('../assets/exercises/push_up_double.png'),
+  'Cable Pushdowns':                  require('../assets/exercises/cable_pushdowns_double.png'),
+  'Cable Row':                        require('../assets/exercises/cable_row_double.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises_double.png'),
+  'Cable Lat Pulldowns':              require('../assets/exercises/cable_lat_pulldowns_double.png'),
+  'Leg Extensions':                   require('../assets/exercises/leg_extensions_double.png'),
+  'Lying Leg Curl':                   require('../assets/exercises/lying_leg_curl_double.png'),
+  'Machine Ab Crunches':              require('../assets/exercises/machine_ab_crunches_double.png'),
+};
 
 type TabKey = 'record' | 'perform';
 
@@ -84,12 +99,20 @@ const PerformTabContent: React.FC<{
     commonMistakes: [],
   };
 
+  const exerciseImage = EXERCISE_PERFORM_IMAGES[exerciseName];
+
   return (
     <View style={styles.tabContent}>
-      {/* Image placeholder */}
-      <View style={styles.imagePlaceholder}>
-        <Text style={styles.imagePlaceholderText}>Exercise demo</Text>
-      </View>
+      {/* Exercise image */}
+      {exerciseImage ? (
+        <View style={styles.imageContainer}>
+          <Image source={exerciseImage} style={styles.exerciseImage} resizeMode="contain" />
+        </View>
+      ) : (
+        <View style={styles.imagePlaceholder}>
+          <Text style={styles.imagePlaceholderText}>Exercise demo</Text>
+        </View>
+      )}
 
       {/* How to Perform */}
       <View style={styles.instructionsSection}>
@@ -333,7 +356,23 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  /* ── Perform tab: image placeholder ── */
+  /* ── Perform tab: image ── */
+  imageContainer: {
+    height: 200,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  exerciseImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  /* ── Perform tab: image placeholder (fallback) ── */
   imagePlaceholder: {
     height: 200,
     borderRadius: 16,
