@@ -4,7 +4,7 @@
  */
 
 import React, { memo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 
 interface TimeRangeOption {
@@ -67,32 +67,23 @@ const styles = StyleSheet.create({
     height: 34,
     paddingHorizontal: 16,
     borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: '#000000',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#3F3F46',
     alignItems: 'center',
     justifyContent: 'center',
   },
   pillActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
-      },
-      android: { elevation: 4 },
-    }),
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   pillText: {
     fontFamily: FONTS.ui.bold,
     fontSize: 11,
     letterSpacing: 2,
-    color: COLORS.textSecondary,
+    color: '#71717A',
   },
   pillTextActive: {
-    color: '#000000',
+    color: '#FFFFFF',
   },
 });
