@@ -568,6 +568,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   ctaButton: {
+    marginTop: 45,
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 48,
