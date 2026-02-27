@@ -328,13 +328,10 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
           })}
         </View>
 
-        {/* CTA Button */}
+        {/* CTA Button — outer view for JS-driven glow, inner for native-driven scale */}
         <Animated.View
           style={[
             styles.ctaWrapper,
-            {
-              transform: [{ scale: buttonScale }],
-            },
             Platform.OS === 'ios' && {
               shadowColor: COLORS.primary,
               shadowOffset: { width: 0, height: 0 },
@@ -343,16 +340,18 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
             },
           ]}
         >
-          <TouchableOpacity onPress={handleGetStarted} activeOpacity={0.85}>
-            <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.ctaButton}
-            >
-              <Text style={styles.ctaText}>Get Started</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+            <TouchableOpacity onPress={handleGetStarted} activeOpacity={0.85}>
+              <LinearGradient
+                colors={['#8B5CF6', '#7C3AED']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.ctaButton}
+              >
+                <Text style={styles.ctaText}>Get Started</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
         </Animated.View>
       </View>
     </View>
