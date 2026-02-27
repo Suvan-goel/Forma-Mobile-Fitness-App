@@ -1,10 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text, Platform } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { CheckCircle } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 
 const BARBELL_WIDTH = 260;
@@ -264,23 +262,46 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
           ]}
           pointerEvents="none"
         >
-          {/* Three concentric glow rings */}
-          <View style={styles.iconOuterRing}>
-            <View style={styles.iconMiddleRing}>
-              <View style={styles.iconInnerCircle}>
-                <CheckCircle size={44} color="#8B5CF6" strokeWidth={1.5} />
-              </View>
-            </View>
+          {/* Label */}
+          <View style={styles.labelRow}>
+            <View style={styles.labelLine} />
+            <Text style={styles.labelText}>ANALYSIS COMPLETE</Text>
+            <View style={styles.labelLine} />
           </View>
 
-          <View style={styles.successTextGroup}>
-            <View style={styles.labelRow}>
-              <View style={styles.labelLine} />
-              <Text style={styles.labelText}>ANALYSIS COMPLETE</Text>
-              <View style={styles.labelLine} />
+          {/* Hero headline */}
+          <Text style={styles.successHeader}>
+            Profile Ready<Text style={styles.accentDot}>.</Text>
+          </Text>
+
+          {/* Subtext */}
+          <Text style={styles.successSubtext}>Your custom AI blueprint has been built.</Text>
+
+          {/* Metrics readout card */}
+          <View style={styles.metricsCard}>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>AI Blueprint</Text>
+              <View style={styles.metricStatus}>
+                <View style={styles.metricDot} />
+                <Text style={styles.metricValue}>Compiled</Text>
+              </View>
             </View>
-            <Text style={styles.successHeader}>Profile Ready.</Text>
-            <Text style={styles.successSubtext}>Your custom AI blueprint has been built.</Text>
+            <View style={styles.metricSeparator} />
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Form Profile</Text>
+              <View style={styles.metricStatus}>
+                <View style={styles.metricDot} />
+                <Text style={styles.metricValue}>Ready</Text>
+              </View>
+            </View>
+            <View style={styles.metricSeparator} />
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Coach Mode</Text>
+              <View style={styles.metricStatus}>
+                <View style={styles.metricDot} />
+                <Text style={styles.metricValue}>Active</Text>
+              </View>
+            </View>
           </View>
         </Animated.View>
 
@@ -300,15 +321,10 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={onComplete}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
-          <LinearGradient
-            colors={['#9B72FF', '#7C3AED']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <Text style={styles.ctaText}>Finalize Profile</Text>
+          <Text style={styles.ctaText}>Begin Training</Text>
+          <Text style={styles.ctaArrow}>→</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -471,101 +487,109 @@ const styles = StyleSheet.create({
   /* ── Success state ───────────────────────── */
   successContainer: {
     position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 100,
     alignItems: 'center',
-    gap: 36,
+    gap: 20,
   },
-  iconOuterRing: {
-    width: 144,
-    height: 144,
-    borderRadius: 72,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    backgroundColor: 'rgba(139, 92, 246, 0.02)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOpacity: 0.2,
-        shadowRadius: 32,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  iconMiddleRing: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    backgroundColor: 'rgba(139, 92, 246, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconInnerCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOpacity: 0.65,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: { elevation: 4 },
-    }),
-  },
-  successTextGroup: {
-    alignItems: 'center',
-    gap: 12,
+  accentDot: {
+    color: COLORS.primary,
   },
   successHeader: {
     fontFamily: FONTS.display.bold,
-    fontSize: 36,
+    fontSize: 52,
     color: '#FFFFFF',
-    letterSpacing: -1,
+    letterSpacing: -2,
     textAlign: 'center',
   },
   successSubtext: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 15,
-    color: '#A1A1AA',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.4)',
     letterSpacing: 0.2,
     textAlign: 'center',
-    maxWidth: 240,
+  },
+
+  /* ── Metrics card ────────────────────────── */
+  metricsCard: {
+    alignSelf: 'stretch',
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 20,
+    marginTop: 8,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+  },
+  metricLabel: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.3,
+  },
+  metricStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  metricDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.primary,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOpacity: 0.9,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 0 },
+      },
+    }),
+  },
+  metricValue: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: COLORS.primary,
+    letterSpacing: 0.3,
+  },
+  metricSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
 
   /* ── CTA button ──────────────────────────── */
   ctaContainer: {
     paddingHorizontal: SPACING.screenHorizontal,
+    marginBottom: 180,
   },
   ctaButton: {
-    borderRadius: 18,
-    paddingVertical: 20,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: { elevation: 12 },
-    }),
+    flexDirection: 'row',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(139, 92, 246, 0.07)',
   },
   ctaText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 16,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
+  },
+  ctaArrow: {
+    fontFamily: FONTS.display.medium,
+    fontSize: 16,
+    color: COLORS.primary,
   },
 });

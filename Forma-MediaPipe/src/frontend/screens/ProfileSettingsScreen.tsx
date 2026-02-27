@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera, Mail, Calendar, User, Shield } from 'lucide-react-native';
+import { ChevronLeft, Camera, Mail, Calendar, User, Shield, LogOut } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   COLORS,
@@ -24,6 +24,7 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { useUser, useUpdateUser } from '../../backend/hooks';
+import { useAuth } from '../../backend/contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 
 interface ProfileSettingsScreenProps {
@@ -36,6 +37,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { user, isLoading: userLoading, refetch } = useUser();
   const { updateProfile, uploadAvatar, isUpdating, error } = useUpdateUser();
+  const { signOut } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -120,6 +122,23 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   const joinDate = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : '';
+
+  const handleLogout = () => {
+    showAlert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch (logoutError) {
+            showAlert('Error', 'Failed to log out. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
 
   if (userLoading) {
     return (
@@ -336,6 +355,20 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
               </View>
             </LinearGradient>
           </View>
+
+          {/* ── LOGOUT ──────────────────────────────── */}
+          <TouchableOpacity
+            style={styles.logoutOuter}
+            activeOpacity={0.7}
+            onPress={handleLogout}
+          >
+            <View style={styles.logoutInner}>
+              <View style={styles.logoutIconBadge}>
+                <LogOut size={16} color="#EF4444" strokeWidth={1.5} />
+              </View>
+              <Text style={styles.logoutText}>Log Out</Text>
+            </View>
+          </TouchableOpacity>
 
           {error ? (
             <Text style={styles.errorText}>{error}</Text>
@@ -573,6 +606,37 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     marginVertical: SPACING.sm + 2,
+  },
+
+  /* ── Logout ────────────────────────────── */
+  logoutOuter: {
+    marginTop: SPACING.xxl,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(239, 68, 68, 0.04)',
+    overflow: 'hidden',
+  },
+  logoutInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  logoutIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: '#EF4444',
+    letterSpacing: 0.5,
   },
 
   /* ── Error ──────────────────────────── */
