@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, ChevronRight, MessageSquareText, AudioLines, Bone, Bug, Timer, UserRound } from 'lucide-react-native';
-import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
@@ -223,17 +222,7 @@ export const CameraSettingsScreen: React.FC = () => {
     setDebugMode(value);
   };
 
-  const handleRestTimerToggle = async (value: boolean) => {
-    if (value) {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        showAlert(
-          'Notifications Disabled',
-          'Enable notifications in your device settings to use the rest timer alert.'
-        );
-        return;
-      }
-    }
+  const handleRestTimerToggle = (value: boolean) => {
     setRestTimerEnabled(value);
   };
 
