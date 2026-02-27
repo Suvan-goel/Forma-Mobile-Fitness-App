@@ -44,6 +44,7 @@ function mapWorkoutDetailsRow(row: any): WorkoutDetails {
     name: row.name,
     date: formatDate(row.date),
     duration: formatDuration(row.duration_seconds),
+    notes: row.notes ?? undefined,
     exercises: (row.workout_exercises ?? []).map((ex: any) => ({
       id: ex.id,
       name: ex.name,
@@ -164,6 +165,7 @@ export const workoutsService = {
         date: payload.date.toISOString(),
         duration_seconds: payload.durationSeconds,
         category: payload.category ?? null,
+        notes: payload.notes ?? null,
       })
       .select()
       .single();

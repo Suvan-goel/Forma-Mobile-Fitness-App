@@ -49,6 +49,7 @@ export const SaveWorkoutScreen: React.FC = () => {
       name: workoutName,
       durationSeconds: workoutElapsedSeconds,
       category: workoutData.category,
+      notes: workoutDescription.trim() || undefined,
       exercises,
     });
 
