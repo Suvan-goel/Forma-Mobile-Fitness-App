@@ -21,7 +21,7 @@ import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
-import { setActiveVoiceId } from '../../backend/services/elevenlabsTTS';
+import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 
@@ -142,6 +142,7 @@ export const CameraScreen: React.FC = () => {
   useEffect(() => {
     const trainer = TRAINERS.find((t) => t.id === selectedTrainerId) ?? TRAINERS.find((t) => t.id === DEFAULT_TRAINER_ID)!;
     setActiveVoiceId(trainer.voiceId);
+    setActiveVoiceSettings(trainer.voiceSettings);
   }, [selectedTrainerId]);
 
   // Use refs to track exercise state without triggering re-renders

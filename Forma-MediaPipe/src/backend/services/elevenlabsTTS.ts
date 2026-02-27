@@ -23,11 +23,32 @@ try {
 const ELEVENLABS_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
 let activeVoiceId = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default: Rachel
 
+interface ActiveVoiceSettings {
+  speed: number;
+  stability: number;
+  similarity: number;
+  styleExaggeration: number;
+}
+
+let activeVoiceSettings: ActiveVoiceSettings = {
+  speed: 0.9,
+  stability: 0.45,
+  similarity: 0.8,
+  styleExaggeration: 0.0,
+};
+
 /**
  * Override the active voice ID at runtime (e.g. when the user selects a trainer).
  */
 export function setActiveVoiceId(id: string): void {
   activeVoiceId = id;
+}
+
+/**
+ * Override the active voice settings at runtime (e.g. when the user selects a trainer).
+ */
+export function setActiveVoiceSettings(settings: ActiveVoiceSettings): void {
+  activeVoiceSettings = settings;
 }
 
 let audioInstance: any = null;
@@ -105,11 +126,12 @@ async function generateSpeech(text: string): Promise<string> {
     },
     body: JSON.stringify({
       text,
-      model_id: 'eleven_turbo_v2_5',
+      model_id: 'eleven_multilingual_v2',
       voice_settings: {
-        stability: 0.45,
-        similarity_boost: 0.8,
-        speed: 0.9,
+        stability: activeVoiceSettings.stability,
+        similarity_boost: activeVoiceSettings.similarity,
+        speed: activeVoiceSettings.speed,
+        style: activeVoiceSettings.styleExaggeration,
       },
     }),
   });

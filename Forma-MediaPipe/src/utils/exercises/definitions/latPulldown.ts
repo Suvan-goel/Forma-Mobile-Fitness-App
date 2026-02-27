@@ -142,6 +142,10 @@ interface LatPulldownState {
   smoothedRightElbow: number;
   smoothedAvgElbow: number;
   smoothedTorsoLean: number;
+  /** After a rep completes, gate next rep start until user re-extends */
+  requireExtensionBeforeNextRep: boolean;
+  /** Timestamp when the last rep completed, for timeout fallback */
+  tRepCompleted: number | null;
   /** Visual feedback */
   feedback: string | null;
   lastFeedbackTime: number;
@@ -186,6 +190,8 @@ function initializeState(): LatPulldownState {
     }),
     warmedUp: false,
     restMaxAvgElbow: -Infinity,
+    requireExtensionBeforeNextRep: false,
+    tRepCompleted: null,
     smoothedLeftElbow: 180,
     smoothedRightElbow: 180,
     smoothedAvgElbow: 180,
@@ -269,6 +275,7 @@ function updateFSM(
   avgElbow: number,
   t: number,
   tRepStart: number | null,
+  requireExtension: boolean,
 ): FSMResult {
   let phase = currentPhase;
   let repCompleted = false;
@@ -276,7 +283,8 @@ function updateFSM(
   switch (phase) {
     case 'REST':
       // Arms extended overhead. When elbows start bending, begin pull.
-      if (avgElbow < THRESHOLDS.PULLING_ENTER) {
+      // requireExtension blocks the transition until the user re-extends after a rep.
+      if (avgElbow < THRESHOLDS.PULLING_ENTER && !requireExtension) {
         phase = 'PULLING';
       }
       break;
@@ -475,10 +483,20 @@ function updateLatPulldownState(
   // -- Track max elbow during REST (pre-pull extension) --
   if (state.phase === 'REST') {
     state.restMaxAvgElbow = Math.max(state.restMaxAvgElbow, smoothedAvgElbow);
+    // Clear the post-rep extension gate once the user has demonstrably re-extended,
+    // or after a 1.5s timeout (so reps still count for users who don't reach full extension).
+    if (state.requireExtensionBeforeNextRep) {
+      const extensionReached = smoothedAvgElbow >= THRESHOLDS.PULLING_ENTER;
+      const timedOut = state.tRepCompleted !== null && (t - state.tRepCompleted) > 1.5;
+      if (extensionReached || timedOut) {
+        state.requireExtensionBeforeNextRep = false;
+        state.tRepCompleted = null;
+      }
+    }
   }
 
   // -- FSM update --
-  const fsmResult = updateFSM(state.phase, smoothedAvgElbow, t, state.tRepStart);
+  const fsmResult = updateFSM(state.phase, smoothedAvgElbow, t, state.tRepStart, state.requireExtensionBeforeNextRep);
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
@@ -527,6 +545,8 @@ function updateLatPulldownState(
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
     state.repCount++;
+    state.requireExtensionBeforeNextRep = true;
+    state.tRepCompleted = t;
 
     const score = computeLatPulldownScore(state.repWindow);
     const messages = generateFormMessages(state.repWindow);
@@ -553,6 +573,8 @@ function updateLatPulldownState(
   if (prevPhase === 'PULLING' && state.phase === 'REST' && !fsmResult.repCompleted) {
     state.repWindow = null;
     state.tRepStart = null;
+    state.requireExtensionBeforeNextRep = false;
+    state.tRepCompleted = null;
   }
 
   // -- Clear feedback after 2 seconds --

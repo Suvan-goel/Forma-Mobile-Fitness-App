@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import {
-  Modal,
   View,
   Text,
   TouchableOpacity,
@@ -81,74 +80,70 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <AlertContext.Provider value={{ showAlert }}>
-      {children}
-      <Modal
-        visible={visible}
-        transparent
-        animationType="none"
-        onRequestClose={() => dismiss()}
-        statusBarTranslucent
-      >
-        <Animated.View style={[styles.overlay, { opacity: opacityAnim }]}>
-          <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
-            <Text style={styles.title}>{config?.title}</Text>
-            {config?.message ? (
-              <Text style={styles.message}>{config.message}</Text>
-            ) : null}
-            <View style={styles.divider} />
-            {isTwoButton ? (
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={[styles.button, styles.buttonCancel]}
-                  onPress={() => dismiss(cancelBtn?.onPress)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.buttonTextCancel}>{cancelBtn?.text}</Text>
-                </TouchableOpacity>
-                {actionBtns.map((btn, idx) => (
+      <View style={{ flex: 1 }}>
+        {children}
+        {visible && (
+          <Animated.View style={[styles.overlay, { opacity: opacityAnim }]}>
+            <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+              <Text style={styles.title}>{config?.title}</Text>
+              {config?.message ? (
+                <Text style={styles.message}>{config.message}</Text>
+              ) : null}
+              <View style={styles.divider} />
+              {isTwoButton ? (
+                <View style={styles.buttonRow}>
                   <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.button,
-                      btn.style === 'destructive' ? styles.buttonDestructive : styles.buttonPrimary,
-                    ]}
-                    onPress={() => dismiss(btn.onPress)}
-                    activeOpacity={0.75}
+                    style={[styles.button, styles.buttonCancel]}
+                    onPress={() => dismiss(cancelBtn?.onPress)}
+                    activeOpacity={0.7}
                   >
-                    <Text style={[
-                      styles.buttonText,
-                      btn.style === 'destructive' ? styles.buttonTextDestructive : styles.buttonTextPrimary,
-                    ]}>
-                      {btn.text}
-                    </Text>
+                    <Text style={styles.buttonTextCancel}>{cancelBtn?.text}</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            ) : (
-              <View>
-                {btns.map((btn, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.buttonFull,
-                      btn.style === 'destructive' ? styles.buttonDestructive : styles.buttonPrimary,
-                    ]}
-                    onPress={() => dismiss(btn.onPress)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[
-                      styles.buttonText,
-                      btn.style === 'destructive' ? styles.buttonTextDestructive : styles.buttonTextPrimary,
-                    ]}>
-                      {btn.text}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+                  {actionBtns.map((btn, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[
+                        styles.button,
+                        btn.style === 'destructive' ? styles.buttonDestructive : styles.buttonPrimary,
+                      ]}
+                      onPress={() => dismiss(btn.onPress)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[
+                        styles.buttonText,
+                        btn.style === 'destructive' ? styles.buttonTextDestructive : styles.buttonTextPrimary,
+                      ]}>
+                        {btn.text}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View>
+                  {btns.map((btn, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[
+                        styles.buttonFull,
+                        btn.style === 'destructive' ? styles.buttonDestructive : styles.buttonPrimary,
+                      ]}
+                      onPress={() => dismiss(btn.onPress)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[
+                        styles.buttonText,
+                        btn.style === 'destructive' ? styles.buttonTextDestructive : styles.buttonTextPrimary,
+                      ]}>
+                        {btn.text}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </Animated.View>
           </Animated.View>
-        </Animated.View>
-      </Modal>
+        )}
+      </View>
     </AlertContext.Provider>
   );
 };
@@ -157,7 +152,7 @@ export const useAlert = () => useContext(AlertContext);
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.82)',
     justifyContent: 'center',
     alignItems: 'center',
