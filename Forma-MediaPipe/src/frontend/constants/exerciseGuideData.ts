@@ -1,48 +1,99 @@
 export interface ExerciseSetupData {
   keySetup: string;
   reasonText: string;
+  cameraTips: string[];
 }
 
 export const EXERCISE_SETUP_DATA: Record<string, ExerciseSetupData> = {
   'Barbell Curl': {
     keySetup: 'Face the camera directly',
     reasonText: 'Tracks both arms for bilateral curl symmetry and elbow drift.',
+    cameraTips: [
+      'Place the phone about 6–8 feet in front of you at chest height.',
+      'Stand centered in frame with your full body and the barbell visible.',
+      'Leave a bit of headroom so the bar never leaves the screen at the top.',
+    ],
   },
   'Barbell Squat': {
     keySetup: 'Camera perpendicular to your body',
     reasonText: 'Tracks knee depth, hip hinge angle, and torso forward lean from the side.',
+    cameraTips: [
+      'Set the phone roughly at hip height, perpendicular to your body.',
+      'Stand 6–8 feet away so your whole body and the barbell are in frame.',
+      'Aim the camera so you can see your feet, hips, and head throughout the squat.',
+    ],
   },
   'Push-Up': {
     keySetup: 'Camera perpendicular to your body',
     reasonText: 'Tracks shoulder-hip-ankle alignment and elbow angle from the side.',
+    cameraTips: [
+      'Place the phone 4–6 feet away at about knee height on your side.',
+      'Frame from head to feet so your whole plank line is visible.',
+      'Angle slightly toward your shoulders so elbows and hips stay clear in view.',
+    ],
   },
   'Cable Pushdowns': {
     keySetup: 'Camera perpendicular to your body',
     reasonText: 'Tracks elbow extension angle and upper arm drift from the side.',
+    cameraTips: [
+      'Place the phone slightly in front and to the side at mid‑torso height.',
+      'Frame from your head down to just below the weight stack or your hips.',
+      'Avoid blocking the view with the cable column — angle a bit forward if needed.',
+    ],
   },
   'Cable Row': {
     keySetup: 'Camera perpendicular to your body',
     reasonText: 'Tracks elbow pull angle and shoulder retraction from the side.',
+    cameraTips: [
+      'Set the phone to the side at about chest height while you sit.',
+      'Frame from your head to just past the handle so elbows stay visible.',
+      'Keep the bench and stack in view without cutting off your shoulders.',
+    ],
   },
   'Standing Dumbbell Lateral Raises': {
     keySetup: 'Face the camera directly',
     reasonText: 'Tracks bilateral arm abduction and shrug detection from the front.',
+    cameraTips: [
+      'Place the phone 6–8 feet directly in front of you at chest height.',
+      'Stand centered so both arms have equal space to move out to the sides.',
+      'Leave room above your head so dumbbells never cut off at the top.',
+    ],
   },
   'Cable Lat Pulldowns': {
     keySetup: 'Face the camera directly',
     reasonText: 'Tracks both arms for bilateral elbow angle and torso lean.',
+    cameraTips: [
+      'Position the phone in front of the machine at about chest height.',
+      'Frame from the top of the bar to your knees while seated.',
+      'Sit centered so both elbows and the bar path stay visible.',
+    ],
   },
   'Leg Extensions': {
     keySetup: 'Camera perpendicular while seated',
     reasonText: 'Tracks knee extension angle and detects hip lift from the side.',
+    cameraTips: [
+      'Place the phone to your side at knee height, facing the machine.',
+      'Frame from your hips down to your feet so the pad and ankles are visible.',
+      'Angle slightly forward so any hip lift off the pad is easy to see.',
+    ],
   },
   'Lying Leg Curl': {
     keySetup: 'Camera perpendicular while prone',
     reasonText: 'Tracks knee flexion angle and detects hip lift from the side.',
+    cameraTips: [
+      'Set the phone at knee height on your side, perpendicular to the bench.',
+      'Frame from your hips down to your feet so the roller and ankles stay visible.',
+      'Make sure your hips and low back are in frame to catch any lifting off the pad.',
+    ],
   },
   'Machine Ab Crunches': {
     keySetup: 'Camera perpendicular while seated',
     reasonText: 'Tracks torso flexion angle and neck position from the side.',
+    cameraTips: [
+      'Place the phone to the side at roughly chest height while you sit.',
+      'Frame from the top of your head to your hips so the crunch arc is clear.',
+      'Angle slightly toward your chest so neck and upper‑back position stay visible.',
+    ],
   },
 };
 

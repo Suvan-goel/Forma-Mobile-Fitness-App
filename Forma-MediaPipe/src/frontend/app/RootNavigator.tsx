@@ -67,6 +67,7 @@ export type RootStackParamList = {
     viewType: 'SIDE' | 'FRONT' | 'ANY';
     keySetup: string;
     reasonText: string;
+    cameraTips: string[];
   };
   Onboarding: undefined;
 };
@@ -84,6 +85,7 @@ export type RecordStackParamList = {
     viewType: 'SIDE' | 'FRONT' | 'ANY';
     keySetup: string;
     reasonText: string;
+    cameraTips: string[];
   };
   SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number } };
   WorkoutSettings: undefined;

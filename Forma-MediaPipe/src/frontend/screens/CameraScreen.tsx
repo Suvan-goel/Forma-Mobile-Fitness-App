@@ -105,6 +105,11 @@ export const CameraScreen: React.FC = () => {
     const setup = EXERCISE_SETUP_DATA[exerciseNameFromRoute] ?? {
       keySetup: 'Position camera to capture full body',
       reasonText: 'Ensures all key joints are visible for tracking.',
+      cameraTips: [
+        'Place the phone far enough away to keep your whole body in frame.',
+        'Set the camera roughly at hip to chest height depending on the lift.',
+        'Avoid strong backlighting so your outline and joints are easy to detect.',
+      ],
     };
     return { viewType, ...setup };
   }, [exerciseNameFromRoute]);
@@ -672,6 +677,7 @@ export const CameraScreen: React.FC = () => {
                       viewType: guideData.viewType,
                       keySetup: guideData.keySetup,
                       reasonText: guideData.reasonText,
+                      cameraTips: guideData.cameraTips,
                     });
                   }
                 }}

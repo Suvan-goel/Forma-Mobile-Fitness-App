@@ -189,6 +189,11 @@ export const ChooseExerciseScreen: React.FC = () => {
     const setup = EXERCISE_SETUP_DATA[exercise.name] ?? {
       keySetup: 'Position camera to capture full body',
       reasonText: 'Ensures all key joints are visible for tracking.',
+      cameraTips: [
+        'Place the phone far enough away to keep your whole body in frame.',
+        'Set the camera around hip to chest height depending on the movement.',
+        'Avoid bright lights or windows directly behind you so your outline stays clear.',
+      ],
     };
     navigation.navigate('ExerciseGuide', {
       exerciseName: exercise.name,
@@ -196,6 +201,7 @@ export const ChooseExerciseScreen: React.FC = () => {
       viewType,
       keySetup: setup.keySetup,
       reasonText: setup.reasonText,
+      cameraTips: setup.cameraTips,
     });
   }, [navigation]);
 

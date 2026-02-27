@@ -69,7 +69,8 @@ const RecordTabContent: React.FC<{
   viewType: string;
   keySetup: string;
   reasonText: string;
-}> = ({ viewType, keySetup, reasonText }) => (
+  cameraTips?: string[];
+}> = ({ viewType, keySetup, reasonText, cameraTips }) => (
   <View style={styles.tabContent}>
     {/* Visual stage */}
     <View style={styles.visualStage}>
@@ -83,6 +84,17 @@ const RecordTabContent: React.FC<{
     <View style={styles.instructionsSection}>
       <Text style={styles.keySetup}>{keySetup}</Text>
       <Text style={styles.reasonText}>{reasonText}</Text>
+      {cameraTips && cameraTips.length > 0 && (
+        <View style={styles.cameraTipsSection}>
+          <Text style={styles.sectionHeader}>CAMERA SETUP TIPS</Text>
+          {cameraTips.map((tip, index) => (
+            <View key={index} style={styles.cameraTipRow}>
+              <View style={styles.cameraTipBullet} />
+              <Text style={styles.cameraTipText}>{tip}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   </View>
 );
@@ -149,7 +161,7 @@ export const ExerciseGuideScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute<GuideRouteProp>();
   const insets = useSafeAreaInsets();
-  const { exerciseName, viewType, keySetup, reasonText } = route.params;
+  const { exerciseName, viewType, keySetup, reasonText, cameraTips } = route.params;
 
   const [activeTab, setActiveTab] = useState<TabKey>('record');
 
@@ -204,6 +216,7 @@ export const ExerciseGuideScreen: React.FC = () => {
             viewType={viewType}
             keySetup={keySetup}
             reasonText={reasonText}
+            cameraTips={cameraTips}
           />
         ) : (
           <PerformTabContent exerciseName={exerciseName} />
@@ -354,6 +367,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.textSecondary,
     lineHeight: 22,
+  },
+
+  /* ── Record tab: camera tips ── */
+  cameraTipsSection: {
+    paddingTop: SPACING.lg,
+  },
+  cameraTipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  cameraTipBullet: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.textSecondary,
+    marginTop: 8,
+    marginRight: 12,
+  },
+  cameraTipText: {
+    flex: 1,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
   },
 
   /* ── Perform tab: image ── */
