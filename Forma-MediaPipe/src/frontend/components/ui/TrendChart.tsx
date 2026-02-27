@@ -5,7 +5,7 @@
  * Renders a smooth Catmull-Rom spline with violet gradient fill.
  */
 
-import React, { useMemo, memo } from 'react';
+import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText } from 'react-native-svg';
@@ -92,6 +92,8 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   formatValue,
   timeRange,
 }) => {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
   const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - SPACING.xl * 2;
   const padLeft = 32;
   const padRight = 8;
@@ -99,9 +101,6 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   const padBottom = 20;
   const graphW = chartWidth - padLeft - padRight;
   const graphH = height - padTop - padBottom;
-
-  const currentValue = data.values.length > 0 ? data.values[data.values.length - 1] : 0;
-  const displayValue = formatValue ? formatValue(currentValue) : String(Math.round(currentValue));
 
   const svgContent = useMemo(() => {
     if (data.values.length === 0) return null;
@@ -156,6 +155,37 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
     return { linePath, areaPath, points, yLabels, xLabels, lastPt };
   }, [data.values, data.dates, graphW, graphH, padLeft, padTop, timeRange]);
 
+  const activeIndex =
+    data.values.length > 0
+      ? selectedIndex != null
+        ? selectedIndex
+        : data.values.length - 1
+      : null;
+
+  const currentValue = activeIndex != null ? data.values[activeIndex] : 0;
+  const displayValue = formatValue ? formatValue(currentValue) : String(Math.round(currentValue));
+
+  const activePoint =
+    svgContent && activeIndex != null ? svgContent.points[activeIndex] : null;
+
+  const handlePointPress = useCallback(
+    (evt: any) => {
+      if (!svgContent || svgContent.points.length === 0) return;
+      const x = evt.nativeEvent.locationX as number;
+      let nearestIndex = 0;
+      let minDist = Number.POSITIVE_INFINITY;
+      svgContent.points.forEach((pt, idx) => {
+        const dist = Math.abs(pt.x - x);
+        if (dist < minDist) {
+          minDist = dist;
+          nearestIndex = idx;
+        }
+      });
+      setSelectedIndex(nearestIndex);
+    },
+    [svgContent],
+  );
+
   return (
     <View style={styles.cardOuter}>
       <LinearGradient
@@ -179,7 +209,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 
           {/* Chart */}
           {svgContent ? (
-            <Svg width={chartWidth} height={height}>
+            <Svg width={chartWidth} height={height} onPress={handlePointPress}>
               <Defs>
                 {/* userSpaceOnUse + pixel coords so gradient renders correctly on native (objectBoundingBox can show solid fill) */}
                 <SvgGradient
@@ -214,16 +244,22 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                   key={i}
                   cx={pt.x}
                   cy={pt.y}
-                  r={i === svgContent.points.length - 1 ? 4 : 0}
+                  r={
+                    activeIndex === i
+                      ? 5
+                      : activeIndex == null && i === svgContent.points.length - 1
+                        ? 4
+                        : 0
+                  }
                   fill={COLORS.accent}
                 />
               ))}
 
               {/* Last point glow */}
-              {svgContent.lastPt && (
+              {activePoint && (
                 <Circle
-                  cx={svgContent.lastPt.x}
-                  cy={svgContent.lastPt.y}
+                  cx={activePoint.x}
+                  cy={activePoint.y}
                   r={8}
                   fill="rgba(139,92,246,0.2)"
                 />
