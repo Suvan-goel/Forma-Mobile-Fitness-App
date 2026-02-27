@@ -49,13 +49,13 @@ const FORM_THRESHOLDS = {
   /** Min average elbow angle above which pull is insufficient */
   PULL_ROM_FAIL: 90,
   /** Max average elbow angle below which extension is insufficient */
-  EXTENSION_ROM_FAIL: 150,
+  EXTENSION_ROM_FAIL: 130,
   /** Torso lateral lean above which there is excessive lean */
   TORSO_LEAN_WARN: 15,
   /** Elbow angle difference between arms above which asymmetry triggers */
   ASYMMETRY_WARN: 20,
   /** Concentric (pull down) too fast threshold (seconds) */
-  TEMPO_PULL_MIN: 0.3,
+  TEMPO_PULL_MIN: 0.2,
   /** Eccentric (return) too fast threshold (seconds) */
   TEMPO_RETURN_MIN: 0.4,
 } as const;
@@ -544,6 +544,11 @@ function updateLatPulldownState(
 
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
+    // The RETURNING→REST transition frame is not captured by the inRep accumulation
+    // block above (inRep is false once phase=REST). Capture it here so the final
+    // extension angle (≥REST_REENTER) is reflected in feedback and scoring.
+    state.repWindow.maxAvgElbow = Math.max(state.repWindow.maxAvgElbow, smoothedAvgElbow);
+
     state.repCount++;
     state.requireExtensionBeforeNextRep = true;
     state.tRepCompleted = t;

@@ -10,7 +10,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "postinstall": "patch-package && node scripts/patch-mediapipe-create-fragment.js && node scripts/patch-mediapipe-disable-native-autocreate.js",
-    "test": "jest"
+    "test": "jest",
+    "replay": "jest scripts/replay.ts --no-coverage --verbose"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -37,7 +38,7 @@
     "expo-haptics": "~14.1.4",
     "expo-image-picker": "~16.1.4",
     "expo-linear-gradient": "~14.1.5",
-"expo-status-bar": "~2.2.3",
+    "expo-status-bar": "~2.2.3",
     "expo-web-browser": "~14.2.0",
     "lucide-react-native": "^0.378.0",
     "react": "19.0.0",
