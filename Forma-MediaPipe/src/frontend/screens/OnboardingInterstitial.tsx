@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text, Platform } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 
@@ -110,7 +109,6 @@ interface OnboardingInterstitialProps {
 }
 
 export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ onComplete }) => {
-  const insets = useSafeAreaInsets();
 
   // Animated values
   const scanX          = useRef(new Animated.Value(SCAN_LEFT)).current;
@@ -250,76 +248,60 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
         </View>
       </Animated.View>
 
-      {/* ── Center area — only used to anchor success state position ── */}
-      <View style={styles.centerArea}>
-
-        {/* Success state */}
-        <Animated.View
-          style={[
-            styles.successContainer,
-            {
-              opacity: successOpacity,
-              transform: [{ scale: successScale }],
-            },
-          ]}
-          pointerEvents="none"
-        >
-          {/* Label */}
-          <View style={styles.labelRow}>
-            <View style={styles.labelLine} />
-            <Text style={styles.labelText}>ANALYSIS COMPLETE</Text>
-            <View style={styles.labelLine} />
-          </View>
-
-          {/* Hero headline */}
-          <Text style={styles.successHeader}>
-            Profile Ready<Text style={styles.accentDot}>.</Text>
-          </Text>
-
-          {/* Subtext */}
-          <Text style={styles.successSubtext}>Your custom AI blueprint has been built.</Text>
-
-          {/* Metrics readout card */}
-          <View style={styles.metricsCard}>
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>AI Blueprint</Text>
-              <View style={styles.metricStatus}>
-                <View style={styles.metricDot} />
-                <Text style={styles.metricValue}>Compiled</Text>
-              </View>
-            </View>
-            <View style={styles.metricSeparator} />
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Form Profile</Text>
-              <View style={styles.metricStatus}>
-                <View style={styles.metricDot} />
-                <Text style={styles.metricValue}>Ready</Text>
-              </View>
-            </View>
-            <View style={styles.metricSeparator} />
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Coach Mode</Text>
-              <View style={styles.metricStatus}>
-                <View style={styles.metricDot} />
-                <Text style={styles.metricValue}>Active</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-      </View>
-
-      {/* ── CTA button — fades in with success state ─────────── */}
+      {/* ── Success state — full-screen overlay, always centered ── */}
       <Animated.View
         style={[
-          styles.ctaContainer,
+          styles.successContainer,
           {
-            opacity: buttonOpacity,
-            paddingBottom: Math.max(insets.bottom, 24),
+            opacity: successOpacity,
+            transform: [{ scale: successScale }],
           },
         ]}
-        pointerEvents={isComplete ? 'auto' : 'none'}
+        pointerEvents={isComplete ? 'box-none' : 'none'}
       >
+        {/* Label */}
+        <View style={styles.labelRow}>
+          <View style={styles.labelLine} />
+          <Text style={styles.labelText}>ANALYSIS COMPLETE</Text>
+          <View style={styles.labelLine} />
+        </View>
+
+        {/* Hero headline */}
+        <Text style={styles.successHeader}>
+          Profile Ready<Text style={styles.accentDot}>.</Text>
+        </Text>
+
+        {/* Subtext */}
+        <Text style={styles.successSubtext}>Your custom AI blueprint has been built.</Text>
+
+        {/* Metrics readout card */}
+        <View style={styles.metricsCard}>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>AI Blueprint</Text>
+            <View style={styles.metricStatus}>
+              <View style={styles.metricDot} />
+              <Text style={styles.metricValue}>Compiled</Text>
+            </View>
+          </View>
+          <View style={styles.metricSeparator} />
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Form Profile</Text>
+            <View style={styles.metricStatus}>
+              <View style={styles.metricDot} />
+              <Text style={styles.metricValue}>Ready</Text>
+            </View>
+          </View>
+          <View style={styles.metricSeparator} />
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Coach Mode</Text>
+            <View style={styles.metricStatus}>
+              <View style={styles.metricDot} />
+              <Text style={styles.metricValue}>Active</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* CTA button — part of the centered content block */}
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={onComplete}
@@ -500,10 +482,13 @@ const styles = StyleSheet.create({
   /* ── Success state ───────────────────────── */
   successContainer: {
     position: 'absolute',
-    left: 24,
-    right: 24,
-    bottom: 100,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
     gap: 20,
   },
   accentDot: {
@@ -580,12 +565,12 @@ const styles = StyleSheet.create({
   /* ── CTA button ──────────────────────────── */
   ctaContainer: {
     paddingHorizontal: SPACING.screenHorizontal,
-    marginBottom: 180,
+    marginBottom: 0,
   },
   ctaButton: {
     borderRadius: 16,
     paddingVertical: 18,
-    paddingHorizontal: 28,
+    paddingHorizontal: 48,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
