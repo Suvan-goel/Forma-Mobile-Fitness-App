@@ -207,11 +207,9 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
   return (
     <Animated.View style={[styles.root, { opacity: screenFade }]}>
 
-      {/* ── Center area: loading and success overlap ─────────── */}
-      <View style={styles.centerArea}>
-
-        {/* Loading group — fades out when scan completes */}
-        <Animated.View style={[styles.loadingGroup, { opacity: loadingOpacity }]}>
+      {/* ── Loading group — full-screen absolute overlay, always centered ── */}
+      <Animated.View style={[styles.loadingOverlay, { opacity: loadingOpacity }]} pointerEvents="none">
+        <View style={styles.loadingGroup}>
 
           {/* Label */}
           <View style={styles.labelRow}>
@@ -249,9 +247,13 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
             {TEXT_PHASES[phaseIndex]}
           </Animated.Text>
 
-        </Animated.View>
+        </View>
+      </Animated.View>
 
-        {/* Success state — springs in over the same space */}
+      {/* ── Center area — only used to anchor success state position ── */}
+      <View style={styles.centerArea}>
+
+        {/* Success state */}
         <Animated.View
           style={[
             styles.successContainer,
@@ -343,6 +345,17 @@ const styles = StyleSheet.create({
   /* ── Center area (loading + success share this space) ─── */
   centerArea: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Loading overlay — full-screen, always centered ─── */
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },

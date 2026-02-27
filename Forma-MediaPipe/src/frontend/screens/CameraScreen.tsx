@@ -632,6 +632,51 @@ export const CameraScreen: React.FC = () => {
     return values;
   }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute, workoutData.duration, isRecording]);
 
+  // Dynamic positioning for the setup guide ("?") button so it stays centered
+  // between the discard "X" button and the exercise title text.
+  const [headerMeasurements, setHeaderMeasurements] = useState<{
+    leftRight: number | null;
+    titleLeft: number | null;
+    questionWidth: number | null;
+  }>({
+    leftRight: null,
+    titleLeft: null,
+    questionWidth: null,
+  });
+
+  const handleHeaderLeftLayout = useCallback((event: any) => {
+    const { x, width } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      leftRight: x + width,
+    }));
+  }, []);
+
+  const handleTitleLayout = useCallback((event: any) => {
+    const { x } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      titleLeft: x,
+    }));
+  }, []);
+
+  const handleQuestionLayout = useCallback((event: any) => {
+    const { width } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      questionWidth: width,
+    }));
+  }, []);
+
+  const questionLeft = useMemo(() => {
+    const { leftRight, titleLeft, questionWidth } = headerMeasurements;
+    if (leftRight == null || titleLeft == null || questionWidth == null) {
+      return null;
+    }
+    const mid = (leftRight + titleLeft) / 2;
+    return mid - questionWidth / 2;
+  }, [headerMeasurements]);
+
   const showCamera = cameraMounted && !isClosing;
 
   return (
@@ -657,11 +702,12 @@ export const CameraScreen: React.FC = () => {
           <View style={[styles.overlay, { height: cameraDisplayHeight }]}>
         {/* Top bar — overlays top of camera */}
         <View style={[styles.topBarSection, { paddingTop: topInset, height: topBarHeight }]}>
-          <View style={styles.headerLeftGroup}>
+          <View style={styles.headerLeftGroup} onLayout={handleHeaderLeftLayout}>
             <TouchableOpacity
               style={styles.discardButton}
               onPress={handleDiscardSetPress}
               activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel="Discard set"
             >
@@ -671,10 +717,11 @@ export const CameraScreen: React.FC = () => {
 
           {/* Setup guide button floated so '?' sits between X and exercise title */}
           <View
+            onLayout={handleQuestionLayout}
             style={[
               styles.setupGuideButtonFloating,
               {
-                left: SCREEN_WIDTH * 0.27 - 18,
+                left: questionLeft ?? SCREEN_WIDTH * 0.27 - 18,
                 // Slightly below exact center so it visually matches text baseline
                 top: topInset + 29 - 18, // 27 ≈ center (24) + 3px downward tweak
               },
@@ -696,7 +743,7 @@ export const CameraScreen: React.FC = () => {
             />
           </View>
 
-          <View style={styles.exerciseTopCardWrap}>
+          <View style={styles.exerciseTopCardWrap} onLayout={handleTitleLayout}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
               {displayValues.exerciseDisplayName}
             </Text>
@@ -706,6 +753,7 @@ export const CameraScreen: React.FC = () => {
               style={styles.settingsButton}
               onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
               activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel="Camera settings"
             >
@@ -1187,17 +1235,12 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   discardButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 0,
   },
   exerciseTopCardWrap: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   exerciseTopCard: {
     alignItems: 'center',
@@ -1209,12 +1252,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   settingsButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 0,
   },
   recordButtonContainer: {
     alignItems: 'center',
