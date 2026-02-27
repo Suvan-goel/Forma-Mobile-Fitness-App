@@ -467,25 +467,16 @@ const styles = StyleSheet.create({
   filterPill: {
     height: 34,
     paddingHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: 17,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: '#3F3F46',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterPillActive: {
-    backgroundColor: '#8B5CF6',
-    borderColor: '#8B5CF6',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 12,
-      },
-      android: { elevation: 6 },
-    }),
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   filterPillText: {
     fontFamily: FONTS.ui.bold,
