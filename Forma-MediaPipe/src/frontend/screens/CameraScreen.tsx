@@ -667,23 +667,35 @@ export const CameraScreen: React.FC = () => {
             >
               <X size={18} color={COLORS.text} strokeWidth={2.5} />
             </TouchableOpacity>
-            <View style={styles.setupGuideButtonWrapper}>
-              <SetupGuideButton
-                onPress={() => {
-                  if (guideData) {
-                    (navigation as any).navigate('ExerciseGuide', {
-                      exerciseName: exerciseNameFromRoute ?? '',
-                      category,
-                      viewType: guideData.viewType,
-                      keySetup: guideData.keySetup,
-                      reasonText: guideData.reasonText,
-                      cameraTips: guideData.cameraTips,
-                    });
-                  }
-                }}
-              />
-            </View>
           </View>
+
+          {/* Setup guide button floated so '?' sits between X and exercise title */}
+          <View
+            style={[
+              styles.setupGuideButtonFloating,
+              {
+                left: SCREEN_WIDTH * 0.27 - 18,
+                // Slightly below exact center so it visually matches text baseline
+                top: topInset + 29 - 18, // 27 ≈ center (24) + 3px downward tweak
+              },
+            ]}
+          >
+            <SetupGuideButton
+              onPress={() => {
+                if (guideData) {
+                  (navigation as any).navigate('ExerciseGuide', {
+                    exerciseName: exerciseNameFromRoute ?? '',
+                    category,
+                    viewType: guideData.viewType,
+                    keySetup: guideData.keySetup,
+                    reasonText: guideData.reasonText,
+                    cameraTips: guideData.cameraTips,
+                  });
+                }
+              }}
+            />
+          </View>
+
           <View style={styles.exerciseTopCardWrap}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
               {displayValues.exerciseDisplayName}
@@ -1117,20 +1129,18 @@ const styles = StyleSheet.create({
   headerLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: SPACING.md,
-  },
-  setupGuideButtonWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: SPACING.md,
   },
   topBarSection: {
+    position: 'relative',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 4,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  setupGuideButtonFloating: {
+    position: 'absolute',
   },
   cameraArea: {
     flex: 1,

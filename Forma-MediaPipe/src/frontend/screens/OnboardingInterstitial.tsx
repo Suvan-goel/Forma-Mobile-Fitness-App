@@ -1,15 +1,17 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text, Platform } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { CheckCircle } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 
-const BARBELL_WIDTH = 240;
-const SCAN_LEFT = 10;
-const SCAN_RIGHT = BARBELL_WIDTH - 10;
-const SCAN_DURATION = 750;
+const BARBELL_WIDTH = 260;
+const BARBELL_HEIGHT = 80;
+const SCAN_LEFT = 5;
+const SCAN_RIGHT = BARBELL_WIDTH - 5;
+const SCAN_DURATION = 800;
 const PHASE_DURATION = 1500;
 
 const TEXT_PHASES = [
@@ -21,19 +23,87 @@ const TEXT_PHASES = [
 // ── Barbell SVG ─────────────────────────────────────────────
 
 const BarbellWireframe: React.FC = () => (
-  <Svg width={BARBELL_WIDTH} height={64} viewBox="0 0 240 64">
+  <Svg width={BARBELL_WIDTH} height={BARBELL_HEIGHT} viewBox={`0 0 ${BARBELL_WIDTH} ${BARBELL_HEIGHT}`}>
     {/* Left collar */}
-    <Rect x={10} y={24} width={32} height={16} rx={3} stroke="#E4E4E7" strokeWidth={2.5} fill="none" />
-    {/* Left plate */}
-    <Rect x={44} y={8} width={18} height={48} rx={2} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
-    {/* Bar */}
-    <Rect x={62} y={28} width={116} height={8} rx={4} stroke="#E4E4E7" strokeWidth={2.5} fill="none" />
-    {/* Right plate */}
-    <Rect x={178} y={8} width={18} height={48} rx={2} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
+    <Rect x={8} y={30} width={26} height={20} rx={3} stroke="#D4D4D8" strokeWidth={2} fill="none" />
+
+    {/* Left plate outer */}
+    <Rect x={34} y={8} width={20} height={64} rx={3} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
+    {/* Left plate inner detail ring */}
+    <Rect x={38} y={16} width={12} height={48} rx={2} stroke="rgba(255,255,255,0.22)" strokeWidth={1} fill="none" />
+
+    {/* Left grip section */}
+    <Rect x={54} y={32} width={32} height={16} rx={3} stroke="#C4C4C8" strokeWidth={1.5} fill="none" />
+
+    {/* Center knurled section */}
+    <Rect x={86} y={32} width={88} height={16} rx={2} stroke="#C4C4C8" strokeWidth={1.5} fill="none" />
+
+    {/* Knurling marks — 8 vertical bars across center */}
+    {Array.from({ length: 8 }, (_, i) => (
+      <Rect
+        key={i}
+        x={92 + i * 11}
+        y={36}
+        width={1.5}
+        height={8}
+        rx={0.75}
+        fill="rgba(255,255,255,0.28)"
+      />
+    ))}
+
+    {/* Right grip section */}
+    <Rect x={174} y={32} width={32} height={16} rx={3} stroke="#C4C4C8" strokeWidth={1.5} fill="none" />
+
+    {/* Right plate inner detail ring */}
+    <Rect x={210} y={16} width={12} height={48} rx={2} stroke="rgba(255,255,255,0.22)" strokeWidth={1} fill="none" />
+    {/* Right plate outer */}
+    <Rect x={206} y={8} width={20} height={64} rx={3} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
+
     {/* Right collar */}
-    <Rect x={198} y={24} width={32} height={16} rx={3} stroke="#E4E4E7" strokeWidth={2.5} fill="none" />
+    <Rect x={226} y={30} width={26} height={20} rx={3} stroke="#D4D4D8" strokeWidth={2} fill="none" />
   </Svg>
 );
+
+// ── Phase Dots ──────────────────────────────────────────────
+
+const PhaseDots: React.FC<{ phase: number }> = ({ phase }) => (
+  <View style={phaseStyles.row}>
+    {TEXT_PHASES.map((_, i) => (
+      <View
+        key={i}
+        style={[
+          phaseStyles.dot,
+          i < phase ? phaseStyles.dotComplete : i === phase ? phaseStyles.dotActive : phaseStyles.dotUpcoming,
+        ]}
+      />
+    ))}
+  </View>
+);
+
+const phaseStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    height: 3,
+    borderRadius: 1.5,
+  },
+  dotComplete: {
+    width: 8,
+    backgroundColor: COLORS.primary,
+    opacity: 0.55,
+  },
+  dotActive: {
+    width: 28,
+    backgroundColor: COLORS.primary,
+  },
+  dotUpcoming: {
+    width: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+});
 
 // ── Main Component ──────────────────────────────────────────
 
@@ -50,7 +120,7 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
   const textOpacity    = useRef(new Animated.Value(0)).current;
   const loadingOpacity = useRef(new Animated.Value(1)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
-  const successScale   = useRef(new Animated.Value(0.8)).current;
+  const successScale   = useRef(new Animated.Value(0.85)).current;
   const buttonOpacity  = useRef(new Animated.Value(0)).current;
 
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -111,13 +181,13 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
     // Kick off recursive scan
     runScanPass();
 
-    // Phase 1 → 2 text cycles
+    // Phase text cycles
     const t1 = setTimeout(() => cycleText(1), PHASE_DURATION);
     const t2 = setTimeout(() => cycleText(2), PHASE_DURATION * 2);
 
-    // Completion — cancel scan (no .stop() on the loop) then cross-fade
+    // Completion — cancel scan then cross-fade to success state
     const t3 = setTimeout(() => {
-      scanCancelledRef.current = true; // current pass finishes naturally, recursion stops
+      scanCancelledRef.current = true;
 
       Animated.parallel([
         Animated.timing(loadingOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
@@ -132,31 +202,58 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
       clearTimeout(t2);
       clearTimeout(t3);
       scanCancelledRef.current = true;
-      if (scanAnimRef.current) scanAnimRef.current.stop(); // safe: component is unmounting
+      if (scanAnimRef.current) scanAnimRef.current.stop();
     };
   }, [scanX, screenFade, textOpacity, loadingOpacity, successOpacity, successScale, buttonOpacity, cycleText, runScanPass]);
 
   return (
     <Animated.View style={[styles.root, { opacity: screenFade }]}>
 
-      {/* ── Center area: loading and success overlap ───────── */}
+      {/* ── Center area: loading and success overlap ─────────── */}
       <View style={styles.centerArea}>
 
         {/* Loading group — fades out when scan completes */}
         <Animated.View style={[styles.loadingGroup, { opacity: loadingOpacity }]}>
-          <View style={styles.barbellContainer}>
-            <BarbellWireframe />
-            <Animated.View style={[styles.scanLine, { transform: [{ translateX: scanX }] }]}>
-              <View style={styles.scanGlow} />
-              <View style={styles.scanCore} />
-            </Animated.View>
+
+          {/* Label */}
+          <View style={styles.labelRow}>
+            <View style={styles.labelLine} />
+            <Text style={styles.labelText}>PROFILE ANALYSIS</Text>
+            <View style={styles.labelLine} />
           </View>
+
+          {/* Barbell with corner brackets */}
+          <View style={styles.barbellWrapper}>
+            {/* Subtle ambient glow behind barbell */}
+            <View style={styles.barbellGlow} />
+
+            {/* Corner brackets — precision targeting feel */}
+            <View style={[styles.cornerBracket, styles.cornerTL]} />
+            <View style={[styles.cornerBracket, styles.cornerTR]} />
+            <View style={[styles.cornerBracket, styles.cornerBL]} />
+            <View style={[styles.cornerBracket, styles.cornerBR]} />
+
+            {/* Barbell + laser scan */}
+            <View style={styles.barbellContainer}>
+              <BarbellWireframe />
+              <Animated.View style={[styles.scanLine, { transform: [{ translateX: scanX }] }]}>
+                <View style={styles.scanGlow} />
+                <View style={styles.scanCore} />
+              </Animated.View>
+            </View>
+          </View>
+
+          {/* Phase progress dots */}
+          <PhaseDots phase={phaseIndex} />
+
+          {/* Cycling status text */}
           <Animated.Text style={[styles.loadingText, { opacity: textOpacity }]}>
             {TEXT_PHASES[phaseIndex]}
           </Animated.Text>
+
         </Animated.View>
 
-        {/* Success state — fades + springs in over the same space */}
+        {/* Success state — springs in over the same space */}
         <Animated.View
           style={[
             styles.successContainer,
@@ -167,27 +264,29 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
           ]}
           pointerEvents="none"
         >
-          {/* Outer glow ring */}
+          {/* Three concentric glow rings */}
           <View style={styles.iconOuterRing}>
-            {/* Inner glow circle */}
-            <View style={styles.iconInnerCircle}>
-              <CheckCircle
-                size={52}
-                color="#8B5CF6"
-                strokeWidth={1.5}
-              />
+            <View style={styles.iconMiddleRing}>
+              <View style={styles.iconInnerCircle}>
+                <CheckCircle size={44} color="#8B5CF6" strokeWidth={1.5} />
+              </View>
             </View>
           </View>
 
           <View style={styles.successTextGroup}>
-            <Text style={styles.successHeader}>Analysis Complete.</Text>
-            <Text style={styles.successSubtext}>Your custom beta profile is ready.</Text>
+            <View style={styles.labelRow}>
+              <View style={styles.labelLine} />
+              <Text style={styles.labelText}>ANALYSIS COMPLETE</Text>
+              <View style={styles.labelLine} />
+            </View>
+            <Text style={styles.successHeader}>Profile Ready.</Text>
+            <Text style={styles.successSubtext}>Your custom AI blueprint has been built.</Text>
           </View>
         </Animated.View>
 
       </View>
 
-      {/* ── CTA button — fades in with success state ────────── */}
+      {/* ── CTA button — fades in with success state ─────────── */}
       <Animated.View
         style={[
           styles.ctaContainer,
@@ -203,6 +302,12 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
           onPress={onComplete}
           activeOpacity={0.85}
         >
+          <LinearGradient
+            colors={['#9B72FF', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           <Text style={styles.ctaText}>Finalize Profile</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -229,11 +334,95 @@ const styles = StyleSheet.create({
   /* ── Loading group ──────────────────────── */
   loadingGroup: {
     alignItems: 'center',
-    gap: 32,
+    gap: 28,
   },
+
+  /* ── Label row ───────────────────────────── */
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  labelLine: {
+    width: 20,
+    height: 1,
+    backgroundColor: 'rgba(139, 92, 246, 0.35)',
+  },
+  labelText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.primary,
+    letterSpacing: 2.5,
+  },
+
+  /* ── Barbell wrapper (contains brackets + glow) ─────── */
+  barbellWrapper: {
+    width: BARBELL_WIDTH + 48,
+    height: BARBELL_HEIGHT + 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Ambient glow behind barbell ─────────────────────── */
+  barbellGlow: {
+    position: 'absolute',
+    width: BARBELL_WIDTH + 20,
+    height: BARBELL_HEIGHT + 60,
+    borderRadius: 80,
+    backgroundColor: 'rgba(139, 92, 246, 0.03)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOpacity: 0.13,
+        shadowRadius: 48,
+        shadowOffset: { width: 0, height: 0 },
+      },
+    }),
+  },
+
+  /* ── Corner brackets ─────────────────────── */
+  cornerBracket: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: 'rgba(139, 92, 246, 0.5)',
+    borderLeftColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderTopColor: 'rgba(139, 92, 246, 0.5)',
+    borderRightColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderBottomColor: 'rgba(139, 92, 246, 0.5)',
+    borderLeftColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderBottomColor: 'rgba(139, 92, 246, 0.5)',
+    borderRightColor: 'rgba(139, 92, 246, 0.5)',
+  },
+
+  /* ── Barbell container ───────────────────── */
   barbellContainer: {
     width: BARBELL_WIDTH,
-    height: 64,
+    height: BARBELL_HEIGHT,
     position: 'relative',
     overflow: 'visible',
   },
@@ -241,22 +430,22 @@ const styles = StyleSheet.create({
   /* ── Laser scan line ────────────────────── */
   scanLine: {
     position: 'absolute',
-    top: -10,
-    bottom: -10,
+    top: -12,
+    bottom: -12,
     left: 0,
     width: 3,
     alignItems: 'center',
   },
   scanCore: {
-    width: 3,
+    width: 2,
     height: '100%',
     backgroundColor: '#8B5CF6',
-    borderRadius: 1.5,
+    borderRadius: 1,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOpacity: 0.8,
-        shadowRadius: 10,
+        shadowOpacity: 0.9,
+        shadowRadius: 8,
         shadowOffset: { width: 0, height: 0 },
       },
       android: { elevation: 5 },
@@ -264,60 +453,70 @@ const styles = StyleSheet.create({
   },
   scanGlow: {
     position: 'absolute',
-    width: 22,
+    width: 32,
     height: '100%',
-    backgroundColor: 'rgba(139, 92, 246, 0.18)',
-    borderRadius: 11,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderRadius: 16,
   },
 
-  /* ── Cycling text ───────────────────────── */
+  /* ── Cycling status text ─────────────────── */
   loadingText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 0.3,
     textAlign: 'center',
   },
 
-  /* ── Success state ──────────────────────── */
+  /* ── Success state ───────────────────────── */
   successContainer: {
     position: 'absolute',
     alignItems: 'center',
-    gap: 28,
+    gap: 36,
   },
   iconOuterRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 144,
+    height: 144,
+    borderRadius: 72,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
-    backgroundColor: 'rgba(139, 92, 246, 0.04)',
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: 'rgba(139, 92, 246, 0.02)',
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOpacity: 0.35,
-        shadowRadius: 24,
+        shadowOpacity: 0.2,
+        shadowRadius: 32,
         shadowOffset: { width: 0, height: 0 },
       },
       android: { elevation: 6 },
     }),
   },
-  iconInnerCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+  iconMiddleRing: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(139, 92, 246, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconInnerCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOpacity: 0.6,
-        shadowRadius: 15,
+        shadowOpacity: 0.65,
+        shadowRadius: 18,
         shadowOffset: { width: 0, height: 0 },
       },
       android: { elevation: 4 },
@@ -325,33 +524,34 @@ const styles = StyleSheet.create({
   },
   successTextGroup: {
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   successHeader: {
     fontFamily: FONTS.display.bold,
-    fontSize: 28,
+    fontSize: 36,
     color: '#FFFFFF',
-    letterSpacing: -0.5,
+    letterSpacing: -1,
     textAlign: 'center',
   },
   successSubtext: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 16,
+    fontSize: 15,
     color: '#A1A1AA',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
     textAlign: 'center',
+    maxWidth: 240,
   },
 
-  /* ── CTA button ─────────────────────────── */
+  /* ── CTA button ──────────────────────────── */
   ctaContainer: {
     paddingHorizontal: SPACING.screenHorizontal,
   },
   ctaButton: {
-    backgroundColor: '#8B5CF6',
     borderRadius: 18,
     paddingVertical: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
