@@ -6,8 +6,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Video, BookOpen, BarChart2, Star } from 'lucide-react-native';
+import { Home, Video, BookOpen, BarChart2, Star } from 'lucide-react-native';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
+import { HomeScreen } from '../screens/HomeScreen';
 import { LogbookScreen } from '../screens/LogbookScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { RewardsScreen } from '../screens/RewardsScreen';
@@ -92,6 +93,7 @@ export type RecordStackParamList = {
 };
 
 export type RootTabParamList = {
+  Home: undefined;
   Logbook: undefined;
   Analytics: undefined;
   Record: undefined;
@@ -104,6 +106,7 @@ const RecordStack = createNativeStackNavigator<RecordStackParamList>();
 
 // Icon mapping - memoized to prevent recreation
 const TAB_ICONS: { [key: string]: any } = {
+  Home: Home,
   Record: Video,
   Logbook: BookOpen,
   Analytics: BarChart2,
@@ -242,7 +245,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
       {/* Header - Hidden for Record tab; no collapse/sticky logic */}
-      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Rewards' && <AppHeader />}
+      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Rewards' && currentTab !== 'Home' && <AppHeader />}
 
       <View style={{ flex: 1 }}>
         <Tab.Navigator
@@ -251,9 +254,10 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
             headerShown: false,
           }}
         >
+          <Tab.Screen name="Home" component={HomeScreen} />
           <Tab.Screen name="Logbook" component={LogbookScreen} />
-          <Tab.Screen name="Analytics" component={AnalyticsScreen} />
           <Tab.Screen name="Record" component={RecordTabWithProvider} />
+          <Tab.Screen name="Analytics" component={AnalyticsScreen} />
           <Tab.Screen name="Rewards" component={RewardsScreen} />
         </Tab.Navigator>
       </View>
@@ -263,7 +267,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
 
 // Bottom Tab Navigator with static header
 const AppTabs: React.FC = memo(() => {
-  const [currentTab, setCurrentTab] = useState('Logbook');
+  const [currentTab, setCurrentTab] = useState('Home');
   
   // Memoize tab change handler
   const handleTabChange = useCallback((tabName: string) => {

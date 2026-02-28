@@ -9,7 +9,6 @@ import {
   ScrollView,
   Animated,
   Platform,
-  Image,
   PanResponder,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,14 +23,12 @@ import {
   Calendar,
   X,
   Check,
-  Menu,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts, useUser, useDeleteWorkout } from '../../backend/hooks';
+import { useWorkouts, useDeleteWorkout } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
-import { useAuth } from '../../backend/contexts/AuthContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../../backend/services/api';
 
@@ -362,19 +359,11 @@ export const LogbookScreen: React.FC = () => {
   const { showAlert } = useAlert();
   const { workouts, isLoading, error, refetch } = useWorkouts();
   const { deleteWorkout } = useDeleteWorkout();
-  const { user } = useAuth();
-  const { user: profileUser, refetch: refetchUser } = useUser();
-  const displayName = profileUser?.displayName
-    ?? user?.user_metadata?.full_name
-    ?? user?.user_metadata?.name
-    ?? 'Athlete';
-
   useFocusEffect(
     React.useCallback(() => {
       setRefreshKey((prev) => prev + 1);
       refetch();
-      refetchUser();
-    }, [refetch, refetchUser]),
+    }, [refetch]),
   );
 
   useEffect(() => {
@@ -497,20 +486,10 @@ export const LogbookScreen: React.FC = () => {
 
   const keyExtractor = useCallback((item: WorkoutSession) => item.id, []);
 
-  const handleSettingsPress = useCallback(() => {
-    navigation.navigate('Settings');
-  }, [navigation]);
-
   /* ── ListHeaderComponent — everything scrolls together ── */
 
   const ListHeader = useCallback(() => (
     <View>
-      {/* ── LOGBOOK TITLE ────────────────────── */}
-      <View style={styles.titleBlock}>
-        <Text style={styles.headerTitle}>LOGBOOK</Text>
-        <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
-      </View>
-
       {/* ── FILTER ROW ───────────────────────── */}
       <ScrollView
         horizontal
@@ -580,6 +559,12 @@ export const LogbookScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* ── LOGBOOK HEADER (fixed) ────────────────── */}
+      <View style={styles.fixedHeader}>
+        <Text style={styles.headerTitle}>LOGBOOK</Text>
+        <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+      </View>
+
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {/* Calendar Modal (rendered outside FlatList, portaled via Modal) */}
         <CalendarModal
@@ -588,26 +573,6 @@ export const LogbookScreen: React.FC = () => {
           onSelectDate={handleDateSelect}
           selectedDate={selectedDate}
         />
-
-        {/* ── WELCOME ROW (sticky) ──────────────── */}
-        <View style={styles.welcomeRow}>
-          <View style={styles.welcomeLeft}>
-            <View style={styles.logoWrap}>
-              <Image
-                source={require('../assets/forma_purple_logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
-            <View>
-              <Text style={styles.welcomeLabel}>Welcome back,</Text>
-              <Text style={styles.welcomeName}>{displayName}</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.settingsButton} onPress={handleSettingsPress} activeOpacity={0.7}>
-            <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
 
         {filteredWorkouts.length === 0 ? (
           <View style={{ flex: 1 }}>
@@ -664,51 +629,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* ── Welcome Row ─────────────────────────── */
-  welcomeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 2,
-    paddingBottom: SPACING.sm,
+  /* ── Fixed Header ────────────────────────── */
+  fixedHeader: {
+    paddingTop: 6,
+    paddingBottom: 8,
     paddingHorizontal: SPACING.screenHorizontal,
-  },
-  welcomeLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 48,
-    height: 48,
-  },
-  welcomeLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: '#A1A1AA',
-  },
-  welcomeName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 17,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  settingsButton: {
-    padding: 8,
-  },
-
-  /* ── Title Block ─────────────────────────── */
-  titleBlock: {
-    paddingTop: 8,
-    paddingBottom: 20,
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
