@@ -467,14 +467,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
                         </Text>
                       </View>
                       <View style={styles.exerciseCardHeaderRight}>
-                        <TouchableOpacity
-                          style={styles.exerciseDeleteButton}
-                          onPress={() => handleDeleteExercise(exercise.id, exercise.name, exercise.sets.length)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Trash2 size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        </TouchableOpacity>
                         <View style={styles.exerciseSetsBadge}>
                           <MonoText style={styles.exerciseSetsValue}>{exercise.sets.length}</MonoText>
                         </View>
@@ -488,7 +480,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                           activeOpacity={0.7}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                          <X size={16} color={COLORS.textTertiary} strokeWidth={2} />
+                          <Trash2 size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                         </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
@@ -1015,15 +1007,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     paddingVertical: 13,
-    borderRadius: 18,
+    borderRadius: 50,
     borderWidth: 1,
-    borderColor: '#8B5CF6',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
   },
   addExerciseText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
-    color: COLORS.accent,
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   controlsRow: {
@@ -1034,7 +1026,7 @@ const styles = StyleSheet.create({
   controlDiscardButton: {
     width: 48,
     height: 48,
-    borderRadius: 18,
+    borderRadius: 50,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -1048,7 +1040,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     height: 48,
-    borderRadius: 18,
+    borderRadius: 50,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -1063,10 +1055,10 @@ const styles = StyleSheet.create({
     flex: 1.4,
     flexDirection: 'row' as const,
     height: 48,
-    borderRadius: 18,
+    borderRadius: 50,
     borderWidth: 1,
-    borderColor: '#8B5CF6',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: 6,

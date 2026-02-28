@@ -20,54 +20,10 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
-import { CameraGuideModal } from '../components/ui/CameraGuideModal';
 import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
-import { setActiveVoiceId } from '../../backend/services/elevenlabsTTS';
+import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
-
-/** Per-exercise setup instructions for the CameraGuideModal */
-const EXERCISE_SETUP_DATA: Record<string, { keySetup: string; reasonText: string }> = {
-  'Barbell Curl': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks both arms for bilateral curl symmetry and elbow drift.',
-  },
-  'Barbell Squat': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks knee depth, hip hinge angle, and torso forward lean from the side.',
-  },
-  'Push-Up': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks shoulder-hip-ankle alignment and elbow angle from the side.',
-  },
-  'Cable Pushdowns': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks elbow extension angle and upper arm drift from the side.',
-  },
-  'Cable Row': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks elbow pull angle and shoulder retraction from the side.',
-  },
-  'Standing Dumbbell Lateral Raises': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks bilateral arm abduction and shrug detection from the front.',
-  },
-  'Cable Lat Pulldowns': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks both arms for bilateral elbow angle and torso lean.',
-  },
-  'Leg Extensions': {
-    keySetup: 'Camera perpendicular while seated',
-    reasonText: 'Tracks knee extension angle and detects hip lift from the side.',
-  },
-  'Lying Leg Curl': {
-    keySetup: 'Camera perpendicular while prone',
-    reasonText: 'Tracks knee flexion angle and detects hip lift from the side.',
-  },
-  'Machine Ab Crunches': {
-    keySetup: 'Camera perpendicular while seated',
-    reasonText: 'Tracks torso flexion angle and neck position from the side.',
-  },
-};
+import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
 const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
@@ -138,8 +94,7 @@ export const CameraScreen: React.FC = () => {
   const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
 
 
-  // Setup guide modal
-  const [guideModalVisible, setGuideModalVisible] = useState(false);
+  // Setup guide screen data
   const guideData = useMemo(() => {
     if (!exerciseNameFromRoute) return null;
     const def = ExerciseRegistry.has(exerciseNameFromRoute)
@@ -150,6 +105,11 @@ export const CameraScreen: React.FC = () => {
     const setup = EXERCISE_SETUP_DATA[exerciseNameFromRoute] ?? {
       keySetup: 'Position camera to capture full body',
       reasonText: 'Ensures all key joints are visible for tracking.',
+      cameraTips: [
+        'Place the phone far enough away to keep your whole body in frame.',
+        'Set the camera roughly at hip to chest height depending on the lift.',
+        'Avoid strong backlighting so your outline and joints are easy to detect.',
+      ],
     };
     return { viewType, ...setup };
   }, [exerciseNameFromRoute]);
@@ -182,6 +142,7 @@ export const CameraScreen: React.FC = () => {
   useEffect(() => {
     const trainer = TRAINERS.find((t) => t.id === selectedTrainerId) ?? TRAINERS.find((t) => t.id === DEFAULT_TRAINER_ID)!;
     setActiveVoiceId(trainer.voiceId);
+    setActiveVoiceSettings(trainer.voiceSettings);
   }, [selectedTrainerId]);
 
   // Use refs to track exercise state without triggering re-renders
@@ -672,6 +633,51 @@ export const CameraScreen: React.FC = () => {
     return values;
   }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute, workoutData.duration, isRecording]);
 
+  // Dynamic positioning for the setup guide ("?") button so it stays centered
+  // between the discard "X" button and the exercise title text.
+  const [headerMeasurements, setHeaderMeasurements] = useState<{
+    leftRight: number | null;
+    titleLeft: number | null;
+    questionWidth: number | null;
+  }>({
+    leftRight: null,
+    titleLeft: null,
+    questionWidth: null,
+  });
+
+  const handleHeaderLeftLayout = useCallback((event: any) => {
+    const { x, width } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      leftRight: x + width,
+    }));
+  }, []);
+
+  const handleTitleLayout = useCallback((event: any) => {
+    const { x } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      titleLeft: x,
+    }));
+  }, []);
+
+  const handleQuestionLayout = useCallback((event: any) => {
+    const { width } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      questionWidth: width,
+    }));
+  }, []);
+
+  const questionLeft = useMemo(() => {
+    const { leftRight, titleLeft, questionWidth } = headerMeasurements;
+    if (leftRight == null || titleLeft == null || questionWidth == null) {
+      return null;
+    }
+    const mid = (leftRight + titleLeft) / 2;
+    return mid - questionWidth / 2;
+  }, [headerMeasurements]);
+
   const showCamera = cameraMounted && !isClosing;
 
   return (
@@ -697,26 +703,58 @@ export const CameraScreen: React.FC = () => {
           <View style={[styles.overlay, { height: cameraDisplayHeight }]}>
         {/* Top bar — overlays top of camera */}
         <View style={[styles.topBarSection, { paddingTop: topInset, height: topBarHeight }]}>
-          <TouchableOpacity
-            style={styles.discardButton}
-            onPress={handleDiscardSetPress}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Discard set"
+          <View style={styles.headerLeftGroup} onLayout={handleHeaderLeftLayout}>
+            <TouchableOpacity
+              style={styles.discardButton}
+              onPress={handleDiscardSetPress}
+              activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Discard set"
+            >
+              <X size={18} color={COLORS.text} strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Setup guide button floated so '?' sits between X and exercise title */}
+          <View
+            onLayout={handleQuestionLayout}
+            style={[
+              styles.setupGuideButtonFloating,
+              {
+                left: questionLeft ?? SCREEN_WIDTH * 0.27 - 18,
+                // Slightly below exact center so it visually matches text baseline
+                top: topInset + 29 - 18, // 27 ≈ center (24) + 3px downward tweak
+              },
+            ]}
           >
-            <X size={18} color={COLORS.text} strokeWidth={2.5} />
-          </TouchableOpacity>
-          <View style={styles.exerciseTopCardWrap}>
+            <SetupGuideButton
+              onPress={() => {
+                if (guideData) {
+                  (navigation as any).navigate('ExerciseGuide', {
+                    exerciseName: exerciseNameFromRoute ?? '',
+                    category,
+                    viewType: guideData.viewType,
+                    keySetup: guideData.keySetup,
+                    reasonText: guideData.reasonText,
+                    cameraTips: guideData.cameraTips,
+                  });
+                }
+              }}
+            />
+          </View>
+
+          <View style={styles.exerciseTopCardWrap} onLayout={handleTitleLayout}>
             <Text style={styles.detectionExercise} numberOfLines={1}>
               {displayValues.exerciseDisplayName}
             </Text>
           </View>
           <View style={styles.headerRightGroup}>
-            <SetupGuideButton onPress={() => setGuideModalVisible(true)} />
             <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
               activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel="Camera settings"
             >
@@ -1127,16 +1165,6 @@ export const CameraScreen: React.FC = () => {
         </View>
       </View>
 
-      {guideData && (
-        <CameraGuideModal
-          visible={guideModalVisible}
-          exerciseName={exerciseNameFromRoute ?? ''}
-          viewType={guideData.viewType}
-          keySetup={guideData.keySetup}
-          reasonText={guideData.reasonText}
-          onClose={() => setGuideModalVisible(false)}
-        />
-      )}
     </View>
   );
 };
@@ -1147,13 +1175,21 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     backgroundColor: COLORS.background,
   },
+  headerLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   topBarSection: {
+    position: 'relative',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: 4,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  setupGuideButtonFloating: {
+    position: 'absolute',
   },
   cameraArea: {
     flex: 1,
@@ -1200,17 +1236,12 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   discardButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 0,
   },
   exerciseTopCardWrap: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   exerciseTopCard: {
     alignItems: 'center',
@@ -1222,12 +1253,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   settingsButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 0,
   },
   recordButtonContainer: {
     alignItems: 'center',

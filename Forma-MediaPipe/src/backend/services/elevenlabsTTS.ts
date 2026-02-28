@@ -23,6 +23,20 @@ try {
 const ELEVENLABS_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
 let activeVoiceId = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default: Rachel
 
+interface ActiveVoiceSettings {
+  speed: number;
+  stability: number;
+  similarity: number;
+  styleExaggeration: number;
+}
+
+let activeVoiceSettings: ActiveVoiceSettings = {
+  speed: 0.9,
+  stability: 0.45,
+  similarity: 0.8,
+  styleExaggeration: 0.0,
+};
+
 /**
  * Override the active voice ID at runtime (e.g. when the user selects a trainer).
  */
@@ -30,8 +44,16 @@ export function setActiveVoiceId(id: string): void {
   activeVoiceId = id;
 }
 
+/**
+ * Override the active voice settings at runtime (e.g. when the user selects a trainer).
+ */
+export function setActiveVoiceSettings(settings: ActiveVoiceSettings): void {
+  activeVoiceSettings = settings;
+}
+
 let audioInstance: any = null;
 let isInitialized = false;
+let speechGeneration = 0; // Incremented on every speakWithElevenLabs call; used to cancel stale fetches
 
 /**
  * Pure-JS base64 encoder for Uint8Array.
@@ -105,11 +127,12 @@ async function generateSpeech(text: string): Promise<string> {
     },
     body: JSON.stringify({
       text,
-      model_id: 'eleven_turbo_v2_5',
+      model_id: 'eleven_multilingual_v2',
       voice_settings: {
-        stability: 0.45,
-        similarity_boost: 0.8,
-        speed: 0.9,
+        stability: activeVoiceSettings.stability,
+        similarity_boost: activeVoiceSettings.similarity,
+        speed: activeVoiceSettings.speed,
+        style: activeVoiceSettings.styleExaggeration,
       },
     }),
   });
@@ -169,6 +192,9 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
     return;
   }
 
+  // Claim this generation; any in-flight fetch with an older generation will be discarded
+  const generation = ++speechGeneration;
+
   try {
     // Initialize audio session
     await initializeAudio();
@@ -186,6 +212,9 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
 
     // Generate speech from ElevenLabs (downloads to temp file)
     const audioUri = await generateSpeech(text.trim());
+
+    // A newer speakWithElevenLabs call was made while we were fetching — discard this result
+    if (generation !== speechGeneration) return;
 
     // Cleanup old files asynchronously (don't block playback)
     cleanupOldAudioFiles().catch(() => {});
@@ -213,6 +242,7 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
  * Stop any currently playing speech.
  */
 export async function stopSpeech(): Promise<void> {
+  speechGeneration++; // Cancel any in-flight fetch
   if (!nativeModulesAvailable || !audioInstance) return;
 
   try {

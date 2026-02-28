@@ -5,14 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+} from '../constants/theme';
 
 // ── Step Data ───────────────────────────────────────────────
 
@@ -23,12 +27,14 @@ interface OptionConfig {
 
 interface StepConfig {
   question: string;
+  category: string;
   options: OptionConfig[];
 }
 
 const STEPS: StepConfig[] = [
   {
     question: 'What is your primary focus?',
+    category: 'YOUR GOAL',
     options: [
       { label: 'Building muscle' },
       { label: 'Just starting working out' },
@@ -38,6 +44,7 @@ const STEPS: StepConfig[] = [
   },
   {
     question: 'How many days a week do you train?',
+    category: 'TRAINING',
     options: [
       { label: '1-2 Days' },
       { label: '3-4 Days' },
@@ -46,6 +53,7 @@ const STEPS: StepConfig[] = [
   },
   {
     question: 'How long have you been training?',
+    category: 'EXPERIENCE',
     options: [
       { label: 'Just starting', subtext: 'Learning the basics' },
       { label: '1–2 years', subtext: 'Consistent routine' },
@@ -54,16 +62,52 @@ const STEPS: StepConfig[] = [
   },
 ];
 
-// ── Glass Slab Component ────────────────────────────────────
+// ── Step Dots ───────────────────────────────────────────────
 
-interface GlassSlabProps {
+const StepDots: React.FC<{ current: number; total: number }> = ({ current, total }) => (
+  <View style={dotStyles.row}>
+    {Array.from({ length: total }, (_, i) => (
+      <View
+        key={i}
+        style={[
+          dotStyles.dot,
+          i === current ? dotStyles.dotActive : dotStyles.dotInactive,
+        ]}
+      />
+    ))}
+  </View>
+);
+
+const dotStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: {
+    width: 28,
+    backgroundColor: COLORS.primary,
+  },
+  dotInactive: {
+    width: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+});
+
+// ── Option Card ─────────────────────────────────────────────
+
+interface OptionCardProps {
   label: string;
   subtext?: string;
   isSelected: boolean;
   onPress: () => void;
 }
 
-const GlassSlab: React.FC<GlassSlabProps> = ({ label, subtext, isSelected, onPress }) => {
+const OptionCard: React.FC<OptionCardProps> = ({ label, subtext, isSelected, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = useCallback(() => {
@@ -78,85 +122,82 @@ const GlassSlab: React.FC<GlassSlabProps> = ({ label, subtext, isSelected, onPre
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity onPress={handlePress} activeOpacity={0.85}>
         <LinearGradient
-          colors={isSelected ? ['#1F1F1F', '#0A0A0A'] : ['#1F1F1F', '#000000']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            slabStyles.slab,
-            isSelected && slabStyles.slabSelected,
-          ]}
+          colors={CARD_GRADIENT_COLORS}
+          start={CARD_GRADIENT_START}
+          end={CARD_GRADIENT_END}
+          style={[cardStyles.card, isSelected && cardStyles.cardSelected]}
         >
-          <View style={slabStyles.labelContainer}>
-            <Text style={[slabStyles.label, isSelected && slabStyles.labelSelected]}>
-              {label}
-            </Text>
-            {subtext ? (
-              <Text style={[slabStyles.subtext, isSelected && slabStyles.subtextSelected]}>
-                {subtext}
-              </Text>
-            ) : null}
-          </View>
           {isSelected && (
-            <View style={slabStyles.checkCircle}>
-              <View style={slabStyles.checkDot} />
-            </View>
+            <View style={[StyleSheet.absoluteFill, cardStyles.selectedOverlay]} pointerEvents="none" />
           )}
+
+          <View style={cardStyles.content}>
+            <Text style={cardStyles.label}>{label}</Text>
+            {subtext ? <Text style={cardStyles.subtext}>{subtext}</Text> : null}
+          </View>
+
+          <View style={[cardStyles.indicator, isSelected && cardStyles.indicatorSelected]}>
+            {isSelected && <View style={cardStyles.indicatorDot} />}
+          </View>
         </LinearGradient>
       </TouchableOpacity>
     </Animated.View>
   );
 };
 
-const slabStyles = StyleSheet.create({
-  slab: {
+const cardStyles = StyleSheet.create({
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 20,
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
   },
-  slabSelected: {
+  cardSelected: {
     borderColor: COLORS.primary,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderWidth: 1.5,
   },
-  labelContainer: {
+  selectedOverlay: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+  },
+  content: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   label: {
     fontFamily: FONTS.display.semibold,
     fontSize: 17,
-    color: COLORS.textSecondary,
-  },
-  labelSelected: {
     color: COLORS.text,
+    letterSpacing: -0.2,
   },
   subtext: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.25)',
+    color: COLORS.textSecondary,
   },
-  subtextSelected: {
-    color: 'rgba(167,139,250,0.7)',
-  },
-  checkCircle: {
+  indicator: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
+    marginLeft: 16,
   },
-  checkDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  indicatorSelected: {
+    borderColor: COLORS.primary,
     backgroundColor: COLORS.primary,
+  },
+  indicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
   },
 });
 
@@ -173,7 +214,6 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
   const [selectedFrequency, setSelectedFrequency] = useState<string | null>(null);
   const [selectedExperience, setSelectedExperience] = useState<string | null>(null);
 
-  // Animated values
   const progressWidth = useRef(new Animated.Value(0.25)).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const contentTranslateX = useRef(new Animated.Value(0)).current;
@@ -198,11 +238,7 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
         ]).start();
       });
       const targetProgress = ((nextStep + 1) / STEPS.length) * 0.5 + 0.25;
-      Animated.timing(progressWidth, {
-        toValue: targetProgress,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
+      Animated.timing(progressWidth, { toValue: targetProgress, duration: 300, useNativeDriver: false }).start();
     },
     [contentOpacity, contentTranslateX, progressWidth],
   );
@@ -213,14 +249,10 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
 
       if (stepIndex === 0) {
         setSelectedGoal(option);
-        setTimeout(() => {
-          animateTransition(1, () => setStepIndex(1));
-        }, 200);
+        setTimeout(() => animateTransition(1, () => setStepIndex(1)), 200);
       } else if (stepIndex === 1) {
         setSelectedFrequency(option);
-        setTimeout(() => {
-          animateTransition(2, () => setStepIndex(2));
-        }, 200);
+        setTimeout(() => animateTransition(2, () => setStepIndex(2)), 200);
       } else {
         setSelectedExperience(option);
         setTimeout(() => {
@@ -242,7 +274,8 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      {/* Progress Bar — 2px violet line at top */}
+
+      {/* Progress bar */}
       <View style={styles.progressTrack}>
         <Animated.View style={[styles.progressFill, { width: progressBarWidth }]}>
           <LinearGradient
@@ -254,28 +287,32 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
         </Animated.View>
       </View>
 
-      {/* Content */}
+      {/* Animated content */}
       <Animated.View
         style={[
           styles.content,
-          {
-            opacity: contentOpacity,
-            transform: [{ translateX: contentTranslateX }],
-          },
+          { opacity: contentOpacity, transform: [{ translateX: contentTranslateX }] },
         ]}
       >
-        {/* Step Indicator */}
-        <Text style={styles.stepIndicator}>
-          {stepIndex + 1} of {STEPS.length}
+        {/* Background step number — decorative */}
+        <Text style={styles.bgNumber} pointerEvents="none">
+          {`0${stepIndex + 1}`}
         </Text>
 
-        {/* Question */}
-        <Text style={styles.question}>{currentStep.question}</Text>
+        {/* Header zone */}
+        <View style={styles.headerZone}>
+          <StepDots current={stepIndex} total={STEPS.length} />
 
-        {/* Options */}
-        <View style={styles.optionsContainer}>
+          <View style={styles.questionWrapper}>
+            <Text style={styles.categoryLabel}>{currentStep.category}</Text>
+            <Text style={styles.question}>{currentStep.question}</Text>
+          </View>
+        </View>
+
+        {/* Options zone */}
+        <View style={styles.optionsZone}>
           {currentStep.options.map((option) => (
-            <GlassSlab
+            <OptionCard
               key={option.label}
               label={option.label}
               subtext={option.subtext}
@@ -298,36 +335,59 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   progressTrack: {
-    height: 2,
+    height: 3,
     backgroundColor: 'rgba(255,255,255,0.06)',
     width: '100%',
   },
   progressFill: {
-    height: 2,
+    height: 3,
     overflow: 'hidden',
   },
   content: {
     flex: 1,
     paddingHorizontal: SPACING.screenHorizontal + 8,
-    paddingTop: 48,
+    paddingTop: 44,
+    paddingBottom: 28,
   },
-  stepIndicator: {
+  // ── Background decoration ──
+  bgNumber: {
+    position: 'absolute',
+    top: -20,
+    right: -16,
+    fontFamily: FONTS.mono.bold,
+    fontSize: 220,
+    lineHeight: 220,
+    color: 'rgba(255,255,255,0.025)',
+    letterSpacing: -12,
+  },
+  // ── Header zone ──
+  headerZone: {
+    gap: 28,
+    marginTop: 50,
+  },
+  questionWrapper: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    paddingLeft: 18,
+    gap: 10,
+  },
+  categoryLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 1,
-    marginBottom: 12,
+    fontSize: 11,
+    color: COLORS.primary,
+    letterSpacing: 2.5,
     textTransform: 'uppercase',
   },
   question: {
     fontFamily: FONTS.display.bold,
-    fontSize: 30,
+    fontSize: 32,
     color: COLORS.text,
-    letterSpacing: -0.5,
-    marginBottom: 40,
-    lineHeight: 38,
+    letterSpacing: -0.8,
+    lineHeight: 40,
   },
-  optionsContainer: {
-    gap: 14,
+  // ── Options zone ──
+  optionsZone: {
+    gap: 12,
+    marginTop: 100,
   },
 });

@@ -73,6 +73,7 @@ export const mockWorkoutDetails: { [key: string]: WorkoutDetails } = {
     name: 'Push Day - Strength',
     date: 'Oct 24',
     duration: '45 min',
+    notes: 'Felt strong today. Increased cable pushdown weight by 5 lbs. Left shoulder was slightly tight on lateral raises — focus on controlled descent next session.',
     exercises: [
       {
         id: '1',

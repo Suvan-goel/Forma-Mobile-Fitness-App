@@ -22,6 +22,7 @@ interface SaveWorkoutParams {
   name: string;
   durationSeconds: number;
   category?: string;
+  notes?: string;
   exercises: WorkoutExerciseInput[];
 }
 
@@ -44,6 +45,7 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
         date: new Date(),
         durationSeconds: params.durationSeconds,
         category: params.category,
+        notes: params.notes,
         exercises: params.exercises.map((ex, i) => ({
           name: ex.name,
           orderIndex: i,

@@ -60,11 +60,15 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComp
   );
 
   const handleInterstitialComplete = useCallback(() => {
-    // Mark onboarding as complete before showing auth
+    // Mark onboarding as complete before showing auth.
+    // Do NOT call onOnboardingComplete() here — that would trigger setHasOnboarded(true)
+    // in the parent, which unmounts this component while transitionTo('auth') is still
+    // in progress, causing conflicting state updates (React 19 "useInsertionEffect" error).
+    // Navigation away from OnboardingFlow happens automatically when the user signs in
+    // (auth state change makes !user && !hasOnboarded false in RootStackNavigator).
     AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, 'true').catch(() => {});
-    onOnboardingComplete();
     transitionTo('auth');
-  }, [transitionTo, onOnboardingComplete]);
+  }, [transitionTo]);
 
   return (
     <View style={styles.root}>

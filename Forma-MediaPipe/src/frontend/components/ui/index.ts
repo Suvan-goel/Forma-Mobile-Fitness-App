@@ -16,4 +16,4 @@ export { TimeRangeSelector, TIME_RANGE_OPTIONS } from './TimeRangeSelector';
 export { TrendChart } from './TrendChart';
 export { SummaryStrip } from './SummaryStrip';
 export { SetupGuideButton } from './SetupGuideButton';
-export { CameraGuideModal } from './CameraGuideModal';
+export { ArchetypeVisual, VIEW_TYPE_LABEL } from './CameraGuideVisuals';

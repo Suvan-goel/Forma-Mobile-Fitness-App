@@ -81,6 +81,7 @@ export interface WorkoutDetails {
   name: string;
   date: string;
   duration: string;
+  notes?: string;
   exercises: WorkoutExercise[];
 }
 
@@ -89,6 +90,7 @@ export interface CreateWorkoutPayload {
   date: Date;
   durationSeconds: number;
   category?: string;
+  notes?: string;
   exercises: {
     name: string;
     orderIndex: number;

@@ -33,7 +33,7 @@ import type {
 /** FSM thresholds (degrees -- average elbow angle of both arms) */
 const THRESHOLDS = {
   /** Average elbow angle below which we transition REST -> PULLING */
-  PULLING_ENTER: 135,
+  PULLING_ENTER: 155,
   /** Average elbow angle below which we consider bottom position (PULLING -> BOTTOM) */
   BOTTOM_ENTER: 85,
   /** Average elbow angle above which we leave BOTTOM (hysteresis) (BOTTOM -> RETURNING) */
@@ -103,8 +103,10 @@ interface RepWindow {
   minAvgElbow: number;
   /** Max average elbow angle during the rep (used for ROM extension scoring) */
   maxAvgElbow: number;
-  /** Max difference in elbow angle between arms at any frame */
-  maxElbowDiff: number;
+  /** Running sum of per-frame elbow angle differences (for average asymmetry) */
+  totalElbowDiff: number;
+  /** Number of frames accumulated in totalElbowDiff */
+  diffFrameCount: number;
   /** Max torso lateral lean during the rep */
   maxTorsoLean: number;
   /** Frame count */
@@ -140,6 +142,10 @@ interface LatPulldownState {
   smoothedRightElbow: number;
   smoothedAvgElbow: number;
   smoothedTorsoLean: number;
+  /** After a rep completes, gate next rep start until user re-extends */
+  requireExtensionBeforeNextRep: boolean;
+  /** Timestamp when the last rep completed, for timeout fallback */
+  tRepCompleted: number | null;
   /** Visual feedback */
   feedback: string | null;
   lastFeedbackTime: number;
@@ -154,7 +160,7 @@ interface LatPulldownDebugInfo {
   torsoLean: number | null;
   minAvgElbow: number | null;
   maxAvgElbow: number | null;
-  maxElbowDiff: number | null;
+  avgElbowDiff: number | null;
   maxTorsoLean: number | null;
 }
 
@@ -184,6 +190,8 @@ function initializeState(): LatPulldownState {
     }),
     warmedUp: false,
     restMaxAvgElbow: -Infinity,
+    requireExtensionBeforeNextRep: false,
+    tRepCompleted: null,
     smoothedLeftElbow: 180,
     smoothedRightElbow: 180,
     smoothedAvgElbow: 180,
@@ -202,7 +210,8 @@ function initRepWindow(tStart: number): RepWindow {
     minRightElbow: Infinity,
     minAvgElbow: Infinity,
     maxAvgElbow: -Infinity,
-    maxElbowDiff: 0,
+    totalElbowDiff: 0,
+    diffFrameCount: 0,
     maxTorsoLean: 0,
     frameCount: 0,
   };
@@ -266,6 +275,7 @@ function updateFSM(
   avgElbow: number,
   t: number,
   tRepStart: number | null,
+  requireExtension: boolean,
 ): FSMResult {
   let phase = currentPhase;
   let repCompleted = false;
@@ -273,7 +283,8 @@ function updateFSM(
   switch (phase) {
     case 'REST':
       // Arms extended overhead. When elbows start bending, begin pull.
-      if (avgElbow < THRESHOLDS.PULLING_ENTER) {
+      // requireExtension blocks the transition until the user re-extends after a rep.
+      if (avgElbow < THRESHOLDS.PULLING_ENTER && !requireExtension) {
         phase = 'PULLING';
       }
       break;
@@ -332,8 +343,11 @@ function computeLatPulldownScore(repWindow: RepWindow): number {
   // 3. Torso lean
   penalties.push({ value: repWindow.maxTorsoLean, config: PENALTY_CONFIGS.TORSO_LEAN });
 
-  // 4. Asymmetry -- max elbow difference between arms
-  penalties.push({ value: repWindow.maxElbowDiff, config: PENALTY_CONFIGS.ASYMMETRY });
+  // 4. Asymmetry -- average elbow difference sampled only during BOTTOM phase (arms stationary)
+  const avgElbowDiff = repWindow.diffFrameCount > 0
+    ? repWindow.totalElbowDiff / repWindow.diffFrameCount
+    : 0;
+  penalties.push({ value: avgElbowDiff, config: PENALTY_CONFIGS.ASYMMETRY });
 
   // 5. Tempo
   if (repWindow.tBottom !== null) {
@@ -375,8 +389,11 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Stay upright \u2014 avoid leaning back excessively.');
   }
 
-  // 4. Asymmetry
-  if (repWindow.maxElbowDiff > FORM_THRESHOLDS.ASYMMETRY_WARN) {
+  // 4. Asymmetry -- average diff sampled only during BOTTOM phase (arms stationary, most stable)
+  const avgElbowDiff = repWindow.diffFrameCount > 0
+    ? repWindow.totalElbowDiff / repWindow.diffFrameCount
+    : 0;
+  if (avgElbowDiff > FORM_THRESHOLDS.ASYMMETRY_WARN) {
     messages.push('Even it out \u2014 pull evenly with both arms.');
   }
 
@@ -466,10 +483,20 @@ function updateLatPulldownState(
   // -- Track max elbow during REST (pre-pull extension) --
   if (state.phase === 'REST') {
     state.restMaxAvgElbow = Math.max(state.restMaxAvgElbow, smoothedAvgElbow);
+    // Clear the post-rep extension gate once the user has demonstrably re-extended,
+    // or after a 1.5s timeout (so reps still count for users who don't reach full extension).
+    if (state.requireExtensionBeforeNextRep) {
+      const extensionReached = smoothedAvgElbow >= THRESHOLDS.PULLING_ENTER;
+      const timedOut = state.tRepCompleted !== null && (t - state.tRepCompleted) > 1.5;
+      if (extensionReached || timedOut) {
+        state.requireExtensionBeforeNextRep = false;
+        state.tRepCompleted = null;
+      }
+    }
   }
 
   // -- FSM update --
-  const fsmResult = updateFSM(state.phase, smoothedAvgElbow, t, state.tRepStart);
+  const fsmResult = updateFSM(state.phase, smoothedAvgElbow, t, state.tRepStart, state.requireExtensionBeforeNextRep);
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
@@ -498,9 +525,13 @@ function updateLatPulldownState(
     w.minAvgElbow = Math.min(w.minAvgElbow, smoothedAvgElbow);
     w.maxAvgElbow = Math.max(w.maxAvgElbow, smoothedAvgElbow);
 
-    // Max difference between arms at this frame
-    const elbowDiff = Math.abs(smoothedLeftElbow - smoothedRightElbow);
-    w.maxElbowDiff = Math.max(w.maxElbowDiff, elbowDiff);
+    // Accumulate elbow difference ONLY during BOTTOM phase.
+    // Arms are stationary at contraction → pose estimation is most stable and
+    // EMA lag-induced apparent asymmetry from fast movement is absent.
+    if (state.phase === 'BOTTOM') {
+      w.totalElbowDiff += Math.abs(smoothedLeftElbow - smoothedRightElbow);
+      w.diffFrameCount++;
+    }
 
     // Max torso lean
     w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
@@ -514,6 +545,8 @@ function updateLatPulldownState(
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
     state.repCount++;
+    state.requireExtensionBeforeNextRep = true;
+    state.tRepCompleted = t;
 
     const score = computeLatPulldownScore(state.repWindow);
     const messages = generateFormMessages(state.repWindow);
@@ -540,6 +573,8 @@ function updateLatPulldownState(
   if (prevPhase === 'PULLING' && state.phase === 'REST' && !fsmResult.repCompleted) {
     state.repWindow = null;
     state.tRepStart = null;
+    state.requireExtensionBeforeNextRep = false;
+    state.tRepCompleted = null;
   }
 
   // -- Clear feedback after 2 seconds --
@@ -568,7 +603,7 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
     torsoLean: fmt(state.smoothedTorsoLean),
     minAvgElbow: w ? (w.minAvgElbow < Infinity ? fmt(w.minAvgElbow) : null) : null,
     maxAvgElbow: w ? (w.maxAvgElbow > -Infinity ? fmt(w.maxAvgElbow) : null) : null,
-    maxElbowDiff: w ? fmt(w.maxElbowDiff) : null,
+    avgElbowDiff: w && w.diffFrameCount > 0 ? fmt(w.totalElbowDiff / w.diffFrameCount) : null,
     maxTorsoLean: w ? fmt(w.maxTorsoLean) : null,
   };
 }

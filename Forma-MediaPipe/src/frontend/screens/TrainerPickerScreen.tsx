@@ -22,7 +22,7 @@ import {
 } from '../constants/theme';
 import { TRAINERS, type Trainer } from '../constants/trainers';
 import { useWorkoutPreferences } from '../../backend/hooks';
-import { setActiveVoiceId, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
+import { setActiveVoiceId, setActiveVoiceSettings, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
 
 const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');
 const FEMALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'female');
@@ -48,6 +48,7 @@ export const TrainerPickerScreen: React.FC = () => {
     updatePref('selectedTrainerId', trainer.id);
     // Switch the voice immediately so the greeting plays in the right voice
     setActiveVoiceId(trainer.voiceId);
+    setActiveVoiceSettings(trainer.voiceSettings);
     if (greetingEnabled) {
       speakWithElevenLabs(trainer.greeting).catch(() => {});
     }

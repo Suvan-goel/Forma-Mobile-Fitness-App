@@ -8,7 +8,6 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { useAuth } from '../../backend/contexts/AuthContext';
@@ -68,18 +67,13 @@ export const WelcomeScreen: React.FC = () => {
               style={styles.buttonOuter}
               disabled={isBusy}
             >
-              <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.buttonGradient}
-              >
+              <View style={styles.buttonGradient}>
                 {isSigningIn === 'google' ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.buttonText}>Continue with Google</Text>
                 )}
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             {/* Apple Sign-In */}
@@ -178,6 +172,9 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   appleButtonOuter: {
     ...Platform.select({

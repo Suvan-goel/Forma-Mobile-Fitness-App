@@ -1,15 +1,14 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text, Platform } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { CheckCircle } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 
-const BARBELL_WIDTH = 240;
-const SCAN_LEFT = 10;
-const SCAN_RIGHT = BARBELL_WIDTH - 10;
-const SCAN_DURATION = 750;
+const BARBELL_WIDTH = 260;
+const BARBELL_HEIGHT = 80;
+const SCAN_LEFT = 5;
+const SCAN_RIGHT = BARBELL_WIDTH - 5;
+const SCAN_DURATION = 800;
 const PHASE_DURATION = 1500;
 
 const TEXT_PHASES = [
@@ -21,19 +20,87 @@ const TEXT_PHASES = [
 // ── Barbell SVG ─────────────────────────────────────────────
 
 const BarbellWireframe: React.FC = () => (
-  <Svg width={BARBELL_WIDTH} height={64} viewBox="0 0 240 64">
+  <Svg width={BARBELL_WIDTH} height={BARBELL_HEIGHT} viewBox={`0 0 ${BARBELL_WIDTH} ${BARBELL_HEIGHT}`}>
     {/* Left collar */}
-    <Rect x={10} y={24} width={32} height={16} rx={3} stroke="#E4E4E7" strokeWidth={2.5} fill="none" />
-    {/* Left plate */}
-    <Rect x={44} y={8} width={18} height={48} rx={2} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
-    {/* Bar */}
-    <Rect x={62} y={28} width={116} height={8} rx={4} stroke="#E4E4E7" strokeWidth={2.5} fill="none" />
-    {/* Right plate */}
-    <Rect x={178} y={8} width={18} height={48} rx={2} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
+    <Rect x={8} y={30} width={26} height={20} rx={3} stroke="#D4D4D8" strokeWidth={2} fill="none" />
+
+    {/* Left plate outer */}
+    <Rect x={34} y={8} width={20} height={64} rx={3} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
+    {/* Left plate inner detail ring */}
+    <Rect x={38} y={16} width={12} height={48} rx={2} stroke="rgba(255,255,255,0.22)" strokeWidth={1} fill="none" />
+
+    {/* Left grip section */}
+    <Rect x={54} y={32} width={32} height={16} rx={3} stroke="#C4C4C8" strokeWidth={1.5} fill="none" />
+
+    {/* Center knurled section */}
+    <Rect x={86} y={32} width={88} height={16} rx={2} stroke="#C4C4C8" strokeWidth={1.5} fill="none" />
+
+    {/* Knurling marks — 8 vertical bars across center */}
+    {Array.from({ length: 8 }, (_, i) => (
+      <Rect
+        key={i}
+        x={92 + i * 11}
+        y={36}
+        width={1.5}
+        height={8}
+        rx={0.75}
+        fill="rgba(255,255,255,0.28)"
+      />
+    ))}
+
+    {/* Right grip section */}
+    <Rect x={174} y={32} width={32} height={16} rx={3} stroke="#C4C4C8" strokeWidth={1.5} fill="none" />
+
+    {/* Right plate inner detail ring */}
+    <Rect x={210} y={16} width={12} height={48} rx={2} stroke="rgba(255,255,255,0.22)" strokeWidth={1} fill="none" />
+    {/* Right plate outer */}
+    <Rect x={206} y={8} width={20} height={64} rx={3} stroke="#FFFFFF" strokeWidth={2.5} fill="none" />
+
     {/* Right collar */}
-    <Rect x={198} y={24} width={32} height={16} rx={3} stroke="#E4E4E7" strokeWidth={2.5} fill="none" />
+    <Rect x={226} y={30} width={26} height={20} rx={3} stroke="#D4D4D8" strokeWidth={2} fill="none" />
   </Svg>
 );
+
+// ── Phase Dots ──────────────────────────────────────────────
+
+const PhaseDots: React.FC<{ phase: number }> = ({ phase }) => (
+  <View style={phaseStyles.row}>
+    {TEXT_PHASES.map((_, i) => (
+      <View
+        key={i}
+        style={[
+          phaseStyles.dot,
+          i < phase ? phaseStyles.dotComplete : i === phase ? phaseStyles.dotActive : phaseStyles.dotUpcoming,
+        ]}
+      />
+    ))}
+  </View>
+);
+
+const phaseStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    height: 3,
+    borderRadius: 1.5,
+  },
+  dotComplete: {
+    width: 8,
+    backgroundColor: COLORS.primary,
+    opacity: 0.55,
+  },
+  dotActive: {
+    width: 28,
+    backgroundColor: COLORS.primary,
+  },
+  dotUpcoming: {
+    width: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+});
 
 // ── Main Component ──────────────────────────────────────────
 
@@ -42,7 +109,6 @@ interface OnboardingInterstitialProps {
 }
 
 export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ onComplete }) => {
-  const insets = useSafeAreaInsets();
 
   // Animated values
   const scanX          = useRef(new Animated.Value(SCAN_LEFT)).current;
@@ -50,7 +116,7 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
   const textOpacity    = useRef(new Animated.Value(0)).current;
   const loadingOpacity = useRef(new Animated.Value(1)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
-  const successScale   = useRef(new Animated.Value(0.8)).current;
+  const successScale   = useRef(new Animated.Value(0.85)).current;
   const buttonOpacity  = useRef(new Animated.Value(0)).current;
 
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -111,13 +177,13 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
     // Kick off recursive scan
     runScanPass();
 
-    // Phase 1 → 2 text cycles
+    // Phase text cycles
     const t1 = setTimeout(() => cycleText(1), PHASE_DURATION);
     const t2 = setTimeout(() => cycleText(2), PHASE_DURATION * 2);
 
-    // Completion — cancel scan (no .stop() on the loop) then cross-fade
+    // Completion — cancel scan then cross-fade to success state
     const t3 = setTimeout(() => {
-      scanCancelledRef.current = true; // current pass finishes naturally, recursion stops
+      scanCancelledRef.current = true;
 
       Animated.parallel([
         Animated.timing(loadingOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
@@ -132,78 +198,117 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
       clearTimeout(t2);
       clearTimeout(t3);
       scanCancelledRef.current = true;
-      if (scanAnimRef.current) scanAnimRef.current.stop(); // safe: component is unmounting
+      if (scanAnimRef.current) scanAnimRef.current.stop();
     };
   }, [scanX, screenFade, textOpacity, loadingOpacity, successOpacity, successScale, buttonOpacity, cycleText, runScanPass]);
 
   return (
     <Animated.View style={[styles.root, { opacity: screenFade }]}>
 
-      {/* ── Center area: loading and success overlap ───────── */}
-      <View style={styles.centerArea}>
+      {/* ── Loading group — full-screen absolute overlay, always centered ── */}
+      <Animated.View style={[styles.loadingOverlay, { opacity: loadingOpacity }]} pointerEvents="none">
+        <View style={styles.loadingGroup}>
 
-        {/* Loading group — fades out when scan completes */}
-        <Animated.View style={[styles.loadingGroup, { opacity: loadingOpacity }]}>
-          <View style={styles.barbellContainer}>
-            <BarbellWireframe />
-            <Animated.View style={[styles.scanLine, { transform: [{ translateX: scanX }] }]}>
-              <View style={styles.scanGlow} />
-              <View style={styles.scanCore} />
-            </Animated.View>
+          {/* Label */}
+          <View style={styles.labelRow}>
+            <View style={styles.labelLine} />
+            <Text style={styles.labelText}>PROFILE ANALYSIS</Text>
+            <View style={styles.labelLine} />
           </View>
-          <Animated.Text style={[styles.loadingText, { opacity: textOpacity }]}>
-            {TEXT_PHASES[phaseIndex]}
-          </Animated.Text>
-        </Animated.View>
 
-        {/* Success state — fades + springs in over the same space */}
-        <Animated.View
-          style={[
-            styles.successContainer,
-            {
-              opacity: successOpacity,
-              transform: [{ scale: successScale }],
-            },
-          ]}
-          pointerEvents="none"
-        >
-          {/* Outer glow ring */}
-          <View style={styles.iconOuterRing}>
-            {/* Inner glow circle */}
-            <View style={styles.iconInnerCircle}>
-              <CheckCircle
-                size={52}
-                color="#8B5CF6"
-                strokeWidth={1.5}
-              />
+          {/* Barbell with corner brackets */}
+          <View style={styles.barbellWrapper}>
+            {/* Subtle ambient glow behind barbell */}
+            <View style={styles.barbellGlow} />
+
+            {/* Corner brackets — precision targeting feel */}
+            <View style={[styles.cornerBracket, styles.cornerTL]} />
+            <View style={[styles.cornerBracket, styles.cornerTR]} />
+            <View style={[styles.cornerBracket, styles.cornerBL]} />
+            <View style={[styles.cornerBracket, styles.cornerBR]} />
+
+            {/* Barbell + laser scan */}
+            <View style={styles.barbellContainer}>
+              <BarbellWireframe />
+              <Animated.View style={[styles.scanLine, { transform: [{ translateX: scanX }] }]}>
+                <View style={styles.scanGlow} />
+                <View style={styles.scanCore} />
+              </Animated.View>
             </View>
           </View>
 
-          <View style={styles.successTextGroup}>
-            <Text style={styles.successHeader}>Analysis Complete.</Text>
-            <Text style={styles.successSubtext}>Your custom beta profile is ready.</Text>
-          </View>
-        </Animated.View>
+          {/* Phase progress dots */}
+          <PhaseDots phase={phaseIndex} />
 
-      </View>
+          {/* Cycling status text */}
+          <Animated.Text style={[styles.loadingText, { opacity: textOpacity }]}>
+            {TEXT_PHASES[phaseIndex]}
+          </Animated.Text>
 
-      {/* ── CTA button — fades in with success state ────────── */}
+        </View>
+      </Animated.View>
+
+      {/* ── Success state — full-screen overlay, always centered ── */}
       <Animated.View
         style={[
-          styles.ctaContainer,
+          styles.successContainer,
           {
-            opacity: buttonOpacity,
-            paddingBottom: Math.max(insets.bottom, 24),
+            opacity: successOpacity,
+            transform: [{ scale: successScale }],
           },
         ]}
-        pointerEvents={isComplete ? 'auto' : 'none'}
+        pointerEvents={isComplete ? 'box-none' : 'none'}
       >
+        {/* Label */}
+        <View style={styles.labelRow}>
+          <View style={styles.labelLine} />
+          <Text style={styles.labelText}>ANALYSIS COMPLETE</Text>
+          <View style={styles.labelLine} />
+        </View>
+
+        {/* Hero headline */}
+        <Text style={styles.successHeader}>
+          Profile Ready<Text style={styles.accentDot}>.</Text>
+        </Text>
+
+        {/* Subtext */}
+        <Text style={styles.successSubtext}>Your custom AI blueprint has been built.</Text>
+
+        {/* Metrics readout card */}
+        <View style={styles.metricsCard}>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>AI Blueprint</Text>
+            <View style={styles.metricStatus}>
+              <View style={styles.metricDot} />
+              <Text style={styles.metricValue}>Compiled</Text>
+            </View>
+          </View>
+          <View style={styles.metricSeparator} />
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Form Profile</Text>
+            <View style={styles.metricStatus}>
+              <View style={styles.metricDot} />
+              <Text style={styles.metricValue}>Ready</Text>
+            </View>
+          </View>
+          <View style={styles.metricSeparator} />
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Coach Mode</Text>
+            <View style={styles.metricStatus}>
+              <View style={styles.metricDot} />
+              <Text style={styles.metricValue}>Active</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* CTA button — part of the centered content block */}
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={onComplete}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
-          <Text style={styles.ctaText}>Finalize Profile</Text>
+          <Text style={styles.ctaText}>Begin Training</Text>
+          <Text style={styles.ctaArrow}>→</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -226,14 +331,109 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  /* ── Loading overlay — full-screen, always centered ─── */
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   /* ── Loading group ──────────────────────── */
   loadingGroup: {
     alignItems: 'center',
-    gap: 32,
+    gap: 28,
   },
+
+  /* ── Label row ───────────────────────────── */
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  labelLine: {
+    width: 20,
+    height: 1,
+    backgroundColor: 'rgba(139, 92, 246, 0.35)',
+  },
+  labelText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.primary,
+    letterSpacing: 2.5,
+  },
+
+  /* ── Barbell wrapper (contains brackets + glow) ─────── */
+  barbellWrapper: {
+    width: BARBELL_WIDTH + 48,
+    height: BARBELL_HEIGHT + 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Ambient glow behind barbell ─────────────────────── */
+  barbellGlow: {
+    position: 'absolute',
+    width: BARBELL_WIDTH + 20,
+    height: BARBELL_HEIGHT + 60,
+    borderRadius: 80,
+    backgroundColor: 'rgba(139, 92, 246, 0.03)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOpacity: 0.13,
+        shadowRadius: 48,
+        shadowOffset: { width: 0, height: 0 },
+      },
+    }),
+  },
+
+  /* ── Corner brackets ─────────────────────── */
+  cornerBracket: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: 'rgba(139, 92, 246, 0.5)',
+    borderLeftColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderTopColor: 'rgba(139, 92, 246, 0.5)',
+    borderRightColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderBottomColor: 'rgba(139, 92, 246, 0.5)',
+    borderLeftColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderBottomColor: 'rgba(139, 92, 246, 0.5)',
+    borderRightColor: 'rgba(139, 92, 246, 0.5)',
+  },
+
+  /* ── Barbell container ───────────────────── */
   barbellContainer: {
     width: BARBELL_WIDTH,
-    height: 64,
+    height: BARBELL_HEIGHT,
     position: 'relative',
     overflow: 'visible',
   },
@@ -241,22 +441,22 @@ const styles = StyleSheet.create({
   /* ── Laser scan line ────────────────────── */
   scanLine: {
     position: 'absolute',
-    top: -10,
-    bottom: -10,
+    top: -12,
+    bottom: -12,
     left: 0,
     width: 3,
     alignItems: 'center',
   },
   scanCore: {
-    width: 3,
+    width: 2,
     height: '100%',
     backgroundColor: '#8B5CF6',
-    borderRadius: 1.5,
+    borderRadius: 1,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOpacity: 0.8,
-        shadowRadius: 10,
+        shadowOpacity: 0.9,
+        shadowRadius: 8,
         shadowOffset: { width: 0, height: 0 },
       },
       android: { elevation: 5 },
@@ -264,108 +464,131 @@ const styles = StyleSheet.create({
   },
   scanGlow: {
     position: 'absolute',
-    width: 22,
+    width: 32,
     height: '100%',
-    backgroundColor: 'rgba(139, 92, 246, 0.18)',
-    borderRadius: 11,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderRadius: 16,
   },
 
-  /* ── Cycling text ───────────────────────── */
+  /* ── Cycling status text ─────────────────── */
   loadingText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-    textAlign: 'center',
-  },
-
-  /* ── Success state ──────────────────────── */
-  successContainer: {
-    position: 'absolute',
-    alignItems: 'center',
-    gap: 28,
-  },
-  iconOuterRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
-    backgroundColor: 'rgba(139, 92, 246, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOpacity: 0.35,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  iconInnerCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOpacity: 0.6,
-        shadowRadius: 15,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: { elevation: 4 },
-    }),
-  },
-  successTextGroup: {
-    alignItems: 'center',
-    gap: 10,
-  },
-  successHeader: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 28,
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    textAlign: 'center',
-  },
-  successSubtext: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 16,
-    color: '#A1A1AA',
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.8)',
     letterSpacing: 0.3,
     textAlign: 'center',
   },
 
-  /* ── CTA button ─────────────────────────── */
-  ctaContainer: {
-    paddingHorizontal: SPACING.screenHorizontal,
-  },
-  ctaButton: {
-    backgroundColor: '#8B5CF6',
-    borderRadius: 18,
-    paddingVertical: 20,
+  /* ── Success state ───────────────────────── */
+  successContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 20,
+  },
+  accentDot: {
+    color: COLORS.primary,
+  },
+  successHeader: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 52,
+    color: '#FFFFFF',
+    letterSpacing: -2,
+    textAlign: 'center',
+  },
+  successSubtext: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 0.2,
+    textAlign: 'center',
+  },
+
+  /* ── Metrics card ────────────────────────── */
+  metricsCard: {
+    alignSelf: 'stretch',
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 20,
+    marginTop: 8,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+  },
+  metricLabel: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.3,
+  },
+  metricStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  metricDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.primary,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.9,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 0 },
       },
-      android: { elevation: 12 },
     }),
   },
+  metricValue: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: COLORS.primary,
+    letterSpacing: 0.3,
+  },
+  metricSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+
+  /* ── CTA button ──────────────────────────── */
+  ctaContainer: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    marginBottom: 0,
+  },
+  ctaButton: {
+    marginTop: 45,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(139, 92, 246, 0.07)',
+  },
   ctaText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 16,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
+  },
+  ctaArrow: {
+    fontFamily: FONTS.display.medium,
+    fontSize: 16,
+    color: COLORS.primary,
   },
 });

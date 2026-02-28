@@ -39,7 +39,7 @@ interface SettingsScreenProps {
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
-  const { signOut, user: authUser } = useAuth();
+  const { user: authUser } = useAuth();
   const { user: profileUser, refetch: refetchUser } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
@@ -58,23 +58,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       refetchUser();
     }, [refetchUser]),
   );
-
-  const handleLogout = () => {
-    showAlert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await signOut();
-          } catch (error) {
-            showAlert('Error', 'Failed to log out. Please try again.');
-          }
-        },
-      },
-    ]);
-  };
 
   const displayName = profileUser?.displayName ?? authUser?.user_metadata?.full_name ?? 'Athlete';
   const userEmail = profileUser?.email ?? authUser?.email ?? '';
@@ -316,20 +299,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </View>
           </TouchableOpacity>
 
-          {/* ── LOGOUT ──────────────────────────────── */}
-          <TouchableOpacity
-            style={styles.logoutOuter}
-            activeOpacity={0.7}
-            onPress={handleLogout}
-          >
-            <View style={styles.logoutInner}>
-              <View style={styles.logoutIconBadge}>
-                <LogOut size={16} color="#EF4444" strokeWidth={1.5} />
-              </View>
-              <Text style={styles.logoutText}>Log Out</Text>
-            </View>
-          </TouchableOpacity>
-
           {/* ── VERSION ─────────────────────────────── */}
           <Text style={styles.versionText}>FORMA v1.0.0</Text>
         </ScrollView>
@@ -511,37 +480,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0.1,
-  },
-
-  /* ── Logout ────────────────────────────── */
-  logoutOuter: {
-    marginTop: SPACING.xxl,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.15)',
-    backgroundColor: 'rgba(239, 68, 68, 0.04)',
-    overflow: 'hidden',
-  },
-  logoutInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-  },
-  logoutIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: '#EF4444',
-    letterSpacing: 0.5,
   },
 
   /* ── Dev: Back to Onboarding ───────────── */
