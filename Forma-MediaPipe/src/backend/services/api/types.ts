@@ -34,6 +34,8 @@ export interface UserStats {
   formScore: number;
   /** Cumulative points earned from weekly consistency bonuses + streaks. Displayed as "+N CONSISTENCY". */
   consistencyScore: number;
+  /** Badge IDs the user has permanently earned (matches Reward.id). Source of truth for badge display and leaderboards. */
+  earnedBadgeIds: string[];
 }
 
 // Exercise types

@@ -18,6 +18,7 @@ import {
   BarChart2,
   Volume2,
   Mail,
+  Star,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -95,6 +96,24 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: 'Why is a perfect 100 rare?',
         answer: 'The scoring system uses continuous penalty curves, so even tiny imperfections result in small point deductions. Scores of 85-93 indicate very good form. A perfect 100 means every aspect of your form was within the tightest possible tolerances.',
+      },
+    ],
+  },
+  {
+    title: 'Rewards & Points',
+    icon: Star,
+    items: [
+      {
+        question: 'How do I earn points?',
+        answer: 'Points come from two sources: workout quality (Form Points) and weekly habits (Consistency Points). Form Points are awarded when you save a workout — each set with a form score of 60 or above earns points, and longer sessions with higher average scores earn bonus points. Consistency Points are awarded once per week based on how well you hit your weekly training target.',
+      },
+      {
+        question: 'How are Form Points calculated?',
+        answer: 'Each qualifying set (form score ≥ 60) earns 1–3 tier points based on quality: 60–74 = 1 pt, 75–84 = 2 pts, 85+ = 3 pts. Weighted exercises earn a small volume bonus on top. A session bonus of up to 10 pts is added based on your average form score, and a duration bonus of up to 5 pts rewards full workouts. The total is capped at 25 pts per workout, and only your first workout each day counts — so consistency beats marathon sessions.',
+      },
+      {
+        question: 'How are Consistency Points calculated?',
+        answer: 'At the start of each new week, Forma checks how many workouts you completed the previous Monday–Sunday versus your weekly training target (set in Settings). Hitting 100% of your target earns 20 pts. Reaching 75–99% earns 10 pts, and 50–74% earns 5 pts. On top of that, a streak bonus rewards consecutive weeks of hitting your target: 2 weeks = +5, 4 weeks = +10, 8+ weeks = +15. The weekly maximum is 35 pts.',
       },
     ],
   },

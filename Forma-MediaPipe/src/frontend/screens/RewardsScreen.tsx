@@ -9,7 +9,19 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock, LucideIcon } from 'lucide-react-native';
+import {
+  Zap,
+  Target,
+  Activity,
+  Shield,
+  Star,
+  Flame,
+  Trophy,
+  Crown,
+  Lock,
+  CheckCircle,
+  LucideIcon,
+} from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
@@ -20,19 +32,18 @@ import { Reward } from '../../backend/services/api';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 const iconMap: { [key: string]: LucideIcon } = {
-  Gift, Utensils, Dumbbell, ShoppingBag, Pill, Star, Lock,
+  Zap, Target, Activity, Shield, Star, Flame, Trophy, Crown, Lock, CheckCircle,
 };
 
-const getIconComponent = (iconName: string): LucideIcon => iconMap[iconName] || Gift;
+const getIconComponent = (iconName: string): LucideIcon => iconMap[iconName] || Star;
 
-const PROGRESS_COLORS: [string, string] = ['#7C3AED', '#8B5CF6'];
+/* ── Badge Card ──────────────────────────── */
 
-/* ── Reward Card ──────────────────────────── */
-
-const RewardCard = memo(({ reward, userPoints }: { reward: Reward; userPoints: number }) => {
-  const isUnlocked = userPoints >= reward.pointsRequired;
+const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds }: { reward: Reward; userPoints: number; earnedBadgeIds: string[] }) => {
+  const isUnlocked = earnedBadgeIds.includes(reward.id);
   const progress = Math.min((userPoints / reward.pointsRequired) * 100, 100);
   const Icon = getIconComponent(reward.iconName);
+  const accent = reward.color;
 
   return (
     <TouchableOpacity
@@ -47,9 +58,12 @@ const RewardCard = memo(({ reward, userPoints }: { reward: Reward; userPoints: n
       >
         <View style={[styles.cardGlassEdge, !isUnlocked && styles.cardLocked]}>
           {/* Icon */}
-          <View style={[styles.iconCircle, isUnlocked && styles.iconCircleActive]}>
+          <View style={[
+            styles.iconCircle,
+            isUnlocked && { backgroundColor: accent + '1A', borderWidth: 1, borderColor: accent + '44' },
+          ]}>
             {isUnlocked ? (
-              <Icon size={20} color={COLORS.accent} strokeWidth={1.5} />
+              <Icon size={20} color={accent} strokeWidth={1.5} />
             ) : (
               <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
             )}
@@ -57,9 +71,14 @@ const RewardCard = memo(({ reward, userPoints }: { reward: Reward; userPoints: n
 
           {/* Info */}
           <View style={styles.cardInfo}>
-            <Text style={[styles.cardTitle, !isUnlocked && styles.cardTitleLocked]}>
-              {reward.title}
-            </Text>
+            <View style={styles.cardTitleRow}>
+              <Text style={[styles.cardTitle, !isUnlocked && styles.cardTitleLocked]}>
+                {reward.title}
+              </Text>
+              <View style={[styles.tierPill, { backgroundColor: accent + '1A' }]}>
+                <Text style={[styles.tierText, { color: accent }]}>{reward.category.toUpperCase()}</Text>
+              </View>
+            </View>
             <Text style={styles.cardDesc}>{reward.description}</Text>
 
             {/* Progress bar */}
@@ -67,7 +86,7 @@ const RewardCard = memo(({ reward, userPoints }: { reward: Reward; userPoints: n
               <View style={styles.progressTrack}>
                 {progress > 0 && (
                   <LinearGradient
-                    colors={PROGRESS_COLORS}
+                    colors={[accent + 'BB', accent] as [string, string]}
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
                     style={[styles.progressFill, { width: `${progress}%` }]}
@@ -78,16 +97,12 @@ const RewardCard = memo(({ reward, userPoints }: { reward: Reward; userPoints: n
             </View>
           </View>
 
-          {/* Redeem badge */}
+          {/* Earned indicator */}
           {isUnlocked && (
-            <LinearGradient
-              colors={PROGRESS_COLORS}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.redeemBadge}
-            >
-              <Text style={styles.redeemText}>REDEEM</Text>
-            </LinearGradient>
+            <View style={[styles.earnedBadge, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
+              <CheckCircle size={10} color={accent} strokeWidth={2.5} />
+              <Text style={[styles.earnedText, { color: accent }]}>EARNED</Text>
+            </View>
           )}
         </View>
       </LinearGradient>
@@ -127,8 +142,9 @@ export const RewardsScreen: React.FC = () => {
     );
   }
 
-  const unlockedRewards = rewards.filter(r => userPoints >= r.pointsRequired);
-  const lockedRewards = rewards.filter(r => userPoints < r.pointsRequired);
+  const earnedBadgeIds = userStats?.earnedBadgeIds ?? [];
+  const earnedBadges = rewards.filter(r => earnedBadgeIds.includes(r.id));
+  const lockedBadges = rewards.filter(r => !earnedBadgeIds.includes(r.id));
 
   return (
     <View style={styles.container}>
@@ -166,43 +182,47 @@ export const RewardsScreen: React.FC = () => {
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
-        <Text style={styles.headerSubtitle}>EARN & REDEEM</Text>
+        <Text style={styles.headerSubtitle}>EARN BADGES</Text>
 
         {/* ── HERO SCORE ─────────────────────────── */}
         <View style={styles.heroSection}>
           <Text style={styles.heroValue}>{userPoints}</Text>
-          <Text style={styles.heroLabel}>AVAILABLE POINTS</Text>
+          <Text style={styles.heroLabel}>TOTAL POINTS</Text>
 
           {/* Sub-stats */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>+{userStats?.formScore || 0}</Text>
               <Text style={styles.statLabel}>FORM</Text>
+              <Text style={styles.statHint}>quality · 25 max/session</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>+{userStats?.consistencyScore || 0}</Text>
               <Text style={styles.statLabel}>CONSISTENCY</Text>
+              <Text style={styles.statHint}>weekly target · 35 max/week</Text>
             </View>
           </View>
         </View>
 
-        {/* ── UNLOCKED REWARDS ───────────────────── */}
-        {unlockedRewards.length > 0 && (
+        {/* ── EARNED BADGES ──────────────────────── */}
+        {earnedBadges.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>UNLOCK REWARDS</Text>
-            {unlockedRewards.map(reward => (
-              <RewardCard key={reward.id} reward={reward} userPoints={userPoints} />
+            <Text style={styles.sectionTitle}>EARNED BADGES</Text>
+            {earnedBadges.map(reward => (
+              <BadgeCard key={reward.id} reward={reward} userPoints={userPoints} earnedBadgeIds={earnedBadgeIds} />
             ))}
           </>
         )}
 
-        {/* ── LOCKED REWARDS ─────────────────────── */}
-        {lockedRewards.length > 0 && (
+        {/* ── LOCKED BADGES ──────────────────────── */}
+        {lockedBadges.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>KEEP GOING</Text>
-            {lockedRewards.map(reward => (
-              <RewardCard key={reward.id} reward={reward} userPoints={userPoints} />
+            <Text style={styles.sectionTitle}>
+              {earnedBadges.length > 0 ? 'LOCKED BADGES' : 'BADGES'}
+            </Text>
+            {lockedBadges.map(reward => (
+              <BadgeCard key={reward.id} reward={reward} userPoints={userPoints} earnedBadgeIds={earnedBadgeIds} />
             ))}
           </>
         )}
@@ -328,7 +348,7 @@ const styles = StyleSheet.create({
   },
   statItem: {
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   statValue: {
     fontFamily: FONTS.display.semibold,
@@ -342,9 +362,16 @@ const styles = StyleSheet.create({
     color: '#52525B',
     letterSpacing: 2,
   },
+  statHint: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9,
+    color: '#3F3F46',
+    letterSpacing: 0.3,
+    marginTop: 1,
+  },
   statDivider: {
     width: 1,
-    height: 28,
+    height: 40,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
 
@@ -358,7 +385,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  /* ── Reward Card (analytics style) ───────────────────────────── */
+  /* ── Badge Card ───────────────────────────── */
   cardOuter: {
     borderRadius: 19,
     overflow: 'hidden',
@@ -367,7 +394,7 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
+        shadowOpacity: 0.2,
         shadowRadius: 15,
       },
       android: { elevation: 6 },
@@ -386,7 +413,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   cardLocked: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
 
   /* ── Icon Circle ───────────────────────────── */
@@ -398,15 +425,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconCircleActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.25)',
-  },
 
   /* ── Card Info ─────────────────────────────── */
   cardInfo: {
     flex: 1,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   cardTitle: {
     fontFamily: FONTS.display.semibold,
@@ -417,11 +444,21 @@ const styles = StyleSheet.create({
   cardTitleLocked: {
     color: COLORS.textSecondary,
   },
+  tierPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  tierText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 8,
+    letterSpacing: 1,
+  },
   cardDesc: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
-    marginTop: 2,
+    marginTop: 3,
   },
 
   /* ── Progress Bar ──────────────────────────── */
@@ -449,16 +486,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* ── Redeem Badge ──────────────────────────── */
-  redeemBadge: {
-    paddingHorizontal: 12,
+  /* ── Earned Badge ──────────────────────────── */
+  earnedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
+    borderWidth: 1,
   },
-  redeemText: {
+  earnedText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 10,
-    color: '#FFFFFF',
+    fontSize: 9,
     letterSpacing: 1,
   },
 });
