@@ -204,6 +204,80 @@ function replayRecording(recording: RecordingFile, verbose: boolean): ReplayResu
 // Load all recording files from the recordings/ directory
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Extracts the first complete JSON object from a string.
+ * Handles the case where multiple recordings are concatenated in one file
+ * by stopping as soon as the outermost `{...}` is closed.
+ */
+function extractFirstJSON(s: string): string {
+  const start = s.indexOf('{');
+  if (start === -1) throw new Error('No JSON object found in content');
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (escape)             { escape = false; continue; }
+    if (c === '\\' && inString) { escape = true; continue; }
+    if (c === '"')          { inString = !inString; continue; }
+    if (inString)           { continue; }
+    if (c === '{' || c === '[') { depth++; }
+    if (c === '}' || c === ']') {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  throw new Error('Unterminated JSON — recording may be incomplete');
+}
+
+/**
+ * Parse a recording file, handling several formats:
+ *
+ * 1. Raw Metro terminal output — each line has a " LOG  " prefix, optionally
+ *    wrapped in === LANDMARK_RECORDING_START/END === markers.
+ *    This is what you get when you copy straight from the Metro terminal or
+ *    pipe Metro output with `tee`.
+ *
+ * 2. Clean JSON — already a valid JSON file with no prefixes.
+ *
+ * If the file contains multiple concatenated recordings (e.g. multiple sets
+ * extracted into one file), only the FIRST recording is used.
+ */
+function parseRecordingFile(raw: string): RecordingFile {
+  // Detect Metro LOG prefix on any line.
+  // Handles variants: "LOG ", " LOG ", "\tLOG\t" (VS Code terminal vs iTerm vs tee)
+  const hasLogPrefix = /^\s*LOG\s/m.test(raw);
+
+  if (!hasLogPrefix) {
+    return JSON.parse(extractFirstJSON(raw)) as RecordingFile;
+  }
+
+  // Strip the LOG prefix (with any surrounding whitespace) from the start of each line,
+  // then join into a single string
+  const stripped = raw
+    .split('\n')
+    .map(line => line.replace(/^\s*LOG\s+/, ''))
+    .join('');
+
+  // If START/END markers exist, use the LAST recording (most recent set)
+  const startMarker = '=== LANDMARK_RECORDING_START ===';
+  const endMarker   = '=== LANDMARK_RECORDING_END ===';
+  const lastStartIdx = stripped.lastIndexOf(startMarker);
+  const lastEndIdx   = stripped.lastIndexOf(endMarker);
+
+  let jsonString: string;
+  if (lastStartIdx !== -1 && lastEndIdx > lastStartIdx) {
+    jsonString = stripped.slice(lastStartIdx + startMarker.length, lastEndIdx).trim();
+  } else {
+    // No markers — extract the first complete JSON object from the stripped content
+    return JSON.parse(extractFirstJSON(stripped)) as RecordingFile;
+  }
+
+  return JSON.parse(jsonString) as RecordingFile;
+}
+
 function loadRecordings(): Array<{ file: string; recording: RecordingFile }> {
   const recordingsDir = path.join(__dirname, 'recordings');
   if (!fs.existsSync(recordingsDir)) {
@@ -211,11 +285,21 @@ function loadRecordings(): Array<{ file: string; recording: RecordingFile }> {
   }
 
   const files = fs.readdirSync(recordingsDir).filter(f => f.endsWith('.json'));
-  return files.map(file => {
+  const results: Array<{ file: string; recording: RecordingFile }> = [];
+
+  for (const file of files) {
+    if (file === '.gitkeep') continue;
     const raw = fs.readFileSync(path.join(recordingsDir, file), 'utf-8');
-    const recording = JSON.parse(raw) as RecordingFile;
-    return { file, recording };
-  });
+    try {
+      const recording = parseRecordingFile(raw);
+      results.push({ file, recording });
+    } catch (e) {
+      console.error(`\n  [replay] Failed to parse ${file}: ${(e as Error).message}`);
+      console.error(`  Make sure the file is either clean JSON or raw Metro terminal output.\n`);
+    }
+  }
+
+  return results;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

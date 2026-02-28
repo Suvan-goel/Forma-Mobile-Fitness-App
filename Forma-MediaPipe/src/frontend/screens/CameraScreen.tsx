@@ -966,22 +966,19 @@ export const CameraScreen: React.FC = () => {
               <View style={styles.torsoDebugCard}>
                 <Text style={styles.torsoDebugTitle}>Lat Pulldown</Text>
                 <Text style={styles.torsoDebugText}>
-                  {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
+                  {d.phase} | {d.warmedUp ? 'ready' : 'warming up'} | {d.activeSide ?? '–'} arm
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Elbow L: {d.leftElbow != null ? d.leftElbow.toFixed(1) + '°' : '–'} | R: {d.rightElbow != null ? d.rightElbow.toFixed(1) + '°' : '–'}
-                </Text>
-                <Text style={styles.torsoDebugText}>
-                  Avg: {d.avgElbow != null ? d.avgElbow.toFixed(1) + '°' : '–'}
+                  Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
                   {'  '}Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
                 </Text>
-                {d.minAvgElbow != null && (
+                {d.minElbow != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Avg: {d.minAvgElbow.toFixed(1)}°–{d.maxAvgElbow != null ? d.maxAvgElbow.toFixed(1) : '–'}°
-                    {'  '}Diff: {d.maxElbowDiff != null ? d.maxElbowDiff.toFixed(1) : '–'}°
+                    Rep: {d.minElbow.toFixed(1)}°–{d.maxElbow != null ? d.maxElbow.toFixed(1) : '–'}°
+                    {'  '}Max lean: {d.maxTorsoLean != null ? d.maxTorsoLean.toFixed(1) + '°' : '–'}
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Pull &lt;85° | Extend &gt;135° | Asym warn 20° | Torso warn 15°</Text>
+                <Text style={styles.torsoDebugHint}>Pull &lt;85° | Enter &lt;150° | Extend &gt;135° | Torso warn 20°</Text>
               </View>
             </View>
             );

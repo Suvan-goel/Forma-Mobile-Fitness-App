@@ -1,7 +1,9 @@
 /**
  * Cable Lat Pulldowns -- Exercise Definition
  *
- * Front view, elbow angle as primary driver. Both arms tracked for symmetry.
+ * Side or diagonal view, single (best-visible) arm elbow angle as primary driver.
+ * No symmetry tracking. Works from side, diagonal, or any angle where one arm
+ * and the torso are visible.
  * FSM: REST -> PULLING -> BOTTOM -> RETURNING -> REST
  * Arms start extended overhead (~150-170deg elbow), pull down to ~50-80deg,
  * then return. One rep = full pull-down + controlled return.
@@ -30,30 +32,33 @@ import type {
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees -- average elbow angle of both arms) */
+/** FSM thresholds (degrees -- smoothed elbow angle of the active arm) */
 const THRESHOLDS = {
-  /** Average elbow angle below which we transition REST -> PULLING */
-  PULLING_ENTER: 155,
-  /** Average elbow angle below which we consider bottom position (PULLING -> BOTTOM) */
+  /** Elbow angle below which we transition REST -> PULLING.
+   *  Set lower than a natural resting extended arm (~160°) to avoid false entry
+   *  from noise or a slightly bent idle arm position. */
+  PULLING_ENTER: 150,
+  /** Elbow angle below which we consider bottom position (PULLING -> BOTTOM) */
   BOTTOM_ENTER: 85,
-  /** Average elbow angle above which we leave BOTTOM (hysteresis) (BOTTOM -> RETURNING) */
+  /** Elbow angle above which we leave BOTTOM (hysteresis) (BOTTOM -> RETURNING) */
   BOTTOM_EXIT: 90,
-  /** Average elbow angle above which the return is complete (RETURNING -> REST) */
+  /** Elbow angle above which the return is complete (RETURNING -> REST) */
   REST_REENTER: 135,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
+  /** Minimum time (seconds) to stay in PULLING before allowing abort back to REST.
+   *  Prevents rapid flicker when the idle arm angle hovers near PULLING_ENTER. */
+  PULLING_ABORT_MIN_TIME: 0.25,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
 const FORM_THRESHOLDS = {
-  /** Min average elbow angle above which pull is insufficient */
+  /** Min elbow angle above which pull is insufficient */
   PULL_ROM_FAIL: 90,
-  /** Max average elbow angle below which extension is insufficient */
+  /** Max elbow angle below which extension is insufficient */
   EXTENSION_ROM_FAIL: 130,
-  /** Torso lateral lean above which there is excessive lean */
-  TORSO_LEAN_WARN: 15,
-  /** Elbow angle difference between arms above which asymmetry triggers */
-  ASYMMETRY_WARN: 20,
+  /** Torso lean above which there is excessive lean (degrees from vertical) */
+  TORSO_LEAN_WARN: 20,
   /** Concentric (pull down) too fast threshold (seconds) */
   TEMPO_PULL_MIN: 0.2,
   /** Eccentric (return) too fast threshold (seconds) */
@@ -63,22 +68,20 @@ const FORM_THRESHOLDS = {
 /**
  * Continuous penalty curve parameters for scoring.
  *
- * | Category         | Cap | Deadzone         | Scale | Key Input                          |
- * |------------------|-----|------------------|-------|------------------------------------|
- * | ROM pull         | 30  | 0 (from ideal)   | 0.04  | min avg elbow shortfall from 85    |
- * | ROM extension    | 25  | 0 (from ideal)   | 0.03  | max avg elbow shortfall from 155   |
- * | Torso lean       | 25  | 8                | 0.12  | max torso lateral lean             |
- * | Asymmetry        | 15  | 10               | 0.015 | max elbow diff between arms        |
- * | Tempo pull       | 10  | 0.4s             | 50    | concentric time deficit            |
- * | Tempo return     | 10  | 0.5s             | 40    | eccentric time deficit             |
+ * | Category         | Cap | Deadzone | Scale | Key Input                     |
+ * |------------------|-----|----------|-------|-------------------------------|
+ * | ROM pull         | 30  | 0        | 0.04  | min elbow shortfall from 85   |
+ * | ROM extension    | 25  | 0        | 0.03  | max elbow shortfall from 155  |
+ * | Torso lean       | 25  | 8        | 0.12  | max torso lean from vertical  |
+ * | Tempo pull       | 10  | 0.4s     | 50    | concentric time deficit       |
+ * | Tempo return     | 10  | 0.5s     | 40    | eccentric time deficit        |
  *
- * Max total penalty: 115 -> worst possible rep = 0.
+ * Max total penalty: 100 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
   PULL_ROM:      { cap: 30, deadzone: 0, scale: 0.04 } as PenaltyConfig,
   EXTENSION_ROM: { cap: 25, deadzone: 0, scale: 0.03 } as PenaltyConfig,
   TORSO_LEAN:    { cap: 25, deadzone: 8, scale: 0.12 } as PenaltyConfig,
-  ASYMMETRY:     { cap: 15, deadzone: 10, scale: 0.015 } as PenaltyConfig,
   TEMPO_PULL:    { cap: 10, deadzone: 0.4, scale: 50 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
 } as const;
@@ -96,18 +99,11 @@ interface RepWindow {
   tStart: number;
   tBottom: number | null;
   tEnd: number;
-  /** Min elbow angle per arm (lower = deeper pull) */
-  minLeftElbow: number;
-  minRightElbow: number;
-  /** Min average elbow angle (used for ROM pull scoring) */
-  minAvgElbow: number;
-  /** Max average elbow angle during the rep (used for ROM extension scoring) */
-  maxAvgElbow: number;
-  /** Running sum of per-frame elbow angle differences (for average asymmetry) */
-  totalElbowDiff: number;
-  /** Number of frames accumulated in totalElbowDiff */
-  diffFrameCount: number;
-  /** Max torso lateral lean during the rep */
+  /** Min elbow angle reached (lower = deeper pull) */
+  minElbow: number;
+  /** Max elbow angle during the rep (used for ROM extension scoring) */
+  maxElbow: number;
+  /** Max torso lean during the rep */
   maxTorsoLean: number;
   /** Frame count */
   frameCount: number;
@@ -128,19 +124,18 @@ interface LatPulldownState {
   repWindow: RepWindow | null;
   /** Last completed rep result */
   lastRepResult: RepResult | null;
-  /** Smoothed angle trackers */
-  leftElbowTracker: SmoothedAngleTracker;
-  rightElbowTracker: SmoothedAngleTracker;
+  /** Smoothed angle tracker for the active arm's elbow */
+  elbowTracker: SmoothedAngleTracker;
   torsoLeanTracker: SmoothedAngleTracker;
   /** Warmup gate */
   warmupGate: WarmupGate;
   warmedUp: boolean;
-  /** Max avg elbow observed during REST (pre-pull extension) */
-  restMaxAvgElbow: number;
+  /** Which arm is being tracked this rep (picked per-REST based on visibility) */
+  activeSide: 'left' | 'right';
+  /** Max elbow observed during REST (pre-pull extension) */
+  restMaxElbow: number;
   /** Current smoothed values (for debug) */
-  smoothedLeftElbow: number;
-  smoothedRightElbow: number;
-  smoothedAvgElbow: number;
+  smoothedElbow: number;
   smoothedTorsoLean: number;
   /** After a rep completes, gate next rep start until user re-extends */
   requireExtensionBeforeNextRep: boolean;
@@ -154,13 +149,11 @@ interface LatPulldownState {
 interface LatPulldownDebugInfo {
   phase: LatPulldownPhase;
   warmedUp: boolean;
-  leftElbow: number | null;
-  rightElbow: number | null;
-  avgElbow: number | null;
+  activeSide: 'left' | 'right';
+  elbow: number | null;
   torsoLean: number | null;
-  minAvgElbow: number | null;
-  maxAvgElbow: number | null;
-  avgElbowDiff: number | null;
+  minElbow: number | null;
+  maxElbow: number | null;
   maxTorsoLean: number | null;
 }
 
@@ -175,26 +168,22 @@ function initializeState(): LatPulldownState {
     tRepStart: null,
     repWindow: null,
     lastRepResult: null,
-    leftElbowTracker: new SmoothedAngleTracker(),
-    rightElbowTracker: new SmoothedAngleTracker(),
+    elbowTracker: new SmoothedAngleTracker(),
     torsoLeanTracker: new SmoothedAngleTracker(),
     warmupGate: new WarmupGate({
       requiredJoints: [
         'left_shoulder', 'right_shoulder',
-        'left_elbow', 'right_elbow',
-        'left_wrist', 'right_wrist',
         'left_hip', 'right_hip',
       ],
       requiredFrames: 10,
-      visibilityThreshold: 0.2,
+      visibilityThreshold: 0.15,
     }),
     warmedUp: false,
-    restMaxAvgElbow: -Infinity,
+    activeSide: 'right',
+    restMaxElbow: -Infinity,
     requireExtensionBeforeNextRep: false,
     tRepCompleted: null,
-    smoothedLeftElbow: 180,
-    smoothedRightElbow: 180,
-    smoothedAvgElbow: 180,
+    smoothedElbow: 180,
     smoothedTorsoLean: 0,
     feedback: null,
     lastFeedbackTime: 0,
@@ -206,12 +195,8 @@ function initRepWindow(tStart: number): RepWindow {
     tStart,
     tBottom: null,
     tEnd: tStart,
-    minLeftElbow: Infinity,
-    minRightElbow: Infinity,
-    minAvgElbow: Infinity,
-    maxAvgElbow: -Infinity,
-    totalElbowDiff: 0,
-    diffFrameCount: 0,
+    minElbow: Infinity,
+    maxElbow: -Infinity,
     maxTorsoLean: 0,
     frameCount: 0,
   };
@@ -228,8 +213,21 @@ function getPoint(kp: Keypoint): Point2D {
 }
 
 /**
+ * Returns which arm is more visible this frame.
+ * Uses shoulder visibility as the primary signal.
+ */
+function pickBetterSide(
+  ls: Keypoint | undefined,
+  rs: Keypoint | undefined,
+): 'left' | 'right' {
+  const lVis = ls?.score ?? 0;
+  const rVis = rs?.score ?? 0;
+  return lVis >= rVis ? 'left' : 'right';
+}
+
+/**
  * Compute elbow angle (shoulder-elbow-wrist) in 2D.
- * Extended overhead: ~150-170 degrees. Pulled down to chest: ~50-80 degrees.
+ * Extended overhead: ~150-170 degrees. Pulled down: ~50-80 degrees.
  */
 function computeElbowAngle(
   shoulder: Keypoint,
@@ -240,24 +238,13 @@ function computeElbowAngle(
 }
 
 /**
- * Compute lateral torso lean from front view.
- * Uses midpoint of shoulders and midpoint of hips.
- * Returns absolute lean angle in degrees from vertical.
+ * Compute torso lean from vertical using a single shoulder + hip.
+ * Works from side, diagonal, or front view.
+ * Returns absolute lean angle in degrees.
  */
-function computeTorsoLean(
-  leftShoulder: Keypoint,
-  rightShoulder: Keypoint,
-  leftHip: Keypoint,
-  rightHip: Keypoint,
-): number {
-  const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
-  const midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-  const midHipX = (leftHip.x + rightHip.x) / 2;
-  const midHipY = (leftHip.y + rightHip.y) / 2;
-
-  const dx = midHipX - midShoulderX;
-  const dy = midHipY - midShoulderY;
-
+function computeTorsoLean(shoulder: Keypoint, hip: Keypoint): number {
+  const dx = shoulder.x - hip.x;
+  const dy = hip.y - shoulder.y; // positive: hip is below shoulder in image coords
   return Math.abs(Math.atan2(dx, dy) * (180 / Math.PI));
 }
 
@@ -272,7 +259,7 @@ interface FSMResult {
 
 function updateFSM(
   currentPhase: LatPulldownPhase,
-  avgElbow: number,
+  elbow: number,
   t: number,
   tRepStart: number | null,
   requireExtension: boolean,
@@ -282,41 +269,40 @@ function updateFSM(
 
   switch (phase) {
     case 'REST':
-      // Arms extended overhead. When elbows start bending, begin pull.
-      // requireExtension blocks the transition until the user re-extends after a rep.
-      if (avgElbow < THRESHOLDS.PULLING_ENTER && !requireExtension) {
+      if (elbow < THRESHOLDS.PULLING_ENTER && !requireExtension) {
         phase = 'PULLING';
       }
       break;
 
     case 'PULLING':
-      // Actively pulling down. When elbows reach bottom position, transition.
-      if (avgElbow < THRESHOLDS.BOTTOM_ENTER) {
+      if (elbow < THRESHOLDS.BOTTOM_ENTER) {
         phase = 'BOTTOM';
-      } else if (avgElbow > THRESHOLDS.REST_REENTER) {
-        // Went back to extended without pulling deep enough -- reset
+      } else if (
+        elbow > THRESHOLDS.REST_REENTER &&
+        tRepStart !== null &&
+        (t - tRepStart) >= THRESHOLDS.PULLING_ABORT_MIN_TIME
+      ) {
+        // Went back to extended without pulling deep enough -- reset.
+        // The min-time guard prevents rapid flicker when the arm hovers near the threshold.
         phase = 'REST';
       }
       break;
 
     case 'BOTTOM':
-      // At bottom of pull. When elbows start extending back up (hysteresis), transition.
-      if (avgElbow > THRESHOLDS.BOTTOM_EXIT) {
+      if (elbow > THRESHOLDS.BOTTOM_EXIT) {
         phase = 'RETURNING';
       }
       break;
 
     case 'RETURNING':
-      // Controlled return. When elbows reach extended position, rep is complete.
       if (
-        avgElbow > THRESHOLDS.REST_REENTER &&
+        elbow > THRESHOLDS.REST_REENTER &&
         tRepStart !== null &&
         (t - tRepStart) >= THRESHOLDS.MIN_REP_TIME
       ) {
         phase = 'REST';
         repCompleted = true;
-      } else if (avgElbow < THRESHOLDS.BOTTOM_ENTER) {
-        // Went back to bottom -- return to BOTTOM
+      } else if (elbow < THRESHOLDS.BOTTOM_ENTER) {
         phase = 'BOTTOM';
       }
       break;
@@ -332,27 +318,21 @@ function updateFSM(
 function computeLatPulldownScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM pull: ideal min avg elbow is 85 or below. Shortfall = max(0, minAvgElbow - 85)
-  const pullShortfall = Math.max(0, repWindow.minAvgElbow - 85);
+  // 1. ROM pull: ideal min elbow is 85 or below
+  const pullShortfall = Math.max(0, repWindow.minElbow - 85);
   penalties.push({ value: pullShortfall, config: PENALTY_CONFIGS.PULL_ROM });
 
-  // 2. ROM extension: ideal max avg elbow is 155 or above. Shortfall = max(0, 155 - maxAvgElbow)
-  const extensionShortfall = Math.max(0, 155 - repWindow.maxAvgElbow);
+  // 2. ROM extension: ideal max elbow is 155 or above
+  const extensionShortfall = Math.max(0, 155 - repWindow.maxElbow);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
   // 3. Torso lean
   penalties.push({ value: repWindow.maxTorsoLean, config: PENALTY_CONFIGS.TORSO_LEAN });
 
-  // 4. Asymmetry -- average elbow difference sampled only during BOTTOM phase (arms stationary)
-  const avgElbowDiff = repWindow.diffFrameCount > 0
-    ? repWindow.totalElbowDiff / repWindow.diffFrameCount
-    : 0;
-  penalties.push({ value: avgElbowDiff, config: PENALTY_CONFIGS.ASYMMETRY });
-
-  // 5. Tempo
+  // 4. Tempo
   if (repWindow.tBottom !== null) {
-    const tPull = repWindow.tBottom - repWindow.tStart;   // concentric (pull down)
-    const tReturn = repWindow.tEnd - repWindow.tBottom;    // eccentric (return up)
+    const tPull = repWindow.tBottom - repWindow.tStart;
+    const tReturn = repWindow.tEnd - repWindow.tBottom;
 
     if (tPull > 0 && tPull < PENALTY_CONFIGS.TEMPO_PULL.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_PULL.deadzone - tPull;
@@ -374,30 +354,18 @@ function computeLatPulldownScore(repWindow: RepWindow): number {
 function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
-  // 1. Pull ROM -- didn't pull deep enough
-  if (repWindow.minAvgElbow > FORM_THRESHOLDS.PULL_ROM_FAIL) {
+  if (repWindow.minElbow > FORM_THRESHOLDS.PULL_ROM_FAIL) {
     messages.push('Pull deeper \u2014 bring the bar to your upper chest.');
   }
 
-  // 2. Extension ROM -- didn't extend fully at top
-  if (repWindow.maxAvgElbow < FORM_THRESHOLDS.EXTENSION_ROM_FAIL) {
+  if (repWindow.maxElbow < FORM_THRESHOLDS.EXTENSION_ROM_FAIL) {
     messages.push('Extend fully \u2014 reach all the way up at the top.');
   }
 
-  // 3. Torso lean
   if (repWindow.maxTorsoLean > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
     messages.push('Stay upright \u2014 avoid leaning back excessively.');
   }
 
-  // 4. Asymmetry -- average diff sampled only during BOTTOM phase (arms stationary, most stable)
-  const avgElbowDiff = repWindow.diffFrameCount > 0
-    ? repWindow.totalElbowDiff / repWindow.diffFrameCount
-    : 0;
-  if (avgElbowDiff > FORM_THRESHOLDS.ASYMMETRY_WARN) {
-    messages.push('Even it out \u2014 pull evenly with both arms.');
-  }
-
-  // 5. Tempo
   if (repWindow.tBottom !== null) {
     const tPull = repWindow.tBottom - repWindow.tStart;
     const tReturn = repWindow.tEnd - repWindow.tBottom;
@@ -440,53 +408,44 @@ function updateLatPulldownState(
   const lh = getKeypoint(keypoints, 'left_hip');
   const rh = getKeypoint(keypoints, 'right_hip');
 
-  // Require both arms visible (front-view exercise)
-  const leftArmVisible =
-    isVisible(ls, VISIBILITY_THRESHOLD) &&
-    isVisible(le, VISIBILITY_THRESHOLD) &&
-    isVisible(lw, VISIBILITY_THRESHOLD);
-  const rightArmVisible =
-    isVisible(rs, VISIBILITY_THRESHOLD) &&
-    isVisible(re, VISIBILITY_THRESHOLD) &&
-    isVisible(rw, VISIBILITY_THRESHOLD);
-
-  if (!leftArmVisible || !rightArmVisible) {
-    return state;
+  // -- Pick active side during REST; lock it during a rep --
+  if (state.phase === 'REST') {
+    state.activeSide = pickBetterSide(ls ?? undefined, rs ?? undefined);
   }
 
+  const side = state.activeSide;
+  const shoulder = side === 'left' ? ls : rs;
+  const elbow    = side === 'left' ? le : re;
+  const wrist    = side === 'left' ? lw : rw;
+  const hip      = side === 'left' ? lh : rh;
+
+  const armVisible =
+    isVisible(shoulder, VISIBILITY_THRESHOLD) &&
+    isVisible(elbow, VISIBILITY_THRESHOLD) &&
+    isVisible(wrist, VISIBILITY_THRESHOLD);
+
+  if (!armVisible) return state;
+
   // -- Compute raw angles --
-  const rawLeftElbow = computeElbowAngle(ls!, le!, lw!);
-  const rawRightElbow = computeElbowAngle(rs!, re!, rw!);
+  const rawElbow = computeElbowAngle(shoulder!, elbow!, wrist!);
 
   let rawTorsoLean = 0;
-  const torsoVisible =
-    isVisible(ls, VISIBILITY_THRESHOLD) &&
-    isVisible(rs, VISIBILITY_THRESHOLD) &&
-    isVisible(lh, VISIBILITY_THRESHOLD) &&
-    isVisible(rh, VISIBILITY_THRESHOLD);
-  if (torsoVisible) {
-    rawTorsoLean = computeTorsoLean(ls!, rs!, lh!, rh!);
+  if (isVisible(shoulder, VISIBILITY_THRESHOLD) && isVisible(hip, VISIBILITY_THRESHOLD)) {
+    rawTorsoLean = computeTorsoLean(shoulder!, hip!);
   }
 
   // -- Smooth angles --
-  const smoothedLeftElbow = state.leftElbowTracker.push(rawLeftElbow);
-  const smoothedRightElbow = state.rightElbowTracker.push(rawRightElbow);
-  const smoothedAvgElbow = (smoothedLeftElbow + smoothedRightElbow) / 2;
+  const smoothedElbow = state.elbowTracker.push(rawElbow);
   const smoothedTorsoLean = state.torsoLeanTracker.push(rawTorsoLean);
 
-  // Update display values (mutate in place for perf)
-  state.smoothedLeftElbow = smoothedLeftElbow;
-  state.smoothedRightElbow = smoothedRightElbow;
-  state.smoothedAvgElbow = smoothedAvgElbow;
+  state.smoothedElbow = smoothedElbow;
   state.smoothedTorsoLean = smoothedTorsoLean;
 
   // -- Track max elbow during REST (pre-pull extension) --
   if (state.phase === 'REST') {
-    state.restMaxAvgElbow = Math.max(state.restMaxAvgElbow, smoothedAvgElbow);
-    // Clear the post-rep extension gate once the user has demonstrably re-extended,
-    // or after a 1.5s timeout (so reps still count for users who don't reach full extension).
+    state.restMaxElbow = Math.max(state.restMaxElbow, smoothedElbow);
     if (state.requireExtensionBeforeNextRep) {
-      const extensionReached = smoothedAvgElbow >= THRESHOLDS.PULLING_ENTER;
+      const extensionReached = smoothedElbow >= THRESHOLDS.PULLING_ENTER;
       const timedOut = state.tRepCompleted !== null && (t - state.tRepCompleted) > 1.5;
       if (extensionReached || timedOut) {
         state.requireExtensionBeforeNextRep = false;
@@ -496,7 +455,7 @@ function updateLatPulldownState(
   }
 
   // -- FSM update --
-  const fsmResult = updateFSM(state.phase, smoothedAvgElbow, t, state.tRepStart, state.requireExtensionBeforeNextRep);
+  const fsmResult = updateFSM(state.phase, smoothedElbow, t, state.tRepStart, state.requireExtensionBeforeNextRep);
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
@@ -504,10 +463,8 @@ function updateLatPulldownState(
   if (prevPhase === 'REST' && state.phase === 'PULLING') {
     state.tRepStart = t;
     state.repWindow = initRepWindow(t);
-    // Seed maxAvgElbow from the pre-pull extended position observed during REST
-    state.repWindow.maxAvgElbow = state.restMaxAvgElbow;
-    // Reset for next rep's REST phase
-    state.restMaxAvgElbow = -Infinity;
+    state.repWindow.maxElbow = state.restMaxElbow;
+    state.restMaxElbow = -Infinity;
   }
 
   // -- Accumulate rep window while in a rep --
@@ -516,27 +473,10 @@ function updateLatPulldownState(
     const w = state.repWindow;
     w.tEnd = t;
     w.frameCount++;
-
-    // Min elbow per arm
-    w.minLeftElbow = Math.min(w.minLeftElbow, smoothedLeftElbow);
-    w.minRightElbow = Math.min(w.minRightElbow, smoothedRightElbow);
-
-    // Min/max average elbow
-    w.minAvgElbow = Math.min(w.minAvgElbow, smoothedAvgElbow);
-    w.maxAvgElbow = Math.max(w.maxAvgElbow, smoothedAvgElbow);
-
-    // Accumulate elbow difference ONLY during BOTTOM phase.
-    // Arms are stationary at contraction → pose estimation is most stable and
-    // EMA lag-induced apparent asymmetry from fast movement is absent.
-    if (state.phase === 'BOTTOM') {
-      w.totalElbowDiff += Math.abs(smoothedLeftElbow - smoothedRightElbow);
-      w.diffFrameCount++;
-    }
-
-    // Max torso lean
+    w.minElbow = Math.min(w.minElbow, smoothedElbow);
+    w.maxElbow = Math.max(w.maxElbow, smoothedElbow);
     w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
 
-    // Record BOTTOM timestamp
     if (state.phase === 'BOTTOM' && w.tBottom === null) {
       w.tBottom = t;
     }
@@ -544,10 +484,7 @@ function updateLatPulldownState(
 
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
-    // The RETURNING→REST transition frame is not captured by the inRep accumulation
-    // block above (inRep is false once phase=REST). Capture it here so the final
-    // extension angle (≥REST_REENTER) is reflected in feedback and scoring.
-    state.repWindow.maxAvgElbow = Math.max(state.repWindow.maxAvgElbow, smoothedAvgElbow);
+    state.repWindow.maxElbow = Math.max(state.repWindow.maxElbow, smoothedElbow);
 
     state.repCount++;
     state.requireExtensionBeforeNextRep = true;
@@ -556,20 +493,11 @@ function updateLatPulldownState(
     const score = computeLatPulldownScore(state.repWindow);
     const messages = generateFormMessages(state.repWindow);
 
-    state.lastRepResult = {
-      repIndex: state.repCount,
-      score,
-      messages,
-    };
+    state.lastRepResult = { repIndex: state.repCount, score, messages };
 
-    if (messages.length > 0) {
-      state.feedback = messages.join('\n');
-    } else {
-      state.feedback = 'Great rep!';
-    }
+    state.feedback = messages.length > 0 ? messages.join('\n') : 'Great rep!';
     state.lastFeedbackTime = t;
 
-    // Reset for next rep
     state.repWindow = null;
     state.tRepStart = null;
   }
@@ -602,13 +530,11 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
   return {
     phase: state.phase,
     warmedUp: state.warmedUp,
-    leftElbow: fmt(state.smoothedLeftElbow),
-    rightElbow: fmt(state.smoothedRightElbow),
-    avgElbow: fmt(state.smoothedAvgElbow),
+    activeSide: state.activeSide,
+    elbow: fmt(state.smoothedElbow),
     torsoLean: fmt(state.smoothedTorsoLean),
-    minAvgElbow: w ? (w.minAvgElbow < Infinity ? fmt(w.minAvgElbow) : null) : null,
-    maxAvgElbow: w ? (w.maxAvgElbow > -Infinity ? fmt(w.maxAvgElbow) : null) : null,
-    avgElbowDiff: w && w.diffFrameCount > 0 ? fmt(w.totalElbowDiff / w.diffFrameCount) : null,
+    minElbow: w ? (w.minElbow < Infinity ? fmt(w.minElbow) : null) : null,
+    maxElbow: w ? (w.maxElbow > -Infinity ? fmt(w.maxElbow) : null) : null,
     maxTorsoLean: w ? fmt(w.maxTorsoLean) : null,
   };
 }
@@ -619,7 +545,7 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
 
 export const latPulldownDefinition: ExerciseDefinition = {
   name: 'Cable Lat Pulldowns',
-  requiredView: 'front',
+  requiredView: 'side',
 
   createState: (): ExerciseState => ({
     repCount: 0,
@@ -634,7 +560,6 @@ export const latPulldownDefinition: ExerciseDefinition = {
     const internal = state._internal as LatPulldownState;
     updateLatPulldownState(keypoints, internal);
 
-    // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = internal.lastRepResult
       ? {
           repIndex: internal.lastRepResult.repIndex,
@@ -658,13 +583,9 @@ export const latPulldownDefinition: ExerciseDefinition = {
       'Pull deeper \u2014 bring the bar to your upper chest.': 'rom_short',
       'Extend fully \u2014 reach all the way up at the top.': 'lockout_short',
       'Stay upright \u2014 avoid leaning back excessively.': 'torso_warn',
-      'Even it out \u2014 pull evenly with both arms.': 'asymmetry',
       'Slow down the pull \u2014 control the descent.': 'tempo_down',
       'Control the return \u2014 resist the weight on the way up.': 'tempo_up',
     },
-    // Reuse existing issue types -- no new definitions needed.
-    // rom_short, lockout_short, torso_warn, asymmetry, tempo_down, tempo_up
-    // are all already registered by other exercises.
   },
 
   summaryConfig: {
@@ -674,8 +595,6 @@ export const latPulldownDefinition: ExerciseDefinition = {
       'Allow your arms to extend fully at the top of each rep to get a full stretch in your lats.',
     'Stay upright \u2014 avoid leaning back excessively.':
       'A slight lean back is fine, but excessive lean shifts the load away from your lats to your lower back.',
-    'Even it out \u2014 pull evenly with both arms.':
-      'Focus on pulling symmetrically \u2014 if one side is dominant, consider single-arm pulldowns to correct imbalances.',
     'Slow down the pull \u2014 control the descent.':
       'Control the concentric phase \u2014 aim for 1-2 seconds on the pull down.',
     'Control the return \u2014 resist the weight on the way up.':

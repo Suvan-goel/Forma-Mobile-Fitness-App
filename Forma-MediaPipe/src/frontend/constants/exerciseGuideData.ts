@@ -60,12 +60,12 @@ export const EXERCISE_SETUP_DATA: Record<string, ExerciseSetupData> = {
     ],
   },
   'Cable Lat Pulldowns': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks both arms for bilateral elbow angle and torso lean.',
+    keySetup: 'Camera to your side or at a diagonal',
+    reasonText: 'Tracks elbow angle and torso lean from the side or diagonal — one arm is enough.',
     cameraTips: [
-      'Position the phone in front of the machine at about chest height.',
-      'Frame from the top of the bar to your knees while seated.',
-      'Sit centered so both elbows and the bar path stay visible.',
+      'Place the phone to your side at about chest height, facing the machine.',
+      'A 45° diagonal also works — just make sure one arm and your torso are clearly visible.',
+      'Frame from your head to your hips so the full range of the bar path is visible.',
     ],
   },
   'Leg Extensions': {
