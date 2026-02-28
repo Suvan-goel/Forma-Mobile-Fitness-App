@@ -18,7 +18,9 @@ import {
   Bone,
   UserRound,
   RefreshCcw,
+  Calendar,
 } from 'lucide-react-native';
+import type { WeeklyTrainingTarget } from '../../backend/hooks/useWorkoutPreferences';
 import {
   COLORS,
   SPACING,
@@ -90,6 +92,53 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
     </TouchableOpacity>
   );
+
+  const TRAINING_TARGET_OPTIONS: WeeklyTrainingTarget[] = ['1-2', '3-4', '5+'];
+  const TRAINING_TARGET_LABELS: Record<WeeklyTrainingTarget, string> = {
+    '1-2': '1–2 days / week',
+    '3-4': '3–4 days / week',
+    '5+': '5+ days / week',
+  };
+
+  const SelectItem = ({
+    icon: Icon,
+    label,
+    value,
+    onPress,
+    isFirst,
+    isLast,
+  }: {
+    icon: any;
+    label: string;
+    value: string;
+    onPress: () => void;
+    isFirst?: boolean;
+    isLast?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[styles.settingItem, isFirst && styles.settingItemFirst, isLast && styles.settingItemLast]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.settingLeft}>
+        <View style={styles.settingIconBadge}>
+          <Icon size={16} color="#A78BFA" strokeWidth={1.5} />
+        </View>
+        <Text style={styles.settingLabel}>{label}</Text>
+      </View>
+      <View style={styles.selectValueRow}>
+        <Text style={styles.selectValueText}>{value}</Text>
+        <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const handleTrainingTargetPress = () => {
+    const current = prefs.weeklyTrainingTarget;
+    const currentIdx = TRAINING_TARGET_OPTIONS.indexOf(current);
+    const nextIdx = (currentIdx + 1) % TRAINING_TARGET_OPTIONS.length;
+    updatePref('weeklyTrainingTarget', TRAINING_TARGET_OPTIONS[nextIdx]);
+  };
 
   const ToggleItem = ({
     icon: Icon,
@@ -237,6 +286,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   label="Skeleton Overlay"
                   value={prefs.showSkeletonOverlay}
                   onToggle={(v) => updatePref('showSkeletonOverlay', v)}
+                />
+                <SelectItem
+                  icon={Calendar}
+                  label="Training Frequency"
+                  value={TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}
+                  onPress={handleTrainingTargetPress}
                   isLast
                 />
               </View>
@@ -480,6 +535,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0.1,
+  },
+
+  /* ── Select Item ───────────────────────── */
+  selectValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  selectValueText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
   },
 
   /* ── Dev: Back to Onboarding ───────────── */

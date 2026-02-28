@@ -16,6 +16,13 @@ import { OnboardingQuestions } from './OnboardingQuestions';
 import { OnboardingInterstitial } from './OnboardingInterstitial';
 import { OnboardingAuth } from './OnboardingAuth';
 import { COLORS } from '../constants/theme';
+import { CAMERA_SETTINGS_KEY } from '../contexts/CameraSettingsContext';
+
+const FREQUENCY_TO_TARGET: Record<string, string> = {
+  '1-2 Days': '1-2',
+  '3-4 Days': '3-4',
+  '5+ Days': '5+',
+};
 
 export const ONBOARDING_STORAGE_KEY = '@forma_has_onboarded';
 
@@ -52,8 +59,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComp
   }, [transitionTo]);
 
   const handleQuestionsComplete = useCallback(
-    (_answers: { goal: string; frequency: string; experience: string }) => {
-      // Answers can be sent to backend later if needed
+    (answers: { goal: string; frequency: string; experience: string }) => {
+      const target = FREQUENCY_TO_TARGET[answers.frequency];
+      if (target) {
+        AsyncStorage.getItem(CAMERA_SETTINGS_KEY).then((raw) => {
+          const stored = raw ? JSON.parse(raw) : {};
+          return AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...stored, weeklyTrainingTarget: target }));
+        }).catch(() => {});
+      }
       transitionTo('interstitial');
     },
     [transitionTo],

@@ -8,11 +8,14 @@ import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CAMERA_SETTINGS_KEY } from '../../frontend/contexts/CameraSettingsContext';
 
+export type WeeklyTrainingTarget = '1-2' | '3-4' | '5+';
+
 interface WorkoutPreferences {
   showFeedback: boolean;
   isTTSEnabled: boolean;
   showSkeletonOverlay: boolean;
   selectedTrainerId: string;
+  weeklyTrainingTarget: WeeklyTrainingTarget;
 }
 
 const defaults: WorkoutPreferences = {
@@ -20,6 +23,7 @@ const defaults: WorkoutPreferences = {
   isTTSEnabled: false,
   showSkeletonOverlay: false,
   selectedTrainerId: 'marcus',
+  weeklyTrainingTarget: '3-4',
 };
 
 export function useWorkoutPreferences() {
@@ -36,6 +40,7 @@ export function useWorkoutPreferences() {
             isTTSEnabled: typeof parsed.isTTSEnabled === 'boolean' ? parsed.isTTSEnabled : defaults.isTTSEnabled,
             showSkeletonOverlay: typeof parsed.showSkeletonOverlay === 'boolean' ? parsed.showSkeletonOverlay : defaults.showSkeletonOverlay,
             selectedTrainerId: typeof parsed.selectedTrainerId === 'string' ? parsed.selectedTrainerId : defaults.selectedTrainerId,
+            weeklyTrainingTarget: (['1-2', '3-4', '5+'] as WeeklyTrainingTarget[]).includes(parsed.weeklyTrainingTarget) ? parsed.weeklyTrainingTarget : defaults.weeklyTrainingTarget,
           });
         } catch { /* ignore corrupt data */ }
       }

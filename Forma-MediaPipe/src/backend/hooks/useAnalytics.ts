@@ -13,7 +13,7 @@ interface UseAnalyticsReturn {
   refetch: (timeRange?: string) => Promise<void>;
 }
 
-export const useAnalytics = (initialTimeRange: string = '1 week'): UseAnalyticsReturn => {
+export const useAnalytics = (initialTimeRange: string = '1 week', weeklyTarget: number = 4): UseAnalyticsReturn => {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export const useAnalytics = (initialTimeRange: string = '1 week'): UseAnalyticsR
     setIsLoading(true);
     setError(null);
     try {
-      const response = await analyticsService.getAnalytics(rangeToUse);
+      const response = await analyticsService.getAnalytics(rangeToUse, weeklyTarget);
       if (response.success) {
         setAnalytics(response.data);
       } else {
@@ -39,7 +39,7 @@ export const useAnalytics = (initialTimeRange: string = '1 week'): UseAnalyticsR
     } finally {
       setIsLoading(false);
     }
-  }, [currentTimeRange]);
+  }, [currentTimeRange, weeklyTarget]);
 
   useEffect(() => {
     fetchAnalytics();

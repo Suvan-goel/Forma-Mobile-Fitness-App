@@ -222,9 +222,10 @@ async function computeSupabaseSummary(
 export const analyticsService = {
   /**
    * Get all analytics data for a given time range.
+   * weeklyTarget: sessions/week that = 100% consistency (2, 4, or 6).
    * When analytics flag is false, queries Supabase directly from workout tables.
    */
-  async getAnalytics(timeRange: string = '1 week'): Promise<ApiResponse<AnalyticsData>> {
+  async getAnalytics(timeRange: string = '1 week', weeklyTarget: number = 4): Promise<ApiResponse<AnalyticsData>> {
     if (API_CONFIG.services.analytics) {
       await mockDelay(API_CONFIG.mockDelayMs);
 
@@ -264,9 +265,8 @@ export const analyticsService = {
       dates: (formRows ?? []).map((r) => parseLocalDate(r.date as string)),
     };
 
-    // 2. Consistency — rolling 7-day workout frequency, target 3 sessions/week
-    // Query from 6 days before startDate so the first days in range have a full window.
-    const CONSISTENCY_TARGET = 3; // sessions per 7 days = 100%
+    // 2. Consistency — sessions per week vs user's weekly target.
+    // For '1 week': rolling daily (7 points). For all other ranges: weekly buckets.
     const lookbackStart = parseLocalDate(startDate);
     lookbackStart.setDate(lookbackStart.getDate() - 6);
 
@@ -281,30 +281,51 @@ export const analyticsService = {
       return { data: {} as AnalyticsData, success: false, error: consistencyErr.message };
     }
 
-    // Build a sorted array of session date strings for the window scan
     const allSessionDates = (consistencyRows ?? []).map((r) =>
       (r.date as string).split('T')[0],
     );
 
     const consistencyValues: number[] = [];
     const consistencyDates: Date[] = [];
-    const cursor = parseLocalDate(startDate);
-    const rangeEnd = parseLocalDate(endDate);
 
-    while (cursor <= rangeEnd) {
-      const windowEnd = toDateStr(cursor);
-      const windowStart = new Date(cursor);
-      windowStart.setDate(cursor.getDate() - 6);
-      const windowStartStr = toDateStr(windowStart);
-
-      const count = allSessionDates.filter(
-        (d) => d >= windowStartStr && d <= windowEnd,
-      ).length;
-
-      consistencyValues.push(Math.min(100, Math.round((count / CONSISTENCY_TARGET) * 100)));
-      consistencyDates.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
+    if (timeRange === '1 week') {
+      // Daily rolling 7-day window — shows variation within the week
+      const cursor = parseLocalDate(startDate);
+      const rangeEnd = parseLocalDate(endDate);
+      while (cursor <= rangeEnd) {
+        const windowEnd = toDateStr(cursor);
+        const windowStart = new Date(cursor);
+        windowStart.setDate(cursor.getDate() - 6);
+        const windowStartStr = toDateStr(windowStart);
+        const count = allSessionDates.filter(
+          (d) => d >= windowStartStr && d <= windowEnd,
+        ).length;
+        consistencyValues.push(Math.min(100, Math.round((count / weeklyTarget) * 100)));
+        consistencyDates.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    } else {
+      // Weekly buckets — one data point per complete week, averaged for the period
+      const rangeEnd = parseLocalDate(endDate);
+      const rangeStart = parseLocalDate(startDate);
+      let weekEnd = new Date(rangeEnd);
+      const buckets: Array<{ start: string; end: string; date: Date }> = [];
+      while (weekEnd >= rangeStart) {
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekEnd.getDate() - 6);
+        const effectiveStart = weekStart < rangeStart ? new Date(rangeStart) : weekStart;
+        buckets.unshift({ start: toDateStr(effectiveStart), end: toDateStr(weekEnd), date: new Date(weekEnd) });
+        weekEnd.setDate(weekEnd.getDate() - 7);
+      }
+      for (const bucket of buckets) {
+        const count = allSessionDates.filter(
+          (d) => d >= bucket.start && d <= bucket.end,
+        ).length;
+        consistencyValues.push(Math.min(100, Math.round((count / weeklyTarget) * 100)));
+        consistencyDates.push(bucket.date);
+      }
     }
+
     const consistencyData: AnalyticsMetric = { values: consistencyValues, dates: consistencyDates };
 
     // 3. Strength / volume — total weight × reps per session date
@@ -388,7 +409,8 @@ export const analyticsService = {
    */
   async getMetricByTimeRange(
     metric: 'form' | 'consistency' | 'strength',
-    timeRange: string
+    timeRange: string,
+    weeklyTarget: number = 4,
   ): Promise<ApiResponse<AnalyticsMetric>> {
     if (API_CONFIG.services.analytics) {
       await mockDelay(API_CONFIG.mockDelayMs);
@@ -405,7 +427,7 @@ export const analyticsService = {
     }
 
     // Real: delegate to getAnalytics and extract the metric
-    const result = await analyticsService.getAnalytics(timeRange);
+    const result = await analyticsService.getAnalytics(timeRange, weeklyTarget);
     if (!result.success) {
       return { data: { values: [], dates: [] }, success: false, error: result.error };
     }

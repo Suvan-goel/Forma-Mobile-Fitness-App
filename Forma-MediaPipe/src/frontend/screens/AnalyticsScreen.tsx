@@ -24,7 +24,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useAnalytics, useUser } from '../../backend/hooks';
+import { useAnalytics, useUser, useWorkoutPreferences } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { NeonArc } from '../components/ui/NeonArc';
 import { StatCard } from '../components/ui/StatCard';
@@ -64,9 +64,13 @@ export const AnalyticsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user: profileUser } = useUser();
 
+  const { prefs } = useWorkoutPreferences();
+  const WEEKLY_TARGET_MAP: Record<string, number> = { '1-2': 2, '3-4': 4, '5+': 6 };
+  const weeklyTarget = WEEKLY_TARGET_MAP[prefs.weeklyTrainingTarget] ?? 4;
+
   const [selectedTimeRange, setSelectedTimeRange] = useState('1 week');
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
-  const { analytics, isLoading, error, refetch } = useAnalytics('1 week');
+  const { analytics, isLoading, error, refetch } = useAnalytics('1 week', weeklyTarget);
 
   const handleTimeRangeChange = useCallback((range: string) => {
     setSelectedTimeRange(range);
@@ -302,13 +306,22 @@ export const AnalyticsScreen: React.FC = () => {
           />
 
           {/* ── CONSISTENCY TREND CHART ────────────── */}
-          <TrendChart
-            title="CONSISTENCY"
-            icon={Target}
-            data={analytics.consistencyData}
-            unit="%"
-            timeRange={selectedTimeRange}
-          />
+          {(() => {
+            const vals = analytics.consistencyData.values;
+            const avgConsistency = vals.length > 0
+              ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)
+              : 0;
+            return (
+              <TrendChart
+                title="CONSISTENCY"
+                icon={Target}
+                data={analytics.consistencyData}
+                unit="%"
+                timeRange={selectedTimeRange}
+                headerValue={avgConsistency}
+              />
+            );
+          })()}
 
           {/* ── PERSONAL BEST CARD ─────────────────── */}
           {summary.personalBest && (

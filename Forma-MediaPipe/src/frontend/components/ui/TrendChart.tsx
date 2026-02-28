@@ -21,6 +21,9 @@ interface TrendChartProps {
   height?: number;
   formatValue?: (v: number) => string;
   timeRange: string;
+  /** When provided, shown in the card header by default (period average).
+   *  Tapping a data point temporarily shows that point's value instead. */
+  headerValue?: number;
 }
 
 // ── Catmull-Rom → Cubic Bezier conversion ───────────────────────
@@ -91,6 +94,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   height = 140,
   formatValue,
   timeRange,
+  headerValue,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -162,8 +166,19 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
         : data.values.length - 1
       : null;
 
-  const currentValue = activeIndex != null ? data.values[activeIndex] : 0;
-  const displayValue = formatValue ? formatValue(currentValue) : String(Math.round(currentValue));
+  // Header always shows period average (headerValue) or last point if no headerValue.
+  const primaryValue = headerValue !== undefined
+    ? headerValue
+    : (activeIndex != null ? data.values[activeIndex] : 0);
+  const displayValue = formatValue ? formatValue(primaryValue) : String(Math.round(primaryValue));
+
+  // Secondary: selected point's value + date label (visible alongside the primary).
+  const selectedDisplayValue = selectedIndex != null
+    ? (formatValue ? formatValue(data.values[selectedIndex]) : String(Math.round(data.values[selectedIndex])))
+    : null;
+  const selectedDateLabel = selectedIndex != null && data.dates[selectedIndex]
+    ? formatDateLabel(data.dates[selectedIndex], timeRange)
+    : null;
 
   const activePoint =
     svgContent && activeIndex != null ? svgContent.points[activeIndex] : null;
@@ -202,8 +217,15 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
               <Text style={styles.headerTitle}>{title}</Text>
             </View>
             <View style={styles.headerRight}>
-              <Text style={styles.currentValue}>{displayValue}</Text>
-              {unit ? <Text style={styles.unitText}>{unit}</Text> : null}
+              <View style={styles.avgRow}>
+                <Text style={styles.currentValue}>{displayValue}</Text>
+                {unit ? <Text style={styles.unitText}>{unit}</Text> : null}
+              </View>
+              {selectedDisplayValue != null && (
+                <Text style={styles.selectedPointText}>
+                  {selectedDisplayValue}{unit ? ` ${unit}` : ''} · {selectedDateLabel}
+                </Text>
+              )}
             </View>
           </View>
 
@@ -347,9 +369,20 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   headerRight: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  avgRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4,
+  },
+  selectedPointText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.accent,
+    letterSpacing: 0.3,
   },
   currentValue: {
     fontFamily: FONTS.display.semibold,
