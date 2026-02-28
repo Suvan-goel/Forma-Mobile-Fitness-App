@@ -173,14 +173,17 @@ export const HomeScreen: React.FC = () => {
         <Animated.View style={{ opacity: fadeAnim }}>
 
           {/* ═══════════════════════════════════════════
-              SECTION 2: PROGRESS SNAPSHOT — Bento Grid
+              SECTION 2: PROGRESS SUMMARY — Bento Grid
               ═══════════════════════════════════════════ */}
+          <View style={[styles.sectionHeader, { marginTop: SPACING.md }]}>
+            <Target size={14} color={COLORS.accent} strokeWidth={1.5} />
+            <Text style={styles.sectionTitle}>PROGRESS SUMMARY</Text>
+          </View>
 
           {/* Hero: Form Score */}
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => navigateToTab('Analytics')}
-            style={styles.heroCardOuter}
           >
             <LinearGradient
               colors={[...CARD_GRADIENT_COLORS]}
@@ -188,26 +191,25 @@ export const HomeScreen: React.FC = () => {
               end={CARD_GRADIENT_END}
               style={styles.cardGradient}
             >
-              <View style={styles.cardGlassEdge}>
-                <View style={styles.heroTop}>
-                  <View style={styles.heroLabelRow}>
-                    <Target size={12} color={scoreColor} strokeWidth={1.5} />
+              <View style={styles.heroGlassEdge}>
+                <View style={styles.heroRow}>
+                  <View style={styles.heroLeft}>
                     <Text style={styles.heroLabel}>FORM SCORE</Text>
+                    <Text style={styles.heroSubtext}>7-day average</Text>
+                  </View>
+                  <View style={styles.heroScoreWrap}>
+                    <Text style={[styles.heroScore, { color: scoreColor }]}>
+                      {homeData.formScore}
+                    </Text>
+                    <Text style={styles.heroScoreSuffix}>/100</Text>
                   </View>
                   <View style={[styles.trendPill, { backgroundColor: trendColor + '18' }]}>
-                    <TrendIcon size={11} color={trendColor} strokeWidth={2} />
+                    <TrendIcon size={10} color={trendColor} strokeWidth={2} />
                     <Text style={[styles.trendPillText, { color: trendColor }]}>
                       {homeData.formTrendPercent > 0 ? '+' : ''}{homeData.formTrendPercent}%
                     </Text>
                   </View>
                 </View>
-                <View style={styles.heroBottom}>
-                  <Text style={[styles.heroScore, { color: scoreColor }]}>
-                    {homeData.formScore}
-                  </Text>
-                  <Text style={styles.heroScoreSuffix}>/100</Text>
-                </View>
-                <Text style={styles.heroSubtext}>7-day average</Text>
               </View>
             </LinearGradient>
           </TouchableOpacity>
@@ -572,19 +574,36 @@ const styles = StyleSheet.create({
   },
 
   /* ── Section 2: Progress Snapshot — Bento ────── */
-  heroCardOuter: {
-    marginTop: SPACING.md,
+  heroGlassEdge: {
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  heroTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  heroLabelRow: {
+  heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+  },
+  heroScoreWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  heroScore: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 42,
+    letterSpacing: -1.5,
+  },
+  heroScoreSuffix: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 14,
+    color: COLORS.textTertiary,
+  },
+  heroLeft: {
+    gap: 3,
   },
   heroLabel: {
     fontFamily: FONTS.display.semibold,
@@ -592,40 +611,23 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     letterSpacing: 1.5,
   },
-  trendPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  trendPillText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    letterSpacing: -0.3,
-  },
-  heroBottom: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  heroScore: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 56,
-    letterSpacing: -2,
-  },
-  heroScoreSuffix: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 16,
-    color: COLORS.textTertiary,
-    marginBottom: 4,
-  },
   heroSubtext: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    marginTop: 2,
+  },
+  trendPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  trendPillText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    letterSpacing: -0.3,
   },
 
   bentoRow: {
