@@ -10,6 +10,7 @@ import {
   Animated,
   Platform,
   PanResponder,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +28,7 @@ import {
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts, useDeleteWorkout } from '../../backend/hooks';
+import { useWorkouts, useDeleteWorkout, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../../backend/services/api';
@@ -346,6 +347,7 @@ export const LogbookScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { onScroll } = useScroll();
+  const { user: profileUser } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const hasAnimated = useRef(false);
 
@@ -490,6 +492,9 @@ export const LogbookScreen: React.FC = () => {
 
   const ListHeader = useCallback(() => (
     <View>
+      {/* ── DATE SUBHEADER ───────────────────── */}
+      <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+
       {/* ── FILTER ROW ───────────────────────── */}
       <ScrollView
         horizontal
@@ -562,7 +567,28 @@ export const LogbookScreen: React.FC = () => {
       {/* ── LOGBOOK HEADER (fixed) ────────────────── */}
       <View style={styles.fixedHeader}>
         <Text style={styles.headerTitle}>LOGBOOK</Text>
-        <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ProfileSettings')}
+          activeOpacity={0.7}
+          style={styles.avatarButton}
+        >
+          {profileUser?.avatarUrl ? (
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+          ) : profileUser ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarGradient}
+            >
+              <Text style={styles.avatarInitial}>
+                {profileUser.displayName[0].toUpperCase()}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.avatarPlaceholder} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -634,6 +660,9 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 8,
     paddingHorizontal: SPACING.screenHorizontal,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
@@ -647,7 +676,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#71717A',
     letterSpacing: 3,
-    marginTop: 6,
+    marginBottom: 12,
+  },
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginTop: 5,
+  },
+  avatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#000000',
+  },
+  avatarInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 
   /* ── Filter Row ──────────────────────────── */
