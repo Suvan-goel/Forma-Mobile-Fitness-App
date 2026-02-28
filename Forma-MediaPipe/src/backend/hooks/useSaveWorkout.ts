@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { workoutsService, CreateWorkoutPayload, rewardsService } from '../services/api';
+import { workoutsService, CreateWorkoutPayload, rewardsService, socialService } from '../services/api';
 import { generateSetSummary } from '../../utils/setNotesSummary';
 import { calculateWorkoutPoints } from '../../utils/pointsCalculator';
 
@@ -75,6 +75,26 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
       if (pts > 0 && sessionId) {
         rewardsService.awardWorkoutPoints(sessionId, pts).catch(() => {
           if (__DEV__) console.warn('[useSaveWorkout] Points award failed for session', sessionId);
+        });
+      }
+
+      // Emit activity event — fire and forget
+      if (sessionId) {
+        const avgFormScore = payload.exercises.length > 0
+          ? Math.round(payload.exercises.reduce((sum, ex) =>
+              sum + ex.sets.reduce((s, set) => s + set.formScore, 0) / Math.max(ex.sets.length, 1), 0) / payload.exercises.length)
+          : 0;
+        socialService.createActivityEvent({
+          eventType: 'workout_completed',
+          payload: {
+            session_id: sessionId,
+            form_score: avgFormScore,
+            duration: `${Math.round(payload.durationSeconds / 60)} min`,
+            exercise_count: payload.exercises.length,
+          },
+          sourceId: sessionId,
+        }).catch(() => {
+          if (__DEV__) console.warn('[useSaveWorkout] Activity event failed for session', sessionId);
         });
       }
 

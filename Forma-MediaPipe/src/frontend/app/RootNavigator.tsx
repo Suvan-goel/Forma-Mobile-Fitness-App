@@ -6,12 +6,15 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Home, Video, BookOpen, BarChart2, Star } from 'lucide-react-native';
+import { Home, Video, BookOpen, BarChart2, Users } from 'lucide-react-native';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LogbookScreen } from '../screens/LogbookScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
-import { RewardsScreen } from '../screens/RewardsScreen';
+import { SocialScreen } from '../screens/SocialScreen';
+import { AddFriendScreen } from '../screens/social/AddFriendScreen';
+import { FriendProfileScreen } from '../screens/social/FriendProfileScreen';
+import { FriendComparisonScreen } from '../screens/social/FriendComparisonScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ProfileSettingsScreen } from '../screens/ProfileSettingsScreen';
@@ -25,6 +28,7 @@ import { WorkoutDetailsScreen } from '../screens/WorkoutDetailsScreen';
 import { WorkoutExercisesScreen } from '../screens/WorkoutExercisesScreen';
 import { SaveWorkoutScreen } from '../screens/SaveWorkoutScreen';
 import { WorkoutInfoScreen } from '../screens/WorkoutInfoScreen';
+import { RewardsScreen } from '../screens/RewardsScreen';
 import { RecordLandingScreen } from '../screens/RecordLandingScreen';
 import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
@@ -70,6 +74,10 @@ export type RootStackParamList = {
     reasonText: string;
     cameraTips: string[];
   };
+  FriendProfile: { userId: string };
+  FriendComparison: { friendId: string };
+  AddFriend: undefined;
+  Rewards: undefined;
   Onboarding: undefined;
 };
 
@@ -97,7 +105,7 @@ export type RootTabParamList = {
   Logbook: undefined;
   Analytics: undefined;
   Record: undefined;
-  Rewards: undefined;
+  Social: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -110,7 +118,7 @@ const TAB_ICONS: { [key: string]: any } = {
   Record: Video,
   Logbook: BookOpen,
   Analytics: BarChart2,
-  Rewards: Star,
+  Social: Users,
 };
 
 // Custom Tab Bar Item - memoized for performance
@@ -245,7 +253,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
       {/* Header - Hidden for Record tab; no collapse/sticky logic */}
-      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Rewards' && currentTab !== 'Home' && <AppHeader />}
+      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Social' && currentTab !== 'Home' && <AppHeader />}
 
       <View style={{ flex: 1 }}>
         <Tab.Navigator
@@ -258,7 +266,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
           <Tab.Screen name="Logbook" component={LogbookScreen} />
           <Tab.Screen name="Record" component={RecordTabWithProvider} />
           <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-          <Tab.Screen name="Rewards" component={RewardsScreen} />
+          <Tab.Screen name="Social" component={SocialScreen} />
         </Tab.Navigator>
       </View>
     </View>
@@ -455,6 +463,26 @@ const RootStackNavigator: React.FC = () => {
               presentation: 'transparentModal',
               animation: 'slide_from_bottom',
             }}
+          />
+          <Stack.Screen
+            name="FriendProfile"
+            component={FriendProfileScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="FriendComparison"
+            component={FriendComparisonScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="AddFriend"
+            component={AddFriendScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="Rewards"
+            component={RewardsScreen}
+            options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
             name="Onboarding"

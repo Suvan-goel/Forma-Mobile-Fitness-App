@@ -18,6 +18,9 @@ import {
   Trash2,
   Eye,
   ShieldCheck,
+  Users,
+  Globe,
+  Lock,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -28,6 +31,7 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { useAlert } from '../contexts/AlertContext';
+import { usePrivacyLevel, PrivacyLevel } from '../../backend/hooks';
 
 interface PrivacySettingsScreenProps {
   navigation: any;
@@ -57,10 +61,32 @@ const DataItem = ({
   </View>
 );
 
+const VISIBILITY_OPTIONS: { level: PrivacyLevel; icon: any; label: string; description: string }[] = [
+  {
+    level: 'public',
+    icon: Globe,
+    label: 'Public',
+    description: 'Anyone on Forma can see your stats and leaderboard position',
+  },
+  {
+    level: 'friends',
+    icon: Users,
+    label: 'Friends Only',
+    description: 'Only friends see your activity and where you rank',
+  },
+  {
+    level: 'private',
+    icon: Lock,
+    label: 'Private',
+    description: 'Hidden from all social features and leaderboards',
+  },
+];
+
 export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { level: privacyLevel, isSaving: isSavingPrivacy, updateLevel } = usePrivacyLevel();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -114,6 +140,58 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
             <Text style={styles.privacyBadgeText}>
               Your privacy is important. Pose detection runs entirely on-device — no video ever leaves your phone.
             </Text>
+          </View>
+
+          {/* Social Visibility */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBadge}>
+              <Users size={12} color="#A78BFA" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.sectionTitle}>Social Visibility</Text>
+          </View>
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                {VISIBILITY_OPTIONS.map((opt, index) => {
+                  const OptionIcon = opt.icon;
+                  const isSelected = privacyLevel === opt.level;
+                  const isLast = index === VISIBILITY_OPTIONS.length - 1;
+                  return (
+                    <View
+                      key={opt.level}
+                      style={[styles.visibilityItem, isLast && styles.visibilityItemLast]}
+                    >
+                      <View style={[
+                        styles.visibilityIconBadge,
+                        isSelected && styles.visibilityIconBadgeActive,
+                      ]}>
+                        <OptionIcon size={15} color={isSelected ? '#A78BFA' : COLORS.textTertiary} strokeWidth={1.5} />
+                      </View>
+                      <View style={styles.visibilityContent}>
+                        <Text style={[styles.visibilityLabel, isSelected && styles.visibilityLabelActive]}>
+                          {opt.label}
+                        </Text>
+                        <Text style={styles.visibilityDesc}>{opt.description}</Text>
+                      </View>
+                      <View style={[styles.radioOuter, isSelected && styles.radioOuterActive]}>
+                        {isSelected && <View style={styles.radioInner} />}
+                      </View>
+                      {/* Tappable overlay */}
+                      <TouchableOpacity
+                        style={StyleSheet.absoluteFillObject}
+                        onPress={() => !isSavingPrivacy && updateLevel(opt.level)}
+                        activeOpacity={0.6}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </LinearGradient>
           </View>
 
           {/* Data We Collect */}
@@ -394,6 +472,68 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     marginVertical: SPACING.md,
+  },
+
+  /* ── Social Visibility ──────────────────── */
+  visibilityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  visibilityItemLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 0,
+  },
+  visibilityIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visibilityIconBadgeActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+  },
+  visibilityContent: {
+    flex: 1,
+  },
+  visibilityLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.1,
+    marginBottom: 3,
+  },
+  visibilityLabelActive: {
+    color: COLORS.text,
+  },
+  visibilityDesc: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    lineHeight: 17,
+  },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterActive: {
+    borderColor: '#A78BFA',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#A78BFA',
   },
 
   /* ── Delete Account ──────────────────── */

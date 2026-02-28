@@ -96,9 +96,9 @@ export const HomeScreen: React.FC = () => {
     navigation.navigate('MainTabs', { screen: tab });
   }, [navigation]);
 
-  const handleComingSoon = useCallback(() => {
-    showAlert('Coming Soon', 'Social features are on the way! Stay tuned.');
-  }, [showAlert]);
+  const handleGoToSocial = useCallback(() => {
+    navigateToTab('Social');
+  }, [navigateToTab]);
 
   // ── Loading ────────────────────────────────────
 
@@ -219,7 +219,7 @@ export const HomeScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.bentoCell}
               activeOpacity={0.8}
-              onPress={() => navigateToTab('Rewards')}
+              onPress={() => navigation.navigate('Rewards')}
             >
               <LinearGradient
                 colors={[...CARD_GRADIENT_COLORS]}
@@ -272,7 +272,7 @@ export const HomeScreen: React.FC = () => {
           {homeData.nextBadge && (
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => navigateToTab('Rewards')}
+              onPress={() => navigation.navigate('Rewards')}
               style={styles.badgeProgressOuter}
             >
               <LinearGradient
@@ -318,12 +318,77 @@ export const HomeScreen: React.FC = () => {
           ) : null}
 
           {/* ═══════════════════════════════════════════
+              ACHIEVEMENTS CARD — entry point to Rewards
+              ═══════════════════════════════════════════ */}
+          <View style={[styles.sectionHeader, { marginTop: SPACING.xl }]}>
+            <Trophy size={14} color={COLORS.yellow} strokeWidth={1.5} />
+            <Text style={styles.sectionTitle}>ACHIEVEMENTS</Text>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Rewards')}
+          >
+            <LinearGradient
+              colors={['#1A1510', '#111008', '#0E0C07']}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.rewardsTeaserEdge}>
+                {/* Top row: icon + points + badge progress */}
+                <View style={styles.rewardsTeaserTop}>
+                  <View style={styles.rewardsTrophyWrap}>
+                    <Trophy size={24} color={COLORS.yellow} strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.rewardsTeaserMid}>
+                    <Text style={styles.rewardsTeaserPts}>
+                      {homeData.totalPoints.toLocaleString()}
+                      <Text style={styles.rewardsTeaserPtsSuffix}> pts</Text>
+                    </Text>
+                    {homeData.nextBadge ? (
+                      <Text style={styles.rewardsTeaserNext} numberOfLines={1}>
+                        Next: {homeData.nextBadge.name}
+                      </Text>
+                    ) : (
+                      <Text style={styles.rewardsTeaserNext}>All badges unlocked</Text>
+                    )}
+                  </View>
+                  {homeData.nextBadge && (
+                    <Text style={[styles.rewardsTeaserPct, { color: homeData.nextBadge.color }]}>
+                      {Math.round((homeData.nextBadge.current / homeData.nextBadge.required) * 100)}%
+                    </Text>
+                  )}
+                </View>
+
+                {/* Progress bar */}
+                {homeData.nextBadge && (
+                  <View style={[styles.progressTrack, { marginTop: 14 }]}>
+                    <LinearGradient
+                      colors={[homeData.nextBadge.color + 'BB', homeData.nextBadge.color]}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={[styles.progressFill, { width: `${Math.min((homeData.nextBadge.current / homeData.nextBadge.required) * 100, 100)}%` }]}
+                    />
+                  </View>
+                )}
+
+                {/* CTA strip */}
+                <View style={styles.rewardsCtaStrip}>
+                  <Text style={styles.rewardsCtaText}>Unlock Your Achievements</Text>
+                  <ChevronRight size={14} color={COLORS.yellow} strokeWidth={2} />
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* ═══════════════════════════════════════════
               SECTION 3: SOCIAL PREVIEW HUB
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionHeader}>
             <Users size={14} color={COLORS.accent} strokeWidth={1.5} />
             <Text style={styles.sectionTitle}>SOCIAL</Text>
-            <TouchableOpacity style={styles.seeAllBtn} activeOpacity={0.7} onPress={handleComingSoon}>
+            <TouchableOpacity style={styles.seeAllBtn} activeOpacity={0.7} onPress={handleGoToSocial}>
               <Text style={styles.seeAllText}>See All</Text>
               <ChevronRight size={12} color={COLORS.accent} strokeWidth={2} />
             </TouchableOpacity>
@@ -369,7 +434,7 @@ export const HomeScreen: React.FC = () => {
                 </View>
               ))}
 
-              <TouchableOpacity style={styles.socialCta} activeOpacity={0.7} onPress={handleComingSoon}>
+              <TouchableOpacity style={styles.socialCta} activeOpacity={0.7} onPress={handleGoToSocial}>
                 <Text style={styles.socialCtaText}>View Leaderboard</Text>
               </TouchableOpacity>
             </View>
@@ -949,5 +1014,67 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
+  },
+
+  /* ── Achievements / Rewards Teaser Card ─── */
+  rewardsTeaserEdge: {
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 166, 35, 0.15)',
+    padding: 16,
+  },
+  rewardsTeaserTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rewardsTrophyWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(245, 166, 35, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rewardsTeaserMid: {
+    flex: 1,
+    gap: 3,
+  },
+  rewardsTeaserPts: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 22,
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  rewardsTeaserPtsSuffix: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
+  },
+  rewardsTeaserNext: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  rewardsTeaserPct: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    letterSpacing: -0.5,
+  },
+  rewardsCtaStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(245, 166, 35, 0.12)',
+  },
+  rewardsCtaText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.yellow,
+    letterSpacing: -0.2,
   },
 });

@@ -11,3 +11,4 @@ export { trainerService } from './trainer.service';
 export { rewardsService } from './rewards.service';
 export { insightsService } from './insights.service';
 export { userService } from './user.service';
+export { socialService } from './social.service';

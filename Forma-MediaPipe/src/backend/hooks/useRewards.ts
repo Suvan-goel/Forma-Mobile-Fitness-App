@@ -3,8 +3,11 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { rewardsService, Reward, UserStats } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { rewardsService, Reward, UserStats, socialService } from '../services/api';
 import { useWorkoutPreferences } from './useWorkoutPreferences';
+
+const EMITTED_BADGES_KEY = '@forma_emitted_badge_events';
 
 const WEEKLY_TARGET_MAP: Record<string, number> = { '1-2': 2, '3-4': 4, '5+': 6 };
 
@@ -40,6 +43,31 @@ export const useRewards = (): UseRewardsReturn => {
       if (rewardsResponse.success && statsResponse.success) {
         setRewards(rewardsResponse.data);
         setUserStats(statsResponse.data);
+
+        // Emit badge_earned activity events for newly unlocked badges (fire and forget)
+        const earnedIds = statsResponse.data.earnedBadgeIds;
+        if (earnedIds.length > 0) {
+          AsyncStorage.getItem(EMITTED_BADGES_KEY).then(raw => {
+            const emitted = new Set<string>(raw ? JSON.parse(raw) : []);
+            const newBadges = earnedIds.filter(id => !emitted.has(id));
+            if (newBadges.length === 0) return;
+
+            const rewardMap = new Map(rewardsResponse.data.map((r: Reward) => [r.id, r]));
+            newBadges.forEach(badgeId => {
+              const reward = rewardMap.get(badgeId);
+              if (reward) {
+                socialService.createActivityEvent({
+                  eventType: 'badge_earned',
+                  payload: { badge_id: badgeId, badge_name: reward.title },
+                  sourceId: badgeId,
+                }).catch(() => {});
+              }
+              emitted.add(badgeId);
+            });
+
+            AsyncStorage.setItem(EMITTED_BADGES_KEY, JSON.stringify([...emitted])).catch(() => {});
+          }).catch(() => {});
+        }
       } else {
         setError('Failed to fetch rewards data');
       }

@@ -20,12 +20,12 @@ import {
   Crown,
   Lock,
   CheckCircle,
+  ChevronLeft,
   LucideIcon,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
-import { useScroll } from '../contexts/ScrollContext';
 import { useRewards, useUser } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { Reward } from '../../backend/services/api';
@@ -113,7 +113,6 @@ const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds }: { reward: Reward
 /* ── Main Screen ──────────────────────────── */
 
 export const RewardsScreen: React.FC = () => {
-  const { onScroll } = useScroll();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user: profileUser } = useUser();
   const { rewards, userStats, userPoints, isLoading, error, refetch } = useRewards();
@@ -150,6 +149,13 @@ export const RewardsScreen: React.FC = () => {
     <View style={styles.container}>
       {/* ── HEADER ─────────────────────────────── */}
       <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          style={styles.backButton}
+        >
+          <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>REWARDS</Text>
         <TouchableOpacity
           onPress={() => navigation.navigate('ProfileSettings')}
@@ -179,7 +185,6 @@ export const RewardsScreen: React.FC = () => {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
         scrollEventThrottle={16}
       >
         <Text style={styles.headerSubtitle}>EARN BADGES</Text>
@@ -259,12 +264,16 @@ const styles = StyleSheet.create({
 
   /* ── Header ────────────────────────────────── */
   header: {
-    paddingTop: 6,
+    paddingTop: 20,
     paddingBottom: 8,
     paddingHorizontal: SPACING.screenHorizontal,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 8,
   },
   avatarButton: {
     width: 36,

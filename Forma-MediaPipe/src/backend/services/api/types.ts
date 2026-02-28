@@ -178,3 +178,114 @@ export interface Reward {
   color: string;
   category: string;
 }
+
+// ── Social types ──────────────────────────────────────────────
+
+// Leaderboard
+export type LeaderboardMetric = 'form_score' | 'weekly_volume' | 'streak';
+export type TimeWindow = '1_week' | '1_month' | 'all_time';
+
+export interface LeaderboardEntry {
+  userId: string;
+  rank: number;
+  displayName: string;
+  avatarUrl?: string;
+  score: number;
+  trend?: 'up' | 'down' | 'stable';
+}
+
+export interface LeaderboardResult {
+  entries: LeaderboardEntry[];
+  totalParticipants: number;
+  currentUser: LeaderboardEntry | null;
+}
+
+// Friends
+export type FriendshipStatus = 'pending' | 'accepted' | 'declined' | 'blocked';
+
+export interface Friend {
+  friendshipId: string;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  lastActive?: string;
+  streakDays: number;
+  avgFormScore: number;
+}
+
+export interface FriendRequest {
+  friendshipId: string;
+  fromUserId: string;
+  fromDisplayName: string;
+  fromAvatarUrl?: string;
+  sentAt: Date;
+}
+
+export interface SuggestedFriend {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  mutualFriendCount: number;
+}
+
+export interface UserSearchResult {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  mutualFriendCount: number;
+  relationshipStatus: 'none' | 'pending_sent' | 'pending_received' | 'friends';
+}
+
+export interface FriendProfileData {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  memberSince: Date;
+  totalWorkouts: number;
+  streakDays: number;
+  avgFormScore: number;
+  earnedBadgeIds: string[];
+  recentWorkouts: WorkoutSession[];
+}
+
+export interface ComparisonStats {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  avgFormScore: number;
+  streakDays: number;
+  weeklyWorkouts: number;
+  bestSetScore: number;
+  totalPoints: number;
+}
+
+export interface ComparisonData {
+  you: ComparisonStats;
+  friend: ComparisonStats;
+}
+
+// Activity
+export type ActivityEventType = 'workout_completed' | 'badge_earned' | 'personal_record' | 'streak_milestone';
+export type ActivityFilter = 'all' | 'workouts' | 'badges' | 'records';
+
+export interface ActivityEvent {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  eventType: ActivityEventType;
+  payload: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface ActivityFeedPage {
+  events: ActivityEvent[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface CreateActivityEventPayload {
+  eventType: ActivityEventType;
+  payload: Record<string, unknown>;
+  sourceId?: string;
+}

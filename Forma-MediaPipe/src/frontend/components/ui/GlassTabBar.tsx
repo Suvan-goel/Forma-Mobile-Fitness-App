@@ -11,7 +11,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { Home, BookOpen, BarChart2, Video, Star } from 'lucide-react-native';
+import { Home, BookOpen, BarChart2, Video, Users } from 'lucide-react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 
 // Icon + label config for each tab
@@ -20,7 +20,7 @@ const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
   Logbook:   { icon: BookOpen,   label: 'Logbook' },
   Analytics: { icon: BarChart2,  label: 'Analytics' },
   Record:    { icon: Video,      label: 'Capture' },
-  Rewards:   { icon: Star,       label: 'Rewards' },
+  Social:    { icon: Users,      label: 'Social' },
 };
 
 /** Single tab item */
@@ -29,7 +29,7 @@ const GlassTabItem = memo(({ routeName, isFocused, onPress }: {
   isFocused: boolean;
   onPress: () => void;
 }) => {
-  const config = TAB_CONFIG[routeName] || { icon: Star, label: routeName };
+  const config = TAB_CONFIG[routeName] || { icon: Users, label: routeName };
   const Icon = config.icon;
 
   return (
