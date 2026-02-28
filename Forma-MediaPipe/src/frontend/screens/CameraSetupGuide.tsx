@@ -7,15 +7,19 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Line, Rect, G, Ellipse } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Rect, G, Ellipse, Defs, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_SLIDES = 3;
+
+// Front-view holographic model asset
+const frontImg = require('../../../assets/front-view.png');
 
 // ── SVG: Tilted Phone on Floor Grid (Slide 0) ──────────────────
 
@@ -66,40 +70,85 @@ const PhoneSetupVector: React.FC = () => (
   </Svg>
 );
 
-// ── SVG: Viewfinder Brackets + Dotted Silhouette (Slide 1) ─────
+// ── Viewfinder Brackets + Holographic Front Model (Slide 1) ─────
+// Image (front-view.png) aspect ratio ~1:2.50 → at h=210: w=84
 
-const ViewfinderVector: React.FC = () => (
-  <Svg width={260} height={280} viewBox="0 0 260 280">
-    {/* Corner brackets */}
-    <Path d="M 55 45 L 28 45 L 28 88" stroke={COLORS.primary} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M 205 45 L 232 45 L 232 88" stroke={COLORS.primary} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M 55 255 L 28 255 L 28 212" stroke={COLORS.primary} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M 205 255 L 232 255 L 232 212" stroke={COLORS.primary} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+const FRAME_W = 260;
+const FRAME_H = 280;
+const FRAME_IMG = { x: 88, y: 35, w: 84, h: 210 };
 
-    {/* Corner accent dots */}
-    <Circle cx={28} cy={45} r={3} fill={COLORS.primary} opacity={0.45} />
-    <Circle cx={232} cy={45} r={3} fill={COLORS.primary} opacity={0.45} />
-    <Circle cx={28} cy={255} r={3} fill={COLORS.primary} opacity={0.45} />
-    <Circle cx={232} cy={255} r={3} fill={COLORS.primary} opacity={0.45} />
+const FrameViewVisual: React.FC = () => (
+  <View style={{ width: FRAME_W, height: FRAME_H }}>
+    {/* Background: violet aura behind figure */}
+    <Svg width={FRAME_W} height={FRAME_H} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`}
+      style={StyleSheet.absoluteFill}>
+      <Defs>
+        <RadialGradient id="frameGlow" cx="50%" cy="50%" r="35%">
+          <Stop offset="0%" stopColor={COLORS.primary} stopOpacity="0.14" />
+          <Stop offset="100%" stopColor={COLORS.primary} stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      <Ellipse cx={FRAME_W / 2} cy={FRAME_H / 2}
+        rx={FRAME_IMG.w / 2 + 25} ry={FRAME_IMG.h / 2 + 15}
+        fill="url(#frameGlow)" />
+    </Svg>
 
-    {/* Human silhouette */}
-    <Circle cx={130} cy={82} r={14} stroke="rgba(255,255,255,0.45)" strokeWidth={1.8} fill="none" strokeDasharray="4,3" />
-    <Line x1={130} y1={96} x2={130} y2={108} stroke="rgba(255,255,255,0.35)" strokeWidth={1.8} strokeDasharray="3,3" />
-    <Line x1={98} y1={113} x2={162} y2={113} stroke="rgba(255,255,255,0.38)" strokeWidth={1.8} strokeDasharray="4,3" />
-    <Line x1={98} y1={113} x2={88} y2={163} stroke="rgba(255,255,255,0.30)" strokeWidth={1.8} strokeDasharray="4,3" />
-    <Line x1={162} y1={113} x2={172} y2={163} stroke="rgba(255,255,255,0.30)" strokeWidth={1.8} strokeDasharray="4,3" />
-    <Line x1={108} y1={113} x2={108} y2={175} stroke="rgba(255,255,255,0.35)" strokeWidth={1.8} strokeDasharray="4,3" />
-    <Line x1={152} y1={113} x2={152} y2={175} stroke="rgba(255,255,255,0.35)" strokeWidth={1.8} strokeDasharray="4,3" />
-    <Line x1={103} y1={175} x2={157} y2={175} stroke="rgba(255,255,255,0.30)" strokeWidth={1.8} strokeDasharray="4,3" />
-    <Line x1={112} y1={175} x2={104} y2={238} stroke="rgba(255,255,255,0.30)" strokeWidth={1.8} strokeDasharray="4,3" />
-    <Line x1={148} y1={175} x2={156} y2={238} stroke="rgba(255,255,255,0.30)" strokeWidth={1.8} strokeDasharray="4,3" />
+    {/* Holographic front-view human model */}
+    <View
+      style={[
+        {
+          position: 'absolute',
+          left: FRAME_IMG.x,
+          top: FRAME_IMG.y,
+          width: FRAME_IMG.w,
+          height: FRAME_IMG.h,
+          overflow: 'visible',
+        },
+        Platform.OS === 'ios' && {
+          shadowColor: COLORS.primary,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.5,
+          shadowRadius: 20,
+        },
+      ]}
+    >
+      <Image
+        source={frontImg}
+        style={{ width: FRAME_IMG.w, height: FRAME_IMG.h, opacity: 0.82 }}
+        resizeMode="contain"
+      />
+      {/* Cold violet tint overlay */}
+      <View style={{
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: COLORS.primary,
+        opacity: 0.03,
+      }} />
+    </View>
 
-    {/* Joint dots */}
-    <Circle cx={98} cy={113} r={3} fill="rgba(255,255,255,0.30)" />
-    <Circle cx={162} cy={113} r={3} fill="rgba(255,255,255,0.30)" />
-    <Circle cx={108} cy={175} r={3} fill="rgba(255,255,255,0.30)" />
-    <Circle cx={152} cy={175} r={3} fill="rgba(255,255,255,0.30)" />
-  </Svg>
+    {/* Foreground: viewfinder brackets + corner dots */}
+    <Svg width={FRAME_W} height={FRAME_H} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`}
+      style={StyleSheet.absoluteFill}>
+      {/* Corner brackets */}
+      <Path d="M 63 32 L 35 32 L 35 78"
+        stroke={COLORS.primary} strokeWidth={2.5} fill="none"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M 197 32 L 225 32 L 225 78"
+        stroke={COLORS.primary} strokeWidth={2.5} fill="none"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M 63 258 L 35 258 L 35 212"
+        stroke={COLORS.primary} strokeWidth={2.5} fill="none"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M 197 258 L 225 258 L 225 212"
+        stroke={COLORS.primary} strokeWidth={2.5} fill="none"
+        strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Corner accent dots */}
+      <Circle cx={35} cy={32} r={3} fill={COLORS.primary} opacity={0.45} />
+      <Circle cx={225} cy={32} r={3} fill={COLORS.primary} opacity={0.45} />
+      <Circle cx={35} cy={258} r={3} fill={COLORS.primary} opacity={0.45} />
+      <Circle cx={225} cy={258} r={3} fill={COLORS.primary} opacity={0.45} />
+    </Svg>
+  </View>
 );
 
 // ── SVG: Dimmed Camera Screen Wireframe (Slide 2) ──────────────
@@ -342,7 +391,7 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
         <Animated.View style={[styles.slideLayer, styles.slideLayerAbsolute, { opacity: s1Opacity, transform: [{ translateX: s1Tx }] }]}>
           <Text style={styles.stepLabel}>THE FRAME</Text>
           <Animated.View style={[styles.vectorWrap, { transform: [{ scale: bracketPulse }] }]}>
-            <ViewfinderVector />
+            <FrameViewVisual />
           </Animated.View>
         </Animated.View>
 
@@ -414,7 +463,6 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
           <Animated.View
             style={[
               styles.ctaWrapper,
-              { transform: [{ scale: buttonScale }] },
               Platform.OS === 'ios' && {
                 shadowColor: COLORS.primary,
                 shadowOffset: { width: 0, height: 0 },
@@ -423,17 +471,19 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
               },
             ]}
           >
-            <TouchableOpacity onPress={handleOpenCamera} activeOpacity={0.85}>
-              <LinearGradient
-                // Use a flat purple fill so styling matches the Google button
-                colors={['rgba(139, 92, 246, 0.12)', 'rgba(139, 92, 246, 0.12)']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.ctaButton}
-              >
-                <Text style={styles.ctaText}>Start Recording</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+              <TouchableOpacity onPress={handleOpenCamera} activeOpacity={0.85}>
+                <LinearGradient
+                  // Use a flat purple fill so styling matches the Google button
+                  colors={['rgba(139, 92, 246, 0.12)', 'rgba(139, 92, 246, 0.12)']}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={styles.ctaButton}
+                >
+                  <Text style={styles.ctaText}>Start Recording</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
           </Animated.View>
         </Animated.View>
       </View>
