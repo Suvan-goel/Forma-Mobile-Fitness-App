@@ -179,77 +179,58 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>PROGRESS SNAPSHOT</Text>
           </View>
 
-          {/* Hero: Form Score */}
-          <TouchableOpacity activeOpacity={0.8} onPress={() => navigateToTab('Analytics')}>
-            <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-              <View style={[styles.cardGlassEdge, styles.snapshotHero]}>
-                <View>
-                  <View style={styles.sectionLabelRow}>
-                    <Target size={12} color={getScoreColor(homeData.formScore)} strokeWidth={1.5} />
-                    <Text style={styles.sectionLabel}>FORM SCORE</Text>
+          {/* Compact unified stats card */}
+          <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
+            <View style={styles.snapshotCompact}>
+              {/* Three-column stats */}
+              <View style={styles.snapshotCols}>
+                <TouchableOpacity style={[styles.snapshotCol, styles.snapshotColDivider]} activeOpacity={0.7} onPress={() => navigateToTab('Analytics')}>
+                  <View style={styles.snapshotColMeta}>
+                    <Target size={10} color={getScoreColor(homeData.formScore)} strokeWidth={1.5} />
+                    <Text style={styles.snapshotColMetaText}>FORM</Text>
                   </View>
-                  <Text style={[styles.snapshotHeroNum, { color: getScoreColor(homeData.formScore) }]}>
+                  <Text style={[styles.snapshotColNum, { color: getScoreColor(homeData.formScore) }]}>
                     {homeData.formScore}
                   </Text>
-                </View>
-                <View style={styles.snapshotHeroRight}>
-                  <View style={[styles.snapshotTrendChip, { backgroundColor: trendColor + '20' }]}>
-                    <TrendIcon size={14} color={trendColor} strokeWidth={2} />
-                    <Text style={[styles.snapshotTrendPct, { color: trendColor }]}>
+                  <View style={[styles.snapshotTrendPill, { backgroundColor: trendColor + '20' }]}>
+                    <TrendIcon size={9} color={trendColor} strokeWidth={2} />
+                    <Text style={[styles.snapshotTrendPillText, { color: trendColor }]}>
                       {homeData.formTrendPercent > 0 ? '+' : ''}{homeData.formTrendPercent}%
                     </Text>
                   </View>
-                  <Text style={styles.snapshotTrendSub}>
-                    {homeData.formTrendDirection === 'up' ? 'Improving' : homeData.formTrendDirection === 'down' ? 'Declining' : 'Stable'}
-                  </Text>
-                </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+                </TouchableOpacity>
 
-          {/* Points + Workouts */}
-          <View style={styles.snapshotStatsRow}>
-            <TouchableOpacity style={styles.snapshotStatCard} activeOpacity={0.8} onPress={() => navigateToTab('Rewards')}>
-              <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-                <View style={styles.snapshotStat}>
-                  <Trophy size={16} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.snapshotStatNum}>{homeData.totalPoints}</Text>
-                  <Text style={styles.snapshotStatLabel}>POINTS</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.snapshotStatCard} activeOpacity={0.8} onPress={() => navigateToTab('Logbook')}>
-              <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-                <View style={styles.snapshotStat}>
-                  <Dumbbell size={16} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.snapshotStatNum}>{homeData.workoutCount}</Text>
-                  <Text style={styles.snapshotStatLabel}>WORKOUTS</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          {/* Next Badge */}
-          {homeData.nextBadge && (
-            <TouchableOpacity style={styles.snapshotBadgeCard} activeOpacity={0.8} onPress={() => navigateToTab('Rewards')}>
-              <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-                <View style={styles.cardGlassEdge}>
-                  <View style={styles.snapshotBadgeRow}>
-                    <View>
-                      <View style={styles.sectionLabelRow}>
-                        <Award size={12} color={homeData.nextBadge.color} strokeWidth={1.5} />
-                        <Text style={styles.sectionLabel}>NEXT BADGE</Text>
-                      </View>
-                      <Text style={styles.snapshotBadgeName}>{homeData.nextBadge.name}</Text>
-                    </View>
-                    <View style={styles.snapshotBadgePts}>
-                      <Text style={[styles.snapshotBadgePtsNum, { color: homeData.nextBadge.color }]}>
-                        {homeData.nextBadge.current}
-                      </Text>
-                      <Text style={styles.snapshotBadgePtsOf}>/ {homeData.nextBadge.required} pts</Text>
-                    </View>
+                <TouchableOpacity style={[styles.snapshotCol, styles.snapshotColDivider]} activeOpacity={0.7} onPress={() => navigateToTab('Rewards')}>
+                  <View style={styles.snapshotColMeta}>
+                    <Trophy size={10} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.snapshotColMetaText}>POINTS</Text>
                   </View>
-                  <View style={[styles.progressTrack, { marginTop: 14 }]}>
+                  <Text style={styles.snapshotColNum}>{homeData.totalPoints}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.snapshotCol} activeOpacity={0.7} onPress={() => navigateToTab('Logbook')}>
+                  <View style={styles.snapshotColMeta}>
+                    <Dumbbell size={10} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.snapshotColMetaText}>WORKOUTS</Text>
+                  </View>
+                  <Text style={styles.snapshotColNum}>{homeData.workoutCount}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Next badge strip */}
+              {homeData.nextBadge && (
+                <TouchableOpacity style={styles.snapshotBadgeStrip} activeOpacity={0.7} onPress={() => navigateToTab('Rewards')}>
+                  <View style={styles.snapshotBadgeStripRow}>
+                    <Award size={11} color={homeData.nextBadge.color} strokeWidth={1.5} />
+                    <Text style={styles.snapshotBadgeStripName} numberOfLines={1}>
+                      {homeData.nextBadge.name}
+                    </Text>
+                    <Text style={[styles.snapshotBadgeStripPts, { color: homeData.nextBadge.color }]}>
+                      {homeData.nextBadge.current}
+                    </Text>
+                    <Text style={styles.snapshotBadgeStripOf}>/ {homeData.nextBadge.required} pts</Text>
+                  </View>
+                  <View style={[styles.progressTrack, { marginTop: 8 }]}>
                     {homeData.nextBadge.current > 0 && (
                       <LinearGradient
                         colors={[homeData.nextBadge.color + 'BB', homeData.nextBadge.color]}
@@ -259,10 +240,10 @@ export const HomeScreen: React.FC = () => {
                       />
                     )}
                   </View>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </LinearGradient>
 
           {/* ═══════════════════════════════════════════
               SECTION 3: SOCIAL PREVIEW HUB
@@ -516,19 +497,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     flex: 1,
   },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
-  },
-
   /* ── Shared divider ──────────────────────────── */
   divider: {
     height: 1,
@@ -537,99 +505,82 @@ const styles = StyleSheet.create({
   },
 
   /* ── Section 2: Progress Snapshot ────────────── */
-  snapshotHero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 20,
-  },
-  snapshotHeroNum: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 72,
-    letterSpacing: -3,
-    lineHeight: 80,
-    marginTop: 4,
-  },
-  snapshotHeroRight: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  snapshotTrendChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
-  },
-  snapshotTrendPct: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 20,
-    letterSpacing: -0.5,
-  },
-  snapshotTrendSub: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-  },
-  snapshotStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  snapshotStatCard: {
-    flex: 1,
-  },
-  snapshotStat: {
+  snapshotCompact: {
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 16,
+    overflow: 'hidden',
+  },
+  snapshotCols: {
+    flexDirection: 'row',
+  },
+  snapshotCol: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    minHeight: 105,
-    justifyContent: 'center',
-    gap: 6,
+    gap: 5,
   },
-  snapshotStatNum: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 36,
-    color: COLORS.text,
-    letterSpacing: -1,
+  snapshotColDivider: {
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255, 255, 255, 0.07)',
   },
-  snapshotStatLabel: {
+  snapshotColMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  snapshotColMetaText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 9,
     color: COLORS.textTertiary,
-    letterSpacing: 2,
+    letterSpacing: 1.5,
   },
-  snapshotBadgeCard: {
-    marginTop: 10,
-  },
-  snapshotBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  snapshotBadgeName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 20,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-    marginTop: 2,
-  },
-  snapshotBadgePts: {
-    alignItems: 'flex-end',
-  },
-  snapshotBadgePtsNum: {
+  snapshotColNum: {
     fontFamily: FONTS.display.bold,
-    fontSize: 30,
+    fontSize: 34,
+    color: COLORS.text,
     letterSpacing: -1,
   },
-  snapshotBadgePtsOf: {
+  snapshotTrendPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  snapshotTrendPillText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    letterSpacing: -0.3,
+  },
+  snapshotBadgeStrip: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  snapshotBadgeStripRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  snapshotBadgeStripName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+    flex: 1,
+  },
+  snapshotBadgeStripPts: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 16,
+    letterSpacing: -0.5,
+  },
+  snapshotBadgeStripOf: {
     fontFamily: FONTS.mono.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
-    marginTop: 2,
   },
 
   progressTrack: {
