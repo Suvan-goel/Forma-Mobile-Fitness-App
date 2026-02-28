@@ -30,7 +30,9 @@ export interface AuthUser {
 }
 
 export interface UserStats {
+  /** Cumulative points earned from workout quality (form scores). Displayed as "+N FORM" on RewardsScreen. */
   formScore: number;
+  /** Cumulative points earned from weekly consistency bonuses + streaks. Displayed as "+N CONSISTENCY". */
   consistencyScore: number;
 }
 

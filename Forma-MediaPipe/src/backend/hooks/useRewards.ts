@@ -4,6 +4,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { rewardsService, Reward, UserStats } from '../services/api';
+import { useWorkoutPreferences } from './useWorkoutPreferences';
+
+const WEEKLY_TARGET_MAP: Record<string, number> = { '1-2': 2, '3-4': 4, '5+': 6 };
 
 interface UseRewardsReturn {
   rewards: Reward[];
@@ -21,13 +24,17 @@ export const useRewards = (): UseRewardsReturn => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { prefs, isLoading: prefsLoading } = useWorkoutPreferences();
+  const weeklyTarget = WEEKLY_TARGET_MAP[prefs.weeklyTrainingTarget] ?? 4;
+
   const fetchData = useCallback(async () => {
+    if (prefsLoading) return; // wait for AsyncStorage before checking consistency
     setIsLoading(true);
     setError(null);
     try {
       const [rewardsResponse, statsResponse] = await Promise.all([
         rewardsService.getRewards(),
-        rewardsService.getUserStats(),
+        rewardsService.getUserStats(weeklyTarget),
       ]);
 
       if (rewardsResponse.success && statsResponse.success) {
@@ -41,7 +48,7 @@ export const useRewards = (): UseRewardsReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [prefsLoading, weeklyTarget]);
 
   useEffect(() => {
     fetchData();

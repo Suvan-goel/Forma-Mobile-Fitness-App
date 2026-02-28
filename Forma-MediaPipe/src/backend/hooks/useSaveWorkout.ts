@@ -4,8 +4,9 @@
  */
 
 import { useState, useCallback } from 'react';
-import { workoutsService, CreateWorkoutPayload } from '../services/api';
+import { workoutsService, CreateWorkoutPayload, rewardsService } from '../services/api';
 import { generateSetSummary } from '../../utils/setNotesSummary';
+import { calculateWorkoutPoints } from '../../utils/pointsCalculator';
 
 interface WorkoutExerciseInput {
   name: string;
@@ -67,6 +68,16 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
         setError(result.error ?? 'Could not save workout.');
         return false;
       }
+
+      // Award workout points — fire and forget, never blocks the save UX
+      const pts = calculateWorkoutPoints(payload);
+      const sessionId = result.data?.id;
+      if (pts > 0 && sessionId) {
+        rewardsService.awardWorkoutPoints(sessionId, pts).catch(() => {
+          if (__DEV__) console.warn('[useSaveWorkout] Points award failed for session', sessionId);
+        });
+      }
+
       return true;
     } catch (e: any) {
       setError(e?.message ?? 'Could not save workout.');

@@ -5,8 +5,8 @@
 import { UserStats, Reward } from '../../api/types';
 
 export const mockUserStats: UserStats = {
-  formScore: 87,
-  consistencyScore: 79,
+  formScore: 147,       // ~8 workouts of solid form (realistic earned total)
+  consistencyScore: 50, // ~2-3 weeks of hitting weekly target
 };
 
 export const mockRewards: Reward[] = [

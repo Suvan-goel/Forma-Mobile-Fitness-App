@@ -12,7 +12,7 @@ export const API_CONFIG = {
     user: false,      // Supabase — Phase 1
     exercises: true,  // mock — Phase 2
     analytics: false, // Supabase — Phase 2
-    rewards: true,    // mock — Phase 3
+    rewards: false,    // mock — Phase 3
     insights: true,   // mock — Phase 3
     trainer: true,    // stays mock
   },
