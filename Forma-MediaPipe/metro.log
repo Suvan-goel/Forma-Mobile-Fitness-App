@@ -613,3 +613,7 @@ Android Bundled 577ms App.tsx (2903 modules)
  LOG  [LandmarkRecording] 687 frames, 0 reps
  ERROR  Error: Exercise "Barbell Curl" already registered, js engine: hermes
  ERROR  Error: Exercise "Barbell Curl" already registered, js engine: hermes
+[dotenv@17.2.4] injecting env (0) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+[dotenv@17.2.4] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+Android Bundled 59ms App.tsx (1 module)
+ WARN  [expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.
