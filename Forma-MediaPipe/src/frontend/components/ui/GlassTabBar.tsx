@@ -143,8 +143,8 @@ const styles = StyleSheet.create({
   pill: {
     borderRadius: 40,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   pillAndroid: {
     backgroundColor: 'rgba(28, 28, 30, 0.92)',

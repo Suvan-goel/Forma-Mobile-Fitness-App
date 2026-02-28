@@ -124,12 +124,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         <View style={styles.settingIconBadge}>
           <Icon size={16} color="#A78BFA" strokeWidth={1.5} />
         </View>
-        <Text style={styles.settingLabel}>{label}</Text>
+        <View style={styles.selectLabelColumn}>
+          <Text style={styles.settingLabel}>{label}</Text>
+          <Text style={styles.selectValueText}>{value}</Text>
+        </View>
       </View>
-      <View style={styles.selectValueRow}>
-        <Text style={styles.selectValueText}>{value}</Text>
-        <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-      </View>
+      <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
     </TouchableOpacity>
   );
 
@@ -538,10 +538,9 @@ const styles = StyleSheet.create({
   },
 
   /* ── Select Item ───────────────────────── */
-  selectValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  selectLabelColumn: {
+    flexDirection: 'column',
+    gap: 2,
   },
   selectValueText: {
     fontFamily: FONTS.ui.regular,
