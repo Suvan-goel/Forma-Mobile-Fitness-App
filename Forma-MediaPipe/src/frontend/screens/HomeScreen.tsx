@@ -2,11 +2,11 @@
  * HomeScreen — Central hub / landing page
  *
  * Sections:
- *   1. Motivation Dashboard (welcome, streak, daily quote)
- *   2. Progress Snapshot (points, form trend, workouts, next badge)
- *   3. Social Preview Hub (leaderboard teaser, friend activity)
- *   4. Challenge Centre (weekly goals derived from existing data)
- *   5. News & Updates (placeholder feed)
+ *   1. Welcome Header (logo, name, settings)
+ *   2. Progress Snapshot (bento grid — form score hero + points/workouts)
+ *   3. Social Preview Hub (leaderboard, friend activity)
+ *   4. Challenge Centre (weekly goals)
+ *   5. News & Updates (feed)
  */
 
 import React, { useRef, useEffect, useCallback } from 'react';
@@ -23,7 +23,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  Zap,
   Award,
   Target,
   Users,
@@ -35,6 +34,8 @@ import {
   Trophy,
   Dumbbell,
   Menu,
+  Flame,
+  Quote,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -105,11 +106,10 @@ export const HomeScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <View style={styles.loadingWrap}>
-          <LoadingSkeleton variant="card" height={180} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={140} style={{ marginBottom: SPACING.md }} />
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: SPACING.md }}>
-            <LoadingSkeleton variant="card" height={90} style={{ flex: 1 }} />
-            <LoadingSkeleton variant="card" height={90} style={{ flex: 1 }} />
-            <LoadingSkeleton variant="card" height={90} style={{ flex: 1 }} />
+            <LoadingSkeleton variant="card" height={100} style={{ flex: 1 }} />
+            <LoadingSkeleton variant="card" height={100} style={{ flex: 1 }} />
           </View>
           <LoadingSkeleton variant="card" height={120} style={{ marginBottom: SPACING.md }} />
           <LoadingSkeleton variant="card" height={200} style={{ marginBottom: SPACING.md }} />
@@ -135,6 +135,7 @@ export const HomeScreen: React.FC = () => {
     : homeData.formTrendDirection === 'down' ? TrendingDown : Minus;
   const trendColor = homeData.formTrendDirection === 'up' ? '#34D399'
     : homeData.formTrendDirection === 'down' ? COLORS.orange : COLORS.textSecondary;
+  const scoreColor = getScoreColor(homeData.formScore);
 
   return (
     <View style={styles.container}>
@@ -172,65 +173,126 @@ export const HomeScreen: React.FC = () => {
         <Animated.View style={{ opacity: fadeAnim }}>
 
           {/* ═══════════════════════════════════════════
-              SECTION 2: PROGRESS SNAPSHOT
+              SECTION 2: PROGRESS SNAPSHOT — Bento Grid
               ═══════════════════════════════════════════ */}
-          <View style={[styles.sectionHeader, { marginTop: SPACING.md }]}>
-            <Zap size={14} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.sectionTitle}>PROGRESS SNAPSHOT</Text>
-          </View>
 
-          {/* Compact unified stats card */}
-          <LinearGradient colors={[...CARD_GRADIENT_COLORS]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-            <View style={styles.snapshotCompact}>
-              {/* Three-column stats */}
-              <View style={styles.snapshotCols}>
-                <TouchableOpacity style={[styles.snapshotCol, styles.snapshotColDivider]} activeOpacity={0.7} onPress={() => navigateToTab('Analytics')}>
-                  <View style={styles.snapshotColMeta}>
-                    <Target size={10} color={getScoreColor(homeData.formScore)} strokeWidth={1.5} />
-                    <Text style={styles.snapshotColMetaText}>FORM</Text>
+          {/* Hero: Form Score */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => navigateToTab('Analytics')}
+            style={styles.heroCardOuter}
+          >
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <View style={styles.heroTop}>
+                  <View style={styles.heroLabelRow}>
+                    <Target size={12} color={scoreColor} strokeWidth={1.5} />
+                    <Text style={styles.heroLabel}>FORM SCORE</Text>
                   </View>
-                  <Text style={[styles.snapshotColNum, { color: getScoreColor(homeData.formScore) }]}>
-                    {homeData.formScore}
-                  </Text>
-                  <View style={[styles.snapshotTrendPill, { backgroundColor: trendColor + '20' }]}>
-                    <TrendIcon size={9} color={trendColor} strokeWidth={2} />
-                    <Text style={[styles.snapshotTrendPillText, { color: trendColor }]}>
+                  <View style={[styles.trendPill, { backgroundColor: trendColor + '18' }]}>
+                    <TrendIcon size={11} color={trendColor} strokeWidth={2} />
+                    <Text style={[styles.trendPillText, { color: trendColor }]}>
                       {homeData.formTrendPercent > 0 ? '+' : ''}{homeData.formTrendPercent}%
                     </Text>
                   </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={[styles.snapshotCol, styles.snapshotColDivider]} activeOpacity={0.7} onPress={() => navigateToTab('Rewards')}>
-                  <View style={styles.snapshotColMeta}>
-                    <Trophy size={10} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.snapshotColMetaText}>POINTS</Text>
-                  </View>
-                  <Text style={styles.snapshotColNum}>{homeData.totalPoints}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.snapshotCol} activeOpacity={0.7} onPress={() => navigateToTab('Logbook')}>
-                  <View style={styles.snapshotColMeta}>
-                    <Dumbbell size={10} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.snapshotColMetaText}>WORKOUTS</Text>
-                  </View>
-                  <Text style={styles.snapshotColNum}>{homeData.workoutCount}</Text>
-                </TouchableOpacity>
+                </View>
+                <View style={styles.heroBottom}>
+                  <Text style={[styles.heroScore, { color: scoreColor }]}>
+                    {homeData.formScore}
+                  </Text>
+                  <Text style={styles.heroScoreSuffix}>/100</Text>
+                </View>
+                <Text style={styles.heroSubtext}>7-day average</Text>
               </View>
+            </LinearGradient>
+          </TouchableOpacity>
 
-              {/* Next badge strip */}
-              {homeData.nextBadge && (
-                <TouchableOpacity style={styles.snapshotBadgeStrip} activeOpacity={0.7} onPress={() => navigateToTab('Rewards')}>
-                  <View style={styles.snapshotBadgeStripRow}>
-                    <Award size={11} color={homeData.nextBadge.color} strokeWidth={1.5} />
-                    <Text style={styles.snapshotBadgeStripName} numberOfLines={1}>
-                      {homeData.nextBadge.name}
-                    </Text>
-                    <Text style={[styles.snapshotBadgeStripPts, { color: homeData.nextBadge.color }]}>
-                      {homeData.nextBadge.current}
-                    </Text>
-                    <Text style={styles.snapshotBadgeStripOf}>/ {homeData.nextBadge.required} pts</Text>
+          {/* Two-column: Points + Workouts */}
+          <View style={styles.bentoRow}>
+            <TouchableOpacity
+              style={styles.bentoCell}
+              activeOpacity={0.8}
+              onPress={() => navigateToTab('Rewards')}
+            >
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.cardGradient}
+              >
+                <View style={styles.cardGlassEdge}>
+                  <View style={styles.bentoLabelRow}>
+                    <Trophy size={12} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.bentoLabel}>POINTS</Text>
                   </View>
-                  <View style={[styles.progressTrack, { marginTop: 8 }]}>
+                  <Text style={styles.bentoValue}>{homeData.totalPoints.toLocaleString()}</Text>
+                  {homeData.nextBadge && (
+                    <View style={styles.bentoBadgeRow}>
+                      <Award size={10} color={homeData.nextBadge.color} strokeWidth={1.5} />
+                      <Text style={styles.bentoBadgeText} numberOfLines={1}>
+                        {homeData.nextBadge.current}/{homeData.nextBadge.required}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.bentoCell}
+              activeOpacity={0.8}
+              onPress={() => navigateToTab('Logbook')}
+            >
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.cardGradient}
+              >
+                <View style={styles.cardGlassEdge}>
+                  <View style={styles.bentoLabelRow}>
+                    <Dumbbell size={12} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.bentoLabel}>WORKOUTS</Text>
+                  </View>
+                  <Text style={styles.bentoValue}>{homeData.workoutCount}</Text>
+                  <Text style={styles.bentoSubtext}>total sessions</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* Next badge progress (if exists) */}
+          {homeData.nextBadge && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => navigateToTab('Rewards')}
+              style={styles.badgeProgressOuter}
+            >
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.cardGradient}
+              >
+                <View style={styles.badgeProgressInner}>
+                  <View style={styles.badgeProgressTop}>
+                    <View style={styles.badgeProgressLeft}>
+                      <Award size={14} color={homeData.nextBadge.color} strokeWidth={1.5} />
+                      <Text style={styles.badgeProgressName} numberOfLines={1}>
+                        {homeData.nextBadge.name}
+                      </Text>
+                    </View>
+                    <Text style={[styles.badgeProgressPts, { color: homeData.nextBadge.color }]}>
+                      {homeData.nextBadge.current}
+                      <Text style={styles.badgeProgressOf}> / {homeData.nextBadge.required}</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.progressTrack}>
                     {homeData.nextBadge.current > 0 && (
                       <LinearGradient
                         colors={[homeData.nextBadge.color + 'BB', homeData.nextBadge.color]}
@@ -240,10 +302,18 @@ export const HomeScreen: React.FC = () => {
                       />
                     )}
                   </View>
-                </TouchableOpacity>
-              )}
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {/* ── Motivational Quote ─────────────────── */}
+          {homeData.motivationalQuote ? (
+            <View style={styles.quoteRow}>
+              <Quote size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
+              <Text style={styles.quoteText}>{homeData.motivationalQuote}</Text>
             </View>
-          </LinearGradient>
+          ) : null}
 
           {/* ═══════════════════════════════════════════
               SECTION 3: SOCIAL PREVIEW HUB
@@ -264,8 +334,7 @@ export const HomeScreen: React.FC = () => {
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
-              {/* Leaderboard preview */}
-              <Text style={styles.innerLabel}>LEADERBOARD PREVIEW</Text>
+              <Text style={styles.innerLabel}>LEADERBOARD</Text>
               {homeData.socialPreview.leaderboard.slice(0, 5).map((entry) => (
                 <View key={entry.rank} style={[styles.leaderRow, entry.isCurrentUser && styles.leaderRowHighlight]}>
                   <Text style={[styles.leaderRank, { color: RANK_COLORS[entry.rank] || COLORS.textSecondary }]}>
@@ -283,8 +352,7 @@ export const HomeScreen: React.FC = () => {
 
               <View style={styles.divider} />
 
-              {/* Friends activity */}
-              <Text style={styles.innerLabel}>FRIENDS ACTIVITY</Text>
+              <Text style={styles.innerLabel}>ACTIVITY</Text>
               {homeData.socialPreview.friendActivity.map((item) => (
                 <View key={item.id} style={styles.activityRow}>
                   <View style={styles.activityAvatar}>
@@ -299,7 +367,6 @@ export const HomeScreen: React.FC = () => {
                 </View>
               ))}
 
-              {/* CTA */}
               <TouchableOpacity style={styles.socialCta} activeOpacity={0.7} onPress={handleComingSoon}>
                 <Text style={styles.socialCtaText}>View Leaderboard</Text>
               </TouchableOpacity>
@@ -310,7 +377,7 @@ export const HomeScreen: React.FC = () => {
               SECTION 4: CHALLENGE CENTRE
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionHeader}>
-            <Target size={14} color={COLORS.accent} strokeWidth={1.5} />
+            <Flame size={14} color={COLORS.accent} strokeWidth={1.5} />
             <Text style={styles.sectionTitle}>CHALLENGES</Text>
           </View>
 
@@ -381,7 +448,6 @@ export const HomeScreen: React.FC = () => {
                   style={styles.cardGradient}
                 >
                   <View style={styles.cardGlassEdge}>
-                    {/* Category pill */}
                     <View style={styles.newsCatRow}>
                       <View style={[styles.newsDot, { backgroundColor: catColor }]} />
                       <View style={[styles.newsPill, { backgroundColor: catColor + '1A' }]}>
@@ -487,7 +553,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: SPACING.xl,
+    marginTop: 28,
     marginBottom: 14,
   },
   sectionTitle: {
@@ -497,6 +563,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     flex: 1,
   },
+
   /* ── Shared divider ──────────────────────────── */
   divider: {
     height: 1,
@@ -504,82 +571,143 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.md,
   },
 
-  /* ── Section 2: Progress Snapshot ────────────── */
-  snapshotCompact: {
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    overflow: 'hidden',
+  /* ── Section 2: Progress Snapshot — Bento ────── */
+  heroCardOuter: {
+    marginTop: SPACING.md,
   },
-  snapshotCols: {
+  heroTop: {
     flexDirection: 'row',
-  },
-  snapshotCol: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 5,
+    marginBottom: 8,
   },
-  snapshotColDivider: {
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(255, 255, 255, 0.07)',
-  },
-  snapshotColMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  snapshotColMetaText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 9,
-    color: COLORS.textTertiary,
-    letterSpacing: 1.5,
-  },
-  snapshotColNum: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 34,
-    color: COLORS.text,
-    letterSpacing: -1,
-  },
-  snapshotTrendPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  snapshotTrendPillText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    letterSpacing: -0.3,
-  },
-  snapshotBadgeStrip: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.07)',
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-  },
-  snapshotBadgeStripRow: {
+  heroLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  snapshotBadgeStripName: {
+  heroLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.text,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
+  },
+  trendPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  trendPillText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    letterSpacing: -0.3,
+  },
+  heroBottom: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  heroScore: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 56,
+    letterSpacing: -2,
+  },
+  heroScoreSuffix: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 16,
+    color: COLORS.textTertiary,
+    marginBottom: 4,
+  },
+  heroSubtext: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    marginTop: 2,
+  },
+
+  bentoRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  bentoCell: {
     flex: 1,
   },
-  snapshotBadgeStripPts: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
-    letterSpacing: -0.5,
+  bentoLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
   },
-  snapshotBadgeStripOf: {
+  bentoLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
+  },
+  bentoValue: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 32,
+    color: COLORS.text,
+    letterSpacing: -1,
+  },
+  bentoSubtext: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    marginTop: 4,
+  },
+  bentoBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  bentoBadgeText: {
     fontFamily: FONTS.mono.regular,
     fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+
+  /* ── Badge Progress Strip ────────────────────── */
+  badgeProgressOuter: {
+    marginTop: 10,
+  },
+  badgeProgressInner: {
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  badgeProgressTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  badgeProgressLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  badgeProgressName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  badgeProgressPts: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 15,
+    letterSpacing: -0.5,
+  },
+  badgeProgressOf: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
     color: COLORS.textTertiary,
   },
 
@@ -599,6 +727,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
     marginTop: 6,
+  },
+
+  /* ── Motivational Quote ────────────────────────── */
+  quoteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 4,
+  },
+  quoteText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    fontStyle: 'italic',
+    flex: 1,
+    lineHeight: 19,
   },
 
   /* ── Section 3: Social ───────────────────────── */
