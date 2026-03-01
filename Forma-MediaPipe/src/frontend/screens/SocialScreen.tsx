@@ -57,9 +57,8 @@ export const SocialScreen: React.FC = memo(() => {
           onPress={handleBack}
           activeOpacity={0.7}
           style={styles.backButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+          <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>SOCIAL</Text>
         <TouchableOpacity
@@ -104,7 +103,7 @@ const styles = StyleSheet.create({
   },
   fixedHeader: {
     paddingTop: 6,
-    paddingBottom: 4,
+    paddingBottom: 8,
     paddingHorizontal: SPACING.screenHorizontal,
     flexDirection: 'row',
     alignItems: 'center',
@@ -113,40 +112,42 @@ const styles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 38,
+    fontSize: 40,
     color: '#FFFFFF',
     letterSpacing: 2,
+    lineHeight: 46,
+    flex: 1,
   },
   avatarButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    marginTop: 5,
   },
   avatarImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   avatarGradient: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholder: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#000000',
   },
   avatarInitial: {
     fontFamily: FONTS.display.bold,

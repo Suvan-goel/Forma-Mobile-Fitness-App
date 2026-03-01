@@ -6,9 +6,6 @@ import {
   ChevronLeft,
   ChevronDown,
   Target,
-  Clock,
-  Calendar,
-  Layers,
   AlignLeft,
   Dumbbell,
 } from 'lucide-react-native';
@@ -230,36 +227,40 @@ export const WorkoutDetailsScreen: React.FC = () => {
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
           {/* ═══════════════════════════════════════════
-              HERO: COMPACT SUMMARY CARD
+              WORKOUT SUMMARY — Compact inline card
               ═══════════════════════════════════════════ */}
           <LinearGradient
             colors={['#1E1A2E', '#151020', '#0C0A14']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
+            style={styles.summaryCard}
           >
-            <View style={styles.heroEdge}>
-              {/* Score row — score left, meta right */}
-              <View style={styles.heroMainRow}>
-                <View style={styles.heroScoreBlock}>
-                  <Text style={[styles.heroScore, { color: formScoreColor }]}>
-                    {avgFormScore}
-                  </Text>
-                  <Text style={styles.heroScoreUnit}>/100</Text>
+            <View style={styles.summaryEdge}>
+              {/* Title row */}
+              <View style={styles.summaryTitleRow}>
+                <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
+                <Text style={styles.summaryTitle}>WORKOUT SUMMARY</Text>
+              </View>
+              {/* Inline stats row */}
+              <View style={styles.summaryStatsRow}>
+                <View style={styles.summaryStat}>
+                  <MonoText style={[styles.summaryScoreValue, { color: formScoreColor }]}>{avgFormScore}</MonoText>
+                  <Text style={styles.summaryStatLabel}>form</Text>
                 </View>
-                <View style={styles.heroMetaBlock}>
-                  <View style={styles.heroMetaRow}>
-                    <Calendar size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
-                    <Text style={styles.heroMetaValue}>{workout.date}</Text>
-                  </View>
-                  <View style={styles.heroMetaRow}>
-                    <Clock size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
-                    <Text style={styles.heroMetaValue}>{workout.duration}</Text>
-                  </View>
-                  <View style={styles.heroMetaRow}>
-                    <Layers size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
-                    <Text style={styles.heroMetaValue}>{totalSets} sets · {totalReps} reps</Text>
-                  </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryStat}>
+                  <Text style={styles.summaryStatValue}>{workout.date}</Text>
+                  <Text style={styles.summaryStatLabel}>date</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryStat}>
+                  <Text style={styles.summaryStatValue}>{workout.duration}</Text>
+                  <Text style={styles.summaryStatLabel}>duration</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryStat}>
+                  <Text style={styles.summaryStatValue}>{totalSets}×{totalReps}</Text>
+                  <Text style={styles.summaryStatLabel}>sets×reps</Text>
                 </View>
               </View>
             </View>
@@ -369,53 +370,61 @@ const styles = StyleSheet.create({
     paddingBottom: 160,
   },
 
-  /* ── Hero Compact Summary ────────────────────── */
-  heroCard: {
-    borderRadius: 18,
+  /* ── Summary Card ────────────────────────────── */
+  summaryCard: {
+    borderRadius: 16,
     marginTop: 14,
     marginBottom: 4,
   },
-  heroEdge: {
-    borderRadius: 18,
+  summaryEdge: {
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
   },
-  heroMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  heroScoreBlock: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 3,
-    marginRight: 20,
-  },
-  heroScore: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 44,
-    letterSpacing: -2,
-    lineHeight: 48,
-  },
-  heroScoreUnit: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 14,
-    color: COLORS.textTertiary,
-  },
-  heroMetaBlock: {
-    flex: 1,
-    gap: 6,
-  },
-  heroMetaRow: {
+  summaryTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  heroMetaValue: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+  summaryTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
     color: COLORS.textSecondary,
-    letterSpacing: 0.2,
+    letterSpacing: 2,
+  },
+  summaryStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  summaryStat: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+  },
+  summaryScoreValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 18,
+  },
+  summaryStatValue: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  summaryStatLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9,
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
 
   /* ── Section Headers ─────────────────────────── */
