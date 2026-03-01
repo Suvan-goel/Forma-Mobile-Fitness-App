@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
-  Alert,
   Modal,
   Platform,
   Animated,
@@ -28,7 +27,9 @@ import {
 } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { LoadingSkeleton, EmptyState } from '../components/ui';
+import { useAlert } from '../contexts/AlertContext';
 import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
+import { useWorkouts } from '../../backend/hooks';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
 
 let VideoComponent: any = null;
@@ -45,6 +46,7 @@ type DateRange = 'all' | 'today' | 'week' | 'month';
 
 interface WorkoutGroup {
   id: string;
+  name: string;
   date: string;
   exercises: string[];
   setCount: number;
@@ -165,10 +167,12 @@ const VideoCard = memo(({ item, onPlay, onDelete }: {
 export const VideoLibraryScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { showAlert } = useAlert();
   const {
     recordings, isLoading, refreshing, storageInfo,
     deleteRecording, refreshRecordings, pullToRefresh,
   } = useVideoLibrary();
+  const { workouts } = useWorkouts();
 
   // UI state
   const [playingVideo, setPlayingVideo] = useState<VideoRecord | null>(null);
@@ -214,6 +218,12 @@ export const VideoLibraryScreen: React.FC = () => {
     return Array.from(names).sort();
   }, [recordings]);
 
+  const workoutNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const w of workouts) map.set(w.id, w.name);
+    return map;
+  }, [workouts]);
+
   const uniqueWorkouts = useMemo(() => {
     const workoutMap = new Map<string, { id: string; date: string; exercises: Set<string>; setCount: number }>();
     let unlinkedCount = 0;
@@ -239,11 +249,11 @@ export const VideoLibraryScreen: React.FC = () => {
     }
 
     const linked: WorkoutGroup[] = Array.from(workoutMap.values())
-      .map(w => ({ ...w, exercises: Array.from(w.exercises) }))
+      .map(w => ({ ...w, name: workoutNameMap.get(w.id) || '', exercises: Array.from(w.exercises) }))
       .sort((a, b) => b.date.localeCompare(a.date));
 
     return { linked, hasUnlinked: unlinkedCount > 0 };
-  }, [recordings]);
+  }, [recordings, workoutNameMap]);
 
   const filteredRecordings = useMemo(() => {
     let result = recordings;
@@ -284,7 +294,7 @@ export const VideoLibraryScreen: React.FC = () => {
   // ── Handlers ──────────────────────────────────────
 
   const handleDelete = useCallback((record: VideoRecord) => {
-    Alert.alert(
+    showAlert(
       'Delete Recording',
       `Delete this ${record.exerciseName} recording?`,
       [
@@ -296,7 +306,7 @@ export const VideoLibraryScreen: React.FC = () => {
         },
       ]
     );
-  }, [deleteRecording]);
+  }, [deleteRecording, showAlert]);
 
   const handlePlay = useCallback((record: VideoRecord) => {
     setPlayingVideo(record);
@@ -513,7 +523,8 @@ export const VideoLibraryScreen: React.FC = () => {
                         ? 'Unlinked Recordings'
                         : (() => {
                             const w = uniqueWorkouts.linked.find(wk => wk.id === selectedWorkoutId);
-                            return w ? `${formatFullDate(w.date)} — ${w.exercises.join(', ')}` : 'Select Workout';
+                            if (!w) return 'Select Workout';
+                            return w.name ? `${w.name} — ${formatFullDate(w.date)}` : `${formatFullDate(w.date)} — ${w.exercises.join(', ')}`;
                           })())
                       : 'Select Workout'}
                   </Text>
@@ -618,9 +629,14 @@ export const VideoLibraryScreen: React.FC = () => {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.selectionItemDate}>{formatFullDate(workout.date)}</Text>
-                      <Text style={styles.selectionItemExercises} numberOfLines={1}>
-                        {workout.exercises.join(', ')} — {workout.setCount} {workout.setCount === 1 ? 'set' : 'sets'}
+                      {workout.name ? (
+                        <Text style={styles.selectionItemDate}>{workout.name}</Text>
+                      ) : null}
+                      <Text style={workout.name ? styles.selectionItemExercises : styles.selectionItemDate} numberOfLines={1}>
+                        {formatFullDate(workout.date)} — {workout.exercises.join(', ')}
+                      </Text>
+                      <Text style={styles.selectionItemExercises}>
+                        {workout.setCount} {workout.setCount === 1 ? 'set' : 'sets'}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -725,7 +741,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: 2,
   },
