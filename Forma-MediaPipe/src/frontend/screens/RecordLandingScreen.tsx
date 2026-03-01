@@ -23,6 +23,9 @@ import {
   Zap,
   ChevronRight,
   Dumbbell,
+  Layers,
+  Repeat,
+  ArrowRight,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
@@ -218,14 +221,25 @@ export const RecordLandingScreen: React.FC = () => {
               style={[styles.cardGradient, { flex: undefined }]}
             >
               <View style={[styles.cardGlassEdge, { flex: undefined }]}>
-                {/* ── Status pill ── */}
-                <View style={styles.activeHeader}>
-                  <View style={styles.statusPill}>
+                {/* ── Top bar: status + pause ── */}
+                <View style={styles.activeTopBar}>
+                  <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
                     <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
-                    <Text style={styles.statusPillText}>
-                      {workoutPaused ? 'PAUSED' : 'IN PROGRESS'}
+                    <Text style={[styles.statusPillText, workoutPaused && styles.statusPillTextPaused]}>
+                      {workoutPaused ? 'PAUSED' : 'ACTIVE'}
                     </Text>
                   </View>
+                  <TouchableOpacity
+                    style={[styles.pauseBtn, workoutPaused && styles.pauseBtnActive]}
+                    onPress={handlePauseWorkout}
+                    activeOpacity={0.7}
+                  >
+                    {workoutPaused ? (
+                      <Play size={14} color={COLORS.text} strokeWidth={2} />
+                    ) : (
+                      <Pause size={14} color={COLORS.textSecondary} strokeWidth={2} />
+                    )}
+                  </TouchableOpacity>
                 </View>
 
                 {/* ── Timer ── */}
@@ -234,69 +248,55 @@ export const RecordLandingScreen: React.FC = () => {
                   onPress={handleResumeWorkout}
                   activeOpacity={0.7}
                 >
-                  <MonoText style={styles.timerText}>
+                  <MonoText bold style={styles.timerText}>
                     {formatStopwatch(workoutElapsedSeconds)}
                   </MonoText>
 
-                  {/* ── Stats row ── */}
-                  {sets.length > 0 && (
-                    <View style={styles.statsRow}>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statValue}>{sets.length}</Text>
-                        <Text style={styles.statLabel}>
-                          {sets.length === 1 ? 'SET' : 'SETS'}
-                        </Text>
-                      </View>
-                      <View style={styles.statDivider} />
-                      <View style={styles.statItem}>
-                        <Text style={styles.statValue}>
-                          {sets.reduce((sum, set) => sum + set.reps, 0)}
-                        </Text>
-                        <Text style={styles.statLabel}>REPS</Text>
-                      </View>
+                  {/* ── Stats chips ── */}
+                  <View style={styles.statsRow}>
+                    <View style={styles.statChip}>
+                      <Layers size={13} color={COLORS.accent} strokeWidth={1.5} />
+                      <MonoText bold style={styles.statChipValue}>{sets.length}</MonoText>
+                      <Text style={styles.statChipLabel}>
+                        {sets.length === 1 ? 'set' : 'sets'}
+                      </Text>
                     </View>
-                  )}
-
-                  <Text style={styles.activeSubtext}>Tap to resume</Text>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statChip}>
+                      <Repeat size={13} color={COLORS.accent} strokeWidth={1.5} />
+                      <MonoText bold style={styles.statChipValue}>
+                        {sets.reduce((sum, set) => sum + set.reps, 0)}
+                      </MonoText>
+                      <Text style={styles.statChipLabel}>reps</Text>
+                    </View>
+                  </View>
                 </TouchableOpacity>
 
-                {/* ── Action buttons ── */}
+                {/* ── Bottom actions ── */}
                 <View style={styles.workoutActions}>
                   <TouchableOpacity
-                    style={styles.workoutActionButton}
+                    style={styles.discardBtn}
                     onPress={handleDiscardWorkout}
                     activeOpacity={0.7}
                   >
-                    <Trash2
-                      size={18}
-                      color={COLORS.textTertiary}
-                      strokeWidth={1.5}
-                    />
-                    <Text style={[styles.workoutActionLabel, styles.discardLabel]}>Discard</Text>
+                    <Trash2 size={15} color={COLORS.textTertiary} strokeWidth={1.5} />
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.workoutActionButton}
-                    onPress={handlePauseWorkout}
-                    activeOpacity={0.7}
+                    style={styles.resumeBtn}
+                    onPress={handleResumeWorkout}
+                    activeOpacity={0.8}
                   >
-                    {workoutPaused ? (
-                      <Play size={18} color={COLORS.accent} strokeWidth={1.5} />
-                    ) : (
-                      <Pause size={18} color={COLORS.accent} strokeWidth={1.5} />
-                    )}
-                    <Text style={styles.workoutActionLabel}>
-                      {workoutPaused ? 'Resume' : 'Pause'}
-                    </Text>
+                    <Text style={styles.resumeBtnText}>Open workout</Text>
+                    <ArrowRight size={14} color={COLORS.text} strokeWidth={2} />
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.workoutActionButton}
+                    style={styles.finishBtn}
                     onPress={handleFinishWorkout}
                     activeOpacity={0.7}
                   >
-                    <Flag size={18} color={'#34D399'} strokeWidth={1.5} />
-                    <Text style={[styles.workoutActionLabel, styles.finishLabel]}>Finish</Text>
+                    <Flag size={15} color="#34D399" strokeWidth={1.5} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -606,38 +606,45 @@ const styles = StyleSheet.create({
 
   /* ── Active Workout Card ─────────────────── */
   activeCardOuter: {
-    borderRadius: 19,
+    borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 24,
       },
-      android: { elevation: 6 },
+      android: { elevation: 8 },
     }),
   },
-  activeHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
+  activeTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 4,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
+    borderColor: 'rgba(52, 211, 153, 0.2)',
+  },
+  statusPillPaused: {
+    backgroundColor: 'rgba(245, 166, 35, 0.08)',
+    borderColor: 'rgba(245, 166, 35, 0.2)',
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#34D399',
   },
   statusDotPaused: {
@@ -646,90 +653,120 @@ const styles = StyleSheet.create({
   statusPillText: {
     fontFamily: FONTS.mono.bold,
     fontSize: 10,
-    color: COLORS.accent,
+    color: '#34D399',
     letterSpacing: 1.5,
+  },
+  statusPillTextPaused: {
+    color: COLORS.yellow,
+  },
+  pauseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pauseBtnActive: {
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
   },
   activeCardContent: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 28,
+    paddingTop: 28,
+    paddingBottom: 24,
   },
   timerText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 48,
+    fontSize: 46,
     color: COLORS.text,
-    lineHeight: 56,
-    letterSpacing: 3,
+    lineHeight: 54,
+    letterSpacing: 2,
+    ...Platform.select({
+      ios: {
+        textShadowColor: 'rgba(139, 92, 246, 0.15)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 24,
+      },
+    }),
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
     marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
-  statItem: {
+  statChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 48,
+    gap: 6,
   },
-  statValue: {
+  statChipValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 20,
+    fontSize: 15,
     color: COLORS.text,
-    lineHeight: 24,
+    lineHeight: 18,
   },
-  statLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  activeSubtext: {
+  statChipLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
-    marginTop: 14,
+    letterSpacing: 0.2,
+  },
+  statDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
 
   /* ── Workout Actions ─────────────────────── */
   workoutActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    alignSelf: 'stretch',
-    paddingVertical: 20,
+    gap: 8,
     paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    paddingTop: 0,
+    paddingBottom: 18,
   },
-  workoutActionButton: {
+  discardBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resumeBtn: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
   },
-  workoutActionLabel: {
-    fontSize: 11,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    letterSpacing: 0.3,
+  resumeBtnText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+    letterSpacing: 0.2,
   },
-  discardLabel: {
-    color: COLORS.textTertiary,
-  },
-  finishLabel: {
-    color: '#34D399',
+  finishBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.15)',
+    backgroundColor: 'rgba(52, 211, 153, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
