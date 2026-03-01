@@ -3,7 +3,7 @@
  * Accessed by tapping the avatar in Logbook, Analytics, or Capture screens.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,11 @@ import {
   Video,
   BookOpen,
   ChevronRight,
+  Flame,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Dumbbell,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -45,25 +50,41 @@ type UserProfileNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-const MiniBarChart: React.FC<{ data: WorkoutBarData[] }> = ({ data }) => {
+const MiniBarChart: React.FC<{
+  data: WorkoutBarData[];
+  selectedIndex: number | null;
+  onSelect: (i: number | null) => void;
+}> = ({ data, selectedIndex, onSelect }) => {
   const maxVal = Math.max(...data.map(d => d.value), 1);
+  const hasSelection = selectedIndex !== null;
   return (
     <View style={chartStyles.container}>
       {data.map((d, i) => {
         const heightPct = d.value > 0 ? Math.max(14, Math.round((d.value / maxVal) * 100)) : 4;
+        const isSelected = selectedIndex === i;
+        const isDimmed = hasSelection && !isSelected;
         return (
-          <View key={i} style={chartStyles.barWrap}>
-            <View style={chartStyles.barTrack}>
+          <TouchableOpacity
+            key={i}
+            style={chartStyles.barWrap}
+            onPress={() => onSelect(isSelected ? null : i)}
+            activeOpacity={0.7}
+          >
+            <View style={[chartStyles.barTrack, isSelected && chartStyles.barTrackSelected]}>
               <View
                 style={[
                   chartStyles.barFill,
                   { height: `${heightPct}%` as any },
                   d.value === 0 && chartStyles.barEmpty,
+                  isDimmed && chartStyles.barDimmed,
+                  isSelected && chartStyles.barSelected,
                 ]}
               />
             </View>
-            <Text style={chartStyles.dayLabel}>{DAY_LABELS[i % 7]}</Text>
-          </View>
+            <Text style={[chartStyles.dayLabel, isSelected && chartStyles.dayLabelSelected]}>
+              {DAY_LABELS[i % 7]}
+            </Text>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -75,7 +96,7 @@ const chartStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 5,
-    height: 90,
+    height: 120,
     marginTop: 14,
   },
   barWrap: {
@@ -85,7 +106,7 @@ const chartStyles = StyleSheet.create({
   },
   barTrack: {
     flex: 1,
-    width: '100%',
+    width: '62%',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 4,
     justifyContent: 'flex-end',
@@ -101,12 +122,25 @@ const chartStyles = StyleSheet.create({
     opacity: 0.2,
     backgroundColor: COLORS.textTertiary,
   },
+  barDimmed: {
+    opacity: 0.3,
+  },
+  barSelected: {
+    opacity: 1,
+  },
+  barTrackSelected: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+  },
   dayLabel: {
     fontFamily: FONTS.mono.regular,
     fontSize: 9,
     color: COLORS.textTertiary,
     marginTop: 5,
     letterSpacing: 0.5,
+  },
+  dayLabelSelected: {
+    color: COLORS.primary,
+    fontFamily: FONTS.mono.bold,
   },
 });
 
@@ -164,6 +198,137 @@ const LinkCard: React.FC<{
   return <View style={styles.card}>{Inner}</View>;
 };
 
+/* ── Perf Stat Card (2-column grid) ──────────────── */
+
+const PerfStatCard: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  unit?: string;
+  trend?: 'up' | 'down' | 'flat';
+  trendPct?: number;
+}> = ({ icon, label, value, unit, trend, trendPct }) => (
+  <View style={perfStyles.card}>
+    <LinearGradient
+      colors={[...CARD_GRADIENT_COLORS]}
+      start={CARD_GRADIENT_START}
+      end={CARD_GRADIENT_END}
+      style={perfStyles.gradient}
+    >
+      <View style={perfStyles.glassEdge}>
+        <View style={perfStyles.iconRow}>
+          <View style={perfStyles.iconWrap}>{icon}</View>
+          {trend && trend !== 'flat' && trendPct !== undefined && trendPct > 0 && (
+            <View style={[perfStyles.trendBadge, trend === 'up' ? perfStyles.trendUp : perfStyles.trendDown]}>
+              {trend === 'up'
+                ? <TrendingUp size={9} color="#34D399" strokeWidth={2} />
+                : <TrendingDown size={9} color="#F87171" strokeWidth={2} />}
+              <Text style={[perfStyles.trendText, trend === 'up' ? perfStyles.trendTextUp : perfStyles.trendTextDown]}>
+                {trendPct}%
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={perfStyles.valueRow}>
+          <Text style={perfStyles.value} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+          {unit ? <Text style={perfStyles.unit}>{unit}</Text> : null}
+        </View>
+        <Text style={perfStyles.label}>{label}</Text>
+      </View>
+    </LinearGradient>
+  </View>
+);
+
+const perfStyles = StyleSheet.create({
+  card: {
+    flex: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  gradient: {
+    borderRadius: 18,
+  },
+  glassEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 14,
+    minHeight: 100,
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  trendUp: {
+    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+  },
+  trendDown: {
+    backgroundColor: 'rgba(248, 113, 113, 0.12)',
+  },
+  trendText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 9,
+  },
+  trendTextUp: {
+    color: '#34D399',
+  },
+  trendTextDown: {
+    color: '#F87171',
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 3,
+    marginBottom: 4,
+  },
+  value: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 24,
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  unit: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  label: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+});
+
 /* ── Main Screen ─────────────────────────────────── */
 
 export const UserProfileScreen: React.FC = () => {
@@ -179,6 +344,18 @@ export const UserProfileScreen: React.FC = () => {
   const friendsCount = friends.length;
   const weeklyBarData = analytics?.weeklyBarData ?? [];
   const totalMinutes = analytics?.summary.totalDurationMinutes ?? 0;
+  const streakDays = analytics?.summary.streakDays ?? 0;
+  const totalReps = analytics?.summary.totalReps ?? 0;
+  const mostTrained = analytics?.summary.mostTrainedExercise ?? null;
+  const formTrendDirection = analytics?.summary.formTrendDirection ?? 'flat';
+  const formTrendPercent = analytics?.summary.formTrendPercent ?? 0;
+  const formValues = analytics?.formData.values ?? [];
+  const avgFormScore = formValues.length > 0
+    ? Math.round(formValues.reduce((a, b) => a + b, 0) / formValues.length)
+    : 0;
+
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
+  const selectedDayData = selectedDayIndex !== null ? weeklyBarData[selectedDayIndex] : null;
 
   const handleGoBack = useCallback(() => navigation.navigate('MainTabs', { screen: 'Home' }), [navigation]);
   const handleSettings = useCallback(() => navigation.navigate('Settings'), [navigation]);
@@ -274,14 +451,26 @@ export const UserProfileScreen: React.FC = () => {
                 </View>
                 <View style={styles.cardTextWrap}>
                   <Text style={styles.cardTitle}>Progress</Text>
-                  <Text style={styles.cardSubtitle}>Minutes active this week</Text>
+                  <Text style={styles.cardSubtitle}>
+                    {selectedDayData
+                      ? `${DAY_LABELS[selectedDayIndex!]} · ${selectedDayData.value} min`
+                      : 'Minutes active this week'}
+                  </Text>
                 </View>
                 <View style={styles.minutesBadge}>
-                  <Text style={styles.minutesValue}>{totalMinutes}</Text>
+                  <Text style={styles.minutesValue}>
+                    {selectedDayData ? selectedDayData.value : totalMinutes}
+                  </Text>
                   <Text style={styles.minutesUnit}>min</Text>
                 </View>
               </View>
-              {weeklyBarData.length > 0 && <MiniBarChart data={weeklyBarData} />}
+              {weeklyBarData.length > 0 && (
+                <MiniBarChart
+                  data={weeklyBarData}
+                  selectedIndex={selectedDayIndex}
+                  onSelect={setSelectedDayIndex}
+                />
+              )}
             </View>
           </LinearGradient>
         </View>
@@ -301,6 +490,37 @@ export const UserProfileScreen: React.FC = () => {
           subtitle="Browse exercise guides"
           onPress={handleTutorials}
         />
+
+        {/* ── Performance Summary Grid ────────── */}
+        <View style={styles.perfGrid}>
+          <PerfStatCard
+            icon={<Flame size={16} color={COLORS.primary} strokeWidth={1.5} />}
+            label="Day Streak"
+            value={streakDays > 0 ? String(streakDays) : '0'}
+            unit="days"
+          />
+          <PerfStatCard
+            icon={<TrendingUp size={16} color={COLORS.primary} strokeWidth={1.5} />}
+            label="Avg Form"
+            value={avgFormScore > 0 ? String(avgFormScore) : '--'}
+            unit={avgFormScore > 0 ? '%' : undefined}
+            trend={formTrendDirection}
+            trendPct={formTrendPercent}
+          />
+        </View>
+        <View style={styles.perfGrid}>
+          <PerfStatCard
+            icon={<Activity size={16} color={COLORS.primary} strokeWidth={1.5} />}
+            label="Total Reps"
+            value={totalReps > 0 ? String(totalReps) : '--'}
+            unit={totalReps > 0 ? 'reps' : undefined}
+          />
+          <PerfStatCard
+            icon={<Dumbbell size={16} color={COLORS.primary} strokeWidth={1.5} />}
+            label="Top Exercise"
+            value={mostTrained ?? '--'}
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -517,6 +737,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
+  },
+
+  /* Performance grid */
+  perfGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
   },
 
   /* Progress card extras */
