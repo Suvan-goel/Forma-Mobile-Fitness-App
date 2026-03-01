@@ -43,10 +43,10 @@ const GlassTabItem = memo(({ routeName, isFocused, onPress }: {
           size={20}
           color={isFocused ? '#FFFFFF' : COLORS.textSecondary}
         />
+        {isFocused && (
+          <Text style={styles.activeLabel}>{config.label}</Text>
+        )}
       </View>
-      <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
-        {config.label}
-      </Text>
     </TouchableOpacity>
   );
 });
@@ -134,7 +134,6 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     zIndex: 100,
-    // Subtle shadow beneath the pill
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -145,7 +144,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   pillAndroid: {
     backgroundColor: 'rgba(28, 28, 30, 0.92)',
@@ -154,38 +153,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: 10,
+    paddingVertical: 15,
     paddingHorizontal: 8,
   },
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    flex: 1,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    minWidth: 40,
-    minHeight: 40,
+    height: 36,
+    minHeight: 36,
     borderRadius: 999,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 12,
   },
   iconWrapActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.25)',
-    borderWidth: 1.5,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderWidth: 1,
     borderColor: COLORS.accent,
+    paddingHorizontal: 14,
   },
-  tabLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
-  },
-  tabLabelActive: {
-    color: COLORS.text,
+  activeLabel: {
     fontFamily: FONTS.ui.bold,
+    fontSize: 11,
+    color: COLORS.text,
+    marginLeft: 6,
+    letterSpacing: 0.3,
   },
 });

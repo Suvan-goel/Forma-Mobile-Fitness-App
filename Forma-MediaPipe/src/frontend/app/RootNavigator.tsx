@@ -22,6 +22,7 @@ import { NotificationSettingsScreen } from '../screens/NotificationSettingsScree
 import { PrivacySettingsScreen } from '../screens/PrivacySettingsScreen';
 import { HelpCenterScreen } from '../screens/HelpCenterScreen';
 import { TrainerPickerScreen } from '../screens/TrainerPickerScreen';
+import { MembershipScreen } from '../screens/MembershipScreen';
 import { CameraScreen } from '../screens/CameraScreen';
 import { InsightsScreen } from '../screens/InsightsScreen';
 import { WorkoutDetailsScreen } from '../screens/WorkoutDetailsScreen';
@@ -63,6 +64,7 @@ export type RootStackParamList = {
   PrivacySettings: undefined;
   HelpCenter: undefined;
   TrainerPicker: undefined;
+  Membership: undefined;
   Camera: CameraParams;
   Insights: { metric: string };
   WorkoutDetails: { workoutId: string };
@@ -421,6 +423,11 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="TrainerPicker"
             component={TrainerPickerScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="Membership"
+            component={MembershipScreen}
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen

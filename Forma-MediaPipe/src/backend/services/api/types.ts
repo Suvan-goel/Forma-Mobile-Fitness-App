@@ -290,3 +290,19 @@ export interface CreateActivityEventPayload {
   payload: Record<string, unknown>;
   sourceId?: string;
 }
+
+// ── Subscription types ──────────────────────────────────────
+
+export type SubscriptionPlan = 'free' | 'premium';
+
+export interface SubscriptionFeature {
+  name: string;
+  freeIncluded: boolean;
+  premiumIncluded: boolean;
+}
+
+export interface SubscriptionStatus {
+  plan: SubscriptionPlan;
+  planLabel: string;
+  features: SubscriptionFeature[];
+}

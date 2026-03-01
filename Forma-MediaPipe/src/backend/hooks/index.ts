@@ -23,3 +23,4 @@ export { useFriendComparison } from './useFriendComparison';
 export { useUserSearch } from './useUserSearch';
 export { usePrivacyLevel } from './usePrivacyLevel';
 export type { PrivacyLevel } from './usePrivacyLevel';
+export { useSubscription } from './useSubscription';

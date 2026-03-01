@@ -17,6 +17,7 @@ import {
   RefreshCcw,
   Calendar,
   SlidersHorizontal,
+  Crown,
 } from 'lucide-react-native';
 import type { WeeklyTrainingTarget } from '../../backend/hooks/useWorkoutPreferences';
 import {
@@ -339,6 +340,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           </View>
           <View style={styles.cardStack}>
             <RowCard icon={UserRound} iconBg="rgba(244, 114, 182, 0.10)" iconColor="#F472B6" label="Choose Trainer" onPress={() => navigation.navigate('TrainerPicker')} />
+          </View>
+
+          {/* Your Plan Section */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Crown size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>YOUR PLAN</Text>
+            </View>
+          </View>
+          <View style={styles.cardStack}>
+            <RowCard icon={Crown} iconBg="rgba(245, 166, 35, 0.10)" iconColor="#F5A623" label="Membership" onPress={() => navigation.navigate('Membership')} />
           </View>
 
           {/* Support Section */}
