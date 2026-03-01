@@ -575,7 +575,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
                         <View style={styles.setsList}>
                           {exercise.sets.map((set, setIndex) => (
                             <View key={setIndex} style={styles.setRow}>
-                              <View style={styles.setRowTop}>
+                              {/* Row 1: Metrics */}
+                              <View style={styles.setMetricsRow}>
                                 <View style={styles.setIndexBadge}>
                                   <MonoText bold style={styles.setIndexText}>{setIndex + 1}</MonoText>
                                 </View>
@@ -616,50 +617,55 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                     </MonoText>
                                   </View>
                                 </View>
-                                <View style={styles.setActions}>
-                                  {set.tempRecordingUrl && (
-                                    <TouchableOpacity
-                                      style={styles.setActionBtn}
-                                      onPress={() =>
-                                        setRecordingOptionsModal({
-                                          exerciseId: exercise.id,
-                                          exerciseName: exercise.name,
-                                          setIndex,
-                                          saveToLibrary: set.saveRecordingToLibrary !== false,
-                                          saveToCameraRoll: set.saveToCameraRoll === true,
-                                        })
-                                      }
-                                      activeOpacity={0.7}
-                                    >
-                                      <Video
-                                        size={13}
-                                        color={set.saveRecordingToLibrary !== false ? COLORS.accent : COLORS.textTertiary}
-                                        strokeWidth={1.5}
-                                      />
-                                    </TouchableOpacity>
-                                  )}
+                              </View>
+
+                              {/* Row 2: Actions */}
+                              <View style={styles.setActions}>
+                                {set.tempRecordingUrl && (
                                   <TouchableOpacity
                                     style={styles.setActionBtn}
                                     onPress={() =>
-                                      setNotesModalSet({
-                                        set,
-                                        setIndex: setIndex + 1,
+                                      setRecordingOptionsModal({
+                                        exerciseId: exercise.id,
                                         exerciseName: exercise.name,
+                                        setIndex,
+                                        saveToLibrary: set.saveRecordingToLibrary !== false,
+                                        saveToCameraRoll: set.saveToCameraRoll === true,
                                       })
                                     }
                                     activeOpacity={0.7}
                                   >
-                                    <FileText size={13} color={COLORS.accent} strokeWidth={1.5} />
+                                    <Video
+                                      size={11}
+                                      color={set.saveRecordingToLibrary !== false ? COLORS.accent : COLORS.textTertiary}
+                                      strokeWidth={1.5}
+                                    />
+                                    <Text style={[styles.setActionLabel, set.saveRecordingToLibrary === false && styles.setActionLabelDim]}>Video</Text>
                                   </TouchableOpacity>
-                                  <TouchableOpacity
-                                    style={styles.setActionBtn}
-                                    onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
-                                    activeOpacity={0.7}
-                                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                                  >
-                                    <X size={13} color={COLORS.textTertiary} strokeWidth={2} />
-                                  </TouchableOpacity>
-                                </View>
+                                )}
+                                <TouchableOpacity
+                                  style={styles.setActionBtn}
+                                  onPress={() =>
+                                    setNotesModalSet({
+                                      set,
+                                      setIndex: setIndex + 1,
+                                      exerciseName: exercise.name,
+                                    })
+                                  }
+                                  activeOpacity={0.7}
+                                >
+                                  <FileText size={11} color={COLORS.accent} strokeWidth={1.5} />
+                                  <Text style={styles.setActionLabel}>Notes</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.setActionBtn, styles.setActionBtnDelete]}
+                                  onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
+                                  activeOpacity={0.7}
+                                  hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                                >
+                                  <X size={11} color={COLORS.textTertiary} strokeWidth={2} />
+                                  <Text style={[styles.setActionLabel, styles.setActionLabelDim]}>Delete</Text>
+                                </TouchableOpacity>
                               </View>
                             </View>
                           ))}
@@ -964,7 +970,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
-    gap: 12,
+    gap: 14,
   },
   scrollContentEmpty: {
     flexGrow: 1,
@@ -973,31 +979,32 @@ const styles = StyleSheet.create({
 
   /* ── Exercise Card ──────────────────────── */
   exerciseCardOuter: {
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
       },
-      android: { elevation: 4 },
+      android: { elevation: 6 },
     }),
   },
   exerciseCardGradient: {
-    borderRadius: 18,
+    borderRadius: 20,
   },
   exerciseCardGlassEdge: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     overflow: 'hidden',
   },
   exerciseCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     gap: 12,
   },
   exerciseAccentLine: {
@@ -1042,15 +1049,16 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   setRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
-  setRowTop: {
+  setMetricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   setIndexBadge: {
     width: 26,
@@ -1072,6 +1080,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingRight: 4,
   },
   setMetricItem: {
     flex: 1,
@@ -1101,15 +1110,31 @@ const styles = StyleSheet.create({
   setActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-evenly',
+    gap: 15,
+    marginTop: 10,
+    paddingLeft: 0,
   },
   setActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  setActionBtnDelete: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  setActionLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.accent,
+    letterSpacing: 0.2,
+  },
+  setActionLabelDim: {
+    color: COLORS.textTertiary,
   },
 
   /* ── Add Set Row ────────────────────────── */
