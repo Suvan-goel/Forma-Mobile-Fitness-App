@@ -96,6 +96,16 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
         }).catch(() => {
           if (__DEV__) console.warn('[useSaveWorkout] Activity event failed for session', sessionId);
         });
+
+        // Check for streak milestones — fire and forget
+        socialService.emitStreakMilestoneIfNeeded().catch(() => {
+          if (__DEV__) console.warn('[useSaveWorkout] Streak milestone check failed');
+        });
+
+        // Check for personal records — fire and forget
+        socialService.emitPersonalRecordsIfNeeded(sessionId, payload.exercises).catch(() => {
+          if (__DEV__) console.warn('[useSaveWorkout] Personal record check failed');
+        });
       }
 
       return true;

@@ -35,6 +35,8 @@ import { supabase } from '../supabase/client';
 
 // ── Private helpers ───────────────────────────────────────────
 
+const STREAK_MILESTONES = new Set([7, 14, 21, 30, 60, 90, 100, 150, 200, 365]);
+
 /**
  * Computes the current streak (consecutive calendar days ending today or yesterday)
  * from the user's workout_sessions rows. No `current_streak` column required.
@@ -688,5 +690,84 @@ export const socialService = {
 
     if (error) return { data: undefined, success: false, error: error.message };
     return { data: undefined, success: true };
+  },
+
+  // ── Milestone Detection ───────────────────────────────────
+
+  /**
+   * Computes the user's current streak and emits a streak_milestone
+   * activity event if the streak has hit a notable threshold.
+   * Fire-and-forget — errors are silently swallowed.
+   */
+  async emitStreakMilestoneIfNeeded(): Promise<void> {
+    if (API_CONFIG.services.social) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const streak = await computeStreak(user.id);
+    if (!STREAK_MILESTONES.has(streak)) return;
+
+    // Check if we already emitted this exact milestone today (prevent duplicates)
+    const today = new Date().toISOString().slice(0, 10);
+    const sourceId = `streak-${streak}-${today}`;
+    const { data: existing } = await supabase
+      .from('activity_events')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('event_type', 'streak_milestone')
+      .eq('source_id', sourceId)
+      .limit(1);
+
+    if (existing && existing.length > 0) return;
+
+    await supabase.from('activity_events').insert({
+      user_id: user.id,
+      event_type: 'streak_milestone',
+      payload: { streak_days: streak },
+      source_id: sourceId,
+    });
+  },
+
+  /**
+   * Checks if any exercise in the just-saved workout set a new max weight
+   * compared to all previous sessions. Emits a personal_record activity
+   * event for each new PR found.
+   * Fire-and-forget — errors are silently swallowed.
+   */
+  async emitPersonalRecordsIfNeeded(
+    sessionId: string,
+    exercises: { name: string; sets: { weight: number }[] }[],
+  ): Promise<void> {
+    if (API_CONFIG.services.social) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    for (const ex of exercises) {
+      const currentMax = Math.max(...ex.sets.map(s => s.weight));
+      if (currentMax <= 0) continue; // skip bodyweight exercises
+
+      // Get previous max weight for this exercise (excluding current session)
+      const { data: prevRows } = await supabase
+        .from('workout_sets')
+        .select('weight, workout_exercises!inner(name, session_id)')
+        .eq('workout_exercises.name', ex.name)
+        .neq('workout_exercises.session_id', sessionId)
+        .order('weight', { ascending: false })
+        .limit(1);
+
+      // Filter to only this user's data (RLS handles this)
+      const prevMax = prevRows && prevRows.length > 0 ? Number(prevRows[0].weight) : 0;
+
+      if (currentMax > prevMax && prevMax > 0) {
+        await supabase.from('activity_events').insert({
+          user_id: user.id,
+          event_type: 'personal_record',
+          payload: { exercise: ex.name, weight: currentMax },
+          source_id: `pr-${ex.name}-${sessionId}`,
+        });
+      }
+    }
   },
 };

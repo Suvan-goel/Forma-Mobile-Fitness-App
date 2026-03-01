@@ -113,28 +113,29 @@ do $$ begin
 end $$;
 
 -- ── activity_events ─────────────────────────────────────────
--- Users can view own events + events from accepted friends
-do $$ begin
-  if not exists (
-    select 1 from pg_policies
-    where tablename = 'activity_events'
-      and policyname = 'Users can view own and friend activity'
-  ) then
-    create policy "Users can view own and friend activity"
-      on activity_events for select
-      using (
-        user_id = auth.uid()
-        or exists (
-          select 1 from friendships f
-          where f.status = 'accepted'
-            and (
-              (f.requester_id = auth.uid() and f.addressee_id = activity_events.user_id)
-              or (f.addressee_id = auth.uid() and f.requester_id = activity_events.user_id)
-            )
-        )
-      );
-  end if;
-end $$;
+-- Users can view own events + events from non-private accepted friends
+drop policy if exists "Users can view own and friend activity" on activity_events;
+create policy "Users can view own and friend activity"
+  on activity_events for select
+  using (
+    user_id = auth.uid()
+    or (
+      -- Friend must have accepted friendship AND not be private
+      exists (
+        select 1 from friendships f
+        where f.status = 'accepted'
+          and (
+            (f.requester_id = auth.uid() and f.addressee_id = activity_events.user_id)
+            or (f.addressee_id = auth.uid() and f.requester_id = activity_events.user_id)
+          )
+      )
+      and not exists (
+        select 1 from profiles p
+        where p.id = activity_events.user_id
+          and p.privacy_level = 'private'
+      )
+    )
+  );
 
 -- Users can insert their own activity events
 do $$ begin
