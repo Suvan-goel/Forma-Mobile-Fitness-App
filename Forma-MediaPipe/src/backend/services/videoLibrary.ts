@@ -22,6 +22,29 @@ const STORAGE_KEY = '@forma/video_library';
 const RECORDINGS_DIR = 'recordings/';
 const THUMBNAILS_DIR = 'recordings/thumbnails/';
 
+/**
+ * Promise-chain mutex — serializes all AsyncStorage read-modify-write operations
+ * to prevent concurrent writes from overwriting each other.
+ *
+ * If a queued operation rejects, the next one still runs (both .then branches
+ * call fn) so a single failure doesn't block the queue permanently.
+ */
+let writeQueue: Promise<void> = Promise.resolve();
+
+function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  let resolve: (value: T) => void;
+  let reject: (err: unknown) => void;
+  const result = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  writeQueue = writeQueue.then(
+    () => fn().then(resolve!, reject!),
+    () => fn().then(resolve!, reject!),
+  );
+  return result;
+}
+
 export interface VideoRecord {
   id: string;
   sessionId: string;
@@ -143,9 +166,11 @@ export async function saveRecording(
       thumbnailPath,
     };
 
-    const records = await readRecords();
-    records.unshift(record); // Newest first
-    await writeRecords(records);
+    await withWriteLock(async () => {
+      const records = await readRecords();
+      records.unshift(record); // Newest first
+      await writeRecords(records);
+    });
 
     return record;
   } catch (error) {
@@ -193,17 +218,19 @@ export async function linkWorkoutId(
   sessionId: string,
   workoutId: string
 ): Promise<void> {
-  const records = await readRecords();
-  let changed = false;
-  for (const record of records) {
-    if (record.sessionId === sessionId && !record.workoutId) {
-      record.workoutId = workoutId;
-      changed = true;
+  await withWriteLock(async () => {
+    const records = await readRecords();
+    let changed = false;
+    for (const record of records) {
+      if (record.sessionId === sessionId && !record.workoutId) {
+        record.workoutId = workoutId;
+        changed = true;
+      }
     }
-  }
-  if (changed) {
-    await writeRecords(records);
-  }
+    if (changed) {
+      await writeRecords(records);
+    }
+  });
 }
 
 /**
@@ -212,35 +239,40 @@ export async function linkWorkoutId(
 export async function deleteRecording(id: string): Promise<void> {
   if (!FileSystem) return;
 
-  const records = await readRecords();
-  const record = records.find((r) => r.id === id);
-  if (!record) return;
+  // Remove from index inside the lock; capture file paths for cleanup outside it.
+  const filePaths = await withWriteLock(async () => {
+    const records = await readRecords();
+    const record = records.find((r) => r.id === id);
+    if (!record) return null;
 
-  // Delete video file
+    const updated = records.filter((r) => r.id !== id);
+    await writeRecords(updated);
+
+    return { videoPath: record.videoPath, thumbnailPath: record.thumbnailPath };
+  });
+
+  if (!filePaths) return;
+
+  // Delete files outside the lock (best-effort, idempotent)
   try {
-    const videoInfo = await FileSystem.getInfoAsync(record.videoPath);
+    const videoInfo = await FileSystem.getInfoAsync(filePaths.videoPath);
     if (videoInfo.exists) {
-      await FileSystem.deleteAsync(record.videoPath, { idempotent: true });
+      await FileSystem.deleteAsync(filePaths.videoPath, { idempotent: true });
     }
   } catch {
     // Best-effort
   }
 
-  // Delete thumbnail
-  if (record.thumbnailPath) {
+  if (filePaths.thumbnailPath) {
     try {
-      const thumbInfo = await FileSystem.getInfoAsync(record.thumbnailPath);
+      const thumbInfo = await FileSystem.getInfoAsync(filePaths.thumbnailPath);
       if (thumbInfo.exists) {
-        await FileSystem.deleteAsync(record.thumbnailPath, { idempotent: true });
+        await FileSystem.deleteAsync(filePaths.thumbnailPath, { idempotent: true });
       }
     } catch {
       // Best-effort
     }
   }
-
-  // Remove from index
-  const updated = records.filter((r) => r.id !== id);
-  await writeRecords(updated);
 }
 
 /**

@@ -14,6 +14,7 @@ import {
 export function useVideoLibrary() {
   const [recordings, setRecordings] = useState<VideoRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ count: number; totalSizeMB: number }>({
     count: 0,
     totalSizeMB: 0,
@@ -72,6 +73,22 @@ export function useVideoLibrary() {
     []
   );
 
+  const pullToRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const [records, usage] = await Promise.all([
+        getRecordings(),
+        getStorageUsageSvc(),
+      ]);
+      setRecordings(records);
+      setStorageInfo(usage);
+    } catch {
+      // Keep existing state
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   const linkWorkoutId = useCallback(
     async (sessionId: string, workoutId: string): Promise<void> => {
       await linkWorkoutIdSvc(sessionId, workoutId);
@@ -83,10 +100,12 @@ export function useVideoLibrary() {
   return {
     recordings,
     isLoading,
+    refreshing,
     storageInfo,
     saveRecording,
     deleteRecording,
     refreshRecordings,
+    pullToRefresh,
     getRecordingForSet,
     getRecordingsForWorkout,
     linkWorkoutId,
