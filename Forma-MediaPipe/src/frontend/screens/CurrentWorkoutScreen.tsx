@@ -27,6 +27,7 @@ import {
   Layers,
   Flag,
   Timer,
+  Video,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
@@ -35,17 +36,10 @@ import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
+import { RecordingOptionsModal } from '../components/ui/RecordingOptionsModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
-import { saveRecording as saveRecordingSvc } from '../../backend/services/videoLibrary';
 import { cleanupTempRecording } from '../../backend/services/screenRecording';
-
-let MediaLibrary: any = null;
-try {
-  MediaLibrary = require('expo-media-library');
-} catch {
-  // expo-media-library not available
-}
 
 export type { LoggedSet };
 
@@ -92,6 +86,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
     addSet,
     clearSets,
     updateSetWeight,
+    attachRecordingToSet,
+    updateSetRecordingFlags,
     removeExercise,
     removeSetFromExercise,
     setWorkoutInProgress,
@@ -115,6 +111,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setIndex: number;
     currentWeight?: number;
     currentUnit?: 'kg' | 'lbs';
+  } | null>(null);
+  const [recordingOptionsModal, setRecordingOptionsModal] = useState<{
+    exerciseId: string;
+    exerciseName: string;
+    setIndex: number;
+    saveToLibrary: boolean;
+    saveToCameraRoll: boolean;
   } | null>(null);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -229,21 +232,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, exercises, startRestTimer])
   );
 
-  // When a recording arrives after the weight modal was already dismissed,
-  // show a standalone alert so the user can still save or discard it.
-  useEffect(() => {
-    if (pendingRecording && !weightModalData) {
-      showAlert(
-        'Set Recording',
-        'Save this set recording to your video library?',
-        [
-          { text: 'Discard', style: 'cancel', onPress: () => handleDiscardRecording() },
-          { text: 'Save', onPress: () => handleSaveRecording(false) },
-        ]
-      );
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingRecording]);
 
   useEffect(() => {
     exercises.forEach((exercise) => {
@@ -305,36 +293,36 @@ export const CurrentWorkoutScreen: React.FC = () => {
     navigation.reset({ index: 0, routes: [{ name: 'RecordLanding' }] });
   };
 
-  const handleSaveRecording = useCallback(async (saveToCameraRoll: boolean) => {
+  // Auto-attach pending recording to the latest set when it arrives
+  useEffect(() => {
     if (!pendingRecording) return;
     const exercise = exercises.find((ex) => ex.name === pendingRecording.exerciseName);
-    const setNumber = exercise ? exercise.sets.length : 1;
-    const record = await saveRecordingSvc(pendingRecording.tempUrl, {
-      sessionId: pendingRecording.sessionId,
-      exerciseName: pendingRecording.exerciseName,
-      setNumber,
-      durationSeconds: pendingRecording.durationSeconds,
-      formScore: pendingRecording.formScore,
-      reps: pendingRecording.reps,
-    });
-    if (saveToCameraRoll && record && MediaLibrary) {
-      try {
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (status === 'granted') {
-          await MediaLibrary.saveToLibraryAsync(record.videoPath);
+    if (exercise) {
+      // Find the latest set without a recording attached
+      let targetIndex = -1;
+      for (let i = exercise.sets.length - 1; i >= 0; i--) {
+        if (!exercise.sets[i].tempRecordingUrl) {
+          targetIndex = i;
+          break;
         }
-      } catch {
-        // Best-effort camera roll save
+      }
+      if (targetIndex >= 0) {
+        attachRecordingToSet(exercise.id, targetIndex, pendingRecording.tempUrl);
       }
     }
     setPendingRecording(null);
-  }, [pendingRecording, exercises]);
+  }, [pendingRecording, exercises, attachRecordingToSet, setPendingRecording]);
 
-  const handleDiscardRecording = useCallback(async () => {
+  const handleSaveRecordingPrefs = useCallback((saveToLibrary: boolean, saveToCameraRoll: boolean) => {
     if (!pendingRecording) return;
-    await cleanupTempRecording(pendingRecording.tempUrl);
-    setPendingRecording(null);
-  }, [pendingRecording]);
+    const exercise = exercises.find((ex) => ex.name === pendingRecording.exerciseName);
+    if (exercise) {
+      const lastSetIndex = exercise.sets.length - 1;
+      if (lastSetIndex >= 0) {
+        updateSetRecordingFlags(exercise.id, lastSetIndex, { saveToLibrary, saveToCameraRoll });
+      }
+    }
+  }, [pendingRecording, exercises, updateSetRecordingFlags]);
 
   const handleWeightSubmit = (weight: number, unit: 'kg' | 'lbs') => {
     if (weightModalData) {
@@ -399,6 +387,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
           text: 'Discard',
           style: 'destructive',
           onPress: () => {
+            // Clean up all temp recording files
+            for (const ex of exercises) {
+              for (const s of ex.sets) {
+                if (s.tempRecordingUrl) {
+                  cleanupTempRecording(s.tempRecordingUrl).catch(() => {});
+                }
+              }
+            }
             clearSets();
             setWorkoutElapsedSeconds(0);
             setWorkoutInProgress(false);
@@ -601,6 +597,27 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                   </View>
                                 </View>
                                 <View style={styles.setActions}>
+                                  {set.tempRecordingUrl && (
+                                    <TouchableOpacity
+                                      style={styles.setActionBtn}
+                                      onPress={() =>
+                                        setRecordingOptionsModal({
+                                          exerciseId: exercise.id,
+                                          exerciseName: exercise.name,
+                                          setIndex,
+                                          saveToLibrary: set.saveRecordingToLibrary !== false,
+                                          saveToCameraRoll: set.saveToCameraRoll === true,
+                                        })
+                                      }
+                                      activeOpacity={0.7}
+                                    >
+                                      <Video
+                                        size={13}
+                                        color={set.saveRecordingToLibrary !== false ? COLORS.accent : COLORS.textTertiary}
+                                        strokeWidth={1.5}
+                                      />
+                                    </TouchableOpacity>
+                                  )}
                                   <TouchableOpacity
                                     style={styles.setActionBtn}
                                     onPress={() =>
@@ -667,8 +684,24 @@ export const CurrentWorkoutScreen: React.FC = () => {
           exerciseName={weightModalData.exerciseName}
           setNumber={weightModalData.setIndex + 1}
           hasRecording={!!pendingRecording}
-          onSaveRecording={handleSaveRecording}
-          onDiscardRecording={handleDiscardRecording}
+          onSaveRecording={handleSaveRecordingPrefs}
+        />
+      )}
+      {recordingOptionsModal && (
+        <RecordingOptionsModal
+          visible={!!recordingOptionsModal}
+          onClose={() => setRecordingOptionsModal(null)}
+          saveToLibrary={recordingOptionsModal.saveToLibrary}
+          saveToCameraRoll={recordingOptionsModal.saveToCameraRoll}
+          onUpdate={(saveToLibrary, saveToCameraRoll) => {
+            updateSetRecordingFlags(recordingOptionsModal.exerciseId, recordingOptionsModal.setIndex, {
+              saveToLibrary,
+              saveToCameraRoll,
+            });
+            setRecordingOptionsModal((prev) => prev ? { ...prev, saveToLibrary, saveToCameraRoll } : null);
+          }}
+          exerciseName={recordingOptionsModal.exerciseName}
+          setNumber={recordingOptionsModal.setIndex + 1}
         />
       )}
 

@@ -7,7 +7,15 @@ import { useState, useCallback } from 'react';
 import { workoutsService, CreateWorkoutPayload, rewardsService, socialService } from '../services/api';
 import { generateSetSummary } from '../../utils/setNotesSummary';
 import { calculateWorkoutPoints } from '../../utils/pointsCalculator';
-import { linkWorkoutId } from '../services/videoLibrary';
+import { saveRecording, linkWorkoutId } from '../services/videoLibrary';
+import { cleanupTempRecording } from '../services/screenRecording';
+
+let MediaLibrary: any = null;
+try {
+  MediaLibrary = require('expo-media-library');
+} catch {
+  // expo-media-library not available
+}
 
 interface WorkoutExerciseInput {
   name: string;
@@ -17,6 +25,10 @@ interface WorkoutExerciseInput {
     formScore: number;
     repFeedback?: string[];
     repFormScores?: number[];
+    durationSeconds?: number;
+    tempRecordingUrl?: string;
+    saveRecordingToLibrary?: boolean;
+    saveToCameraRoll?: boolean;
   }[];
 }
 
@@ -110,11 +122,40 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
           if (__DEV__) console.warn('[useSaveWorkout] Personal record check failed');
         });
 
-        // Link video recordings to the saved workout — fire and forget
-        if (params.workoutSessionId) {
-          linkWorkoutId(params.workoutSessionId, sessionId).catch(() => {
-            if (__DEV__) console.warn('[useSaveWorkout] Video linking failed for session', sessionId);
-          });
+        // Save opted-in recordings to video library — fire and forget
+        for (const ex of params.exercises) {
+          for (let j = 0; j < ex.sets.length; j++) {
+            const s = ex.sets[j];
+            if (!s.tempRecordingUrl) continue;
+            if (s.saveRecordingToLibrary !== false) {
+              saveRecording(s.tempRecordingUrl, {
+                sessionId: params.workoutSessionId || '',
+                exerciseName: ex.name,
+                setNumber: j + 1,
+                durationSeconds: s.durationSeconds ?? 0,
+                formScore: s.formScore,
+                reps: s.reps,
+              }).then((record) => {
+                // Link to workout
+                if (record && params.workoutSessionId) {
+                  linkWorkoutId(params.workoutSessionId, sessionId).catch(() => {});
+                }
+                // Save to camera roll if requested
+                if (s.saveToCameraRoll && record && MediaLibrary) {
+                  MediaLibrary.requestPermissionsAsync().then(({ status }: { status: string }) => {
+                    if (status === 'granted') {
+                      MediaLibrary.saveToLibraryAsync(record.videoPath).catch(() => {});
+                    }
+                  }).catch(() => {});
+                }
+              }).catch(() => {
+                if (__DEV__) console.warn('[useSaveWorkout] Recording save failed for', ex.name, 'set', j + 1);
+              });
+            } else {
+              // Clean up opted-out recordings
+              cleanupTempRecording(s.tempRecordingUrl).catch(() => {});
+            }
+          }
         }
       }
 

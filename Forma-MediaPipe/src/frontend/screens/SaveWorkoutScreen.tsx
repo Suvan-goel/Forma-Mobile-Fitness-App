@@ -36,6 +36,7 @@ import { RecordStackParamList } from '../app/RootNavigator';
 import { useSaveWorkout } from '../../backend/hooks';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useAlert } from '../contexts/AlertContext';
+import { cleanupTempRecording } from '../../backend/services/screenRecording';
 
 type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
 type SaveWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'SaveWorkout'>;
@@ -130,6 +131,14 @@ export const SaveWorkoutScreen: React.FC = () => {
           text: 'Yes',
           style: 'destructive',
           onPress: () => {
+            // Clean up all temp recording files
+            for (const ex of exercises) {
+              for (const s of ex.sets) {
+                if (s.tempRecordingUrl) {
+                  cleanupTempRecording(s.tempRecordingUrl).catch(() => {});
+                }
+              }
+            }
             clearSets();
             setWorkoutInProgress(false);
             navigation.reset({

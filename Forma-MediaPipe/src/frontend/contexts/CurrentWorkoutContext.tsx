@@ -12,6 +12,12 @@ export interface LoggedSet {
   repFeedback?: string[];
   /** Per-rep form scores (parallel to repFeedback, one per rep) */
   repFormScores?: number[];
+  /** Temp recording file URL — persisted to video library only at workout save time. */
+  tempRecordingUrl?: string;
+  /** Whether to save this set's recording to the video library (default true when recording exists). */
+  saveRecordingToLibrary?: boolean;
+  /** Whether to also save this set's recording to the device camera roll. */
+  saveToCameraRoll?: boolean;
 }
 
 export interface WorkoutExercise {
@@ -42,6 +48,8 @@ type CurrentWorkoutContextValue = {
   addSetToExercise: (exerciseId: string, set: LoggedSet) => void;
   addSet: (set: LoggedSet) => void; // Deprecated but kept for compatibility
   updateSetWeight: (exerciseId: string, setIndex: number, weight: number, unit: 'kg' | 'lbs') => void;
+  attachRecordingToSet: (exerciseId: string, setIndex: number, tempUrl: string) => void;
+  updateSetRecordingFlags: (exerciseId: string, setIndex: number, flags: { saveToLibrary?: boolean; saveToCameraRoll?: boolean }) => void;
   removeExercise: (exerciseId: string) => void;
   removeSetFromExercise: (exerciseId: string, setIndex: number) => void;
   clearSets: () => void;
@@ -63,6 +71,8 @@ const defaultValue: CurrentWorkoutContextValue = {
   addSetToExercise: () => {},
   addSet: () => {},
   updateSetWeight: () => {},
+  attachRecordingToSet: () => {},
+  updateSetRecordingFlags: () => {},
   removeExercise: () => {},
   removeSetFromExercise: () => {},
   clearSets: () => {},
@@ -138,6 +148,45 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     );
   }, []);
 
+  const attachRecordingToSet = useCallback((exerciseId: string, setIndex: number, tempUrl: string) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id === exerciseId) {
+          const updatedSets = [...ex.sets];
+          if (updatedSets[setIndex]) {
+            updatedSets[setIndex] = {
+              ...updatedSets[setIndex],
+              tempRecordingUrl: tempUrl,
+              saveRecordingToLibrary: true,
+              saveToCameraRoll: false,
+            };
+          }
+          return { ...ex, sets: updatedSets };
+        }
+        return ex;
+      })
+    );
+  }, []);
+
+  const updateSetRecordingFlags = useCallback((exerciseId: string, setIndex: number, flags: { saveToLibrary?: boolean; saveToCameraRoll?: boolean }) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id === exerciseId) {
+          const updatedSets = [...ex.sets];
+          if (updatedSets[setIndex]) {
+            updatedSets[setIndex] = {
+              ...updatedSets[setIndex],
+              ...(flags.saveToLibrary !== undefined && { saveRecordingToLibrary: flags.saveToLibrary }),
+              ...(flags.saveToCameraRoll !== undefined && { saveToCameraRoll: flags.saveToCameraRoll }),
+            };
+          }
+          return { ...ex, sets: updatedSets };
+        }
+        return ex;
+      })
+    );
+  }, []);
+
   const removeExercise = useCallback((exerciseId: string) => {
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
   }, []);
@@ -182,6 +231,8 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
         addSetToExercise,
         addSet,
         updateSetWeight,
+        attachRecordingToSet,
+        updateSetRecordingFlags,
         removeExercise,
         removeSetFromExercise,
         clearSets,

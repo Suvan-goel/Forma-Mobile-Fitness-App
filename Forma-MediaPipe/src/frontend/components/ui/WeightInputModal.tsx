@@ -22,8 +22,7 @@ interface WeightInputModalProps {
   exerciseName?: string;
   setNumber?: number;
   hasRecording?: boolean;
-  onSaveRecording?: (saveToCameraRoll: boolean) => void;
-  onDiscardRecording?: () => void;
+  onSaveRecording?: (saveToLibrary: boolean, saveToCameraRoll: boolean) => void;
 }
 
 export const WeightInputModal: React.FC<WeightInputModalProps> = ({
@@ -36,7 +35,6 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
   setNumber,
   hasRecording,
   onSaveRecording,
-  onDiscardRecording,
 }) => {
   const [weight, setWeight] = useState('');
   const [unit, setUnit] = useState<'kg' | 'lbs'>(initialUnit);
@@ -61,22 +59,14 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
       onSubmit(0, unit);
       setWeight('');
     }
-    // Handle recording save/discard
+    // Store recording preferences (actual save deferred to workout save)
     if (hasRecording) {
-      if (saveToLibrary) {
-        onSaveRecording?.(saveToCameraRoll);
-      } else {
-        onDiscardRecording?.();
-      }
+      onSaveRecording?.(saveToLibrary, saveToCameraRoll);
     }
     onClose();
   };
 
   const handleSkip = () => {
-    // Discard recording when skipping
-    if (hasRecording) {
-      onDiscardRecording?.();
-    }
     setWeight('');
     onClose();
   };
@@ -93,7 +83,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
         activeOpacity={1}
         onPress={() => {
           Keyboard.dismiss();
-          handleSkip();
+          hasRecording ? handleSubmit() : handleSkip();
         }}
       >
         <TouchableOpacity
@@ -111,11 +101,11 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
               {/* Header */}
               <View style={styles.header}>
                 <Text style={styles.title}>
-                  {initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Log Weight'}
+                  {hasRecording ? 'Log Set' : (initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Log Weight')}
                 </Text>
                 <TouchableOpacity
                   style={styles.closeButton}
-                  onPress={handleSkip}
+                  onPress={hasRecording ? handleSubmit : handleSkip}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
@@ -227,13 +217,15 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
 
               {/* Action buttons */}
               <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={styles.skipButton}
-                  onPress={handleSkip}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.skipButtonText}>Skip</Text>
-                </TouchableOpacity>
+                {!hasRecording && (
+                  <TouchableOpacity
+                    style={styles.skipButton}
+                    onPress={handleSkip}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.skipButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.submitButton}
                   onPress={handleSubmit}
