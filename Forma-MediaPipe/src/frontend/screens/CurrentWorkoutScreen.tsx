@@ -124,6 +124,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setIndex: number;
     currentWeight?: number;
     currentUnit?: 'kg' | 'lbs';
+    showRecordingOptions?: boolean;
   } | null>(null);
   const [recordingOptionsModal, setRecordingOptionsModal] = useState<{
     exerciseId: string;
@@ -238,6 +239,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             setIndex: lastSetIndex,
             currentWeight: lastSet?.weight,
             currentUnit: lastSet?.weightUnit || 'kg',
+            showRecordingOptions: true,
           });
         }
         navigation.setParams({ showWeightFor: undefined });
@@ -701,10 +703,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           initialUnit={weightModalData.currentUnit}
           exerciseName={weightModalData.exerciseName}
           setNumber={weightModalData.setIndex + 1}
-          hasRecording={
-            !!exercises.find((ex) => ex.id === weightModalData.exerciseId)
-              ?.sets[weightModalData.setIndex]?.tempRecordingUrl
-          }
+          hasRecording={!!weightModalData.showRecordingOptions}
           onSaveRecording={handleSaveRecordingPrefs}
         />
       )}
