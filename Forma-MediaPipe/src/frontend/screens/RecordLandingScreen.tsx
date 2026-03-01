@@ -52,6 +52,19 @@ const formatStopwatch = (totalSeconds: number) => {
     .padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
+const getTimerParts = (totalSeconds: number) => {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return [
+    h.toString().padStart(2, '0'),
+    ':',
+    m.toString().padStart(2, '0'),
+    ':',
+    s.toString().padStart(2, '0'),
+  ];
+};
+
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -248,9 +261,17 @@ export const RecordLandingScreen: React.FC = () => {
                   onPress={handleResumeWorkout}
                   activeOpacity={0.7}
                 >
-                  <MonoText bold style={styles.timerText}>
-                    {formatStopwatch(workoutElapsedSeconds)}
-                  </MonoText>
+                  <View style={styles.timerDisplay}>
+                    {getTimerParts(workoutElapsedSeconds).map((part, i) => (
+                      <MonoText
+                        key={i}
+                        bold={part !== ':'}
+                        style={part === ':' ? styles.timerColon : styles.timerDigit}
+                      >
+                        {part}
+                      </MonoText>
+                    ))}
+                  </View>
                 </TouchableOpacity>
 
                 {/* ── Bento Stats Row ── */}
@@ -697,19 +718,23 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 20,
   },
-  timerText: {
+  timerDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timerDigit: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 52,
-    color: COLORS.text,
-    lineHeight: 60,
-    letterSpacing: 2,
-    ...Platform.select({
-      ios: {
-        textShadowColor: 'rgba(139, 92, 246, 0.25)',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 30,
-      },
-    }),
+    fontSize: 44,
+    color: '#FFFFFF',
+    lineHeight: 52,
+    letterSpacing: 1,
+  },
+  timerColon: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 33,
+    color: 'rgba(255, 255, 255, 0.25)',
+    lineHeight: 52,
+    marginHorizontal: 1,
   },
 
   /* ── Bento Stats ── */

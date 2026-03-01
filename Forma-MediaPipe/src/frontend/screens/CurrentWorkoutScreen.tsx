@@ -64,10 +64,23 @@ const formatStopwatch = (totalSeconds: number) => {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
+const getTimerParts = (totalSeconds: number) => {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return [
+    h.toString().padStart(2, '0'),
+    ':',
+    m.toString().padStart(2, '0'),
+    ':',
+    s.toString().padStart(2, '0'),
+  ];
+};
+
 /* ── Main Screen ──────────────────────────── */
 
-const TIMER_FONT_SIZE_MAX = 56;
-const TIMER_FONT_SIZE_MIN = 40;
+const TIMER_FONT_SIZE_MAX = 48;
+const TIMER_FONT_SIZE_MIN = 36;
 
 export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
@@ -314,15 +327,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
   }, [pendingRecording, exercises, attachRecordingToSet, setPendingRecording]);
 
   const handleSaveRecordingPrefs = useCallback((saveToLibrary: boolean, saveToCameraRoll: boolean) => {
-    if (!pendingRecording) return;
-    const exercise = exercises.find((ex) => ex.name === pendingRecording.exerciseName);
-    if (exercise) {
-      const lastSetIndex = exercise.sets.length - 1;
-      if (lastSetIndex >= 0) {
-        updateSetRecordingFlags(exercise.id, lastSetIndex, { saveToLibrary, saveToCameraRoll });
-      }
-    }
-  }, [pendingRecording, exercises, updateSetRecordingFlags]);
+    if (!weightModalData) return;
+    updateSetRecordingFlags(weightModalData.exerciseId, weightModalData.setIndex, { saveToLibrary, saveToCameraRoll });
+  }, [weightModalData, updateSetRecordingFlags]);
 
   const handleWeightSubmit = (weight: number, unit: 'kg' | 'lbs') => {
     if (weightModalData) {
@@ -441,9 +448,20 @@ export const CurrentWorkoutScreen: React.FC = () => {
       <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], flex: 1 }}>
         {/* ── TIMER HERO ──────────────────────── */}
         <View style={styles.timerBlock}>
-          <MonoText bold style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerLineHeight }]}>
-            {formatStopwatch(elapsedSeconds)}
-          </MonoText>
+          <View style={styles.timerDisplay}>
+            {getTimerParts(elapsedSeconds).map((part, i) => (
+              <MonoText
+                key={i}
+                bold={part !== ':'}
+                style={part === ':'
+                  ? [styles.timerColon, { fontSize: timerFontSize * 0.75, lineHeight: timerLineHeight }]
+                  : [styles.timerDigit, { fontSize: timerFontSize, lineHeight: timerLineHeight }]
+                }
+              >
+                {part}
+              </MonoText>
+            ))}
+          </View>
           {totalSetsCount > 0 && (
             <View style={styles.statsRow}>
               <View style={styles.statChip}>
@@ -683,7 +701,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
           initialUnit={weightModalData.currentUnit}
           exerciseName={weightModalData.exerciseName}
           setNumber={weightModalData.setIndex + 1}
-          hasRecording={!!pendingRecording}
+          hasRecording={
+            !!exercises.find((ex) => ex.id === weightModalData.exerciseId)
+              ?.sets[weightModalData.setIndex]?.tempRecordingUrl
+          }
           onSaveRecording={handleSaveRecordingPrefs}
         />
       )}
@@ -829,17 +850,19 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: SPACING.screenHorizontal,
   },
-  timerText: {
+  timerDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timerDigit: {
     fontFamily: FONTS.mono.bold,
     color: '#FFFFFF',
-    letterSpacing: 2,
-    ...Platform.select({
-      ios: {
-        textShadowColor: 'rgba(139, 92, 246, 0.2)',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 30,
-      },
-    }),
+    letterSpacing: 1,
+  },
+  timerColon: {
+    fontFamily: FONTS.mono.regular,
+    color: 'rgba(255, 255, 255, 0.25)',
+    marginHorizontal: 1,
   },
   statsRow: {
     flexDirection: 'row',
