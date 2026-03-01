@@ -274,8 +274,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backButton: {
-    padding: 4,
-    marginRight: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarButton: {
     width: 36,
@@ -313,6 +316,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 2,
     lineHeight: 46,
+    flex: 1,
   },
   headerSubtitle: {
     fontFamily: FONTS.ui.regular,
