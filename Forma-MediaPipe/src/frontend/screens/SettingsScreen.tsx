@@ -231,11 +231,38 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               <Text style={styles.sectionLabel}>ACCOUNT</Text>
             </View>
           </View>
-          <View style={styles.cardStack}>
-            <RowCard icon={User} iconBg="rgba(139, 92, 246, 0.10)" iconColor="#A78BFA" label="Profile" onPress={() => navigation.navigate('ProfileSettings')} />
-            <RowCard icon={Bell} iconBg="rgba(245, 166, 35, 0.10)" iconColor={COLORS.yellow} label="Notifications" onPress={() => navigation.navigate('NotificationSettings')} />
-            <RowCard icon={Lock} iconBg="rgba(52, 211, 153, 0.10)" iconColor="#34D399" label="Privacy" onPress={() => navigation.navigate('PrivacySettings')} />
-          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.groupEdge}>
+              <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('ProfileSettings')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <User size={14} color="#A78BFA" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Profile</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+              <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('NotificationSettings')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                  <Bell size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Notifications</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+              <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('PrivacySettings')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                  <Lock size={14} color="#34D399" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Privacy</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
           {/* Workout Section */}
           <View style={styles.sectionRow}>
@@ -244,12 +271,64 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               <Text style={styles.sectionLabel}>WORKOUT</Text>
             </View>
           </View>
-          <View style={styles.cardStack}>
-            <ToggleCard icon={Eye} iconBg="rgba(139, 92, 246, 0.10)" iconColor="#A78BFA" label="Visual Feedback" value={prefs.showFeedback} onToggle={(v) => updatePref('showFeedback', v)} />
-            <ToggleCard icon={Volume2} iconBg="rgba(96, 165, 250, 0.10)" iconColor="#60A5FA" label="Voice Coaching" value={prefs.isTTSEnabled} onToggle={(v) => updatePref('isTTSEnabled', v)} />
-            <ToggleCard icon={Bone} iconBg="rgba(245, 166, 35, 0.10)" iconColor={COLORS.yellow} label="Skeleton Overlay" value={prefs.showSkeletonOverlay} onToggle={(v) => updatePref('showSkeletonOverlay', v)} />
-            <RowCardWithSub icon={Calendar} iconBg="rgba(52, 211, 153, 0.10)" iconColor="#34D399" label="Training Frequency" sub={TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]} onPress={handleTrainingTargetPress} />
-          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.groupEdge}>
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Visual Feedback</Text>
+                <Switch
+                  value={prefs.showFeedback}
+                  onValueChange={(v) => updatePref('showFeedback', v)}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.showFeedback ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                />
+              </View>
+              <View style={styles.rowDivider} />
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
+                  <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Voice Coaching</Text>
+                <Switch
+                  value={prefs.isTTSEnabled}
+                  onValueChange={(v) => updatePref('isTTSEnabled', v)}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.isTTSEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                />
+              </View>
+              <View style={styles.rowDivider} />
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                  <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Skeleton Overlay</Text>
+                <Switch
+                  value={prefs.showSkeletonOverlay}
+                  onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                />
+              </View>
+              <View style={styles.rowDivider} />
+              <TouchableOpacity style={styles.groupRow} onPress={handleTrainingTargetPress} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                  <Calendar size={14} color="#34D399" strokeWidth={1.5} />
+                </View>
+                <View style={styles.rowLabelCol}>
+                  <Text style={styles.rowLabel}>Training Frequency</Text>
+                  <Text style={styles.rowSubLabel}>{TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}</Text>
+                </View>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
           {/* Trainer Section */}
           <View style={styles.sectionRow}>
@@ -423,6 +502,25 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 14,
     paddingVertical: 16,
+  },
+
+  /* Grouped card (multiple rows) */
+  groupEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 16,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
 
   /* Row inside card */
