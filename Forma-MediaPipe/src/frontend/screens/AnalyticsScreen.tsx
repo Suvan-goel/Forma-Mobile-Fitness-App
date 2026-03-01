@@ -153,7 +153,7 @@ export const AnalyticsScreen: React.FC = () => {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>ANALYTICS</Text>
           <TouchableOpacity
-            onPress={() => navigation.navigate('ProfileSettings')}
+            onPress={() => navigation.navigate('UserProfile')}
             activeOpacity={0.7}
             style={styles.avatarButton}
           >

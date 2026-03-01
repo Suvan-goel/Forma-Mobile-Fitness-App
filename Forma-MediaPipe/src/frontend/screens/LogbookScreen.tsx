@@ -568,7 +568,7 @@ export const LogbookScreen: React.FC = () => {
       <View style={styles.fixedHeader}>
         <Text style={styles.headerTitle}>LOGBOOK</Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('ProfileSettings')}
+          onPress={() => navigation.navigate('UserProfile')}
           activeOpacity={0.7}
           style={styles.avatarButton}
         >

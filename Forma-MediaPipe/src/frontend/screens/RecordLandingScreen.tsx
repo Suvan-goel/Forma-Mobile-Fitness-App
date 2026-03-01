@@ -163,7 +163,7 @@ export const RecordLandingScreen: React.FC = () => {
           <Text style={styles.headerSubtitle}>TODAY'S SESSION</Text>
         </View>
         <TouchableOpacity
-          onPress={() => rootNavigation.navigate('ProfileSettings')}
+          onPress={() => rootNavigation.navigate('UserProfile')}
           activeOpacity={0.7}
           style={styles.avatarButton}
         >

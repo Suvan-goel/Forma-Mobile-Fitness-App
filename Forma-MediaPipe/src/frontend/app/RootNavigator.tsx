@@ -29,6 +29,8 @@ import { WorkoutExercisesScreen } from '../screens/WorkoutExercisesScreen';
 import { SaveWorkoutScreen } from '../screens/SaveWorkoutScreen';
 import { WorkoutInfoScreen } from '../screens/WorkoutInfoScreen';
 import { RewardsScreen } from '../screens/RewardsScreen';
+import { UserProfileScreen } from '../screens/UserProfileScreen';
+import { TutorialsScreen } from '../screens/TutorialsScreen';
 import { RecordLandingScreen } from '../screens/RecordLandingScreen';
 import { CurrentWorkoutScreen } from '../screens/CurrentWorkoutScreen';
 import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
@@ -78,6 +80,8 @@ export type RootStackParamList = {
   FriendComparison: { friendId: string };
   AddFriend: undefined;
   Rewards: undefined;
+  UserProfile: undefined;
+  Tutorials: undefined;
   Onboarding: undefined;
 };
 
@@ -482,6 +486,16 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="Rewards"
             component={RewardsScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="UserProfile"
+            component={UserProfileScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="Tutorials"
+            component={TutorialsScreen}
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
