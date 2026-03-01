@@ -56,60 +56,58 @@ export const RecordingOptionsModal: React.FC<RecordingOptionsModalProps> = ({
             <View style={styles.cardGlassEdge}>
               {/* Header */}
               <View style={styles.header}>
-                <Text style={styles.title}>Recording Options</Text>
+                <View style={styles.headerLeft}>
+                  <Text style={styles.title}>Recording</Text>
+                  {exerciseName && setNumber != null && (
+                    <Text style={styles.subtitle}>{exerciseName} · Set {setNumber}</Text>
+                  )}
+                </View>
                 <TouchableOpacity
                   style={styles.closeButton}
                   onPress={onClose}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <X size={18} color={COLORS.textSecondary} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
 
-              {exerciseName && setNumber && (
-                <Text style={styles.subtitle}>
-                  {exerciseName} • Set {setNumber}
-                </Text>
-              )}
-
-              {/* Recording toggles */}
-              <View style={styles.section}>
+              {/* Save To subheading + side-by-side toggle cards */}
+              <Text style={styles.sectionHeading}>Save To</Text>
+              <View style={styles.cardsRow}>
                 <TouchableOpacity
-                  style={[styles.recordingToggle, saveToLibrary && styles.recordingToggleActive]}
-                  onPress={() => {
-                    const newSaveToLibrary = !saveToLibrary;
-                    onUpdate(newSaveToLibrary, newSaveToLibrary ? saveToCameraRoll : false);
-                  }}
+                  style={[styles.optionCard, saveToLibrary && styles.optionCardActive]}
+                  onPress={() => onUpdate(!saveToLibrary, !saveToLibrary ? saveToCameraRoll : false)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.rowIcon}>
-                    <Video size={16} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                  <View style={[styles.optionIconWrap, saveToLibrary && styles.optionIconWrapActive]}>
+                    <Video size={20} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
                   </View>
-                  <View style={styles.recordingToggleText}>
-                    <Text style={[styles.recordingLabel, saveToLibrary && styles.recordingLabelActive]}>
-                      Save to Video Library
-                    </Text>
-                  </View>
-                  <View style={[styles.toggleDot, saveToLibrary && styles.toggleDotActive]}>
-                    {saveToLibrary && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                  <Text style={[styles.optionLabel, saveToLibrary && styles.optionLabelActive]}>
+                    Video Library
+                  </Text>
+                  <View style={[styles.optionCheck, saveToLibrary && styles.optionCheckActive]}>
+                    {saveToLibrary && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
                   </View>
                 </TouchableOpacity>
 
-                {saveToLibrary && (
-                  <TouchableOpacity
-                    style={[styles.recordingSubToggle, saveToCameraRoll && styles.recordingToggleActive]}
-                    onPress={() => onUpdate(saveToLibrary, !saveToCameraRoll)}
-                    activeOpacity={0.7}
-                  >
-                    <Download size={14} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
-                    <Text style={[styles.recordingSubLabel, saveToCameraRoll && styles.recordingLabelActive]}>
-                      Also save to Camera Roll
-                    </Text>
-                    <View style={[styles.toggleDotSmall, saveToCameraRoll && styles.toggleDotActive]}>
-                      {saveToCameraRoll && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
-                    </View>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={[styles.optionCard, saveToCameraRoll && styles.optionCardActive]}
+                  onPress={() => {
+                    const next = !saveToCameraRoll;
+                    onUpdate(next ? true : saveToLibrary, next);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.optionIconWrap, saveToCameraRoll && styles.optionIconWrapActive]}>
+                    <Download size={20} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                  </View>
+                  <Text style={[styles.optionLabel, saveToCameraRoll && styles.optionLabelActive]}>
+                    Camera Roll
+                  </Text>
+                  <View style={[styles.optionCheck, saveToCameraRoll && styles.optionCheckActive]}>
+                    {saveToCameraRoll && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
+                  </View>
+                </TouchableOpacity>
               </View>
 
               {/* Done button */}
@@ -172,15 +170,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xs,
+    paddingBottom: SPACING.sm,
+  },
+  headerLeft: {
+    flex: 1,
+    marginRight: SPACING.md,
   },
   title: {
-    fontSize: 18,
-    fontFamily: FONTS.display.semibold,
+    fontSize: 20,
+    fontFamily: FONTS.display.bold,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textSecondary,
+    marginTop: 3,
+    letterSpacing: 0.2,
   },
   closeButton: {
     width: 34,
@@ -192,102 +201,77 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  subtitle: {
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textTertiary,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.sm,
-    letterSpacing: 0.5,
-  },
-  section: {
+
+  /* ── Side-by-side cards ──────────────────── */
+  sectionHeading: {
+    fontSize: 11,
+    fontFamily: FONTS.display.bold,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+    textAlign: 'center',
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.xs,
-    marginHorizontal: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.08)',
   },
-  rowIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  recordingToggle: {
+  cardsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    marginBottom: SPACING.xs,
+    gap: 10,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
   },
-  recordingToggleActive: {
+  optionCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    gap: 10,
+  },
+  optionCardActive: {
     borderColor: 'rgba(139, 92, 246, 0.3)',
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
   },
-  recordingToggleText: {
-    flex: 1,
+  optionIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  recordingLabel: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
+  optionIconWrapActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+  },
+  optionLabel: {
+    fontSize: 13,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.textTertiary,
+    letterSpacing: -0.1,
+    textAlign: 'center',
   },
-  recordingLabelActive: {
+  optionLabelActive: {
     color: COLORS.text,
   },
-  recordingSubToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: SPACING.sm,
-    marginLeft: 46,
-    gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    marginBottom: SPACING.xs,
-  },
-  recordingSubLabel: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textTertiary,
-  },
-  toggleDot: {
+  optionCheck: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggleDotSmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleDotActive: {
+  optionCheckActive: {
     borderColor: COLORS.accent,
     backgroundColor: COLORS.accent,
   },
+
+  /* ── Button ──────────────────────────────── */
   buttonRow: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
     paddingBottom: SPACING.xl,
   },
   doneButtonOuter: {

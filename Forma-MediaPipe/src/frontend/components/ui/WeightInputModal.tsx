@@ -159,7 +159,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* Recording options */}
+              {/* Recording options — side-by-side cards */}
               {hasRecording && (
                 <View style={styles.recordingSection}>
                   <View style={styles.sectionLabelRow}>
@@ -167,37 +167,48 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                     <Text style={styles.sectionLabel}>RECORDING</Text>
                   </View>
 
-                  <TouchableOpacity
-                    style={[styles.toggleRow, saveToLibrary && styles.toggleRowActive]}
-                    onPress={() => setSaveToLibrary(!saveToLibrary)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.toggleIconWrap, saveToLibrary && styles.toggleIconWrapActive]}>
-                      <Video size={14} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
-                    </View>
-                    <Text style={[styles.toggleLabel, saveToLibrary && styles.toggleLabelActive]}>
-                      Save to Video Library
-                    </Text>
-                    <View style={[styles.toggleCheck, saveToLibrary && styles.toggleCheckActive]}>
-                      {saveToLibrary && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
-                    </View>
-                  </TouchableOpacity>
-
-                  {saveToLibrary && (
+                  <Text style={styles.recordingSaveToHeading}>Save To</Text>
+                  <View style={styles.recordingCardsRow}>
                     <TouchableOpacity
-                      style={[styles.toggleSubRow, saveToCameraRoll && styles.toggleRowActive]}
-                      onPress={() => setSaveToCameraRoll(!saveToCameraRoll)}
+                      style={[styles.recordingCard, saveToLibrary && styles.recordingCardActive]}
+                      onPress={() => {
+                        const next = !saveToLibrary;
+                        setSaveToLibrary(next);
+                        if (!next) setSaveToCameraRoll(false);
+                      }}
                       activeOpacity={0.7}
                     >
-                      <Download size={13} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
-                      <Text style={[styles.toggleSubLabel, saveToCameraRoll && styles.toggleLabelActive]}>
-                        Also save to Camera Roll
+                      <View style={[styles.recordingCardIcon, saveToLibrary && styles.recordingCardIconActive]}>
+                        <Video size={18} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                      </View>
+                      <Text style={[styles.recordingCardLabel, saveToLibrary && styles.recordingCardLabelActive]}>
+                        Video Library
                       </Text>
-                      <View style={[styles.toggleCheckSmall, saveToCameraRoll && styles.toggleCheckActive]}>
-                        {saveToCameraRoll && <Check size={9} color="#FFFFFF" strokeWidth={3} />}
+                      <View style={[styles.recordingCardCheck, saveToLibrary && styles.recordingCardCheckActive]}>
+                        {saveToLibrary && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
                       </View>
                     </TouchableOpacity>
-                  )}
+
+                    <TouchableOpacity
+                      style={[styles.recordingCard, saveToCameraRoll && styles.recordingCardActive]}
+                      onPress={() => {
+                        const next = !saveToCameraRoll;
+                        if (next) setSaveToLibrary(true);
+                        setSaveToCameraRoll(next);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.recordingCardIcon, saveToCameraRoll && styles.recordingCardIconActive]}>
+                        <Download size={18} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                      </View>
+                      <Text style={[styles.recordingCardLabel, saveToCameraRoll && styles.recordingCardLabelActive]}>
+                        Camera Roll
+                      </Text>
+                      <View style={[styles.recordingCardCheck, saveToCameraRoll && styles.recordingCardCheckActive]}>
+                        {saveToCameraRoll && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
 
@@ -413,84 +424,67 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     letterSpacing: 2,
   },
-  toggleRow: {
+  recordingSaveToHeading: {
+    fontSize: 11,
+    fontFamily: FONTS.display.bold,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  recordingCardsRow: {
     flexDirection: 'row',
+    gap: 10,
+  },
+  recordingCard: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    marginBottom: SPACING.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    gap: 8,
   },
-  toggleRowActive: {
-    borderColor: 'rgba(139, 92, 246, 0.25)',
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+  recordingCardActive: {
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
   },
-  toggleIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
+  recordingCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
   },
-  toggleIconWrapActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+  recordingCardIconActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
   },
-  toggleLabel: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: FONTS.ui.regular,
+  recordingCardLabel: {
+    fontSize: 12,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.textTertiary,
+    letterSpacing: -0.1,
+    textAlign: 'center',
   },
-  toggleLabelActive: {
+  recordingCardLabelActive: {
     color: COLORS.text,
   },
-  toggleCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  recordingCardCheck: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.12)',
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggleCheckSmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleCheckActive: {
+  recordingCardCheckActive: {
     borderColor: COLORS.accent,
     backgroundColor: COLORS.accent,
-  },
-  toggleSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    marginLeft: 42,
-    gap: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    marginBottom: SPACING.xs,
-  },
-  toggleSubLabel: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textTertiary,
   },
 
   /* ── Buttons ──────────────────────────────── */
