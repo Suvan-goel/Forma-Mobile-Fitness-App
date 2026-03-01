@@ -139,6 +139,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const isPausedRef = useRef(false);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const exercisesRef = useRef(exercises);
+  exercisesRef.current = exercises;
   const { restTimerEnabled, restTimerDurationSeconds } = useCameraSettings();
   isPausedRef.current = workoutPaused;
 
@@ -228,7 +230,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
       const showWeightFor = route.params?.showWeightFor;
       if (showWeightFor?.exerciseId) {
         startRestTimer();
-        const exercise = exercises.find((ex) => ex.id === showWeightFor.exerciseId);
+        const exercise = exercisesRef.current.find((ex) => ex.id === showWeightFor.exerciseId);
         if (exercise && exercise.sets.length > 0) {
           const lastSetIndex = exercise.sets.length - 1;
           const lastSet = exercise.sets[lastSetIndex];
@@ -244,7 +246,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         }
         navigation.setParams({ showWeightFor: undefined });
       }
-    }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, exercises, startRestTimer])
+    }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, startRestTimer])
   );
 
 

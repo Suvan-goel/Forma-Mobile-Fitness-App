@@ -217,31 +217,35 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     return exercises.flatMap((ex) => ex.sets);
   }, [exercises]);
 
+  const contextValue = useMemo<CurrentWorkoutContextValue>(() => ({
+    exercises,
+    sets,
+    sessionId: sessionIdRef.current,
+    workoutInProgress,
+    workoutElapsedSeconds,
+    workoutPaused,
+    pendingRecording,
+    addExercise,
+    addSetToExercise,
+    addSet,
+    updateSetWeight,
+    attachRecordingToSet,
+    updateSetRecordingFlags,
+    removeExercise,
+    removeSetFromExercise,
+    clearSets,
+    setWorkoutInProgress,
+    setWorkoutElapsedSeconds,
+    setWorkoutPaused,
+    setPendingRecording,
+  }), [
+    exercises, sets, workoutInProgress, workoutElapsedSeconds, workoutPaused, pendingRecording,
+    addExercise, addSetToExercise, addSet, updateSetWeight, attachRecordingToSet,
+    updateSetRecordingFlags, removeExercise, removeSetFromExercise, clearSets,
+  ]);
+
   return (
-    <CurrentWorkoutContext.Provider
-      value={{
-        exercises,
-        sets,
-        sessionId: sessionIdRef.current,
-        workoutInProgress,
-        workoutElapsedSeconds,
-        workoutPaused,
-        pendingRecording,
-        addExercise,
-        addSetToExercise,
-        addSet,
-        updateSetWeight,
-        attachRecordingToSet,
-        updateSetRecordingFlags,
-        removeExercise,
-        removeSetFromExercise,
-        clearSets,
-        setWorkoutInProgress,
-        setWorkoutElapsedSeconds,
-        setWorkoutPaused,
-        setPendingRecording,
-      }}
-    >
+    <CurrentWorkoutContext.Provider value={contextValue}>
       {children}
     </CurrentWorkoutContext.Provider>
   );

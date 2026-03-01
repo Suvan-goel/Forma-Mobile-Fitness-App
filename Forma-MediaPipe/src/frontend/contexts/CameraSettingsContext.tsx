@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const CAMERA_SETTINGS_KEY = 'forma_camera_settings';
@@ -107,27 +107,32 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     persistSetting('autoScreenRecording', value);
   }, [persistSetting]);
 
+  const contextValue = useMemo<CameraSettingsContextValue>(() => ({
+    showFeedback,
+    isTTSEnabled,
+    showSkeletonOverlay,
+    debugMode,
+    restTimerEnabled,
+    restTimerDurationSeconds,
+    selectedTrainerId,
+    autoScreenRecording,
+    setShowFeedback,
+    setIsTTSEnabled,
+    setShowSkeletonOverlay,
+    setDebugMode,
+    setRestTimerEnabled,
+    setRestTimerDurationSeconds,
+    setSelectedTrainerId,
+    setAutoScreenRecording,
+  }), [
+    showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode,
+    restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording,
+    setShowFeedback, setIsTTSEnabled, setShowSkeletonOverlay, setDebugMode,
+    setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording,
+  ]);
+
   return (
-    <CameraSettingsContext.Provider
-      value={{
-        showFeedback,
-        isTTSEnabled,
-        showSkeletonOverlay,
-        debugMode,
-        restTimerEnabled,
-        restTimerDurationSeconds,
-        selectedTrainerId,
-        autoScreenRecording,
-        setShowFeedback,
-        setIsTTSEnabled,
-        setShowSkeletonOverlay,
-        setDebugMode,
-        setRestTimerEnabled,
-        setRestTimerDurationSeconds,
-        setSelectedTrainerId,
-        setAutoScreenRecording,
-      }}
-    >
+    <CameraSettingsContext.Provider value={contextValue}>
       {children}
     </CameraSettingsContext.Provider>
   );

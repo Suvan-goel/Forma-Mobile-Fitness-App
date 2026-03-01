@@ -413,8 +413,8 @@ export const CameraScreen: React.FC = () => {
             repFeedback: [...prev.repFeedback, feedbackMsg],
           }));
           // Synchronous accumulation — immune to InteractionManager deferral race
-          accumulatedFormScoresRef.current = [...accumulatedFormScoresRef.current, formScore];
-          accumulatedRepFeedbackRef.current = [...accumulatedRepFeedbackRef.current, feedbackMsg];
+          accumulatedFormScoresRef.current.push(formScore);
+          accumulatedRepFeedbackRef.current.push(feedbackMsg);
         }
       } else if (currentExerciseRef.current !== null) {
         // No exercise detected - reset
