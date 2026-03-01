@@ -11,6 +11,7 @@ export type CameraSettings = {
   restTimerEnabled: boolean;
   restTimerDurationSeconds: number;
   selectedTrainerId: string;
+  autoScreenRecording: boolean;
 };
 
 type CameraSettingsContextValue = CameraSettings & {
@@ -21,6 +22,7 @@ type CameraSettingsContextValue = CameraSettings & {
   setRestTimerEnabled: (value: boolean) => void;
   setRestTimerDurationSeconds: (value: number) => void;
   setSelectedTrainerId: (id: string) => void;
+  setAutoScreenRecording: (value: boolean) => void;
 };
 
 const defaultSettings: CameraSettings = {
@@ -31,6 +33,7 @@ const defaultSettings: CameraSettings = {
   restTimerEnabled: false,
   restTimerDurationSeconds: 90,
   selectedTrainerId: 'marcus',
+  autoScreenRecording: false,
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
@@ -43,6 +46,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const [restTimerEnabled, setRestTimerEnabledRaw] = useState(defaultSettings.restTimerEnabled);
   const [restTimerDurationSeconds, setRestTimerDurationSecondsRaw] = useState(defaultSettings.restTimerDurationSeconds);
   const [selectedTrainerId, setSelectedTrainerIdRaw] = useState(defaultSettings.selectedTrainerId);
+  const [autoScreenRecording, setAutoScreenRecordingRaw] = useState(defaultSettings.autoScreenRecording);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -56,6 +60,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         if (typeof saved.restTimerEnabled === 'boolean') setRestTimerEnabledRaw(saved.restTimerEnabled);
         if (typeof saved.restTimerDurationSeconds === 'number') setRestTimerDurationSecondsRaw(saved.restTimerDurationSeconds);
         if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
+        if (typeof saved.autoScreenRecording === 'boolean') setAutoScreenRecordingRaw(saved.autoScreenRecording);
       } catch { /* ignore corrupt data */ }
     });
   }, []);
@@ -97,6 +102,11 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     persistSetting('selectedTrainerId', id);
   }, [persistSetting]);
 
+  const setAutoScreenRecording = useCallback((value: boolean) => {
+    setAutoScreenRecordingRaw(value);
+    persistSetting('autoScreenRecording', value);
+  }, [persistSetting]);
+
   return (
     <CameraSettingsContext.Provider
       value={{
@@ -107,6 +117,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         restTimerEnabled,
         restTimerDurationSeconds,
         selectedTrainerId,
+        autoScreenRecording,
         setShowFeedback,
         setIsTTSEnabled,
         setShowSkeletonOverlay,
@@ -114,6 +125,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         setRestTimerEnabled,
         setRestTimerDurationSeconds,
         setSelectedTrainerId,
+        setAutoScreenRecording,
       }}
     >
       {children}

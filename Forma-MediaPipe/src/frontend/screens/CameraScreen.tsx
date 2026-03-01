@@ -61,7 +61,7 @@ export const CameraScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   const { addSetToExercise, sessionId, setPendingRecording } = useCurrentWorkout();
-  const { showFeedback, isTTSEnabled, setIsTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId } = useCameraSettings();
+  const { showFeedback, isTTSEnabled, setIsTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording } = useCameraSettings();
   const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -482,6 +482,7 @@ export const CameraScreen: React.FC = () => {
       }
 
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
+        const wasRecording = screenRecAttemptedRef.current;
         const durationSeconds = workoutDataRef.current.duration;
         const newSet = {
           exerciseName: exerciseNameFromRoute,
@@ -526,7 +527,7 @@ export const CameraScreen: React.FC = () => {
         setCameraMounted(false);
         setTimeout(() => {
           (navigation as any).navigate('CurrentWorkout', {
-            showWeightFor: { exerciseId },
+            showWeightFor: { exerciseId, hasRecording: wasRecording },
           });
         }, 450);
       } else {
@@ -581,15 +582,15 @@ export const CameraScreen: React.FC = () => {
         isRecordingLandmarksRef.current = true;
       }
 
-      // Auto-start screen recording — await with timeout so the ref is set before user stops
-      if (screenRecAvailable) {
+      // Auto-start screen recording (if enabled in settings)
+      if (screenRecAvailable && autoScreenRecording) {
         screenRecAttemptedRef.current = true;
         startScreenRec().catch(() => {
           if (__DEV__) console.warn('[CameraScreen] Auto screen recording start failed');
         });
       }
     }
-  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec]);
+  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording]);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(prev => !prev);

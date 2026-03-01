@@ -94,7 +94,7 @@ export type RecordStackParamList = {
   RecordLanding: undefined;
   CurrentWorkout: {
     newSet?: LoggedSet;
-    showWeightFor?: { exerciseId: string };
+    showWeightFor?: { exerciseId: string; hasRecording?: boolean };
   } | undefined;
   ChooseExercise: undefined;
   WorkoutTemplates: undefined;

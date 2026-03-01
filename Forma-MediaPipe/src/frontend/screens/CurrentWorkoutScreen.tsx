@@ -45,7 +45,7 @@ export type { LoggedSet };
 
 type RecordStackParamList = {
   RecordLanding: undefined;
-  CurrentWorkout: { newSet?: LoggedSet; showWeightFor?: { exerciseId: string } } | undefined;
+  CurrentWorkout: { newSet?: LoggedSet; showWeightFor?: { exerciseId: string; hasRecording?: boolean } } | undefined;
   ChooseExercise: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout: true };
   SaveWorkout: { workoutData: { category: string; duration: string; totalSets: number; totalReps: number; avgFormScore: number } };
@@ -239,7 +239,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             setIndex: lastSetIndex,
             currentWeight: lastSet?.weight,
             currentUnit: lastSet?.weightUnit || 'kg',
-            showRecordingOptions: true,
+            showRecordingOptions: !!showWeightFor.hasRecording,
           });
         }
         navigation.setParams({ showWeightFor: undefined });

@@ -160,57 +160,79 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
               </View>
 
               {/* Recording options — side-by-side cards */}
-              {hasRecording && (
-                <View style={styles.recordingSection}>
-                  <View style={styles.sectionLabelRow}>
-                    <Video size={12} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.sectionLabel}>RECORDING</Text>
-                  </View>
-
-                  <Text style={styles.recordingSaveToHeading}>Save To</Text>
-                  <View style={styles.recordingCardsRow}>
-                    <TouchableOpacity
-                      style={[styles.recordingCard, saveToLibrary && styles.recordingCardActive]}
-                      onPress={() => {
-                        const next = !saveToLibrary;
-                        setSaveToLibrary(next);
-                        if (!next) setSaveToCameraRoll(false);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.recordingCardIcon, saveToLibrary && styles.recordingCardIconActive]}>
-                        <Video size={18} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
-                      </View>
-                      <Text style={[styles.recordingCardLabel, saveToLibrary && styles.recordingCardLabelActive]}>
-                        Video Library
-                      </Text>
-                      <View style={[styles.recordingCardCheck, saveToLibrary && styles.recordingCardCheckActive]}>
-                        {saveToLibrary && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
-                      </View>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.recordingCard, saveToCameraRoll && styles.recordingCardActive]}
-                      onPress={() => {
-                        const next = !saveToCameraRoll;
-                        if (next) setSaveToLibrary(true);
-                        setSaveToCameraRoll(next);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.recordingCardIcon, saveToCameraRoll && styles.recordingCardIconActive]}>
-                        <Download size={18} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
-                      </View>
-                      <Text style={[styles.recordingCardLabel, saveToCameraRoll && styles.recordingCardLabelActive]}>
-                        Camera Roll
-                      </Text>
-                      <View style={[styles.recordingCardCheck, saveToCameraRoll && styles.recordingCardCheckActive]}>
-                        {saveToCameraRoll && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
-                      </View>
-                    </TouchableOpacity>
-                  </View>
+              <View style={styles.recordingSection}>
+                <View style={styles.sectionLabelRow}>
+                  <Video size={12} color={hasRecording ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                  <Text style={[styles.sectionLabel, !hasRecording && styles.sectionLabelDisabled]}>RECORDING</Text>
                 </View>
-              )}
+
+                {hasRecording ? (
+                  <>
+                    <Text style={styles.recordingSaveToHeading}>Save To</Text>
+                    <View style={styles.recordingCardsRow}>
+                      <TouchableOpacity
+                        style={[styles.recordingCard, saveToLibrary && styles.recordingCardActive]}
+                        onPress={() => {
+                          const next = !saveToLibrary;
+                          setSaveToLibrary(next);
+                          if (!next) setSaveToCameraRoll(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.recordingCardIcon, saveToLibrary && styles.recordingCardIconActive]}>
+                          <Video size={18} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                        </View>
+                        <Text style={[styles.recordingCardLabel, saveToLibrary && styles.recordingCardLabelActive]}>
+                          Video Library
+                        </Text>
+                        <View style={[styles.recordingCardCheck, saveToLibrary && styles.recordingCardCheckActive]}>
+                          {saveToLibrary && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.recordingCard, saveToCameraRoll && styles.recordingCardActive]}
+                        onPress={() => {
+                          const next = !saveToCameraRoll;
+                          if (next) setSaveToLibrary(true);
+                          setSaveToCameraRoll(next);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.recordingCardIcon, saveToCameraRoll && styles.recordingCardIconActive]}>
+                          <Download size={18} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                        </View>
+                        <Text style={[styles.recordingCardLabel, saveToCameraRoll && styles.recordingCardLabelActive]}>
+                          Camera Roll
+                        </Text>
+                        <View style={[styles.recordingCardCheck, saveToCameraRoll && styles.recordingCardCheckActive]}>
+                          {saveToCameraRoll && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.recordingDisabledRow}>
+                    <View style={[styles.recordingCardsRow, styles.recordingCardsDisabled]}>
+                      <View style={[styles.recordingCard, styles.recordingCardDisabled]}>
+                        <View style={styles.recordingCardIcon}>
+                          <Video size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
+                        </View>
+                        <Text style={styles.recordingCardLabel}>Video Library</Text>
+                        <View style={styles.recordingCardCheck} />
+                      </View>
+                      <View style={[styles.recordingCard, styles.recordingCardDisabled]}>
+                        <View style={styles.recordingCardIcon}>
+                          <Download size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
+                        </View>
+                        <Text style={styles.recordingCardLabel}>Camera Roll</Text>
+                        <View style={styles.recordingCardCheck} />
+                      </View>
+                    </View>
+                    <Text style={styles.notRecordedText}>Set was not recorded</Text>
+                  </View>
+                )}
+              </View>
 
               {/* Action buttons */}
               <View style={styles.buttonRow}>
@@ -485,6 +507,25 @@ const styles = StyleSheet.create({
   recordingCardCheckActive: {
     borderColor: COLORS.accent,
     backgroundColor: COLORS.accent,
+  },
+  sectionLabelDisabled: {
+    color: COLORS.textTertiary,
+  },
+  recordingDisabledRow: {
+    alignItems: 'center' as const,
+  },
+  recordingCardsDisabled: {
+    opacity: 0.35,
+  },
+  recordingCardDisabled: {
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  notRecordedText: {
+    fontSize: 11,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+    marginTop: 10,
   },
 
   /* ── Buttons ──────────────────────────────── */

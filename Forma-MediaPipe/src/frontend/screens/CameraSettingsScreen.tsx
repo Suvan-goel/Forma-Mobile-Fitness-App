@@ -24,6 +24,7 @@ import {
   UserRound,
   SlidersHorizontal,
   Tv,
+  Video,
   Wrench,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -204,12 +205,14 @@ export const CameraSettingsScreen: React.FC = () => {
     restTimerEnabled,
     restTimerDurationSeconds,
     selectedTrainerId,
+    autoScreenRecording,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
     setDebugMode,
     setRestTimerEnabled,
     setRestTimerDurationSeconds,
+    setAutoScreenRecording,
   } = useCameraSettings();
 
   useEffect(() => {
@@ -375,8 +378,8 @@ export const CameraSettingsScreen: React.FC = () => {
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
-            <View style={styles.cardEdge}>
-              <View style={styles.row}>
+            <View style={styles.groupEdge}>
+              <View style={styles.groupRow}>
                 <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
                   <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 </View>
@@ -387,6 +390,22 @@ export const CameraSettingsScreen: React.FC = () => {
                   disabled={debugMode}
                   trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
                   thumbColor={showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                />
+              </View>
+              <View style={styles.rowDivider} />
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.10)' }]}>
+                  <Video size={14} color="#EF4444" strokeWidth={1.5} />
+                </View>
+                <View style={styles.rowLabelCol}>
+                  <Text style={styles.rowLabel}>Auto Screen Recording</Text>
+                  <Text style={styles.rowSubLabel}>Records each set automatically</Text>
+                </View>
+                <Switch
+                  value={autoScreenRecording}
+                  onValueChange={setAutoScreenRecording}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={autoScreenRecording ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
             </View>

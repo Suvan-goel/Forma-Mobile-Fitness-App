@@ -16,6 +16,7 @@ interface WorkoutPreferences {
   showSkeletonOverlay: boolean;
   selectedTrainerId: string;
   weeklyTrainingTarget: WeeklyTrainingTarget;
+  autoScreenRecording: boolean;
 }
 
 const defaults: WorkoutPreferences = {
@@ -24,6 +25,7 @@ const defaults: WorkoutPreferences = {
   showSkeletonOverlay: false,
   selectedTrainerId: 'marcus',
   weeklyTrainingTarget: '3-4',
+  autoScreenRecording: false,
 };
 
 export function useWorkoutPreferences() {
@@ -41,6 +43,7 @@ export function useWorkoutPreferences() {
             showSkeletonOverlay: typeof parsed.showSkeletonOverlay === 'boolean' ? parsed.showSkeletonOverlay : defaults.showSkeletonOverlay,
             selectedTrainerId: typeof parsed.selectedTrainerId === 'string' ? parsed.selectedTrainerId : defaults.selectedTrainerId,
             weeklyTrainingTarget: (['1-2', '3-4', '5+'] as WeeklyTrainingTarget[]).includes(parsed.weeklyTrainingTarget) ? parsed.weeklyTrainingTarget : defaults.weeklyTrainingTarget,
+            autoScreenRecording: typeof parsed.autoScreenRecording === 'boolean' ? parsed.autoScreenRecording : defaults.autoScreenRecording,
           });
         } catch { /* ignore corrupt data */ }
       }

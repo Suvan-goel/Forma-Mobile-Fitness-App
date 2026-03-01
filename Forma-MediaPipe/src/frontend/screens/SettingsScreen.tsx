@@ -18,6 +18,7 @@ import {
   Calendar,
   SlidersHorizontal,
   Crown,
+  Video,
 } from 'lucide-react-native';
 import type { WeeklyTrainingTarget } from '../../backend/hooks/useWorkoutPreferences';
 import {
@@ -315,6 +316,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
                   trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
                   thumbColor={prefs.showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                />
+              </View>
+              <View style={styles.rowDivider} />
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.10)' }]}>
+                  <Video size={14} color="#EF4444" strokeWidth={1.5} />
+                </View>
+                <View style={styles.rowLabelCol}>
+                  <Text style={styles.rowLabel}>Auto Screen Recording</Text>
+                  <Text style={styles.rowSubLabel}>Records each set automatically</Text>
+                </View>
+                <Switch
+                  value={prefs.autoScreenRecording}
+                  onValueChange={(v) => updatePref('autoScreenRecording', v)}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.autoScreenRecording ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
               <View style={styles.rowDivider} />
