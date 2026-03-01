@@ -12,9 +12,10 @@ import {
   TextLayoutEventData,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, ChevronDown, ChevronUp, Clock, TrendingUp } from 'lucide-react-native';
+import { X, ChevronDown, ChevronUp, Clock, TrendingUp, Target, FileText } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
+import { MonoText } from '../typography/MonoText';
 import { generateSetSummary } from '../../../utils/setNotesSummary';
 const MAX_FEEDBACK_LINES = 2;
 
@@ -40,12 +41,13 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 
   const repCount = Math.max(repFeedback.length, repFormScores.length, set.reps);
   const hasNotes = repCount > 0;
+  const scoreColor = getScoreColor(set.formScore);
 
   const [expandedReps, setExpandedReps] = useState<Set<number>>(new Set());
   const [overflowedReps, setOverflowedReps] = useState<Set<number>>(new Set());
   const [headerHeight, setHeaderHeight] = useState(0);
 
-  const maxModalHeight = windowHeight * 0.75;
+  const maxModalHeight = windowHeight * 0.8;
   const scrollMaxHeight = headerHeight > 0 ? maxModalHeight - headerHeight : undefined;
 
   useEffect(() => {
@@ -89,16 +91,17 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
         onPress={onClose}
       >
         <TouchableOpacity
-          style={[styles.modalContent, { maxHeight: windowHeight * 0.75 }]}
+          style={[styles.sheetOuter, { maxHeight: maxModalHeight }]}
           activeOpacity={1}
           onPress={() => {}}
         >
-          <View style={styles.glassEdge}>
+          <View style={styles.sheetGlassEdge}>
+            {/* Hero header with purple gradient */}
             <LinearGradient
-              colors={['#1C1C1E', '#141414', '#0E0E0E']}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={styles.modalGradient}
+              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.headerGradient}
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
             >
               {/* Drag handle */}
@@ -106,8 +109,8 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                 <View style={styles.handle} />
               </View>
 
-              {/* Header */}
-              <View style={styles.header}>
+              {/* Title row */}
+              <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
                   <Text style={styles.title}>Set {setNumber}</Text>
                   <Text style={styles.subtitle} numberOfLines={1}>{exerciseName}</Text>
@@ -121,33 +124,52 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* Stats bar */}
-              {(set.durationSeconds != null && set.durationSeconds > 0 || hasNotes) && (
-                <View style={styles.statsBar}>
-                  {set.durationSeconds != null && set.durationSeconds > 0 && (
-                    <View style={styles.statItem}>
-                      <Clock size={13} color={COLORS.textTertiary} strokeWidth={2} />
-                      <Text style={styles.statValue}>
-                        {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
-                      </Text>
+              {/* Hero score + stats */}
+              {hasNotes && (
+                <View style={styles.heroStats}>
+                  {/* Score hero */}
+                  <View style={styles.scoreHero}>
+                    <View style={styles.scoreLabelRow}>
+                      <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.scoreLabel}>FORM SCORE</Text>
                     </View>
-                  )}
-                  {hasNotes && (
-                    <View style={styles.statItem}>
-                      <TrendingUp size={13} color={COLORS.textTertiary} strokeWidth={2} />
-                      <Text style={styles.statValue}>
-                        {repCount} rep{repCount !== 1 ? 's' : ''}
-                      </Text>
-                    </View>
-                  )}
-                  {hasNotes && (
-                    <View style={styles.statItem}>
-                      <View style={[styles.scoreDot, { backgroundColor: getScoreColor(set.formScore) }]} />
-                      <Text style={[styles.statValue, { color: getScoreColor(set.formScore) }]}>
+                    <View style={styles.scoreValueRow}>
+                      <MonoText bold style={[styles.scoreValue, { color: scoreColor }]}>
                         {set.formScore}
-                      </Text>
+                      </MonoText>
+                      <Text style={styles.scoreUnit}>/100</Text>
                     </View>
-                  )}
+                  </View>
+
+                  {/* Stat chips */}
+                  <View style={styles.statChips}>
+                    {set.durationSeconds != null && set.durationSeconds > 0 && (
+                      <View style={styles.statChip}>
+                        <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
+                        <MonoText style={styles.statChipText}>
+                          {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
+                        </MonoText>
+                      </View>
+                    )}
+                    <View style={styles.statChip}>
+                      <TrendingUp size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
+                      <MonoText style={styles.statChipText}>
+                        {repCount} rep{repCount !== 1 ? 's' : ''}
+                      </MonoText>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Minimal stats for no-notes case */}
+              {!hasNotes && (set.durationSeconds != null && set.durationSeconds > 0) && (
+                <View style={styles.heroStatsMinimal}>
+                  <View style={styles.statChip}>
+                    <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    <MonoText style={styles.statChipText}>
+                      {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
+                    </MonoText>
+                  </View>
                 </View>
               )}
             </LinearGradient>
@@ -162,83 +184,114 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                   <>
                     {/* Rep breakdown */}
                     <View style={styles.section}>
-                      <Text style={styles.sectionTitle}>Rep breakdown</Text>
-                      <View style={styles.repList}>
-                        {Array.from({ length: repCount }, (_, idx) => {
-                          const { formScore, feedback } = getRepDetails(idx);
-                          const isExpanded = expandedReps.has(idx);
-                          const showExpand = overflowedReps.has(idx) || isExpanded;
-                          const isGoodRep = feedback === 'Great rep!' || feedback === 'Good rep.';
-                          const scoreColor = getScoreColor(formScore);
+                      <View style={styles.sectionLabelRow}>
+                        <FileText size={12} color={COLORS.accent} strokeWidth={1.5} />
+                        <Text style={styles.sectionTitle}>REP BREAKDOWN</Text>
+                      </View>
 
-                          return (
-                            <View
-                              key={idx}
-                              style={[
-                                styles.repRow,
-                                idx === repCount - 1 && styles.repRowLast,
-                              ]}
-                            >
-                              <View style={styles.repHeader}>
-                                <View style={styles.repLabelRow}>
-                                  <Text style={styles.repNumber}>{idx + 1}</Text>
-                                  <View style={[styles.scoreBadge, { backgroundColor: `${scoreColor}15` }]}>
-                                    <Text style={[styles.scoreBadgeText, { color: scoreColor }]}>
-                                      {formScore}
+                      <View style={styles.repListOuter}>
+                        <LinearGradient
+                          colors={[...CARD_GRADIENT_COLORS]}
+                          start={CARD_GRADIENT_START}
+                          end={CARD_GRADIENT_END}
+                          style={styles.repListGradient}
+                        >
+                          <View style={styles.repListEdge}>
+                            {Array.from({ length: repCount }, (_, idx) => {
+                              const { formScore, feedback } = getRepDetails(idx);
+                              const isExpanded = expandedReps.has(idx);
+                              const showExpand = overflowedReps.has(idx) || isExpanded;
+                              const isGoodRep = feedback === 'Great rep!' || feedback === 'Good rep.';
+                              const repScoreColor = getScoreColor(formScore);
+
+                              return (
+                                <View
+                                  key={idx}
+                                  style={[
+                                    styles.repRow,
+                                    idx === repCount - 1 && styles.repRowLast,
+                                  ]}
+                                >
+                                  <View style={styles.repHeader}>
+                                    <View style={styles.repLabelRow}>
+                                      <View style={styles.repIndexBadge}>
+                                        <MonoText bold style={styles.repIndexText}>{idx + 1}</MonoText>
+                                      </View>
+                                      <View style={[styles.scoreBadge, { backgroundColor: `${repScoreColor}15` }]}>
+                                        <MonoText bold style={[styles.scoreBadgeText, { color: repScoreColor }]}>
+                                          {formScore}
+                                        </MonoText>
+                                      </View>
+                                    </View>
+                                    {showExpand && (
+                                      <TouchableOpacity
+                                        style={styles.repExpandButton}
+                                        onPress={() => toggleRepExpanded(idx)}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={isExpanded ? 'Collapse feedback' : 'Expand feedback'}
+                                      >
+                                        {isExpanded ? (
+                                          <ChevronUp size={14} color={COLORS.textTertiary} strokeWidth={2} />
+                                        ) : (
+                                          <ChevronDown size={14} color={COLORS.textTertiary} strokeWidth={2} />
+                                        )}
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                  <View style={styles.repFeedbackContainer}>
+                                    {/* Hidden text to measure real line count for overflow */}
+                                    <Text
+                                      style={[styles.repFeedback, styles.repFeedbackMeasure]}
+                                      onTextLayout={(e) => handleFeedbackLayout(idx, e)}
+                                      pointerEvents="none"
+                                    >
+                                      {feedback}
+                                    </Text>
+                                    <Text
+                                      style={[
+                                        styles.repFeedback,
+                                        isGoodRep && styles.repFeedbackGood,
+                                      ]}
+                                      numberOfLines={isExpanded ? undefined : MAX_FEEDBACK_LINES}
+                                    >
+                                      {feedback}
                                     </Text>
                                   </View>
                                 </View>
-                                {showExpand && (
-                                  <TouchableOpacity
-                                    style={styles.repExpandButton}
-                                    onPress={() => toggleRepExpanded(idx)}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={isExpanded ? 'Collapse feedback' : 'Expand feedback'}
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronUp size={16} color={COLORS.textTertiary} strokeWidth={2} />
-                                    ) : (
-                                      <ChevronDown size={16} color={COLORS.textTertiary} strokeWidth={2} />
-                                    )}
-                                  </TouchableOpacity>
-                                )}
-                              </View>
-                              <View style={styles.repFeedbackContainer}>
-                                {/* Hidden text to measure real line count for overflow */}
-                                <Text
-                                  style={[styles.repFeedback, styles.repFeedbackMeasure]}
-                                  onTextLayout={(e) => handleFeedbackLayout(idx, e)}
-                                  pointerEvents="none"
-                                >
-                                  {feedback}
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.repFeedback,
-                                    isGoodRep && styles.repFeedbackGood,
-                                  ]}
-                                  numberOfLines={isExpanded ? undefined : MAX_FEEDBACK_LINES}
-                                >
-                                  {feedback}
-                                </Text>
-                              </View>
-                            </View>
-                          );
-                        })}
+                              );
+                            })}
+                          </View>
+                        </LinearGradient>
                       </View>
                     </View>
 
                     {/* Form summary */}
                     <View style={styles.section}>
-                      <Text style={styles.sectionTitle}>Summary</Text>
-                      <View style={styles.summaryCard}>
-                        <Text style={styles.summaryText}>{summary}</Text>
+                      <View style={styles.sectionLabelRow}>
+                        <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
+                        <Text style={styles.sectionTitle}>SUMMARY</Text>
+                      </View>
+
+                      <View style={styles.summaryOuter}>
+                        <LinearGradient
+                          colors={[...CARD_GRADIENT_COLORS]}
+                          start={CARD_GRADIENT_START}
+                          end={CARD_GRADIENT_END}
+                          style={styles.summaryGradient}
+                        >
+                          <View style={styles.summaryEdge}>
+                            <Text style={styles.summaryText}>{summary}</Text>
+                          </View>
+                        </LinearGradient>
                       </View>
                     </View>
                   </>
                 ) : (
                   <View style={styles.emptyState}>
+                    <View style={styles.emptyIconWrap}>
+                      <FileText size={24} color={COLORS.textTertiary} strokeWidth={1} />
+                    </View>
                     <Text style={styles.emptyText}>
                       No rep-by-rep feedback for this set.
                     </Text>
@@ -258,35 +311,37 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  sheetOuter: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
       },
       android: { elevation: 10 },
     }),
   },
-  modalGradient: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-  glassEdge: {
+  sheetGlassEdge: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(139, 92, 246, 0.15)',
     overflow: 'hidden',
-    backgroundColor: '#0E0E0E',
+    backgroundColor: '#0C0A14',
+  },
+
+  /* ── Header ──────────────────────────────── */
+  headerGradient: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   handleContainer: {
     alignItems: 'center',
@@ -297,15 +352,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
   headerLeft: {
     flex: 1,
@@ -324,54 +379,113 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statsBar: {
+
+  /* ── Hero Stats ──────────────────────────── */
+  heroStats: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
+  },
+  heroStatsMinimal: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.xl,
-    paddingBottom: SPACING.md,
-    gap: SPACING.lg,
+    paddingBottom: SPACING.lg,
   },
-  statItem: {
+  scoreHero: {
+    gap: 4,
+  },
+  scoreLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
-  statValue: {
-    fontSize: 12,
+  scoreLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+  },
+  scoreValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 3,
+  },
+  scoreValue: {
+    fontSize: 40,
+    letterSpacing: -1.5,
+    lineHeight: 44,
+  },
+  scoreUnit: {
     fontFamily: FONTS.mono.regular,
+    fontSize: 14,
+    color: COLORS.textTertiary,
+  },
+  statChips: {
+    gap: 8,
+    alignItems: 'flex-end',
+    paddingBottom: 6,
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  statChipText: {
+    fontSize: 12,
     color: COLORS.textSecondary,
   },
-  scoreDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
+
+  /* ── Scroll ──────────────────────────────── */
   scrollView: {},
   scrollContent: {
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xs,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.xxl,
   },
+
+  /* ── Sections ─────────────────────────────── */
   section: {
     marginBottom: SPACING.xl,
   },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: SPACING.sm,
+  },
   sectionTitle: {
     fontSize: 11,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textTertiary,
-    marginBottom: SPACING.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    fontFamily: FONTS.display.bold,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
   },
-  repList: {
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+
+  /* ── Rep List ─────────────────────────────── */
+  repListOuter: {
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  repListGradient: {
+    borderRadius: 18,
+  },
+  repListEdge: {
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     overflow: 'hidden',
@@ -396,23 +510,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
   },
-  repNumber: {
-    fontSize: 13,
-    fontFamily: FONTS.display.semibold,
-    color: COLORS.textSecondary,
-    width: 20,
+  repIndexBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repIndexText: {
+    fontSize: 11,
+    color: COLORS.accent,
+    lineHeight: 14,
   },
   scoreBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   scoreBadgeText: {
     fontSize: 11,
-    fontFamily: FONTS.mono.bold,
   },
   repFeedbackContainer: {
-    paddingLeft: 28,
+    paddingLeft: 32,
     position: 'relative',
   },
   repExpandButton: {
@@ -430,15 +552,23 @@ const styles = StyleSheet.create({
   repFeedbackMeasure: {
     position: 'absolute',
     opacity: 0,
-    left: 28,
+    left: 32,
     right: 0,
   },
   repFeedbackGood: {
     color: '#34D399',
   },
-  summaryCard: {
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+
+  /* ── Summary ──────────────────────────────── */
+  summaryOuter: {
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  summaryGradient: {
+    borderRadius: 18,
+  },
+  summaryEdge: {
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     padding: SPACING.md,
@@ -449,21 +579,35 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 20,
   },
+
+  /* ── Empty State ──────────────────────────── */
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING.xxl,
   },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
   emptyText: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
     textAlign: 'center',
   },
   emptySubtext: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
     marginTop: SPACING.xs,
     textAlign: 'center',
+    paddingHorizontal: SPACING.xl,
   },
 });

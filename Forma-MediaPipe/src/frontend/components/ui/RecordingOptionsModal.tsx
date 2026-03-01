@@ -8,8 +8,8 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, Video, Download } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import { X, Video, Download, Check } from 'lucide-react-native';
+import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
 interface RecordingOptionsModalProps {
   visible: boolean;
@@ -48,9 +48,9 @@ export const RecordingOptionsModal: React.FC<RecordingOptionsModalProps> = ({
           onPress={() => {}}
         >
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
+            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
@@ -90,7 +90,9 @@ export const RecordingOptionsModal: React.FC<RecordingOptionsModalProps> = ({
                       Save to Video Library
                     </Text>
                   </View>
-                  <View style={[styles.toggleDot, saveToLibrary && styles.toggleDotActive]} />
+                  <View style={[styles.toggleDot, saveToLibrary && styles.toggleDotActive]}>
+                    {saveToLibrary && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                  </View>
                 </TouchableOpacity>
 
                 {saveToLibrary && (
@@ -103,7 +105,9 @@ export const RecordingOptionsModal: React.FC<RecordingOptionsModalProps> = ({
                     <Text style={[styles.recordingSubLabel, saveToCameraRoll && styles.recordingLabelActive]}>
                       Also save to Camera Roll
                     </Text>
-                    <View style={[styles.toggleDotSmall, saveToCameraRoll && styles.toggleDotActive]} />
+                    <View style={[styles.toggleDotSmall, saveToCameraRoll && styles.toggleDotActive]}>
+                      {saveToCameraRoll && <Check size={10} color="#FFFFFF" strokeWidth={3} />}
+                    </View>
                   </TouchableOpacity>
                 )}
               </View>
@@ -111,11 +115,18 @@ export const RecordingOptionsModal: React.FC<RecordingOptionsModalProps> = ({
               {/* Done button */}
               <View style={styles.buttonRow}>
                 <TouchableOpacity
-                  style={styles.doneButton}
+                  style={styles.doneButtonOuter}
                   onPress={onClose}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.doneButtonText}>Done</Text>
+                  <LinearGradient
+                    colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.doneButton}
+                  >
+                    <Text style={styles.doneButtonText}>Done</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             </View>
@@ -137,25 +148,25 @@ const styles = StyleSheet.create({
   cardOuter: {
     width: '100%',
     maxWidth: 380,
-    borderRadius: 19,
+    borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.2,
-        shadowRadius: 20,
+        shadowRadius: 24,
       },
       android: { elevation: 8 },
     }),
   },
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 22,
   },
   cardGlassEdge: {
-    borderRadius: 19,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(139, 92, 246, 0.15)',
   },
   header: {
     flexDirection: 'row',
@@ -166,16 +177,18 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xs,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: FONTS.display.semibold,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -192,7 +205,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xs,
     marginHorizontal: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(139, 92, 246, 0.08)',
   },
   rowIcon: {
     width: 34,
@@ -206,9 +219,9 @@ const styles = StyleSheet.create({
   recordingToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.xs,
-    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -216,7 +229,7 @@ const styles = StyleSheet.create({
   },
   recordingToggleActive: {
     borderColor: 'rgba(139, 92, 246, 0.3)',
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
   },
   recordingToggleText: {
     flex: 1,
@@ -236,7 +249,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     marginLeft: 46,
     gap: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
@@ -255,6 +268,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.15)',
     backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toggleDotSmall: {
     width: 16,
@@ -263,6 +278,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.15)',
     backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toggleDotActive: {
     borderColor: COLORS.accent,
@@ -271,12 +288,17 @@ const styles = StyleSheet.create({
   buttonRow: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.xl,
+  },
+  doneButtonOuter: {
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   doneButton: {
     paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: COLORS.accent,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },

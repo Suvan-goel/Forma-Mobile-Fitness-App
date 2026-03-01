@@ -575,55 +575,50 @@ export const CurrentWorkoutScreen: React.FC = () => {
                         <View style={styles.setsList}>
                           {exercise.sets.map((set, setIndex) => (
                             <View key={setIndex} style={styles.setRow}>
-                              {/* Row 1: Metrics */}
-                              <View style={styles.setMetricsRow}>
-                                <View style={styles.setIndexBadge}>
-                                  <MonoText bold style={styles.setIndexText}>{setIndex + 1}</MonoText>
+                              <View style={styles.setIndexBadge}>
+                                <MonoText bold style={styles.setIndexText}>{setIndex + 1}</MonoText>
+                              </View>
+                              <View style={styles.setMetrics}>
+                                <View style={styles.setMetricItem}>
+                                  <Text style={styles.setMetricLabel}>REPS</Text>
+                                  <MonoText bold style={styles.setMetricValue}>{set.reps}</MonoText>
                                 </View>
-                                <View style={styles.setMetrics}>
-                                  <View style={styles.setMetricItem}>
-                                    <Text style={styles.setMetricLabel}>REPS</Text>
-                                    <MonoText bold style={styles.setMetricValue}>{set.reps}</MonoText>
-                                  </View>
-                                  <View style={styles.setMetricDivider} />
-                                  <TouchableOpacity
-                                    style={styles.setMetricItem}
-                                    onPress={() =>
-                                      handleEditWeight(
-                                        exercise.id,
-                                        exercise.name,
-                                        setIndex,
-                                        set.weight,
-                                        set.weightUnit
-                                      )
-                                    }
-                                    activeOpacity={0.7}
+                                <View style={styles.setMetricDivider} />
+                                <TouchableOpacity
+                                  style={styles.setMetricItem}
+                                  onPress={() =>
+                                    handleEditWeight(
+                                      exercise.id,
+                                      exercise.name,
+                                      setIndex,
+                                      set.weight,
+                                      set.weightUnit
+                                    )
+                                  }
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={styles.setMetricLabel}>WEIGHT</Text>
+                                  <MonoText
+                                    bold
+                                    style={[styles.setMetricValue, !set.weight && styles.setMetricValueEmpty]}
                                   >
-                                    <Text style={styles.setMetricLabel}>WEIGHT</Text>
-                                    <MonoText
-                                      bold
-                                      style={[styles.setMetricValue, !set.weight && styles.setMetricValueEmpty]}
-                                    >
-                                      {set.weight && set.weight > 0
-                                        ? `${set.weight}${set.weightUnit || 'kg'}`
-                                        : '—'}
-                                    </MonoText>
-                                  </TouchableOpacity>
-                                  <View style={styles.setMetricDivider} />
-                                  <View style={styles.setMetricItem}>
-                                    <Text style={styles.setMetricLabel}>FORM</Text>
-                                    <MonoText bold style={[styles.setMetricValue, { color: getScoreColor(set.formScore) }]}>
-                                      {set.formScore}
-                                    </MonoText>
-                                  </View>
+                                    {set.weight && set.weight > 0
+                                      ? `${set.weight}${set.weightUnit || 'kg'}`
+                                      : '—'}
+                                  </MonoText>
+                                </TouchableOpacity>
+                                <View style={styles.setMetricDivider} />
+                                <View style={styles.setMetricItem}>
+                                  <Text style={styles.setMetricLabel}>FORM</Text>
+                                  <MonoText bold style={[styles.setMetricValue, { color: getScoreColor(set.formScore) }]}>
+                                    {set.formScore}
+                                  </MonoText>
                                 </View>
                               </View>
-
-                              {/* Row 2: Actions */}
                               <View style={styles.setActions}>
                                 {set.tempRecordingUrl && (
                                   <TouchableOpacity
-                                    style={styles.setActionBtn}
+                                    style={styles.setActionIcon}
                                     onPress={() =>
                                       setRecordingOptionsModal({
                                         exerciseId: exercise.id,
@@ -634,17 +629,17 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                       })
                                     }
                                     activeOpacity={0.7}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                   >
                                     <Video
-                                      size={11}
+                                      size={13}
                                       color={set.saveRecordingToLibrary !== false ? COLORS.accent : COLORS.textTertiary}
                                       strokeWidth={1.5}
                                     />
-                                    <Text style={[styles.setActionLabel, set.saveRecordingToLibrary === false && styles.setActionLabelDim]}>Video</Text>
                                   </TouchableOpacity>
                                 )}
                                 <TouchableOpacity
-                                  style={styles.setActionBtn}
+                                  style={styles.setActionIcon}
                                   onPress={() =>
                                     setNotesModalSet({
                                       set,
@@ -653,18 +648,17 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                     })
                                   }
                                   activeOpacity={0.7}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                 >
-                                  <FileText size={11} color={COLORS.accent} strokeWidth={1.5} />
-                                  <Text style={styles.setActionLabel}>Notes</Text>
+                                  <FileText size={13} color={COLORS.accent} strokeWidth={1.5} />
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                  style={[styles.setActionBtn, styles.setActionBtnDelete]}
+                                  style={styles.setActionIcon}
                                   onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
                                   activeOpacity={0.7}
-                                  hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                 >
-                                  <X size={11} color={COLORS.textTertiary} strokeWidth={2} />
-                                  <Text style={[styles.setActionLabel, styles.setActionLabelDim]}>Delete</Text>
+                                  <X size={13} color={COLORS.textTertiary} strokeWidth={2} />
                                 </TouchableOpacity>
                               </View>
                             </View>
@@ -1049,16 +1043,13 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   setRow: {
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  setMetricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 16,
+    gap: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
   setIndexBadge: {
     width: 26,
@@ -1080,7 +1071,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 4,
   },
   setMetricItem: {
     flex: 1,
@@ -1110,31 +1100,15 @@ const styles = StyleSheet.create({
   setActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    gap: 15,
-    marginTop: 10,
-    paddingLeft: 0,
+    gap: 7,
   },
-  setActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 20,
-    paddingVertical: 6,
+  setActionIcon: {
+    width: 28,
+    height: 28,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  setActionBtnDelete: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-  },
-  setActionLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.accent,
-    letterSpacing: 0.2,
-  },
-  setActionLabelDim: {
-    color: COLORS.textTertiary,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* ── Add Set Row ────────────────────────── */

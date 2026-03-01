@@ -10,8 +10,8 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, Weight, Video, Download } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import { X, Video, Download, Check, Dumbbell } from 'lucide-react-native';
+import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
 interface WeightInputModalProps {
   visible: boolean;
@@ -92,124 +92,110 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
           onPress={() => {}}
         >
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
+            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
               {/* Header */}
-              <View style={styles.header}>
-                <Text style={styles.title}>
-                  {hasRecording ? 'Log Set' : (initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Log Weight')}
-                </Text>
+              <View style={styles.headerRow}>
+                <View style={styles.headerLeft}>
+                  <Text style={styles.title}>
+                    {hasRecording ? 'Log Set' : (initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Log Weight')}
+                  </Text>
+                  {exerciseName && setNumber != null && (
+                    <Text style={styles.subtitle}>{exerciseName} · Set {setNumber}</Text>
+                  )}
+                </View>
                 <TouchableOpacity
                   style={styles.closeButton}
                   onPress={hasRecording ? handleSubmit : handleSkip}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <X size={18} color={COLORS.textSecondary} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
 
-              {exerciseName && setNumber && (
-                <Text style={styles.subtitle}>
-                  {exerciseName} • Set {setNumber}
-                </Text>
-              )}
-
-              {/* Weight input section */}
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>WEIGHT</Text>
-
-                <View style={styles.inputRow}>
-                  <View style={styles.rowIcon}>
-                    <Weight
-                      size={18}
-                      color={COLORS.accent}
-                      strokeWidth={1.5}
-                    />
-                  </View>
+            {/* Body */}
+            <View style={styles.body}>
+              {/* Weight input hero */}
+              <View style={styles.weightHero}>
+                <View style={styles.weightIconWrap}>
+                  <Dumbbell size={16} color={COLORS.accent} strokeWidth={1.5} />
+                </View>
+                <View style={styles.weightInputWrap}>
                   <TextInput
-                    style={styles.input}
+                    style={styles.weightInput}
                     value={weight}
                     onChangeText={setWeight}
                     keyboardType="decimal-pad"
                     placeholder="0"
-                    placeholderTextColor={COLORS.textTertiary}
+                    placeholderTextColor="rgba(139, 92, 246, 0.25)"
                     autoFocus
                     selectTextOnFocus
                   />
-                  <Text style={styles.inputUnitHint}>
-                    {unit}
-                  </Text>
+                  <Text style={styles.weightUnitHint}>{unit}</Text>
                 </View>
               </View>
 
-              {/* Unit toggle section */}
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>UNIT</Text>
-
-                <View style={styles.unitToggle}>
-                  <TouchableOpacity
-                    style={[styles.unitButton, unit === 'kg' && styles.unitButtonActive]}
-                    onPress={() => setUnit('kg')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.unitText, unit === 'kg' && styles.unitTextActive]}>
-                      kg
-                    </Text>
-                    <Text style={[styles.unitDescription, unit === 'kg' && styles.unitDescriptionActive]}>
-                      Kilograms
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.unitButton, unit === 'lbs' && styles.unitButtonActive]}
-                    onPress={() => setUnit('lbs')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.unitText, unit === 'lbs' && styles.unitTextActive]}>
-                      lbs
-                    </Text>
-                    <Text style={[styles.unitDescription, unit === 'lbs' && styles.unitDescriptionActive]}>
-                      Pounds
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+              {/* Unit toggle — inline pills */}
+              <View style={styles.unitRow}>
+                <TouchableOpacity
+                  style={[styles.unitPill, unit === 'kg' && styles.unitPillActive]}
+                  onPress={() => setUnit('kg')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.unitPillText, unit === 'kg' && styles.unitPillTextActive]}>kg</Text>
+                  <Text style={[styles.unitPillSub, unit === 'kg' && styles.unitPillSubActive]}>Kilograms</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.unitPill, unit === 'lbs' && styles.unitPillActive]}
+                  onPress={() => setUnit('lbs')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.unitPillText, unit === 'lbs' && styles.unitPillTextActive]}>lbs</Text>
+                  <Text style={[styles.unitPillSub, unit === 'lbs' && styles.unitPillSubActive]}>Pounds</Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Recording save section — only shown when a recording exists */}
+              {/* Recording options */}
               {hasRecording && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>SET RECORDING</Text>
+                <View style={styles.recordingSection}>
+                  <View style={styles.sectionLabelRow}>
+                    <Video size={12} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.sectionLabel}>RECORDING</Text>
+                  </View>
 
                   <TouchableOpacity
-                    style={[styles.recordingToggle, saveToLibrary && styles.recordingToggleActive]}
+                    style={[styles.toggleRow, saveToLibrary && styles.toggleRowActive]}
                     onPress={() => setSaveToLibrary(!saveToLibrary)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.rowIcon}>
-                      <Video size={16} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                    <View style={[styles.toggleIconWrap, saveToLibrary && styles.toggleIconWrapActive]}>
+                      <Video size={14} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
                     </View>
-                    <View style={styles.recordingToggleText}>
-                      <Text style={[styles.recordingLabel, saveToLibrary && styles.recordingLabelActive]}>
-                        Save to Video Library
-                      </Text>
+                    <Text style={[styles.toggleLabel, saveToLibrary && styles.toggleLabelActive]}>
+                      Save to Video Library
+                    </Text>
+                    <View style={[styles.toggleCheck, saveToLibrary && styles.toggleCheckActive]}>
+                      {saveToLibrary && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
                     </View>
-                    <View style={[styles.toggleDot, saveToLibrary && styles.toggleDotActive]} />
                   </TouchableOpacity>
 
                   {saveToLibrary && (
                     <TouchableOpacity
-                      style={[styles.recordingSubToggle, saveToCameraRoll && styles.recordingToggleActive]}
+                      style={[styles.toggleSubRow, saveToCameraRoll && styles.toggleRowActive]}
                       onPress={() => setSaveToCameraRoll(!saveToCameraRoll)}
                       activeOpacity={0.7}
                     >
-                      <Download size={14} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
-                      <Text style={[styles.recordingSubLabel, saveToCameraRoll && styles.recordingLabelActive]}>
+                      <Download size={13} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                      <Text style={[styles.toggleSubLabel, saveToCameraRoll && styles.toggleLabelActive]}>
                         Also save to Camera Roll
                       </Text>
-                      <View style={[styles.toggleDotSmall, saveToCameraRoll && styles.toggleDotActive]} />
+                      <View style={[styles.toggleCheckSmall, saveToCameraRoll && styles.toggleCheckActive]}>
+                        {saveToCameraRoll && <Check size={9} color="#FFFFFF" strokeWidth={3} />}
+                      </View>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -227,13 +213,21 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
-                  style={styles.submitButton}
+                  style={styles.saveButtonOuter}
                   onPress={handleSubmit}
-                  activeOpacity={0.7}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.submitButtonText}>Save</Text>
+                  <LinearGradient
+                    colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.saveButtonGradient}
+                  >
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
+            </View>
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -253,215 +247,262 @@ const styles = StyleSheet.create({
   cardOuter: {
     width: '100%',
     maxWidth: 380,
-    borderRadius: 19,
+    borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 20,
+        shadowOpacity: 0.25,
+        shadowRadius: 24,
       },
-      android: { elevation: 8 },
+      android: { elevation: 10 },
     }),
   },
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 22,
   },
   cardGlassEdge: {
-    borderRadius: 19,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    overflow: 'hidden',
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xs,
+    paddingBottom: SPACING.sm,
+  },
+  headerLeft: {
+    flex: 1,
+    marginRight: SPACING.md,
   },
   title: {
     fontSize: 20,
-    fontFamily: FONTS.display.semibold,
+    fontFamily: FONTS.display.bold,
     color: COLORS.text,
-    letterSpacing: -0.3,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 12,
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textTertiary,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.sm,
-    letterSpacing: 0.5,
+    color: COLORS.textSecondary,
+    marginTop: 3,
+    letterSpacing: 0.2,
   },
-  section: {
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xs,
-    marginHorizontal: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textTertiary,
-    letterSpacing: 1.5,
-    marginBottom: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.xs,
-  },
-  rowIcon: {
+  closeButton: {
     width: 34,
     height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  input: {
+
+  /* ── Body ─────────────────────────────────── */
+  body: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xl,
+  },
+
+  /* ── Weight Hero ──────────────────────────── */
+  weightHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(139, 92, 246, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.1)',
+    marginBottom: SPACING.md,
+  },
+  weightIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  weightInputWrap: {
     flex: 1,
-    fontSize: 36,
-    fontFamily: FONTS.mono.bold,
-    color: COLORS.accent,
-    paddingVertical: SPACING.xs,
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
-  inputUnitHint: {
+  weightInput: {
+    flex: 1,
+    fontSize: 38,
+    fontFamily: FONTS.display.bold,
+    color: COLORS.accent,
+    letterSpacing: -1,
+    paddingVertical: 2,
+  },
+  weightUnitHint: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
     marginLeft: SPACING.sm,
+    marginBottom: 4,
   },
-  unitToggle: {
+
+  /* ── Unit Toggle ──────────────────────────── */
+  unitRow: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-    paddingBottom: SPACING.sm,
+    marginBottom: SPACING.lg,
   },
-  unitButton: {
+  unitPill: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  unitButtonActive: {
-    borderColor: 'rgba(139, 92, 246, 0.4)',
+  unitPillActive: {
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
   },
-  unitText: {
+  unitPillText: {
     fontSize: 15,
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.textTertiary,
     lineHeight: 20,
   },
-  unitTextActive: {
+  unitPillTextActive: {
     color: COLORS.accent,
   },
-  unitDescription: {
-    fontSize: 11,
+  unitPillSub: {
+    fontSize: 10,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
-    opacity: 0.6,
+    opacity: 0.5,
     marginTop: 1,
   },
-  unitDescriptionActive: {
+  unitPillSubActive: {
     color: COLORS.textSecondary,
     opacity: 1,
   },
-  recordingToggle: {
+
+  /* ── Recording Section ────────────────────── */
+  recordingSection: {
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(139, 92, 246, 0.08)',
+    marginBottom: SPACING.sm,
+  },
+  sectionLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.xs,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    marginBottom: SPACING.xs,
+    gap: 6,
+    marginBottom: SPACING.sm,
   },
-  recordingToggleActive: {
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
   },
-  recordingToggleText: {
-    flex: 1,
-  },
-  recordingLabel: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textTertiary,
-  },
-  recordingLabelActive: {
-    color: COLORS.text,
-  },
-  recordingSubToggle: {
+  toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: SPACING.sm,
-    marginLeft: 46,
-    gap: 8,
-    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     marginBottom: SPACING.xs,
   },
-  recordingSubLabel: {
+  toggleRowActive: {
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+  },
+  toggleIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  toggleIconWrapActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+  },
+  toggleLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+  },
+  toggleLabelActive: {
+    color: COLORS.text,
+  },
+  toggleCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleCheckSmall: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleCheckActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accent,
+  },
+  toggleSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginLeft: 42,
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    marginBottom: SPACING.xs,
+  },
+  toggleSubLabel: {
     flex: 1,
     fontSize: 12,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
   },
-  toggleDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: 'transparent',
-  },
-  toggleDotSmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: 'transparent',
-  },
-  toggleDotActive: {
-    borderColor: COLORS.accent,
-    backgroundColor: COLORS.accent,
-  },
+
+  /* ── Buttons ──────────────────────────────── */
   buttonRow: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.lg,
   },
   skipButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
+    height: 50,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -473,18 +514,32 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
   },
-  submitButton: {
+  saveButtonOuter: {
     flex: 2,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: COLORS.accent,
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  saveButtonGradient: {
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  submitButtonText: {
-    fontSize: 14,
+  saveButtonText: {
+    fontSize: 15,
     fontFamily: FONTS.display.semibold,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 });
