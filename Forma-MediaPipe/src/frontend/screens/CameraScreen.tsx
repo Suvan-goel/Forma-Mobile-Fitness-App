@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator } from 'react-native';
 import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -24,6 +24,7 @@ import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSet
 import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
+import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
 
 /** Exercises with dedicated heuristics (FSM-based form analysis) */
 const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
@@ -59,8 +60,9 @@ export const CameraScreen: React.FC = () => {
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
-  const { addSetToExercise } = useCurrentWorkout();
+  const { addSetToExercise, sessionId, setPendingRecording } = useCurrentWorkout();
   const { showFeedback, isTTSEnabled, setIsTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId } = useCameraSettings();
+  const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -81,6 +83,10 @@ export const CameraScreen: React.FC = () => {
 
   // Unified exercise state ref — populated via ExerciseRegistry on mount and recording start
   const exerciseStateRef = useRef<ExerciseState | null>(null);
+
+  // Screen recording pulse animation + attempt tracking
+  const screenRecPulseAnim = useRef(new Animated.Value(1)).current;
+  const screenRecAttemptedRef = useRef(false);
 
   // __DEV__-only: landmark recording refs (auto-record when set recording starts/stops)
   const isRecordingLandmarksRef = useRef(false);
@@ -424,7 +430,7 @@ export const CameraScreen: React.FC = () => {
     workoutDataRef.current = workoutData;
   }, [workoutData]);
 
-  const handleRecordPress = useCallback(() => {
+  const handleRecordPress = useCallback(async () => {
     if (isRecording) {
       // Read per-rep data from synchronous refs (immune to InteractionManager deferral)
       pendingUIStateRef.current = null;
@@ -491,11 +497,37 @@ export const CameraScreen: React.FC = () => {
         if (isTTSEnabledRef.current) {
           ttsOnSetEnded(totalReps, avgFormScore).catch(() => {});
         }
+
+        // Stop screen recording if we attempted to start one.
+        // Non-blocking: Samsung/Android MediaProjection can take 5-30s to finalize.
+        // Navigate immediately; deliver the recording via context when ready.
+        // Context setter survives CameraScreen unmount (provider is in RecordTabWithProvider).
+        if (screenRecAttemptedRef.current) {
+          screenRecAttemptedRef.current = false;
+          const recMeta = {
+            exerciseName: exerciseNameFromRoute,
+            formScore: avgFormScore,
+            reps: totalReps,
+            durationSeconds: durationSeconds > 0 ? durationSeconds : 0,
+            sessionId,
+          };
+          stopScreenRec().then((tempUrl) => {
+            if (__DEV__) console.log('[CameraScreen] stopScreenRec resolved, tempUrl:', tempUrl);
+            if (tempUrl) {
+              setPendingRecording({ tempUrl, ...recMeta });
+            }
+          }).catch((err) => {
+            if (__DEV__) console.warn('[CameraScreen] Screen recording stop failed:', err);
+          });
+        }
+
         // Unmount camera first so native layer releases it; prevents "Camera initialization failed" on next open
         setIsClosing(true);
         setCameraMounted(false);
         setTimeout(() => {
-          (navigation as any).navigate('CurrentWorkout', { showWeightFor: { exerciseId } });
+          (navigation as any).navigate('CurrentWorkout', {
+            showWeightFor: { exerciseId },
+          });
         }, 450);
       } else {
         // Original flow: navigate to SaveWorkout
@@ -548,8 +580,16 @@ export const CameraScreen: React.FC = () => {
         landmarkBufferRef.current = [];
         isRecordingLandmarksRef.current = true;
       }
+
+      // Auto-start screen recording — await with timeout so the ref is set before user stops
+      if (screenRecAvailable) {
+        screenRecAttemptedRef.current = true;
+        startScreenRec().catch(() => {
+          if (__DEV__) console.warn('[CameraScreen] Auto screen recording start failed');
+        });
+      }
     }
-  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise]);
+  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec]);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(prev => !prev);
@@ -569,7 +609,28 @@ export const CameraScreen: React.FC = () => {
     }
   }, [handleCameraFlip]);
 
+  // Screen recording: pulse animation
+  useEffect(() => {
+    if (isRecordingScreen) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(screenRecPulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+          Animated.timing(screenRecPulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      screenRecPulseAnim.setValue(1);
+    }
+  }, [isRecordingScreen, screenRecPulseAnim]);
+
   const handleDiscardSetPress = useCallback(() => {
+    // Cancel any active screen recording on discard
+    if (screenRecAttemptedRef.current || isRecordingScreenRef.current) {
+      screenRecAttemptedRef.current = false;
+      cancelScreenRec().catch(() => {});
+    }
     showAlert(
       'Discard set?',
       'Are you sure you want to discard this set? Your reps will not be saved.',
@@ -588,7 +649,7 @@ export const CameraScreen: React.FC = () => {
         },
       ]
     );
-  }, [navigation]);
+  }, [navigation, isRecordingScreenRef, cancelScreenRec]);
 
   // Layout: camera fills entire screen; top bar and controls overlay on top.
   const topInset = insets.top + 6;
@@ -810,6 +871,11 @@ export const CameraScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
           <View style={styles.headerRightGroup} onLayout={handleSettingsLayout}>
+            {isRecordingScreen && (
+              <View style={styles.screenRecButton} accessibilityLabel="Screen recording active">
+                <Animated.View style={[styles.screenRecDot, { opacity: screenRecPulseAnim }]} />
+              </View>
+            )}
             <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
@@ -1310,6 +1376,16 @@ const styles = StyleSheet.create({
   },
   settingsButton: {
     padding: 0,
+  },
+  screenRecButton: {
+    marginRight: 16,
+    padding: 4,
+  },
+  screenRecDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#EF4444',
   },
   recordButtonContainer: {
     alignItems: 'center',

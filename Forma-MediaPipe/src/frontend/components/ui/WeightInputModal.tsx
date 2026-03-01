@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, Weight } from 'lucide-react-native';
+import { X, Weight, Video, Download } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 
 interface WeightInputModalProps {
@@ -21,6 +21,9 @@ interface WeightInputModalProps {
   initialUnit?: 'kg' | 'lbs';
   exerciseName?: string;
   setNumber?: number;
+  hasRecording?: boolean;
+  onSaveRecording?: (saveToCameraRoll: boolean) => void;
+  onDiscardRecording?: () => void;
 }
 
 export const WeightInputModal: React.FC<WeightInputModalProps> = ({
@@ -31,14 +34,21 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
   initialUnit = 'kg',
   exerciseName,
   setNumber,
+  hasRecording,
+  onSaveRecording,
+  onDiscardRecording,
 }) => {
   const [weight, setWeight] = useState('');
   const [unit, setUnit] = useState<'kg' | 'lbs'>(initialUnit);
+  const [saveToLibrary, setSaveToLibrary] = useState(true);
+  const [saveToCameraRoll, setSaveToCameraRoll] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setWeight(initialWeight ? String(initialWeight) : '');
       setUnit(initialUnit);
+      setSaveToLibrary(true);
+      setSaveToCameraRoll(false);
     }
   }, [visible, initialWeight, initialUnit]);
 
@@ -47,16 +57,26 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
     if (!isNaN(weightNum) && weightNum > 0) {
       onSubmit(weightNum, unit);
       setWeight('');
-      onClose();
     } else if (weight === '' || weightNum === 0) {
-      // Allow submitting 0 or empty to clear weight
       onSubmit(0, unit);
       setWeight('');
-      onClose();
     }
+    // Handle recording save/discard
+    if (hasRecording) {
+      if (saveToLibrary) {
+        onSaveRecording?.(saveToCameraRoll);
+      } else {
+        onDiscardRecording?.();
+      }
+    }
+    onClose();
   };
 
   const handleSkip = () => {
+    // Discard recording when skipping
+    if (hasRecording) {
+      onDiscardRecording?.();
+    }
     setWeight('');
     onClose();
   };
@@ -167,6 +187,43 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Recording save section — only shown when a recording exists */}
+              {hasRecording && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>SET RECORDING</Text>
+
+                  <TouchableOpacity
+                    style={[styles.recordingToggle, saveToLibrary && styles.recordingToggleActive]}
+                    onPress={() => setSaveToLibrary(!saveToLibrary)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.rowIcon}>
+                      <Video size={16} color={saveToLibrary ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                    </View>
+                    <View style={styles.recordingToggleText}>
+                      <Text style={[styles.recordingLabel, saveToLibrary && styles.recordingLabelActive]}>
+                        Save to Video Library
+                      </Text>
+                    </View>
+                    <View style={[styles.toggleDot, saveToLibrary && styles.toggleDotActive]} />
+                  </TouchableOpacity>
+
+                  {saveToLibrary && (
+                    <TouchableOpacity
+                      style={[styles.recordingSubToggle, saveToCameraRoll && styles.recordingToggleActive]}
+                      onPress={() => setSaveToCameraRoll(!saveToCameraRoll)}
+                      activeOpacity={0.7}
+                    >
+                      <Download size={14} color={saveToCameraRoll ? COLORS.accent : COLORS.textTertiary} strokeWidth={1.5} />
+                      <Text style={[styles.recordingSubLabel, saveToCameraRoll && styles.recordingLabelActive]}>
+                        Also save to Camera Roll
+                      </Text>
+                      <View style={[styles.toggleDotSmall, saveToCameraRoll && styles.toggleDotActive]} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
 
               {/* Action buttons */}
               <View style={styles.buttonRow}>
@@ -336,6 +393,71 @@ const styles = StyleSheet.create({
   unitDescriptionActive: {
     color: COLORS.textSecondary,
     opacity: 1,
+  },
+  recordingToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.xs,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    marginBottom: SPACING.xs,
+  },
+  recordingToggleActive: {
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+  },
+  recordingToggleText: {
+    flex: 1,
+  },
+  recordingLabel: {
+    fontSize: 14,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+  },
+  recordingLabelActive: {
+    color: COLORS.text,
+  },
+  recordingSubToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: SPACING.sm,
+    marginLeft: 46,
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    marginBottom: SPACING.xs,
+  },
+  recordingSubLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+  },
+  toggleDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'transparent',
+  },
+  toggleDotSmall: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'transparent',
+  },
+  toggleDotActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accent,
   },
   buttonRow: {
     flexDirection: 'row',

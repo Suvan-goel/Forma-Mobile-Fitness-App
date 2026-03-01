@@ -19,14 +19,18 @@
       "bundleIdentifier": "com.forma.dev.allahham.12345.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app requires camera access to process video frames for MediaPipe pose detection.",
-        "NSPhotoLibraryUsageDescription": "Choose a profile photo from your photo library."
+        "NSPhotoLibraryUsageDescription": "Choose a profile photo from your photo library.",
+        "NSPhotoLibraryAddUsageDescription": "Save workout recordings to your photo library.",
+        "NSMicrophoneUsageDescription": "Record audio during workout screen recordings."
       }
     },
     "android": {
       "package": "com.forma.app",
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "WRITE_EXTERNAL_STORAGE",
+        "FOREGROUND_SERVICE"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -59,6 +63,14 @@
       "expo-font",
       "expo-web-browser",
       "expo-image-picker",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Save workout recordings to your photo library.",
+          "savePhotosPermission": "Save workout recordings to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
       [
         "expo-build-properties",
         {

@@ -7,6 +7,7 @@ import { useState, useCallback } from 'react';
 import { workoutsService, CreateWorkoutPayload, rewardsService, socialService } from '../services/api';
 import { generateSetSummary } from '../../utils/setNotesSummary';
 import { calculateWorkoutPoints } from '../../utils/pointsCalculator';
+import { linkWorkoutId } from '../services/videoLibrary';
 
 interface WorkoutExerciseInput {
   name: string;
@@ -25,6 +26,8 @@ interface SaveWorkoutParams {
   category?: string;
   notes?: string;
   exercises: WorkoutExerciseInput[];
+  /** CurrentWorkoutContext sessionId — used to link video recordings to the saved workout */
+  workoutSessionId?: string;
 }
 
 interface UseSaveWorkoutReturn {
@@ -106,6 +109,13 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
         socialService.emitPersonalRecordsIfNeeded(sessionId, payload.exercises).catch(() => {
           if (__DEV__) console.warn('[useSaveWorkout] Personal record check failed');
         });
+
+        // Link video recordings to the saved workout — fire and forget
+        if (params.workoutSessionId) {
+          linkWorkoutId(params.workoutSessionId, sessionId).catch(() => {
+            if (__DEV__) console.warn('[useSaveWorkout] Video linking failed for session', sessionId);
+          });
+        }
       }
 
       return true;

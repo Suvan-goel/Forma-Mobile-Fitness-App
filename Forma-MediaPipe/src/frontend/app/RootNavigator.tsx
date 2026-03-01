@@ -38,6 +38,7 @@ import { ChooseExerciseScreen } from '../screens/ChooseExerciseScreen';
 import { WorkoutTemplatesScreen } from '../screens/WorkoutTemplatesScreen';
 import { CameraSettingsScreen } from '../screens/CameraSettingsScreen';
 import { ExerciseGuideScreen } from '../screens/ExerciseGuideScreen';
+import { VideoLibraryScreen } from '../screens/VideoLibraryScreen';
 import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlow';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
@@ -84,13 +85,17 @@ export type RootStackParamList = {
   Rewards: undefined;
   UserProfile: undefined;
   Tutorials: undefined;
+  VideoLibrary: undefined;
   Onboarding: undefined;
 };
 
 // Define the Record Stack Param List
 export type RecordStackParamList = {
   RecordLanding: undefined;
-  CurrentWorkout: { newSet?: LoggedSet; showWeightFor?: { exerciseId: string } } | undefined;
+  CurrentWorkout: {
+    newSet?: LoggedSet;
+    showWeightFor?: { exerciseId: string };
+  } | undefined;
   ChooseExercise: undefined;
   WorkoutTemplates: undefined;
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout?: true };
@@ -503,6 +508,11 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="Tutorials"
             component={TutorialsScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="VideoLibrary"
+            component={VideoLibraryScreen}
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen

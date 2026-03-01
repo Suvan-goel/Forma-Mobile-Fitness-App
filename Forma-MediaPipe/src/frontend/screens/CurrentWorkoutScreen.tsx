@@ -37,6 +37,15 @@ import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
+import { saveRecording as saveRecordingSvc } from '../../backend/services/videoLibrary';
+import { cleanupTempRecording } from '../../backend/services/screenRecording';
+
+let MediaLibrary: any = null;
+try {
+  MediaLibrary = require('expo-media-library');
+} catch {
+  // expo-media-library not available
+}
 
 export type { LoggedSet };
 
@@ -90,6 +99,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setWorkoutElapsedSeconds,
     workoutPaused,
     setWorkoutPaused,
+    pendingRecording,
+    setPendingRecording,
   } = useCurrentWorkout();
   const [elapsedSeconds, setElapsedSeconds] = useState(contextElapsed);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
@@ -218,6 +229,22 @@ export const CurrentWorkoutScreen: React.FC = () => {
     }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, exercises, startRestTimer])
   );
 
+  // When a recording arrives after the weight modal was already dismissed,
+  // show a standalone alert so the user can still save or discard it.
+  useEffect(() => {
+    if (pendingRecording && !weightModalData) {
+      showAlert(
+        'Set Recording',
+        'Save this set recording to your video library?',
+        [
+          { text: 'Discard', style: 'cancel', onPress: () => handleDiscardRecording() },
+          { text: 'Save', onPress: () => handleSaveRecording(false) },
+        ]
+      );
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRecording]);
+
   useEffect(() => {
     exercises.forEach((exercise) => {
       const prevCount = prevSetCountsRef.current.get(exercise.id) || 0;
@@ -277,6 +304,37 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setWorkoutElapsedSeconds(elapsedSeconds);
     navigation.reset({ index: 0, routes: [{ name: 'RecordLanding' }] });
   };
+
+  const handleSaveRecording = useCallback(async (saveToCameraRoll: boolean) => {
+    if (!pendingRecording) return;
+    const exercise = exercises.find((ex) => ex.name === pendingRecording.exerciseName);
+    const setNumber = exercise ? exercise.sets.length : 1;
+    const record = await saveRecordingSvc(pendingRecording.tempUrl, {
+      sessionId: pendingRecording.sessionId,
+      exerciseName: pendingRecording.exerciseName,
+      setNumber,
+      durationSeconds: pendingRecording.durationSeconds,
+      formScore: pendingRecording.formScore,
+      reps: pendingRecording.reps,
+    });
+    if (saveToCameraRoll && record && MediaLibrary) {
+      try {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === 'granted') {
+          await MediaLibrary.saveToLibraryAsync(record.videoPath);
+        }
+      } catch {
+        // Best-effort camera roll save
+      }
+    }
+    setPendingRecording(null);
+  }, [pendingRecording, exercises]);
+
+  const handleDiscardRecording = useCallback(async () => {
+    if (!pendingRecording) return;
+    await cleanupTempRecording(pendingRecording.tempUrl);
+    setPendingRecording(null);
+  }, [pendingRecording]);
 
   const handleWeightSubmit = (weight: number, unit: 'kg' | 'lbs') => {
     if (weightModalData) {
@@ -608,6 +666,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
           initialUnit={weightModalData.currentUnit}
           exerciseName={weightModalData.exerciseName}
           setNumber={weightModalData.setIndex + 1}
+          hasRecording={!!pendingRecording}
+          onSaveRecording={handleSaveRecording}
+          onDiscardRecording={handleDiscardRecording}
         />
       )}
 

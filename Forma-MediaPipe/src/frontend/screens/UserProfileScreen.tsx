@@ -438,7 +438,7 @@ export const UserProfileScreen: React.FC = () => {
 
           <View style={{ height: 8 }} />
 
-          <View>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('VideoLibrary')}>
             <LinearGradient
               colors={[...CARD_GRADIENT_COLORS]}
               start={CARD_GRADIENT_START}
@@ -447,18 +447,18 @@ export const UserProfileScreen: React.FC = () => {
             >
               <View style={styles.linkEdge}>
                 <View style={styles.linkRow}>
-                  <View style={[styles.linkIconWrap, styles.linkIconWrapDim]}>
-                    <Video size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  <View style={styles.linkIconWrap}>
+                    <Video size={18} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
                   <View style={styles.linkTextWrap}>
-                    <Text style={[styles.linkTitle, styles.linkTitleDim]}>Video Library</Text>
-                    <Text style={styles.linkSubtitle}>Your recorded workouts · Coming soon</Text>
+                    <Text style={styles.linkTitle}>Video Library</Text>
+                    <Text style={styles.linkSubtitle}>Your recorded workouts</Text>
                   </View>
                   <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
               </View>
             </LinearGradient>
-          </View>
+          </TouchableOpacity>
 
           {/* ═══════════════════════════════════════════
               PERFORMANCE — 2×2 Bento grid

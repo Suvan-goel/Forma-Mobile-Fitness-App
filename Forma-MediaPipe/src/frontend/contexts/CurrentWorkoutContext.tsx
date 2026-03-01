@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 
 export interface LoggedSet {
   exerciseName: string;
@@ -21,12 +21,23 @@ export interface WorkoutExercise {
   sets: LoggedSet[];
 }
 
+export interface PendingRecording {
+  tempUrl: string;
+  exerciseName: string;
+  formScore: number;
+  reps: number;
+  durationSeconds: number;
+  sessionId: string;
+}
+
 type CurrentWorkoutContextValue = {
   exercises: WorkoutExercise[];
   sets: LoggedSet[]; // Derived from exercises for backward compatibility
+  sessionId: string;
   workoutInProgress: boolean;
   workoutElapsedSeconds: number;
   workoutPaused: boolean;
+  pendingRecording: PendingRecording | null;
   addExercise: (exercise: { name: string; category: string }) => void;
   addSetToExercise: (exerciseId: string, set: LoggedSet) => void;
   addSet: (set: LoggedSet) => void; // Deprecated but kept for compatibility
@@ -37,14 +48,17 @@ type CurrentWorkoutContextValue = {
   setWorkoutInProgress: (value: boolean) => void;
   setWorkoutElapsedSeconds: (value: number | ((prev: number) => number)) => void;
   setWorkoutPaused: (value: boolean | ((prev: boolean) => boolean)) => void;
+  setPendingRecording: (value: PendingRecording | null) => void;
 };
 
 const defaultValue: CurrentWorkoutContextValue = {
   exercises: [],
   sets: [],
+  sessionId: '',
   workoutInProgress: false,
   workoutElapsedSeconds: 0,
   workoutPaused: false,
+  pendingRecording: null,
   addExercise: () => {},
   addSetToExercise: () => {},
   addSet: () => {},
@@ -55,6 +69,7 @@ const defaultValue: CurrentWorkoutContextValue = {
   setWorkoutInProgress: () => {},
   setWorkoutElapsedSeconds: () => {},
   setWorkoutPaused: () => {},
+  setPendingRecording: () => {},
 };
 
 const CurrentWorkoutContext = createContext<CurrentWorkoutContextValue>(defaultValue);
@@ -64,6 +79,8 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
   const [workoutInProgress, setWorkoutInProgress] = useState(false);
   const [workoutElapsedSeconds, setWorkoutElapsedSeconds] = useState(0);
   const [workoutPaused, setWorkoutPaused] = useState(false);
+  const [pendingRecording, setPendingRecording] = useState<PendingRecording | null>(null);
+  const sessionIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const addExercise = useCallback((exercise: { name: string; category: string }) => {
     const newExercise: WorkoutExercise = {
@@ -142,6 +159,8 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     setWorkoutInProgress(false);
     setWorkoutElapsedSeconds(0);
     setWorkoutPaused(false);
+    setPendingRecording(null);
+    sessionIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }, []);
 
   // Flatten exercises to sets for backward compatibility
@@ -154,9 +173,11 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
       value={{
         exercises,
         sets,
+        sessionId: sessionIdRef.current,
         workoutInProgress,
         workoutElapsedSeconds,
         workoutPaused,
+        pendingRecording,
         addExercise,
         addSetToExercise,
         addSet,
@@ -167,6 +188,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
         setWorkoutInProgress,
         setWorkoutElapsedSeconds,
         setWorkoutPaused,
+        setPendingRecording,
       }}
     >
       {children}

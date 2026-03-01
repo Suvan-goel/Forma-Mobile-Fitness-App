@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated, Modal, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -8,6 +8,7 @@ import {
   Target,
   AlignLeft,
   Dumbbell,
+  Video,
 } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,18 +24,36 @@ import {
 } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useWorkoutDetails } from '../../backend/hooks';
+import { useVideoLibrary } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutExercise } from '../../backend/services/api';
+import type { VideoRecord } from '../../backend/services/videoLibrary';
+
+let VideoComponent: any = null;
+try {
+  VideoComponent = require('expo-av').Video;
+} catch {
+  // expo-av Video not available
+}
 
 type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetails'>;
 type WorkoutDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetails'>;
 
-const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => {
+interface ExerciseCardProps {
+  exercise: WorkoutExercise;
+  recordings: VideoRecord[];
+  onPlayRecording: (record: VideoRecord) => void;
+}
+
+const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPlayRecording }) => {
   const [expandedSets, setExpandedSets] = useState<Record<number, boolean>>({});
 
   const toggleSetNotes = (setNumber: number) => {
     setExpandedSets((prev) => ({ ...prev, [setNumber]: !prev[setNumber] }));
   };
+
+  const getRecordingForSet = (setNumber: number): VideoRecord | undefined =>
+    recordings.find((r) => r.exerciseName === exercise.name && r.setNumber === setNumber);
 
   const avgScore = Math.round(
     exercise.sets.reduce((sum, s) => sum + s.formScore, 0) / exercise.sets.length
@@ -65,12 +84,14 @@ const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => 
             <Text style={[styles.setsHeaderText, styles.colReps]}>Reps</Text>
             <Text style={[styles.setsHeaderText, styles.colWeight]}>Weight</Text>
             <Text style={[styles.setsHeaderText, styles.colScore]}>Form</Text>
+            <View style={styles.colVideo} />
           </View>
 
           {/* Sets */}
           {exercise.sets.map((set, idx) => {
             const scoreColor = getScoreColor(set.formScore);
             const isLast = idx === exercise.sets.length - 1;
+            const recording = getRecordingForSet(set.setNumber);
             return (
               <View key={set.setNumber}>
                 <TouchableOpacity
@@ -98,6 +119,23 @@ const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => 
                       />
                     )}
                   </View>
+                  <TouchableOpacity
+                    style={styles.colVideo}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    onPress={() => {
+                      if (recording) {
+                        onPlayRecording(recording);
+                      } else {
+                        Alert.alert('No Recording', 'Set recording was not saved for this set.');
+                      }
+                    }}
+                  >
+                    <Video
+                      size={14}
+                      color={recording ? COLORS.accent : 'rgba(255,255,255,0.15)'}
+                      strokeWidth={1.5}
+                    />
+                  </TouchableOpacity>
                 </TouchableOpacity>
                 {set.notes && expandedSets[set.setNumber] && (
                   <View style={styles.setNotesContainer}>
@@ -123,6 +161,20 @@ export const WorkoutDetailsScreen: React.FC = () => {
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   const { workout, isLoading, error, refetch } = useWorkoutDetails(workoutId);
+  const { getRecordingsForWorkout } = useVideoLibrary();
+  const [workoutRecordings, setWorkoutRecordings] = useState<VideoRecord[]>([]);
+  const [playingVideo, setPlayingVideo] = useState<VideoRecord | null>(null);
+
+  // Fetch recordings for this workout
+  useEffect(() => {
+    if (workoutId) {
+      getRecordingsForWorkout(workoutId).then(setWorkoutRecordings).catch(() => {});
+    }
+  }, [workoutId, getRecordingsForWorkout]);
+
+  const handlePlayRecording = useCallback((record: VideoRecord) => {
+    setPlayingVideo(record);
+  }, []);
 
   useEffect(() => {
     if (workout) {
@@ -306,11 +358,44 @@ export const WorkoutDetailsScreen: React.FC = () => {
           </View>
 
           {workout.exercises.map((exercise) => (
-            <ExerciseCard key={exercise.id} exercise={exercise} />
+            <ExerciseCard
+              key={exercise.id}
+              exercise={exercise}
+              recordings={workoutRecordings}
+              onPlayRecording={handlePlayRecording}
+            />
           ))}
 
         </Animated.View>
       </ScrollView>
+
+      {/* Video Playback Modal */}
+      {playingVideo && VideoComponent && (
+        <Modal
+          visible={!!playingVideo}
+          animationType="fade"
+          onRequestClose={() => setPlayingVideo(null)}
+        >
+          <View style={styles.playerContainer}>
+            <VideoComponent
+              source={{ uri: playingVideo.videoPath }}
+              style={styles.player}
+              useNativeControls
+              shouldPlay
+              resizeMode="contain"
+              onPlaybackStatusUpdate={(status: any) => {
+                if (status.didJustFinish) setPlayingVideo(null);
+              }}
+            />
+            <TouchableOpacity
+              style={[styles.playerClose, { top: insets.top + 10 }]}
+              onPress={() => setPlayingVideo(null)}
+            >
+              <Text style={styles.playerCloseText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -624,5 +709,35 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
     lineHeight: 18,
+  },
+
+  /* ── Video column ──────────────────────────── */
+  colVideo: {
+    width: 28,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+
+  /* ── Video Player Modal ────────────────────── */
+  playerContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center' as const,
+  },
+  player: {
+    flex: 1,
+  },
+  playerClose: {
+    position: 'absolute' as const,
+    right: 16,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  playerCloseText: {
+    fontSize: 15,
+    fontFamily: FONTS.ui.bold,
+    color: COLORS.text,
   },
 });

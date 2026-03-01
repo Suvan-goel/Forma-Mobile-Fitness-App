@@ -46,7 +46,7 @@ export const SaveWorkoutScreen: React.FC = () => {
   const route = useRoute<SaveWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
   const { workoutData } = route.params;
-  const { clearSets, setWorkoutInProgress, exercises, workoutElapsedSeconds } = useCurrentWorkout();
+  const { clearSets, setWorkoutInProgress, exercises, workoutElapsedSeconds, sessionId } = useCurrentWorkout();
 
   const [workoutName, setWorkoutName] = useState('');
   const [workoutDescription, setWorkoutDescription] = useState('');
@@ -80,6 +80,7 @@ export const SaveWorkoutScreen: React.FC = () => {
       category: workoutData.category,
       notes: workoutDescription.trim() || undefined,
       exercises,
+      workoutSessionId: sessionId,
     });
 
     if (!success) {

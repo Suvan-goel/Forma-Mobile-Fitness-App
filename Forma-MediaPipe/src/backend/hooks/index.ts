@@ -24,3 +24,5 @@ export { useUserSearch } from './useUserSearch';
 export { usePrivacyLevel } from './usePrivacyLevel';
 export type { PrivacyLevel } from './usePrivacyLevel';
 export { useSubscription } from './useSubscription';
+export { useScreenRecording } from './useScreenRecording';
+export { useVideoLibrary } from './useVideoLibrary';
