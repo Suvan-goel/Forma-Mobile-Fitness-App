@@ -9,6 +9,17 @@ diff --git a/node_modules/react-native-record-screen/android/build/.transforms/3
 new file mode 100644
 index 0000000..20b6706
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/.transforms/386a4b15d3484969f2f432838ebb986e/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/results.bin b/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..70778f5
+Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/transformed/classes/classes_dex/classes.dex differ
 diff --git a/node_modules/react-native-record-screen/android/build/generated/source/buildConfig/debug/com/recordscreen/BuildConfig.java b/node_modules/react-native-record-screen/android/build/generated/source/buildConfig/debug/com/recordscreen/BuildConfig.java
 new file mode 100644
 index 0000000..d9f1a9c
@@ -88,7 +99,7 @@ index 0000000..9e26dfe
 \ No newline at end of file
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/react-native-record-screen/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
 new file mode 100644
-index 0000000..efc367c
+index 0000000..b4b5394
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/react-native-record-screen/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
 new file mode 100644
@@ -201,7 +212,7 @@ index 0000000..08f4ebe
 \ No newline at end of file
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/react-native-record-screen/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
 new file mode 100644
-index 0000000..990b24b
+index 0000000..13fc5ae
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/react-native-record-screen/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
 new file mode 100644
@@ -557,7 +568,7 @@ index 0000000..131e265
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len differ
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin
 new file mode 100644
-index 0000000..72ff84d
+index 0000000..2b4027b
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin differ
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin
 new file mode 100644
@@ -565,7 +576,7 @@ index 0000000..745e222
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin differ
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin
 new file mode 100644
-index 0000000..62127b2
+index 0000000..052fe00
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin differ
 diff --git a/node_modules/react-native-record-screen/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/react-native-record-screen/android/build/outputs/logs/manifest-merger-debug-report.txt
 new file mode 100644
@@ -603,11 +614,11 @@ index 0000000..271f26c
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$Companion.class differ
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$mActivityEventListener$1.class b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$mActivityEventListener$1.class
 new file mode 100644
-index 0000000..82aacb4
+index 0000000..5177a89
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$mActivityEventListener$1.class differ
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule.class b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule.class
 new file mode 100644
-index 0000000..9e5521e
+index 0000000..5256f3a
 Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule.class differ
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenPackage.class b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenPackage.class
 new file mode 100644
@@ -691,10 +702,46 @@ index e3850d5..67a1ceb 100644
  
    override fun HBRecorderOnPause() {
 diff --git a/node_modules/react-native-record-screen/ios/RecordScreen.mm b/node_modules/react-native-record-screen/ios/RecordScreen.mm
-index 67ac51f..0d7e02d 100644
+index 67ac51f..cf75823 100644
 --- a/node_modules/react-native-record-screen/ios/RecordScreen.mm
 +++ b/node_modules/react-native-record-screen/ios/RecordScreen.mm
-@@ -252,27 +252,56 @@ - (int) adjustMultipleOf2:(int)value;
+@@ -4,6 +4,7 @@
+ @implementation RecordScreen
+ 
+ UIBackgroundTaskIdentifier _backgroundRenderingID;
++dispatch_queue_t _writingQueue;
+ 
+ - (NSDictionary *)errorResponse:(NSDictionary *)result;
+ {
+@@ -86,7 +87,8 @@ - (int) adjustMultipleOf2:(int)value;
+     self.writer = [AVAssetWriter assetWriterWithURL:[NSURL fileURLWithPath:videoOutPath] fileType:AVFileTypeMPEG4 error:&error];
+     if (!self.writer) {
+         NSLog(@"writer: %@", error);
+-        abort();
++        resolve([self errorResponse:@{@"error": error.localizedDescription ?: @"Failed to create asset writer"}]);
++        return;
+     }
+ 
+     AudioChannelLayout acl = { 0 };
+@@ -123,6 +125,8 @@ - (int) adjustMultipleOf2:(int)value;
+     [self.writer setMovieTimeScale:60];
+     [self.videoInput setExpectsMediaDataInRealTime:YES];
+ 
++    _writingQueue = dispatch_queue_create("com.recordscreen.writing", DISPATCH_QUEUE_SERIAL);
++
+     if (self.enableMic) {
+         self.screenRecorder.microphoneEnabled = YES;
+     }
+@@ -133,7 +137,7 @@ - (int) adjustMultipleOf2:(int)value;
+                 [self.screenRecorder startCaptureWithHandler:^(CMSampleBufferRef sampleBuffer, RPSampleBufferType bufferType, NSError* error) {
+                     // Failure to do so will result in a memory error when accessing the sampleBuffer in the main thread.
+                     CFRetain(sampleBuffer);
+-                    dispatch_async(dispatch_get_main_queue(), ^{
++                    dispatch_async(_writingQueue, ^{
+                         if (CMSampleBufferDataIsReady(sampleBuffer)) {
+                             if (self.writer.status == AVAssetWriterStatusUnknown && !self.encounteredFirstBuffer && bufferType == RPSampleBufferTypeVideo) {
+                                 self.encounteredFirstBuffer = YES;
+@@ -252,11 +256,44 @@ - (int) adjustMultipleOf2:(int)value;
  
      dispatch_async(dispatch_get_main_queue(), ^{
          if (@available(iOS 11.0, *)) {
@@ -706,21 +753,6 @@ index 67ac51f..0d7e02d 100644
 +            }
              [[RPScreenRecorder sharedRecorder] stopCaptureWithHandler:^(NSError * _Nullable error) {
 -                if (!error) {
--                    [self.audioInput markAsFinished];
--                    [self.micInput markAsFinished];
--                    [self.videoInput markAsFinished];
--                    [self.writer finishWritingWithCompletionHandler:^{
--
--                        NSDictionary *result = [NSDictionary dictionaryWithObject:self.writer.outputURL.absoluteString forKey:@"outputURL"];
--                        resolve([self successResponse:result]);
--
--                        NSLog(@"finishWritingWithCompletionHandler: Recording stopped successfully. Cleaning up... %@", result);
--                        self.audioInput = nil;
--                        self.micInput = nil;
--                        self.videoInput = nil;
--                        self.writer = nil;
--                        self.screenRecorder = nil;
--                    }];
 +                if (error) {
 +                    // Handle error — resolve with error info instead of hanging
 +                    NSLog(@"stopRecording error: %@", error);
@@ -733,33 +765,34 @@ index 67ac51f..0d7e02d 100644
 +                    return;
 +                }
 +
-+                [self.audioInput markAsFinished];
-+                [self.micInput markAsFinished];
-+                [self.videoInput markAsFinished];
++                // Dispatch to the writing queue so any in-flight buffer writes
++                // finish before we finalize the asset writer.
++                dispatch_queue_t queue = self->_writingQueue ?: dispatch_get_main_queue();
++                dispatch_async(queue, ^{
+                     [self.audioInput markAsFinished];
+                     [self.micInput markAsFinished];
+                     [self.videoInput markAsFinished];
 +
-+                if (!self.writer) {
-+                    // Writer was never created — resolve with error instead of hanging
-+                    NSLog(@"stopRecording: writer is nil, cannot finish writing");
-+                    resolve([self errorResponse:@{@"error": @"Writer not initialized"}]);
-+                    self.audioInput = nil;
-+                    self.micInput = nil;
-+                    self.videoInput = nil;
-+                    self.screenRecorder = nil;
-+                    return;
-                 }
++                    if (!self.writer) {
++                        // Writer was never created — resolve with error instead of hanging
++                        NSLog(@"stopRecording: writer is nil, cannot finish writing");
++                        resolve([self errorResponse:@{@"error": @"Writer not initialized"}]);
++                        self.audioInput = nil;
++                        self.micInput = nil;
++                        self.videoInput = nil;
++                        self.screenRecorder = nil;
++                        return;
++                    }
 +
-+                [self.writer finishWritingWithCompletionHandler:^{
-+
-+                    NSDictionary *result = [NSDictionary dictionaryWithObject:self.writer.outputURL.absoluteString forKey:@"outputURL"];
-+                    resolve([self successResponse:result]);
-+
-+                    NSLog(@"finishWritingWithCompletionHandler: Recording stopped successfully. Cleaning up... %@", result);
-+                    self.audioInput = nil;
-+                    self.micInput = nil;
-+                    self.videoInput = nil;
-+                    self.writer = nil;
-+                    self.screenRecorder = nil;
-+                }];
+                     [self.writer finishWritingWithCompletionHandler:^{
+ 
+                         NSDictionary *result = [NSDictionary dictionaryWithObject:self.writer.outputURL.absoluteString forKey:@"outputURL"];
+@@ -269,10 +306,11 @@ - (int) adjustMultipleOf2:(int)value;
+                         self.writer = nil;
+                         self.screenRecorder = nil;
+                     }];
+-                }
++                });
              }];
          } else {
              // Fallback on earlier versions

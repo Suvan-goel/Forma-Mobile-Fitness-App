@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, Switch, Image } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, Switch, Image, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -19,6 +19,8 @@ import {
   SlidersHorizontal,
   Crown,
   Video,
+  Info,
+  X,
 } from 'lucide-react-native';
 import type { WeeklyTrainingTarget } from '../../backend/hooks/useWorkoutPreferences';
 import {
@@ -46,6 +48,30 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
+  const [infoModal, setInfoModal] = useState<string | null>(null);
+
+  const SETTING_INFO: Record<string, { title: string; description: string }> = {
+    'Visual Feedback': {
+      title: 'Visual Feedback',
+      description: 'Shows real-time form feedback messages on screen during your workout, helping you correct your technique as you exercise.',
+    },
+    'Voice Coaching': {
+      title: 'Voice Coaching',
+      description: 'Enables AI voice coaching that speaks form corrections and encouragement during your workout using text-to-speech.',
+    },
+    'Skeleton Overlay': {
+      title: 'Skeleton Overlay',
+      description: 'Displays a skeleton overlay on the camera view showing your detected body joints and connections in real-time.',
+    },
+    'Auto Screen Recording': {
+      title: 'Auto Screen Recording',
+      description: 'Automatically records your screen during workouts so you can review your form afterwards.\n\nThis will increase battery drain and use additional phone storage.',
+    },
+    'Training Frequency': {
+      title: 'Training Frequency',
+      description: 'Set your weekly training goal to help personalize your workout recommendations and track your consistency.',
+    },
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -285,6 +311,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
                 </View>
                 <Text style={styles.rowLabel}>Visual Feedback</Text>
+                <TouchableOpacity onPress={() => setInfoModal('Visual Feedback')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
                 <Switch
                   value={prefs.showFeedback}
                   onValueChange={(v) => updatePref('showFeedback', v)}
@@ -298,6 +327,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
                 </View>
                 <Text style={styles.rowLabel}>Voice Coaching</Text>
+                <TouchableOpacity onPress={() => setInfoModal('Voice Coaching')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
                 <Switch
                   value={prefs.isTTSEnabled}
                   onValueChange={(v) => updatePref('isTTSEnabled', v)}
@@ -311,6 +343,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.rowLabel}>Skeleton Overlay</Text>
+                <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
                 <Switch
                   value={prefs.showSkeletonOverlay}
                   onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
@@ -323,10 +358,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 <View style={[styles.iconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.10)' }]}>
                   <Video size={14} color="#EF4444" strokeWidth={1.5} />
                 </View>
-                <View style={styles.rowLabelCol}>
-                  <Text style={styles.rowLabel}>Auto Screen Recording</Text>
-                  <Text style={styles.rowSubLabel}>May increase battery usage and reduce performance.</Text>
-                </View>
+                <Text style={styles.rowLabel}>Auto Screen Recording</Text>
+                <TouchableOpacity onPress={() => setInfoModal('Auto Screen Recording')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
                 <Switch
                   value={prefs.autoScreenRecording}
                   onValueChange={(v) => updatePref('autoScreenRecording', v)}
@@ -343,6 +378,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   <Text style={styles.rowLabel}>Training Frequency</Text>
                   <Text style={styles.rowSubLabel}>{TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}</Text>
                 </View>
+                <TouchableOpacity onPress={(e) => { e.stopPropagation(); setInfoModal('Training Frequency'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
                 <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
               </TouchableOpacity>
             </View>
@@ -394,6 +432,30 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           <Text style={styles.versionText}>FORMA v1.0.0</Text>
         </Animated.View>
       </ScrollView>
+
+      {/* Info Modal */}
+      <Modal
+        visible={infoModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInfoModal(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setInfoModal(null)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{infoModal ? SETTING_INFO[infoModal]?.title : ''}</Text>
+              <TouchableOpacity onPress={() => setInfoModal(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalDescription}>{infoModal ? SETTING_INFO[infoModal]?.description : ''}</Text>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -605,5 +667,41 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textAlign: 'center',
     marginTop: 4,
+  },
+
+  /* Info Modal */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  modalContent: {
+    backgroundColor: '#1A1625',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    padding: 22,
+    width: '100%',
+    maxWidth: 340,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+  modalDescription: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 21,
   },
 });

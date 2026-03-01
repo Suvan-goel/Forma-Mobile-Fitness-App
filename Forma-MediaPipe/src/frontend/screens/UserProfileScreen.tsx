@@ -985,6 +985,7 @@ const styles = StyleSheet.create({
   },
   perfCell: {
     flex: 1,
+    height: 150,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -997,13 +998,14 @@ const styles = StyleSheet.create({
   },
   perfGradient: {
     borderRadius: 18,
+    flex: 1,
   },
   perfEdge: {
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     padding: 14,
-    minHeight: 110,
+    flex: 1,
   },
   perfIconRow: {
     flexDirection: 'row',

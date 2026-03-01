@@ -78,9 +78,11 @@ const styles = StyleSheet.create({
     }),
   },
   tileGradient: {
+    flex: 1,
     borderRadius: 19,
   },
   tileGlassEdge: {
+    flex: 1,
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',

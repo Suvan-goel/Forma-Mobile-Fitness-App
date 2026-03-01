@@ -67,6 +67,7 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   pill: {
+    flex: 1,
     height: 32,
     paddingHorizontal: 14,
     borderRadius: 16,
