@@ -1,12 +1,29 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronDown, Target, Clock, Calendar, Layers, AlignLeft } from 'lucide-react-native';
+import {
+  ChevronLeft,
+  ChevronDown,
+  Target,
+  Clock,
+  Calendar,
+  Layers,
+  AlignLeft,
+  Dumbbell,
+} from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
+import {
+  COLORS,
+  SPACING,
+  FONTS,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  getScoreColor,
+} from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useWorkoutDetails } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
@@ -35,7 +52,7 @@ const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => 
         end={CARD_GRADIENT_END}
         style={styles.cardGradient}
       >
-        <View style={styles.cardGlassEdge}>
+        <View style={styles.cardEdge}>
           {/* Exercise header row */}
           <View style={styles.exerciseHeader}>
             <Text style={styles.exerciseName} numberOfLines={1}>{exercise.name}</Text>
@@ -54,12 +71,13 @@ const ExerciseCard: React.FC<{ exercise: WorkoutExercise }> = ({ exercise }) => 
           </View>
 
           {/* Sets */}
-          {exercise.sets.map((set) => {
+          {exercise.sets.map((set, idx) => {
             const scoreColor = getScoreColor(set.formScore);
+            const isLast = idx === exercise.sets.length - 1;
             return (
               <View key={set.setNumber}>
                 <TouchableOpacity
-                  style={styles.setRow}
+                  style={[styles.setRow, isLast && !set.notes && styles.setRowLast]}
                   activeOpacity={set.notes ? 0.6 : 1}
                   onPress={() => set.notes ? toggleSetNotes(set.setNumber) : undefined}
                 >
@@ -104,7 +122,27 @@ export const WorkoutDetailsScreen: React.FC = () => {
   const route = useRoute<WorkoutDetailsScreenRouteProp>();
   const { workoutId } = route.params;
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
   const { workout, isLoading, error, refetch } = useWorkoutDetails(workoutId);
+
+  useEffect(() => {
+    if (workout) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [workout, fadeAnim, slideAnim]);
 
   // Loading state
   if (isLoading) {
@@ -112,13 +150,17 @@ export const WorkoutDetailsScreen: React.FC = () => {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ChevronLeft size={24} color={COLORS.text} />
+            <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Loading...</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
-          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={160} style={{ marginBottom: SPACING.md }} />
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: SPACING.md }}>
+            <LoadingSkeleton variant="card" height={110} style={{ flex: 1 }} />
+            <LoadingSkeleton variant="card" height={110} style={{ flex: 1 }} />
+          </View>
           <LoadingSkeleton variant="card" height={200} style={{ marginBottom: SPACING.md }} />
           <LoadingSkeleton variant="card" height={200} />
         </View>
@@ -132,7 +174,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ChevronLeft size={24} color={COLORS.text} />
+            <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Error</Text>
           <View style={styles.placeholder} />
@@ -149,7 +191,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ChevronLeft size={24} color={COLORS.text} />
+            <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Workout Not Found</Text>
           <View style={styles.placeholder} />
@@ -182,63 +224,91 @@ export const WorkoutDetailsScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 200 }]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Strip */}
-        <View style={styles.statsStrip}>
-          <View style={styles.statChip}>
-            <Calendar size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-            <Text style={styles.statChipValue}>{workout.date}</Text>
-            <Text style={styles.statChipLabel}>Date</Text>
-          </View>
-          <View style={styles.statStripDivider} />
-          <View style={styles.statChip}>
-            <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-            <Text style={styles.statChipValue}>{workout.duration}</Text>
-            <Text style={styles.statChipLabel}>Duration</Text>
-          </View>
-          <View style={styles.statStripDivider} />
-          <View style={styles.statChip}>
-            <Layers size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-            <Text style={styles.statChipValue}>{totalSets} · {totalReps}</Text>
-            <Text style={styles.statChipLabel}>Sets · Reps</Text>
-          </View>
-          <View style={styles.statStripDivider} />
-          <View style={styles.statChip}>
-            <Target size={12} color={formScoreColor} strokeWidth={1.5} />
-            <MonoText style={[styles.statChipValue, { color: formScoreColor }]}>{avgFormScore}</MonoText>
-            <Text style={styles.statChipLabel}>Avg Form</Text>
-          </View>
-        </View>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-        {/* Notes Card */}
-        {workout.notes && (
-          <View style={styles.notesCardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.notesCardGradient}
-            >
-              <View style={styles.notesCardGlass}>
-                <View style={styles.notesAccentBar} />
-                <View style={styles.notesContent}>
-                  <View style={styles.notesHeaderRow}>
-                    <AlignLeft size={13} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.notesLabel}>Notes</Text>
+          {/* ═══════════════════════════════════════════
+              HERO: COMPACT SUMMARY CARD
+              ═══════════════════════════════════════════ */}
+          <LinearGradient
+            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroEdge}>
+              {/* Score row — score left, meta right */}
+              <View style={styles.heroMainRow}>
+                <View style={styles.heroScoreBlock}>
+                  <Text style={[styles.heroScore, { color: formScoreColor }]}>
+                    {avgFormScore}
+                  </Text>
+                  <Text style={styles.heroScoreUnit}>/100</Text>
+                </View>
+                <View style={styles.heroMetaBlock}>
+                  <View style={styles.heroMetaRow}>
+                    <Calendar size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    <Text style={styles.heroMetaValue}>{workout.date}</Text>
                   </View>
-                  <Text style={styles.notesText}>{workout.notes}</Text>
+                  <View style={styles.heroMetaRow}>
+                    <Clock size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    <Text style={styles.heroMetaValue}>{workout.duration}</Text>
+                  </View>
+                  <View style={styles.heroMetaRow}>
+                    <Layers size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    <Text style={styles.heroMetaValue}>{totalSets} sets · {totalReps} reps</Text>
+                  </View>
                 </View>
               </View>
-            </LinearGradient>
-          </View>
-        )}
+            </View>
+          </LinearGradient>
 
-        {/* Exercises */}
-        {workout.exercises.map((exercise) => (
-          <ExerciseCard key={exercise.id} exercise={exercise} />
-        ))}
+          {/* ═══════════════════════════════════════════
+              NOTES — Accent card (if present)
+              ═══════════════════════════════════════════ */}
+          {workout.notes && (
+            <>
+              <View style={styles.sectionRow}>
+                <View style={styles.sectionLabelRow}>
+                  <AlignLeft size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>NOTES</Text>
+                </View>
+              </View>
+
+              <View style={styles.notesOuter}>
+                <LinearGradient
+                  colors={[...CARD_GRADIENT_COLORS]}
+                  start={CARD_GRADIENT_START}
+                  end={CARD_GRADIENT_END}
+                  style={styles.notesGradient}
+                >
+                  <View style={styles.notesEdge}>
+                    <View style={styles.notesAccentBar} />
+                    <Text style={styles.notesText}>{workout.notes}</Text>
+                  </View>
+                </LinearGradient>
+              </View>
+            </>
+          )}
+
+          {/* ═══════════════════════════════════════════
+              EXERCISES — Section with cards
+              ═══════════════════════════════════════════ */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>EXERCISES</Text>
+            </View>
+            <Text style={styles.exerciseCount}>{workout.exercises.length}</Text>
+          </View>
+
+          {workout.exercises.map((exercise) => (
+            <ExerciseCard key={exercise.id} exercise={exercise} />
+          ))}
+
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -259,145 +329,180 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     justifyContent: 'center',
   },
+
+  /* ── Header ──────────────────────────────────── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.md,
-    marginBottom: SPACING.xs,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
   },
   backButton: {
-    padding: SPACING.sm,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
-    fontFamily: FONTS.display.semibold,
+    fontSize: 18,
+    fontFamily: FONTS.display.bold,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     textAlign: 'center',
+    marginHorizontal: SPACING.sm,
   },
   placeholder: {
-    width: 24 + SPACING.sm * 2,
+    width: 40,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    gap: 12,
+    paddingBottom: 160,
   },
 
-  /* ── Stats strip ── */
-  statsStrip: {
+  /* ── Hero Compact Summary ────────────────────── */
+  heroCard: {
+    borderRadius: 18,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  heroEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    padding: 16,
+  },
+  heroMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.xs,
   },
-  statChip: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 5,
+  heroScoreBlock: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 3,
+    marginRight: 20,
   },
-  statChipValue: {
-    fontSize: 15,
-    fontFamily: FONTS.display.semibold,
-    color: COLORS.text,
-    letterSpacing: -0.2,
+  heroScore: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 44,
+    letterSpacing: -2,
+    lineHeight: 48,
   },
-  statChipLabel: {
-    fontSize: 9,
-    fontFamily: FONTS.ui.regular,
+  heroScoreUnit: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 14,
     color: COLORS.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
   },
-  statStripDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  heroMetaBlock: {
+    flex: 1,
+    gap: 6,
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroMetaValue: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
   },
 
-  /* ── Notes card ── */
-  notesCardOuter: {
-    borderRadius: 19,
+  /* ── Section Headers ─────────────────────────── */
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 2,
+  },
+  exerciseCount: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+  },
+
+  /* ── Notes Card ──────────────────────────────── */
+  notesOuter: {
+    borderRadius: 18,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.18,
-        shadowRadius: 12,
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
       },
-      android: { elevation: 4 },
+      android: { elevation: 3 },
     }),
   },
-  notesCardGradient: {
-    borderRadius: 19,
+  notesGradient: {
+    borderRadius: 18,
   },
-  notesCardGlass: {
-    borderRadius: 19,
+  notesEdge: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     flexDirection: 'row',
     overflow: 'hidden',
   },
   notesAccentBar: {
     width: 3,
     backgroundColor: COLORS.accent,
-    borderTopLeftRadius: 19,
-    borderBottomLeftRadius: 19,
-  },
-  notesContent: {
-    flex: 1,
-    paddingVertical: SPACING.lg,
-    paddingLeft: SPACING.md,
-    paddingRight: SPACING.lg,
-    gap: SPACING.sm,
-  },
-  notesHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  notesLabel: {
-    fontSize: 10,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.accent,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
   },
   notesText: {
+    flex: 1,
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
     lineHeight: 21,
+    padding: 16,
   },
 
-  /* ── Exercise cards ── */
+  /* ── Exercise Cards ──────────────────────────── */
   cardOuter: {
-    borderRadius: 19,
+    borderRadius: 18,
     overflow: 'hidden',
+    marginBottom: 8,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
-        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
       },
-      android: { elevation: 5 },
+      android: { elevation: 3 },
     }),
   },
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 18,
   },
-  cardGlassEdge: {
-    borderRadius: 19,
+  cardEdge: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: SPACING.lg,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 16,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -408,7 +513,7 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 16,
     fontFamily: FONTS.display.semibold,
     color: COLORS.text,
     letterSpacing: -0.3,
@@ -429,7 +534,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: SPACING.xs,
   },
   setsHeaderText: {
@@ -461,7 +566,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  setRowLast: {
+    borderBottomWidth: 0,
   },
   setNumWrapper: {
     width: 32,
@@ -497,8 +605,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
     backgroundColor: 'rgba(139, 92, 246, 0.04)',
+    borderRadius: 8,
+    marginBottom: 4,
   },
   setNotesText: {
     fontSize: 12,
