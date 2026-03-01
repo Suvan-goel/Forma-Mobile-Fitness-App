@@ -8,11 +8,24 @@ import {
   Platform,
   ScrollView,
   Modal,
+  Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, ChevronRight, MessageSquareText, AudioLines, Bone, Bug, Timer, UserRound } from 'lucide-react-native';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Volume2,
+  Bone,
+  Bug,
+  Timer,
+  UserRound,
+  SlidersHorizontal,
+  Tv,
+  Wrench,
+} from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
@@ -46,9 +59,6 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChan
     }
   }, [selectedIndex]);
 
-  // Shared commit: rounds y to nearest item and fires onValueChange.
-  // Math.round gives the same target that snapToInterval will snap to,
-  // so this is safe to call from both onScrollEndDrag and onMomentumScrollEnd.
   const commitY = useCallback((y: number) => {
     const index = Math.round(y / ITEM_HEIGHT);
     const clamped = Math.max(0, Math.min(index, values.length - 1));
@@ -60,15 +70,9 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChan
 
   const handleScrollBeginDrag = useCallback(() => {
     isUserScrolling.current = true;
-    // Cancel any pending no-momentum commit from a previous drag
     if (dragEndTimer.current) clearTimeout(dragEndTimer.current);
   }, []);
 
-  // onScrollEndDrag fires when the user lifts their finger.
-  // If momentum follows, onMomentumScrollBegin will cancel this timer.
-  // If there is no momentum (slow drag with fast decelerationRate), this
-  // fires after 50 ms and commits the position — fixing the case where
-  // onMomentumScrollEnd never fires.
   const handleScrollEndDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = e.nativeEvent.contentOffset.y;
     dragEndTimer.current = setTimeout(() => {
@@ -77,8 +81,6 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, selected, onValueChan
   }, [commitY]);
 
   const handleMomentumScrollBegin = useCallback(() => {
-    // Momentum started after drag end — cancel the fallback timer and let
-    // onMomentumScrollEnd handle the final position instead.
     if (dragEndTimer.current) clearTimeout(dragEndTimer.current);
   }, []);
 
@@ -192,6 +194,8 @@ export const CameraSettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { showAlert } = useAlert();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
   const {
     showFeedback,
     isTTSEnabled,
@@ -207,6 +211,21 @@ export const CameraSettingsScreen: React.FC = () => {
     setRestTimerEnabled,
     setRestTimerDurationSeconds,
   } = useCameraSettings();
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const currentTrainerName = TRAINERS.find((t) => t.id === selectedTrainerId)?.name ?? 'Maya';
 
@@ -245,184 +264,165 @@ export const CameraSettingsScreen: React.FC = () => {
   const formattedDuration = `${currentMinutes}:${snappedSeconds.toString().padStart(2, '0')}`;
 
   return (
-    <View style={styles.container}>
-      {/* ── HEADER ──────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>SETTINGS</Text>
+        <Text style={styles.headerTitle}>Settings</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* ── SECTIONS ────────────────────────── */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Feedback */}
-        <TouchableOpacity style={styles.sectionOuter} activeOpacity={1}>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+
+          {/* ── FEEDBACK Section ──────────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <SlidersHorizontal size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>FEEDBACK</Text>
+            </View>
+          </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
-            style={styles.sectionGradient}
+            style={styles.cardGradient}
           >
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionLabel}>FEEDBACK</Text>
-
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <MessageSquareText
-                    size={18}
-                    color={debugMode ? COLORS.textTertiary : COLORS.accent}
-                    strokeWidth={1.5}
-                  />
+            <View style={styles.groupEdge}>
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
                 </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDisabled]}>Form messages</Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
-                    On-screen feedback during reps
-                  </Text>
-                </View>
+                <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Form Messages</Text>
                 <Switch
                   value={showFeedback}
                   onValueChange={setShowFeedback}
                   disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={showFeedback ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
-
-              <View style={styles.separator} />
-
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <AudioLines
-                    size={18}
-                    color={debugMode ? COLORS.textTertiary : COLORS.accent}
-                    strokeWidth={1.5}
-                  />
+              <View style={styles.rowDivider} />
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
+                  <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
                 </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDisabled]}>Voice coaching</Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
-                    Spoken cues via text-to-speech
-                  </Text>
-                </View>
+                <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Voice Coaching</Text>
                 <Switch
                   value={isTTSEnabled}
                   onValueChange={handleTTSChange}
                   disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={isTTSEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
             </View>
           </LinearGradient>
-        </TouchableOpacity>
 
-        {/* Trainer */}
-        <TouchableOpacity
-          style={styles.sectionOuter}
-          activeOpacity={0.7}
-          onPress={() => (navigation as any).navigate('TrainerPicker')}
-        >
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.sectionGradient}
-          >
-            <View style={styles.sectionCard}>
+          {/* ── YOUR TRAINER Section ──────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <UserRound size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>YOUR TRAINER</Text>
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <UserRound size={18} color={COLORS.accent} strokeWidth={1.5} />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={styles.label}>Trainer</Text>
-                  <Text style={styles.description}>{currentTrainerName}</Text>
-                </View>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </View>
             </View>
-          </LinearGradient>
-        </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => (navigation as any).navigate('TrainerPicker')}
+          >
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardEdge}>
+                <View style={styles.row}>
+                  <View style={[styles.iconWrap, { backgroundColor: 'rgba(244, 114, 182, 0.10)' }]}>
+                    <UserRound size={14} color="#F472B6" strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.rowLabelCol}>
+                    <Text style={styles.rowLabel}>Choose Trainer</Text>
+                    <Text style={styles.rowSubLabel}>{currentTrainerName}</Text>
+                  </View>
+                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
 
-        {/* Display */}
-        <TouchableOpacity style={styles.sectionOuter} activeOpacity={1}>
+          {/* ── DISPLAY Section ───────────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Tv size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>DISPLAY</Text>
+            </View>
+          </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
-            style={styles.sectionGradient}
+            style={styles.cardGradient}
           >
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionLabel}>DISPLAY</Text>
-
+            <View style={styles.cardEdge}>
               <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <Bone
-                    size={18}
-                    color={debugMode ? COLORS.textTertiary : COLORS.accent}
-                    strokeWidth={1.5}
-                  />
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                  <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDisabled]}>Skeleton overlay</Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDisabled]}>
-                    Show detected pose landmarks
-                  </Text>
-                </View>
+                <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
                 <Switch
                   value={showSkeletonOverlay}
                   onValueChange={setShowSkeletonOverlay}
                   disabled={debugMode}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
             </View>
           </LinearGradient>
-        </TouchableOpacity>
 
-        {/* Rest Timer */}
-        <TouchableOpacity style={styles.sectionOuter} activeOpacity={1}>
+          {/* ── REST TIMER Section ────────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Timer size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>REST TIMER</Text>
+            </View>
+          </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
-            style={styles.sectionGradient}
+            style={styles.cardGradient}
           >
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionLabel}>REST TIMER</Text>
-
-              <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <Timer
-                    size={18}
-                    color={restTimerEnabled ? COLORS.accent : COLORS.textSecondary}
-                    strokeWidth={1.5}
-                  />
+            <View style={styles.groupEdge}>
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                  <Timer size={14} color="#34D399" strokeWidth={1.5} />
                 </View>
-                <View style={styles.rowText}>
-                  <Text style={styles.label}>Rest timer</Text>
-                  <Text style={styles.description}>Countdown between sets</Text>
-                </View>
+                <Text style={styles.rowLabel}>Rest Timer</Text>
                 <Switch
                   value={restTimerEnabled}
                   onValueChange={handleRestTimerToggle}
-                  trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                  thumbColor={COLORS.text}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={restTimerEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
-
               {restTimerEnabled && (
                 <>
-                  <View style={styles.separator} />
-                  <View style={styles.restTimerValueRow}>
+                  <View style={styles.rowDivider} />
+                  <View style={styles.groupRow}>
+                    <View style={[styles.iconWrap, { backgroundColor: 'transparent' }]} />
                     <MonoText bold style={styles.restTimerValueText}>{formattedDuration}</MonoText>
                     <TouchableOpacity style={styles.changeButton} onPress={openTimerModal} activeOpacity={0.7}>
                       <Text style={styles.changeButtonText}>Change</Text>
@@ -432,43 +432,40 @@ export const CameraSettingsScreen: React.FC = () => {
               )}
             </View>
           </LinearGradient>
-        </TouchableOpacity>
 
-        {/* Developer */}
-        <TouchableOpacity style={styles.sectionOuter} activeOpacity={1}>
+          {/* ── DEVELOPER Section ─────────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Wrench size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>DEVELOPER</Text>
+            </View>
+          </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
-            style={styles.sectionGradient}
+            style={styles.cardGradient}
           >
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionLabel}>DEVELOPER</Text>
-
+            <View style={styles.cardEdge}>
               <View style={styles.row}>
-                <View style={styles.rowIcon}>
-                  <Bug
-                    size={18}
-                    color={debugMode ? COLORS.orange : COLORS.textSecondary}
-                    strokeWidth={1.5}
-                  />
+                <View style={[styles.iconWrap, { backgroundColor: debugMode ? 'rgba(224, 120, 86, 0.10)' : 'rgba(255, 255, 255, 0.04)' }]}>
+                  <Bug size={14} color={debugMode ? COLORS.orange : COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.label, debugMode && styles.labelDebugActive]}>Debug mode</Text>
-                  <Text style={[styles.description, debugMode && styles.descriptionDebugActive]}>
-                    Skeleton on, TTS off, shows angles
-                  </Text>
+                <View style={styles.rowLabelCol}>
+                  <Text style={[styles.rowLabel, debugMode && { color: COLORS.orange }]}>Debug Mode</Text>
+                  <Text style={styles.rowSubLabel}>Skeleton on, TTS off, shows angles</Text>
                 </View>
                 <Switch
                   value={debugMode}
                   onValueChange={handleDebugChange}
-                  trackColor={{ false: COLORS.border, true: COLORS.orange }}
-                  thumbColor={COLORS.text}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(224, 120, 86, 0.4)' }}
+                  thumbColor={debugMode ? COLORS.orange : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
             </View>
           </LinearGradient>
-        </TouchableOpacity>
+
+        </Animated.View>
       </ScrollView>
 
       {/* Rest Timer Duration Modal */}
@@ -478,12 +475,6 @@ export const CameraSettingsScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setIsTimerModalVisible(false)}
       >
-        {/*
-         * Backdrop and card are SIBLINGS, not nested.
-         * This prevents the backdrop TouchableOpacity from wrapping the
-         * WheelColumn ScrollViews, which would cause it to briefly hold
-         * the gesture and make scrolling feel unresponsive.
-         */}
         <View style={styles.modalBackdrop}>
           <TouchableOpacity
             style={StyleSheet.absoluteFillObject}
@@ -525,131 +516,149 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  /* ── Header ─────────────────────────────── */
+  /* Header — matches SettingsScreen */
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 16,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#27272A',
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerSpacer: {
-    width: 36,
-    height: 36,
-  },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: 2,
+    letterSpacing: -0.4,
+  },
+  headerSpacer: {
+    width: 40,
   },
 
-  /* ── Scroll ──────────────────────────────── */
+  /* Scroll */
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 8,
-    gap: 12,
   },
 
-  /* ── Section Cards ───────────────────────── */
-  sectionOuter: {
-    borderRadius: 19,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-    }),
+  /* Section Headers — matches HomeScreen / SettingsScreen */
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 12,
   },
-  sectionGradient: {
-    borderRadius: 19,
-  },
-  sectionCard: {
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
-    paddingHorizontal: SPACING.md,
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textTertiary,
-    letterSpacing: 1.5,
-    marginBottom: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 2,
   },
 
-  /* ── Rows ────────────────────────────────── */
+  /* Individual card */
+  cardGradient: {
+    borderRadius: 18,
+  },
+  cardEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
+
+  /* Grouped card (multiple rows) */
+  groupEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 16,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+
+  /* Row inside card */
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: SPACING.xs,
+    gap: 12,
   },
-  rowIcon: {
-    width: 34,
-    height: 34,
+  iconWrap: {
+    width: 32,
+    height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  rowText: {
+  rowLabel: {
     flex: 1,
-    marginRight: SPACING.sm,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    marginLeft: 46,
-  },
-  label: {
-    fontSize: 15,
     fontFamily: FONTS.ui.regular,
+    fontSize: 14,
     color: COLORS.text,
-    lineHeight: 20,
+    letterSpacing: 0.1,
   },
-  labelDisabled: {
+  rowLabelDisabled: {
     color: COLORS.textTertiary,
   },
-  labelDebugActive: {
-    color: COLORS.orange,
+  rowLabelCol: {
+    flex: 1,
+    gap: 2,
   },
-  description: {
-    fontSize: 12,
+  rowSubLabel: {
     fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-    lineHeight: 16,
-    marginTop: 1,
-  },
-  descriptionDisabled: {
+    fontSize: 11,
     color: COLORS.textTertiary,
-    opacity: 0.7,
-  },
-  descriptionDebugActive: {
-    color: COLORS.textSecondary,
   },
 
-  /* ── Wheel Picker ────────────────────────── */
+  /* Rest Timer Value */
+  restTimerValueText: {
+    flex: 1,
+    fontSize: 22,
+    color: COLORS.accent,
+  },
+  changeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  },
+  changeButtonText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.accent,
+    letterSpacing: 0.3,
+  },
+
+  /* Wheel Picker */
   wheelRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -676,34 +685,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  /* ── Rest Timer Value Row ─────────────────── */
-  restTimerValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: SPACING.xs,
-  },
-  restTimerValueText: {
-    fontSize: 22,
-    color: COLORS.accent,
-  },
-  changeButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-  },
-  changeButtonText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.accent,
-    letterSpacing: 0.3,
-  },
-
-  /* ── Timer Modal ──────────────────────────── */
+  /* Timer Modal */
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
