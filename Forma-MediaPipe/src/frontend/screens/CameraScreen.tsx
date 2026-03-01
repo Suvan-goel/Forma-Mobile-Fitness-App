@@ -4,7 +4,7 @@ import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { X } from 'lucide-react-native';
+import { X, Volume2, VolumeX } from 'lucide-react-native';
 import CogIcon from '../components/icons/CogIcon';
 import { COLORS, FONTS, SPACING, getScoreColor } from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
@@ -60,7 +60,7 @@ export const CameraScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   const { addSetToExercise } = useCurrentWorkout();
-  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId } = useCameraSettings();
+  const { showFeedback, isTTSEnabled, setIsTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId } = useCameraSettings();
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -751,6 +751,22 @@ export const CameraScreen: React.FC = () => {
           </View>
           <View style={styles.headerRightGroup}>
             <TouchableOpacity
+              style={styles.ttsToggleButton}
+              onPress={() => {
+                const next = !isTTSEnabled;
+                setIsTTSEnabled(next);
+                if (!next) ttsStopCoach();
+              }}
+              activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={isTTSEnabled ? 'Disable voice coaching' : 'Enable voice coaching'}
+            >
+              {isTTSEnabled
+                ? <Volume2 size={20} color={COLORS.text} strokeWidth={2} />
+                : <VolumeX size={20} color="rgba(255,255,255,0.4)" strokeWidth={2} />}
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
               activeOpacity={0.8}
@@ -1247,7 +1263,12 @@ const styles = StyleSheet.create({
   headerRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
+  },
+  ttsToggleButton: {
+    width: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   settingsButton: {
     padding: 0,

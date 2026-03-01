@@ -27,7 +27,7 @@ import {
   BookOpen,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts, useDeleteWorkout, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
@@ -98,125 +98,77 @@ const CalendarModal = ({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.calendarContainer} onStartShouldSetResponder={() => true}>
-          <View style={styles.calendarHeader}>
-            <TouchableOpacity onPress={() => navigateMonth('prev')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Text style={styles.calendarNavButton}>{'\u2039'}</Text>
-            </TouchableOpacity>
-            <Text style={styles.calendarTitle}>
-              {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            </Text>
-            <TouchableOpacity onPress={() => navigateMonth('next')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Text style={styles.calendarNavButton}>{'\u203A'}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.calendarDaysHeader}>
-            {DAY_NAMES.map((day) => (
-              <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
-            ))}
-          </View>
-          <View style={styles.calendarGrid}>
-            {days.map((day, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.calendarDay,
-                  day && isSameDay(day, selectedDate) && styles.calendarDaySelected,
-                  !day && styles.calendarDayEmpty,
-                  day && isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayToday,
-                ]}
-                onPress={() => day && onSelectDate(day)}
-                disabled={!day}
-              >
-                {day && (
-                  <Text style={[
-                    styles.calendarDayText,
-                    isSameDay(day, selectedDate) && styles.calendarDayTextSelected,
-                    isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayTextToday,
-                  ]}>
-                    {day.getDate()}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity style={styles.calendarCloseButton} onPress={onClose}>
-            <Text style={styles.calendarCloseButtonText}>Done</Text>
-          </TouchableOpacity>
+        <View style={styles.calendarOuter} onStartShouldSetResponder={() => true}>
+          <LinearGradient
+            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.calendarGradient}
+          >
+            <View style={styles.calendarEdge}>
+              <View style={styles.calendarHeaderRow}>
+                <View style={styles.calendarLabelRow}>
+                  <Calendar size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.calendarLabel}>SELECT DATE</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={styles.calendarCloseBtn}
+                  activeOpacity={0.7}
+                >
+                  <X size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarDivider} />
+              <View style={styles.calendarNavRow}>
+                <TouchableOpacity onPress={() => navigateMonth('prev')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Text style={styles.calendarNavButton}>{'\u2039'}</Text>
+                </TouchableOpacity>
+                <Text style={styles.calendarTitle}>
+                  {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                </Text>
+                <TouchableOpacity onPress={() => navigateMonth('next')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Text style={styles.calendarNavButton}>{'\u203A'}</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarDaysHeader}>
+                {DAY_NAMES.map((day) => (
+                  <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
+                ))}
+              </View>
+              <View style={styles.calendarGrid}>
+                {days.map((day, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.calendarDay,
+                      day && isSameDay(day, selectedDate) && styles.calendarDaySelected,
+                      !day && styles.calendarDayEmpty,
+                      day && isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayToday,
+                    ]}
+                    onPress={() => day && onSelectDate(day)}
+                    disabled={!day}
+                  >
+                    {day && (
+                      <Text style={[
+                        styles.calendarDayText,
+                        isSameDay(day, selectedDate) && styles.calendarDayTextSelected,
+                        isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayTextToday,
+                      ]}>
+                        {day.getDate()}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </LinearGradient>
         </View>
       </TouchableOpacity>
     </Modal>
   );
 };
 
-/* ── Dropdown Pill (Year/Month/Week) ──────── */
-
-const DropdownPill = ({
-  label,
-  options,
-  selectedValue,
-  onSelect,
-}: {
-  label: string;
-  options: string[];
-  selectedValue: string | null;
-  onSelect: (value: string) => void;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const displayValue = selectedValue || label;
-
-  return (
-    <>
-      <TouchableOpacity
-        style={[styles.filterPill, selectedValue && styles.filterPillActive]}
-        onPress={() => setIsOpen(true)}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={[styles.filterPillText, selectedValue && styles.filterPillTextActive]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {displayValue}
-        </Text>
-      </TouchableOpacity>
-
-      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
-        <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={() => setIsOpen(false)}>
-          <View style={styles.dropdownSheet} onStartShouldSetResponder={() => true}>
-            <View style={styles.dropdownHandleWrap}>
-              <View style={styles.dropdownHandle} />
-            </View>
-            <Text style={styles.dropdownTitle}>{label}</Text>
-            <View style={styles.dropdownDivider} />
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.dropdownScroll}>
-              {options.map((option) => {
-                const isSelected = selectedValue === option || (option === 'All' && !selectedValue);
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
-                    onPress={() => { onSelect(option); setIsOpen(false); }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>
-                      {option}
-                    </Text>
-                    {isSelected && (
-                      <View style={styles.dropdownCheckWrap}>
-                        <Check size={16} color={COLORS.accent} strokeWidth={2.5} />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </>
-  );
-};
 
 /* ── Workout Card ─────────────────────────── */
 
@@ -370,6 +322,7 @@ export const LogbookScreen: React.FC = () => {
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<'year' | 'month' | 'week' | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { showAlert } = useAlert();
@@ -487,6 +440,7 @@ export const LogbookScreen: React.FC = () => {
 
   const filteredWorkouts = getFilteredWorkouts();
   const hasActiveFilter = selectedYear || selectedMonth || selectedWeek || selectedDate;
+  const activeFilterMode = selectedDate ? 'date' : selectedWeek ? 'week' : selectedMonth ? 'month' : selectedYear ? 'year' : 'all';
 
   const handleDelete = useCallback(async (id: string) => {
     const success = await deleteWorkout(id);
@@ -515,50 +469,71 @@ export const LogbookScreen: React.FC = () => {
         </Text>
       </View>
 
-      {/* ── FILTER ROW ───────────────────────── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        bounces={false}
-        contentContainerStyle={styles.filterRow}
-        style={styles.filterScrollView}
-        nestedScrollEnabled
+      {/* ── FILTER TABS ───────────────────────── */}
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.filterCard}
       >
-        <TouchableOpacity
-          style={[styles.calendarPill, selectedDate && styles.filterPillActive]}
-          onPress={() => setIsCalendarOpen(true)}
-          activeOpacity={0.7}
-        >
-          <Calendar size={14} color={selectedDate ? '#FFFFFF' : '#71717A'} strokeWidth={1.5} />
-        </TouchableOpacity>
-
-        <DropdownPill label="Year" options={getUniqueYears()} selectedValue={selectedYear} onSelect={(v) => handleFilterChange('year', v)} />
-        <DropdownPill label="Month" options={getUniqueMonths()} selectedValue={selectedMonth} onSelect={(v) => handleFilterChange('month', v)} />
-        <DropdownPill label="Week" options={getUniqueWeeks()} selectedValue={selectedWeek} onSelect={(v) => handleFilterChange('week', v)} />
-
-        {hasActiveFilter && (
-          <TouchableOpacity
-            style={styles.clearFilterPill}
-            onPress={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); setSelectedDate(null); }}
-            activeOpacity={0.7}
-          >
-            <X size={12} color="#71717A" strokeWidth={2} />
-            <Text style={styles.clearFilterText}>Clear</Text>
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {/* ── SELECTED DATE CHIP ────────────────── */}
-      {selectedDate && (
-        <View style={styles.dateChipRow}>
-          <View style={styles.dateChip}>
-            <Calendar size={11} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.dateChipText}>{formatSelectedDate()}</Text>
+        <View style={styles.filterCardEdge}>
+          <View style={styles.filterTabRow}>
             <TouchableOpacity
-              onPress={() => { setSelectedDate(null); setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); }}
+              style={[styles.filterTab, activeFilterMode === 'all' && styles.filterTabActive]}
+              onPress={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); setSelectedDate(null); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterTabText, activeFilterMode === 'all' && styles.filterTabTextActive]}>All</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterTab, activeFilterMode === 'week' && styles.filterTabActive]}
+              onPress={() => setOpenDropdown('week')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterTabText, activeFilterMode === 'week' && styles.filterTabTextActive]}>Week</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterTab, activeFilterMode === 'month' && styles.filterTabActive]}
+              onPress={() => setOpenDropdown('month')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterTabText, activeFilterMode === 'month' && styles.filterTabTextActive]}>Month</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterTab, activeFilterMode === 'year' && styles.filterTabActive]}
+              onPress={() => setOpenDropdown('year')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterTabText, activeFilterMode === 'year' && styles.filterTabTextActive]}>Year</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterCalendarTab, activeFilterMode === 'date' && styles.filterTabActive]}
+              onPress={() => setIsCalendarOpen(true)}
+              activeOpacity={0.7}
+            >
+              <Calendar size={14} color={activeFilterMode === 'date' ? '#FFFFFF' : COLORS.textTertiary} strokeWidth={1.5} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* ── ACTIVE FILTER CHIP ────────────────── */}
+      {hasActiveFilter && (
+        <View style={styles.activeFilterRow}>
+          <View style={styles.activeFilterChip}>
+            {activeFilterMode === 'date' && <Calendar size={11} color={COLORS.accent} strokeWidth={1.5} />}
+            <Text style={styles.activeFilterText}>
+              {selectedDate ? formatSelectedDate() : selectedWeek || selectedMonth || selectedYear}
+            </Text>
+            <TouchableOpacity
+              onPress={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); setSelectedDate(null); }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <X size={12} color="#71717A" strokeWidth={2} />
+              <X size={12} color={COLORS.textTertiary} strokeWidth={2} />
             </TouchableOpacity>
           </View>
         </View>
@@ -632,6 +607,62 @@ export const LogbookScreen: React.FC = () => {
           onSelectDate={handleDateSelect}
           selectedDate={selectedDate}
         />
+
+        {/* Filter Selection Modal */}
+        <Modal visible={!!openDropdown} transparent animationType="fade" onRequestClose={() => setOpenDropdown(null)}>
+          <TouchableOpacity style={styles.selectionOverlay} activeOpacity={1} onPress={() => setOpenDropdown(null)}>
+            <View style={styles.selectionContainer} onStartShouldSetResponder={() => true}>
+              <LinearGradient
+                colors={['#1E1A2E', '#151020', '#0C0A14']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.selectionGradient}
+              >
+                <View style={styles.selectionEdge}>
+                  <View style={styles.selectionHeader}>
+                    <View style={styles.selectionLabelRow}>
+                      <Layers size={13} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.selectionTitle}>
+                        {openDropdown === 'year' ? 'SELECT YEAR' : openDropdown === 'month' ? 'SELECT MONTH' : 'SELECT WEEK'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setOpenDropdown(null)}
+                      style={styles.selectionCloseBtn}
+                      activeOpacity={0.7}
+                    >
+                      <X size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.selectionDivider} />
+                  <ScrollView showsVerticalScrollIndicator={false} style={styles.selectionScroll}>
+                    {(openDropdown === 'year' ? getUniqueYears() : openDropdown === 'month' ? getUniqueMonths() : getUniqueWeeks()).map((option) => {
+                      const currentValue = openDropdown === 'year' ? selectedYear : openDropdown === 'month' ? selectedMonth : selectedWeek;
+                      const isSelected = currentValue === option || (option === 'All' && !currentValue);
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={[styles.selectionItem, isSelected && styles.selectionItemActive]}
+                          onPress={() => { if (openDropdown) handleFilterChange(openDropdown, option); setOpenDropdown(null); }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.selectionItemText, isSelected && styles.selectionItemTextActive]}>
+                            {option}
+                          </Text>
+                          {isSelected && (
+                            <View style={styles.selectionCheckWrap}>
+                              <Check size={14} color={COLORS.accent} strokeWidth={2.5} />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </LinearGradient>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {filteredWorkouts.length === 0 ? (
           <View style={{ flex: 1 }}>
@@ -756,89 +787,70 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  /* ── Filter Row ──────────────────────────── */
-  filterScrollView: {
-    maxHeight: 44,
-    marginBottom: SPACING.md,
-    marginHorizontal: -SPACING.screenHorizontal,
+  /* ── Filter Card ─────────────────────────── */
+  filterCard: {
+    borderRadius: 16,
+    marginBottom: 14,
   },
-  filterRow: {
+  filterCardEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 4,
+  },
+  filterTabRow: {
     flexDirection: 'row',
-    paddingHorizontal: SPACING.screenHorizontal,
-    gap: 8,
     alignItems: 'center',
-    paddingVertical: 4,
+    gap: 2,
   },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-  },
-  filterPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-  },
-  filterPillText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: '#71717A',
-    letterSpacing: 0.3,
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
-  },
-  calendarPill: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  filterTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clearFilterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.25)',
-    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+  filterTabActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
   },
-  clearFilterText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: '#71717A',
+  filterTabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.textTertiary,
     letterSpacing: 0.3,
   },
-
-  /* ── Selected Date Chip ──────────────────── */
-  dateChipRow: {
-    paddingBottom: SPACING.sm,
+  filterTabTextActive: {
+    color: '#FFFFFF',
   },
-  dateChip: {
+  filterCalendarTab: {
+    width: 44,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Active Filter Chip ─────────────────── */
+  activeFilterRow: {
+    marginBottom: 12,
+  },
+  activeFilterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 7,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 10,
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.20)',
   },
-  dateChipText: {
+  activeFilterText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: '#FFFFFF',
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
   },
 
   /* ── Swipe-to-Delete ─────────────────────── */
@@ -1014,27 +1026,63 @@ const styles = StyleSheet.create({
   /* ── Calendar Modal ──────────────────────── */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  calendarContainer: {
-    ...CARD_STYLE,
-    borderRadius: 20,
-    padding: SPACING.xl,
+  calendarOuter: {
     width: '88%',
     maxWidth: 380,
+  },
+  calendarGradient: {
+    borderRadius: 22,
     ...Platform.select({
       ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.5,
-        shadowRadius: 30,
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 24,
       },
       android: { elevation: 12 },
     }),
   },
-  calendarHeader: {
+  calendarEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    padding: 20,
+  },
+  calendarHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  calendarLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  calendarLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+  },
+  calendarCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDivider: {
+    height: 1,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    marginBottom: 16,
+  },
+  calendarNavRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1070,7 +1118,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
-    marginBottom: SPACING.lg,
   },
   calendarDay: {
     width: 40,
@@ -1110,109 +1157,96 @@ const styles = StyleSheet.create({
   calendarDayTextToday: {
     color: COLORS.accent,
   },
-  calendarCloseButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    paddingVertical: 13,
+
+  /* ── Selection Modal ────────────────────── */
+  selectionOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  selectionContainer: {
+    width: '88%',
+    maxWidth: 380,
+  },
+  selectionGradient: {
+    borderRadius: 22,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  calendarCloseButtonText: {
-    fontSize: 14,
-    fontFamily: FONTS.display.semibold,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-
-  /* ── Dropdown Bottom Sheet ──────────────── */
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  dropdownSheet: {
-    backgroundColor: '#111111',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    paddingBottom: 40,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: -8 },
-        shadowOpacity: 0.4,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 24,
       },
       android: { elevation: 12 },
     }),
   },
-  dropdownHandleWrap: {
+  selectionEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    padding: 20,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 4,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  dropdownHandle: {
-    width: 32,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  selectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  dropdownTitle: {
+  selectionTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: '#71717A',
+    fontSize: 11,
+    color: COLORS.textSecondary,
     letterSpacing: 2,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    paddingVertical: 14,
   },
-  dropdownDivider: {
-    height: 1,
+  selectionCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    marginHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  dropdownScroll: {
+  selectionDivider: {
+    height: 1,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    marginBottom: 12,
+  },
+  selectionScroll: {
     maxHeight: 340,
-    paddingHorizontal: 12,
-    paddingTop: 8,
   },
-  dropdownItem: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  selectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderRadius: 12,
     marginVertical: 2,
   },
-  dropdownItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  selectionItemActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
   },
-  dropdownItemText: {
-    fontSize: 15,
+  selectionItemText: {
+    fontSize: 14,
     fontFamily: FONTS.ui.regular,
-    color: '#71717A',
+    color: COLORS.textSecondary,
   },
-  dropdownItemTextActive: {
+  selectionItemTextActive: {
     color: '#FFFFFF',
     fontFamily: FONTS.display.semibold,
   },
-  dropdownCheckWrap: {
+  selectionCheckWrap: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
