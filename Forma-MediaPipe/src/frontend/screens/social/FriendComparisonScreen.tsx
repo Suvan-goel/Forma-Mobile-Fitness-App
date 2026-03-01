@@ -10,10 +10,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, Swords } from 'lucide-react-native';
+import { ChevronLeft, Swords } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useFriendComparison } from '../../../backend/hooks';
 import { ComparisonCard } from '../../components/ui/ComparisonCard';
@@ -30,10 +32,10 @@ export const FriendComparisonScreen: React.FC = memo(() => {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
-            <ArrowLeft size={22} color={COLORS.text} />
+            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Compare</Text>
-          <View style={{ width: 22 }} />
+          <View style={{ width: 36 }} />
         </View>
         <View style={styles.centerContainer}>
           <ActivityIndicator color={COLORS.primary} size="large" />
@@ -47,30 +49,54 @@ export const FriendComparisonScreen: React.FC = memo(() => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
-          <ArrowLeft size={22} color={COLORS.text} />
+          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Compare</Text>
-        <View style={{ width: 22 }} />
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* VS Header */}
         <View style={styles.vsHeader}>
-          <View style={styles.vsAvatar}>
-            <Text style={styles.vsAvatarText}>
-              {comparison.you.displayName.charAt(0).toUpperCase()}
-            </Text>
+          <View style={[
+            styles.vsAvatarOuter,
+            Platform.OS === 'ios' && {
+              shadowColor: '#8B5CF6',
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
+            },
+          ]}>
+            <LinearGradient
+              colors={['rgba(139, 92, 246, 0.2)', 'rgba(139, 92, 246, 0.06)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.vsAvatar}
+            >
+              <Text style={styles.vsAvatarText}>
+                {comparison.you.displayName.charAt(0).toUpperCase()}
+              </Text>
+            </LinearGradient>
           </View>
 
           <View style={styles.vsIconContainer}>
-            <Swords size={22} color={COLORS.primary} />
+            <View style={styles.vsIconBg}>
+              <Swords size={18} color={COLORS.primary} />
+            </View>
             <Text style={styles.vsText}>VS</Text>
           </View>
 
-          <View style={styles.vsAvatar}>
-            <Text style={styles.vsAvatarText}>
-              {comparison.friend.displayName.charAt(0).toUpperCase()}
-            </Text>
+          <View style={styles.vsAvatarOuter}>
+            <LinearGradient
+              colors={['rgba(139, 92, 246, 0.2)', 'rgba(139, 92, 246, 0.06)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.vsAvatar}
+            >
+              <Text style={styles.vsAvatarText}>
+                {comparison.friend.displayName.charAt(0).toUpperCase()}
+              </Text>
+            </LinearGradient>
           </View>
         </View>
 
@@ -142,7 +168,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   backButton: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
@@ -159,13 +188,13 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xl,
     gap: SPACING.xl,
   },
+  vsAvatarOuter: {},
   vsAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -176,11 +205,21 @@ const styles = StyleSheet.create({
   },
   vsIconContainer: {
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+  },
+  vsIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   vsText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.primary,
     letterSpacing: 2,
   },

@@ -91,7 +91,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   icon: Icon,
   data,
   unit = '',
-  height = 140,
+  height = 160,
   formatValue,
   timeRange,
   headerValue,
@@ -254,7 +254,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
               <Path
                 d={svgContent.linePath}
                 stroke={COLORS.accent}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -268,7 +268,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                   cy={pt.y}
                   r={
                     activeIndex === i
-                      ? 5
+                      ? 6
                       : activeIndex == null && i === svgContent.points.length - 1
                         ? 4
                         : 0
@@ -335,11 +335,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
   cardGradient: {

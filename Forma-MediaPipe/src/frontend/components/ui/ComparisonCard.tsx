@@ -1,10 +1,11 @@
 /**
- * ComparisonCard — Side-by-side stat comparison card
+ * ComparisonCard — Side-by-side stat comparison with visual bar
  */
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS, FONTS, SPACING, CARD_STYLE } from '../../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 
 interface ComparisonCardProps {
   label: string;
@@ -21,8 +22,8 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = memo(({
   format = 'decimal',
   higherIsBetter = true,
 }) => {
-  const youWins = higherIsBetter ? yourValue >= friendValue : yourValue <= friendValue;
-  const friendWins = !youWins;
+  const youWins = higherIsBetter ? yourValue > friendValue : yourValue < friendValue;
+  const friendWins = higherIsBetter ? friendValue > yourValue : friendValue < yourValue;
   const isDraw = yourValue === friendValue;
 
   const formatValue = (val: number) => {
@@ -33,66 +34,120 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = memo(({
     }
   };
 
+  // Compute bar widths proportionally
+  const barWidths = useMemo(() => {
+    const total = yourValue + friendValue;
+    if (total === 0) return { you: 50, friend: 50 };
+    return {
+      you: Math.max(15, (yourValue / total) * 100),
+      friend: Math.max(15, (friendValue / total) * 100),
+    };
+  }, [yourValue, friendValue]);
+
+  const youColor = youWins ? '#34D399' : isDraw ? COLORS.textSecondary : COLORS.textTertiary;
+  const friendColor = friendWins ? '#34D399' : isDraw ? COLORS.textSecondary : COLORS.textTertiary;
+
   return (
-    <View style={styles.card}>
-      {/* Your side */}
-      <View style={styles.side}>
-        <Text style={[
-          styles.value,
-          youWins && !isDraw && styles.valueWinner,
-        ]}>
-          {formatValue(yourValue)}
-        </Text>
-      </View>
+    <View style={styles.cardOuter}>
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.card}
+      >
+        <View style={styles.cardEdge}>
+          {/* Label */}
+          <Text style={styles.label}>{label}</Text>
 
-      {/* Label */}
-      <View style={styles.labelContainer}>
-        <Text style={styles.label}>{label}</Text>
-      </View>
+          {/* Values row */}
+          <View style={styles.valuesRow}>
+            <Text style={[styles.value, { color: youColor }]}>
+              {formatValue(yourValue)}
+            </Text>
+            <Text style={[styles.value, { color: friendColor }]}>
+              {formatValue(friendValue)}
+            </Text>
+          </View>
 
-      {/* Friend side */}
-      <View style={styles.side}>
-        <Text style={[
-          styles.value,
-          friendWins && !isDraw && styles.valueWinner,
-        ]}>
-          {formatValue(friendValue)}
-        </Text>
-      </View>
+          {/* Comparison bar */}
+          <View style={styles.barContainer}>
+            <View style={[
+              styles.barLeft,
+              { width: `${barWidths.you}%` },
+              youWins && styles.barWinner,
+              isDraw && styles.barDraw,
+            ]} />
+            <View style={styles.barGap} />
+            <View style={[
+              styles.barRight,
+              { width: `${barWidths.friend}%` },
+              friendWins && styles.barWinner,
+              isDraw && styles.barDraw,
+            ]} />
+          </View>
+        </View>
+      </LinearGradient>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  card: {
-    ...CARD_STYLE,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
+  cardOuter: {
     marginHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.sm,
+    borderRadius: 18,
+    overflow: 'hidden',
   },
-  side: {
-    flex: 1,
-    alignItems: 'center',
+  card: {
+    borderRadius: 18,
+  },
+  cardEdge: {
+    padding: SPACING.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  label: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  valuesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
   },
   value: {
     fontFamily: FONTS.mono.bold,
     fontSize: 22,
-    color: COLORS.textSecondary,
   },
-  valueWinner: {
-    color: '#34D399',
+  barContainer: {
+    flexDirection: 'row',
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
   },
-  labelContainer: {
-    paddingHorizontal: SPACING.md,
+  barLeft: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
-  label: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    textAlign: 'center',
+  barRight: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  barGap: {
+    width: 4,
+  },
+  barWinner: {
+    backgroundColor: 'rgba(52, 211, 153, 0.4)',
+  },
+  barDraw: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
   },
 });

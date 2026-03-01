@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, Search, UserPlus, Check, Clock } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_STYLE } from '../../constants/theme';
+import { ChevronLeft, Search, UserPlus, Check, Clock } from 'lucide-react-native';
+import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useUserSearch, useFriends } from '../../../backend/hooks';
 import { UserSearchResult } from '../../../backend/services/api/types';
 
@@ -23,14 +23,14 @@ const StatusIndicator = memo(({ status }: { status: UserSearchResult['relationsh
   switch (status) {
     case 'friends':
       return (
-        <View style={[styles.statusBadge, { backgroundColor: 'rgba(52, 211, 153, 0.1)' }]}>
+        <View style={[styles.statusBadge, { backgroundColor: 'rgba(52, 211, 153, 0.08)', borderColor: 'rgba(52, 211, 153, 0.15)' }]}>
           <Check size={14} color="#34D399" />
           <Text style={[styles.statusText, { color: '#34D399' }]}>Friends</Text>
         </View>
       );
     case 'pending_sent':
       return (
-        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.04)', borderColor: 'rgba(255, 255, 255, 0.08)' }]}>
           <Clock size={14} color={COLORS.textTertiary} />
           <Text style={[styles.statusText, { color: COLORS.textTertiary }]}>Pending</Text>
         </View>
@@ -45,7 +45,7 @@ export const AddFriendScreen: React.FC = memo(() => {
   const navigation = useNavigation();
   const [query, setQuery] = useState('');
   const { results, isLoading, error } = useUserSearch(query);
-  const { sendRequest, suggestedFriends } = useFriends();
+  const { sendRequest } = useFriends();
 
   const handleAdd = useCallback(async (userId: string) => {
     await sendRequest(userId);
@@ -76,7 +76,7 @@ export const AddFriendScreen: React.FC = memo(() => {
           onPress={() => handleAdd(item.userId)}
           activeOpacity={0.7}
         >
-          <UserPlus size={16} color={COLORS.text} />
+          <UserPlus size={15} color={COLORS.text} />
           <Text style={styles.addButtonText}>Add</Text>
         </TouchableOpacity>
       ) : (
@@ -97,15 +97,15 @@ export const AddFriendScreen: React.FC = memo(() => {
           activeOpacity={0.7}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <ArrowLeft size={22} color={COLORS.text} />
+          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Friends</Text>
-        <View style={{ width: 22 }} />
+        <View style={{ width: 36 }} />
       </View>
 
       {/* Search bar */}
       <View style={styles.searchContainer}>
-        <Search size={18} color={COLORS.textTertiary} />
+        <Search size={16} color={COLORS.textTertiary} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by name..."
@@ -135,7 +135,9 @@ export const AddFriendScreen: React.FC = memo(() => {
               </View>
             ) : (
               <View style={styles.emptyContainer}>
-                <Search size={40} color={COLORS.textTertiary} />
+                <View style={styles.emptyIconContainer}>
+                  <Search size={24} color={COLORS.textTertiary} />
+                </View>
                 <Text style={styles.emptyText}>Search for friends by name</Text>
                 <Text style={styles.emptySubtext}>Type at least 2 characters</Text>
               </View>
@@ -162,7 +164,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   backButton: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
@@ -174,9 +179,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: SPACING.screenHorizontal,
     paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     gap: SPACING.sm,
@@ -200,16 +205,24 @@ const styles = StyleSheet.create({
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: SPACING.screenHorizontal,
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.md,
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 6,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
   },
   avatarText: {
     fontFamily: FONTS.display.semibold,
@@ -234,10 +247,10 @@ const styles = StyleSheet.create({
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: 20,
     backgroundColor: COLORS.primary,
   },
   addButtonText: {
@@ -251,7 +264,8 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   statusText: {
     fontFamily: FONTS.ui.regular,
@@ -261,6 +275,17 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     alignItems: 'center',
     gap: SPACING.sm,
+  },
+  emptyIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: SPACING.xs,
   },
   emptyText: {
     fontFamily: FONTS.ui.regular,

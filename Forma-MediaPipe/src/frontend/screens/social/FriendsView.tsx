@@ -14,16 +14,12 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { UserPlus, Check, X, Users } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
   COLORS,
   FONTS,
   SPACING,
-  CARD_GRADIENT_COLORS,
-  CARD_GRADIENT_START,
-  CARD_GRADIENT_END,
 } from '../../constants/theme';
 import { useFriends } from '../../../backend/hooks';
 import { Friend, FriendRequest, SuggestedFriend } from '../../../backend/services/api/types';
@@ -77,33 +73,26 @@ const SuggestedCard = memo(({
   suggestion: SuggestedFriend;
   onAdd: (userId: string) => void;
 }) => (
-  <LinearGradient
-    colors={[...CARD_GRADIENT_COLORS]}
-    start={CARD_GRADIENT_START}
-    end={CARD_GRADIENT_END}
-    style={styles.suggestedGradient}
-  >
-    <View style={styles.suggestedCard}>
-      <View style={styles.suggestedAvatar}>
-        <Text style={styles.suggestedAvatarText}>
-          {suggestion.displayName.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <Text style={styles.suggestedName} numberOfLines={1}>
-        {suggestion.displayName}
+  <View style={styles.suggestedCard}>
+    <View style={styles.suggestedAvatar}>
+      <Text style={styles.suggestedAvatarText}>
+        {suggestion.displayName.charAt(0).toUpperCase()}
       </Text>
-      <Text style={styles.suggestedMutual}>
-        {suggestion.mutualFriendCount} mutual
-      </Text>
-      <TouchableOpacity
-        style={styles.addSmallButton}
-        onPress={() => onAdd(suggestion.userId)}
-        activeOpacity={0.7}
-      >
-        <UserPlus size={14} color={COLORS.primary} />
-      </TouchableOpacity>
     </View>
-  </LinearGradient>
+    <Text style={styles.suggestedName} numberOfLines={1}>
+      {suggestion.displayName}
+    </Text>
+    <Text style={styles.suggestedMutual}>
+      {suggestion.mutualFriendCount} mutual
+    </Text>
+    <TouchableOpacity
+      style={styles.addSmallButton}
+      onPress={() => onAdd(suggestion.userId)}
+      activeOpacity={0.7}
+    >
+      <UserPlus size={13} color={COLORS.primary} />
+    </TouchableOpacity>
+  </View>
 ));
 
 // ── Main View ─────────────────────────────────────────────────
@@ -180,7 +169,7 @@ export const FriendsView: React.FC = memo(() => {
       {/* Suggested friends */}
       {suggestedFriends.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabelPadded}>PEOPLE YOU MAY KNOW</Text>
+          <Text style={styles.sectionLabelPadded}>SUGGESTED</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -235,7 +224,9 @@ export const FriendsView: React.FC = memo(() => {
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Users size={48} color={COLORS.textTertiary} />
+            <View style={styles.emptyIconContainer}>
+              <Users size={32} color={COLORS.textTertiary} />
+            </View>
             <Text style={styles.emptyTitle}>No friends yet</Text>
             <Text style={styles.emptySubtitle}>
               Add friends to compare stats and stay motivated
@@ -260,7 +251,7 @@ export const FriendsView: React.FC = memo(() => {
       {/* FAB */}
       {friends.length > 0 && (
         <TouchableOpacity style={styles.fab} onPress={handleAddFriend} activeOpacity={0.7}>
-          <UserPlus size={22} color={COLORS.text} />
+          <UserPlus size={20} color={COLORS.text} />
         </TouchableOpacity>
       )}
     </View>
@@ -292,30 +283,32 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
     color: COLORS.textTertiary,
     letterSpacing: 2,
   },
   sectionLabelPadded: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
     color: COLORS.textTertiary,
     letterSpacing: 2,
     paddingHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.sm,
   },
   sectionLabelInline: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
     color: COLORS.textTertiary,
     letterSpacing: 2,
   },
   countBadge: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   countText: {
     fontFamily: FONTS.mono.bold,
@@ -328,8 +321,6 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: SPACING.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
     gap: SPACING.sm,
   },
   friendsCount: {
@@ -344,16 +335,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
   },
   requestAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   requestAvatarText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.text,
   },
   requestInfo: {
@@ -366,48 +359,50 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   acceptButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.25)',
+    borderColor: 'rgba(52, 211, 153, 0.2)',
   },
   declineButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: SPACING.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   suggestedScroll: {
     paddingHorizontal: SPACING.screenHorizontal,
     gap: SPACING.sm,
   },
-  suggestedGradient: {
-    borderRadius: 19,
-  },
   suggestedCard: {
-    width: 120,
+    width: 110,
     padding: SPACING.md,
-    borderRadius: 19,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
   },
   suggestedAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.sm,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
   },
   suggestedAvatarText: {
     fontFamily: FONTS.display.semibold,
@@ -431,22 +426,32 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   emptyContainer: {
     paddingTop: 80,
     alignItems: 'center',
     paddingHorizontal: SPACING.xxl,
   },
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: SPACING.md,
+  },
   emptyTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 18,
     color: COLORS.text,
-    marginTop: SPACING.md,
   },
   emptySubtitle: {
     fontFamily: FONTS.ui.regular,
@@ -462,13 +467,13 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 19,
+    borderRadius: 20,
     backgroundColor: COLORS.primary,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
+        shadowOpacity: 0.35,
         shadowRadius: 12,
       },
       android: { elevation: 6 },
@@ -488,12 +493,12 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: SPACING.md,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-    borderRadius: 19,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderRadius: 20,
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(139, 92, 246, 0.25)',
   },
   retryText: {
     fontFamily: FONTS.ui.bold,
@@ -504,9 +509,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 100,
     right: SPACING.xl,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',

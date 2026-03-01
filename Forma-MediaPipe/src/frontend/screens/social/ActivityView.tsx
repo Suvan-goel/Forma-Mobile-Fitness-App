@@ -95,7 +95,9 @@ export const ActivityView: React.FC = memo(() => {
       ListFooterComponent={ListFooter}
       ListEmptyComponent={
         <View style={styles.emptyContainer}>
-          <Inbox size={48} color={COLORS.textTertiary} />
+          <View style={styles.emptyIconContainer}>
+            <Inbox size={28} color={COLORS.textTertiary} />
+          </View>
           <Text style={styles.emptyTitle}>No activity yet</Text>
           <Text style={styles.emptySubtitle}>
             Add friends to see their workout activity here
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  /* ── Filter pills (matches Logbook filter style) ── */
+  /* ── Filter pills ── */
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.screenHorizontal,
@@ -136,22 +138,22 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   filterPill: {
-    paddingVertical: 7,
+    paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 19,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#3F3F46',
-    backgroundColor: COLORS.background,
+    borderColor: '#27272A',
+    backgroundColor: 'transparent',
   },
   filterPillActive: {
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   filterText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   filterTextActive: {
     fontFamily: FONTS.ui.bold,
@@ -164,11 +166,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.xxl,
   },
+  emptyIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: SPACING.md,
+  },
   emptyTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 18,
     color: COLORS.text,
-    marginTop: SPACING.md,
   },
   emptySubtitle: {
     fontFamily: FONTS.ui.regular,
@@ -185,12 +197,12 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: SPACING.md,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-    borderRadius: 19,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderRadius: 20,
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(139, 92, 246, 0.25)',
   },
   retryText: {
     fontFamily: FONTS.ui.bold,

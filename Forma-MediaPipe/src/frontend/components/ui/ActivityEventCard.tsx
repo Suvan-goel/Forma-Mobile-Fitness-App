@@ -1,11 +1,12 @@
 /**
- * ActivityEventCard — Single event in the activity feed
+ * ActivityEventCard — Event card in the activity feed
  */
 
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Activity, Award, TrendingUp, Flame } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_STYLE, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
 import { ActivityEvent } from '../../../backend/services/api/types';
 
 interface ActivityEventCardProps {
@@ -55,49 +56,77 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
   const formScore = event.eventType === 'workout_completed' ? event.payload.form_score as number : null;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={[styles.iconContainer, { backgroundColor: `${config.color}15` }]}>
-          <Icon size={16} color={config.color} />
-        </View>
+    <View style={styles.cardOuter}>
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.card}
+      >
+        <View style={styles.cardEdge}>
+          {/* Header row */}
+          <View style={styles.header}>
+            <View style={[styles.iconContainer, { backgroundColor: `${config.color}15` }]}>
+              <Icon size={16} color={config.color} />
+            </View>
 
-        <View style={styles.headerText}>
-          <Text style={styles.name} numberOfLines={1}>
-            {event.displayName}
-          </Text>
-          <Text style={styles.timestamp}>
-            {getRelativeTime(event.createdAt)}
-          </Text>
-        </View>
+            <View style={styles.headerText}>
+              <Text style={styles.name} numberOfLines={1}>
+                {event.displayName}
+              </Text>
+              <Text style={styles.timestamp}>
+                {getRelativeTime(event.createdAt)}
+              </Text>
+            </View>
 
-        {formScore != null && (
-          <View style={styles.scoreBadge}>
-            <Text style={[styles.scoreText, { color: getScoreColor(formScore) }]}>
-              {formScore}
-            </Text>
+            {formScore != null && (
+              <View style={[styles.scoreBadge, { borderColor: `${getScoreColor(formScore)}25` }]}>
+                <Text style={[styles.scoreText, { color: getScoreColor(formScore) }]}>
+                  {formScore}
+                </Text>
+              </View>
+            )}
           </View>
-        )}
-      </View>
 
-      <Text style={styles.description}>{description}</Text>
+          {/* Description */}
+          <Text style={styles.description}>{description}</Text>
 
-      {event.eventType === 'workout_completed' && !!event.payload.duration && (
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText}>
-            {event.payload.duration as string} • {event.payload.exercise_count as number} exercises
-          </Text>
+          {/* Meta info */}
+          {event.eventType === 'workout_completed' && !!event.payload.duration && (
+            <View style={styles.metaRow}>
+              <View style={styles.metaPill}>
+                <Text style={styles.metaText}>
+                  {event.payload.duration as string}
+                </Text>
+              </View>
+              <View style={styles.metaPill}>
+                <Text style={styles.metaText}>
+                  {event.payload.exercise_count as number} exercises
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
-      )}
+      </LinearGradient>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  card: {
-    ...CARD_STYLE,
-    padding: SPACING.md,
+  cardOuter: {
     marginHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.sm,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  card: {
+    borderRadius: 18,
+  },
+  cardEdge: {
+    padding: SPACING.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   header: {
     flexDirection: 'row',
@@ -105,9 +134,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -127,10 +156,11 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   scoreBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
   },
   scoreText: {
     fontFamily: FONTS.mono.bold,
@@ -140,10 +170,18 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
     color: COLORS.textSecondary,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   metaRow: {
-    marginTop: SPACING.xs,
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  metaPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   metaText: {
     fontFamily: FONTS.ui.regular,

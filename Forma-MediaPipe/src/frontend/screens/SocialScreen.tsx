@@ -1,8 +1,5 @@
 /**
  * SocialScreen — Top-level container for the Social tab
- *
- * Uses an internal tab selector (not a nested navigator) to switch
- * between Leaderboard, Friends, and Activity views.
  */
 
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
@@ -62,7 +59,7 @@ export const SocialScreen: React.FC = memo(() => {
           style={styles.backButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
+          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>SOCIAL</Text>
         <TouchableOpacity
@@ -107,7 +104,7 @@ const styles = StyleSheet.create({
   },
   fixedHeader: {
     paddingTop: 6,
-    paddingBottom: 8,
+    paddingBottom: 4,
     paddingHorizontal: SPACING.screenHorizontal,
     flexDirection: 'row',
     alignItems: 'center',
@@ -116,42 +113,40 @@ const styles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 40,
+    fontSize: 38,
     color: '#FFFFFF',
     letterSpacing: 2,
-    lineHeight: 46,
-    flex: 1,
   },
   avatarButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     overflow: 'hidden',
-    marginTop: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   avatarImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   avatarGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#000000',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatarInitial: {
     fontFamily: FONTS.display.bold,

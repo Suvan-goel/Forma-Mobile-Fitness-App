@@ -10,11 +10,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, GitCompare, Award, Calendar, Flame } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_STYLE, getScoreColor } from '../../constants/theme';
+import { ChevronLeft, GitCompare, Award, Calendar, Flame } from 'lucide-react-native';
+import { COLORS, FONTS, SPACING, getScoreColor } from '../../constants/theme';
 import { useFriendProfile } from '../../../backend/hooks';
 
 export const FriendProfileScreen: React.FC = memo(() => {
@@ -33,10 +35,10 @@ export const FriendProfileScreen: React.FC = memo(() => {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
-            <ArrowLeft size={22} color={COLORS.text} />
+            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
-          <View style={{ width: 22 }} />
+          <View style={{ width: 36 }} />
         </View>
         <View style={styles.centerContainer}>
           <ActivityIndicator color={COLORS.primary} size="large" />
@@ -50,19 +52,34 @@ export const FriendProfileScreen: React.FC = memo(() => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
-          <ArrowLeft size={22} color={COLORS.text} />
+          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <View style={{ width: 22 }} />
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Profile header */}
         <View style={styles.profileHeader}>
-          <View style={styles.largeAvatar}>
-            <Text style={styles.largeAvatarText}>
-              {profile.displayName.charAt(0).toUpperCase()}
-            </Text>
+          <View style={[
+            styles.largeAvatarOuter,
+            Platform.OS === 'ios' && {
+              shadowColor: '#8B5CF6',
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+            },
+          ]}>
+            <LinearGradient
+              colors={['rgba(139, 92, 246, 0.25)', 'rgba(139, 92, 246, 0.08)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.largeAvatar}
+            >
+              <Text style={styles.largeAvatarText}>
+                {profile.displayName.charAt(0).toUpperCase()}
+              </Text>
+            </LinearGradient>
           </View>
           <Text style={styles.displayName}>{profile.displayName}</Text>
           <Text style={styles.memberSince}>
@@ -73,19 +90,25 @@ export const FriendProfileScreen: React.FC = memo(() => {
         {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Calendar size={16} color={COLORS.textTertiary} />
+            <View style={styles.statIconContainer}>
+              <Calendar size={14} color={COLORS.primary} />
+            </View>
             <Text style={styles.statValue}>{profile.totalWorkouts}</Text>
             <Text style={styles.statLabel}>Workouts</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Flame size={16} color={COLORS.textTertiary} />
+            <View style={styles.statIconContainer}>
+              <Flame size={14} color="#E07856" />
+            </View>
             <Text style={styles.statValue}>{profile.streakDays}</Text>
             <Text style={styles.statLabel}>Streak</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Award size={16} color={COLORS.textTertiary} />
+            <View style={styles.statIconContainer}>
+              <Award size={14} color="#34D399" />
+            </View>
             <Text style={[styles.statValue, { color: getScoreColor(profile.avgFormScore) }]}>
               {profile.avgFormScore.toFixed(1)}
             </Text>
@@ -115,9 +138,11 @@ export const FriendProfileScreen: React.FC = memo(() => {
               <View key={workout.id} style={styles.workoutCard}>
                 <View style={styles.workoutHeader}>
                   <Text style={styles.workoutName}>{workout.name}</Text>
-                  <Text style={[styles.workoutScore, { color: getScoreColor(workout.formScore) }]}>
-                    {workout.formScore}
-                  </Text>
+                  <View style={[styles.workoutScoreBadge, { borderColor: `${getScoreColor(workout.formScore)}25` }]}>
+                    <Text style={[styles.workoutScore, { color: getScoreColor(workout.formScore) }]}>
+                      {workout.formScore}
+                    </Text>
+                  </View>
                 </View>
                 <Text style={styles.workoutMeta}>
                   {workout.date} • {workout.duration} • {workout.totalSets} sets
@@ -128,7 +153,11 @@ export const FriendProfileScreen: React.FC = memo(() => {
         )}
 
         {/* Compare button */}
-        <TouchableOpacity style={styles.compareButton} onPress={handleCompare} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.compareButton}
+          onPress={handleCompare}
+          activeOpacity={0.7}
+        >
           <GitCompare size={18} color={COLORS.text} />
           <Text style={styles.compareButtonText}>Compare Stats</Text>
         </TouchableOpacity>
@@ -155,7 +184,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   backButton: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
@@ -169,20 +201,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.xl,
   },
+  largeAvatarOuter: {
+    marginBottom: SPACING.md,
+  },
   largeAvatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.md,
   },
   largeAvatarText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 28,
+    fontSize: 30,
     color: COLORS.text,
   },
   displayName: {
@@ -199,7 +232,10 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     marginHorizontal: SPACING.screenHorizontal,
-    ...CARD_STYLE,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     padding: SPACING.md,
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -207,6 +243,15 @@ const styles = StyleSheet.create({
   statItem: {
     alignItems: 'center',
     gap: 4,
+  },
+  statIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   statValue: {
     fontFamily: FONTS.mono.bold,
@@ -220,7 +265,7 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    height: 32,
+    height: 40,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   section: {
@@ -228,11 +273,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
   },
   sectionTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.textTertiary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 2,
     marginBottom: SPACING.md,
   },
   badgeRow: {
@@ -240,17 +285,20 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   badge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderColor: 'rgba(139, 92, 246, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   workoutCard: {
-    ...CARD_STYLE,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     padding: SPACING.md,
     marginBottom: SPACING.sm,
   },
@@ -265,9 +313,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
   },
+  workoutScoreBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
   workoutScore: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 16,
+    fontSize: 14,
   },
   workoutMeta: {
     fontFamily: FONTS.ui.regular,
@@ -282,8 +337,17 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.screenHorizontal,
     marginTop: SPACING.xxl,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 20,
     backgroundColor: COLORS.primary,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+      },
+      android: { elevation: 6 },
+    }),
   },
   compareButtonText: {
     fontFamily: FONTS.ui.bold,

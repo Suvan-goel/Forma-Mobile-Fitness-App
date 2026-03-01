@@ -49,18 +49,20 @@ const MetricSelector = memo(({ active, onSelect }: { active: LeaderboardMetric; 
 
 const TimeSelector = memo(({ active, onSelect }: { active: TimeWindow; onSelect: (t: TimeWindow) => void }) => (
   <View style={styles.timeRow}>
-    {TIME_WINDOWS.map(t => (
-      <TouchableOpacity
-        key={t.key}
-        style={[styles.timePill, active === t.key && styles.timePillActive]}
-        onPress={() => onSelect(t.key)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.timeText, active === t.key && styles.timeTextActive]}>
-          {t.label}
-        </Text>
-      </TouchableOpacity>
-    ))}
+    <View style={styles.timeTrack}>
+      {TIME_WINDOWS.map(t => (
+        <TouchableOpacity
+          key={t.key}
+          style={[styles.timePill, active === t.key && styles.timePillActive]}
+          onPress={() => onSelect(t.key)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.timeText, active === t.key && styles.timeTextActive]}>
+            {t.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
   </View>
 ));
 
@@ -139,7 +141,9 @@ export const LeaderboardView: React.FC = memo(() => {
       {/* Sticky current user banner */}
       {showStickyBanner && currentUser && (
         <View style={styles.stickyBanner}>
-          <Text style={styles.stickyRank}>#{currentUser.rank}</Text>
+          <View style={styles.stickyRankBadge}>
+            <Text style={styles.stickyRank}>#{currentUser.rank}</Text>
+          </View>
           <Text style={styles.stickyName}>You</Text>
           <Text style={[styles.stickyScore, { color: getScoreColor(currentUser.score) }]}>
             {currentUser.score.toFixed(1)}
@@ -158,30 +162,30 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  /* ── Metric Selector (matches Logbook filter pills) ── */
+  /* ── Metric Selector ── */
   selectorRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.xs,
     gap: SPACING.sm,
   },
   metricPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 19,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#3F3F46',
-    backgroundColor: COLORS.background,
+    borderColor: '#27272A',
+    backgroundColor: 'transparent',
   },
   metricPillActive: {
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   metricText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   metricTextActive: {
     fontFamily: FONTS.ui.bold,
@@ -190,23 +194,23 @@ const styles = StyleSheet.create({
 
   /* ── Time Window Selector ── */
   timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingTop: SPACING.sm,
+    alignItems: 'center',
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.xs,
-    gap: SPACING.sm,
+  },
+  timeTrack: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 10,
+    padding: 2,
   },
   timePill: {
     paddingVertical: 6,
-    paddingHorizontal: 20,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 22,
+    borderRadius: 8,
   },
   timePillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
   },
   timeText: {
     fontFamily: FONTS.ui.regular,
@@ -222,8 +226,6 @@ const styles = StyleSheet.create({
   listHeaderRow: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: SPACING.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   listHeaderText: {
     fontFamily: FONTS.ui.regular,
@@ -250,12 +252,12 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: SPACING.md,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-    borderRadius: 19,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderRadius: 20,
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(139, 92, 246, 0.25)',
   },
   retryText: {
     fontFamily: FONTS.ui.bold,
@@ -288,18 +290,23 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    paddingBottom: 40,
+    paddingVertical: 16,
+    paddingBottom: 36,
     paddingHorizontal: SPACING.screenHorizontal,
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.25)',
+    borderTopColor: 'rgba(139, 92, 246, 0.15)',
     gap: SPACING.md,
+  },
+  stickyRankBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
   },
   stickyRank: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.primary,
   },
   stickyName: {

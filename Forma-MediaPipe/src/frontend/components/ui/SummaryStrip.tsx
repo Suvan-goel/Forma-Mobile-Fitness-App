@@ -32,6 +32,7 @@ const SummaryTile = memo(({
       style={styles.tileGradient}
     >
       <View style={styles.tileGlassEdge}>
+        <View style={styles.tileAccentLine} />
         <Icon size={14} color={COLORS.accent} strokeWidth={1.5} />
         <Text style={styles.tileValue}>{value}</Text>
         <Text style={styles.tileLabel}>{label}</Text>
@@ -84,22 +85,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     padding: SPACING.md,
-    minHeight: 90,
+    minHeight: 100,
     justifyContent: 'space-between',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  tileAccentLine: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
+    opacity: 0.4,
   },
   tileValue: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 24,
+    fontSize: 32,
     color: COLORS.text,
-    lineHeight: 30,
+    lineHeight: 38,
     letterSpacing: -0.5,
     marginTop: 6,
+    textAlign: 'center',
   },
   tileLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontSize: 9,
     color: COLORS.textTertiary,
     letterSpacing: 2,
     marginTop: 2,
+    textAlign: 'center',
   },
 });

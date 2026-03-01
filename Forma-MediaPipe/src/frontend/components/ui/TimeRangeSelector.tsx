@@ -60,22 +60,25 @@ export { TIME_RANGE_OPTIONS };
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 20,
+    padding: 3,
   },
   pill: {
-    height: 34,
-    paddingHorizontal: 16,
-    borderRadius: 17,
-    backgroundColor: '#000000',
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#3F3F46',
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   pillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
   },
   pillText: {
     fontFamily: FONTS.ui.bold,

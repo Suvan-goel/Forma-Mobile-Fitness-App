@@ -20,6 +20,10 @@ interface NeonArcProps {
   displayValue?: string;
   size?: number;
   strokeWidth?: number;
+  /** Trend direction arrow shown below the label */
+  trendDirection?: 'up' | 'down' | 'flat';
+  /** Trend percentage (e.g. 34.4) shown below the label */
+  trendPercent?: number;
 }
 
 const toRad = (deg: number) => ((deg - 90) * Math.PI) / 180;
@@ -47,7 +51,9 @@ export const NeonArc: React.FC<NeonArcProps> = memo(({
   label,
   displayValue,
   size = 280,
-  strokeWidth = 12,
+  strokeWidth = 14,
+  trendDirection,
+  trendPercent,
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -136,18 +142,25 @@ export const NeonArc: React.FC<NeonArcProps> = memo(({
       {/* Centre text — Space Grotesk SemiBold */}
       <View style={[styles.centerText, { top: textCenterY - 52 }]}>
         <Text style={styles.valueText}>{displayValue ?? value}</Text>
-        <View style={{ height: 8 }} />
+        <View style={{ height: 6 }} />
         <Text style={styles.labelText}>{label.toUpperCase()}</Text>
-        <View style={styles.stars}>
-          {[...Array(3)].map((_, i) => (
-            <Text
-              key={i}
-              style={[styles.star, i < Math.ceil(value / 35) && styles.starActive]}
-            >
-              {'\u2605'}
+        {trendDirection && trendPercent !== undefined && trendPercent > 0 && (
+          <View style={styles.trendRow}>
+            <Text style={[
+              styles.trendArrow,
+              { color: trendDirection === 'up' ? '#34D399' : trendDirection === 'down' ? '#E07856' : COLORS.textTertiary },
+            ]}>
+              {trendDirection === 'up' ? '\u25B2' : trendDirection === 'down' ? '\u25BC' : '\u2500'}
             </Text>
-          ))}
-        </View>
+            <Text style={[
+              styles.trendText,
+              { color: trendDirection === 'up' ? '#34D399' : trendDirection === 'down' ? '#E07856' : COLORS.textTertiary },
+            ]}>
+              {trendPercent}%
+            </Text>
+            <Text style={styles.trendLabel}>vs prev</Text>
+          </View>
+        )}
       </View>
     </Animated.View>
   );
@@ -188,17 +201,25 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     textAlign: 'center',
   },
-  stars: {
+  trendRow: {
     flexDirection: 'row',
-    gap: 4,
-    marginTop: 8,
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+    marginTop: 10,
   },
-  star: {
+  trendArrow: {
+    fontSize: 10,
+  },
+  trendText: {
+    fontFamily: FONTS.ui.bold,
     fontSize: 12,
-    color: COLORS.textTertiary,
+    letterSpacing: 0.5,
   },
-  starActive: {
-    color: '#A78BFA',
+  trendLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
   },
 });
