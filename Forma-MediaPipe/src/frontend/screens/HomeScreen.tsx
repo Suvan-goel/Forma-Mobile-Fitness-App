@@ -293,7 +293,7 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigateToTab('Record')}
           >
             <LinearGradient
-              colors={['rgba(139, 92, 246, 0.35)', 'rgba(124, 58, 237, 0.35)']}
+              colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.ctaGradient}

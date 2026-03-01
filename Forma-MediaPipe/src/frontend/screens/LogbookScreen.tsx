@@ -24,9 +24,10 @@ import {
   Calendar,
   X,
   Check,
+  BookOpen,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts, useDeleteWorkout, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
@@ -86,6 +87,12 @@ const CalendarModal = ({
   const isSameDay = (a: Date | null, b: Date | null) =>
     !!a && !!b && a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
 
+  const isToday = (date: Date | null) => {
+    if (!date) return false;
+    const today = new Date();
+    return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+  };
+
   const days = getDaysInMonth(currentMonth);
 
   return (
@@ -116,12 +123,17 @@ const CalendarModal = ({
                   styles.calendarDay,
                   day && isSameDay(day, selectedDate) && styles.calendarDaySelected,
                   !day && styles.calendarDayEmpty,
+                  day && isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayToday,
                 ]}
                 onPress={() => day && onSelectDate(day)}
                 disabled={!day}
               >
                 {day && (
-                  <Text style={[styles.calendarDayText, isSameDay(day, selectedDate) && styles.calendarDayTextSelected]}>
+                  <Text style={[
+                    styles.calendarDayText,
+                    isSameDay(day, selectedDate) && styles.calendarDayTextSelected,
+                    isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayTextToday,
+                  ]}>
                     {day.getDate()}
                   </Text>
                 )}
@@ -206,16 +218,15 @@ const DropdownPill = ({
   );
 };
 
-/* ── Workout Card (LinearGradient surface) ── */
+/* ── Workout Card ─────────────────────────── */
 
 interface WorkoutCardProps {
   session: WorkoutSession;
   onDelete: (id: string) => void;
 }
 
-/** Card height = content (~74px) + increased top/bottom padding (20px) + horizontal padding (16px); gap for getItemLayout */
-const CARD_INNER_HEIGHT = 122;
-const CARD_GAP = 14;
+const CARD_INNER_HEIGHT = 110;
+const CARD_GAP = 12;
 const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
 const DELETE_AREA_WIDTH = 72;
 
@@ -283,7 +294,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => 
       {/* Delete button revealed when card slides left */}
       <View style={styles.deleteArea}>
         <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
-          <X size={20} color="#EF4444" strokeWidth={2} />
+          <X size={18} color="#EF4444" strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
@@ -304,29 +315,32 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => 
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
+              {/* Purple accent line on the left */}
+              <View style={styles.cardAccentLine} />
+
               <View style={styles.cardLayout}>
                 <View style={styles.cardContent}>
                   <Text style={styles.cardDate}>
                     {session.date} {session.fullDate.getFullYear()}
                   </Text>
-                  <Text style={styles.cardTitle}>{session.name}</Text>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{session.name}</Text>
                   <View style={styles.metaRow}>
                     <View style={styles.metaItem}>
-                      <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
-                      <Text style={styles.metaText}>{session.totalSets} {session.totalSets === 1 ? 'SET' : 'SETS'}</Text>
+                      <Layers size={11} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.metaText}>{session.totalSets} {session.totalSets === 1 ? 'set' : 'sets'}</Text>
                     </View>
                     <View style={styles.metaDot} />
                     <View style={styles.metaItem}>
-                      <Clock size={12} color={COLORS.accent} strokeWidth={1.5} />
+                      <Clock size={11} color={COLORS.accent} strokeWidth={1.5} />
                       <Text style={styles.metaText}>{session.duration}</Text>
                     </View>
                   </View>
                 </View>
                 <View style={styles.cardRight}>
                   <View style={styles.scoreBadge}>
-                    <MonoText style={styles.scoreValue}>{session.formScore}</MonoText>
+                    <MonoText style={[styles.scoreValue, { color: getScoreColor(session.formScore) }]}>{session.formScore}</MonoText>
                   </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
               </View>
             </View>
@@ -472,6 +486,7 @@ export const LogbookScreen: React.FC = () => {
   };
 
   const filteredWorkouts = getFilteredWorkouts();
+  const hasActiveFilter = selectedYear || selectedMonth || selectedWeek || selectedDate;
 
   const handleDelete = useCallback(async (id: string) => {
     const success = await deleteWorkout(id);
@@ -492,8 +507,13 @@ export const LogbookScreen: React.FC = () => {
 
   const ListHeader = useCallback(() => (
     <View>
-      {/* ── DATE SUBHEADER ───────────────────── */}
-      <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+      {/* ── DATE + COUNT ───────────────────────── */}
+      <View style={styles.subHeaderRow}>
+        <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
+        <Text style={styles.workoutCount}>
+          {filteredWorkouts.length} {filteredWorkouts.length === 1 ? 'session' : 'sessions'}
+        </Text>
+      </View>
 
       {/* ── FILTER ROW ───────────────────────── */}
       <ScrollView
@@ -509,43 +529,56 @@ export const LogbookScreen: React.FC = () => {
           onPress={() => setIsCalendarOpen(true)}
           activeOpacity={0.7}
         >
-          <Calendar size={15} color={selectedDate ? '#FFFFFF' : '#71717A'} strokeWidth={1.5} />
+          <Calendar size={14} color={selectedDate ? '#FFFFFF' : '#71717A'} strokeWidth={1.5} />
         </TouchableOpacity>
 
         <DropdownPill label="Year" options={getUniqueYears()} selectedValue={selectedYear} onSelect={(v) => handleFilterChange('year', v)} />
         <DropdownPill label="Month" options={getUniqueMonths()} selectedValue={selectedMonth} onSelect={(v) => handleFilterChange('month', v)} />
         <DropdownPill label="Week" options={getUniqueWeeks()} selectedValue={selectedWeek} onSelect={(v) => handleFilterChange('week', v)} />
+
+        {hasActiveFilter && (
+          <TouchableOpacity
+            style={styles.clearFilterPill}
+            onPress={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); setSelectedDate(null); }}
+            activeOpacity={0.7}
+          >
+            <X size={12} color="#71717A" strokeWidth={2} />
+            <Text style={styles.clearFilterText}>Clear</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* ── SELECTED DATE CHIP ────────────────── */}
       {selectedDate && (
         <View style={styles.dateChipRow}>
           <View style={styles.dateChip}>
+            <Calendar size={11} color={COLORS.accent} strokeWidth={1.5} />
             <Text style={styles.dateChipText}>{formatSelectedDate()}</Text>
             <TouchableOpacity
               onPress={() => { setSelectedDate(null); setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <X size={13} color="#71717A" strokeWidth={2} />
+              <X size={12} color="#71717A" strokeWidth={2} />
             </TouchableOpacity>
           </View>
         </View>
       )}
     </View>
-  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, workouts]);
+  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, workouts, filteredWorkouts.length]);
 
   /* ── Loading ──── */
   if (isLoading) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingWrap}>
-          <View style={{ marginBottom: 30 }}>
-            <LoadingSkeleton variant="text" height={40} style={{ width: 200, marginBottom: SPACING.sm }} />
-            <LoadingSkeleton variant="text" height={12} style={{ width: 130 }} />
+          <View style={{ marginBottom: 28 }}>
+            <LoadingSkeleton variant="text" height={38} style={{ width: 180, marginBottom: SPACING.sm }} />
+            <LoadingSkeleton variant="text" height={12} style={{ width: 120 }} />
           </View>
-          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: 14 }} />
-          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: 14 }} />
-          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: 14 }} />
+          <LoadingSkeleton variant="card" height={110} style={{ marginBottom: 12 }} />
+          <LoadingSkeleton variant="card" height={110} style={{ marginBottom: 12 }} />
+          <LoadingSkeleton variant="card" height={110} style={{ marginBottom: 12 }} />
+          <LoadingSkeleton variant="card" height={110} />
         </View>
       </View>
     );
@@ -592,7 +625,7 @@ export const LogbookScreen: React.FC = () => {
       </View>
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        {/* Calendar Modal (rendered outside FlatList, portaled via Modal) */}
+        {/* Calendar Modal */}
         <CalendarModal
           visible={isCalendarOpen}
           onClose={() => setIsCalendarOpen(false)}
@@ -606,6 +639,9 @@ export const LogbookScreen: React.FC = () => {
               <ListHeader />
             </View>
             <View style={[StyleSheet.absoluteFill, styles.emptyState]} pointerEvents="none">
+              <View style={styles.emptyIconWrap}>
+                <BookOpen size={28} color={COLORS.textTertiary} strokeWidth={1.2} />
+              </View>
               <Text style={styles.emptyStateTitle}>
                 {selectedDate ? 'No sessions' : 'No workouts yet'}
               </Text>
@@ -658,7 +694,7 @@ const styles = StyleSheet.create({
   /* ── Fixed Header ────────────────────────── */
   fixedHeader: {
     paddingTop: 6,
-    paddingBottom: 8,
+    paddingBottom: 6,
     paddingHorizontal: SPACING.screenHorizontal,
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -666,52 +702,63 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 40,
+    fontSize: 38,
     color: '#FFFFFF',
     letterSpacing: 2,
-    lineHeight: 46,
+    lineHeight: 44,
+  },
+  subHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
   headerDate: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
-    color: '#71717A',
-    letterSpacing: 3,
-    marginBottom: 12,
+    color: '#52525B',
+    letterSpacing: 2.5,
+  },
+  workoutCount: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 11,
+    color: '#52525B',
+    letterSpacing: 0.5,
   },
   avatarButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     overflow: 'hidden',
-    marginTop: 5,
+    marginTop: 6,
   },
   avatarImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   avatarGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#000000',
   },
   avatarInitial: {
     fontFamily: FONTS.display.bold,
-    fontSize: 14,
+    fontSize: 13,
     color: '#FFFFFF',
   },
 
   /* ── Filter Row ──────────────────────────── */
   filterScrollView: {
-    maxHeight: 46,
+    maxHeight: 44,
     marginBottom: SPACING.md,
     marginHorizontal: -SPACING.screenHorizontal,
   },
@@ -724,34 +771,51 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 19,
+    paddingVertical: 7,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#3F3F46',
-    backgroundColor: '#000000',
+    borderColor: '#27272A',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   filterPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   filterPillText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: '#71717A',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   filterPillTextActive: {
     color: '#FFFFFF',
   },
   calendarPill: {
-    width: 36,
-    height: 32,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
-    borderColor: '#3F3F46',
-    backgroundColor: '#000000',
+    borderColor: '#27272A',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  clearFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+  },
+  clearFilterText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: '#71717A',
+    letterSpacing: 0.3,
   },
 
   /* ── Selected Date Chip ──────────────────── */
@@ -762,19 +826,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 12,
+    gap: 7,
+    paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderColor: 'rgba(139, 92, 246, 0.20)',
   },
   dateChipText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
 
   /* ── Swipe-to-Delete ─────────────────────── */
@@ -788,82 +852,83 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   deleteButton: {
-    width: 48,
-    height: 82,
-    borderRadius: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.10)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.28)',
+    borderColor: 'rgba(239, 68, 68, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#EF4444',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-      },
-    }),
   },
 
-  /* ── Workout Card (matches Analytics card style) ────────────────────────── */
+  /* ── Workout Card ────────────────────────── */
   cardOuter: {
     height: CARD_INNER_HEIGHT,
-    borderRadius: 19,
+    borderRadius: 16,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
   cardGradient: {
     flex: 1,
-    borderRadius: 19,
+    borderRadius: 16,
   },
   cardGlassEdge: {
     flex: 1,
-    borderRadius: 19,
+    flexDirection: 'row',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.md,
-    alignItems: 'flex-start',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    paddingVertical: SPACING.lg,
+    paddingLeft: 0,
+    paddingRight: SPACING.md,
+    alignItems: 'center',
+  },
+  cardAccentLine: {
+    width: 3,
+    height: 36,
+    borderRadius: 1.5,
+    marginLeft: 14,
+    marginRight: 14,
+    backgroundColor: COLORS.accent,
   },
   cardLayout: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    alignSelf: 'stretch',
   },
   cardContent: {
     flex: 1,
-    gap: 5,
+    gap: 3,
   },
   cardDate: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.mono.regular,
     fontSize: 10,
-    color: COLORS.textTertiary,
+    color: '#52525B',
     textTransform: 'uppercase',
-    letterSpacing: 2,
+    letterSpacing: 1.5,
   },
   cardTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 18,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: -0.3,
-    marginTop: 2,
+    marginTop: 1,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 6,
-    marginBottom: 4,
+    marginTop: 5,
   },
   metaItem: {
     flexDirection: 'row',
@@ -871,32 +936,32 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   metaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: COLORS.textTertiary,
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#3F3F46',
   },
   metaText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
+    fontSize: 11,
+    color: '#71717A',
+    letterSpacing: 0.3,
   },
   cardRight: {
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     marginLeft: SPACING.md,
   },
   scoreBadge: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.accent,
-    minWidth: 46,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    minWidth: 44,
   },
   scoreValue: {
     fontFamily: FONTS.mono.bold,
@@ -910,7 +975,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
-    gap: 14,
+    gap: CARD_GAP,
   },
 
   /* ── Empty State ─────────────────────────── */
@@ -920,38 +985,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
   },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
   emptyStateTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 20,
+    fontSize: 18,
     color: '#FFFFFF',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   emptyStateText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: '#71717A',
+    fontSize: 13,
+    color: '#52525B',
     textAlign: 'center',
+    lineHeight: 18,
   },
 
   /* ── Calendar Modal ──────────────────────── */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   calendarContainer: {
     ...CARD_STYLE,
-    borderRadius: 24,
+    borderRadius: 20,
     padding: SPACING.xl,
     width: '88%',
     maxWidth: 380,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.5,
         shadowRadius: 30,
       },
       android: { elevation: 12 },
@@ -964,13 +1041,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   calendarNavButton: {
-    fontSize: 28,
+    fontSize: 26,
     fontFamily: FONTS.display.medium,
     color: COLORS.accent,
     paddingHorizontal: 12,
   },
   calendarTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONTS.display.semibold,
     color: '#FFFFFF',
     letterSpacing: -0.3,
@@ -983,7 +1060,7 @@ const styles = StyleSheet.create({
   calendarDayHeader: {
     fontSize: 10,
     fontFamily: FONTS.ui.regular,
-    color: '#52525B',
+    color: '#3F3F46',
     width: 40,
     textAlign: 'center',
     letterSpacing: 1,
@@ -998,7 +1075,7 @@ const styles = StyleSheet.create({
   calendarDay: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     margin: 3,
@@ -1012,37 +1089,44 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 12,
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
       },
     }),
+  },
+  calendarDayToday: {
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   calendarDayText: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
-    color: '#FFFFFF',
+    color: '#A1A1AA',
   },
   calendarDayTextSelected: {
     color: '#FFFFFF',
     fontFamily: FONTS.ui.bold,
   },
+  calendarDayTextToday: {
+    color: COLORS.accent,
+  },
   calendarCloseButton: {
     backgroundColor: COLORS.accent,
-    borderRadius: 19,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 14,
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
       },
       android: { elevation: 6 },
     }),
   },
   calendarCloseButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: FONTS.display.semibold,
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -1051,23 +1135,23 @@ const styles = StyleSheet.create({
   /* ── Dropdown Bottom Sheet ──────────────── */
   dropdownOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'flex-end',
   },
   dropdownSheet: {
-    backgroundColor: '#141414',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: '#111111',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     paddingBottom: 40,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#000000',
         shadowOffset: { width: 0, height: -8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 30,
+        shadowOpacity: 0.4,
+        shadowRadius: 20,
       },
       android: { elevation: 12 },
     }),
@@ -1078,15 +1162,15 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   dropdownHandle: {
-    width: 36,
+    width: 32,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   dropdownTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: '#A1A1AA',
+    fontSize: 14,
+    color: '#71717A',
     letterSpacing: 2,
     textTransform: 'uppercase',
     textAlign: 'center',
@@ -1094,7 +1178,7 @@ const styles = StyleSheet.create({
   },
   dropdownDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     marginHorizontal: 20,
   },
   dropdownScroll: {
@@ -1108,26 +1192,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between' as const,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     marginVertical: 2,
   },
   dropdownItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
   },
   dropdownItemText: {
     fontSize: 15,
     fontFamily: FONTS.ui.regular,
-    color: '#A1A1AA',
+    color: '#71717A',
   },
   dropdownItemTextActive: {
     color: '#FFFFFF',
     fontFamily: FONTS.display.semibold,
   },
   dropdownCheckWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
