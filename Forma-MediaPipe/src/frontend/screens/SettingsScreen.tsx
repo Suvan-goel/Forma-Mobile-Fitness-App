@@ -84,6 +84,86 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     updatePref('weeklyTrainingTarget', TRAINING_TARGET_OPTIONS[nextIdx]);
   };
 
+  /* Reusable single-row card */
+  const RowCard = ({ icon: Icon, iconBg, iconColor, label, onPress, right }: {
+    icon: any; iconBg: string; iconColor: string; label: string;
+    onPress?: () => void; right?: React.ReactNode;
+  }) => (
+    <TouchableOpacity activeOpacity={onPress ? 0.7 : 1} onPress={onPress} disabled={!onPress}>
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.cardGradient}
+      >
+        <View style={styles.cardEdge}>
+          <View style={styles.row}>
+            <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+              <Icon size={14} color={iconColor} strokeWidth={1.5} />
+            </View>
+            <Text style={styles.rowLabel}>{label}</Text>
+            {right ?? <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />}
+          </View>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  /* Reusable single-row card with sub-label */
+  const RowCardWithSub = ({ icon: Icon, iconBg, iconColor, label, sub, onPress }: {
+    icon: any; iconBg: string; iconColor: string; label: string; sub: string; onPress: () => void;
+  }) => (
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.cardGradient}
+      >
+        <View style={styles.cardEdge}>
+          <View style={styles.row}>
+            <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+              <Icon size={14} color={iconColor} strokeWidth={1.5} />
+            </View>
+            <View style={styles.rowLabelCol}>
+              <Text style={styles.rowLabel}>{label}</Text>
+              <Text style={styles.rowSubLabel}>{sub}</Text>
+            </View>
+            <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+          </View>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  /* Toggle card */
+  const ToggleCard = ({ icon: Icon, iconBg, iconColor, label, value, onToggle }: {
+    icon: any; iconBg: string; iconColor: string; label: string;
+    value: boolean; onToggle: (v: boolean) => void;
+  }) => (
+    <LinearGradient
+      colors={[...CARD_GRADIENT_COLORS]}
+      start={CARD_GRADIENT_START}
+      end={CARD_GRADIENT_END}
+      style={styles.cardGradient}
+    >
+      <View style={styles.cardEdge}>
+        <View style={styles.row}>
+          <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+            <Icon size={14} color={iconColor} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.rowLabel}>{label}</Text>
+          <Switch
+            value={value}
+            onValueChange={onToggle}
+            trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+            thumbColor={value ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+          />
+        </View>
+      </View>
+    </LinearGradient>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -151,38 +231,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               <Text style={styles.sectionLabel}>ACCOUNT</Text>
             </View>
           </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
-              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('ProfileSettings')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                  <User size={14} color="#A78BFA" strokeWidth={1.5} />
-                </View>
-                <Text style={styles.rowLabel}>Profile</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
-              <View style={styles.rowDivider} />
-              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('NotificationSettings')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                  <Bell size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                </View>
-                <Text style={styles.rowLabel}>Notifications</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
-              <View style={styles.rowDivider} />
-              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('PrivacySettings')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
-                  <Lock size={14} color="#34D399" strokeWidth={1.5} />
-                </View>
-                <Text style={styles.rowLabel}>Privacy</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
+          <View style={styles.cardStack}>
+            <RowCard icon={User} iconBg="rgba(139, 92, 246, 0.10)" iconColor="#A78BFA" label="Profile" onPress={() => navigation.navigate('ProfileSettings')} />
+            <RowCard icon={Bell} iconBg="rgba(245, 166, 35, 0.10)" iconColor={COLORS.yellow} label="Notifications" onPress={() => navigation.navigate('NotificationSettings')} />
+            <RowCard icon={Lock} iconBg="rgba(52, 211, 153, 0.10)" iconColor="#34D399" label="Privacy" onPress={() => navigation.navigate('PrivacySettings')} />
+          </View>
 
           {/* Workout Section */}
           <View style={styles.sectionRow}>
@@ -191,64 +244,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               <Text style={styles.sectionLabel}>WORKOUT</Text>
             </View>
           </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
-              <View style={styles.toggleRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                  <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
-                </View>
-                <Text style={styles.toggleLabel}>Visual Feedback</Text>
-                <Switch
-                  value={prefs.showFeedback}
-                  onValueChange={(v) => updatePref('showFeedback', v)}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={prefs.showFeedback ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
-              <View style={styles.rowDivider} />
-              <View style={styles.toggleRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
-                  <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
-                </View>
-                <Text style={styles.toggleLabel}>Voice Coaching</Text>
-                <Switch
-                  value={prefs.isTTSEnabled}
-                  onValueChange={(v) => updatePref('isTTSEnabled', v)}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={prefs.isTTSEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
-              <View style={styles.rowDivider} />
-              <View style={styles.toggleRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                  <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                </View>
-                <Text style={styles.toggleLabel}>Skeleton Overlay</Text>
-                <Switch
-                  value={prefs.showSkeletonOverlay}
-                  onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={prefs.showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
-              <View style={styles.rowDivider} />
-              <TouchableOpacity style={styles.row} onPress={handleTrainingTargetPress} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
-                  <Calendar size={14} color="#34D399" strokeWidth={1.5} />
-                </View>
-                <View style={styles.rowLabelCol}>
-                  <Text style={styles.rowLabel}>Training Frequency</Text>
-                  <Text style={styles.rowSubLabel}>{TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}</Text>
-                </View>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
+          <View style={styles.cardStack}>
+            <ToggleCard icon={Eye} iconBg="rgba(139, 92, 246, 0.10)" iconColor="#A78BFA" label="Visual Feedback" value={prefs.showFeedback} onToggle={(v) => updatePref('showFeedback', v)} />
+            <ToggleCard icon={Volume2} iconBg="rgba(96, 165, 250, 0.10)" iconColor="#60A5FA" label="Voice Coaching" value={prefs.isTTSEnabled} onToggle={(v) => updatePref('isTTSEnabled', v)} />
+            <ToggleCard icon={Bone} iconBg="rgba(245, 166, 35, 0.10)" iconColor={COLORS.yellow} label="Skeleton Overlay" value={prefs.showSkeletonOverlay} onToggle={(v) => updatePref('showSkeletonOverlay', v)} />
+            <RowCardWithSub icon={Calendar} iconBg="rgba(52, 211, 153, 0.10)" iconColor="#34D399" label="Training Frequency" sub={TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]} onPress={handleTrainingTargetPress} />
+          </View>
 
           {/* Trainer Section */}
           <View style={styles.sectionRow}>
@@ -257,22 +258,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               <Text style={styles.sectionLabel}>YOUR TRAINER</Text>
             </View>
           </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
-              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TrainerPicker')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(244, 114, 182, 0.10)' }]}>
-                  <UserRound size={14} color="#F472B6" strokeWidth={1.5} />
-                </View>
-                <Text style={styles.rowLabel}>Choose Trainer</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
+          <View style={styles.cardStack}>
+            <RowCard icon={UserRound} iconBg="rgba(244, 114, 182, 0.10)" iconColor="#F472B6" label="Choose Trainer" onPress={() => navigation.navigate('TrainerPicker')} />
+          </View>
 
           {/* Support Section */}
           <View style={styles.sectionRow}>
@@ -281,22 +269,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               <Text style={styles.sectionLabel}>SUPPORT</Text>
             </View>
           </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
-              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('HelpCenter')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
-                  <HelpCircle size={14} color="#60A5FA" strokeWidth={1.5} />
-                </View>
-                <Text style={styles.rowLabel}>Help Center</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
+          <View style={styles.cardStack}>
+            <RowCard icon={HelpCircle} iconBg="rgba(96, 165, 250, 0.10)" iconColor="#60A5FA" label="Help Center" onPress={() => navigation.navigate('HelpCenter')} />
+          </View>
 
           {/* Back to Onboarding */}
           <TouchableOpacity
@@ -413,7 +388,7 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
 
-  /* Section Headers (matches Home) */
+  /* Section Headers */
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -433,7 +408,12 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  /* Cards (matches Home gradient cards) */
+  /* Card stack — gap between individual cards */
+  cardStack: {
+    gap: 8,
+  },
+
+  /* Individual card */
   cardGradient: {
     borderRadius: 18,
   },
@@ -441,20 +421,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
   },
 
-  /* Rows */
+  /* Row inside card */
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 8,
-  },
-  rowDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    marginVertical: 2,
   },
   iconWrap: {
     width: 32,
@@ -478,21 +453,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
-  },
-
-  /* Toggle Rows */
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 6,
-  },
-  toggleLabel: {
-    flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: COLORS.text,
-    letterSpacing: 0.1,
   },
 
   /* Onboarding */
