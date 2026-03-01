@@ -127,6 +127,8 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 120,
   },
+
+  /* ── Filter pills (matches Logbook filter style) ── */
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.screenHorizontal,
@@ -136,23 +138,27 @@ const styles = StyleSheet.create({
   filterPill: {
     paddingVertical: 7,
     paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    backgroundColor: COLORS.background,
   },
   filterPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderWidth: 1,
-    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   filterText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.5,
   },
   filterTextActive: {
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
   },
+
+  /* ── States ── */
   emptyContainer: {
     paddingTop: 80,
     alignItems: 'center',
@@ -181,8 +187,10 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingVertical: 8,
     paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderRadius: 19,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   retryText: {
     fontFamily: FONTS.ui.bold,

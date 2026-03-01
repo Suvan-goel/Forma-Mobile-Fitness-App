@@ -1,5 +1,7 @@
 /**
- * SocialTabSelector — Horizontal pill selector for Social section internal tabs
+ * SocialTabSelector — Segmented tab bar for Social section
+ *
+ * Clean underline-style selector matching the app's cyber-minimalist design.
  */
 
 import React, { memo } from 'react';
@@ -22,52 +24,63 @@ const TABS: { key: SocialTab; label: string }[] = [
 export const SocialTabSelector: React.FC<SocialTabSelectorProps> = memo(({ activeTab, onTabChange }) => {
   return (
     <View style={styles.container}>
-      {TABS.map(tab => {
-        const isActive = activeTab === tab.key;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            onPress={() => onTabChange(tab.key)}
-            style={[styles.pill, isActive && styles.pillActive]}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.label, isActive && styles.labelActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+      <View style={styles.tabRow}>
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              onPress={() => onTabChange(tab.key)}
+              style={styles.tab}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.label, isActive && styles.labelActive]}>
+                {tab.label}
+              </Text>
+              <View style={[styles.indicator, isActive && styles.indicatorActive]} />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <View style={styles.bottomBorder} />
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.sm,
   },
-  pill: {
+  tabRow: {
+    flexDirection: 'row',
+  },
+  tab: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  pillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderColor: COLORS.primary,
+    paddingVertical: 12,
   },
   label: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
   },
   labelActive: {
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.text,
+  },
+  indicator: {
+    height: 2,
+    width: '60%',
+    borderRadius: 1,
+    marginTop: 8,
+    backgroundColor: 'transparent',
+  },
+  indicatorActive: {
+    backgroundColor: COLORS.primary,
+  },
+  bottomBorder: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
 });

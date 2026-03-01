@@ -12,10 +12,19 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { UserPlus, Check, X, Users } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, FONTS, SPACING, CARD_STYLE } from '../../constants/theme';
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+} from '../../constants/theme';
 import { useFriends } from '../../../backend/hooks';
 import { Friend, FriendRequest, SuggestedFriend } from '../../../backend/services/api/types';
 import { FriendRow } from '../../components/ui/FriendRow';
@@ -68,26 +77,33 @@ const SuggestedCard = memo(({
   suggestion: SuggestedFriend;
   onAdd: (userId: string) => void;
 }) => (
-  <View style={styles.suggestedCard}>
-    <View style={styles.suggestedAvatar}>
-      <Text style={styles.suggestedAvatarText}>
-        {suggestion.displayName.charAt(0).toUpperCase()}
+  <LinearGradient
+    colors={[...CARD_GRADIENT_COLORS]}
+    start={CARD_GRADIENT_START}
+    end={CARD_GRADIENT_END}
+    style={styles.suggestedGradient}
+  >
+    <View style={styles.suggestedCard}>
+      <View style={styles.suggestedAvatar}>
+        <Text style={styles.suggestedAvatarText}>
+          {suggestion.displayName.charAt(0).toUpperCase()}
+        </Text>
+      </View>
+      <Text style={styles.suggestedName} numberOfLines={1}>
+        {suggestion.displayName}
       </Text>
+      <Text style={styles.suggestedMutual}>
+        {suggestion.mutualFriendCount} mutual
+      </Text>
+      <TouchableOpacity
+        style={styles.addSmallButton}
+        onPress={() => onAdd(suggestion.userId)}
+        activeOpacity={0.7}
+      >
+        <UserPlus size={14} color={COLORS.primary} />
+      </TouchableOpacity>
     </View>
-    <Text style={styles.suggestedName} numberOfLines={1}>
-      {suggestion.displayName}
-    </Text>
-    <Text style={styles.suggestedMutual}>
-      {suggestion.mutualFriendCount} mutual
-    </Text>
-    <TouchableOpacity
-      style={styles.addSmallButton}
-      onPress={() => onAdd(suggestion.userId)}
-      activeOpacity={0.7}
-    >
-      <UserPlus size={14} color={COLORS.primary} />
-    </TouchableOpacity>
-  </View>
+  </LinearGradient>
 ));
 
 // ── Main View ─────────────────────────────────────────────────
@@ -144,9 +160,12 @@ export const FriendsView: React.FC = memo(() => {
       {/* Pending requests */}
       {pendingRequests.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Friend Requests ({pendingRequests.length})
-          </Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionLabel}>REQUESTS</Text>
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{pendingRequests.length}</Text>
+            </View>
+          </View>
           {pendingRequests.map(request => (
             <RequestItem
               key={request.friendshipId}
@@ -161,7 +180,7 @@ export const FriendsView: React.FC = memo(() => {
       {/* Suggested friends */}
       {suggestedFriends.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>People You May Know</Text>
+          <Text style={styles.sectionLabelPadded}>PEOPLE YOU MAY KNOW</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -181,9 +200,8 @@ export const FriendsView: React.FC = memo(() => {
       {/* Friends header */}
       {friends.length > 0 && (
         <View style={styles.friendsHeader}>
-          <Text style={styles.sectionTitle}>
-            Friends ({friends.length})
-          </Text>
+          <Text style={styles.sectionLabelInline}>FRIENDS</Text>
+          <Text style={styles.friendsCount}>{friends.length}</Text>
         </View>
       )}
     </View>
@@ -266,19 +284,58 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
   },
-  sectionTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.textSecondary,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
     paddingHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  },
+  sectionLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 2,
+  },
+  sectionLabelPadded: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 2,
+    paddingHorizontal: SPACING.screenHorizontal,
+    marginBottom: SPACING.sm,
+  },
+  sectionLabelInline: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 2,
+  },
+  countBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  countText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 11,
+    color: COLORS.primary,
   },
   friendsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingTop: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: SPACING.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    gap: SPACING.sm,
+  },
+  friendsCount: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
   },
   requestRow: {
     flexDirection: 'row',
@@ -316,6 +373,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.25)',
   },
   declineButton: {
     width: 32,
@@ -330,13 +389,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     gap: SPACING.sm,
   },
+  suggestedGradient: {
+    borderRadius: 19,
+  },
   suggestedCard: {
     width: 120,
     padding: SPACING.md,
-    borderRadius: 14,
-    backgroundColor: '#1A1A1A',
+    borderRadius: 19,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
   },
   suggestedAvatar: {
@@ -401,13 +462,23 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 19,
     backgroundColor: COLORS.primary,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: { elevation: 6 },
+    }),
   },
   addButtonText: {
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 14,
     color: COLORS.text,
+    letterSpacing: 0.3,
   },
   errorText: {
     fontFamily: FONTS.ui.regular,
@@ -419,8 +490,10 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingVertical: 8,
     paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderRadius: 19,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   retryText: {
     fontFamily: FONTS.ui.bold,
@@ -437,10 +510,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+    }),
   },
 });

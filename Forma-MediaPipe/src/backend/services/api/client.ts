@@ -15,7 +15,7 @@ export const API_CONFIG = {
     rewards: false,    // mock — Phase 3
     insights: true,   // mock — Phase 3
     trainer: true,    // stays mock
-    social: false,     // mock — Phase 4 (Social section)
+    social: true,      // TEMP: mock for visual preview — flip back to false when done
   },
   mockDelayMs: 300,
   supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,

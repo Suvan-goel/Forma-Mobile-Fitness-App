@@ -23,7 +23,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  Award,
   Target,
   Users,
   Newspaper,
@@ -47,7 +46,6 @@ import {
   getScoreColor,
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useAlert } from '../contexts/AlertContext';
 import { useHomeData } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import type { RootStackParamList } from '../app/RootNavigator';
@@ -79,7 +77,6 @@ export const HomeScreen: React.FC = () => {
   const { onScroll } = useScroll();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { showAlert } = useAlert();
   const { homeData, isLoading, error, refetch } = useHomeData();
 
   useEffect(() => {
@@ -214,12 +211,12 @@ export const HomeScreen: React.FC = () => {
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* Two-column: Points + Workouts */}
+          {/* Two-column: Streak + Workouts */}
           <View style={styles.bentoRow}>
             <TouchableOpacity
               style={styles.bentoCell}
               activeOpacity={0.8}
-              onPress={() => navigation.navigate('Rewards')}
+              onPress={() => navigateToTab('Analytics')}
             >
               <LinearGradient
                 colors={[...CARD_GRADIENT_COLORS]}
@@ -229,18 +226,15 @@ export const HomeScreen: React.FC = () => {
               >
                 <View style={styles.cardGlassEdge}>
                   <View style={styles.bentoLabelRow}>
-                    <Trophy size={12} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.bentoLabel}>POINTS</Text>
+                    <Flame size={12} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.bentoLabel}>STREAK</Text>
                   </View>
-                  <Text style={styles.bentoValue}>{homeData.totalPoints.toLocaleString()}</Text>
-                  {homeData.nextBadge && (
-                    <View style={styles.bentoBadgeRow}>
-                      <Award size={10} color={homeData.nextBadge.color} strokeWidth={1.5} />
-                      <Text style={styles.bentoBadgeText} numberOfLines={1}>
-                        {homeData.nextBadge.current}/{homeData.nextBadge.required}
-                      </Text>
-                    </View>
-                  )}
+                  <Text style={styles.bentoValue}>
+                    {homeData.streakDays > 0 ? homeData.streakDays : '—'}
+                  </Text>
+                  <Text style={styles.bentoSubtext}>
+                    {homeData.streakDays > 0 ? 'day streak' : 'start today'}
+                  </Text>
                 </View>
               </LinearGradient>
             </TouchableOpacity>
@@ -268,46 +262,32 @@ export const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Next badge progress (if exists) */}
-          {homeData.nextBadge && (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('Rewards')}
-              style={styles.badgeProgressOuter}
+          {/* Quick Start CTA */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => navigateToTab('Record')}
+            style={styles.quickStartOuter}
+          >
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
             >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.cardGradient}
-              >
-                <View style={styles.badgeProgressInner}>
-                  <View style={styles.badgeProgressTop}>
-                    <View style={styles.badgeProgressLeft}>
-                      <Award size={14} color={homeData.nextBadge.color} strokeWidth={1.5} />
-                      <Text style={styles.badgeProgressName} numberOfLines={1}>
-                        {homeData.nextBadge.name}
-                      </Text>
-                    </View>
-                    <Text style={[styles.badgeProgressPts, { color: homeData.nextBadge.color }]}>
-                      {homeData.nextBadge.current}
-                      <Text style={styles.badgeProgressOf}> / {homeData.nextBadge.required}</Text>
-                    </Text>
+              <View style={styles.cardGlassEdge}>
+                <View style={styles.quickStartRow}>
+                  <View style={styles.quickStartIconWrap}>
+                    <Dumbbell size={18} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
-                  <View style={styles.progressTrack}>
-                    {homeData.nextBadge.current > 0 && (
-                      <LinearGradient
-                        colors={[homeData.nextBadge.color + 'BB', homeData.nextBadge.color]}
-                        start={{ x: 0, y: 0.5 }}
-                        end={{ x: 1, y: 0.5 }}
-                        style={[styles.progressFill, { width: `${Math.min((homeData.nextBadge.current / homeData.nextBadge.required) * 100, 100)}%` }]}
-                      />
-                    )}
+                  <View style={styles.quickStartTextWrap}>
+                    <Text style={styles.quickStartTitle}>Start a Workout</Text>
+                    <Text style={styles.quickStartSub}>Track your form in real-time</Text>
                   </View>
+                  <ChevronRight size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
 
           {/* ── Motivational Quote ─────────────────── */}
           {homeData.motivationalQuote ? (
@@ -727,53 +707,35 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     marginTop: 4,
   },
-  bentoBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  bentoBadgeText: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
-
-  /* ── Badge Progress Strip ────────────────────── */
-  badgeProgressOuter: {
+  /* ── Quick Start CTA ─────────────────────────── */
+  quickStartOuter: {
     marginTop: 10,
   },
-  badgeProgressInner: {
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  badgeProgressTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  badgeProgressLeft: {
+  quickStartRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+  },
+  quickStartIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickStartTextWrap: {
     flex: 1,
+    gap: 3,
   },
-  badgeProgressName: {
+  quickStartTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.text,
-  },
-  badgeProgressPts: {
-    fontFamily: FONTS.display.bold,
     fontSize: 15,
-    letterSpacing: -0.5,
+    color: COLORS.text,
+    letterSpacing: -0.2,
   },
-  badgeProgressOf: {
-    fontFamily: FONTS.mono.regular,
+  quickStartSub: {
+    fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
   },

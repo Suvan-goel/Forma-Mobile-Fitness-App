@@ -12,7 +12,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { COLORS, FONTS, SPACING, CARD_STYLE, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, getScoreColor } from '../../constants/theme';
 import { useLeaderboard } from '../../../backend/hooks';
 import { LeaderboardEntry, LeaderboardMetric, TimeWindow } from '../../../backend/services/api/types';
 import { Top3Podium } from '../../components/ui/Top3Podium';
@@ -35,11 +35,11 @@ const MetricSelector = memo(({ active, onSelect }: { active: LeaderboardMetric; 
     {METRICS.map(m => (
       <TouchableOpacity
         key={m.key}
-        style={[styles.selectorPill, active === m.key && styles.selectorPillActive]}
+        style={[styles.metricPill, active === m.key && styles.metricPillActive]}
         onPress={() => onSelect(m.key)}
         activeOpacity={0.7}
       >
-        <Text style={[styles.selectorText, active === m.key && styles.selectorTextActive]}>
+        <Text style={[styles.metricText, active === m.key && styles.metricTextActive]}>
           {m.label}
         </Text>
       </TouchableOpacity>
@@ -157,47 +157,56 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 120,
   },
+
+  /* ── Metric Selector (matches Logbook filter pills) ── */
   selectorRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.md,
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
-  selectorPill: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  selectorPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+  metricPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 19,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: '#3F3F46',
+    backgroundColor: COLORS.background,
   },
-  selectorText: {
+  metricPillActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
+  },
+  metricText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.5,
   },
-  selectorTextActive: {
+  metricTextActive: {
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
   },
+
+  /* ── Time Window Selector ── */
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xs,
     gap: SPACING.sm,
   },
   timePill: {
     paddingVertical: 6,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: 'transparent',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   timePillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   timeText: {
     fontFamily: FONTS.ui.regular,
@@ -208,6 +217,8 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
   },
+
+  /* ── List Header ── */
   listHeaderRow: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingVertical: SPACING.sm,
@@ -218,7 +229,10 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
+    letterSpacing: 0.5,
   },
+
+  /* ── States ── */
   loadingContainer: {
     paddingTop: 80,
     alignItems: 'center',
@@ -238,8 +252,10 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingVertical: 8,
     paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderRadius: 19,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   retryText: {
     fontFamily: FONTS.ui.bold,
@@ -263,6 +279,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: SPACING.sm,
   },
+
+  /* ── Sticky Banner ── */
   stickyBanner: {
     position: 'absolute',
     bottom: 0,
@@ -271,11 +289,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 20,
+    paddingBottom: 40,
     paddingHorizontal: SPACING.screenHorizontal,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    backgroundColor: '#000000',
     borderTopWidth: 1,
-    borderTopColor: COLORS.primary,
+    borderTopColor: 'rgba(139, 92, 246, 0.25)',
     gap: SPACING.md,
   },
   stickyRank: {
