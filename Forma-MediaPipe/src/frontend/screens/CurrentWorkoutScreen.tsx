@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   useWindowDimensions,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -27,7 +28,7 @@ import {
   Flag,
   Timer,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE, GLOW_SHADOW, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
 import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
@@ -62,9 +63,8 @@ const formatStopwatch = (totalSeconds: number) => {
 
 /* ── Main Screen ──────────────────────────── */
 
-const TIMER_FONT_SIZE_MAX = 72;
-const TIMER_FONT_SIZE_MIN = 44;
-const TIMER_LINE_HEIGHT_RATIO = 80 / 72;
+const TIMER_FONT_SIZE_MAX = 56;
+const TIMER_FONT_SIZE_MIN = 40;
 
 export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
@@ -74,9 +74,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const { width: windowWidth } = useWindowDimensions();
   const timerFontSize = Math.min(
     TIMER_FONT_SIZE_MAX,
-    Math.max(TIMER_FONT_SIZE_MIN, (windowWidth - 2 * SPACING.screenHorizontal) / 5)
+    Math.max(TIMER_FONT_SIZE_MIN, (windowWidth - 2 * SPACING.screenHorizontal) / 6)
   );
-  const timerLineHeight = Math.round(timerFontSize * TIMER_LINE_HEIGHT_RATIO);
+  const timerLineHeight = Math.round(timerFontSize * 1.15);
   const {
     exercises,
     sets,
@@ -114,7 +114,18 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const { restTimerEnabled, restTimerDurationSeconds } = useCameraSettings();
   isPausedRef.current = workoutPaused;
 
-  /* ── Timer logic: one interval; when paused we skip ticking so the display freezes ──── */
+  /* ── Entrance animation ──── */
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
+  /* ── Timer logic ──── */
 
   useEffect(() => {
     setWorkoutInProgress(true);
@@ -140,8 +151,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setWorkoutPaused((p) => {
       const next = !p;
       if (!next) {
-        // Resuming: shift startTimeRef forward by the pause duration so the
-        // interval calculates elapsed time correctly without jumping.
         startTimeRef.current = Date.now() - elapsedSeconds * 1000;
       }
       return next;
@@ -152,7 +161,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   const startRestTimer = useCallback(() => {
     if (!restTimerEnabled || restTimerDurationSeconds <= 0) return;
-    // Clear any existing rest timer
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
 
     const endTime = Date.now() + restTimerDurationSeconds * 1000;
@@ -175,7 +183,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setRestSecondsLeft(null);
   }, []);
 
-  // Clean up rest timer on unmount
   useEffect(() => {
     return () => {
       if (restIntervalRef.current) clearInterval(restIntervalRef.current);
@@ -208,7 +215,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         }
         navigation.setParams({ showWeightFor: undefined });
       }
-    }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, exercises])
+    }, [route.params?.newSet, route.params?.showWeightFor, addSet, navigation, exercises, startRestTimer])
   );
 
   useEffect(() => {
@@ -354,224 +361,233 @@ export const CurrentWorkoutScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── HEADER ──────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <TouchableOpacity style={styles.headerBackButton} onPress={handleGoBack} activeOpacity={0.7}>
-          <ChevronLeft size={22} color="#71717A" strokeWidth={1.5} />
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity style={styles.headerIconButton} onPress={handleGoBack} activeOpacity={0.7}>
+          <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
 
-        <Text style={styles.headerLabel}>ACTIVE SESSION</Text>
+        <View style={styles.headerCenter}>
+          <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
+            <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
+            <Text style={[styles.statusText, workoutPaused && styles.statusTextPaused]}>
+              {workoutPaused ? 'PAUSED' : 'ACTIVE'}
+            </Text>
+          </View>
+        </View>
 
         <TouchableOpacity
-          style={styles.headerSettingsButton}
+          style={styles.headerIconButton}
           onPress={() => navigation.navigate('WorkoutSettings')}
           activeOpacity={0.7}
         >
-          <CogIcon size={20} color={COLORS.text} />
+          <CogIcon size={18} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      {/* ── TIMER HERO ──────────────────────── */}
-      <View style={styles.timerBlock}>
-        <MonoText bold style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerLineHeight }]}>
-          {formatStopwatch(elapsedSeconds)}
-        </MonoText>
-        {workoutPaused && (
-          <View style={styles.pausedBadge}>
-            <Text style={styles.pausedBadgeText}>PAUSED</Text>
-          </View>
-        )}
-        {totalSetsCount > 0 && (
-          <View style={styles.sessionMetaRow}>
-            <View style={styles.sessionMetaItem}>
-              <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sessionMetaText}>{totalSetsCount} SETS</Text>
-            </View>
-            <View style={styles.sessionMetaDot} />
-            <View style={styles.sessionMetaItem}>
-              <Clock size={12} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sessionMetaText}>{totalRepsCount} REPS</Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* ── REST TIMER BAR ──────────────────── */}
-      {restSecondsLeft !== null && (
-        <View style={styles.restTimerBar}>
-          <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
-          <View style={styles.restTimerProgress}>
-            <View style={styles.restTimerTrack}>
-              <View
-                style={[
-                  styles.restTimerFill,
-                  { width: `${(restSecondsLeft / restTimerDurationSeconds) * 100}%` },
-                ]}
-              />
-            </View>
-          </View>
-          <MonoText bold style={styles.restTimerText}>
-            {Math.floor(restSecondsLeft / 60)}:{(restSecondsLeft % 60).toString().padStart(2, '0')}
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], flex: 1 }}>
+        {/* ── TIMER HERO ──────────────────────── */}
+        <View style={styles.timerBlock}>
+          <MonoText bold style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerLineHeight }]}>
+            {formatStopwatch(elapsedSeconds)}
           </MonoText>
-          <TouchableOpacity
-            onPress={cancelRestTimer}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            activeOpacity={0.7}
-          >
-            <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* ── CONTENT AREA ────────────────────── */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 180 },
-          exercises.length === 0 && styles.scrollContentEmpty,
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {exercises.length === 0 ? (
-          /* ── THE VOID (Empty State) ──── */
-          <View style={styles.voidState}>
-            <View style={styles.voidIconWrap}>
-              <Dumbbell size={40} color="#52525B" strokeWidth={1} />
-            </View>
-            <Text style={styles.voidTitle}>NO EXERCISES</Text>
-            <Text style={styles.voidSubtext}>Add an exercise to begin tracking</Text>
-          </View>
-        ) : (
-          /* ── EXERCISE CARDS ──── */
-          exercises.map((exercise) => {
-            const isExpanded = expandedExerciseIds.has(exercise.id);
-            return (
-              <View key={exercise.id} style={styles.exerciseCardOuter}>
-                <LinearGradient
-                  colors={[...CARD_GRADIENT_COLORS]}
-                  start={CARD_GRADIENT_START}
-                  end={CARD_GRADIENT_END}
-                  style={styles.exerciseCardGradient}
-                >
-                  <View style={styles.exerciseCardGlassEdge}>
-                    {/* Card Header */}
-                    <TouchableOpacity
-                      style={styles.exerciseCardHeader}
-                      onPress={() => toggleExerciseExpanded(exercise.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.exerciseCardHeaderLeft}>
-                        <Text style={styles.exerciseCardName}>{exercise.name}</Text>
-                        <Text style={styles.exerciseCardMeta}>
-                          {exercise.sets.length} {exercise.sets.length === 1 ? 'SET' : 'SETS'}
-                        </Text>
-                      </View>
-                      <View style={styles.exerciseCardHeaderRight}>
-                        <View style={styles.exerciseSetsBadge}>
-                          <MonoText style={styles.exerciseSetsValue}>{exercise.sets.length}</MonoText>
-                        </View>
-                        {isExpanded ? (
-                          <ChevronUp size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        ) : (
-                          <ChevronDown size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        )}
-                        <TouchableOpacity
-                          onPress={() => handleDeleteExercise(exercise.id, exercise.name, exercise.sets.length)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Trash2 size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        </TouchableOpacity>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Expanded Sets */}
-                    {isExpanded && (
-                      <View style={styles.setsList}>
-                        {exercise.sets.map((set, setIndex) => (
-                          <View key={setIndex} style={styles.setRow}>
-                            <View style={styles.setRowHeader}>
-                              <Text style={styles.setRowLabel}>SET {setIndex + 1}</Text>
-                              <View style={styles.setRowActions}>
-                                <TouchableOpacity
-                                  style={styles.setNotesButton}
-                                  onPress={() =>
-                                    setNotesModalSet({
-                                      set,
-                                      setIndex: setIndex + 1,
-                                      exerciseName: exercise.name,
-                                    })
-                                  }
-                                  activeOpacity={0.7}
-                                >
-                                  <FileText size={14} color={COLORS.accent} strokeWidth={1.5} />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.setDeleteButton}
-                                  onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
-                                  activeOpacity={0.7}
-                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                >
-                                  <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                            <View style={styles.setMetrics}>
-                              <View style={styles.setMetricItem}>
-                                <Text style={styles.setMetricLabel}>REPS</Text>
-                                <MonoText bold style={styles.setMetricValue}>{set.reps}</MonoText>
-                              </View>
-                              <View style={styles.setMetricDivider} />
-                              <TouchableOpacity
-                                style={styles.setMetricItem}
-                                onPress={() =>
-                                  handleEditWeight(
-                                    exercise.id,
-                                    exercise.name,
-                                    setIndex,
-                                    set.weight,
-                                    set.weightUnit
-                                  )
-                                }
-                                activeOpacity={0.7}
-                              >
-                                <Text style={styles.setMetricLabel}>WEIGHT</Text>
-                                <MonoText
-                                  bold
-                                  style={[styles.setMetricValue, !set.weight && styles.setMetricValueEmpty]}
-                                >
-                                  {set.weight && set.weight > 0
-                                    ? `${set.weight}${set.weightUnit || 'kg'}`
-                                    : '—'}
-                                </MonoText>
-                              </TouchableOpacity>
-                              <View style={styles.setMetricDivider} />
-                              <View style={styles.setMetricItem}>
-                                <Text style={styles.setMetricLabel}>FORM</Text>
-                                <MonoText bold style={[styles.setMetricValue, { color: getScoreColor(set.formScore) }]}>{set.formScore}</MonoText>
-                              </View>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    {/* Add Set Row */}
-                    <TouchableOpacity
-                      style={styles.addSetRow}
-                      onPress={() => handleAddSet(exercise)}
-                      activeOpacity={0.7}
-                    >
-                      <Plus size={14} color={COLORS.accent} strokeWidth={2} />
-                      <Text style={styles.addSetRowText}>Add set</Text>
-                    </TouchableOpacity>
-                  </View>
-                </LinearGradient>
+          {totalSetsCount > 0 && (
+            <View style={styles.statsRow}>
+              <View style={styles.statChip}>
+                <Layers size={11} color={COLORS.accent} strokeWidth={1.5} />
+                <MonoText bold style={styles.statChipValue}>{totalSetsCount}</MonoText>
+                <Text style={styles.statChipLabel}>sets</Text>
               </View>
-            );
-          })
+              <View style={styles.statDivider} />
+              <View style={styles.statChip}>
+                <Clock size={11} color={COLORS.accent} strokeWidth={1.5} />
+                <MonoText bold style={styles.statChipValue}>{totalRepsCount}</MonoText>
+                <Text style={styles.statChipLabel}>reps</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* ── REST TIMER BAR ──────────────────── */}
+        {restSecondsLeft !== null && (
+          <View style={styles.restTimerBar}>
+            <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
+            <View style={styles.restTimerProgress}>
+              <View style={styles.restTimerTrack}>
+                <View
+                  style={[
+                    styles.restTimerFill,
+                    { width: `${(restSecondsLeft / restTimerDurationSeconds) * 100}%` },
+                  ]}
+                />
+              </View>
+            </View>
+            <MonoText bold style={styles.restTimerText}>
+              {Math.floor(restSecondsLeft / 60)}:{(restSecondsLeft % 60).toString().padStart(2, '0')}
+            </MonoText>
+            <TouchableOpacity
+              onPress={cancelRestTimer}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
         )}
-      </ScrollView>
+
+        {/* ── CONTENT AREA ────────────────────── */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 180 },
+            exercises.length === 0 && styles.scrollContentEmpty,
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {exercises.length === 0 ? (
+            /* ── Empty State ──── */
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <Dumbbell size={32} color={COLORS.textTertiary} strokeWidth={1} />
+              </View>
+              <Text style={styles.emptyTitle}>No exercises yet</Text>
+              <Text style={styles.emptySubtext}>Tap below to add your first exercise</Text>
+            </View>
+          ) : (
+            /* ── EXERCISE CARDS ──── */
+            exercises.map((exercise) => {
+              const isExpanded = expandedExerciseIds.has(exercise.id);
+              return (
+                <View key={exercise.id} style={styles.exerciseCardOuter}>
+                  <LinearGradient
+                    colors={[...CARD_GRADIENT_COLORS]}
+                    start={CARD_GRADIENT_START}
+                    end={CARD_GRADIENT_END}
+                    style={styles.exerciseCardGradient}
+                  >
+                    <View style={styles.exerciseCardGlassEdge}>
+                      {/* Card Header */}
+                      <TouchableOpacity
+                        style={styles.exerciseCardHeader}
+                        onPress={() => toggleExerciseExpanded(exercise.id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.exerciseAccentLine} />
+                        <View style={styles.exerciseCardHeaderLeft}>
+                          <Text style={styles.exerciseCardName}>{exercise.name}</Text>
+                          <Text style={styles.exerciseCardMeta}>
+                            {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'} recorded
+                          </Text>
+                        </View>
+                        <View style={styles.exerciseCardHeaderRight}>
+                          {isExpanded ? (
+                            <ChevronUp size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                          ) : (
+                            <ChevronDown size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                          )}
+                          <TouchableOpacity
+                            onPress={() => handleDeleteExercise(exercise.id, exercise.name, exercise.sets.length)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            style={styles.exerciseDeleteBtn}
+                          >
+                            <Trash2 size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Expanded Sets */}
+                      {isExpanded && (
+                        <View style={styles.setsList}>
+                          {exercise.sets.map((set, setIndex) => (
+                            <View key={setIndex} style={styles.setRow}>
+                              <View style={styles.setRowTop}>
+                                <View style={styles.setIndexBadge}>
+                                  <MonoText bold style={styles.setIndexText}>{setIndex + 1}</MonoText>
+                                </View>
+                                <View style={styles.setMetrics}>
+                                  <View style={styles.setMetricItem}>
+                                    <Text style={styles.setMetricLabel}>REPS</Text>
+                                    <MonoText bold style={styles.setMetricValue}>{set.reps}</MonoText>
+                                  </View>
+                                  <View style={styles.setMetricDivider} />
+                                  <TouchableOpacity
+                                    style={styles.setMetricItem}
+                                    onPress={() =>
+                                      handleEditWeight(
+                                        exercise.id,
+                                        exercise.name,
+                                        setIndex,
+                                        set.weight,
+                                        set.weightUnit
+                                      )
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={styles.setMetricLabel}>WEIGHT</Text>
+                                    <MonoText
+                                      bold
+                                      style={[styles.setMetricValue, !set.weight && styles.setMetricValueEmpty]}
+                                    >
+                                      {set.weight && set.weight > 0
+                                        ? `${set.weight}${set.weightUnit || 'kg'}`
+                                        : '—'}
+                                    </MonoText>
+                                  </TouchableOpacity>
+                                  <View style={styles.setMetricDivider} />
+                                  <View style={styles.setMetricItem}>
+                                    <Text style={styles.setMetricLabel}>FORM</Text>
+                                    <MonoText bold style={[styles.setMetricValue, { color: getScoreColor(set.formScore) }]}>
+                                      {set.formScore}
+                                    </MonoText>
+                                  </View>
+                                </View>
+                                <View style={styles.setActions}>
+                                  <TouchableOpacity
+                                    style={styles.setActionBtn}
+                                    onPress={() =>
+                                      setNotesModalSet({
+                                        set,
+                                        setIndex: setIndex + 1,
+                                        exerciseName: exercise.name,
+                                      })
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <FileText size={13} color={COLORS.accent} strokeWidth={1.5} />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.setActionBtn}
+                                    onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
+                                    activeOpacity={0.7}
+                                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                                  >
+                                    <X size={13} color={COLORS.textTertiary} strokeWidth={2} />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      {/* Add Set Row */}
+                      <TouchableOpacity
+                        style={styles.addSetRow}
+                        onPress={() => handleAddSet(exercise)}
+                        activeOpacity={0.7}
+                      >
+                        <Plus size={13} color={COLORS.accent} strokeWidth={2.5} />
+                        <Text style={styles.addSetRowText}>Add set</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </LinearGradient>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      </Animated.View>
 
       {/* ── Modals ──── */}
       {notesModalSet && (
@@ -599,7 +615,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
       <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 4 }]}>
         {/* Add Exercise */}
         <TouchableOpacity style={styles.addExerciseButton} onPress={handleAddExercise} activeOpacity={0.8}>
-          <Plus size={15} color={COLORS.accent} strokeWidth={2.5} />
+          <Plus size={15} color={COLORS.text} strokeWidth={2.5} />
           <Text style={styles.addExerciseText}>Add exercise</Text>
         </TouchableOpacity>
 
@@ -610,20 +626,20 @@ export const CurrentWorkoutScreen: React.FC = () => {
             onPress={handleDiscardWorkout}
             activeOpacity={0.7}
           >
-            <Trash2 size={16} color="#52525B" strokeWidth={1.5} />
+            <Trash2 size={15} color={COLORS.textTertiary} strokeWidth={1.5} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.controlPauseButton}
+            style={[styles.controlPauseButton, workoutPaused && styles.controlPauseButtonActive]}
             onPress={handlePausePress}
             activeOpacity={0.7}
           >
             {workoutPaused ? (
-              <Play size={17} color="#FFFFFF" strokeWidth={1.5} />
+              <Play size={15} color={COLORS.text} strokeWidth={1.5} />
             ) : (
-              <PauseIcon size={17} color="#A1A1AA" />
+              <PauseIcon size={15} color={COLORS.textSecondary} />
             )}
-            <Text style={styles.controlPauseLabel}>
+            <Text style={[styles.controlPauseLabel, workoutPaused && styles.controlPauseLabelActive]}>
               {workoutPaused ? 'Resume' : 'Pause'}
             </Text>
           </TouchableOpacity>
@@ -633,8 +649,15 @@ export const CurrentWorkoutScreen: React.FC = () => {
             onPress={handleEndWorkout}
             activeOpacity={0.7}
           >
-            <Flag size={15} color="#FFFFFF" strokeWidth={1.5} />
-            <Text style={styles.controlFinishLabel}>Finish</Text>
+            <LinearGradient
+              colors={['rgba(139, 92, 246, 0.5)', 'rgba(124, 58, 237, 0.25)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.controlFinishGradient}
+            >
+              <Flag size={14} color={COLORS.text} strokeWidth={1.5} />
+              <Text style={styles.controlFinishLabel}>Finish</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
@@ -656,91 +679,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
-  headerBackButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
-    borderColor: '#27272A',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: '#52525B',
-    letterSpacing: 3,
-  },
-  headerSettingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
+  headerCenter: {
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.2)',
+  },
+  statusPillPaused: {
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#34D399',
+  },
+  statusDotPaused: {
+    backgroundColor: COLORS.accent,
+  },
+  statusText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 10,
+    color: '#34D399',
+    letterSpacing: 1.5,
+  },
+  statusTextPaused: {
+    color: COLORS.accent,
   },
 
   /* ── Timer Hero ─────────────────────────── */
   timerBlock: {
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
     paddingHorizontal: SPACING.screenHorizontal,
   },
   timerText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: TIMER_FONT_SIZE_MAX,
     color: '#FFFFFF',
-    lineHeight: 80,
-    letterSpacing: -2,
+    letterSpacing: 2,
     ...Platform.select({
       ios: {
-        textShadowColor: 'rgba(255, 255, 255, 0.15)',
+        textShadowColor: 'rgba(139, 92, 246, 0.2)',
         textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 20,
+        textShadowRadius: 30,
       },
     }),
   },
-  pausedBadge: {
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
-  pausedBadgeText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 10,
-    color: COLORS.accent,
-    letterSpacing: 2,
-  },
-  sessionMetaRow: {
+  statChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
+    gap: 5,
   },
-  sessionMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  statChipValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 13,
+    color: COLORS.text,
+    lineHeight: 16,
   },
-  sessionMetaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#3F3F46',
-  },
-  sessionMetaText: {
+  statChipLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: '#A1A1AA',
-    letterSpacing: 2,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  statDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
 
   /* ── Rest Timer Bar ──────────────────────── */
@@ -753,56 +786,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
+    borderColor: 'rgba(139, 92, 246, 0.15)',
   },
   restTimerProgress: {
     flex: 1,
   },
   restTimerTrack: {
-    height: 4,
-    borderRadius: 2,
+    height: 3,
+    borderRadius: 1.5,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     overflow: 'hidden',
   },
   restTimerFill: {
-    height: 4,
-    borderRadius: 2,
+    height: 3,
+    borderRadius: 1.5,
     backgroundColor: COLORS.accent,
   },
   restTimerText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.accent,
     minWidth: 36,
     textAlign: 'right',
   },
 
-  /* ── Void (Empty State) ─────────────────── */
-  voidState: {
+  /* ── Empty State ─────────────────────────── */
+  emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 48,
   },
-  voidIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 19,
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
-  voidTitle: {
+  emptyTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: '#52525B',
-    letterSpacing: 3,
+    fontSize: 16,
+    color: COLORS.textTertiary,
+    letterSpacing: -0.3,
     marginBottom: 6,
   },
-  voidSubtext: {
+  emptySubtext: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
     color: '#3F3F46',
@@ -815,7 +848,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
-    gap: 14,
+    gap: 12,
   },
   scrollContentEmpty: {
     flexGrow: 1,
@@ -824,154 +857,143 @@ const styles = StyleSheet.create({
 
   /* ── Exercise Card ──────────────────────── */
   exerciseCardOuter: {
-    borderRadius: 19,
+    borderRadius: 18,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
   exerciseCardGradient: {
-    borderRadius: 19,
+    borderRadius: 18,
   },
   exerciseCardGlassEdge: {
-    borderRadius: 19,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     overflow: 'hidden',
   },
   exerciseCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
+    padding: 16,
+    gap: 12,
+  },
+  exerciseAccentLine: {
+    width: 3,
+    height: 32,
+    borderRadius: 1.5,
+    backgroundColor: COLORS.accent,
   },
   exerciseCardHeaderLeft: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   exerciseCardName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 18,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
   exerciseCardMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: '#52525B',
-    letterSpacing: 2,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.2,
   },
   exerciseCardHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginLeft: SPACING.md,
+    gap: 8,
   },
-  exerciseDeleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+  exerciseDeleteBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  exerciseSetsBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: '#8B5CF6',
-    minWidth: 36,
-  },
-  exerciseSetsValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 14,
-    color: '#8B5CF6',
-    lineHeight: 17,
-    textAlign: 'center',
   },
 
   /* ── Set Rows ───────────────────────────── */
   setsList: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   setRow: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
-  setRowHeader: {
+  setRowTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    gap: 10,
   },
-  setRowLabel: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 10,
+  setIndexBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setIndexText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 11,
     color: COLORS.accent,
-    letterSpacing: 2,
-  },
-  setRowActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  setNotesButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  setDeleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    lineHeight: 14,
   },
   setMetrics: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
   },
   setMetricItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   setMetricDivider: {
     width: 1,
-    height: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   setMetricLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 9,
-    color: '#52525B',
-    letterSpacing: 2,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.5,
   },
   setMetricValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 18,
-    color: '#8B5CF6',
-    lineHeight: 22,
+    fontSize: 16,
+    color: COLORS.text,
+    lineHeight: 20,
   },
   setMetricValueEmpty: {
     color: '#3F3F46',
+  },
+  setActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  setActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* ── Add Set Row ────────────────────────── */
@@ -980,16 +1002,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   addSetRowText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 12,
-    color: '#8B5CF6',
-    letterSpacing: 0.5,
+    color: COLORS.accent,
+    letterSpacing: 0.3,
   },
 
   /* ── Bottom Panel ─────────────────────── */
@@ -998,7 +1019,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     backgroundColor: '#000000',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
     gap: 10,
   },
   addExerciseButton: {
@@ -1006,29 +1027,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    paddingVertical: 13,
+    paddingVertical: 12,
     borderRadius: 50,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   addExerciseText: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.semibold,
     fontSize: 13,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
+    color: COLORS.text,
+    letterSpacing: 0.2,
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   controlDiscardButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 50,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1039,43 +1060,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 48,
-    borderRadius: 50,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  controlPauseButtonActive: {
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
   },
   controlPauseLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
-    color: '#A1A1AA',
-    letterSpacing: 0.3,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
+  },
+  controlPauseLabelActive: {
+    color: COLORS.text,
   },
   controlFinishButton: {
-    flex: 1.4,
-    flexDirection: 'row' as const,
-    height: 48,
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 6,
+    flex: 1.3,
+    height: 46,
+    borderRadius: 23,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
       },
       android: { elevation: 4 },
     }),
   },
+  controlFinishGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+  },
   controlFinishLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.2,
   },
 });
