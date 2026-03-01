@@ -399,7 +399,7 @@ export const CameraSettingsScreen: React.FC = () => {
                 </View>
                 <View style={styles.rowLabelCol}>
                   <Text style={styles.rowLabel}>Auto Screen Recording</Text>
-                  <Text style={styles.rowSubLabel}>Records each set automatically</Text>
+                  <Text style={styles.rowSubLabel}>Automatically records your sets so you can save them to your video library. May increase battery usage and reduce performance.</Text>
                 </View>
                 <Switch
                   value={autoScreenRecording}
