@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Animated, Switch, Image } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, Switch, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -9,16 +9,14 @@ import {
   Bell,
   Lock,
   HelpCircle,
-  LogOut,
   Shield,
-  Mail,
-  SlidersHorizontal,
   Eye,
   Volume2,
   Bone,
   UserRound,
   RefreshCcw,
   Calendar,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 import type { WeeklyTrainingTarget } from '../../backend/hooks/useWorkoutPreferences';
 import {
@@ -44,17 +42,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const { user: authUser } = useAuth();
   const { user: profileUser, refetch: refetchUser } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
-  // Refresh profile data when screen gains focus (e.g. after editing profile)
   useFocusEffect(
     React.useCallback(() => {
       refetchUser();
@@ -65,73 +70,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const userEmail = profileUser?.email ?? authUser?.email ?? '';
   const userInitial = (displayName[0] ?? 'A').toUpperCase();
 
-  const SettingItem = ({
-    icon: Icon,
-    label,
-    onPress,
-    isFirst,
-    isLast,
-  }: {
-    icon: any;
-    label: string;
-    onPress?: () => void;
-    isFirst?: boolean;
-    isLast?: boolean;
-  }) => (
-    <TouchableOpacity
-      style={[styles.settingItem, isFirst && styles.settingItemFirst, isLast && styles.settingItemLast]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.settingLeft}>
-        <View style={styles.settingIconBadge}>
-          <Icon size={16} color="#A78BFA" strokeWidth={1.5} />
-        </View>
-        <Text style={styles.settingLabel}>{label}</Text>
-      </View>
-      <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-    </TouchableOpacity>
-  );
-
   const TRAINING_TARGET_OPTIONS: WeeklyTrainingTarget[] = ['1-2', '3-4', '5+'];
   const TRAINING_TARGET_LABELS: Record<WeeklyTrainingTarget, string> = {
     '1-2': '1–2 days / week',
     '3-4': '3–4 days / week',
     '5+': '5+ days / week',
   };
-
-  const SelectItem = ({
-    icon: Icon,
-    label,
-    value,
-    onPress,
-    isFirst,
-    isLast,
-  }: {
-    icon: any;
-    label: string;
-    value: string;
-    onPress: () => void;
-    isFirst?: boolean;
-    isLast?: boolean;
-  }) => (
-    <TouchableOpacity
-      style={[styles.settingItem, isFirst && styles.settingItemFirst, isLast && styles.settingItemLast]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.settingLeft}>
-        <View style={styles.settingIconBadge}>
-          <Icon size={16} color="#A78BFA" strokeWidth={1.5} />
-        </View>
-        <View style={styles.selectLabelColumn}>
-          <Text style={styles.settingLabel}>{label}</Text>
-          <Text style={styles.selectValueText}>{value}</Text>
-        </View>
-      </View>
-      <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-    </TouchableOpacity>
-  );
 
   const handleTrainingTargetPress = () => {
     const current = prefs.weeklyTrainingTarget;
@@ -140,75 +84,40 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     updatePref('weeklyTrainingTarget', TRAINING_TARGET_OPTIONS[nextIdx]);
   };
 
-  const ToggleItem = ({
-    icon: Icon,
-    label,
-    value,
-    onToggle,
-    isFirst,
-    isLast,
-  }: {
-    icon: any;
-    label: string;
-    value: boolean;
-    onToggle: (v: boolean) => void;
-    isFirst?: boolean;
-    isLast?: boolean;
-  }) => (
-    <View style={[styles.settingItem, isFirst && styles.settingItemFirst, isLast && styles.settingItemLast]}>
-      <View style={styles.settingLeft}>
-        <View style={styles.settingIconBadge}>
-          <Icon size={16} color="#A78BFA" strokeWidth={1.5} />
-        </View>
-        <Text style={styles.settingLabel}>{label}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onToggle}
-        trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: 'rgba(139, 92, 246, 0.4)' }}
-        thumbColor={value ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-      />
-    </View>
-  );
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        {/* ── HEADER ─────────────────────────────── */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>SETTINGS</Text>
-          <View style={styles.placeholder} />
-        </View>
-
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          {/* ── PROFILE CARD ────────────────────────── */}
-          <TouchableOpacity
-            style={styles.cardOuter}
-            activeOpacity={0.82}
-            onPress={() => navigation.navigate('UserProfile')}
-          >
+          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {/* Profile Card */}
+          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('UserProfile')}>
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
+              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.profileCard}
             >
-              <View style={styles.cardGlassEdge}>
+              <View style={styles.profileEdge}>
                 <View style={styles.profileRow}>
                   {profileUser?.avatarUrl ? (
-                    <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+                    <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatar} />
                   ) : profileUser ? (
                     <LinearGradient
                       colors={['#8B5CF6', '#7C3AED']}
@@ -222,21 +131,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                     <View style={styles.avatarPlaceholder} />
                   )}
                   <View style={styles.profileInfo}>
-                    <Text style={styles.profileName} numberOfLines={1}>
-                      {displayName}
-                    </Text>
+                    <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
                     {profileUser?.bio ? (
-                      <Text style={styles.profileBio} numberOfLines={2}>
-                        {profileUser.bio}
-                      </Text>
-                    ) : null}
-                    {userEmail ? (
-                      <View style={styles.emailRow}>
-                        <Mail size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        <Text style={styles.profileEmail} numberOfLines={1}>
-                          {userEmail}
-                        </Text>
-                      </View>
+                      <Text style={styles.profileSub} numberOfLines={1}>{profileUser.bio}</Text>
+                    ) : userEmail ? (
+                      <Text style={styles.profileSub} numberOfLines={1}>{userEmail}</Text>
                     ) : null}
                   </View>
                   <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -245,129 +144,173 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* ── ACCOUNT SECTION ─────────────────────── */}
-          <View style={styles.sectionHeader}>
-            <Shield size={14} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.sectionTitle}>Account</Text>
+          {/* Account Section */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Shield size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>ACCOUNT</Text>
+            </View>
           </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <SettingItem icon={User} label="Profile" onPress={() => navigation.navigate('ProfileSettings')} isFirst />
-                <SettingItem icon={Bell} label="Notifications" onPress={() => navigation.navigate('NotificationSettings')} />
-                <SettingItem icon={Lock} label="Privacy" onPress={() => navigation.navigate('PrivacySettings')} isLast />
-              </View>
-            </LinearGradient>
-          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('ProfileSettings')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <User size={14} color="#A78BFA" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Profile</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('NotificationSettings')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                  <Bell size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Notifications</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('PrivacySettings')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                  <Lock size={14} color="#34D399" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Privacy</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
-          {/* ── WORKOUT PREFERENCES SECTION ──────────── */}
-          <View style={styles.sectionHeader}>
-            <SlidersHorizontal size={14} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.sectionTitle}>Workout</Text>
+          {/* Workout Section */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <SlidersHorizontal size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>WORKOUT</Text>
+            </View>
           </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <ToggleItem
-                  icon={Eye}
-                  label="Visual Feedback"
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <View style={styles.toggleRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.toggleLabel}>Visual Feedback</Text>
+                <Switch
                   value={prefs.showFeedback}
-                  onToggle={(v) => updatePref('showFeedback', v)}
-                  isFirst
+                  onValueChange={(v) => updatePref('showFeedback', v)}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.showFeedback ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
-                <ToggleItem
-                  icon={Volume2}
-                  label="Voice Coaching (TTS)"
+              </View>
+              <View style={styles.rowDivider} />
+              <View style={styles.toggleRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
+                  <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.toggleLabel}>Voice Coaching</Text>
+                <Switch
                   value={prefs.isTTSEnabled}
-                  onToggle={(v) => updatePref('isTTSEnabled', v)}
+                  onValueChange={(v) => updatePref('isTTSEnabled', v)}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.isTTSEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
-                <ToggleItem
-                  icon={Bone}
-                  label="Skeleton Overlay"
+              </View>
+              <View style={styles.rowDivider} />
+              <View style={styles.toggleRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                  <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                </View>
+                <Text style={styles.toggleLabel}>Skeleton Overlay</Text>
+                <Switch
                   value={prefs.showSkeletonOverlay}
-                  onToggle={(v) => updatePref('showSkeletonOverlay', v)}
-                />
-                <SelectItem
-                  icon={Calendar}
-                  label="Training Frequency"
-                  value={TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}
-                  onPress={handleTrainingTargetPress}
-                  isLast
+                  onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
-            </LinearGradient>
-          </View>
+              <View style={styles.rowDivider} />
+              <TouchableOpacity style={styles.row} onPress={handleTrainingTargetPress} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                  <Calendar size={14} color="#34D399" strokeWidth={1.5} />
+                </View>
+                <View style={styles.rowLabelCol}>
+                  <Text style={styles.rowLabel}>Training Frequency</Text>
+                  <Text style={styles.rowSubLabel}>{TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}</Text>
+                </View>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
-          {/* ── YOUR TRAINER SECTION ──────────────── */}
-          <View style={styles.sectionHeader}>
-            <UserRound size={14} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.sectionTitle}>Your Trainer</Text>
+          {/* Trainer Section */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <UserRound size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>YOUR TRAINER</Text>
+            </View>
           </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <SettingItem
-                  icon={UserRound}
-                  label="Trainer"
-                  onPress={() => navigation.navigate('TrainerPicker')}
-                  isFirst
-                  isLast
-                />
-              </View>
-            </LinearGradient>
-          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TrainerPicker')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(244, 114, 182, 0.10)' }]}>
+                  <UserRound size={14} color="#F472B6" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Choose Trainer</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
-          {/* ── SUPPORT SECTION ─────────────────────── */}
-          <View style={styles.sectionHeader}>
-            <HelpCircle size={14} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.sectionTitle}>Support</Text>
+          {/* Support Section */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <HelpCircle size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>SUPPORT</Text>
+            </View>
           </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <SettingItem icon={HelpCircle} label="Help Center" onPress={() => navigation.navigate('HelpCenter')} isFirst isLast />
-              </View>
-            </LinearGradient>
-          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('HelpCenter')} activeOpacity={0.7}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
+                  <HelpCircle size={14} color="#60A5FA" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.rowLabel}>Help Center</Text>
+                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
-          {/* ── BACK TO ONBOARDING ──────────────────── */}
+          {/* Back to Onboarding */}
           <TouchableOpacity
-            style={styles.devOnboardingOuter}
+            style={styles.onboardingBtn}
             activeOpacity={0.7}
             onPress={() => navigation.navigate('Onboarding')}
           >
-            <View style={styles.devOnboardingInner}>
-              <View style={styles.devOnboardingIconBadge}>
-                <RefreshCcw size={14} color="#F59E0B" strokeWidth={1.5} />
-              </View>
-              <Text style={styles.devOnboardingText}>Back to Onboarding</Text>
-            </View>
+            <RefreshCcw size={13} color={COLORS.textTertiary} strokeWidth={1.5} />
+            <Text style={styles.onboardingText}>Back to Onboarding</Text>
           </TouchableOpacity>
 
-          {/* ── VERSION ─────────────────────────────── */}
           <Text style={styles.versionText}>FORMA v1.0.0</Text>
-        </ScrollView>
-      </Animated.View>
+        </Animated.View>
+      </ScrollView>
     </View>
   );
 };
@@ -378,244 +321,202 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  /* ── Header ──────────────────────────────── */
+  /* Header */
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.lg,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  backButton: {
+  backBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: 2,
+    letterSpacing: -0.4,
   },
-  placeholder: {
+  headerSpacer: {
     width: 40,
   },
-
-  /* ── Scroll ─────────────────────────────── */
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.xxxl,
+    paddingBottom: 160,
   },
 
-  /* ── Profile Card ──────────────────────── */
+  /* Profile Card */
+  profileCard: {
+    borderRadius: 22,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  profileEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    padding: 18,
+  },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
-  avatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   avatarGradient: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#000000',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#27272A',
   },
   avatarText: {
     fontFamily: FONTS.display.bold,
     fontSize: 22,
     color: '#FFFFFF',
-    letterSpacing: -0.5,
   },
   profileInfo: {
     flex: 1,
+    gap: 2,
   },
   profileName: {
-    fontFamily: FONTS.display.semibold,
+    fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    letterSpacing: -0.4,
   },
-  emailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  profileBio: {
+  profileSub: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.1,
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-  profileEmail: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textTertiary,
-    letterSpacing: 0.2,
-    flex: 1,
   },
 
-  /* ── Section Headers ───────────────────── */
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: SPACING.xl,
-    marginBottom: SPACING.sm + 2,
-  },
-  sectionTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-
-  /* ── Shared Gradient Card ────────────── */
-  cardOuter: {
-    borderRadius: 19,
-    overflow: 'hidden',
-    marginBottom: 2,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  cardGradient: {
-    borderRadius: 19,
-  },
-  cardGlassEdge: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: SPACING.lg,
-    overflow: 'hidden',
-  },
-
-  /* ── Setting Items ─────────────────────── */
-  settingItem: {
+  /* Section Headers (matches Home) */
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    marginTop: 24,
+    marginBottom: 12,
   },
-  settingItemFirst: {
-    paddingTop: 0,
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  settingItemLast: {
-    borderBottomWidth: 0,
-    paddingBottom: 0,
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 2,
   },
-  settingLeft: {
+
+  /* Cards (matches Home gradient cards) */
+  cardGradient: {
+    borderRadius: 18,
+  },
+  cardEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+  },
+
+  /* Rows */
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingVertical: 8,
   },
-  settingIconBadge: {
+  rowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    marginVertical: 2,
+  },
+  iconWrap: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingLabel: {
+  rowLabel: {
+    flex: 1,
     fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: 0.1,
+  },
+  rowLabelCol: {
+    flex: 1,
+    gap: 2,
+  },
+  rowSubLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+
+  /* Toggle Rows */
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 6,
+  },
+  toggleLabel: {
+    flex: 1,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: 0.1,
   },
 
-  /* ── Select Item ───────────────────────── */
-  selectLabelColumn: {
-    flexDirection: 'column',
-    gap: 2,
-  },
-  selectValueText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.2,
-  },
-
-  /* ── Dev: Back to Onboarding ───────────── */
-  devOnboardingOuter: {
-    marginTop: SPACING.xxl,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
-    backgroundColor: 'rgba(245, 158, 11, 0.04)',
-    overflow: 'hidden',
-  },
-  devOnboardingInner: {
+  /* Onboarding */
+  onboardingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 6,
     paddingVertical: 14,
+    marginTop: 24,
   },
-  devOnboardingIconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  devOnboardingText: {
+  onboardingText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: '#F59E0B',
-    letterSpacing: 0.3,
-  },
-  devBadge: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 9,
-    color: 'rgba(245, 158, 11, 0.5)',
-    letterSpacing: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
-    borderRadius: 3,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    fontSize: 12,
+    color: COLORS.textTertiary,
   },
 
-  /* ── Version ───────────────────────────── */
+  /* Version */
   versionText: {
     fontFamily: FONTS.mono.regular,
     fontSize: 10,
     color: COLORS.textTertiary,
     letterSpacing: 2,
     textAlign: 'center',
-    marginTop: SPACING.xl,
+    marginTop: 4,
   },
 });

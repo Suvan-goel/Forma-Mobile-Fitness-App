@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Platform,
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,22 +30,29 @@ export const TrainerPickerScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
   const selectedTrainerId = prefs.selectedTrainerId;
   const [greetingEnabled, setGreetingEnabled] = useState(true);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const handleSelectTrainer = (trainer: Trainer) => {
     if (trainer.id === selectedTrainerId) return;
     updatePref('selectedTrainerId', trainer.id);
-    // Switch the voice immediately so the greeting plays in the right voice
     setActiveVoiceId(trainer.voiceId);
     setActiveVoiceSettings(trainer.voiceSettings);
     if (greetingEnabled) {
@@ -85,26 +91,26 @@ export const TrainerPickerScreen: React.FC = () => {
             <Text style={styles.trainerDescription}>{trainer.description}</Text>
           </View>
         </TouchableOpacity>
-        {!isLast && <View style={styles.rowSeparator} />}
+        {!isLast && <View style={styles.rowDivider} />}
       </View>
     );
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── HEADER ─────────────────────────────── */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={styles.backBtn}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>YOUR TRAINER</Text>
+        <Text style={styles.headerTitle}>Your Trainer</Text>
         <TouchableOpacity
-          style={styles.speakerButton}
+          style={styles.speakerBtn}
           onPress={() => setGreetingEnabled((v) => !v)}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -118,52 +124,54 @@ export const TrainerPickerScreen: React.FC = () => {
 
       <Animated.ScrollView
         style={[styles.scroll, { opacity: fadeAnim }]}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + SPACING.xxxl }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 160 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.intro}>
-          Choose a trainer whose coaching style fits how you like to train. Your selection sets the voice used for all spoken cues.
-        </Text>
+        <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
+          <Text style={styles.intro}>
+            Choose a trainer whose coaching style fits how you like to train. Your selection sets the voice used for all spoken cues.
+          </Text>
 
-        {/* ── MALE TRAINERS ─────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <UserRound size={14} color={COLORS.accent} strokeWidth={1.5} />
-          <Text style={styles.sectionTitle}>Male</Text>
-        </View>
-        <View style={styles.cardOuter}>
+          {/* Male Trainers */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <UserRound size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>MALE</Text>
+            </View>
+          </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
-            <View style={styles.cardInner}>
+            <View style={styles.cardEdge}>
               {MALE_TRAINERS.map((trainer, index) =>
                 renderTrainerRow(trainer, index, MALE_TRAINERS.length)
               )}
             </View>
           </LinearGradient>
-        </View>
 
-        {/* ── FEMALE TRAINERS ───────────────────── */}
-        <View style={styles.sectionHeader}>
-          <CircleUserRound size={14} color={COLORS.accent} strokeWidth={1.5} />
-          <Text style={styles.sectionTitle}>Female</Text>
-        </View>
-        <View style={styles.cardOuter}>
+          {/* Female Trainers */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <CircleUserRound size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>FEMALE</Text>
+            </View>
+          </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
-            <View style={styles.cardInner}>
+            <View style={styles.cardEdge}>
               {FEMALE_TRAINERS.map((trainer, index) =>
                 renderTrainerRow(trainer, index, FEMALE_TRAINERS.length)
               )}
             </View>
           </LinearGradient>
-        </View>
+        </Animated.View>
       </Animated.ScrollView>
     </View>
   );
@@ -175,43 +183,41 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  /* ── Header ──────────────────────────────── */
+  /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.lg,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  backButton: {
+  backBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: 2,
+    letterSpacing: -0.4,
   },
-  speakerButton: {
+  speakerBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
 
-  /* ── Scroll ──────────────────────────────── */
+  /* Scroll */
   scroll: {
     flex: 1,
   },
@@ -223,71 +229,59 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     lineHeight: 20,
-    marginBottom: SPACING.xl,
+    marginTop: 18,
+    marginBottom: 8,
   },
 
-  /* ── Section Headers ─────────────────────── */
-  sectionHeader: {
+  /* Section Headers (matches Home) */
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  sectionLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.sm + 2,
   },
-  sectionTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
     letterSpacing: 2,
-    textTransform: 'uppercase',
   },
 
-  /* ── Card ────────────────────────────────── */
-  cardOuter: {
-    borderRadius: 19,
-    overflow: 'hidden',
-    marginBottom: 2,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
-        shadowRadius: 15,
-      },
-      android: { elevation: 6 },
-    }),
-  },
+  /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 18,
   },
-  cardInner: {
-    borderRadius: 19,
+  cardEdge: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    overflow: 'hidden',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
   },
 
-  /* ── Trainer Rows ────────────────────────── */
+  /* Trainer Rows */
   trainerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   trainerRowFirst: {
-    paddingTop: SPACING.sm,
+    paddingTop: 4,
   },
   trainerRowLast: {
-    paddingBottom: SPACING.sm,
+    paddingBottom: 4,
   },
-  rowSeparator: {
+  rowDivider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     marginLeft: 32,
   },
 
-  /* ── Radio ───────────────────────────────── */
+  /* Radio */
   radio: {
     width: 20,
     height: 20,
@@ -310,7 +304,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
 
-  /* ── Trainer Info ────────────────────────── */
+  /* Trainer Info */
   trainerInfo: {
     flex: 1,
   },

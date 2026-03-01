@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Platform,
   Animated,
   Switch,
 } from 'react-native';
@@ -29,15 +28,23 @@ interface NotificationSettingsScreenProps {
 export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
   const { prefs, updatePref, isLoading } = useNotificationPreferences();
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const handleRestTimerToggle = (value: boolean) => {
     updatePref('restTimerEnabled', value);
@@ -45,82 +52,71 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ChevronLeft size={20} color={COLORS.text} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          {/* Page Title */}
-          <View style={styles.titleSection}>
-            <Text style={styles.pageTitle}>Notifications</Text>
-            <Text style={styles.pageSubtitle}>
-              Control when Forma sends you notifications during your workout.
-            </Text>
-          </View>
+          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {/* Subtitle */}
+          <Text style={styles.subtitle}>
+            Control when Forma sends you notifications during your workout.
+          </Text>
 
           {/* Alerts Section */}
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconBadge}>
-              <Bell size={12} color="#A78BFA" strokeWidth={1.5} />
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Bell size={13} color={COLORS.yellow} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>ALERTS</Text>
             </View>
-            <Text style={styles.sectionTitle}>Alerts</Text>
           </View>
 
-          {/* Rest Timer Notification */}
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <View style={styles.toggleRow}>
-                  <View style={styles.toggleLeft}>
-                    <View style={styles.iconBadge}>
-                      <Timer size={16} color="#A78BFA" strokeWidth={1.5} />
-                    </View>
-                    <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Rest Timer</Text>
-                      <Text style={styles.toggleDescription}>
-                        Get notified when your rest period finishes between sets
-                      </Text>
-                    </View>
-                  </View>
-                  <Switch
-                    value={prefs.restTimerEnabled}
-                    onValueChange={handleRestTimerToggle}
-                    trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: 'rgba(139, 92, 246, 0.4)' }}
-                    thumbColor={prefs.restTimerEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                    disabled={isLoading}
-                  />
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <View style={styles.toggleRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                  <Timer size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 </View>
+                <View style={styles.toggleContent}>
+                  <Text style={styles.toggleLabel}>Rest Timer</Text>
+                  <Text style={styles.toggleDesc}>
+                    Get notified when your rest period finishes between sets
+                  </Text>
+                </View>
+                <Switch
+                  value={prefs.restTimerEnabled}
+                  onValueChange={handleRestTimerToggle}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={prefs.restTimerEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                  disabled={isLoading}
+                />
               </View>
-            </LinearGradient>
-          </View>
+            </View>
+          </LinearGradient>
 
           {/* Footer */}
-          <View style={styles.footerContainer}>
-            <View style={styles.footerDot} />
-            <Text style={styles.footerNote}>
-              More notification options coming soon
-            </Text>
-          </View>
-        </ScrollView>
-      </Animated.View>
+          <Text style={styles.footerNote}>More notification options coming soon</Text>
+        </Animated.View>
+      </ScrollView>
     </View>
   );
 };
@@ -131,122 +127,96 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  /* ── Header ──────────────────────────────── */
+  /* Header */
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.md,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  backButton: {
+  backBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-
-  /* ── Scroll ─────────────────────────────── */
+  headerTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
+  headerSpacer: {
+    width: 40,
+  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.xxxl + 40,
+    paddingBottom: 160,
   },
 
-  /* ── Page Title ──────────────────────────── */
-  titleSection: {
-    marginBottom: SPACING.xxl,
-  },
-  pageTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 28,
-    color: COLORS.text,
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  pageSubtitle: {
+  /* Subtitle */
+  subtitle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textSecondary,
     lineHeight: 20,
+    marginTop: 18,
+    marginBottom: 8,
   },
 
-  /* ── Section Headers ───────────────────── */
-  sectionHeader: {
+  /* Section Headers (matches Home) */
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: SPACING.sm + 2,
+    marginTop: 24,
+    marginBottom: 12,
   },
-  sectionIconBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  sectionLabelRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
-  sectionTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
     letterSpacing: 2,
-    textTransform: 'uppercase',
   },
 
-  /* ── Shared Gradient Card ────────────── */
-  cardOuter: {
-    borderRadius: 19,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-    }),
-  },
+  /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 18,
   },
-  cardGlassEdge: {
-    borderRadius: 22,
+  cardEdge: {
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: SPACING.lg,
-    overflow: 'hidden',
+    padding: 14,
   },
 
-  /* ── Toggle Row ──────────────────────── */
+  /* Toggle */
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  toggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flex: 1,
-    marginRight: SPACING.md,
-  },
-  iconBadge: {
+  iconWrap: {
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggleInfo: {
+  toggleContent: {
     flex: 1,
   },
   toggleLabel: {
@@ -256,31 +226,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     marginBottom: 3,
   },
-  toggleDescription: {
+  toggleDesc: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
     lineHeight: 17,
   },
 
-  /* ── Footer ──────────────────────────── */
-  footerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: SPACING.xxl,
-  },
-  footerDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.textTertiary,
-  },
+  /* Footer */
   footerNote: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    textAlign: 'center',
+    marginTop: 32,
   },
 });

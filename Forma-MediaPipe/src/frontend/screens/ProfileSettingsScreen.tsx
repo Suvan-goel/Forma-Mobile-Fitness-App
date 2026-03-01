@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Platform,
   Animated,
   TextInput,
   ActivityIndicator,
@@ -13,7 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera, Mail, Calendar, User, Shield, LogOut, AlignLeft } from 'lucide-react-native';
+import { ChevronLeft, Camera, Mail, Calendar, LogOut, User, AlignLeft, Shield } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   COLORS,
@@ -35,6 +34,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
   const { user, isLoading: userLoading, refetch } = useUser();
   const { updateProfile, uploadAvatar, isUpdating, error } = useUpdateUser();
   const { signOut } = useAuth();
@@ -45,12 +45,19 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   const [lastName, setLastName] = useState('');
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   useEffect(() => {
     if (user) {
@@ -61,11 +68,11 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
     }
   }, [user]);
 
+  const hasDisplayNameChanged = displayName.trim() !== (user?.displayName ?? '');
+  const hasBioChanged = bio.trim() !== (user?.bio ?? '');
   const hasNameChanged =
     firstName.trim() !== (user?.firstName ?? '') ||
     lastName.trim() !== (user?.lastName ?? '');
-  const hasDisplayNameChanged = displayName.trim() !== (user?.displayName ?? '');
-  const hasBioChanged = bio.trim() !== (user?.bio ?? '');
 
   const handleSaveDisplayName = async () => {
     if (!hasDisplayNameChanged || !displayName.trim()) return;
@@ -164,53 +171,47 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ChevronLeft size={20} color={COLORS.text} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          {/* Page Title */}
-          <View style={styles.titleSection}>
-            <Text style={styles.pageTitle}>Profile</Text>
-            <Text style={styles.pageSubtitle}>Manage your personal information</Text>
-          </View>
+          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           {/* Avatar */}
           <View style={styles.avatarSection}>
             <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.7} disabled={isUpdating}>
-              <View style={styles.avatarContainer}>
-                <View style={styles.avatarRing}>
-                  {user?.avatarUrl ? (
-                    <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-                  ) : user ? (
-                    <LinearGradient
-                      colors={['#8B5CF6', '#7C3AED']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.avatarGradient}
-                    >
-                      <Text style={styles.avatarText}>{userInitial}</Text>
-                    </LinearGradient>
-                  ) : (
-                    <View style={styles.avatarPlaceholder} />
-                  )}
-                </View>
-                <View style={styles.cameraIconBadge}>
-                  <Camera size={14} color={COLORS.text} strokeWidth={1.5} />
+              <View style={styles.avatarWrapper}>
+                {user?.avatarUrl ? (
+                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                ) : user ? (
+                  <LinearGradient
+                    colors={['#8B5CF6', '#7C3AED']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.avatarGradient}
+                  >
+                    <Text style={styles.avatarText}>{userInitial}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.avatarPlaceholder} />
+                )}
+                <View style={styles.cameraBadge}>
+                  <Camera size={13} color="#FFFFFF" strokeWidth={2} />
                 </View>
               </View>
             </TouchableOpacity>
@@ -220,210 +221,196 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
             )}
           </View>
 
-          {/* Display Name Section */}
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconBadge}>
-              <User size={12} color="#A78BFA" strokeWidth={1.5} />
+          {/* Display Name */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <User size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>DISPLAY NAME</Text>
             </View>
-            <Text style={styles.sectionTitle}>Display Name</Text>
           </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <TextInput
-                  style={styles.textInput}
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  placeholder="Enter your display name"
-                  placeholderTextColor={COLORS.textTertiary}
-                  autoCapitalize="words"
-                  returnKeyType="done"
-                  onSubmitEditing={handleSaveDisplayName}
-                />
-                {hasDisplayNameChanged && (
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <TextInput
+                style={styles.textInput}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Enter your display name"
+                placeholderTextColor={COLORS.textTertiary}
+                autoCapitalize="words"
+                returnKeyType="done"
+                onSubmitEditing={handleSaveDisplayName}
+              />
+              {hasDisplayNameChanged && (
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={handleSaveDisplayName}
+                  activeOpacity={0.7}
+                  disabled={isUpdating}
+                >
+                  <Text style={styles.saveBtnText}>{isUpdating ? 'Saving...' : 'Save'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </LinearGradient>
+
+          {/* Bio */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <AlignLeft size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>BIO</Text>
+            </View>
+          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <TextInput
+                style={styles.bioInput}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Tell people a little about yourself..."
+                placeholderTextColor={COLORS.textTertiary}
+                multiline
+                numberOfLines={3}
+                maxLength={160}
+                returnKeyType="default"
+                textAlignVertical="top"
+              />
+              <View style={styles.bioFooter}>
+                <Text style={styles.bioCharCount}>{bio.length}/160</Text>
+                {hasBioChanged && (
                   <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleSaveDisplayName}
+                    style={styles.saveBtn}
+                    onPress={handleSaveBio}
                     activeOpacity={0.7}
                     disabled={isUpdating}
                   >
-                    <Text style={styles.saveButtonText}>
-                      {isUpdating ? 'Saving...' : 'Save'}
-                    </Text>
+                    <Text style={styles.saveBtnText}>{isUpdating ? 'Saving...' : 'Save'}</Text>
                   </TouchableOpacity>
                 )}
               </View>
-            </LinearGradient>
-          </View>
-
-          {/* Bio Section */}
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconBadge}>
-              <AlignLeft size={12} color="#A78BFA" strokeWidth={1.5} />
             </View>
-            <Text style={styles.sectionTitle}>Bio</Text>
+          </LinearGradient>
+
+          {/* Name */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <User size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>NAME</Text>
+            </View>
           </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <TextInput
-                  style={styles.bioInput}
-                  value={bio}
-                  onChangeText={setBio}
-                  placeholder="Tell people a little about yourself…"
-                  placeholderTextColor={COLORS.textTertiary}
-                  multiline
-                  numberOfLines={3}
-                  maxLength={160}
-                  returnKeyType="default"
-                  textAlignVertical="top"
-                />
-                <View style={styles.bioFooter}>
-                  <Text style={styles.bioCharCount}>{bio.length}/160</Text>
-                  {hasBioChanged && (
-                    <TouchableOpacity
-                      style={styles.saveButton}
-                      onPress={handleSaveBio}
-                      activeOpacity={0.7}
-                      disabled={isUpdating}
-                    >
-                      <Text style={styles.saveButtonText}>
-                        {isUpdating ? 'Saving...' : 'Save'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <View style={styles.infoRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <User size={14} color="#A78BFA" strokeWidth={1.5} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>First name</Text>
+                  <TextInput
+                    style={styles.nameInput}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    placeholder="First name"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                  />
                 </View>
               </View>
-            </LinearGradient>
-          </View>
-
-          {/* Name Section */}
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconBadge}>
-              <User size={12} color="#A78BFA" strokeWidth={1.5} />
-            </View>
-            <Text style={styles.sectionTitle}>Name</Text>
-          </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <View style={styles.infoRow}>
-                  <View style={styles.infoIconBadge}>
-                    <User size={14} color="#A78BFA" strokeWidth={1.5} />
-                  </View>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>First name</Text>
-                    <TextInput
-                      style={styles.nameInput}
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      placeholder="First name"
-                      placeholderTextColor={COLORS.textTertiary}
-                      autoCapitalize="words"
-                      returnKeyType="next"
-                    />
-                  </View>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <User size={14} color="#A78BFA" strokeWidth={1.5} />
                 </View>
-                <View style={styles.separator} />
-                <View style={styles.infoRow}>
-                  <View style={styles.infoIconBadge}>
-                    <User size={14} color="#A78BFA" strokeWidth={1.5} />
-                  </View>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Last name</Text>
-                    <TextInput
-                      style={styles.nameInput}
-                      value={lastName}
-                      onChangeText={setLastName}
-                      placeholder="Last name"
-                      placeholderTextColor={COLORS.textTertiary}
-                      autoCapitalize="words"
-                      returnKeyType="done"
-                      onSubmitEditing={handleSaveName}
-                    />
-                  </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Last name</Text>
+                  <TextInput
+                    style={styles.nameInput}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    placeholder="Last name"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoCapitalize="words"
+                    returnKeyType="done"
+                    onSubmitEditing={handleSaveName}
+                  />
                 </View>
-                {hasNameChanged && (
-                  <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleSaveName}
-                    activeOpacity={0.7}
-                    disabled={isUpdating}
-                  >
-                    <Text style={styles.saveButtonText}>
-                      {isUpdating ? 'Saving...' : 'Save'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
-            </LinearGradient>
-          </View>
-
-          {/* Account Details Section */}
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconBadge}>
-              <Shield size={12} color="#A78BFA" strokeWidth={1.5} />
+              {hasNameChanged && (
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={handleSaveName}
+                  activeOpacity={0.7}
+                  disabled={isUpdating}
+                >
+                  <Text style={styles.saveBtnText}>{isUpdating ? 'Saving...' : 'Save'}</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <Text style={styles.sectionTitle}>Account</Text>
+          </LinearGradient>
+
+          {/* Account Details */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Shield size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>ACCOUNT</Text>
+            </View>
           </View>
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardGlassEdge}>
-                <View style={styles.infoRow}>
-                  <View style={styles.infoIconBadge}>
-                    <Mail size={14} color="#A78BFA" strokeWidth={1.5} />
-                  </View>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Email</Text>
-                    <Text style={styles.infoValue}>{user?.email ?? ''}</Text>
-                  </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <View style={styles.infoRow}>
+                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                  <Mail size={14} color="#A78BFA" strokeWidth={1.5} />
                 </View>
-                {joinDate ? (
-                  <>
-                    <View style={styles.separator} />
-                    <View style={styles.infoRow}>
-                      <View style={styles.infoIconBadge}>
-                        <Calendar size={14} color="#A78BFA" strokeWidth={1.5} />
-                      </View>
-                      <View style={styles.infoContent}>
-                        <Text style={styles.infoLabel}>Member Since</Text>
-                        <Text style={styles.infoValue}>{joinDate}</Text>
-                      </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Email</Text>
+                  <Text style={styles.infoValue}>{user?.email ?? ''}</Text>
+                </View>
+              </View>
+              {joinDate ? (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.infoRow}>
+                    <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                      <Calendar size={14} color="#34D399" strokeWidth={1.5} />
                     </View>
-                  </>
-                ) : null}
-              </View>
-            </LinearGradient>
-          </View>
+                    <View style={styles.infoContent}>
+                      <Text style={styles.infoLabel}>Member Since</Text>
+                      <Text style={styles.infoValue}>{joinDate}</Text>
+                    </View>
+                  </View>
+                </>
+              ) : null}
+            </View>
+          </LinearGradient>
 
-          {/* ── LOGOUT ──────────────────────────────── */}
+          {/* Logout */}
           <TouchableOpacity
-            style={styles.logoutOuter}
+            style={styles.logoutBtn}
             activeOpacity={0.7}
             onPress={handleLogout}
           >
             <View style={styles.logoutInner}>
-              <View style={styles.logoutIconBadge}>
+              <View style={styles.logoutIconWrap}>
                 <LogOut size={16} color="#EF4444" strokeWidth={1.5} />
               </View>
               <Text style={styles.logoutText}>Log Out</Text>
@@ -433,8 +420,8 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           {error ? (
             <Text style={styles.errorText}>{error}</Text>
           ) : null}
-        </ScrollView>
-      </Animated.View>
+        </Animated.View>
+      </ScrollView>
     </View>
   );
 };
@@ -445,97 +432,81 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  /* ── Header ──────────────────────────────── */
+  /* Header */
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.md,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  backButton: {
+  backBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-
-  /* ── Scroll ─────────────────────────────── */
+  headerTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
+  headerSpacer: {
+    width: 40,
+  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.xxxl + 40,
+    paddingBottom: 160,
   },
 
-  /* ── Page Title ──────────────────────────── */
-  titleSection: {
-    marginBottom: SPACING.xxl,
-  },
-  pageTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 28,
-    color: COLORS.text,
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  pageSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-
-  /* ── Avatar ──────────────────────────────── */
+  /* Avatar */
   avatarSection: {
     alignItems: 'center',
-    marginBottom: SPACING.xxl,
+    marginTop: 24,
+    marginBottom: 8,
   },
-  avatarContainer: {
+  avatarWrapper: {
     position: 'relative',
   },
-  avatarRing: {
-    borderRadius: 9999,
-    padding: 3,
-    borderWidth: 2,
-    borderColor: 'rgba(139, 92, 246, 0.25)',
-  },
   avatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
   },
   avatarGradient: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#000000',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#27272A',
   },
   avatarText: {
     fontFamily: FONTS.display.bold,
     fontSize: 36,
     color: '#FFFFFF',
-    letterSpacing: -0.5,
   },
-  cameraIconBadge: {
+  cameraBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: -2,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -544,107 +515,103 @@ const styles = StyleSheet.create({
   },
   tapToChange: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textTertiary,
-    marginTop: SPACING.sm + 2,
-    letterSpacing: 0.3,
+    marginTop: SPACING.sm,
   },
 
-  /* ── Section Headers ───────────────────── */
-  sectionHeader: {
+  /* Section Headers (matches Home) */
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.sm + 2,
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 12,
   },
-  sectionIconBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  sectionLabelRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
-  sectionTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
     letterSpacing: 2,
-    textTransform: 'uppercase',
   },
 
-  /* ── Shared Gradient Card ────────────── */
-  cardOuter: {
-    borderRadius: 19,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-    }),
-  },
+  /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 18,
   },
-  cardGlassEdge: {
-    borderRadius: 22,
+  cardEdge: {
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: SPACING.lg,
-    overflow: 'hidden',
+    padding: 16,
   },
 
-  /* ── Text Input ──────────────────────── */
+  /* Inputs */
   textInput: {
     fontFamily: FONTS.ui.regular,
     fontSize: 16,
     color: COLORS.text,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
-    paddingVertical: SPACING.sm + 2,
+    paddingVertical: SPACING.sm,
   },
   nameInput: {
     fontFamily: FONTS.ui.regular,
     fontSize: 15,
     color: COLORS.text,
-    letterSpacing: 0.1,
     paddingVertical: 2,
     marginTop: 2,
   },
-  saveButton: {
-    alignSelf: 'flex-end',
-    marginTop: SPACING.md,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+  bioInput: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
+    color: COLORS.text,
+    lineHeight: 22,
+    minHeight: 72,
+    paddingVertical: SPACING.sm,
   },
-  saveButtonText: {
+  bioFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+  },
+  bioCharCount: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+  },
+  saveBtn: {
+    alignSelf: 'flex-end',
+    marginTop: SPACING.sm,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  saveBtnText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: '#FFFFFF',
+    fontSize: 13,
+    color: '#A78BFA',
     letterSpacing: 0.3,
   },
 
-  /* ── Info Rows ───────────────────────── */
+  /* Info Rows */
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     paddingVertical: 6,
   },
-  infoIconBadge: {
+  iconWrap: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -656,28 +623,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
     letterSpacing: 0.5,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   infoValue: {
     fontFamily: FONTS.ui.regular,
     fontSize: 15,
     color: COLORS.text,
-    letterSpacing: 0.1,
   },
-  separator: {
+  divider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    marginVertical: SPACING.sm + 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginVertical: 8,
   },
 
-  /* ── Logout ────────────────────────────── */
-  logoutOuter: {
-    marginTop: SPACING.xxl,
+  /* Logout */
+  logoutBtn: {
+    marginTop: 32,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: 'rgba(239, 68, 68, 0.12)',
     backgroundColor: 'rgba(239, 68, 68, 0.04)',
-    overflow: 'hidden',
   },
   logoutInner: {
     flexDirection: 'row',
@@ -686,11 +651,11 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 16,
   },
-  logoutIconBadge: {
+  logoutIconWrap: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: 'rgba(239, 68, 68, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -698,34 +663,10 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.semibold,
     fontSize: 15,
     color: '#EF4444',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
 
-  /* ── Bio ────────────────────────────── */
-  bioInput: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 15,
-    color: COLORS.text,
-    lineHeight: 22,
-    minHeight: 72,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  bioFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: SPACING.sm,
-  },
-  bioCharCount: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
-  },
-
-  /* ── Error ──────────────────────────── */
+  /* Error */
   errorText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
