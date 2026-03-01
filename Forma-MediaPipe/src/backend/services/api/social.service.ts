@@ -372,6 +372,7 @@ export const socialService = {
       .select('id, display_name, avatar_url')
       .ilike('display_name', `%${query}%`)
       .neq('id', user.id)
+      .not('privacy_level', 'eq', 'private')
       .limit(20);
 
     if (error) return { data: [], success: false, error: error.message };

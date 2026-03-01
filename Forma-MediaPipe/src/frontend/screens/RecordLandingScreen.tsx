@@ -215,12 +215,12 @@ export const RecordLandingScreen: React.FC = () => {
           /* ── Active Workout Card ── */
           <View style={styles.activeCardOuter}>
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
+              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={[styles.cardGradient, { flex: undefined }]}
             >
-              <View style={[styles.cardGlassEdge, { flex: undefined }]}>
+              <View style={[styles.activeGlassEdge]}>
                 {/* ── Top bar: status + pause ── */}
                 <View style={styles.activeTopBar}>
                   <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
@@ -251,26 +251,32 @@ export const RecordLandingScreen: React.FC = () => {
                   <MonoText bold style={styles.timerText}>
                     {formatStopwatch(workoutElapsedSeconds)}
                   </MonoText>
-
-                  {/* ── Stats chips ── */}
-                  <View style={styles.statsRow}>
-                    <View style={styles.statChip}>
-                      <Layers size={13} color={COLORS.accent} strokeWidth={1.5} />
-                      <MonoText bold style={styles.statChipValue}>{sets.length}</MonoText>
-                      <Text style={styles.statChipLabel}>
-                        {sets.length === 1 ? 'set' : 'sets'}
-                      </Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statChip}>
-                      <Repeat size={13} color={COLORS.accent} strokeWidth={1.5} />
-                      <MonoText bold style={styles.statChipValue}>
-                        {sets.reduce((sum, set) => sum + set.reps, 0)}
-                      </MonoText>
-                      <Text style={styles.statChipLabel}>reps</Text>
-                    </View>
-                  </View>
                 </TouchableOpacity>
+
+                {/* ── Bento Stats Row ── */}
+                <View style={styles.bentoRow}>
+                  <View style={styles.bentoCard}>
+                    <View style={styles.bentoIconWrap}>
+                      <Layers size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
+                    <MonoText bold style={styles.bentoValue}>{sets.length}</MonoText>
+                    <Text style={styles.bentoLabel}>
+                      {sets.length === 1 ? 'set' : 'sets'}
+                    </Text>
+                  </View>
+                  <View style={styles.bentoCard}>
+                    <View style={[styles.bentoIconWrap, styles.bentoIconGreen]}>
+                      <Repeat size={14} color="#34D399" strokeWidth={1.5} />
+                    </View>
+                    <MonoText bold style={styles.bentoValue}>
+                      {sets.reduce((sum, set) => sum + set.reps, 0)}
+                    </MonoText>
+                    <Text style={styles.bentoLabel}>reps</Text>
+                  </View>
+                </View>
+
+                {/* ── Divider ── */}
+                <View style={styles.activeDivider} />
 
                 {/* ── Bottom actions ── */}
                 <View style={styles.workoutActions}>
@@ -283,12 +289,19 @@ export const RecordLandingScreen: React.FC = () => {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.resumeBtn}
                     onPress={handleResumeWorkout}
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
+                    style={styles.resumeBtnOuter}
                   >
-                    <Text style={styles.resumeBtnText}>Open workout</Text>
-                    <ArrowRight size={14} color={COLORS.text} strokeWidth={2} />
+                    <LinearGradient
+                      colors={['rgba(139, 92, 246, 0.55)', 'rgba(124, 58, 237, 0.3)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.resumeGradient}
+                    >
+                      <Text style={styles.resumeBtnText}>Open workout</Text>
+                      <ArrowRight size={14} color={COLORS.text} strokeWidth={2} />
+                    </LinearGradient>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -611,19 +624,24 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 28,
       },
-      android: { elevation: 8 },
+      android: { elevation: 12 },
     }),
+  },
+  activeGlassEdge: {
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
   },
   activeTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 20,
     paddingBottom: 4,
   },
   statusPill: {
@@ -676,50 +694,71 @@ const styles = StyleSheet.create({
   activeCardContent: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
   },
   timerText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 46,
+    fontSize: 52,
     color: COLORS.text,
-    lineHeight: 54,
+    lineHeight: 60,
     letterSpacing: 2,
     ...Platform.select({
       ios: {
-        textShadowColor: 'rgba(139, 92, 246, 0.15)',
+        textShadowColor: 'rgba(139, 92, 246, 0.25)',
         textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 24,
+        textShadowRadius: 30,
       },
     }),
   },
-  statsRow: {
+
+  /* ── Bento Stats ── */
+  bentoRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginTop: 16,
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
   },
-  statChip: {
-    flexDirection: 'row',
+  bentoCard: {
+    flex: 1,
     alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     gap: 6,
   },
-  statChipValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 15,
-    color: COLORS.text,
-    lineHeight: 18,
+  bentoIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
-  statChipLabel: {
+  bentoIconGreen: {
+    backgroundColor: 'rgba(52, 211, 153, 0.10)',
+  },
+  bentoValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 24,
+    color: COLORS.text,
+    lineHeight: 28,
+  },
+  bentoLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
     letterSpacing: 0.2,
   },
-  statDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+
+  /* ── Divider ── */
+  activeDivider: {
+    height: 1,
+    marginHorizontal: 20,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
   },
 
   /* ── Workout Actions ─────────────────────── */
@@ -728,41 +767,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    paddingTop: 0,
-    paddingBottom: 18,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   discardBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  resumeBtn: {
+  resumeBtnOuter: {
+    flex: 1,
+    height: 46,
+    borderRadius: 23,
+    overflow: 'hidden',
+  },
+  resumeGradient: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    gap: 8,
+    borderRadius: 23,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   resumeBtnText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.text,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
   finishBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
     borderColor: 'rgba(52, 211, 153, 0.15)',
     backgroundColor: 'rgba(52, 211, 153, 0.06)',
