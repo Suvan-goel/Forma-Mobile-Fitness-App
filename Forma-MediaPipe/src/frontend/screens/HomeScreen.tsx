@@ -38,8 +38,8 @@ import {
   Menu,
   Flame,
   Quote,
-  Play,
   Zap,
+  Play,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -293,7 +293,7 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigateToTab('Record')}
           >
             <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
+              colors={['rgba(139, 92, 246, 0.35)', 'rgba(124, 58, 237, 0.35)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.ctaGradient}
@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
   ctaSub: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.65)',
+    color: 'rgba(255, 255, 255, 0.55)',
   },
 
   /* ── Quote ───────────────────────────────────── */
