@@ -75,7 +75,7 @@ const chartStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 5,
-    height: 52,
+    height: 90,
     marginTop: 14,
   },
   barWrap: {
@@ -180,7 +180,7 @@ export const UserProfileScreen: React.FC = () => {
   const weeklyBarData = analytics?.weeklyBarData ?? [];
   const totalMinutes = analytics?.summary.totalDurationMinutes ?? 0;
 
-  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
+  const handleGoBack = useCallback(() => navigation.navigate('MainTabs', { screen: 'Home' }), [navigation]);
   const handleSettings = useCallback(() => navigation.navigate('Settings'), [navigation]);
   const handleEditProfile = useCallback(() => navigation.navigate('ProfileSettings'), [navigation]);
   const handleRewards = useCallback(() => navigation.navigate('Rewards'), [navigation]);

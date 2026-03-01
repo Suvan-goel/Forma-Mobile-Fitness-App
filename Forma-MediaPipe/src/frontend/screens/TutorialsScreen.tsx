@@ -294,6 +294,11 @@ export const TutorialsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* ── Subtitle ────────────────────────────── */}
+      {!showSearch && (
+        <Text style={styles.headerSubtitle}>TAP AN EXERCISE FOR INSTRUCTIONS</Text>
+      )}
+
       {/* ── Search Bar ──────────────────────────── */}
       {showSearch && (
         <View style={styles.searchRow}>
@@ -408,6 +413,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  /* Subtitle */
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 2,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: 4,
+    textAlign: 'center',
+  },
+
   /* Search */
   searchRow: {
     paddingHorizontal: SPACING.screenHorizontal,
@@ -443,7 +459,7 @@ const styles = StyleSheet.create({
   /* Filter Pills */
   filterWrap: {
     height: 60,
-    marginTop: 20,
+    marginTop: 8,
     marginBottom: 16,
     overflow: 'visible',
   },
@@ -518,7 +534,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     marginBottom: 4,
   },
   cardIconBtn: {

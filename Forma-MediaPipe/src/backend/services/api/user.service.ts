@@ -51,6 +51,7 @@ export const userService = {
         firstName: profile.first_name ?? undefined,
         lastName: profile.last_name ?? undefined,
         avatarUrl: profile.avatar_url ?? undefined,
+        bio: profile.bio ?? undefined,
         createdAt: new Date(profile.created_at),
       },
       success: true,
@@ -111,6 +112,7 @@ export const userService = {
     if (updates.firstName !== undefined) dbUpdate.first_name = updates.firstName;
     if (updates.lastName !== undefined) dbUpdate.last_name = updates.lastName;
     if (updates.avatarUrl !== undefined) dbUpdate.avatar_url = updates.avatarUrl;
+    if (updates.bio !== undefined) dbUpdate.bio = updates.bio;
 
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -139,6 +141,7 @@ export const userService = {
         firstName: profile.first_name ?? undefined,
         lastName: profile.last_name ?? undefined,
         avatarUrl: profile.avatar_url ?? undefined,
+        bio: profile.bio ?? undefined,
         createdAt: new Date(profile.created_at),
       },
       success: true,

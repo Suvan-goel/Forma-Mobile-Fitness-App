@@ -25,6 +25,7 @@ import {
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useRewards, useUser } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
@@ -114,6 +115,7 @@ const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds }: { reward: Reward
 
 export const RewardsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const { user: profileUser } = useUser();
   const { rewards, userStats, userPoints, isLoading, error, refetch } = useRewards();
 
@@ -146,7 +148,7 @@ export const RewardsScreen: React.FC = () => {
   const lockedBadges = rewards.filter(r => !earnedBadgeIds.includes(r.id));
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ── HEADER ─────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -158,7 +160,7 @@ export const RewardsScreen: React.FC = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>REWARDS</Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('ProfileSettings')}
+          onPress={() => navigation.navigate('UserProfile')}
           activeOpacity={0.7}
           style={styles.avatarButton}
         >
@@ -264,7 +266,7 @@ const styles = StyleSheet.create({
 
   /* ── Header ────────────────────────────────── */
   header: {
-    paddingTop: 20,
+    paddingTop: 6,
     paddingBottom: 8,
     paddingHorizontal: SPACING.screenHorizontal,
     flexDirection: 'row',

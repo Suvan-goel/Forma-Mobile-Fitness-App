@@ -178,7 +178,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -194,7 +194,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           showsVerticalScrollIndicator={false}
         >
           {/* ── PROFILE CARD ────────────────────────── */}
-          <View style={styles.cardOuter}>
+          <TouchableOpacity
+            style={styles.cardOuter}
+            activeOpacity={0.82}
+            onPress={() => navigation.navigate('UserProfile')}
+          >
             <LinearGradient
               colors={[...CARD_GRADIENT_COLORS]}
               start={CARD_GRADIENT_START}
@@ -221,6 +225,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                     <Text style={styles.profileName} numberOfLines={1}>
                       {displayName}
                     </Text>
+                    {profileUser?.bio ? (
+                      <Text style={styles.profileBio} numberOfLines={2}>
+                        {profileUser.bio}
+                      </Text>
+                    ) : null}
                     {userEmail ? (
                       <View style={styles.emailRow}>
                         <Mail size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -230,10 +239,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                       </View>
                     ) : null}
                   </View>
+                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
               </View>
             </LinearGradient>
-          </View>
+          </TouchableOpacity>
 
           {/* ── ACCOUNT SECTION ─────────────────────── */}
           <View style={styles.sectionHeader}>
@@ -450,6 +460,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  profileBio: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.1,
+    lineHeight: 18,
+    marginBottom: 4,
   },
   profileEmail: {
     fontFamily: FONTS.ui.regular,

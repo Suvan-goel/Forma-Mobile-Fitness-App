@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera, Mail, Calendar, User, Shield, LogOut } from 'lucide-react-native';
+import { ChevronLeft, Camera, Mail, Calendar, User, Shield, LogOut, AlignLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   COLORS,
@@ -40,6 +40,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   const { signOut } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
 
@@ -54,6 +55,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName);
+      setBio(user.bio ?? '');
       setFirstName(user.firstName ?? '');
       setLastName(user.lastName ?? '');
     }
@@ -63,6 +65,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
     firstName.trim() !== (user?.firstName ?? '') ||
     lastName.trim() !== (user?.lastName ?? '');
   const hasDisplayNameChanged = displayName.trim() !== (user?.displayName ?? '');
+  const hasBioChanged = bio.trim() !== (user?.bio ?? '');
 
   const handleSaveDisplayName = async () => {
     if (!hasDisplayNameChanged || !displayName.trim()) return;
@@ -72,6 +75,17 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
       showAlert('Success', 'Display name updated.');
     } else {
       showAlert('Error', result.error ?? 'Failed to update display name.');
+    }
+  };
+
+  const handleSaveBio = async () => {
+    if (!hasBioChanged) return;
+    const result = await updateProfile({ bio: bio.trim() });
+    if (result.success) {
+      await refetch();
+      showAlert('Success', 'Bio updated.');
+    } else {
+      showAlert('Error', result.error ?? 'Failed to update bio.');
     }
   };
 
@@ -243,6 +257,52 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                     </Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* Bio Section */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBadge}>
+              <AlignLeft size={12} color="#A78BFA" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.sectionTitle}>Bio</Text>
+          </View>
+          <View style={styles.cardOuter}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <TextInput
+                  style={styles.bioInput}
+                  value={bio}
+                  onChangeText={setBio}
+                  placeholder="Tell people a little about yourself…"
+                  placeholderTextColor={COLORS.textTertiary}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={160}
+                  returnKeyType="default"
+                  textAlignVertical="top"
+                />
+                <View style={styles.bioFooter}>
+                  <Text style={styles.bioCharCount}>{bio.length}/160</Text>
+                  {hasBioChanged && (
+                    <TouchableOpacity
+                      style={styles.saveButton}
+                      onPress={handleSaveBio}
+                      activeOpacity={0.7}
+                      disabled={isUpdating}
+                    >
+                      <Text style={styles.saveButtonText}>
+                        {isUpdating ? 'Saving...' : 'Save'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             </LinearGradient>
           </View>
@@ -638,6 +698,30 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.semibold,
     fontSize: 15,
     color: '#EF4444',
+    letterSpacing: 0.5,
+  },
+
+  /* ── Bio ────────────────────────────── */
+  bioInput: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
+    color: COLORS.text,
+    lineHeight: 22,
+    minHeight: 72,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  bioFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+  },
+  bioCharCount: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
     letterSpacing: 0.5,
   },
 
