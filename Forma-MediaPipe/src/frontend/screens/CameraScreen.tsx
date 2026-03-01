@@ -634,15 +634,22 @@ export const CameraScreen: React.FC = () => {
   }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute, workoutData.duration, isRecording]);
 
   // Dynamic positioning for the setup guide ("?") button so it stays centered
-  // between the discard "X" button and the exercise title text.
+  // between the discard "X" button and the exercise title text,
+  // and the speaker icon centered between the title and the settings cog.
   const [headerMeasurements, setHeaderMeasurements] = useState<{
     leftRight: number | null;
     titleLeft: number | null;
+    titleRight: number | null;
     questionWidth: number | null;
+    settingsLeft: number | null;
+    speakerWidth: number | null;
   }>({
     leftRight: null,
     titleLeft: null,
+    titleRight: null,
     questionWidth: null,
+    settingsLeft: null,
+    speakerWidth: null,
   });
 
   const handleHeaderLeftLayout = useCallback((event: any) => {
@@ -654,10 +661,11 @@ export const CameraScreen: React.FC = () => {
   }, []);
 
   const handleTitleLayout = useCallback((event: any) => {
-    const { x } = event.nativeEvent.layout;
+    const { x, width } = event.nativeEvent.layout;
     setHeaderMeasurements(prev => ({
       ...prev,
       titleLeft: x,
+      titleRight: x + width,
     }));
   }, []);
 
@@ -669,6 +677,22 @@ export const CameraScreen: React.FC = () => {
     }));
   }, []);
 
+  const handleSettingsLayout = useCallback((event: any) => {
+    const { x } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      settingsLeft: x,
+    }));
+  }, []);
+
+  const handleSpeakerLayout = useCallback((event: any) => {
+    const { width } = event.nativeEvent.layout;
+    setHeaderMeasurements(prev => ({
+      ...prev,
+      speakerWidth: width,
+    }));
+  }, []);
+
   const questionLeft = useMemo(() => {
     const { leftRight, titleLeft, questionWidth } = headerMeasurements;
     if (leftRight == null || titleLeft == null || questionWidth == null) {
@@ -676,6 +700,15 @@ export const CameraScreen: React.FC = () => {
     }
     const mid = (leftRight + titleLeft) / 2;
     return mid - questionWidth / 2;
+  }, [headerMeasurements]);
+
+  const speakerLeft = useMemo(() => {
+    const { titleRight, settingsLeft, speakerWidth } = headerMeasurements;
+    if (titleRight == null || settingsLeft == null || speakerWidth == null) {
+      return null;
+    }
+    const mid = (titleRight + settingsLeft) / 2;
+    return mid - speakerWidth / 2;
   }, [headerMeasurements]);
 
   const showCamera = cameraMounted && !isClosing;
@@ -749,9 +782,18 @@ export const CameraScreen: React.FC = () => {
               {displayValues.exerciseDisplayName}
             </Text>
           </View>
-          <View style={styles.headerRightGroup}>
+          {/* Speaker icon floated so it sits centered between title and settings cog */}
+          <View
+            onLayout={handleSpeakerLayout}
+            style={[
+              styles.setupGuideButtonFloating,
+              {
+                left: speakerLeft ?? SCREEN_WIDTH * 0.73 - 10,
+                top: topInset + 29 - 18,
+              },
+            ]}
+          >
             <TouchableOpacity
-              style={styles.ttsToggleButton}
               onPress={() => {
                 const next = !isTTSEnabled;
                 setIsTTSEnabled(next);
@@ -766,6 +808,8 @@ export const CameraScreen: React.FC = () => {
                 ? <Volume2 size={20} color={COLORS.text} strokeWidth={2} />
                 : <VolumeX size={20} color="rgba(255,255,255,0.4)" strokeWidth={2} />}
             </TouchableOpacity>
+          </View>
+          <View style={styles.headerRightGroup} onLayout={handleSettingsLayout}>
             <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
@@ -1263,12 +1307,6 @@ const styles = StyleSheet.create({
   headerRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-  },
-  ttsToggleButton: {
-    width: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   settingsButton: {
     padding: 0,
