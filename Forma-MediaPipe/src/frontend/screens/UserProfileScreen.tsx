@@ -1,9 +1,9 @@
 /**
  * UserProfileScreen — Your own public-facing profile page.
- * Accessed by tapping the avatar in Logbook, Analytics, or Capture screens.
+ * Redesigned to match HomeScreen design language.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Image,
   Platform,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -31,6 +32,8 @@ import {
   TrendingDown,
   Activity,
   Dumbbell,
+  Trophy,
+  User,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -144,196 +147,14 @@ const chartStyles = StyleSheet.create({
   },
 });
 
-/* ── Stat Item ───────────────────────────────────── */
-
-const StatItem: React.FC<{ value: string; label: string; dim?: boolean }> = ({
-  value,
-  label,
-  dim,
-}) => (
-  <View style={styles.statItem}>
-    <Text style={[styles.statValue, dim && styles.statValueDim]}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
-
-/* ── Link Card (navigable) ───────────────────────── */
-
-const LinkCard: React.FC<{
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  onPress?: () => void;
-  dimmed?: boolean;
-}> = ({ icon, title, subtitle, onPress, dimmed }) => {
-  const Inner = (
-    <LinearGradient
-      colors={[...CARD_GRADIENT_COLORS]}
-      start={CARD_GRADIENT_START}
-      end={CARD_GRADIENT_END}
-      style={styles.cardGradient}
-    >
-      <View style={styles.cardGlassEdge}>
-        <View style={styles.cardRow}>
-          <View style={[styles.cardIconWrap, dimmed && styles.cardIconWrapDim]}>
-            {icon}
-          </View>
-          <View style={styles.cardTextWrap}>
-            <Text style={[styles.cardTitle, dimmed && styles.cardTitleDim]}>{title}</Text>
-            <Text style={styles.cardSubtitle}>{subtitle}</Text>
-          </View>
-          <ChevronRight size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
-        </View>
-      </View>
-    </LinearGradient>
-  );
-
-  if (onPress) {
-    return (
-      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.82}>
-        {Inner}
-      </TouchableOpacity>
-    );
-  }
-  return <View style={styles.card}>{Inner}</View>;
-};
-
-/* ── Perf Stat Card (2-column grid) ──────────────── */
-
-const PerfStatCard: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  unit?: string;
-  trend?: 'up' | 'down' | 'flat';
-  trendPct?: number;
-}> = ({ icon, label, value, unit, trend, trendPct }) => (
-  <View style={perfStyles.card}>
-    <LinearGradient
-      colors={[...CARD_GRADIENT_COLORS]}
-      start={CARD_GRADIENT_START}
-      end={CARD_GRADIENT_END}
-      style={perfStyles.gradient}
-    >
-      <View style={perfStyles.glassEdge}>
-        <View style={perfStyles.iconRow}>
-          <View style={perfStyles.iconWrap}>{icon}</View>
-          {trend && trend !== 'flat' && trendPct !== undefined && trendPct > 0 && (
-            <View style={[perfStyles.trendBadge, trend === 'up' ? perfStyles.trendUp : perfStyles.trendDown]}>
-              {trend === 'up'
-                ? <TrendingUp size={9} color="#34D399" strokeWidth={2} />
-                : <TrendingDown size={9} color="#F87171" strokeWidth={2} />}
-              <Text style={[perfStyles.trendText, trend === 'up' ? perfStyles.trendTextUp : perfStyles.trendTextDown]}>
-                {trendPct}%
-              </Text>
-            </View>
-          )}
-        </View>
-        <View style={perfStyles.valueRow}>
-          <Text style={perfStyles.value} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-          {unit ? <Text style={perfStyles.unit}>{unit}</Text> : null}
-        </View>
-        <Text style={perfStyles.label}>{label}</Text>
-      </View>
-    </LinearGradient>
-  </View>
-);
-
-const perfStyles = StyleSheet.create({
-  card: {
-    flex: 1,
-    borderRadius: 18,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  gradient: {
-    borderRadius: 18,
-  },
-  glassEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    padding: 14,
-    minHeight: 100,
-  },
-  iconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 20,
-  },
-  trendUp: {
-    backgroundColor: 'rgba(52, 211, 153, 0.12)',
-  },
-  trendDown: {
-    backgroundColor: 'rgba(248, 113, 113, 0.12)',
-  },
-  trendText: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 9,
-  },
-  trendTextUp: {
-    color: '#34D399',
-  },
-  trendTextDown: {
-    color: '#F87171',
-  },
-  valueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 3,
-    marginBottom: 4,
-  },
-  value: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 24,
-    color: COLORS.text,
-    letterSpacing: -0.5,
-  },
-  unit: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  label: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-});
-
 /* ── Main Screen ─────────────────────────────────── */
 
 export const UserProfileScreen: React.FC = () => {
   const navigation = useNavigation<UserProfileNavigationProp>();
   const insets = useSafeAreaInsets();
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
   const { user } = useUser();
   const { workouts } = useWorkouts();
@@ -357,6 +178,21 @@ export const UserProfileScreen: React.FC = () => {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const selectedDayData = selectedDayIndex !== null ? weeklyBarData[selectedDayIndex] : null;
 
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
   const handleGoBack = useCallback(() => navigation.navigate('MainTabs', { screen: 'Home' }), [navigation]);
   const handleSettings = useCallback(() => navigation.navigate('Settings'), [navigation]);
   const handleEditProfile = useCallback(() => navigation.navigate('ProfileSettings'), [navigation]);
@@ -367,91 +203,185 @@ export const UserProfileScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── Header ──────────────────────────────── */}
+      {/* ── Header (Home-style) ──────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleGoBack} activeOpacity={0.7}>
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>PROFILE</Text>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleSettings} activeOpacity={0.7}>
-          <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.7}>
+            <ChevronLeft size={20} color={COLORS.text} strokeWidth={1.5} />
+          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerGreeting}>Your profile</Text>
+            <Text style={styles.headerName}>{user?.displayName ?? ''}</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.menuBtn}
+          onPress={handleSettings}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Menu size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
       >
-        {/* ── Profile Hero ────────────────────── */}
-        <View style={styles.profileSection}>
-          {/* Avatar */}
-          <View style={styles.avatarRing}>
-            {user?.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <LinearGradient
-                colors={['#9F75FF', '#7C3AED']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.avatarGradient}
-              >
-                <Text style={styles.avatarInitial}>{initial}</Text>
-              </LinearGradient>
-            )}
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+
+          {/* ═══════════════════════════════════════════
+              HERO: PROFILE CARD
+              ═══════════════════════════════════════════ */}
+          <TouchableOpacity activeOpacity={0.85} onPress={handleEditProfile}>
+            <LinearGradient
+              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroCard}
+            >
+              <View style={styles.heroEdge}>
+                {/* Top label row */}
+                <View style={styles.heroTopRow}>
+                  <View style={styles.heroLabelRow}>
+                    <User size={13} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.heroLabel}>PROFILE</Text>
+                  </View>
+                  <View style={styles.editChip}>
+                    <Edit2 size={10} color={COLORS.accent} strokeWidth={2} />
+                    <Text style={styles.editChipText}>Edit</Text>
+                  </View>
+                </View>
+
+                {/* Avatar + name row */}
+                <View style={styles.heroProfileRow}>
+                  <View style={styles.avatarRing}>
+                    {user?.avatarUrl ? (
+                      <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                    ) : (
+                      <LinearGradient
+                        colors={['#9F75FF', '#7C3AED']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.avatarGradient}
+                      >
+                        <Text style={styles.avatarInitial}>{initial}</Text>
+                      </LinearGradient>
+                    )}
+                  </View>
+                  <View style={styles.heroNameWrap}>
+                    <Text style={styles.heroDisplayName}>{user?.displayName ?? ''}</Text>
+                    {user?.bio ? (
+                      <Text style={styles.heroBio} numberOfLines={2}>{user.bio}</Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Inline stats row */}
+                <View style={styles.heroStatsRow}>
+                  <View style={styles.heroStatItem}>
+                    <Text style={styles.heroStatValue}>{workoutCount}</Text>
+                    <Text style={styles.heroStatLabel}>workouts</Text>
+                  </View>
+                  <View style={styles.heroStatDivider} />
+                  <View style={styles.heroStatItem}>
+                    <Text style={[styles.heroStatValue, styles.heroStatValueDim]}>0</Text>
+                    <Text style={styles.heroStatLabel}>followers</Text>
+                  </View>
+                  <View style={styles.heroStatDivider} />
+                  <View style={styles.heroStatItem}>
+                    <Text style={[styles.heroStatValue, styles.heroStatValueDim]}>0</Text>
+                    <Text style={styles.heroStatLabel}>following</Text>
+                  </View>
+                  <View style={styles.heroStatDivider} />
+                  <View style={styles.heroStatItem}>
+                    <Text style={styles.heroStatValue}>{friendsCount}</Text>
+                    <Text style={styles.heroStatLabel}>friends</Text>
+                  </View>
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* ═══════════════════════════════════════════
+              EDIT PROFILE CTA (Quick Start style)
+              ═══════════════════════════════════════════ */}
+          <TouchableOpacity activeOpacity={0.85} onPress={handleEditProfile}>
+            <LinearGradient
+              colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.ctaGradient}
+            >
+              <View style={styles.ctaInner}>
+                <View style={styles.ctaIconWrap}>
+                  <Edit2 size={16} color="#FFFFFF" strokeWidth={2} />
+                </View>
+                <View style={styles.ctaTextWrap}>
+                  <Text style={styles.ctaTitle}>Edit Profile</Text>
+                  <Text style={styles.ctaSub}>Customize your public profile</Text>
+                </View>
+                <ChevronRight size={18} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* ═══════════════════════════════════════════
+              REWARDS — Section header + card
+              ═══════════════════════════════════════════ */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>REWARDS</Text>
+            </View>
+            <TouchableOpacity style={styles.seeAllBtn} activeOpacity={0.7} onPress={handleRewards}>
+              <Text style={styles.seeAllText}>View All</Text>
+              <ChevronRight size={11} color={COLORS.accent} strokeWidth={2} />
+            </TouchableOpacity>
           </View>
 
-          <Text style={styles.displayName}>{user?.displayName ?? ''}</Text>
-
-          {user?.bio ? (
-            <Text style={styles.bio}>{user.bio}</Text>
-          ) : null}
-
-          {/* Edit Profile */}
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={handleEditProfile}
-            activeOpacity={0.8}
-          >
-            <Edit2 size={13} color={COLORS.primary} strokeWidth={2} />
-            <Text style={styles.editButtonText}>Edit Profile</Text>
+          <TouchableOpacity activeOpacity={0.85} onPress={handleRewards}>
+            <LinearGradient
+              colors={['#1A1510', '#111008', '#0E0C07']}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.rewardsCard}
+            >
+              <View style={styles.rewardsEdge}>
+                <View style={styles.rewardsRow}>
+                  <View style={styles.rewardsIconWrap}>
+                    <Gift size={20} color={COLORS.yellow} strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.rewardsTextWrap}>
+                    <Text style={styles.rewardsTitle}>Badges & Points</Text>
+                    <Text style={styles.rewardsSubtitle}>View your badges & points</Text>
+                  </View>
+                  <ChevronRight size={16} color={COLORS.yellow} strokeWidth={1.5} />
+                </View>
+              </View>
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
 
-        {/* ── Stats Row ──────────────────────── */}
-        <View style={styles.statsCard}>
-          <StatItem value={String(workoutCount)} label="Workouts" />
-          <View style={styles.statDivider} />
-          <StatItem value="0" label="Followers" dim />
-          <View style={styles.statDivider} />
-          <StatItem value="0" label="Following" dim />
-          <View style={styles.statDivider} />
-          <StatItem value={String(friendsCount)} label="Friends" />
-        </View>
+          {/* ═══════════════════════════════════════════
+              PROGRESS — Weekly activity
+              ═══════════════════════════════════════════ */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <BarChart2 size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>PROGRESS</Text>
+            </View>
+          </View>
 
-        {/* ── Rewards Card ───────────────────── */}
-        <LinkCard
-          icon={<Gift size={20} color={COLORS.primary} strokeWidth={1.5} />}
-          title="Rewards"
-          subtitle="View your badges & points"
-          onPress={handleRewards}
-        />
-
-        {/* ── Progress Card ───────────────────── */}
-        <View style={styles.card}>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
+            style={styles.progressCard}
           >
-            <View style={styles.cardGlassEdge}>
-              <View style={styles.cardRow}>
-                <View style={styles.cardIconWrap}>
-                  <BarChart2 size={20} color={COLORS.primary} strokeWidth={1.5} />
-                </View>
-                <View style={styles.cardTextWrap}>
-                  <Text style={styles.cardTitle}>Progress</Text>
-                  <Text style={styles.cardSubtitle}>
+            <View style={styles.progressEdge}>
+              <View style={styles.progressTopRow}>
+                <View style={styles.progressTextWrap}>
+                  <Text style={styles.progressTitle}>
                     {selectedDayData
                       ? `${DAY_LABELS[selectedDayIndex!]} · ${selectedDayData.value} min`
                       : 'Minutes active this week'}
@@ -473,54 +403,176 @@ export const UserProfileScreen: React.FC = () => {
               )}
             </View>
           </LinearGradient>
-        </View>
 
-        {/* ── Video Library Card ─────────────── */}
-        <LinkCard
-          icon={<Video size={20} color={COLORS.textTertiary} strokeWidth={1.5} />}
-          title="Video Library"
-          subtitle="Your recorded workouts · Coming soon"
-          dimmed
-        />
+          {/* ═══════════════════════════════════════════
+              EXPLORE — Link cards
+              ═══════════════════════════════════════════ */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <BookOpen size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>EXPLORE</Text>
+            </View>
+          </View>
 
-        {/* ── Tutorials Card ─────────────────── */}
-        <LinkCard
-          icon={<BookOpen size={20} color={COLORS.primary} strokeWidth={1.5} />}
-          title="Exercise Tutorials"
-          subtitle="Browse exercise guides"
-          onPress={handleTutorials}
-        />
+          <TouchableOpacity activeOpacity={0.85} onPress={handleTutorials}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.linkCard}
+            >
+              <View style={styles.linkEdge}>
+                <View style={styles.linkRow}>
+                  <View style={styles.linkIconWrap}>
+                    <BookOpen size={18} color={COLORS.accent} strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.linkTextWrap}>
+                    <Text style={styles.linkTitle}>Exercise Tutorials</Text>
+                    <Text style={styles.linkSubtitle}>Browse exercise guides</Text>
+                  </View>
+                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
 
-        {/* ── Performance Summary Grid ────────── */}
-        <View style={styles.perfGrid}>
-          <PerfStatCard
-            icon={<Flame size={16} color={COLORS.primary} strokeWidth={1.5} />}
-            label="Day Streak"
-            value={streakDays > 0 ? String(streakDays) : '0'}
-            unit="days"
-          />
-          <PerfStatCard
-            icon={<TrendingUp size={16} color={COLORS.primary} strokeWidth={1.5} />}
-            label="Avg Form"
-            value={avgFormScore > 0 ? String(avgFormScore) : '--'}
-            unit={avgFormScore > 0 ? '%' : undefined}
-            trend={formTrendDirection}
-            trendPct={formTrendPercent}
-          />
-        </View>
-        <View style={styles.perfGrid}>
-          <PerfStatCard
-            icon={<Activity size={16} color={COLORS.primary} strokeWidth={1.5} />}
-            label="Total Reps"
-            value={totalReps > 0 ? String(totalReps) : '--'}
-            unit={totalReps > 0 ? 'reps' : undefined}
-          />
-          <PerfStatCard
-            icon={<Dumbbell size={16} color={COLORS.primary} strokeWidth={1.5} />}
-            label="Top Exercise"
-            value={mostTrained ?? '--'}
-          />
-        </View>
+          <View style={{ height: 8 }} />
+
+          <View>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.linkCard}
+            >
+              <View style={styles.linkEdge}>
+                <View style={styles.linkRow}>
+                  <View style={[styles.linkIconWrap, styles.linkIconWrapDim]}>
+                    <Video size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  </View>
+                  <View style={styles.linkTextWrap}>
+                    <Text style={[styles.linkTitle, styles.linkTitleDim]}>Video Library</Text>
+                    <Text style={styles.linkSubtitle}>Your recorded workouts · Coming soon</Text>
+                  </View>
+                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </View>
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* ═══════════════════════════════════════════
+              PERFORMANCE — 2×2 Bento grid
+              ═══════════════════════════════════════════ */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Activity size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>PERFORMANCE</Text>
+            </View>
+          </View>
+
+          <View style={styles.perfRow}>
+            <View style={styles.perfCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.perfGradient}
+              >
+                <View style={styles.perfEdge}>
+                  <View style={styles.perfIconRow}>
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
+                  </View>
+                  <Text style={styles.perfValue}>{streakDays > 0 ? String(streakDays) : '—'}</Text>
+                  <Text style={styles.perfUnit}>days</Text>
+                  <Text style={styles.perfLabel}>Day Streak</Text>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.perfCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.perfGradient}
+              >
+                <View style={styles.perfEdge}>
+                  <View style={styles.perfIconRow}>
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <TrendingUp size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
+                    {formTrendDirection !== 'flat' && formTrendPercent > 0 && (
+                      <View style={[
+                        styles.trendBadge,
+                        { backgroundColor: formTrendDirection === 'up' ? 'rgba(52, 211, 153, 0.12)' : 'rgba(248, 113, 113, 0.12)' },
+                      ]}>
+                        {formTrendDirection === 'up'
+                          ? <TrendingUp size={9} color="#34D399" strokeWidth={2} />
+                          : <TrendingDown size={9} color="#F87171" strokeWidth={2} />}
+                        <Text style={[
+                          styles.trendBadgeText,
+                          { color: formTrendDirection === 'up' ? '#34D399' : '#F87171' },
+                        ]}>
+                          {formTrendPercent}%
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.perfValue}>{avgFormScore > 0 ? String(avgFormScore) : '—'}</Text>
+                  <Text style={styles.perfUnit}>{avgFormScore > 0 ? '%' : ''}</Text>
+                  <Text style={styles.perfLabel}>Avg Form</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
+
+          <View style={styles.perfRow}>
+            <View style={styles.perfCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.perfGradient}
+              >
+                <View style={styles.perfEdge}>
+                  <View style={styles.perfIconRow}>
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
+                  </View>
+                  <Text style={styles.perfValue}>{totalReps > 0 ? String(totalReps) : '—'}</Text>
+                  <Text style={styles.perfUnit}>{totalReps > 0 ? 'reps' : ''}</Text>
+                  <Text style={styles.perfLabel}>Total Reps</Text>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.perfCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.perfGradient}
+              >
+                <View style={styles.perfEdge}>
+                  <View style={styles.perfIconRow}>
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
+                  </View>
+                  <Text style={styles.perfValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {mostTrained ?? '—'}
+                  </Text>
+                  <Text style={styles.perfUnit}> </Text>
+                  <Text style={styles.perfLabel}>Top Exercise</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
+
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -534,56 +586,122 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  /* Header */
+  /* Header — Home-style */
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: 12,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
   },
-  headerBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: '#27272A',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerGreeting: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 15,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: 2.5,
+    letterSpacing: -0.4,
+  },
+  menuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* Scroll */
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 8,
   },
 
-  /* Profile hero */
-  profileSection: {
+  /* ── Hero Profile Card ─────────────────────────── */
+  heroCard: {
+    borderRadius: 22,
+    marginBottom: 12,
+    marginTop: 18,
+  },
+  heroEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    padding: 20,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 28,
+    marginBottom: 16,
+  },
+  heroLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+  },
+  editChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+  },
+  editChipText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.accent,
+    letterSpacing: -0.3,
+  },
+  heroProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 20,
   },
   avatarRing: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 2.5,
     borderColor: 'rgba(139, 92, 246, 0.55)',
     padding: 2,
-    marginBottom: 16,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.45,
-        shadowRadius: 18,
+        shadowOpacity: 0.35,
+        shadowRadius: 14,
       },
       android: { elevation: 6 },
     }),
@@ -591,162 +709,211 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 44,
+    borderRadius: 34,
   },
   avatarGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 44,
+    borderRadius: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontFamily: FONTS.display.bold,
-    fontSize: 34,
+    fontSize: 28,
     color: COLORS.text,
   },
-  displayName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: -0.3,
-    marginBottom: 6,
-  },
-  bio: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 32,
-    marginBottom: 16,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    marginTop: 4,
-  },
-  editButtonText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12,
-    color: COLORS.primary,
-    letterSpacing: 0.3,
-  },
-
-  /* Stats card */
-  statsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: '#111111',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: SPACING.md,
-    marginBottom: 4,
-  },
-  statItem: {
+  heroNameWrap: {
     flex: 1,
-    alignItems: 'center',
     gap: 4,
   },
-  statValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 20,
+  heroDisplayName: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 24,
     color: COLORS.text,
     letterSpacing: -0.5,
   },
-  statValueDim: {
+  heroBio: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(139, 92, 246, 0.10)',
+  },
+  heroStatItem: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  heroStatValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  heroStatValueDim: {
     color: COLORS.textTertiary,
   },
-  statLabel: {
+  heroStatLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
-  statDivider: {
+  heroStatDivider: {
     width: 1,
-    height: 30,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    height: 24,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
   },
 
-  /* Cards */
-  card: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginTop: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  cardGradient: {
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 20,
   },
-  cardGlassEdge: {
-    borderRadius: 20,
+  trendBadgeText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 9,
+  },
+
+  /* ── CTA Button (Quick Start style) ────────────── */
+  ctaGradient: {
+    borderRadius: 16,
+    marginBottom: 4,
+  },
+  ctaInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 14,
+  },
+  ctaIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  ctaTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  ctaSub: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.55)',
+  },
+
+  /* ── Section Headers (Home-style) ──────────────── */
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 2,
+  },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  seeAllText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.accent,
+  },
+
+  /* ── Rewards Card (Gold-tinted like Achievements) ─ */
+  rewardsCard: {
+    borderRadius: 18,
+  },
+  rewardsEdge: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: SPACING.md,
+    borderColor: 'rgba(245, 166, 35, 0.12)',
+    padding: 16,
   },
-  cardRow: {
+  rewardsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  cardIconWrap: {
+  rewardsIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(245, 166, 35, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardIconWrapDim: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  cardTextWrap: {
+  rewardsTextWrap: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
-  cardTitle: {
+  rewardsTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 15,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
-  cardTitleDim: {
+  rewardsSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
     color: COLORS.textSecondary,
   },
-  cardSubtitle: {
+
+  /* ── Progress Card ─────────────────────────────── */
+  progressCard: {
+    borderRadius: 18,
+  },
+  progressEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 16,
+  },
+  progressTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressTextWrap: {
+    flex: 1,
+  },
+  progressTitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
   },
-
-  /* Performance grid */
-  perfGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-
-  /* Progress card extras */
   minutesBadge: {
     alignItems: 'center',
   },
@@ -763,5 +930,113 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+
+  /* ── Link Cards ────────────────────────────────── */
+  linkCard: {
+    borderRadius: 16,
+  },
+  linkEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  linkIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkIconWrapDim: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  linkTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  linkTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  linkTitleDim: {
+    color: COLORS.textSecondary,
+  },
+  linkSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+
+  /* ── Performance Grid ──────────────────────────── */
+  perfRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  perfCell: {
+    flex: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  perfGradient: {
+    borderRadius: 18,
+  },
+  perfEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 14,
+    minHeight: 110,
+  },
+  perfIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  perfIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  perfValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 24,
+    color: COLORS.text,
+    letterSpacing: -0.5,
+    marginBottom: 2,
+  },
+  perfUnit: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  perfLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,12 +6,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Dumbbell, Layers, Zap } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
@@ -93,7 +94,7 @@ const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     focusTag: 'FULL BODY',
     description: 'Hit every muscle group in a single session.',
     exercises: [
-      { name: 'Barbell Squat', category: 'Weightlifting' },
+      { name: 'Barbell Squat', category: 'Calisthenics' },
       { name: 'Push-Up', category: 'Calisthenics' },
       { name: 'Cable Lat Pulldowns', category: 'Weightlifting' },
       { name: 'Cable Row', category: 'Weightlifting' },
@@ -122,7 +123,7 @@ const TemplateCard: React.FC<{
   <TouchableOpacity
     style={styles.cardOuter}
     onPress={() => onPress(template)}
-    activeOpacity={0.82}
+    activeOpacity={0.85}
   >
     <LinearGradient
       colors={[...CARD_GRADIENT_COLORS]}
@@ -135,16 +136,14 @@ const TemplateCard: React.FC<{
         <View style={styles.cardTopRow}>
           <View style={styles.cardTitleBlock}>
             <Text style={styles.cardName}>{template.name}</Text>
-            <View style={styles.focusTagRow}>
-              <Text style={styles.focusTag}>{template.focusTag}</Text>
-            </View>
+            <Text style={styles.focusTag}>{template.focusTag}</Text>
           </View>
           <View style={styles.cardTopRight}>
             <View style={styles.countBadge}>
               <Text style={styles.countBadgeText}>{template.exercises.length}</Text>
               <Text style={styles.countBadgeLabel}>EX</Text>
             </View>
-            <ChevronRight size={18} color={COLORS.accent} strokeWidth={1.5} />
+            <ChevronRight size={16} color={COLORS.accent} strokeWidth={1.5} />
           </View>
         </View>
 
@@ -168,15 +167,29 @@ export const WorkoutTemplatesScreen: React.FC = () => {
   const navigation = useNavigation<WorkoutTemplatesNavigationProp>();
   const insets = useSafeAreaInsets();
   const { addExercise, clearSets } = useCurrentWorkout();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const handleSelectTemplate = useCallback((template: WorkoutTemplate) => {
-    // Clear any previous workout state before loading template
     clearSets();
-    // Add all template exercises to the workout context
     template.exercises.forEach((ex) => {
       addExercise({ name: ex.name, category: ex.category });
     });
-    // Navigate to the active workout screen
     navigation.navigate('CurrentWorkout');
   }, [addExercise, clearSets, navigation]);
 
@@ -187,36 +200,71 @@ export const WorkoutTemplatesScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── Header ──────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.7}>
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>TEMPLATES</Text>
-        <View style={styles.headerSpacer} />
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.7}>
+            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>Templates</Text>
+            <Text style={styles.headerSubtitle}>{WORKOUT_TEMPLATES.length} routines</Text>
+          </View>
+        </View>
       </View>
 
-      {/* ── Subtitle ─────────────────────── */}
-      <View style={styles.subtitleBlock}>
-        <Dumbbell size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-        <Text style={styles.subtitle}>Select a template to pre-load exercises</Text>
-      </View>
-
-      {/* ── Template List ────────────────── */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 24 },
-        ]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {WORKOUT_TEMPLATES.map((template) => (
-          <TemplateCard
-            key={template.id}
-            template={template}
-            onPress={handleSelectTemplate}
-          />
-        ))}
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+
+          {/* ── Hero Intro Card ─────────────────── */}
+          <LinearGradient
+            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroEdge}>
+              <View style={styles.heroTopRow}>
+                <View style={styles.heroIconWrap}>
+                  <Layers size={18} color={COLORS.accent} strokeWidth={1.5} />
+                </View>
+                <View style={styles.heroTextWrap}>
+                  <Text style={styles.heroTitle}>Quick Start</Text>
+                  <Text style={styles.heroSubtext}>
+                    Select a template to pre-load exercises into your workout
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+
+          {/* ── Section Header ──────────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>ROUTINES</Text>
+            </View>
+            <View style={styles.templateCountPill}>
+              <Zap size={10} color={COLORS.accent} strokeWidth={2} />
+              <Text style={styles.templateCountText}>{WORKOUT_TEMPLATES.length}</Text>
+            </View>
+          </View>
+
+          {/* ── Template List ────────────────────── */}
+          <View style={styles.templateList}>
+            {WORKOUT_TEMPLATES.map((template) => (
+              <TemplateCard
+                key={template.id}
+                template={template}
+                onPress={handleSelectTemplate}
+              />
+            ))}
+          </View>
+
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -227,7 +275,7 @@ export const WorkoutTemplatesScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: COLORS.background,
   },
 
   /* ── Header ─────────────────────────────── */
@@ -236,37 +284,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#27272A',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTextWrap: {
+    gap: 1,
+  },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: 2,
+    letterSpacing: -0.4,
   },
-  headerSpacer: {
-    width: 36,
-  },
-
-  /* ── Subtitle ─────────────────────────── */
-  subtitleBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 8,
-    paddingBottom: 20,
-  },
-  subtitle: {
+  headerSubtitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
@@ -279,31 +323,112 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: 160,
+  },
+
+  /* ── Hero Intro Card ─────────────────────── */
+  heroCard: {
+    borderRadius: 22,
+    marginTop: 18,
+  },
+  heroEdge: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    padding: 20,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 14,
+  },
+  heroIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  heroTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+  heroSubtext: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    lineHeight: 17,
+  },
+
+  /* ── Section Header ──────────────────────── */
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 2,
+  },
+  templateCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+  },
+  templateCountText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.accent,
+    letterSpacing: -0.3,
+  },
+
+  /* ── Template List ───────────────────────── */
+  templateList: {
+    gap: 10,
   },
 
   /* ── Card ─────────────────────────────── */
   cardOuter: {
-    borderRadius: 19,
+    borderRadius: 18,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 18,
   },
   cardGlassEdge: {
-    borderRadius: 19,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 20,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 16,
     gap: 10,
   },
 
@@ -315,17 +440,14 @@ const styles = StyleSheet.create({
   },
   cardTitleBlock: {
     flex: 1,
-    gap: 5,
+    gap: 4,
     marginRight: 12,
   },
   cardName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: -0.3,
-  },
-  focusTagRow: {
-    flexDirection: 'row',
   },
   focusTag: {
     fontFamily: FONTS.ui.bold,
@@ -341,24 +463,22 @@ const styles = StyleSheet.create({
   countBadge: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
     flexDirection: 'row',
     gap: 3,
   },
   countBadgeText: {
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.bold,
     fontSize: 13,
     color: COLORS.accent,
     lineHeight: 16,
   },
   countBadgeLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontSize: 9,
     color: COLORS.accent,
     letterSpacing: 1,
     lineHeight: 16,
@@ -378,15 +498,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
+    marginTop: 2,
   },
   chip: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   chipText: {
     fontFamily: FONTS.ui.regular,
