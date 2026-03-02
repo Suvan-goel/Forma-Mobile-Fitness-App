@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ExpoPoseDetectionModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.posedetection.ExpoPoseDetectionModule"]
+  }
+}

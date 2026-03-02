@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator } from 'react-native';
-import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
+import { PoseDetectionView, switchCamera } from 'expo-pose-detection';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -678,23 +678,12 @@ export const CameraScreen: React.FC = () => {
   const cameraDisplayWidth = SCREEN_WIDTH;
   const controlStripApproxHeight = 165 + insets.bottom;
 
-  // Memoize MediaPipe props — native PreviewView uses fillCenter to handle aspect ratio centering
+  // Memoize pose detection props
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
-  const mediapipeProps = useMemo(() => ({
-    width: cameraDisplayWidth,
-    height: cameraDisplayHeight,
-    face: effectiveShowSkeleton,
-    leftArm: effectiveShowSkeleton,
-    rightArm: effectiveShowSkeleton,
-    torso: effectiveShowSkeleton,
-    leftLeg: effectiveShowSkeleton,
-    rightLeg: effectiveShowSkeleton,
-    leftWrist: effectiveShowSkeleton,
-    rightWrist: effectiveShowSkeleton,
-    leftAnkle: effectiveShowSkeleton,
-    rightAnkle: effectiveShowSkeleton,
+  const poseDetectionProps = useMemo(() => ({
     frameLimit: 20,
-  }), [effectiveShowSkeleton, cameraDisplayWidth, cameraDisplayHeight]);
+    showSkeleton: effectiveShowSkeleton,
+  }), [effectiveShowSkeleton]);
 
   // Memoize display values to avoid recalculation
   const displayValues = useMemo(() => {
@@ -805,8 +794,9 @@ export const CameraScreen: React.FC = () => {
           >
             <View style={[styles.cameraContainer, { width: cameraDisplayWidth, height: cameraDisplayHeight }]}>
               {showCamera && (
-                <RNMediapipe
-                  {...mediapipeProps}
+                <PoseDetectionView
+                  style={{ width: cameraDisplayWidth, height: cameraDisplayHeight }}
+                  {...poseDetectionProps}
                   onLandmark={handleLandmark}
                 />
               )}

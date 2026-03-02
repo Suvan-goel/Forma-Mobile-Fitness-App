@@ -1,0 +1,276 @@
+package expo.modules.posedetection
+
+import android.content.Context
+import android.util.Log
+import android.widget.FrameLayout
+import androidx.camera.core.AspectRatio
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import expo.modules.kotlin.AppContext
+import expo.modules.kotlin.viewevent.EventDispatcher
+import expo.modules.kotlin.views.ExpoView
+import java.util.concurrent.Executors
+
+class ExpoPoseDetectionView(
+  context: Context,
+  appContext: AppContext
+) : ExpoView(context, appContext) {
+
+  // ExpoView extends LinearLayout and defaults to Yoga-only layout.
+  // Override to enable Android-native layout so child views get measured/laid out.
+  override val shouldUseAndroidLayout: Boolean = true
+
+  companion object {
+    private const val TAG = "ExpoPoseDetection"
+
+    @JvmStatic
+    var activeInstance: ExpoPoseDetectionView? = null
+  }
+
+  // Event dispatcher for landmark data
+  val onLandmark by EventDispatcher()
+
+  // Configuration
+  private var frameLimit: Int = 20
+  private var showSkeleton: Boolean = false
+
+  // Camera
+  private var cameraProvider: ProcessCameraProvider? = null
+  private var cameraFacing = CameraSelector.LENS_FACING_FRONT
+  private val backgroundExecutor = Executors.newSingleThreadExecutor()
+  private val previewView: PreviewView
+  private val overlayView: OverlayView
+
+  // Pose detection
+  private var poseLandmarkerHelper: PoseLandmarkerHelper? = null
+
+  // Frame throttling
+  private var lastProcessedFrameTimeMs: Long = 0
+
+  init {
+    activeInstance = this
+
+    // Use a FrameLayout container so PreviewView and OverlayView overlap (stack)
+    // rather than being arranged vertically by the LinearLayout parent.
+    val container = FrameLayout(context).apply {
+      layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+    }
+
+    previewView = PreviewView(context).apply {
+      layoutParams = FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.MATCH_PARENT
+      )
+      implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+    }
+    container.addView(previewView)
+
+    overlayView = OverlayView(context).apply {
+      layoutParams = FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.MATCH_PARENT
+      )
+      visibility = if (showSkeleton) VISIBLE else GONE
+    }
+    container.addView(overlayView)
+
+    addView(container)
+
+    // Initialize pose helper on background thread
+    backgroundExecutor.execute {
+      poseLandmarkerHelper = PoseLandmarkerHelper(
+        context = context,
+        listener = ::handlePoseResult
+      )
+    }
+
+    // Start camera
+    setupCamera()
+  }
+
+  // MARK: - Configuration
+
+  fun configureFrameLimit(limit: Int) {
+    frameLimit = limit.coerceIn(1, 60)
+  }
+
+  fun configureShowSkeleton(show: Boolean) {
+    showSkeleton = show
+    post {
+      overlayView.visibility = if (show) VISIBLE else GONE
+      if (!show) overlayView.clear()
+    }
+  }
+
+  fun switchCamera() {
+    cameraFacing = if (cameraFacing == CameraSelector.LENS_FACING_FRONT)
+      CameraSelector.LENS_FACING_BACK
+    else
+      CameraSelector.LENS_FACING_FRONT
+    bindCameraUseCases()
+  }
+
+  // MARK: - Camera Setup
+
+  private fun setupCamera() {
+    val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+    cameraProviderFuture.addListener({
+      cameraProvider = cameraProviderFuture.get()
+      bindCameraUseCases()
+    }, ContextCompat.getMainExecutor(context))
+  }
+
+  private fun bindCameraUseCases() {
+    val rawActivity = appContext.currentActivity
+    if (rawActivity == null) {
+      Log.w(TAG, "bindCameraUseCases: currentActivity is null, deferring")
+      return
+    }
+    val activity = rawActivity as? FragmentActivity
+    if (activity == null) {
+      Log.e(TAG, "bindCameraUseCases: activity is not FragmentActivity: ${rawActivity.javaClass.name}")
+      return
+    }
+    val provider = cameraProvider
+    if (provider == null) {
+      Log.w(TAG, "bindCameraUseCases: cameraProvider is null")
+      return
+    }
+
+    val preview = Preview.Builder()
+      .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+      .build()
+
+    val imageAnalysis = ImageAnalysis.Builder()
+      .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+      .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+      .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+      .build()
+      .also {
+        it.setAnalyzer(backgroundExecutor) { imageProxy ->
+          detectPose(imageProxy)
+        }
+      }
+
+    val cameraSelector = CameraSelector.Builder()
+      .requireLensFacing(cameraFacing)
+      .build()
+
+    try {
+      provider.unbindAll()
+      provider.bindToLifecycle(activity, cameraSelector, preview, imageAnalysis)
+      preview.setSurfaceProvider(previewView.surfaceProvider)
+      Log.d(TAG, "Camera bound successfully, facing=${if (cameraFacing == CameraSelector.LENS_FACING_FRONT) "FRONT" else "BACK"}")
+    } catch (e: Exception) {
+      Log.e(TAG, "Camera binding failed", e)
+    }
+  }
+
+  // MARK: - Pose Detection
+
+  private fun detectPose(imageProxy: ImageProxy) {
+    // Frame throttling (built in — no patch needed)
+    val minIntervalMs = 1000L / frameLimit.coerceIn(1, 60)
+    val now = System.currentTimeMillis()
+    if (now - lastProcessedFrameTimeMs < minIntervalMs) {
+      imageProxy.close()
+      return
+    }
+    lastProcessedFrameTimeMs = now
+
+    // Capture values before close (the imageProxy lifecycle fix from patch #4)
+    val helper = poseLandmarkerHelper
+    if (helper == null) {
+      imageProxy.close()
+      return
+    }
+
+    helper.detectLiveStream(
+      imageProxy = imageProxy,
+      isFrontCamera = cameraFacing == CameraSelector.LENS_FACING_FRONT
+    )
+  }
+
+  // MARK: - Pose Result Handler
+
+  private fun handlePoseResult(
+    result: PoseLandmarkerResult,
+    inputImageHeight: Int,
+    inputImageWidth: Int
+  ) {
+    // Build landmark data on background thread (off main thread — patch #6 built in)
+    val landmarks = result.landmarks()
+    if (landmarks.isEmpty()) return
+
+    val firstPose = landmarks[0]
+    val worldLandmarks = result.worldLandmarks()
+    val firstWorldPose = if (worldLandmarks.isNotEmpty()) worldLandmarks[0] else null
+
+    val landmarksArray = mutableListOf<Map<String, Any>>()
+    for (lm in firstPose) {
+      landmarksArray.add(mapOf(
+        "x" to lm.x(),
+        "y" to lm.y(),
+        "z" to lm.z(),
+        "visibility" to (lm.visibility().orElse(0f)),
+        "presence" to (lm.presence().orElse(0f))
+      ))
+    }
+
+    val worldLandmarksArray = mutableListOf<Map<String, Any>>()
+    if (firstWorldPose != null) {
+      for (lm in firstWorldPose) {
+        worldLandmarksArray.add(mapOf(
+          "x" to lm.x(),
+          "y" to lm.y(),
+          "z" to lm.z(),
+          "visibility" to (lm.visibility().orElse(0f)),
+          "presence" to (lm.presence().orElse(0f))
+        ))
+      }
+    }
+
+    val payload = mapOf(
+      "landmarks" to landmarksArray,
+      "worldLandmarks" to worldLandmarksArray,
+      "additionalData" to mapOf(
+        "height" to inputImageHeight,
+        "width" to inputImageWidth
+      )
+    )
+
+    // Emit to JS and update overlay on main thread
+    post {
+      onLandmark(payload)
+
+      if (showSkeleton) {
+        overlayView.setResults(
+          result,
+          inputImageHeight,
+          inputImageWidth
+        )
+      }
+    }
+  }
+
+  // MARK: - Lifecycle
+
+  override fun onDetachedFromWindow() {
+    super.onDetachedFromWindow()
+    try {
+      cameraProvider?.unbindAll()
+    } catch (_: Exception) {}
+    backgroundExecutor.shutdown()
+    poseLandmarkerHelper?.clearPoseLandmarker()
+    if (activeInstance === this) {
+      activeInstance = null
+    }
+  }
+}

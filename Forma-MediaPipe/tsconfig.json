@@ -15,7 +15,10 @@
     "noEmit": true,
     "isolatedModules": true,
     "allowJs": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "expo-pose-detection": ["./modules/expo-pose-detection/index"]
+    }
   },
   "include": [
     "**/*.ts",

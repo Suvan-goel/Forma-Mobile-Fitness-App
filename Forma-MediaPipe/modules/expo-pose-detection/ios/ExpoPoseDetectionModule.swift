@@ -1,0 +1,27 @@
+import ExpoModulesCore
+
+public class ExpoPoseDetectionModule: Module {
+  static weak var activeView: ExpoPoseDetectionView?
+
+  public func definition() -> ModuleDefinition {
+    Name("ExpoPoseDetection")
+
+    Function("switchCamera") {
+      DispatchQueue.main.async {
+        ExpoPoseDetectionModule.activeView?.switchCamera()
+      }
+    }
+
+    View(ExpoPoseDetectionView.self) {
+      Events("onLandmark")
+
+      Prop("frameLimit") { (view: ExpoPoseDetectionView, limit: Int) in
+        view.configureFrameLimit(limit)
+      }
+
+      Prop("showSkeleton") { (view: ExpoPoseDetectionView, show: Bool) in
+        view.configureShowSkeleton(show)
+      }
+    }
+  }
+}

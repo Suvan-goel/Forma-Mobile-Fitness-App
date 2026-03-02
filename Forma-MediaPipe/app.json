@@ -83,6 +83,10 @@
             "targetSdkVersion": 35
           }
         }
+      ],
+      [
+        "./plugins/withGradleJavaHome",
+        "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
       ]
     ]
   }
