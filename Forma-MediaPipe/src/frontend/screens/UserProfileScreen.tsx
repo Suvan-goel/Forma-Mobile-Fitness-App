@@ -617,15 +617,14 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
   },
   backBtn: {
-    width: 10,
-    height: 0,
-    borderRadius: 16,
+    width: 24,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: -5,
+    marginLeft: -6,
   },
   logoWrap: {
     width: 50,

@@ -128,14 +128,14 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
   },
   backBtn: {
-    width: 40,
+    width: 24,
     height: 40,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -6,
   },
   logoWrap: {
     width: 50,
