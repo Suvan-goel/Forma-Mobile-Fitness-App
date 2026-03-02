@@ -23,8 +23,6 @@ import {
   Zap,
   ChevronRight,
   Dumbbell,
-  Layers,
-  Repeat,
   ArrowRight,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
@@ -243,12 +241,12 @@ export const RecordLandingScreen: React.FC = () => {
           /* ── Active Workout Card ── */
           <View style={styles.activeCardOuter}>
             <LinearGradient
-              colors={['#1E1A2E', '#151020', '#0C0A14']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              colors={['#1A1625', '#13101D', '#0D0B14']}
+              start={{ x: 0.2, y: 0 }}
+              end={{ x: 0.8, y: 1 }}
               style={[styles.cardGradient, { flex: undefined }]}
             >
-              <View style={[styles.activeGlassEdge]}>
+              <View style={styles.activeGlassEdge}>
                 {/* ── Top bar: status + pause ── */}
                 <View style={styles.activeTopBar}>
                   <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
@@ -270,7 +268,7 @@ export const RecordLandingScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
 
-                {/* ── Timer ── */}
+                {/* ── Timer + inline stats ── */}
                 <TouchableOpacity
                   style={styles.activeCardContent}
                   onPress={handleResumeWorkout}
@@ -287,32 +285,16 @@ export const RecordLandingScreen: React.FC = () => {
                       </MonoText>
                     ))}
                   </View>
-                </TouchableOpacity>
-
-                {/* ── Bento Stats Row ── */}
-                <View style={styles.bentoRow}>
-                  <View style={styles.bentoCard}>
-                    <View style={styles.bentoIconWrap}>
-                      <Layers size={14} color={COLORS.accent} strokeWidth={1.5} />
-                    </View>
-                    <MonoText bold style={styles.bentoValue}>{sets.length}</MonoText>
-                    <Text style={styles.bentoLabel}>
-                      {sets.length === 1 ? 'set' : 'sets'}
-                    </Text>
-                  </View>
-                  <View style={styles.bentoCard}>
-                    <View style={[styles.bentoIconWrap, styles.bentoIconGreen]}>
-                      <Repeat size={14} color="#34D399" strokeWidth={1.5} />
-                    </View>
-                    <MonoText bold style={styles.bentoValue}>
+                  <View style={styles.statsRow}>
+                    <MonoText bold style={styles.statValue}>{sets.length}</MonoText>
+                    <Text style={styles.statLabel}>{sets.length === 1 ? 'set' : 'sets'}</Text>
+                    <View style={styles.statDot} />
+                    <MonoText bold style={styles.statValue}>
                       {sets.reduce((sum, set) => sum + set.reps, 0)}
                     </MonoText>
-                    <Text style={styles.bentoLabel}>reps</Text>
+                    <Text style={styles.statLabel}>reps</Text>
                   </View>
-                </View>
-
-                {/* ── Divider ── */}
-                <View style={styles.activeDivider} />
+                </TouchableOpacity>
 
                 {/* ── Bottom actions ── */}
                 <View style={styles.workoutActions}>
@@ -321,7 +303,7 @@ export const RecordLandingScreen: React.FC = () => {
                     onPress={handleDiscardWorkout}
                     activeOpacity={0.7}
                   >
-                    <Trash2 size={15} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    <Trash2 size={15} color="#EF4444" strokeWidth={1.5} />
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -330,7 +312,7 @@ export const RecordLandingScreen: React.FC = () => {
                     style={styles.resumeBtnOuter}
                   >
                     <LinearGradient
-                      colors={['rgba(139, 92, 246, 0.55)', 'rgba(124, 58, 237, 0.3)']}
+                      colors={['rgba(139, 92, 246, 0.5)', 'rgba(124, 58, 237, 0.25)']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.resumeGradient}
@@ -674,45 +656,37 @@ const styles = StyleSheet.create({
 
   /* ── Active Workout Card ─────────────────── */
   activeCardOuter: {
-    borderRadius: 22,
+    borderRadius: 24,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 28,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 24,
       },
       android: { elevation: 12 },
     }),
   },
   activeGlassEdge: {
-    borderRadius: 19,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(139, 92, 246, 0.12)',
   },
   activeTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 4,
+    paddingTop: 18,
+    paddingBottom: 2,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: 'rgba(52, 211, 153, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.2)',
   },
   statusPillPaused: {
-    backgroundColor: 'rgba(245, 166, 35, 0.08)',
-    borderColor: 'rgba(245, 166, 35, 0.2)',
   },
   statusDot: {
     width: 5,
@@ -749,8 +723,8 @@ const styles = StyleSheet.create({
   activeCardContent: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   timerDisplay: {
     flexDirection: 'row',
@@ -758,66 +732,44 @@ const styles = StyleSheet.create({
   },
   timerDigit: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 44,
+    fontSize: 40,
     color: '#FFFFFF',
-    lineHeight: 52,
-    letterSpacing: 1,
+    lineHeight: 48,
+    letterSpacing: 2,
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
-    fontSize: 33,
-    color: 'rgba(255, 255, 255, 0.25)',
-    lineHeight: 52,
-    marginHorizontal: 1,
+    fontSize: 30,
+    color: 'rgba(139, 92, 246, 0.45)',
+    lineHeight: 48,
+    marginHorizontal: 2,
   },
 
-  /* ── Bento Stats ── */
-  bentoRow: {
+  /* ── Inline Stats ── */
+  statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-  },
-  bentoCard: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     gap: 6,
+    marginTop: 10,
   },
-  bentoIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  bentoIconGreen: {
-    backgroundColor: 'rgba(52, 211, 153, 0.10)',
-  },
-  bentoValue: {
+  statValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 24,
+    fontSize: 15,
     color: COLORS.text,
-    lineHeight: 28,
+    lineHeight: 18,
   },
-  bentoLabel: {
+  statLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textTertiary,
     letterSpacing: 0.2,
   },
-
-  /* ── Divider ── */
-  activeDivider: {
-    height: 1,
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+  statDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(139, 92, 246, 0.4)',
+    marginHorizontal: 4,
   },
 
   /* ── Workout Actions ─────────────────────── */
@@ -826,16 +778,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   discardBtn: {
     width: 46,
     height: 46,
     borderRadius: 23,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
