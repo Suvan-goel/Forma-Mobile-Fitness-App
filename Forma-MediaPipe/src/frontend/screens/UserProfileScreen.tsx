@@ -39,11 +39,12 @@ import {
   COLORS,
   SPACING,
   FONTS,
+  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
 } from '../constants/theme';
-import { useUser, useWorkouts, useFriends, useAnalytics } from '../../backend/hooks';
+import { useUser, useWorkouts, useFriends, useAnalytics, useFollowing } from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
 import type { WorkoutBarData } from '../../backend/services/api';
 
@@ -159,6 +160,7 @@ export const UserProfileScreen: React.FC = () => {
   const { user } = useUser();
   const { workouts } = useWorkouts();
   const { friends } = useFriends();
+  const { counts: followCounts } = useFollowing();
   const { analytics } = useAnalytics('1 week', 4);
 
   const workoutCount = workouts.length;
@@ -242,7 +244,7 @@ export const UserProfileScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <TouchableOpacity activeOpacity={0.85} onPress={handleEditProfile}>
             <LinearGradient
-              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              colors={SCREEN_GRADIENT_COLORS}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroCard}
@@ -291,15 +293,23 @@ export const UserProfileScreen: React.FC = () => {
                     <Text style={styles.heroStatLabel}>workouts</Text>
                   </View>
                   <View style={styles.heroStatDivider} />
-                  <View style={styles.heroStatItem}>
-                    <Text style={[styles.heroStatValue, styles.heroStatValueDim]}>0</Text>
+                  <TouchableOpacity
+                    style={styles.heroStatItem}
+                    onPress={() => navigation.navigate('FollowList', { mode: 'followers' })}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.heroStatValue}>{followCounts.followerCount}</Text>
                     <Text style={styles.heroStatLabel}>followers</Text>
-                  </View>
+                  </TouchableOpacity>
                   <View style={styles.heroStatDivider} />
-                  <View style={styles.heroStatItem}>
-                    <Text style={[styles.heroStatValue, styles.heroStatValueDim]}>0</Text>
+                  <TouchableOpacity
+                    style={styles.heroStatItem}
+                    onPress={() => navigation.navigate('FollowList', { mode: 'following' })}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.heroStatValue}>{followCounts.followingCount}</Text>
                     <Text style={styles.heroStatLabel}>following</Text>
-                  </View>
+                  </TouchableOpacity>
                   <View style={styles.heroStatDivider} />
                   <View style={styles.heroStatItem}>
                     <Text style={styles.heroStatValue}>{friendsCount}</Text>

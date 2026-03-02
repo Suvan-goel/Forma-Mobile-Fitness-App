@@ -16,7 +16,7 @@
     "ios": {
       "icon": "./assets/ios-icon.png",
       "supportsTablet": true,
-      "bundleIdentifier": "com.forma.dev.allahham.12345.app",
+      "bundleIdentifier": "com.forma.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app requires camera access to process video frames for MediaPipe pose detection.",
         "NSPhotoLibraryUsageDescription": "Choose a profile photo from your photo library.",

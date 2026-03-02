@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',

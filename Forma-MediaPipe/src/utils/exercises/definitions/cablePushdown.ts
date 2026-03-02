@@ -438,14 +438,14 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
     const tPush = repWindow.tExtended - repWindow.tStart;  // concentric (push down)
     const tReturn = repWindow.tEnd - repWindow.tExtended;   // eccentric (return)
 
-    // Penalize if too fast (value = deadzone - actual, capped at 0 if not too fast)
+    // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
     if (tPush > 0 && tPush < PENALTY_CONFIGS.TEMPO_PUSH.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_PUSH.deadzone - tPush;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_PUSH });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_PUSH, deadzone: 0 } });
     }
     if (tReturn > 0 && tReturn < PENALTY_CONFIGS.TEMPO_RETURN.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_RETURN.deadzone - tReturn;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_RETURN });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
     }
   }
 

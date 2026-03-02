@@ -27,6 +27,7 @@ import {
   COLORS,
   SPACING,
   FONTS,
+  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
@@ -248,7 +249,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           {/* Profile Card */}
           <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('UserProfile')}>
             <LinearGradient
-              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              colors={SCREEN_GRADIENT_COLORS}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.profileCard}
@@ -446,15 +447,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             <RowCard icon={HelpCircle} iconBg="rgba(96, 165, 250, 0.10)" iconColor="#60A5FA" label="Help Center" onPress={() => navigation.navigate('HelpCenter')} />
           </View>
 
-          {/* Back to Onboarding */}
-          <TouchableOpacity
-            style={styles.onboardingBtn}
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate('Onboarding')}
-          >
-            <RefreshCcw size={13} color={COLORS.textTertiary} strokeWidth={1.5} />
-            <Text style={styles.onboardingText}>Back to Onboarding</Text>
-          </TouchableOpacity>
+          {/* Back to Onboarding (dev only) */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={styles.onboardingBtn}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Onboarding')}
+            >
+              <RefreshCcw size={13} color={COLORS.textTertiary} strokeWidth={1.5} />
+              <Text style={styles.onboardingText}>Back to Onboarding</Text>
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.versionText}>FORMA v1.0.0</Text>
         </Animated.View>
@@ -510,12 +513,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-    width: 10,
-    height: 0,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: -5,
   },
   logoWrap: {
     width: 50,

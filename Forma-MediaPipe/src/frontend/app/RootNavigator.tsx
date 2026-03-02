@@ -12,6 +12,7 @@ import { SocialScreen } from '../screens/SocialScreen';
 import { AddFriendScreen } from '../screens/social/AddFriendScreen';
 import { FriendProfileScreen } from '../screens/social/FriendProfileScreen';
 import { FriendComparisonScreen } from '../screens/social/FriendComparisonScreen';
+import { FollowListScreen } from '../screens/social/FollowListScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ProfileSettingsScreen } from '../screens/ProfileSettingsScreen';
@@ -72,6 +73,7 @@ export type RootStackParamList = {
   FriendProfile: { userId: string };
   FriendComparison: { friendId: string };
   AddFriend: undefined;
+  FollowList: { mode: 'followers' | 'following' };
   Rewards: undefined;
   UserProfile: undefined;
   Tutorials: undefined;
@@ -327,6 +329,11 @@ const RootStackNavigator: React.FC = () => {
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
+            name="FollowList"
+            component={FollowListScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
             name="Rewards"
             component={RewardsScreen}
             options={{ animation: 'slide_from_right' }}
@@ -346,11 +353,13 @@ const RootStackNavigator: React.FC = () => {
             component={VideoLibraryScreen}
             options={{ animation: 'slide_from_right' }}
           />
-          <Stack.Screen
-            name="Onboarding"
-            component={OnboardingDevScreen}
-            options={{ animation: 'slide_from_bottom' }}
-          />
+          {__DEV__ && (
+            <Stack.Screen
+              name="Onboarding"
+              component={OnboardingDevScreen}
+              options={{ animation: 'slide_from_bottom' }}
+            />
+          )}
         </>
       ) : (
         <Stack.Screen name="Welcome" component={WelcomeScreen} />

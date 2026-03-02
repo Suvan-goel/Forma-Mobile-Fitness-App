@@ -113,8 +113,6 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
             </View>
           </LinearGradient>
 
-          {/* Footer */}
-          <Text style={styles.footerNote}>More notification options coming soon</Text>
         </Animated.View>
       </ScrollView>
     </View>
@@ -233,12 +231,4 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  /* Footer */
-  footerNote: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-    marginTop: 32,
-  },
 });

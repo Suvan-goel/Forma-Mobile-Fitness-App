@@ -3,14 +3,22 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Activity, Award, TrendingUp, Flame } from 'lucide-react-native';
+import { Activity, Award, TrendingUp, Flame, Heart } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
-import { ActivityEvent } from '../../../backend/services/api/types';
+import { ActivityEvent, ReactionType, EventReactions } from '../../../backend/services/api/types';
+
+const EMOJI_REACTIONS: { type: ReactionType; emoji: string }[] = [
+  { type: 'muscle', emoji: '\uD83D\uDCAA' },
+  { type: 'fire', emoji: '\uD83D\uDD25' },
+  { type: 'clap', emoji: '\uD83D\uDC4F' },
+];
 
 interface ActivityEventCardProps {
   event: ActivityEvent;
+  reactions?: EventReactions;
+  onToggleReaction?: (eventId: string, reactionType: ReactionType) => void;
 }
 
 function getRelativeTime(date: Date): string {
@@ -33,7 +41,7 @@ const EVENT_CONFIG: Record<string, { icon: any; color: string }> = {
   streak_milestone: { icon: Flame, color: '#E07856' },
 };
 
-export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event }) => {
+export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event, reactions, onToggleReaction }) => {
   const config = EVENT_CONFIG[event.eventType] || EVENT_CONFIG.workout_completed;
   const Icon = config.icon;
 
@@ -106,6 +114,53 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
               </View>
             </View>
           )}
+
+          {/* Reaction row */}
+          <View style={styles.reactionRow}>
+            <TouchableOpacity
+              style={styles.likeButton}
+              onPress={() => onToggleReaction?.(event.id, 'like')}
+              activeOpacity={0.6}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Heart
+                size={14}
+                color={reactions?.userReaction === 'like' ? '#EF4444' : COLORS.textTertiary}
+                fill={reactions?.userReaction === 'like' ? '#EF4444' : 'transparent'}
+              />
+              {(reactions?.counts.like ?? 0) > 0 && (
+                <Text style={[
+                  styles.likeCount,
+                  reactions?.userReaction === 'like' && styles.likeCountActive,
+                ]}>
+                  {reactions!.counts.like}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {EMOJI_REACTIONS.map(({ type, emoji }) => {
+              const count = reactions?.counts[type] ?? 0;
+              const isActive = reactions?.userReaction === type;
+              return (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.emojiPill, isActive && styles.emojiPillActive]}
+                  onPress={() => onToggleReaction?.(event.id, type)}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Text style={[styles.emoji, !isActive && count === 0 && styles.emojiInactive]}>
+                    {emoji}
+                  </Text>
+                  {count > 0 && (
+                    <Text style={[styles.emojiCount, isActive && styles.emojiCountActive]}>
+                      {count}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </LinearGradient>
     </View>
@@ -187,5 +242,57 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
+  },
+
+  /* ── Reaction row ── */
+  reactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  likeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  likeCount: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  likeCountActive: {
+    color: '#EF4444',
+  },
+  emojiPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+  },
+  emojiPillActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  emoji: {
+    fontSize: 13,
+  },
+  emojiInactive: {
+    opacity: 0.4,
+  },
+  emojiCount: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+  },
+  emojiCountActive: {
+    color: COLORS.textSecondary,
   },
 });

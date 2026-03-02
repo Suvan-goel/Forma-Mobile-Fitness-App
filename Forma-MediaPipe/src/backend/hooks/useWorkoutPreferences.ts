@@ -58,7 +58,9 @@ export function useWorkoutPreferences() {
     AsyncStorage.getItem(CAMERA_SETTINGS_KEY).then((raw) => {
       const stored = raw ? JSON.parse(raw) : {};
       return AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...stored, [key]: value }));
-    }).catch(() => {});
+    }).catch((err) => {
+      if (__DEV__) console.warn('[useWorkoutPreferences] Failed to persist', key, err);
+    });
   }, []);
 
   return { prefs, updatePref, isLoading };

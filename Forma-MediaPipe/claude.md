@@ -10,7 +10,7 @@
 ## 2. Critical Dependency Versions
 Canonical set lives in `package.json`, aligned via `npx expo install --fix`. Key pieces:
 - **Expo:** ~53.0.27 — **React:** 19.0.0 — **React Native:** 0.79.6
-- `@thinksys/react-native-mediapipe`: ^0.0.19 (Pose detection — patched via `patch-package`)
+- `expo-pose-detection`: local Expo module at `modules/expo-pose-detection/` (Pose detection + camera)
 - `expo-av`: ~15.1.7 (Audio playback for TTS)
 - `expo-file-system`: ~18.1.11 (Temp file storage for TTS audio)
 - `expo-build-properties`: ~0.14.0 (iOS JSC engine override, Android SDK targets)
@@ -21,7 +21,7 @@ Canonical set lives in `package.json`, aligned via `npx expo install --fix`. Key
 ### Modules included in iOS build
 | Module | Purpose | iOS-specific config |
 |--------|---------|---------------------|
-| `@thinksys/react-native-mediapipe` | Pose detection + camera | `NSCameraUsageDescription` in Info.plist |
+| `expo-pose-detection` (local module) | Pose detection + camera | `NSCameraUsageDescription` in Info.plist |
 | `expo-av` | TTS audio playback | `playsInSilentModeIOS`, `interruptionModeIOS: MixWithOthers` |
 | `expo-file-system` | Temp file I/O for TTS audio cache | None |
 | `expo-font` | Custom fonts (Inter, JetBrains Mono) | None |
@@ -43,8 +43,8 @@ These caused iOS crashes ("Cannot read property 'S' of undefined"):
 - Corresponding Babel plugins removed from `babel.config.js`
 
 ## 4. MediaPipe Integration
-We use `@thinksys/react-native-mediapipe` with callback-based landmark data.
-- `RNMediapipe` component handles camera + pose detection internally
+We use a local Expo module `expo-pose-detection` (in `modules/expo-pose-detection/`) for pose detection.
+- `PoseDetectionView` component handles camera + pose detection internally
 - Landmark data received via `onLandmark` callback (not frame processors/worklets)
 - Detection confidence lowered to 0.35 (from 0.5) for better side-on detection
 - Android-specific patches applied via `patch-package` (see `patches/` directory)

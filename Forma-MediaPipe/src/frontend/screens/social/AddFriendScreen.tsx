@@ -14,9 +14,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ChevronLeft, Search, UserPlus, Check, Clock } from 'lucide-react-native';
+import { ChevronLeft, Search, UserPlus, Check, Clock, Heart } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
-import { useUserSearch, useFriends } from '../../../backend/hooks';
+import { useUserSearch, useFriends, useFollowing } from '../../../backend/hooks';
 import { UserSearchResult } from '../../../backend/services/api/types';
 
 const StatusIndicator = memo(({ status }: { status: UserSearchResult['relationshipStatus'] }) => {
@@ -46,10 +46,19 @@ export const AddFriendScreen: React.FC = memo(() => {
   const [query, setQuery] = useState('');
   const { results, isLoading, error } = useUserSearch(query);
   const { sendRequest } = useFriends();
+  const { followUser, unfollowUser, isFollowingUser } = useFollowing();
 
   const handleAdd = useCallback(async (userId: string) => {
     await sendRequest(userId);
   }, [sendRequest]);
+
+  const handleToggleFollow = useCallback(async (userId: string) => {
+    if (isFollowingUser(userId)) {
+      await unfollowUser(userId);
+    } else {
+      await followUser(userId);
+    }
+  }, [isFollowingUser, unfollowUser, followUser]);
 
   const renderItem = useCallback(({ item }: { item: UserSearchResult }) => (
     <View style={styles.userRow}>
@@ -71,19 +80,49 @@ export const AddFriendScreen: React.FC = memo(() => {
       </View>
 
       {item.relationshipStatus === 'none' || item.relationshipStatus === 'pending_received' ? (
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => handleAdd(item.userId)}
-          activeOpacity={0.7}
-        >
-          <UserPlus size={15} color={COLORS.text} />
-          <Text style={styles.addButtonText}>Add</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.followHeartBtn}
+            onPress={() => handleToggleFollow(item.userId)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Heart
+              size={18}
+              color={isFollowingUser(item.userId) ? '#F472B6' : COLORS.textTertiary}
+              fill={isFollowingUser(item.userId) ? '#F472B6' : 'none'}
+              strokeWidth={1.8}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => handleAdd(item.userId)}
+            activeOpacity={0.7}
+          >
+            <UserPlus size={15} color={COLORS.text} />
+            <Text style={styles.addButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
-        <StatusIndicator status={item.relationshipStatus} />
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.followHeartBtn}
+            onPress={() => handleToggleFollow(item.userId)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Heart
+              size={18}
+              color={isFollowingUser(item.userId) ? '#F472B6' : COLORS.textTertiary}
+              fill={isFollowingUser(item.userId) ? '#F472B6' : 'none'}
+              strokeWidth={1.8}
+            />
+          </TouchableOpacity>
+          <StatusIndicator status={item.relationshipStatus} />
+        </View>
       )}
     </View>
-  ), [handleAdd]);
+  ), [handleAdd, handleToggleFollow, isFollowingUser]);
 
   const keyExtractor = useCallback((item: UserSearchResult) => item.userId, []);
 
@@ -243,6 +282,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textTertiary,
     marginTop: 2,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  followHeartBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   addButton: {
     flexDirection: 'row',

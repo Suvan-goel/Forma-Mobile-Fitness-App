@@ -394,14 +394,14 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
     const tCurl = repWindow.tCurled - repWindow.tStart;    // concentric (curl up)
     const tLower = repWindow.tEnd - repWindow.tCurled;      // eccentric (lower down)
 
-    // Penalize if too fast
+    // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
     if (tCurl > 0 && tCurl < PENALTY_CONFIGS.TEMPO_CURL.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_CURL.deadzone - tCurl;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_CURL });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_CURL, deadzone: 0 } });
     }
     if (tLower > 0 && tLower < PENALTY_CONFIGS.TEMPO_LOWER.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_LOWER.deadzone - tLower;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_LOWER });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_LOWER, deadzone: 0 } });
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -29,6 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useRewards, useUser } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { useAlert } from '../contexts/AlertContext';
 import { Reward } from '../../backend/services/api';
 import type { RootStackParamList } from '../app/RootNavigator';
 
@@ -40,7 +42,16 @@ const getIconComponent = (iconName: string): LucideIcon => iconMap[iconName] || 
 
 /* ── Badge Card ──────────────────────────── */
 
-const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds }: { reward: Reward; userPoints: number; earnedBadgeIds: string[] }) => {
+interface BadgeCardProps {
+  reward: Reward;
+  userPoints: number;
+  earnedBadgeIds: string[];
+  isRedeemed: boolean;
+  isRedeeming: boolean;
+  onRedeem?: () => void;
+}
+
+const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds, isRedeemed, isRedeeming, onRedeem }: BadgeCardProps) => {
   const isUnlocked = earnedBadgeIds.includes(reward.id);
   const progress = Math.min((userPoints / reward.pointsRequired) * 100, 100);
   const Icon = getIconComponent(reward.iconName);
@@ -98,11 +109,34 @@ const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds }: { reward: Reward
             </View>
           </View>
 
-          {/* Earned indicator */}
+          {/* Status indicator */}
           {isUnlocked && (
-            <View style={[styles.earnedBadge, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
-              <CheckCircle size={10} color={accent} strokeWidth={2.5} />
-              <Text style={[styles.earnedText, { color: accent }]}>EARNED</Text>
+            <View style={styles.statusColumn}>
+              {isRedeemed ? (
+                <View style={[styles.earnedBadge, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
+                  <CheckCircle size={10} color={accent} strokeWidth={2.5} />
+                  <Text style={[styles.earnedText, { color: accent }]}>REDEEMED</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={[styles.earnedBadge, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
+                    <CheckCircle size={10} color={accent} strokeWidth={2.5} />
+                    <Text style={[styles.earnedText, { color: accent }]}>EARNED</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={onRedeem}
+                    disabled={isRedeeming}
+                    activeOpacity={0.7}
+                    style={[styles.redeemBtn, { backgroundColor: accent }]}
+                  >
+                    {isRedeeming ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.redeemBtnText}>Redeem</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           )}
         </View>
@@ -116,8 +150,21 @@ const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds }: { reward: Reward
 export const RewardsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const { user: profileUser } = useUser();
-  const { rewards, userStats, userPoints, isLoading, error, refetch } = useRewards();
+  const { rewards, userStats, userPoints, redeemedBadgeIds, isLoading, error, refetch, redeemReward } = useRewards();
+  const [redeemingId, setRedeemingId] = useState<string | null>(null);
+
+  const handleRedeem = useCallback(async (rewardId: string) => {
+    setRedeemingId(rewardId);
+    const result = await redeemReward(rewardId);
+    setRedeemingId(null);
+    if (result.success) {
+      showAlert('Badge Redeemed', result.message, [{ text: 'OK' }]);
+    } else {
+      showAlert('Redeem Failed', result.message, [{ text: 'OK' }]);
+    }
+  }, [redeemReward, showAlert]);
 
   if (isLoading) {
     return (
@@ -223,7 +270,15 @@ export const RewardsScreen: React.FC = () => {
           <>
             <Text style={styles.sectionTitle}>EARNED BADGES</Text>
             {earnedBadges.map(reward => (
-              <BadgeCard key={reward.id} reward={reward} userPoints={userPoints} earnedBadgeIds={earnedBadgeIds} />
+              <BadgeCard
+                key={reward.id}
+                reward={reward}
+                userPoints={userPoints}
+                earnedBadgeIds={earnedBadgeIds}
+                isRedeemed={redeemedBadgeIds.includes(reward.id)}
+                isRedeeming={redeemingId === reward.id}
+                onRedeem={() => handleRedeem(reward.id)}
+              />
             ))}
           </>
         )}
@@ -235,7 +290,14 @@ export const RewardsScreen: React.FC = () => {
               {earnedBadges.length > 0 ? 'LOCKED BADGES' : 'BADGES'}
             </Text>
             {lockedBadges.map(reward => (
-              <BadgeCard key={reward.id} reward={reward} userPoints={userPoints} earnedBadgeIds={earnedBadgeIds} />
+              <BadgeCard
+                key={reward.id}
+                reward={reward}
+                userPoints={userPoints}
+                earnedBadgeIds={earnedBadgeIds}
+                isRedeemed={false}
+                isRedeeming={false}
+              />
             ))}
           </>
         )}
@@ -287,12 +349,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-    width: 10,
-    height: 0,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: -5,
   },
   logoWrap: {
     width: 50,
@@ -539,5 +600,25 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.semibold,
     fontSize: 9,
     letterSpacing: 1,
+  },
+
+  /* ── Redeem Button ──────────────────────────── */
+  statusColumn: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  redeemBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 72,
+  },
+  redeemBtnText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });

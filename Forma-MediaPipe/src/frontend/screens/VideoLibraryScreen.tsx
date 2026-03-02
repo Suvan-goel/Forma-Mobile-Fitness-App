@@ -22,7 +22,7 @@ import {
 } from 'lucide-react-native';
 import {
   COLORS, FONTS, SPACING,
-  CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END,
+  SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END,
   getScoreColor,
 } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
@@ -591,7 +591,7 @@ export const VideoLibraryScreen: React.FC = () => {
         >
           <View style={styles.selectionContainer} onStartShouldSetResponder={() => true}>
             <LinearGradient
-              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              colors={SCREEN_GRADIENT_COLORS}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.selectionGradient}

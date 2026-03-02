@@ -336,11 +336,11 @@ function computeLatPulldownScore(repWindow: RepWindow): number {
 
     if (tPull > 0 && tPull < PENALTY_CONFIGS.TEMPO_PULL.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_PULL.deadzone - tPull;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_PULL });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_PULL, deadzone: 0 } });
     }
     if (tReturn > 0 && tReturn < PENALTY_CONFIGS.TEMPO_RETURN.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_RETURN.deadzone - tReturn;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_RETURN });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
     }
   }
 

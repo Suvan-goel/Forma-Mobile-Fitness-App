@@ -153,7 +153,7 @@ export const useAlert = () => useContext(AlertContext);
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+    backgroundColor: COLORS.overlayBackground,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#141414',
+    backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',

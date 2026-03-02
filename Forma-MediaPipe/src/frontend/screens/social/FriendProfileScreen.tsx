@@ -27,17 +27,20 @@ import {
   Trophy,
   ChevronRight,
   Target,
+  UserPlus,
+  UserMinus,
 } from 'lucide-react-native';
 import {
   COLORS,
   FONTS,
   SPACING,
+  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   getScoreColor,
 } from '../../constants/theme';
-import { useFriendProfile } from '../../../backend/hooks';
+import { useFriendProfile, useFollowing } from '../../../backend/hooks';
 
 export const FriendProfileScreen: React.FC = memo(() => {
   const insets = useSafeAreaInsets();
@@ -45,6 +48,8 @@ export const FriendProfileScreen: React.FC = memo(() => {
   const route = useRoute<any>();
   const { userId } = route.params;
   const { profile, isLoading } = useFriendProfile(userId);
+  const { followUser, unfollowUser, isFollowingUser } = useFollowing();
+  const isCurrentlyFollowing = isFollowingUser(userId);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -105,7 +110,7 @@ export const FriendProfileScreen: React.FC = memo(() => {
               PROFILE HERO CARD
               ═══════════════════════════════════════════ */}
           <LinearGradient
-            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            colors={SCREEN_GRADIENT_COLORS}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroCard}
@@ -203,6 +208,34 @@ export const FriendProfileScreen: React.FC = memo(() => {
               </LinearGradient>
             </View>
           </View>
+
+          {/* ═══════════════════════════════════════════
+              FOLLOW / UNFOLLOW
+              ═══════════════════════════════════════════ */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={async () => {
+              if (isCurrentlyFollowing) {
+                await unfollowUser(userId);
+              } else {
+                await followUser(userId);
+              }
+            }}
+          >
+            <View style={[styles.followCta, isCurrentlyFollowing && styles.followCtaActive]}>
+              {isCurrentlyFollowing ? (
+                <>
+                  <UserMinus size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <Text style={styles.followCtaTextDim}>Following</Text>
+                </>
+              ) : (
+                <>
+                  <UserPlus size={16} color={COLORS.primary} strokeWidth={1.5} />
+                  <Text style={styles.followCtaTextAccent}>Follow</Text>
+                </>
+              )}
+            </View>
+          </TouchableOpacity>
 
           {/* ═══════════════════════════════════════════
               COMPARE CTA — Accent gradient button
@@ -464,6 +497,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textTertiary,
     marginTop: 2,
+  },
+
+  /* ── Follow CTA ──────────────────────────────── */
+  followCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.20)',
+    marginBottom: 12,
+  },
+  followCtaActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  followCtaTextAccent: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.primary,
+    letterSpacing: -0.2,
+  },
+  followCtaTextDim: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    letterSpacing: -0.2,
   },
 
   /* ── Compare CTA ───────────────────────────── */

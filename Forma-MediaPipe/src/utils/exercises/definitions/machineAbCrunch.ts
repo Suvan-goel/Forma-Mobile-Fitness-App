@@ -365,11 +365,11 @@ function computeAbCrunchScore(repWindow: RepWindow): number {
 
     if (tCrunch > 0 && tCrunch < PENALTY_CONFIGS.TEMPO_CRUNCH.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_CRUNCH.deadzone - tCrunch;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_CRUNCH });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_CRUNCH, deadzone: 0 } });
     }
     if (tReturn > 0 && tReturn < PENALTY_CONFIGS.TEMPO_RETURN.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_RETURN.deadzone - tReturn;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_RETURN });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
     }
   }
 

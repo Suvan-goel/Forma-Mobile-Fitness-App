@@ -333,6 +333,58 @@ export const rewardsService = {
         success: true,
       };
     }
-    throw new Error('Real API not implemented');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { data: { success: false, message: 'Not authenticated' }, success: false, error: 'Not authenticated' };
+    }
+
+    // Verify the user has earned this badge
+    const { data: badge } = await supabase
+      .from('user_badges')
+      .select('badge_id')
+      .eq('user_id', user.id)
+      .eq('badge_id', rewardId)
+      .maybeSingle();
+
+    if (!badge) {
+      return { data: { success: false, message: 'Badge not earned yet' }, success: false, error: 'Badge not earned' };
+    }
+
+    const { error } = await supabase
+      .from('user_redemptions')
+      .insert({ user_id: user.id, badge_id: rewardId });
+
+    if (error) {
+      if (error.code === '23505') {
+        return { data: { success: false, message: 'Already redeemed' }, success: false, error: 'Already redeemed' };
+      }
+      return { data: { success: false, message: error.message }, success: false, error: error.message };
+    }
+
+    const reward = mockRewards.find(r => r.id === rewardId);
+    return { data: { success: true, message: `Successfully redeemed: ${reward?.title ?? rewardId}` }, success: true };
+  },
+
+  /**
+   * Fetch badge IDs the current user has redeemed.
+   */
+  async getRedeemedBadges(): Promise<ApiResponse<string[]>> {
+    if (API_CONFIG.services.rewards) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: [], success: true };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { data: [], success: false, error: 'Not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('user_redemptions')
+      .select('badge_id')
+      .eq('user_id', user.id);
+
+    if (error) return { data: [], success: false, error: error.message };
+    return { data: (data ?? []).map((r: any) => r.badge_id as string), success: true };
   },
 };

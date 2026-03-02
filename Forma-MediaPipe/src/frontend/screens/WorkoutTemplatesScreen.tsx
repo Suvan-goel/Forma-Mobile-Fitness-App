@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Dumbbell, Layers, Zap } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
 
@@ -221,7 +221,7 @@ export const WorkoutTemplatesScreen: React.FC = () => {
 
           {/* ── Hero Intro Card ─────────────────── */}
           <LinearGradient
-            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            colors={SCREEN_GRADIENT_COLORS}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroCard}

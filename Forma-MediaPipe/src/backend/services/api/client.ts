@@ -12,7 +12,6 @@ export const API_CONFIG = {
     analytics: false, // Supabase — Phase 2
     rewards: false,    // mock — Phase 3
     insights: true,   // mock — Phase 3
-    trainer: true,    // stays mock
     social: true,     // Supabase — social features live
   },
   mockDelayMs: 300,

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Inbox } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
-import { useActivityFeed } from '../../../backend/hooks';
+import { useActivityFeed, useReactions } from '../../../backend/hooks';
 import { ActivityEvent, ActivityFilter } from '../../../backend/services/api/types';
 import { ActivityEventCard } from '../../components/ui/ActivityEventCard';
 
@@ -47,9 +47,16 @@ export const ActivityView: React.FC = memo(() => {
   const [filter, setFilter] = useState<ActivityFilter>('all');
   const { events, isLoading, isLoadingMore, error, hasMore, loadMore, refetch } = useActivityFeed(filter);
 
+  const eventIds = useMemo(() => events.map(e => e.id), [events]);
+  const { reactions, toggleReaction } = useReactions(eventIds);
+
   const renderItem = useCallback(({ item }: { item: ActivityEvent }) => (
-    <ActivityEventCard event={item} />
-  ), []);
+    <ActivityEventCard
+      event={item}
+      reactions={reactions[item.id]}
+      onToggleReaction={toggleReaction}
+    />
+  ), [reactions, toggleReaction]);
 
   const keyExtractor = useCallback((item: ActivityEvent) => item.id, []);
 

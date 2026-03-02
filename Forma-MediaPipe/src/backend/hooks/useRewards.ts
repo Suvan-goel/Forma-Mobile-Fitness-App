@@ -15,6 +15,7 @@ interface UseRewardsReturn {
   rewards: Reward[];
   userStats: UserStats | null;
   userPoints: number;
+  redeemedBadgeIds: string[];
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -24,6 +25,7 @@ interface UseRewardsReturn {
 export const useRewards = (): UseRewardsReturn => {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [redeemedBadgeIds, setRedeemedBadgeIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,14 +37,16 @@ export const useRewards = (): UseRewardsReturn => {
     setIsLoading(true);
     setError(null);
     try {
-      const [rewardsResponse, statsResponse] = await Promise.all([
+      const [rewardsResponse, statsResponse, redeemedResponse] = await Promise.all([
         rewardsService.getRewards(),
         rewardsService.getUserStats(weeklyTarget),
+        rewardsService.getRedeemedBadges(),
       ]);
 
       if (rewardsResponse.success && statsResponse.success) {
         setRewards(rewardsResponse.data);
         setUserStats(statsResponse.data);
+        if (redeemedResponse.success) setRedeemedBadgeIds(redeemedResponse.data);
 
         // Emit badge_earned activity events for newly unlocked badges (fire and forget)
         const earnedIds = statsResponse.data.earnedBadgeIds;
@@ -60,13 +64,19 @@ export const useRewards = (): UseRewardsReturn => {
                   eventType: 'badge_earned',
                   payload: { badge_id: badgeId, badge_name: reward.title },
                   sourceId: badgeId,
-                }).catch(() => {});
+                }).catch((err) => {
+                  if (__DEV__) console.warn('[useRewards] Failed to emit badge event', badgeId, err);
+                });
               }
               emitted.add(badgeId);
             });
 
-            AsyncStorage.setItem(EMITTED_BADGES_KEY, JSON.stringify([...emitted])).catch(() => {});
-          }).catch(() => {});
+            AsyncStorage.setItem(EMITTED_BADGES_KEY, JSON.stringify([...emitted])).catch((err) => {
+              if (__DEV__) console.warn('[useRewards] Failed to persist emitted badges', err);
+            });
+          }).catch((err) => {
+            if (__DEV__) console.warn('[useRewards] Failed to read emitted badges', err);
+          });
         }
       } else {
         setError('Failed to fetch rewards data');
@@ -90,6 +100,7 @@ export const useRewards = (): UseRewardsReturn => {
     try {
       const response = await rewardsService.redeemReward(rewardId);
       if (response.success) {
+        setRedeemedBadgeIds(prev => prev.includes(rewardId) ? prev : [...prev, rewardId]);
         return response.data;
       }
       return { success: false, message: response.error || 'Failed to redeem reward' };
@@ -98,5 +109,5 @@ export const useRewards = (): UseRewardsReturn => {
     }
   }, []);
 
-  return { rewards, userStats, userPoints, isLoading, error, refetch: fetchData, redeemReward };
+  return { rewards, userStats, userPoints, redeemedBadgeIds, isLoading, error, refetch: fetchData, redeemReward };
 };

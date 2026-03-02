@@ -13,6 +13,10 @@ import {
   ComparisonData,
   ActivityEvent,
   ActivityFeedPage,
+  FollowRelation,
+  ReactionType,
+  ReactionCounts,
+  EventReactions,
 } from '../../api/types';
 
 // ── Leaderboard mock data ─────────────────────────────────────
@@ -71,9 +75,27 @@ export const mockSuggestedFriends: SuggestedFriend[] = [
 ];
 
 export const mockSearchResults: UserSearchResult[] = [
-  { userId: 'u2', displayName: 'Jordan Lee', mutualFriendCount: 3, relationshipStatus: 'none' },
-  { userId: 'u4', displayName: 'Taylor Kim', mutualFriendCount: 1, relationshipStatus: 'pending_received' },
-  { userId: 'u1', displayName: 'Alex Chen', mutualFriendCount: 0, relationshipStatus: 'friends' },
+  { userId: 'u2', displayName: 'Jordan Lee', mutualFriendCount: 3, relationshipStatus: 'none', followStatus: 'none' },
+  { userId: 'u4', displayName: 'Taylor Kim', mutualFriendCount: 1, relationshipStatus: 'pending_received', followStatus: 'none' },
+  { userId: 'u1', displayName: 'Alex Chen', mutualFriendCount: 0, relationshipStatus: 'friends', followStatus: 'mutual_follow' },
+];
+
+// ── Follow mock data ─────────────────────────────────────────
+
+export const mockFollowers: FollowRelation[] = [
+  { userId: 'u1', displayName: 'Alex Chen', followedAt: new Date(Date.now() - 7 * 86400000) },
+  { userId: 'u3', displayName: 'Sam Rivera', followedAt: new Date(Date.now() - 14 * 86400000) },
+  { userId: 'u5', displayName: 'Morgan Wu', followedAt: new Date(Date.now() - 3 * 86400000) },
+  { userId: 'u7', displayName: 'Riley Zhang', followedAt: new Date(Date.now() - 21 * 86400000) },
+  { userId: 'u9', displayName: 'Avery Singh', followedAt: new Date(Date.now() - 2 * 86400000) },
+  { userId: 'u11', displayName: 'Reese Tanaka', followedAt: new Date(Date.now() - 10 * 86400000) },
+];
+
+export const mockFollowing: FollowRelation[] = [
+  { userId: 'u1', displayName: 'Alex Chen', followedAt: new Date(Date.now() - 7 * 86400000) },
+  { userId: 'u3', displayName: 'Sam Rivera', followedAt: new Date(Date.now() - 14 * 86400000) },
+  { userId: 'u5', displayName: 'Morgan Wu', followedAt: new Date(Date.now() - 3 * 86400000) },
+  { userId: 'u8', displayName: 'Dakota Patel', followedAt: new Date(Date.now() - 5 * 86400000) },
 ];
 
 // ── Friend Profile & Comparison mock data ─────────────────────
@@ -93,6 +115,8 @@ export function getMockFriendProfile(userId: string): FriendProfileData {
       { id: 'w2', name: 'Pull Day', date: 'Feb 25', fullDate: new Date('2026-02-25'), duration: '38 min', totalSets: 10, totalReps: 80, formScore: 88, userId },
       { id: 'w3', name: 'Leg Day', date: 'Feb 23', fullDate: new Date('2026-02-23'), duration: '50 min', totalSets: 15, totalReps: 120, formScore: 85, userId },
     ],
+    isFollowing: mockFollowing.some(f => f.userId === userId),
+    isFollowedBy: mockFollowers.some(f => f.userId === userId),
   };
 }
 
@@ -207,4 +231,80 @@ export function getMockActivityFeed(
     nextCursor: page.length > 0 ? page[page.length - 1].id : null,
     hasMore,
   };
+}
+
+// ── Reactions mock data ─────────────────────────────────────
+
+const MOCK_CURRENT_USER_ID = 'current';
+const ALL_REACTION_TYPES: ReactionType[] = ['like', 'muscle', 'fire', 'clap'];
+
+// Map<eventId, Map<userId, ReactionType>> — each user has at most one reaction per event
+const reactionStore = new Map<string, Map<string, ReactionType>>();
+
+// Seed some initial reactions for visual interest
+(function seedReactions() {
+  const seeds: Record<string, Record<string, ReactionType>> = {
+    'ae1': { 'u3': 'like', 'u5': 'muscle', 'u8': 'like', 'u10': 'fire' },
+    'ae2': { 'u1': 'fire', 'u5': 'fire', 'u8': 'clap', 'u10': 'clap' },
+    'ae3': { 'u1': 'like', 'u3': 'muscle', 'u8': 'like', 'u10': 'like' },
+    'ae5': { 'u1': 'like', 'u3': 'fire', 'u5': 'clap' },
+  };
+  for (const [eventId, userReactions] of Object.entries(seeds)) {
+    const eventMap = new Map<string, ReactionType>();
+    for (const [userId, type] of Object.entries(userReactions)) {
+      eventMap.set(userId, type);
+    }
+    reactionStore.set(eventId, eventMap);
+  }
+})();
+
+function computeCounts(eventMap: Map<string, ReactionType>): ReactionCounts {
+  const counts: ReactionCounts = { like: 0, muscle: 0, fire: 0, clap: 0 };
+  for (const type of eventMap.values()) {
+    counts[type]++;
+  }
+  return counts;
+}
+
+export function getMockReactionsForEvents(
+  eventIds: string[],
+): Record<string, EventReactions> {
+  const result: Record<string, EventReactions> = {};
+
+  for (const eventId of eventIds) {
+    const eventMap = reactionStore.get(eventId);
+    if (eventMap) {
+      result[eventId] = {
+        counts: computeCounts(eventMap),
+        userReaction: eventMap.get(MOCK_CURRENT_USER_ID) ?? null,
+      };
+    } else {
+      result[eventId] = {
+        counts: { like: 0, muscle: 0, fire: 0, clap: 0 },
+        userReaction: null,
+      };
+    }
+  }
+  return result;
+}
+
+export function toggleMockReaction(
+  eventId: string,
+  reactionType: ReactionType,
+): { added: boolean; previousReaction: ReactionType | null } {
+  if (!reactionStore.has(eventId)) {
+    reactionStore.set(eventId, new Map());
+  }
+  const eventMap = reactionStore.get(eventId)!;
+  const current = eventMap.get(MOCK_CURRENT_USER_ID) ?? null;
+
+  if (current === reactionType) {
+    // Same reaction — remove it
+    eventMap.delete(MOCK_CURRENT_USER_ID);
+    return { added: false, previousReaction: current };
+  } else {
+    // Different or no reaction — set the new one
+    eventMap.set(MOCK_CURRENT_USER_ID, reactionType);
+    return { added: true, previousReaction: current };
+  }
 }

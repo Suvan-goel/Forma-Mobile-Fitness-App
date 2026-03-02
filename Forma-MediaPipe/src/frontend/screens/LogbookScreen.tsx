@@ -27,7 +27,7 @@ import {
   BookOpen,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
+import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts, useDeleteWorkout, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
@@ -95,7 +95,7 @@ const CalendarModal = ({
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.calendarOuter} onStartShouldSetResponder={() => true}>
           <LinearGradient
-            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            colors={SCREEN_GRADIENT_COLORS}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.calendarGradient}
@@ -608,7 +608,7 @@ export const LogbookScreen: React.FC = () => {
           <TouchableOpacity style={styles.selectionOverlay} activeOpacity={1} onPress={() => setOpenDropdown(null)}>
             <View style={styles.selectionContainer} onStartShouldSetResponder={() => true}>
               <LinearGradient
-                colors={['#1E1A2E', '#151020', '#0C0A14']}
+                colors={SCREEN_GRADIENT_COLORS}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.selectionGradient}

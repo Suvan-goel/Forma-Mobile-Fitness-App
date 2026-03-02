@@ -440,14 +440,14 @@ function computeLegExtensionScore(repWindow: RepWindow): number {
     const tExtend = repWindow.tExtended - repWindow.tStart;  // concentric (extend)
     const tReturn = repWindow.tEnd - repWindow.tExtended;     // eccentric (return)
 
-    // Penalize if too fast
+    // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
     if (tExtend > 0 && tExtend < PENALTY_CONFIGS.TEMPO_EXTEND.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_EXTEND.deadzone - tExtend;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_EXTEND });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_EXTEND, deadzone: 0 } });
     }
     if (tReturn > 0 && tReturn < PENALTY_CONFIGS.TEMPO_RETURN.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_RETURN.deadzone - tReturn;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_RETURN });
+      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
     }
   }
 

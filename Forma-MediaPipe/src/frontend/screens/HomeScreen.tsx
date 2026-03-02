@@ -45,6 +45,7 @@ import {
   COLORS,
   SPACING,
   FONTS,
+  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
@@ -191,7 +192,7 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigateToTab('Analytics')}
           >
             <LinearGradient
-              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              colors={SCREEN_GRADIENT_COLORS}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroCard}

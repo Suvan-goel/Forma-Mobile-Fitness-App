@@ -257,7 +257,7 @@ export function calculateSignedVerticalAngleSagittal(
   let cy = rightMid.y - leftMid.y;
   let cz = (rightMid.z ?? 0) - (leftMid.z ?? 0);
   const coronalMag = Math.sqrt(cx * cx + cy * cy + cz * cz);
-  if (coronalMag < 1e-8) return NaN;
+  if (coronalMag < 1e-8) return 0;
   cx /= coronalMag;
   cy /= coronalMag;
   cz /= coronalMag;

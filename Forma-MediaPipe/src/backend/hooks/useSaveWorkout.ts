@@ -138,22 +138,30 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
               }).then((record) => {
                 // Link to workout
                 if (record && params.workoutSessionId) {
-                  linkWorkoutId(params.workoutSessionId, sessionId).catch(() => {});
+                  linkWorkoutId(params.workoutSessionId, sessionId).catch((err) => {
+                    if (__DEV__) console.warn('[useSaveWorkout] Failed to link workout ID', err);
+                  });
                 }
                 // Save to camera roll if requested
                 if (s.saveToCameraRoll && record && MediaLibrary) {
                   MediaLibrary.requestPermissionsAsync().then(({ status }: { status: string }) => {
                     if (status === 'granted') {
-                      MediaLibrary.saveToLibraryAsync(record.videoPath).catch(() => {});
+                      MediaLibrary.saveToLibraryAsync(record.videoPath).catch((err: unknown) => {
+                        if (__DEV__) console.warn('[useSaveWorkout] Failed to save to camera roll', err);
+                      });
                     }
-                  }).catch(() => {});
+                  }).catch((err: unknown) => {
+                    if (__DEV__) console.warn('[useSaveWorkout] Failed to request media library permissions', err);
+                  });
                 }
               }).catch(() => {
                 if (__DEV__) console.warn('[useSaveWorkout] Recording save failed for', ex.name, 'set', j + 1);
               });
             } else {
               // Clean up opted-out recordings
-              cleanupTempRecording(s.tempRecordingUrl).catch(() => {});
+              cleanupTempRecording(s.tempRecordingUrl).catch((err) => {
+                if (__DEV__) console.warn('[useSaveWorkout] Failed to cleanup temp recording', err);
+              });
             }
           }
         }

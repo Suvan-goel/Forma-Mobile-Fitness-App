@@ -131,12 +131,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-    width: 10,
-    height: 0,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: -5,
   },
   logoWrap: {
     width: 50,

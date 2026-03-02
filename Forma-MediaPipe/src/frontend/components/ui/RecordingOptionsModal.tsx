@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, Video, Download, Check } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS } from '../../constants/theme';
 
 interface RecordingOptionsModalProps {
   visible: boolean;
@@ -48,7 +48,7 @@ export const RecordingOptionsModal: React.FC<RecordingOptionsModalProps> = ({
           onPress={() => {}}
         >
           <LinearGradient
-            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            colors={SCREEN_GRADIENT_COLORS}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cardGradient}

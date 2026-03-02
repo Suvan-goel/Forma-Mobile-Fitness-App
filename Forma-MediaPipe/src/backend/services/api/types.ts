@@ -235,6 +235,7 @@ export interface UserSearchResult {
   avatarUrl?: string;
   mutualFriendCount: number;
   relationshipStatus: 'none' | 'pending_sent' | 'pending_received' | 'friends';
+  followStatus: FollowStatus;
 }
 
 export interface FriendProfileData {
@@ -247,6 +248,8 @@ export interface FriendProfileData {
   avgFormScore: number;
   earnedBadgeIds: string[];
   recentWorkouts: WorkoutSession[];
+  isFollowing: boolean;
+  isFollowedBy: boolean;
 }
 
 export interface ComparisonStats {
@@ -264,6 +267,21 @@ export interface ComparisonData {
   you: ComparisonStats;
   friend: ComparisonStats;
 }
+
+// Follows
+export interface FollowRelation {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  followedAt: Date;
+}
+
+export interface FollowCounts {
+  followerCount: number;
+  followingCount: number;
+}
+
+export type FollowStatus = 'none' | 'following' | 'followed_by' | 'mutual_follow';
 
 // Activity
 export type ActivityEventType = 'workout_completed' | 'badge_earned' | 'personal_record' | 'streak_milestone';
@@ -289,6 +307,21 @@ export interface CreateActivityEventPayload {
   eventType: ActivityEventType;
   payload: Record<string, unknown>;
   sourceId?: string;
+}
+
+// Reactions
+export type ReactionType = 'like' | 'muscle' | 'fire' | 'clap';
+
+export interface ReactionCounts {
+  like: number;
+  muscle: number;
+  fire: number;
+  clap: number;
+}
+
+export interface EventReactions {
+  counts: ReactionCounts;
+  userReaction: ReactionType | null;
 }
 
 // ── Subscription types ──────────────────────────────────────

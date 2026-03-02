@@ -18,6 +18,11 @@ import {
   CreateActivityEventPayload,
   LeaderboardEntry,
   ActivityEvent,
+  FollowRelation,
+  FollowCounts,
+  FollowStatus,
+  ReactionType,
+  EventReactions,
 } from './types';
 import { API_CONFIG } from './client';
 import { mockDelay } from '../mock/delay';
@@ -30,6 +35,10 @@ import {
   getMockFriendProfile,
   getMockComparison,
   getMockActivityFeed,
+  getMockReactionsForEvents,
+  toggleMockReaction,
+  mockFollowers,
+  mockFollowing,
 } from '../mock/data/social.mock';
 import { supabase } from '../supabase/client';
 
@@ -337,6 +346,31 @@ export const socialService = {
       .eq('id', friendshipId);
 
     if (error) return { data: undefined, success: false, error: error.message };
+
+    // Auto-follow both directions when accepting a friend request
+    // Uses SECURITY DEFINER RPC to bypass RLS (can't insert rows for other user)
+    if (accept) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: friendship } = await supabase
+          .from('friendships')
+          .select('requester_id, addressee_id')
+          .eq('id', friendshipId)
+          .single();
+
+        if (friendship) {
+          const otherId = friendship.requester_id === user.id
+            ? friendship.addressee_id
+            : friendship.requester_id;
+
+          await supabase.rpc('auto_follow_both', {
+            user_a: user.id,
+            user_b: otherId,
+          });
+        }
+      }
+    }
+
     return { data: undefined, success: true };
   },
 
@@ -346,12 +380,36 @@ export const socialService = {
       return { data: undefined, success: true };
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: undefined, success: false, error: 'Not authenticated' };
+
+    // Query friendship to get the other user's ID before deleting
+    const { data: friendship } = await supabase
+      .from('friendships')
+      .select('requester_id, addressee_id')
+      .eq('id', friendshipId)
+      .single();
+
     const { error } = await supabase
       .from('friendships')
       .delete()
       .eq('id', friendshipId);
 
     if (error) return { data: undefined, success: false, error: error.message };
+
+    // Auto-unfollow both directions
+    // Uses SECURITY DEFINER RPC to bypass RLS (can't delete rows for other user)
+    if (friendship) {
+      const otherId = friendship.requester_id === user.id
+        ? friendship.addressee_id
+        : friendship.requester_id;
+
+      await supabase.rpc('auto_unfollow_both', {
+        user_a: user.id,
+        user_b: otherId,
+      });
+    }
+
     return { data: undefined, success: true };
   },
 
@@ -397,6 +455,22 @@ export const socialService = {
       });
     });
 
+    // Get follow relationships for search results
+    const { data: outgoingFollows } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', user.id)
+      .in('following_id', searchedIds);
+
+    const { data: incomingFollows } = await supabase
+      .from('follows')
+      .select('follower_id')
+      .eq('following_id', user.id)
+      .in('follower_id', searchedIds);
+
+    const followingSet = new Set((outgoingFollows ?? []).map((f: any) => f.following_id));
+    const followedBySet = new Set((incomingFollows ?? []).map((f: any) => f.follower_id));
+
     const results: UserSearchResult[] = (profiles ?? []).map((p: any) => {
       const friendship = friendshipMap.get(p.id);
       let relationshipStatus: UserSearchResult['relationshipStatus'] = 'none';
@@ -406,12 +480,19 @@ export const socialService = {
           relationshipStatus = friendship.isRequester ? 'pending_sent' : 'pending_received';
         }
       }
+
+      let followStatus: FollowStatus = 'none';
+      if (followingSet.has(p.id) && followedBySet.has(p.id)) followStatus = 'mutual_follow';
+      else if (followingSet.has(p.id)) followStatus = 'following';
+      else if (followedBySet.has(p.id)) followStatus = 'followed_by';
+
       return {
         userId: p.id,
         displayName: p.display_name,
         avatarUrl: p.avatar_url ?? undefined,
         mutualFriendCount: 0,
         relationshipStatus,
+        followStatus,
       };
     });
 
@@ -474,6 +555,19 @@ export const socialService = {
       ? allWorkouts.reduce((sum: number, w: any) => sum + (w.form_score ?? 0), 0) / allWorkouts.length
       : 0;
 
+    // Check follow relationship
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    let isFollowing = false;
+    let isFollowedBy = false;
+    if (currentUser) {
+      const [outRes, inRes] = await Promise.all([
+        supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', userId).limit(1),
+        supabase.from('follows').select('id').eq('follower_id', userId).eq('following_id', currentUser.id).limit(1),
+      ]);
+      isFollowing = (outRes.data?.length ?? 0) > 0;
+      isFollowedBy = (inRes.data?.length ?? 0) > 0;
+    }
+
     return {
       data: {
         userId,
@@ -485,6 +579,8 @@ export const socialService = {
         avgFormScore: Math.round(avgFormScore * 10) / 10,
         earnedBadgeIds: (badgesResult.data ?? []).map((b: any) => b.badge_id),
         recentWorkouts,
+        isFollowing,
+        isFollowedBy,
       },
       success: true,
     };
@@ -558,17 +654,14 @@ export const socialService = {
       return { data: { events: [], nextCursor: null, hasMore: false }, success: false, error: 'Not authenticated' };
     }
 
-    // Get friend IDs first
-    const { data: friendships } = await supabase
-      .from('friendships')
-      .select('requester_id, addressee_id')
-      .eq('status', 'accepted')
-      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
+    // Get followed user IDs (activity feed shows people you follow + self)
+    const { data: followRows } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', user.id);
 
-    const friendIds = (friendships ?? []).map((f: any) =>
-      f.requester_id === user.id ? f.addressee_id : f.requester_id,
-    );
-    const allUserIds = [user.id, ...friendIds];
+    const followedIds = (followRows ?? []).map((f: any) => f.following_id);
+    const allUserIds = [user.id, ...followedIds];
 
     let query = supabase
       .from('activity_events')
@@ -632,6 +725,191 @@ export const socialService = {
     };
   },
 
+  // ── Follows ────────────────────────────────────────────────
+
+  async getFollowers(userId?: string): Promise<ApiResponse<FollowRelation[]>> {
+    if (API_CONFIG.services.social) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: mockFollowers, success: true };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: [], success: false, error: 'Not authenticated' };
+
+    const targetId = userId ?? user.id;
+    const { data, error } = await supabase
+      .from('follows')
+      .select('follower_id, created_at')
+      .eq('following_id', targetId)
+      .order('created_at', { ascending: false });
+
+    if (error) return { data: [], success: false, error: error.message };
+
+    const followerIds = (data ?? []).map((r: any) => r.follower_id);
+    if (followerIds.length === 0) return { data: [], success: true };
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url')
+      .in('id', followerIds);
+
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    const createdAtMap = new Map((data ?? []).map((r: any) => [r.follower_id, r.created_at]));
+
+    const followers: FollowRelation[] = followerIds.map(id => {
+      const profile = profileMap.get(id);
+      return {
+        userId: id,
+        displayName: profile?.display_name ?? 'Unknown',
+        avatarUrl: profile?.avatar_url ?? undefined,
+        followedAt: new Date(createdAtMap.get(id)),
+      };
+    });
+
+    return { data: followers, success: true };
+  },
+
+  async getFollowing(userId?: string): Promise<ApiResponse<FollowRelation[]>> {
+    if (API_CONFIG.services.social) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: mockFollowing, success: true };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: [], success: false, error: 'Not authenticated' };
+
+    const targetId = userId ?? user.id;
+    const { data, error } = await supabase
+      .from('follows')
+      .select('following_id, created_at')
+      .eq('follower_id', targetId)
+      .order('created_at', { ascending: false });
+
+    if (error) return { data: [], success: false, error: error.message };
+
+    const followingIds = (data ?? []).map((r: any) => r.following_id);
+    if (followingIds.length === 0) return { data: [], success: true };
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url')
+      .in('id', followingIds);
+
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    const createdAtMap = new Map((data ?? []).map((r: any) => [r.following_id, r.created_at]));
+
+    const following: FollowRelation[] = followingIds.map(id => {
+      const profile = profileMap.get(id);
+      return {
+        userId: id,
+        displayName: profile?.display_name ?? 'Unknown',
+        avatarUrl: profile?.avatar_url ?? undefined,
+        followedAt: new Date(createdAtMap.get(id)),
+      };
+    });
+
+    return { data: following, success: true };
+  },
+
+  async followUser(targetUserId: string): Promise<ApiResponse<void>> {
+    if (API_CONFIG.services.social) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: undefined, success: true };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: undefined, success: false, error: 'Not authenticated' };
+
+    if (user.id === targetUserId) {
+      return { data: undefined, success: false, error: 'Cannot follow yourself' };
+    }
+
+    // Check target's privacy level
+    const { data: targetProfile } = await supabase
+      .from('profiles')
+      .select('privacy_level')
+      .eq('id', targetUserId)
+      .single();
+
+    const privacyLevel = targetProfile?.privacy_level ?? 'friends';
+
+    if (privacyLevel === 'private') {
+      return { data: undefined, success: false, error: 'Cannot follow private profiles' };
+    }
+
+    if (privacyLevel === 'friends') {
+      // Check if they are friends
+      const { data: friendship } = await supabase
+        .from('friendships')
+        .select('id')
+        .eq('status', 'accepted')
+        .or(`and(requester_id.eq.${user.id},addressee_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},addressee_id.eq.${user.id})`)
+        .limit(1);
+
+      if (!friendship || friendship.length === 0) {
+        return { data: undefined, success: false, error: 'Must be friends to follow this user' };
+      }
+    }
+
+    const { error } = await supabase
+      .from('follows')
+      .upsert(
+        { follower_id: user.id, following_id: targetUserId },
+        { onConflict: 'follower_id,following_id' },
+      );
+
+    if (error) return { data: undefined, success: false, error: error.message };
+    return { data: undefined, success: true };
+  },
+
+  async unfollowUser(targetUserId: string): Promise<ApiResponse<void>> {
+    if (API_CONFIG.services.social) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: undefined, success: true };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: undefined, success: false, error: 'Not authenticated' };
+
+    const { error } = await supabase
+      .from('follows')
+      .delete()
+      .eq('follower_id', user.id)
+      .eq('following_id', targetUserId);
+
+    if (error) return { data: undefined, success: false, error: error.message };
+    return { data: undefined, success: true };
+  },
+
+  async getFollowCounts(userId?: string): Promise<ApiResponse<FollowCounts>> {
+    if (API_CONFIG.services.social) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return {
+        data: { followerCount: mockFollowers.length, followingCount: mockFollowing.length },
+        success: true,
+      };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { data: { followerCount: 0, followingCount: 0 }, success: false, error: 'Not authenticated' };
+    }
+
+    const targetId = userId ?? user.id;
+    const [followersRes, followingRes] = await Promise.all([
+      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', targetId),
+      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', targetId),
+    ]);
+
+    return {
+      data: {
+        followerCount: followersRes.count ?? 0,
+        followingCount: followingRes.count ?? 0,
+      },
+      success: true,
+    };
+  },
+
   // ── Privacy Level ────────────────────────────────────────────
 
   async getPrivacyLevel(): Promise<ApiResponse<'public' | 'friends' | 'private'>> {
@@ -690,6 +968,117 @@ export const socialService = {
 
     if (error) return { data: undefined, success: false, error: error.message };
     return { data: undefined, success: true };
+  },
+
+  // ── Reactions ──────────────────────────────────────────────
+
+  async getReactionsForEvents(
+    eventIds: string[],
+  ): Promise<ApiResponse<Record<string, EventReactions>>> {
+    if (API_CONFIG.services.social) {
+      await mockDelay(API_CONFIG.mockDelayMs);
+      return { data: getMockReactionsForEvents(eventIds), success: true };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      const empty: Record<string, EventReactions> = {};
+      for (const id of eventIds) {
+        empty[id] = { counts: { like: 0, muscle: 0, fire: 0, clap: 0 }, userReaction: null };
+      }
+      return { data: empty, success: false, error: 'Not authenticated' };
+    }
+
+    if (eventIds.length === 0) return { data: {}, success: true };
+
+    // Fetch all reactions for these events in one query
+    const { data: rows, error } = await supabase
+      .from('activity_reactions')
+      .select('event_id, user_id, reaction_type')
+      .in('event_id', eventIds);
+
+    if (error) {
+      const empty: Record<string, EventReactions> = {};
+      for (const id of eventIds) {
+        empty[id] = { counts: { like: 0, muscle: 0, fire: 0, clap: 0 }, userReaction: null };
+      }
+      return { data: empty, success: false, error: error.message };
+    }
+
+    // Build result map
+    const result: Record<string, EventReactions> = {};
+    for (const id of eventIds) {
+      result[id] = { counts: { like: 0, muscle: 0, fire: 0, clap: 0 }, userReaction: null };
+    }
+
+    for (const row of (rows ?? [])) {
+      const eventReactions = result[row.event_id];
+      if (!eventReactions) continue;
+      const type = row.reaction_type as ReactionType;
+      eventReactions.counts[type]++;
+      if (row.user_id === user.id) {
+        eventReactions.userReaction = type;
+      }
+    }
+
+    return { data: result, success: true };
+  },
+
+  async toggleReaction(
+    eventId: string,
+    reactionType: ReactionType,
+  ): Promise<ApiResponse<{ added: boolean; previousReaction: ReactionType | null }>> {
+    if (API_CONFIG.services.social) {
+      await mockDelay(100);
+      const result = toggleMockReaction(eventId, reactionType);
+      return { data: result, success: true };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { data: { added: false, previousReaction: null }, success: false, error: 'Not authenticated' };
+    }
+
+    // Check if user already has a reaction on this event
+    const { data: existing } = await supabase
+      .from('activity_reactions')
+      .select('id, reaction_type')
+      .eq('event_id', eventId)
+      .eq('user_id', user.id)
+      .limit(1);
+
+    const currentRow = existing && existing.length > 0 ? existing[0] : null;
+    const previousReaction = (currentRow?.reaction_type as ReactionType) ?? null;
+
+    if (previousReaction === reactionType) {
+      // Same reaction — remove it
+      const { error } = await supabase
+        .from('activity_reactions')
+        .delete()
+        .eq('id', currentRow!.id);
+
+      if (error) return { data: { added: false, previousReaction: null }, success: false, error: error.message };
+      return { data: { added: false, previousReaction }, success: true };
+    }
+
+    if (currentRow) {
+      // Different reaction — update to the new type
+      const { error } = await supabase
+        .from('activity_reactions')
+        .update({ reaction_type: reactionType })
+        .eq('id', currentRow.id);
+
+      if (error) return { data: { added: false, previousReaction: null }, success: false, error: error.message };
+      return { data: { added: true, previousReaction }, success: true };
+    }
+
+    // No existing reaction — insert new one
+    const { error } = await supabase
+      .from('activity_reactions')
+      .insert({ event_id: eventId, user_id: user.id, reaction_type: reactionType });
+
+    if (error) return { data: { added: false, previousReaction: null }, success: false, error: error.message };
+    return { data: { added: true, previousReaction: null }, success: true };
   },
 
   // ── Milestone Detection ───────────────────────────────────

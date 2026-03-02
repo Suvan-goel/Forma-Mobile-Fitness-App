@@ -35,10 +35,16 @@ export const COLORS = {
   chartPrimary: '#8B5CF6',
   chartSecondary: 'rgba(255,255,255,0.06)',
 
+  // Overlays
+  overlayBackground: 'rgba(0,0,0,0.82)',
+
   // Neon glow — UV blacklight violet
   glowViolet: 'rgba(139, 92, 246, 0.35)',
   glowVioletStrong: 'rgba(139, 92, 246, 0.55)',
 } as const;
+
+/** Standard screen background gradient — deep purple-black */
+export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#1E1A2E', '#151020', '#0C0A14'];
 
 /** Analytics-style gradient for all cards (same border, gradient, and colors across app) */
 export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#1A1A1A', '#111111', '#0E0E0E'];

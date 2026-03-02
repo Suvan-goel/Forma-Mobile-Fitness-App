@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, Video, Download, Check, Dumbbell } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS } from '../../constants/theme';
 
 interface WeightInputModalProps {
   visible: boolean;
@@ -92,7 +92,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
           onPress={() => {}}
         >
           <LinearGradient
-            colors={['#1E1A2E', '#151020', '#0C0A14']}
+            colors={SCREEN_GRADIENT_COLORS}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cardGradient}

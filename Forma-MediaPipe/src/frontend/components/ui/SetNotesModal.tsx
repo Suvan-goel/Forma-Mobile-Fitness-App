@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, ChevronDown, ChevronUp, Clock, TrendingUp, Target, FileText } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { MonoText } from '../typography/MonoText';
 import { generateSetSummary } from '../../../utils/setNotesSummary';
@@ -98,7 +98,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
           <View style={styles.sheetGlassEdge}>
             {/* Hero header with purple gradient */}
             <LinearGradient
-              colors={['#1E1A2E', '#151020', '#0C0A14']}
+              colors={SCREEN_GRADIENT_COLORS}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.headerGradient}

@@ -99,10 +99,9 @@ export const CameraScreen: React.FC = () => {
   const landmarkRecordingStartRef = useRef(0);
 
   const category = route.params?.category ?? 'Weightlifting';
-  const exerciseNameFromRoute = (route.params as any)?.exerciseName;
-  const exerciseId = (route.params as any)?.exerciseId;
-  const returnToCurrentWorkout = (route.params as any)?.returnToCurrentWorkout ?? false;
-  const cameraSessionKey = (route.params as any)?.cameraSessionKey ?? 'default';
+  const exerciseNameFromRoute = route.params?.exerciseName;
+  const exerciseId = route.params?.exerciseId;
+  const returnToCurrentWorkout = route.params?.returnToCurrentWorkout ?? false;
 
 
   // Setup guide screen data
@@ -610,6 +609,13 @@ export const CameraScreen: React.FC = () => {
       });
     }, 1200);
   }, [autoScreenRecording, setAutoScreenRecording, autoRecToastAnim, autoRecToastTimer]);
+
+  // Cleanup toast timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoRecToastTimer.current) clearTimeout(autoRecToastTimer.current);
+    };
+  }, []);
 
   const handlePausePress = useCallback(() => {
     setIsPaused(prev => !prev);

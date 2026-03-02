@@ -17,7 +17,7 @@ const FEATURES: SubscriptionFeature[] = [
 ];
 
 export const mockSubscriptionStatus: SubscriptionStatus = {
-  plan: 'free',
-  planLabel: 'Free',
+  plan: 'premium',
+  planLabel: 'Pro',
   features: FEATURES,
 };
