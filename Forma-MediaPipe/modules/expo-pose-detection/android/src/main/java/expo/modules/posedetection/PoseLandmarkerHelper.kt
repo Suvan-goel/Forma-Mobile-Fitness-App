@@ -14,11 +14,11 @@ import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 
 class PoseLandmarkerHelper(
   private val context: Context,
+  private val modelAsset: String = "pose_landmarker_full.task",
   private val listener: ((PoseLandmarkerResult, Int, Int) -> Unit)? = null
 ) {
   companion object {
     private const val TAG = "PoseLandmarkerHelper"
-    private const val MODEL_ASSET = "pose_landmarker_full.task"
     private const val MIN_POSE_DETECTION_CONFIDENCE = 0.35F
     private const val MIN_POSE_TRACKING_CONFIDENCE = 0.35F
     private const val MIN_POSE_PRESENCE_CONFIDENCE = 0.35F
@@ -34,7 +34,7 @@ class PoseLandmarkerHelper(
     try {
       val baseOptions = BaseOptions.builder()
         .setDelegate(Delegate.CPU)
-        .setModelAssetPath(MODEL_ASSET)
+        .setModelAssetPath(modelAsset)
         .build()
 
       val options = PoseLandmarker.PoseLandmarkerOptions.builder()

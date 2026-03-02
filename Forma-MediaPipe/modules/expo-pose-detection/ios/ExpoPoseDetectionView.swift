@@ -29,7 +29,13 @@ class ExpoPoseDetectionView: ExpoView {
   // MARK: - Configuration
   private var frameLimit: Int = 20
   private var showSkeleton: Bool = false
+  private var modelName: String = "pose_landmarker_full"
   private var isSessionRunning = false
+
+  private static let allowedModels: Set<String> = [
+    "pose_landmarker_full",
+    "pose_landmarker_heavy"
+  ]
 
   // MARK: - Frame throttling
   private var lastProcessedFrameTimeMs: Double = 0
@@ -89,6 +95,15 @@ class ExpoPoseDetectionView: ExpoView {
       if !show {
         self?.overlayView?.clear()
       }
+    }
+  }
+
+  func configureModelName(_ name: String) {
+    let validName = Self.allowedModels.contains(name) ? name : "pose_landmarker_full"
+    guard validName != modelName else { return }
+    modelName = validName
+    sessionQueue.async { [weak self] in
+      self?.reinitializePoseLandmarker()
     }
   }
 
@@ -190,13 +205,32 @@ class ExpoPoseDetectionView: ExpoView {
   }
 
   private func initializePoseLandmarker() {
-    poseLandmarkerService = PoseLandmarkerService(
-      modelName: "pose_landmarker_full",
+    let service = PoseLandmarkerService(
+      modelName: modelName,
       minPoseDetectionConfidence: 0.35,
       minPosePresenceConfidence: 0.35,
       minTrackingConfidence: 0.35,
       delegate: self
     )
+    if service == nil && modelName != "pose_landmarker_full" {
+      print("[ExpoPoseDetection] Model '\(modelName)' not found, falling back to pose_landmarker_full")
+      poseLandmarkerService = PoseLandmarkerService(
+        modelName: "pose_landmarker_full",
+        minPoseDetectionConfidence: 0.35,
+        minPosePresenceConfidence: 0.35,
+        minTrackingConfidence: 0.35,
+        delegate: self
+      )
+    } else {
+      poseLandmarkerService = service
+    }
+  }
+
+  private func reinitializePoseLandmarker() {
+    poseLandmarkerService?.clearPoseLandmarker()
+    poseLandmarkerService = nil
+    lastProcessedFrameTimeMs = 0
+    initializePoseLandmarker()
   }
 
   // MARK: - Session control

@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.source_files   = '**/*.{h,m,swift}'
-  s.resource       = 'Models/pose_landmarker_full.task'
+  s.resources      = 'Models/*.task'
 
   s.dependency 'ExpoModulesCore'
   s.dependency 'MediaPipeTasksVision'

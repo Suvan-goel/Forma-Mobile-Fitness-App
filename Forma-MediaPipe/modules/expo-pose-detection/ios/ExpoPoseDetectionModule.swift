@@ -22,6 +22,10 @@ public class ExpoPoseDetectionModule: Module {
       Prop("showSkeleton") { (view: ExpoPoseDetectionView, show: Bool) in
         view.configureShowSkeleton(show)
       }
+
+      Prop("modelName") { (view: ExpoPoseDetectionView, name: String) in
+        view.configureModelName(name)
+      }
     }
   }
 }

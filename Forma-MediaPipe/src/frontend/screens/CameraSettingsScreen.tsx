@@ -208,6 +208,7 @@ export const CameraSettingsScreen: React.FC = () => {
     restTimerDurationSeconds,
     selectedTrainerId,
     autoScreenRecording,
+    poseModel,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
@@ -215,6 +216,7 @@ export const CameraSettingsScreen: React.FC = () => {
     setRestTimerEnabled,
     setRestTimerDurationSeconds,
     setAutoScreenRecording,
+    setPoseModel,
   } = useCameraSettings();
 
   const [infoModal, setInfoModal] = useState<string | null>(null);
@@ -243,6 +245,10 @@ export const CameraSettingsScreen: React.FC = () => {
     'Debug Mode': {
       title: 'Debug Mode',
       description: 'Enables the developer debug overlay showing joint angles, detection confidence, and raw pose data. Turns on skeleton overlay and disables TTS.',
+    },
+    'Heavy Model': {
+      title: 'Heavy Model',
+      description: 'Uses the heavy (29 MB) pose detection model instead of the default full (9 MB) model. The heavy model may provide more accurate landmark detection but uses more memory and may run slower on older devices.\n\nRequires a brief re-initialization when toggled.',
     },
   };
 
@@ -508,8 +514,8 @@ export const CameraSettingsScreen: React.FC = () => {
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
-            <View style={styles.cardEdge}>
-              <View style={styles.row}>
+            <View style={styles.groupEdge}>
+              <View style={styles.groupRow}>
                 <View style={[styles.iconWrap, { backgroundColor: debugMode ? 'rgba(224, 120, 86, 0.10)' : 'rgba(255, 255, 255, 0.04)' }]}>
                   <Bug size={14} color={debugMode ? COLORS.orange : COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
@@ -522,6 +528,22 @@ export const CameraSettingsScreen: React.FC = () => {
                   onValueChange={handleDebugChange}
                   trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(224, 120, 86, 0.4)' }}
                   thumbColor={debugMode ? COLORS.orange : 'rgba(255, 255, 255, 0.3)'}
+                />
+              </View>
+              <View style={styles.rowDivider} />
+              <View style={styles.groupRow}>
+                <View style={[styles.iconWrap, { backgroundColor: poseModel === 'pose_landmarker_heavy' ? 'rgba(96, 165, 250, 0.10)' : 'rgba(255, 255, 255, 0.04)' }]}>
+                  <SlidersHorizontal size={14} color={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : COLORS.textTertiary} strokeWidth={1.5} />
+                </View>
+                <Text style={[styles.rowLabel, poseModel === 'pose_landmarker_heavy' && { color: '#60A5FA' }]}>Heavy Model</Text>
+                <TouchableOpacity onPress={() => setInfoModal('Heavy Model')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
+                <Switch
+                  value={poseModel === 'pose_landmarker_heavy'}
+                  onValueChange={(val) => setPoseModel(val ? 'pose_landmarker_heavy' : 'pose_landmarker_full')}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(96, 165, 250, 0.4)' }}
+                  thumbColor={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
             </View>

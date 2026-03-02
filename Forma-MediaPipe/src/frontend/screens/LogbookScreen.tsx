@@ -794,8 +794,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
-    marginBottom: 4,
-    marginTop: 12,
+    marginBottom: 2,
+    marginTop: 18,
     gap: 20,
   },
   filterTab: {
@@ -822,7 +822,8 @@ const styles = StyleSheet.create({
 
   /* ── Active Filter Chip ─────────────────── */
   activeFilterRow: {
-    marginBottom: 12,
+    marginBottom: 0,
+    marginTop: 6,
   },
   activeFilterChip: {
     flexDirection: 'row',

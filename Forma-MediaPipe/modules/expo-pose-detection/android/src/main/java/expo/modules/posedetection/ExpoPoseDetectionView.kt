@@ -29,6 +29,7 @@ class ExpoPoseDetectionView(
 
   companion object {
     private const val TAG = "ExpoPoseDetection"
+    private val ALLOWED_MODELS = setOf("pose_landmarker_full", "pose_landmarker_heavy")
 
     @JvmStatic
     var activeInstance: ExpoPoseDetectionView? = null
@@ -40,6 +41,7 @@ class ExpoPoseDetectionView(
   // Configuration
   private var frameLimit: Int = 20
   private var showSkeleton: Boolean = false
+  private var currentModelName: String = "pose_landmarker_full"
 
   // Camera
   private var cameraProvider: ProcessCameraProvider? = null
@@ -87,6 +89,7 @@ class ExpoPoseDetectionView(
     backgroundExecutor.execute {
       poseLandmarkerHelper = PoseLandmarkerHelper(
         context = context,
+        modelAsset = "${currentModelName}.task",
         listener = ::handlePoseResult
       )
     }
@@ -106,6 +109,21 @@ class ExpoPoseDetectionView(
     post {
       overlayView.visibility = if (show) VISIBLE else GONE
       if (!show) overlayView.clear()
+    }
+  }
+
+  fun configureModelName(name: String) {
+    val validName = if (ALLOWED_MODELS.contains(name)) name else "pose_landmarker_full"
+    if (validName == currentModelName) return
+    currentModelName = validName
+    backgroundExecutor.execute {
+      poseLandmarkerHelper?.clearPoseLandmarker()
+      lastProcessedFrameTimeMs = 0
+      poseLandmarkerHelper = PoseLandmarkerHelper(
+        context = context,
+        modelAsset = "${currentModelName}.task",
+        listener = ::handlePoseResult
+      )
     }
   }
 

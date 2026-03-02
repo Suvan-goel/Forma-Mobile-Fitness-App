@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
+import type { PoseModelName } from 'expo-pose-detection';
 
 export type CameraSettings = {
   showFeedback: boolean;
@@ -11,6 +12,7 @@ export type CameraSettings = {
   restTimerDurationSeconds: number;
   selectedTrainerId: string;
   autoScreenRecording: boolean;
+  poseModel: PoseModelName;
 };
 
 type CameraSettingsContextValue = CameraSettings & {
@@ -22,6 +24,7 @@ type CameraSettingsContextValue = CameraSettings & {
   setRestTimerDurationSeconds: (value: number) => void;
   setSelectedTrainerId: (id: string) => void;
   setAutoScreenRecording: (value: boolean) => void;
+  setPoseModel: (model: PoseModelName) => void;
 };
 
 const defaultSettings: CameraSettings = {
@@ -33,6 +36,7 @@ const defaultSettings: CameraSettings = {
   restTimerDurationSeconds: 90,
   selectedTrainerId: 'marcus',
   autoScreenRecording: false,
+  poseModel: 'pose_landmarker_full',
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
@@ -46,6 +50,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const [restTimerDurationSeconds, setRestTimerDurationSecondsRaw] = useState(defaultSettings.restTimerDurationSeconds);
   const [selectedTrainerId, setSelectedTrainerIdRaw] = useState(defaultSettings.selectedTrainerId);
   const [autoScreenRecording, setAutoScreenRecordingRaw] = useState(defaultSettings.autoScreenRecording);
+  const [poseModel, setPoseModelRaw] = useState<PoseModelName>(defaultSettings.poseModel);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -60,6 +65,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         if (typeof saved.restTimerDurationSeconds === 'number') setRestTimerDurationSecondsRaw(saved.restTimerDurationSeconds);
         if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
         if (typeof saved.autoScreenRecording === 'boolean') setAutoScreenRecordingRaw(saved.autoScreenRecording);
+        if (saved.poseModel === 'pose_landmarker_full' || saved.poseModel === 'pose_landmarker_heavy') setPoseModelRaw(saved.poseModel);
       } catch { /* ignore corrupt data */ }
     });
   }, []);
@@ -106,6 +112,11 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     persistSetting('autoScreenRecording', value);
   }, [persistSetting]);
 
+  const setPoseModel = useCallback((model: PoseModelName) => {
+    setPoseModelRaw(model);
+    persistSetting('poseModel', model);
+  }, [persistSetting]);
+
   const contextValue = useMemo<CameraSettingsContextValue>(() => ({
     showFeedback,
     isTTSEnabled,
@@ -115,6 +126,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     restTimerDurationSeconds,
     selectedTrainerId,
     autoScreenRecording,
+    poseModel,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
@@ -123,11 +135,12 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     setRestTimerDurationSeconds,
     setSelectedTrainerId,
     setAutoScreenRecording,
+    setPoseModel,
   }), [
     showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode,
-    restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording,
+    restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording, poseModel,
     setShowFeedback, setIsTTSEnabled, setShowSkeletonOverlay, setDebugMode,
-    setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording,
+    setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording, setPoseModel,
   ]);
 
   return (

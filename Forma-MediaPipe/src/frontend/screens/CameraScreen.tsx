@@ -61,7 +61,7 @@ export const CameraScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   const { addSetToExercise, sessionId, setPendingRecording } = useCurrentWorkout();
-  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording } = useCameraSettings();
+  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording, poseModel } = useCameraSettings();
   const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -689,7 +689,8 @@ export const CameraScreen: React.FC = () => {
   const poseDetectionProps = useMemo(() => ({
     frameLimit: 30,
     showSkeleton: effectiveShowSkeleton,
-  }), [effectiveShowSkeleton]);
+    modelName: poseModel,
+  }), [effectiveShowSkeleton, poseModel]);
 
   // Memoize display values to avoid recalculation
   const displayValues = useMemo(() => {
