@@ -97,14 +97,6 @@ export const FONTS = {
     semiboldFallback: 'System',
     boldFallback: 'System',
   },
-  // Legacy Serif — Playfair Display (kept for non-analytics screens)
-  serif: {
-    regular: 'PlayfairDisplay_400Regular',
-    bold: 'PlayfairDisplay_700Bold',
-    black: 'PlayfairDisplay_900Black',
-    regularFallback: 'Georgia',
-    boldFallback: 'Georgia',
-  },
   // UI Font — Inter (Sans-Serif)
   ui: {
     regular: 'Inter_400Regular',

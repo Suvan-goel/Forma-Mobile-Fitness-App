@@ -26,13 +26,14 @@ const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
   { label: 'ALL', value: 'All Time' },
 ];
 
-const Pill = memo(({ label, isActive, onPress }: { label: string; isActive: boolean; onPress: () => void }) => (
+const Tab = memo(({ label, isActive, onPress }: { label: string; isActive: boolean; onPress: () => void }) => (
   <TouchableOpacity
-    style={[styles.pill, isActive && styles.pillActive]}
+    style={styles.tab}
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <Text style={[styles.pillText, isActive && styles.pillTextActive]}>{label}</Text>
+    <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
+    {isActive && <View style={styles.underline} />}
   </TouchableOpacity>
 ));
 
@@ -44,7 +45,7 @@ export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = memo(({ optio
   return (
     <View style={styles.container}>
       {options.map((opt) => (
-        <Pill
+        <Tab
           key={opt.value}
           label={opt.label}
           isActive={selected === opt.value}
@@ -60,34 +61,31 @@ export { TIME_RANGE_OPTIONS };
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 20,
-    padding: 3,
-  },
-  pill: {
-    flex: 1,
-    height: 32,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-evenly',
+    marginBottom: 10,
+    marginTop: 12,
+    gap: 20,
   },
-  pillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderColor: 'rgba(139, 92, 246, 0.4)',
+  tab: {
+    alignItems: 'center',
+    paddingBottom: 6,
   },
-  pillText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 11,
-    letterSpacing: 2,
-    color: '#71717A',
+  tabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
   },
-  pillTextActive: {
+  tabTextActive: {
     color: '#FFFFFF',
+  },
+  underline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 });

@@ -16,7 +16,7 @@ import { OnboardingQuestions } from './OnboardingQuestions';
 import { OnboardingInterstitial } from './OnboardingInterstitial';
 import { OnboardingAuth } from './OnboardingAuth';
 import { COLORS } from '../constants/theme';
-import { CAMERA_SETTINGS_KEY } from '../contexts/CameraSettingsContext';
+import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
 
 const FREQUENCY_TO_TARGET: Record<string, string> = {
   '1-2 Days': '1-2',

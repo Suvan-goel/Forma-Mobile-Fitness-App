@@ -13,7 +13,7 @@ export type Keypoint = {
   score: number;
 };
 
-export type ExerciseState = {
+type ExerciseState = {
   name: string | null;
   repCount: number;
   phase: 'up' | 'down' | 'idle';
@@ -365,7 +365,7 @@ const geometryCache = {
  * Uses relative positioning (not fixed pixels) for scale-independence
  * Applies angle smoothing for stable detection
  */
-export function detectBicepCurl(keypoints: Keypoint[]): {
+function detectBicepCurl(keypoints: Keypoint[]): {
   detected: boolean;
   side: 'left' | 'right' | 'both' | null;
   angle: number | null;
@@ -467,7 +467,7 @@ export function detectBicepCurl(keypoints: Keypoint[]): {
  * Detect if person is doing push-ups
  * Looks for plank position with arm extension/flexion
  */
-export function detectPushup(keypoints: Keypoint[]): {
+function detectPushup(keypoints: Keypoint[]): {
   detected: boolean;
   angle: number | null;
 } {
@@ -538,7 +538,7 @@ export function detectPushup(keypoints: Keypoint[]): {
  * Detect if person is doing squats
  * Looks for standing posture with knee bending motion
  */
-export function detectSquat(keypoints: Keypoint[]): {
+function detectSquat(keypoints: Keypoint[]): {
   detected: boolean;
   angle: number | null;
 } {

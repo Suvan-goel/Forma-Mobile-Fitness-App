@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CAMERA_SETTINGS_KEY } from '../../frontend/contexts/CameraSettingsContext';
+import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
 
 export type WeeklyTrainingTarget = '1-2' | '3-4' | '5+';
 

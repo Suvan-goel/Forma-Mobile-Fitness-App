@@ -24,13 +24,25 @@ const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
 };
 
 /** Single tab item */
-const GlassTabItem = memo(({ routeName, isFocused, onPress }: {
+const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
   routeName: string;
+  routeKey: string;
   isFocused: boolean;
-  onPress: () => void;
+  navigation: any;
 }) => {
   const config = TAB_CONFIG[routeName] || { icon: Users, label: routeName };
   const Icon = config.icon;
+
+  const onPress = useCallback(() => {
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: routeKey,
+      canPreventDefault: true,
+    });
+    if (!isFocused && !event.defaultPrevented) {
+      navigation.navigate(routeName);
+    }
+  }, [isFocused, routeKey, routeName, navigation]);
 
   return (
     <TouchableOpacity
@@ -78,32 +90,17 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
 
   const bottomOffset = Math.max(insets.bottom, 12) + 8;
 
-  // Build inner BEFORE any early return so hooks inside .map() always run
   const inner = (
     <View style={styles.pillContent}>
-      {state.routes.map((route: any, index: number) => {
-        const isFocused = state.index === index;
-
-        const onPress = useCallback(() => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        }, [isFocused, route.key, route.name]);
-
-        return (
-          <GlassTabItem
-            key={route.key}
-            routeName={route.name}
-            isFocused={isFocused}
-            onPress={onPress}
-          />
-        );
-      })}
+      {state.routes.map((route: any, index: number) => (
+        <GlassTabItem
+          key={route.key}
+          routeName={route.name}
+          routeKey={route.key}
+          isFocused={state.index === index}
+          navigation={navigation}
+        />
+      ))}
     </View>
   );
 

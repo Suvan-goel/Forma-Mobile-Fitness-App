@@ -3,7 +3,7 @@
  */
 
 export * from './types';
-export { API_CONFIG, apiClient } from './client';
+export { API_CONFIG } from './client';
 export { workoutsService } from './workouts.service';
 export { exercisesService } from './exercises.service';
 export { analyticsService } from './analytics.service';

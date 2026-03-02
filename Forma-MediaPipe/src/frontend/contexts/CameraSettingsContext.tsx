@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-export const CAMERA_SETTINGS_KEY = 'forma_camera_settings';
+import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
 
 export type CameraSettings = {
   showFeedback: boolean;

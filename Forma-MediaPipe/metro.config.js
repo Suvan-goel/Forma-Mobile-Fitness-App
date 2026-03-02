@@ -14,7 +14,4 @@ config.resolver = {
   sourceExts: [...resolver.sourceExts, 'svg'],
 };
 
-// Ensure .tflite is treated as a bundled asset
-config.resolver.assetExts = Array.from(new Set([...(config.resolver.assetExts || []), 'tflite']));
-
 module.exports = config;

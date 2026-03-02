@@ -470,56 +470,52 @@ export const LogbookScreen: React.FC = () => {
       </View>
 
       {/* ── FILTER TABS ───────────────────────── */}
-      <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
-        start={CARD_GRADIENT_START}
-        end={CARD_GRADIENT_END}
-        style={styles.filterCard}
-      >
-        <View style={styles.filterCardEdge}>
-          <View style={styles.filterTabRow}>
-            <TouchableOpacity
-              style={[styles.filterTab, activeFilterMode === 'all' && styles.filterTabActive]}
-              onPress={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); setSelectedDate(null); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterTabText, activeFilterMode === 'all' && styles.filterTabTextActive]}>All</Text>
-            </TouchableOpacity>
+      <View style={styles.filterTabRow}>
+        <TouchableOpacity
+          style={styles.filterTab}
+          onPress={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); setSelectedDate(null); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, activeFilterMode === 'all' && styles.filterTabTextActive]}>All</Text>
+          {activeFilterMode === 'all' && <View style={styles.filterUnderline} />}
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterTab, activeFilterMode === 'week' && styles.filterTabActive]}
-              onPress={() => setOpenDropdown('week')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterTabText, activeFilterMode === 'week' && styles.filterTabTextActive]}>Week</Text>
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.filterTab}
+          onPress={() => setOpenDropdown('week')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, activeFilterMode === 'week' && styles.filterTabTextActive]}>Week</Text>
+          {activeFilterMode === 'week' && <View style={styles.filterUnderline} />}
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterTab, activeFilterMode === 'month' && styles.filterTabActive]}
-              onPress={() => setOpenDropdown('month')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterTabText, activeFilterMode === 'month' && styles.filterTabTextActive]}>Month</Text>
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.filterTab}
+          onPress={() => setOpenDropdown('month')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, activeFilterMode === 'month' && styles.filterTabTextActive]}>Month</Text>
+          {activeFilterMode === 'month' && <View style={styles.filterUnderline} />}
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterTab, activeFilterMode === 'year' && styles.filterTabActive]}
-              onPress={() => setOpenDropdown('year')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterTabText, activeFilterMode === 'year' && styles.filterTabTextActive]}>Year</Text>
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.filterTab}
+          onPress={() => setOpenDropdown('year')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, activeFilterMode === 'year' && styles.filterTabTextActive]}>Year</Text>
+          {activeFilterMode === 'year' && <View style={styles.filterUnderline} />}
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterCalendarTab, activeFilterMode === 'date' && styles.filterTabActive]}
-              onPress={() => setIsCalendarOpen(true)}
-              activeOpacity={0.7}
-            >
-              <Calendar size={14} color={activeFilterMode === 'date' ? '#FFFFFF' : COLORS.textTertiary} strokeWidth={1.5} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </LinearGradient>
+        <TouchableOpacity
+          style={styles.filterTab}
+          onPress={() => setIsCalendarOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Calendar size={14} color={activeFilterMode === 'date' ? '#FFFFFF' : COLORS.textTertiary} strokeWidth={1.5} />
+          {activeFilterMode === 'date' && <View style={styles.filterUnderline} />}
+        </TouchableOpacity>
+      </View>
 
       {/* ── ACTIVE FILTER CHIP ────────────────── */}
       {hasActiveFilter && (
@@ -787,47 +783,35 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  /* ── Filter Card ─────────────────────────── */
-  filterCard: {
-    borderRadius: 16,
-    marginBottom: 14,
-  },
-  filterCardEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 4,
-  },
+  /* ── Filter Tabs ─────────────────────────── */
   filterTabRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'space-evenly',
+    marginBottom: 4,
+    marginTop: 12,
+    gap: 20,
   },
   filterTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterTabActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingBottom: 6,
   },
   filterTabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textTertiary,
     letterSpacing: 0.3,
   },
   filterTabTextActive: {
     color: '#FFFFFF',
   },
-  filterCalendarTab: {
-    width: 44,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  filterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 
   /* ── Active Filter Chip ─────────────────── */

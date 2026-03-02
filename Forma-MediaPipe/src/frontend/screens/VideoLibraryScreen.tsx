@@ -463,29 +463,21 @@ export const VideoLibraryScreen: React.FC = () => {
           ListHeaderComponent={
             <View>
               {/* ── Filter Tab Bar ─────────────────── */}
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.filterCard}
-              >
-                <View style={styles.filterCardEdge}>
-                  <View style={styles.filterTabRow}>
-                    {FILTER_TABS.map(tab => (
-                      <TouchableOpacity
-                        key={tab.key}
-                        style={[styles.filterTab, filterMode === tab.key && styles.filterTabActive]}
-                        onPress={() => handleFilterModeChange(tab.key)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.filterTabText, filterMode === tab.key && styles.filterTabTextActive]}>
-                          {tab.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </LinearGradient>
+              <View style={styles.filterTabRow}>
+                {FILTER_TABS.map(tab => (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={styles.filterTab}
+                    onPress={() => handleFilterModeChange(tab.key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterTabText, filterMode === tab.key && styles.filterTabTextActive]}>
+                      {tab.label}
+                    </Text>
+                    {filterMode === tab.key && <View style={styles.filterUnderline} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               {/* ── Sub-filters ────────────────────── */}
               {filterMode === 'exercise' && (
@@ -789,40 +781,35 @@ const styles = StyleSheet.create({
     marginBottom: GRID_GAP,
   },
 
-  /* ── Filter Card ─────────────────────────── */
-  filterCard: {
-    borderRadius: 16,
-    marginBottom: 12,
-  },
-  filterCardEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 4,
-  },
+  /* ── Filter Tabs ─────────────────────────── */
   filterTabRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'space-evenly',
+    marginBottom: 16,
+    marginTop: 12,
+    gap: 20,
   },
   filterTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterTabActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingBottom: 6,
   },
   filterTabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textTertiary,
     letterSpacing: 0.3,
   },
   filterTabTextActive: {
     color: '#FFFFFF',
+  },
+  filterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 
   /* ── Sub-filter pills ────────────────────── */

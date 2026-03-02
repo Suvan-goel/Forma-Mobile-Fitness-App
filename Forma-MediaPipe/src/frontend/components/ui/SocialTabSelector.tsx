@@ -2,8 +2,8 @@
  * SocialTabSelector — Pill-style tab bar for Social section
  */
 
-import React, { memo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
+import React, { memo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
 export type SocialTab = 'leaderboard' | 'friends' | 'activity';
@@ -20,18 +20,6 @@ const TABS: { key: SocialTab; label: string }[] = [
 ];
 
 export const SocialTabSelector: React.FC<SocialTabSelectorProps> = memo(({ activeTab, onTabChange }) => {
-  const slideAnim = useRef(new Animated.Value(TABS.findIndex(t => t.key === activeTab))).current;
-
-  useEffect(() => {
-    const index = TABS.findIndex(t => t.key === activeTab);
-    Animated.spring(slideAnim, {
-      toValue: index,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 30,
-    }).start();
-  }, [activeTab, slideAnim]);
-
   return (
     <View style={styles.container}>
       {TABS.map((tab) => {
@@ -40,12 +28,13 @@ export const SocialTabSelector: React.FC<SocialTabSelectorProps> = memo(({ activ
           <TouchableOpacity
             key={tab.key}
             onPress={() => onTabChange(tab.key)}
-            style={[styles.pill, isActive && styles.pillActive]}
+            style={styles.tab}
             activeOpacity={0.7}
           >
-            <Text style={[styles.label, isActive && styles.labelActive]}>
+            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
               {tab.label}
             </Text>
+            {isActive && <View style={styles.underline} />}
           </TouchableOpacity>
         );
       })}
@@ -57,30 +46,31 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.xs,
-    paddingBottom: SPACING.md,
-    gap: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    marginBottom: 12,
+    marginTop: 12,
+    gap: 20,
   },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    backgroundColor: 'transparent',
+  tab: {
+    alignItems: 'center',
+    paddingBottom: 6,
   },
-  pillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-  },
-  label: {
-    fontFamily: FONTS.ui.regular,
+  tabText: {
+    fontFamily: FONTS.display.semibold,
     fontSize: 13,
     color: COLORS.textTertiary,
     letterSpacing: 0.3,
   },
-  labelActive: {
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+  tabTextActive: {
+    color: '#FFFFFF',
+  },
+  underline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 });
