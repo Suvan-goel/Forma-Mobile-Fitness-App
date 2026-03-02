@@ -4,7 +4,7 @@ import { RNMediapipe, switchCamera } from '@thinksys/react-native-mediapipe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { X, Volume2, VolumeX } from 'lucide-react-native';
+import { X, Video, VideoOff } from 'lucide-react-native';
 import CogIcon from '../components/icons/CogIcon';
 import { COLORS, FONTS, SPACING, getScoreColor } from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
@@ -61,7 +61,7 @@ export const CameraScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   const { addSetToExercise, sessionId, setPendingRecording } = useCurrentWorkout();
-  const { showFeedback, isTTSEnabled, setIsTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording } = useCameraSettings();
+  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording } = useCameraSettings();
   const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -844,7 +844,7 @@ export const CameraScreen: React.FC = () => {
               {displayValues.exerciseDisplayName}
             </Text>
           </View>
-          {/* Speaker icon floated so it sits centered between title and settings cog */}
+          {/* Screen recording toggle floated so it sits centered between title and settings cog */}
           <View
             onLayout={handleSpeakerLayout}
             style={[
@@ -856,27 +856,20 @@ export const CameraScreen: React.FC = () => {
             ]}
           >
             <TouchableOpacity
-              onPress={() => {
-                const next = !isTTSEnabled;
-                setIsTTSEnabled(next);
-                if (!next) ttsStopCoach();
-              }}
+              onPress={() => setAutoScreenRecording(!autoScreenRecording)}
               activeOpacity={0.8}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
-              accessibilityLabel={isTTSEnabled ? 'Disable voice coaching' : 'Enable voice coaching'}
+              accessibilityLabel={isRecordingScreen ? 'Screen recording active' : autoScreenRecording ? 'Disable auto screen recording' : 'Enable auto screen recording'}
             >
-              {isTTSEnabled
-                ? <Volume2 size={20} color={COLORS.text} strokeWidth={2} />
-                : <VolumeX size={20} color="rgba(255,255,255,0.4)" strokeWidth={2} />}
+              {isRecordingScreen
+                ? <Animated.View style={[styles.screenRecDot, { opacity: screenRecPulseAnim }]} />
+                : autoScreenRecording
+                  ? <Video size={20} color={COLORS.text} strokeWidth={2} />
+                  : <VideoOff size={20} color="rgba(255,255,255,0.4)" strokeWidth={2} />}
             </TouchableOpacity>
           </View>
           <View style={styles.headerRightGroup} onLayout={handleSettingsLayout}>
-            {isRecordingScreen && (
-              <View style={styles.screenRecButton} accessibilityLabel="Screen recording active">
-                <Animated.View style={[styles.screenRecDot, { opacity: screenRecPulseAnim }]} />
-              </View>
-            )}
             <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
@@ -1377,10 +1370,6 @@ const styles = StyleSheet.create({
   },
   settingsButton: {
     padding: 0,
-  },
-  screenRecButton: {
-    marginRight: 16,
-    padding: 4,
   },
   screenRecDot: {
     width: 14,
