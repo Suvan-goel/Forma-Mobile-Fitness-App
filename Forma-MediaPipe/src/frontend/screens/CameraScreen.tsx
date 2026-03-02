@@ -88,6 +88,11 @@ export const CameraScreen: React.FC = () => {
   const screenRecPulseAnim = useRef(new Animated.Value(1)).current;
   const screenRecAttemptedRef = useRef(false);
 
+  // Auto-recording toast
+  const [autoRecToastText, setAutoRecToastText] = useState<string | null>(null);
+  const autoRecToastAnim = useRef(new Animated.Value(0)).current;
+  const autoRecToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // __DEV__-only: landmark recording refs (auto-record when set recording starts/stops)
   const isRecordingLandmarksRef = useRef(false);
   const landmarkBufferRef = useRef<Array<{ timestamp: number; keypoints: Keypoint[] }>>([]);
@@ -592,6 +597,20 @@ export const CameraScreen: React.FC = () => {
     }
   }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording]);
 
+  const handleAutoRecToggle = useCallback(() => {
+    const next = !autoScreenRecording;
+    setAutoScreenRecording(next);
+    // Show toast
+    if (autoRecToastTimer.current) clearTimeout(autoRecToastTimer.current);
+    setAutoRecToastText(next ? 'Auto recording enabled' : 'Auto recording disabled');
+    autoRecToastAnim.setValue(1);
+    autoRecToastTimer.current = setTimeout(() => {
+      Animated.timing(autoRecToastAnim, { toValue: 0, duration: 500, useNativeDriver: true }).start(() => {
+        setAutoRecToastText(null);
+      });
+    }, 1200);
+  }, [autoScreenRecording, setAutoScreenRecording, autoRecToastAnim, autoRecToastTimer]);
+
   const handlePausePress = useCallback(() => {
     setIsPaused(prev => !prev);
   }, []);
@@ -856,8 +875,9 @@ export const CameraScreen: React.FC = () => {
             ]}
           >
             <TouchableOpacity
-              onPress={() => setAutoScreenRecording(!autoScreenRecording)}
+              onPress={handleAutoRecToggle}
               activeOpacity={0.8}
+              style={styles.autoRecToggle}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel={isRecordingScreen ? 'Screen recording active' : autoScreenRecording ? 'Disable auto screen recording' : 'Enable auto screen recording'}
@@ -882,6 +902,13 @@ export const CameraScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Auto-recording toast */}
+        {autoRecToastText && (
+          <Animated.View style={[styles.autoRecToast, { opacity: autoRecToastAnim, top: topBarHeight + 8 }]} pointerEvents="none">
+            <Text style={styles.autoRecToastText}>{autoRecToastText}</Text>
+          </Animated.View>
+        )}
 
         {/* Feedback Display - Speech bubble below exercise name. Debug: only last message. */}
         {(showFeedback || debugMode) && (() => {
@@ -1371,11 +1398,32 @@ const styles = StyleSheet.create({
   settingsButton: {
     padding: 0,
   },
+  autoRecToggle: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screenRecDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
     backgroundColor: '#EF4444',
+  },
+  autoRecToast: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    zIndex: 10,
+  },
+  autoRecToastText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: FONTS.ui.regular,
   },
   recordButtonContainer: {
     alignItems: 'center',

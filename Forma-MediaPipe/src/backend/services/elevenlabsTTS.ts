@@ -55,6 +55,10 @@ let audioInstance: any = null;
 let isInitialized = false;
 let speechGeneration = 0; // Incremented on every speakWithElevenLabs call; used to cancel stale fetches
 
+// Audio cache: maps "voiceId:text" → file URI to avoid re-generating identical phrases.
+// Coaching message pools are small and fixed (~50 phrases), so cache stays bounded.
+const audioCache = new Map<string, string>();
+
 /**
  * Pure-JS base64 encoder for Uint8Array.
  * Avoids btoa (Hermes-only) and FileReader.readAsDataURL (hangs on JSC with binary blobs).
@@ -115,9 +119,22 @@ async function generateSpeech(text: string): Promise<string> {
     throw new Error('ElevenLabs API key not configured');
   }
 
+  // Check cache — same voice + same text = identical audio, skip the API call
+  const cacheKey = `${activeVoiceId}:${text}`;
+  const cached = audioCache.get(cacheKey);
+  if (cached) {
+    try {
+      const info = await FileSystem.getInfoAsync(cached);
+      if (info.exists) return cached;
+    } catch {}
+    audioCache.delete(cacheKey); // File was cleaned up — re-generate
+  }
+
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${activeVoiceId}`;
 
   // Fetch audio from ElevenLabs
+  // Using eleven_turbo_v2_5: ~300ms latency vs ~1-2s for eleven_multilingual_v2.
+  // All coaching cues are English-only, so multilingual support is not needed.
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -127,7 +144,7 @@ async function generateSpeech(text: string): Promise<string> {
     },
     body: JSON.stringify({
       text,
-      model_id: 'eleven_multilingual_v2',
+      model_id: 'eleven_turbo_v2_5',
       voice_settings: {
         stability: activeVoiceSettings.stability,
         similarity_boost: activeVoiceSettings.similarity,
@@ -152,6 +169,9 @@ async function generateSpeech(text: string): Promise<string> {
     encoding: FileSystem.EncodingType.Base64,
   });
 
+  // Cache the result for future identical requests
+  audioCache.set(cacheKey, fileUri);
+
   return fileUri;
 }
 
@@ -168,9 +188,17 @@ async function cleanupOldAudioFiles(): Promise<void> {
     const files = await FileSystem.readDirectoryAsync(cacheDir);
     const ttsFiles = files.filter((f: string) => f.startsWith('tts_') && f.endsWith('.mp3'));
 
-    // Keep only the most recent 3 files, delete older ones
-    if (ttsFiles.length > 3) {
-      const sorted = ttsFiles.sort().reverse(); // Descending by timestamp
+    // Build set of filenames currently in the cache so we don't delete them
+    const cachedFilenames = new Set<string>();
+    for (const uri of audioCache.values()) {
+      const parts = uri.split('/');
+      cachedFilenames.add(parts[parts.length - 1]);
+    }
+
+    // Delete uncached files beyond the 3 most recent
+    const uncached = ttsFiles.filter((f: string) => !cachedFilenames.has(f));
+    if (uncached.length > 3) {
+      const sorted = uncached.sort().reverse(); // Descending by timestamp
       for (let i = 3; i < sorted.length; i++) {
         await FileSystem.deleteAsync(`${cacheDir}${sorted[i]}`, { idempotent: true });
       }
