@@ -114,7 +114,9 @@ class ExpoPoseDetectionView(
       CameraSelector.LENS_FACING_BACK
     else
       CameraSelector.LENS_FACING_FRONT
-    bindCameraUseCases()
+    // Must run on main thread — switchCamera() is called from the JS thread
+    // via Expo Module Function, but CameraX requires the main thread.
+    post { bindCameraUseCases() }
   }
 
   // MARK: - Camera Setup
