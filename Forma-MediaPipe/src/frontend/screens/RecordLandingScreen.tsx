@@ -508,6 +508,7 @@ const styles = StyleSheet.create({
   contentArea: {
     flex: 1,
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 16,
     gap: 14,
   },
   contentCentered: {
