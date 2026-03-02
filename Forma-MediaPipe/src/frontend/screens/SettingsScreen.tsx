@@ -36,6 +36,12 @@ import { useWorkoutPreferences, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 
+const formatHeaderDate = (): string => {
+  const d = new Date();
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
+};
+
 interface SettingsScreenProps {
   navigation: any;
 }
@@ -95,7 +101,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   );
 
   const displayName = profileUser?.displayName ?? authUser?.user_metadata?.full_name ?? 'Athlete';
-  const userEmail = profileUser?.email ?? authUser?.email ?? '';
   const userInitial = (displayName[0] ?? 'A').toUpperCase();
 
   const TRAINING_TARGET_OPTIONS: WeeklyTrainingTarget[] = ['1-2', '3-4', '5+'];
@@ -196,16 +201,42 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })} activeOpacity={0.7} style={styles.backBtn}>
+            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+          </TouchableOpacity>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>SETTINGS</Text>
+            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
+          </View>
+        </View>
         <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
+          onPress={() => navigation.navigate('UserProfile')}
           activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.profileBtn}
         >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
+          {profileUser?.avatarUrl ? (
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
+          ) : profileUser ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.profileGradient}
+            >
+              <Text style={styles.profileInitial}>{userInitial}</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.profilePlaceholder} />
+          )}
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
@@ -240,11 +271,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   )}
                   <View style={styles.profileInfo}>
                     <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
-                    {profileUser?.bio ? (
-                      <Text style={styles.profileSub} numberOfLines={1}>{profileUser.bio}</Text>
-                    ) : userEmail ? (
-                      <Text style={styles.profileSub} numberOfLines={1}>{userEmail}</Text>
-                    ) : null}
+                    <Text style={styles.profileSub} numberOfLines={1}>View your public profile</Text>
                   </View>
                   <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
@@ -475,24 +502,76 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 10,
+    height: 0,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -5,
+  },
+  logoWrap: {
+    width: 50,
+    height: 55,
+    borderRadius: 13,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
+  logoImage: {
+    width: 55,
+    height: 55,
+  },
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerName: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
     letterSpacing: -0.4,
   },
-  headerSpacer: {
-    width: 40,
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  profileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  profileGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profilePlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#27272A',
+  },
+  profileInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
   scroll: {
     flex: 1,

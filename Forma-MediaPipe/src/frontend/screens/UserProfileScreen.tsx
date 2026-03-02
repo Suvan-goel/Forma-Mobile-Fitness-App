@@ -203,15 +203,22 @@ export const UserProfileScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── Header (Home-style) ──────────────────── */}
+      {/* ── Header (Social-style) ──────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.7}>
-            <ChevronLeft size={20} color={COLORS.text} strokeWidth={1.5} />
+          <TouchableOpacity onPress={handleGoBack} activeOpacity={0.7} style={styles.backBtn}>
+            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
           </TouchableOpacity>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
           <View style={styles.headerTextWrap}>
-            <Text style={styles.headerGreeting}>Your profile</Text>
-            <Text style={styles.headerName}>{user?.displayName ?? ''}</Text>
+            <Text style={styles.headerName}>{user?.displayName?.toUpperCase() ?? ''}</Text>
+            <Text style={styles.headerSubtitle}>YOUR PROFILE</Text>
           </View>
         </View>
         <TouchableOpacity
@@ -603,17 +610,29 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 10,
+    height: 0,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: -5,
+  },
+  logoWrap: {
+    width: 50,
+    height: 55,
+    borderRadius: 13,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 55,
+    height: 55,
   },
   headerTextWrap: {
     gap: 1,
   },
-  headerGreeting: {
+  headerSubtitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
@@ -626,10 +645,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   menuBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },

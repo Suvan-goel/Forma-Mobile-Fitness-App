@@ -43,11 +43,6 @@ const MONTH_NAMES = [
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const formatHeaderDate = (): string => {
-  const d = new Date();
-  return `${MONTH_SHORT[d.getMonth()].toUpperCase()} ${d.getDate()} \u2022 TODAY`;
-};
-
 /* ── Calendar Modal ───────────────────────── */
 
 const CalendarModal = ({
@@ -461,14 +456,6 @@ export const LogbookScreen: React.FC = () => {
 
   const ListHeader = useCallback(() => (
     <View>
-      {/* ── DATE + COUNT ───────────────────────── */}
-      <View style={styles.subHeaderRow}>
-        <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
-        <Text style={styles.workoutCount}>
-          {filteredWorkouts.length} {filteredWorkouts.length === 1 ? 'session' : 'sessions'}
-        </Text>
-      </View>
-
       {/* ── FILTER TABS ───────────────────────── */}
       <View style={styles.filterTabRow}>
         <TouchableOpacity
@@ -568,29 +555,41 @@ export const LogbookScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* ── LOGBOOK HEADER (fixed) ────────────────── */}
-      <View style={styles.fixedHeader}>
-        <Text style={styles.headerTitle}>LOGBOOK</Text>
+      {/* ── LOGBOOK HEADER (HomeScreen style) ─────── */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>LOGBOOK</Text>
+            <Text style={styles.headerSubtitleText}>{filteredWorkouts.length} {filteredWorkouts.length === 1 ? 'SESSION' : 'SESSIONS'}</Text>
+          </View>
+        </View>
         <TouchableOpacity
           onPress={() => navigation.navigate('UserProfile')}
           activeOpacity={0.7}
-          style={styles.avatarButton}
+          style={styles.profileBtn}
         >
           {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.avatarGradient}
+              style={styles.profileGradient}
             >
-              <Text style={styles.avatarInitial}>
+              <Text style={styles.profileInitial}>
                 {profileUser.displayName[0].toUpperCase()}
               </Text>
             </LinearGradient>
           ) : (
-            <View style={styles.avatarPlaceholder} />
+            <View style={styles.profilePlaceholder} />
           )}
         </TouchableOpacity>
       </View>
@@ -718,71 +717,78 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* ── Fixed Header ────────────────────────── */
-  fixedHeader: {
-    paddingTop: 6,
-    paddingBottom: 6,
-    paddingHorizontal: SPACING.screenHorizontal,
+  /* ── Header (HomeScreen style) ────────────── */
+  header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
   },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 38,
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    lineHeight: 44,
-  },
-  subHeaderRow: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
+    gap: 12,
   },
-  headerDate: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: '#52525B',
-    letterSpacing: 2.5,
-  },
-  workoutCount: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 11,
-    color: '#52525B',
-    letterSpacing: 0.5,
-  },
-  avatarButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  logoWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 13,
     overflow: 'hidden',
-    marginTop: 6,
-  },
-  avatarImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-  },
-  avatarGradient: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarPlaceholder: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#000000',
+  logoImage: {
+    width: 55,
+    height: 55,
   },
-  avatarInitial: {
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerSubtitleText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 13,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
+  profileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  profileGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profilePlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#27272A',
+  },
+  profileInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
     color: '#FFFFFF',
   },
-
   /* ── Filter Tabs ─────────────────────────── */
   filterTabRow: {
     flexDirection: 'row',

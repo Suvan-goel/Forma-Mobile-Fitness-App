@@ -149,36 +149,44 @@ export const RewardsScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── HEADER ─────────────────────────────── */}
+      {/* ── HEADER (Social-style) ────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          style={styles.backButton}
-        >
-          <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>REWARDS</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
+            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+          </TouchableOpacity>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>REWARDS</Text>
+            <Text style={styles.headerSubtitle}>EARN BADGES</Text>
+          </View>
+        </View>
         <TouchableOpacity
           onPress={() => navigation.navigate('UserProfile')}
           activeOpacity={0.7}
-          style={styles.avatarButton}
+          style={styles.profileBtn}
         >
           {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.avatarGradient}
+              style={styles.profileGradient}
             >
-              <Text style={styles.avatarInitial}>
+              <Text style={styles.profileInitial}>
                 {profileUser.displayName[0].toUpperCase()}
               </Text>
             </LinearGradient>
           ) : (
-            <View style={styles.avatarPlaceholder} />
+            <View style={styles.profilePlaceholder} />
           )}
         </TouchableOpacity>
       </View>
@@ -189,8 +197,6 @@ export const RewardsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
       >
-        <Text style={styles.headerSubtitle}>EARN BADGES</Text>
-
         {/* ── HERO SCORE ─────────────────────────── */}
         <View style={styles.heroSection}>
           <Text style={styles.heroValue}>{userPoints}</Text>
@@ -264,67 +270,85 @@ const styles = StyleSheet.create({
     paddingBottom: 150,
   },
 
-  /* ── Header ────────────────────────────────── */
+  /* ── Header (Social-style) ───────────────────── */
   header: {
-    paddingTop: 6,
-    paddingBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+  },
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  backBtn: {
+    width: 10,
+    height: 0,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -5,
+  },
+  logoWrap: {
+    width: 50,
+    height: 55,
+    borderRadius: 13,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarButton: {
+  logoImage: {
+    width: 55,
+    height: 55,
+  },
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  headerName: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
+  profileBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     overflow: 'hidden',
-    marginTop: 5,
   },
-  avatarImage: {
+  profileImage: {
     width: 36,
     height: 36,
     borderRadius: 18,
   },
-  avatarGradient: {
+  profileGradient: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarPlaceholder: {
+  profilePlaceholder: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#000000',
+    backgroundColor: '#27272A',
   },
-  avatarInitial: {
+  profileInitial: {
     fontFamily: FONTS.display.bold,
     fontSize: 14,
     color: '#FFFFFF',
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 40,
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    lineHeight: 46,
-    flex: 1,
-  },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: '#71717A',
-    letterSpacing: 3,
-    marginTop: 0,
-    marginBottom: 20,
   },
 
   /* ── Hero Score ────────────────────────────── */

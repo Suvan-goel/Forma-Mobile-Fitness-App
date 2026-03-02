@@ -681,7 +681,7 @@ export const CameraScreen: React.FC = () => {
   // Memoize pose detection props
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
   const poseDetectionProps = useMemo(() => ({
-    frameLimit: 20,
+    frameLimit: 30,
     showSkeleton: effectiveShowSkeleton,
   }), [effectiveShowSkeleton]);
 

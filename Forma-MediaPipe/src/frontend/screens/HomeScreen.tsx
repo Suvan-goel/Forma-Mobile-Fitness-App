@@ -160,8 +160,8 @@ export const HomeScreen: React.FC = () => {
             />
           </View>
           <View style={styles.headerTextWrap}>
-            <Text style={styles.greetingText}>Welcome back</Text>
-            <Text style={styles.nameText}>{homeData.displayName}</Text>
+            <Text style={styles.nameText}>{homeData.displayName.toUpperCase()}</Text>
+            <Text style={styles.greetingText}>WELCOME BACK</Text>
           </View>
         </View>
         <TouchableOpacity

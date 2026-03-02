@@ -65,6 +65,12 @@ const getTimerParts = (totalSeconds: number) => {
   ];
 };
 
+const formatHeaderDate = (): string => {
+  const d = new Date();
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
+};
+
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -185,32 +191,41 @@ export const RecordLandingScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* ── HEADER ──────────────────────────────── */}
-      <View style={[styles.headerSection, { paddingTop: insets.top + 6 }]}>
-        <View style={styles.titleBlock}>
-          <Text style={styles.headerTitle}>CAPTURE</Text>
-          <Text style={styles.headerSubtitle}>TODAY'S SESSION</Text>
+      {/* ── HEADER (HomeScreen style) ────────────── */}
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>CAPTURE</Text>
+            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
+          </View>
         </View>
         <TouchableOpacity
           onPress={() => rootNavigation.navigate('UserProfile')}
           activeOpacity={0.7}
-          style={styles.avatarButton}
+          style={styles.profileBtn}
         >
           {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.avatarGradient}
+              style={styles.profileGradient}
             >
-              <Text style={styles.avatarInitial}>
+              <Text style={styles.profileInitial}>
                 {profileUser.displayName[0].toUpperCase()}
               </Text>
             </LinearGradient>
           ) : (
-            <View style={styles.avatarPlaceholder} />
+            <View style={styles.profilePlaceholder} />
           )}
         </TouchableOpacity>
       </View>
@@ -416,59 +431,77 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
 
-  /* ── Header ──────────────────────────────── */
-  headerSection: {
-    paddingHorizontal: SPACING.screenHorizontal,
+  /* ── Header (HomeScreen style) ────────────── */
+  header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
   },
-  titleBlock: {
-    paddingBottom: 16,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  avatarButton: {
+  logoWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 13,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 55,
+    height: 55,
+  },
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  headerName: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
+  profileBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     overflow: 'hidden',
-    marginTop: 5,
   },
-  avatarImage: {
+  profileImage: {
     width: 36,
     height: 36,
     borderRadius: 18,
   },
-  avatarGradient: {
+  profileGradient: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarPlaceholder: {
+  profilePlaceholder: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#000000',
+    backgroundColor: '#27272A',
   },
-  avatarInitial: {
+  profileInitial: {
     fontFamily: FONTS.display.bold,
     fontSize: 14,
     color: '#FFFFFF',
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 40,
-    color: COLORS.text,
-    letterSpacing: 2,
-    lineHeight: 46,
-  },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    letterSpacing: 3,
-    marginTop: 6,
   },
 
   /* ── Content Area ──────────────────────────── */

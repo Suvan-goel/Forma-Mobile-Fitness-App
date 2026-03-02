@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  ArrowLeft, Trash2, Play, HardDrive, Film,
+  ChevronLeft, Trash2, Play, HardDrive,
   Filter, X, Dumbbell, ChevronRight,
 } from 'lucide-react-native';
 import {
@@ -350,20 +350,22 @@ export const VideoLibraryScreen: React.FC = () => {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ArrowLeft size={22} color={COLORS.text} strokeWidth={2} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <View style={styles.sectionLabelRow}>
-              <Film size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>VIDEO LIBRARY</Text>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
+              <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+            </TouchableOpacity>
+            <View style={styles.logoWrap}>
+              <Image
+                source={require('../assets/forma_purple_logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.headerName}>VIDEOS</Text>
+              <Text style={styles.headerSubtitle}>LOADING...</Text>
             </View>
           </View>
-          <View style={styles.headerRight} />
         </View>
         <View style={styles.loadingWrap}>
           <LoadingSkeleton variant="card" height={48} style={{ marginBottom: SPACING.md }} />
@@ -386,20 +388,22 @@ export const VideoLibraryScreen: React.FC = () => {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ArrowLeft size={22} color={COLORS.text} strokeWidth={2} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <View style={styles.sectionLabelRow}>
-              <Film size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>VIDEO LIBRARY</Text>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
+              <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+            </TouchableOpacity>
+            <View style={styles.logoWrap}>
+              <Image
+                source={require('../assets/forma_purple_logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.headerName}>VIDEOS</Text>
+              <Text style={styles.headerSubtitle}>0 RECORDINGS</Text>
             </View>
           </View>
-          <View style={styles.headerRight} />
         </View>
         <View style={styles.emptyWrap}>
           <EmptyState
@@ -416,26 +420,27 @@ export const VideoLibraryScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── Header ──────────────────────────────── */}
+      {/* ── Header (Social-style) ────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ArrowLeft size={22} color={COLORS.text} strokeWidth={2} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={styles.sectionLabelRow}>
-            <Film size={13} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.sectionLabel}>VIDEO LIBRARY</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
+            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+          </TouchableOpacity>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>VIDEOS</Text>
+            <Text style={styles.headerSubtitle}>{storageInfo.count} {storageInfo.count === 1 ? 'RECORDING' : 'RECORDINGS'}</Text>
           </View>
         </View>
         <View style={styles.storageBadge}>
           <HardDrive size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-          <MonoText style={styles.storageText}>
-            {storageInfo.count} · {storageInfo.totalSizeMB}MB
-          </MonoText>
+          <MonoText style={styles.storageText}>{storageInfo.totalSizeMB}MB</MonoText>
         </View>
       </View>
 
@@ -702,29 +707,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  /* ── Header ──────────────────────────────── */
+  /* ── Header (Social-style) ───────────────── */
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.md,
+    paddingTop: 4,
+    paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backBtn: {
+    width: 10,
+    height: 0,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -5,
+  },
+  logoWrap: {
+    width: 50,
+    height: 55,
+    borderRadius: 13,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
+  logoImage: {
+    width: 55,
+    height: 55,
   },
-  headerRight: {
-    width: 40,
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  headerName: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
   },
   sectionLabelRow: {
     flexDirection: 'row',

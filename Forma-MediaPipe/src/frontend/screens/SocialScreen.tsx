@@ -16,6 +16,12 @@ import { ActivityView } from './social/ActivityView';
 import { useUser } from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
 
+const formatHeaderDate = (): string => {
+  const d = new Date();
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
+};
+
 export const SocialScreen: React.FC = memo(() => {
   const [activeTab, setActiveTab] = useState<SocialTab>('leaderboard');
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -51,36 +57,44 @@ export const SocialScreen: React.FC = memo(() => {
 
   return (
     <View style={styles.container}>
-      {/* ── HEADER ──────── */}
-      <View style={styles.fixedHeader}>
-        <TouchableOpacity
-          onPress={handleBack}
-          activeOpacity={0.7}
-          style={styles.backButton}
-        >
-          <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>SOCIAL</Text>
+      {/* ── HEADER (HomeScreen style) ────────────── */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={handleBack} activeOpacity={0.7} style={styles.backBtn}>
+            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+          </TouchableOpacity>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>SOCIAL</Text>
+            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
+          </View>
+        </View>
         <TouchableOpacity
           onPress={() => navigation.navigate('UserProfile')}
           activeOpacity={0.7}
-          style={styles.avatarButton}
+          style={styles.profileBtn}
         >
           {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.avatarGradient}
+              style={styles.profileGradient}
             >
-              <Text style={styles.avatarInitial}>
+              <Text style={styles.profileInitial}>
                 {profileUser.displayName[0].toUpperCase()}
               </Text>
             </LinearGradient>
           ) : (
-            <View style={styles.avatarPlaceholder} />
+            <View style={styles.profilePlaceholder} />
           )}
         </TouchableOpacity>
       </View>
@@ -101,55 +115,81 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  fixedHeader: {
-    paddingTop: 6,
-    paddingBottom: 8,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+  },
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  backBtn: {
+    width: 10,
+    height: 0,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -5,
+  },
+  logoWrap: {
+    width: 50,
+    height: 55,
+    borderRadius: 13,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 40,
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    lineHeight: 46,
-    flex: 1,
+  logoImage: {
+    width: 55,
+    height: 55,
   },
-  avatarButton: {
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  headerName: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
+  profileBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     overflow: 'hidden',
-    marginTop: 5,
   },
-  avatarImage: {
+  profileImage: {
     width: 36,
     height: 36,
     borderRadius: 18,
   },
-  avatarGradient: {
+  profileGradient: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarPlaceholder: {
+  profilePlaceholder: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#000000',
+    backgroundColor: '#27272A',
   },
-  avatarInitial: {
+  profileInitial: {
     fontFamily: FONTS.display.bold,
     fontSize: 14,
     color: '#FFFFFF',

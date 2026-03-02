@@ -15,7 +15,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, Animated, Dimensions, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Timer, Trophy, Target, Activity, TrendingUp, BarChart3 } from 'lucide-react-native';
+import { Timer, Trophy, Target, Activity, TrendingUp, BarChart3, Flame, Dumbbell, Zap } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
@@ -25,7 +25,6 @@ import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { NeonArc } from '../components/ui/NeonArc';
 import { TimeRangeSelector, TIME_RANGE_OPTIONS } from '../components/ui/TimeRangeSelector';
 import { TrendChart } from '../components/ui/TrendChart';
-import { SummaryStrip } from '../components/ui/SummaryStrip';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -129,29 +128,41 @@ export const AnalyticsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* ── HEADER (fixed) ────────────────────── */}
-      <View style={styles.fixedHeader}>
-        <Text style={styles.headerTitle}>ANALYTICS</Text>
+      {/* ── HEADER (HomeScreen style) ────────────── */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>ANALYTICS</Text>
+            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
+          </View>
+        </View>
         <TouchableOpacity
           onPress={() => navigation.navigate('UserProfile')}
           activeOpacity={0.7}
-          style={styles.avatarButton}
+          style={styles.profileBtn}
         >
           {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.avatarGradient}
+              style={styles.profileGradient}
             >
-              <Text style={styles.avatarInitial}>
+              <Text style={styles.profileInitial}>
                 {profileUser.displayName[0].toUpperCase()}
               </Text>
             </LinearGradient>
           ) : (
-            <View style={styles.avatarPlaceholder} />
+            <View style={styles.profilePlaceholder} />
           )}
         </TouchableOpacity>
       </View>
@@ -164,9 +175,6 @@ export const AnalyticsScreen: React.FC = () => {
         scrollEventThrottle={16}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          {/* ── Date subtitle (scrolls with content) ── */}
-          <Text style={styles.headerDate}>{formatHeaderDate()}</Text>
-
           {/* ── TIME RANGE SELECTOR ──────────────── */}
           <TimeRangeSelector
             options={TIME_RANGE_OPTIONS}
@@ -184,12 +192,73 @@ export const AnalyticsScreen: React.FC = () => {
             trendPercent={hasData ? summary.formTrendPercent : undefined}
           />
 
-          {/* ── SUMMARY STRIP ──────────────────────── */}
-          <SummaryStrip
-            workoutCount={summary.workoutCount}
-            streakDays={summary.streakDays}
-            totalReps={summary.totalReps}
-          />
+          {/* ── SUMMARY STATS ROW (bento grid) ─────── */}
+          <View style={styles.statsRow}>
+            <View style={styles.statCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.statGradient}
+              >
+                <View style={styles.statEdge}>
+                  <View style={styles.statIconRow}>
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
+                  </View>
+                  <Text style={styles.statValue}>{summary.workoutCount}</Text>
+                  <Text style={styles.statLabel}>workouts</Text>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.statCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.statGradient}
+              >
+                <View style={styles.statEdge}>
+                  <View style={styles.statIconRow}>
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
+                  </View>
+                  <Text style={styles.statValue}>
+                    {summary.streakDays > 0 ? summary.streakDays : '\u2014'}
+                  </Text>
+                  <Text style={styles.statLabel}>
+                    {summary.streakDays > 0 ? 'day streak' : 'no streak'}
+                  </Text>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.statCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.statGradient}
+              >
+                <View style={styles.statEdge}>
+                  <View style={styles.statIconRow}>
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                      <Zap size={14} color="#34D399" strokeWidth={1.5} />
+                    </View>
+                  </View>
+                  <Text style={styles.statValue}>
+                    {summary.totalReps >= 1000
+                      ? `${(summary.totalReps / 1000).toFixed(1).replace(/\.0$/, '')}k`
+                      : summary.totalReps}
+                  </Text>
+                  <Text style={styles.statLabel}>total reps</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
 
           {/* ═══════════════════════════════════════════
               SECTION: ACTIVITY
@@ -418,58 +487,119 @@ const styles = StyleSheet.create({
     paddingBottom: 160,
   },
 
-  /* ── Fixed Header (matches Logbook) ─────── */
-  fixedHeader: {
-    paddingTop: 6,
-    paddingBottom: 6,
-    paddingHorizontal: SPACING.screenHorizontal,
+  /* ── Header (HomeScreen style) ────────────── */
+  header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
   },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 38,
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    lineHeight: 44,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  headerDate: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: '#52525B',
-    letterSpacing: 2.5,
-    marginBottom: 14,
-  },
-  avatarButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  logoWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 13,
     overflow: 'hidden',
-    marginTop: 6,
-  },
-  avatarImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-  },
-  avatarGradient: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarPlaceholder: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#000000',
+  logoImage: {
+    width: 55,
+    height: 55,
   },
-  avatarInitial: {
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 13,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
+  profileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  profileGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profilePlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#27272A',
+  },
+  profileInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
     color: '#FFFFFF',
+  },
+
+  /* ── Stats Row (bento grid) ─────────────── */
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  statCell: {
+    flex: 1,
+  },
+  statGradient: {
+    borderRadius: 18,
+  },
+  statEdge: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+  },
+  statIconRow: {
+    marginBottom: 10,
+  },
+  statIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 24,
+    color: COLORS.text,
+    letterSpacing: -1,
+    lineHeight: 28,
+  },
+  statLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    marginTop: 2,
   },
 
   /* ── Section Headers (matches HomeScreen) ─── */
