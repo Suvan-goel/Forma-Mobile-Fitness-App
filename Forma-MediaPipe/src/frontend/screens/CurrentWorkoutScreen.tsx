@@ -742,7 +742,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             onPress={handleDiscardWorkout}
             activeOpacity={0.7}
           >
-            <Trash2 size={15} color={COLORS.textTertiary} strokeWidth={1.5} />
+            <Trash2 size={15} color="#EF4444" strokeWidth={1.5} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1056,10 +1056,8 @@ const styles = StyleSheet.create({
   setIndexBadge: {
     width: 26,
     height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1166,8 +1164,8 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 23,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
