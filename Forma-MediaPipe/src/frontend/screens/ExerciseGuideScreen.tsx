@@ -51,13 +51,14 @@ const TabPill: React.FC<{
   onPress: () => void;
 }> = ({ label, isActive, onPress }) => (
   <TouchableOpacity
-    style={[styles.pill, isActive && styles.pillActive]}
+    style={styles.pill}
     onPress={onPress}
     activeOpacity={0.7}
   >
     <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
       {label}
     </Text>
+    {isActive && <View style={styles.pillUnderline} />}
   </TouchableOpacity>
 );
 
@@ -276,33 +277,32 @@ const styles = StyleSheet.create({
   /* ── Tab Switcher ── */
   tabBar: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 40,
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.md,
-  },
-  pill: {
-    flex: 1,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#000000',
-    borderWidth: 1,
-    borderColor: '#3F3F46',
-    alignItems: 'center',
+    paddingTop: SPACING.sm + 5,
+    paddingBottom: SPACING.md - 2,
     justifyContent: 'center',
   },
-  pillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+  pill: {
+    alignItems: 'center',
+    paddingBottom: 6,
   },
   pillText: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 12,
+    fontSize: 15,
     letterSpacing: 2,
-    color: '#71717A',
+    color: COLORS.textTertiary,
   },
   pillTextActive: {
     color: '#FFFFFF',
+  },
+  pillUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 
   /* ── Scroll ── */

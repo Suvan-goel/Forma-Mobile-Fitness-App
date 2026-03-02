@@ -35,13 +35,14 @@ const MetricSelector = memo(({ active, onSelect }: { active: LeaderboardMetric; 
     {METRICS.map(m => (
       <TouchableOpacity
         key={m.key}
-        style={[styles.metricPill, active === m.key && styles.metricPillActive]}
+        style={styles.tab}
         onPress={() => onSelect(m.key)}
         activeOpacity={0.7}
       >
-        <Text style={[styles.metricText, active === m.key && styles.metricTextActive]}>
+        <Text style={[styles.tabText, active === m.key && styles.tabTextActive]}>
           {m.label}
         </Text>
+        {active === m.key && <View style={styles.underline} />}
       </TouchableOpacity>
     ))}
   </View>
@@ -165,31 +166,12 @@ const styles = StyleSheet.create({
   /* ── Metric Selector ── */
   selectorRow: {
     flexDirection: 'row',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.xs,
-    gap: SPACING.sm,
-  },
-  metricPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    backgroundColor: 'transparent',
-  },
-  metricPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-  },
-  metricText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  metricTextActive: {
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    paddingHorizontal: SPACING.screenHorizontal + 50,
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    marginTop: 4,
+    marginBottom: 4,
+    gap: 20,
   },
 
   /* ── Time Window Selector ── */
@@ -220,6 +202,29 @@ const styles = StyleSheet.create({
   timeTextActive: {
     fontFamily: FONTS.ui.bold,
     color: COLORS.text,
+  },
+
+  /* ── Shared tab styles ── */
+  tab: {
+    alignItems: 'center',
+    paddingBottom: 6,
+  },
+  tabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+  },
+  underline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 
   /* ── List Header ── */

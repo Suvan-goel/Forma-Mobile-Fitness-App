@@ -30,13 +30,14 @@ const FilterRow = memo(({ active, onSelect }: { active: ActivityFilter; onSelect
     {FILTERS.map(f => (
       <TouchableOpacity
         key={f.key}
-        style={[styles.filterPill, active === f.key && styles.filterPillActive]}
+        style={styles.tab}
         onPress={() => onSelect(f.key)}
         activeOpacity={0.7}
       >
-        <Text style={[styles.filterText, active === f.key && styles.filterTextActive]}>
+        <Text style={[styles.tabText, active === f.key && styles.tabTextActive]}>
           {f.label}
         </Text>
+        {active === f.key && <View style={styles.underline} />}
       </TouchableOpacity>
     ))}
   </View>
@@ -130,34 +131,35 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  /* ── Filter pills ── */
+  /* ── Filter tabs ── */
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.md,
-    gap: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    marginVertical: 12,
+    gap: 20,
   },
-  filterPill: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    backgroundColor: 'transparent',
+  tab: {
+    alignItems: 'center',
+    paddingBottom: 6,
   },
-  filterPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-  },
-  filterText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+  tabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
     color: COLORS.textTertiary,
     letterSpacing: 0.3,
   },
-  filterTextActive: {
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+  tabTextActive: {
+    color: '#FFFFFF',
+  },
+  underline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 
   /* ── States ── */

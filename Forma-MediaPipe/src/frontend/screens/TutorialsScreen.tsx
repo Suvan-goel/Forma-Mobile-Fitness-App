@@ -82,19 +82,20 @@ const FILTER_LABELS: Record<string, string> = {
   core: 'CORE',
 };
 
-const FilterPill = memo(({ id, isActive, onPress }: {
+const FilterTab = memo(({ id, isActive, onPress }: {
   id: string;
   isActive: boolean;
   onPress: (id: string) => void;
 }) => (
   <TouchableOpacity
-    style={[styles.filterPill, isActive && styles.filterPillActive]}
+    style={styles.filterTab}
     onPress={() => onPress(id)}
     activeOpacity={0.7}
   >
-    <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+    <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
       {FILTER_LABELS[id] || id.toUpperCase()}
     </Text>
+    {isActive && <View style={styles.filterUnderline} />}
   </TouchableOpacity>
 ));
 
@@ -335,7 +336,7 @@ export const TutorialsScreen: React.FC = () => {
           bounces={false}
         >
           {FILTER_ORDER.map(id => (
-            <FilterPill
+            <FilterTab
               key={id}
               id={id}
               isActive={selectedMuscleGroup === id}
@@ -456,45 +457,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* Filter Pills */
+  /* Filter Tabs */
   filterWrap: {
-    height: 60,
-    marginTop: 8,
-    marginBottom: 16,
-    overflow: 'visible',
+    height: 36,
+    marginTop: 16,
+    marginBottom: 12,
   },
-  filterScroll: {
-    flex: 1,
-    overflow: 'visible',
-  },
+  filterScroll: {},
   filterRow: {
     paddingHorizontal: SPACING.screenHorizontal,
-    gap: 8,
+    gap: 20,
     alignItems: 'center',
-    paddingVertical: 10,
   },
-  filterPill: {
-    height: 34,
-    paddingHorizontal: 16,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: '#3F3F46',
-    backgroundColor: '#000000',
+  filterTab: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingBottom: 6,
   },
-  filterPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+  filterTabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
   },
-  filterPillText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 11,
-    color: '#71717A',
-    letterSpacing: 2,
-  },
-  filterPillTextActive: {
+  filterTabTextActive: {
     color: '#FFFFFF',
+  },
+  filterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
   },
 
   /* Grid */
