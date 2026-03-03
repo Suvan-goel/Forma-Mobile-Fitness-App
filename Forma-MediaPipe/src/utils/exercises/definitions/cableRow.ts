@@ -19,7 +19,7 @@
 import {
   Keypoint,
   calculateAngle,
-  calculateVerticalAngle,
+  calculateSignedVerticalAngle,
   getKeypoint,
   isVisible,
   minKeypointConfidence,
@@ -308,10 +308,14 @@ function calculateShoulderAngle(
 }
 
 /**
- * Calculate torso deviation from vertical using the shoulder-hip line.
- * Returns the absolute angle from vertical in degrees (0 = perfectly upright).
- * Uses calculateVerticalAngle() which handles both Y-up (world landmarks)
- * and Y-down (image landmarks) coordinate systems correctly.
+ * Calculate signed torso angle from vertical using the shoulder-hip line.
+ * Returns a signed angle in degrees: positive = forward lean, negative = backward lean,
+ * 0 = perfectly upright. Uses the YZ plane (sagittal), ignoring the X-axis so that
+ * lateral body rotation doesn't inflate the measurement.
+ *
+ * A signed angle is essential for delta-from-baseline tracking: the unsigned version
+ * folds at vertical (0°), causing lean-back past vertical to produce a SHRINKING delta
+ * instead of a growing one.
  */
 function calculateTorsoDeviation(
   keypoints: Keypoint[],
@@ -328,7 +332,7 @@ function calculateTorsoDeviation(
     return null;
   }
 
-  return calculateVerticalAngle(hip, shoulder);
+  return calculateSignedVerticalAngle(hip, shoulder);
 }
 
 // ============================================================================
