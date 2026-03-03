@@ -61,7 +61,7 @@ const FORM_THRESHOLDS = {
   EXTENSION_FAIL: 145,
   /** Shoulder retraction angle delta below which retraction is insufficient */
   RETRACTION_FAIL: 15,
-  /** Torso deviation from vertical above which there is excessive lean */
+  /** Torso deviation delta from baseline above which there is excessive lean */
   TORSO_LEAN_WARN: 20,
   /** Concentric (pull) too fast threshold (seconds) */
   TEMPO_PULL_MIN: 0.3,
@@ -77,7 +77,7 @@ const FORM_THRESHOLDS = {
  * | ROM pull depth       | 30  | 0               | 0.04  | min elbow shortfall from 85deg    |
  * | ROM extension        | 20  | 0               | 0.03  | max elbow shortfall from 155deg   |
  * | Shoulder retraction  | 25  | 8               | 0.04  | retraction shortfall              |
- * | Torso lean           | 25  | 5               | 0.12  | max torso deviation from vertical |
+ * | Torso lean           | 25  | 5               | 0.12  | torso deviation delta from baseline |
  * | Tempo pull           | 12  | 0.3s            | 60    | concentric time deficit           |
  * | Tempo return         | 8   | 0.4s            | 40    | eccentric time deficit            |
  *
@@ -115,11 +115,13 @@ interface RepWindow {
   minElbow: number;
   /** Max elbow angle during rep (should be high -- extended position) */
   maxElbow: number;
-  /** Shoulder angle at rep start (baseline for retraction) */
+  /** Raw shoulder angle at rep start (baseline for retraction delta) */
   shoulderAngleBaseline: number | null;
-  /** Min shoulder angle during rep (peak retraction = most change from baseline) */
+  /** Max change in raw shoulder angle from baseline (measures retraction amplitude) */
   maxShoulderDelta: number;
-  /** Max absolute torso deviation from vertical during rep */
+  /** Raw torso deviation at rep start (baseline for dynamic lean measurement) */
+  torsoDevBaseline: number | null;
+  /** Max increase in torso deviation from baseline during rep */
   maxTorsoDev: number;
   /** Timestamps */
   tStart: number;
@@ -190,6 +192,7 @@ function initRepWindow(tStart: number): RepWindow {
     maxElbow: -Infinity,
     shoulderAngleBaseline: null,
     maxShoulderDelta: 0,
+    torsoDevBaseline: null,
     maxTorsoDev: 0,
     tStart,
     tContracted: null,
@@ -557,36 +560,49 @@ function updateCableRowState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update elbow min/max
+    // Update elbow min/max — use rawElbow for peak tracking so that EMA lag
+    // doesn't suppress the true ROM. The FSM uses the smoothed signal for
+    // transition stability, but the form check needs the actual peak angles.
     if (!isNaN(smoothedElbow)) {
       window.minElbow = Math.min(window.minElbow, smoothedElbow);
-      window.maxElbow = Math.max(window.maxElbow, smoothedElbow);
+    }
+    if (rawElbow !== null) {
+      window.maxElbow = Math.max(window.maxElbow, rawElbow);
     }
 
-    // Track shoulder angle delta from baseline (measures retraction)
+    // Track shoulder angle delta from baseline (measures retraction).
+    // Uses RAW shoulder angle — EMA smoothing dampens the peak delta,
+    // causing the retraction check to fail even on good reps.
     // Only update when the three keypoints used by calculateShoulderAngle
     // (hip, shoulder, elbow) all have sufficient confidence.
-    if (!isNaN(smoothedShoulder)) {
-      if (window.shoulderAngleBaseline === null) {
-        window.shoulderAngleBaseline = smoothedShoulder;
-      }
+    if (rawShoulder !== null) {
       const shoulderConf = minKeypointConfidence(keypoints, [
         `${visibleSide}_hip`, `${visibleSide}_shoulder`, `${visibleSide}_elbow`,
       ]);
       if (shoulderConf >= 0.3) {
-        const delta = Math.abs(smoothedShoulder - window.shoulderAngleBaseline);
+        if (window.shoulderAngleBaseline === null) {
+          window.shoulderAngleBaseline = rawShoulder;
+        }
+        const delta = Math.abs(rawShoulder - window.shoulderAngleBaseline);
         window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
       }
     }
 
-    // Track torso deviation
+    // Track torso deviation as delta from baseline — the absolute angle from
+    // vertical includes natural seated lean and body rotation artifacts, which
+    // easily exceed the threshold even with perfect form. Measuring the CHANGE
+    // from baseline captures dynamic lean during the pull (the actual concern).
     // Only update when shoulder + hip have sufficient confidence.
-    if (!isNaN(smoothedTorso)) {
+    if (rawTorsoDev !== null) {
       const torsoConf = minKeypointConfidence(keypoints, [
         `${visibleSide}_shoulder`, `${visibleSide}_hip`,
       ]);
       if (torsoConf >= 0.3) {
-        window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
+        if (window.torsoDevBaseline === null) {
+          window.torsoDevBaseline = rawTorsoDev;
+        }
+        const torsoDelta = Math.abs(rawTorsoDev - window.torsoDevBaseline);
+        window.maxTorsoDev = Math.max(window.maxTorsoDev, torsoDelta);
       }
     }
 
@@ -598,6 +614,14 @@ function updateCableRowState(
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    // Record the completing frame's elbow angle — the rep window stops updating
+    // once phase becomes REST, but the frame that triggers REST_REENTER has
+    // the actual peak extension angle and must be included.
+    if (rawElbow !== null) {
+      newState.repWindow.maxElbow = Math.max(newState.repWindow.maxElbow, rawElbow);
+    }
+    newState.repWindow.tEnd = t;
+
     newState.repCount++;
 
     const score = computeCableRowScore(newState.repWindow);
