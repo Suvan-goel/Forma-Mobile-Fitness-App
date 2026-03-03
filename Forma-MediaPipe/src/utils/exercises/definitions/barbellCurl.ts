@@ -41,8 +41,8 @@ const THRESHOLDS = {
 const FORM_THRESHOLDS = {
   SHOULDER_WARN: 45,
   SHOULDER_FAIL: 65,
-  TORSO_WARN: 12,
-  TORSO_FAIL: 18,
+  TORSO_WARN: 15,
+  TORSO_FAIL: 22,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,
   WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
@@ -60,8 +60,8 @@ const FORM_THRESHOLDS = {
 } as const;
 
 /** Smoothing parameters */
-const MEDIAN_WINDOW = 3;
-const EMA_ALPHA = 0.5;
+const MEDIAN_WINDOW = 4;
+const EMA_ALPHA = 0.4;
 const VISIBILITY_THRESHOLD = 0.15;
 
 /** Warm-up: require N consecutive stable frames before enabling FSM */
@@ -85,9 +85,9 @@ const _PENALTIES = {
 // All use quadratic ramps: penalty(x) = min(cap, scale * max(0, x - deadzone)^2)
 // ============================================================================
 
-/** Torso swing penalty — max 35 pts. Deadzone 8deg (shoulder drift + breathing/sway/noise). */
+/** Torso swing penalty — max 35 pts. Deadzone 10deg (shoulder drift + breathing/sway/noise). */
 function penaltyTorso(delta: number): number {
-  const d = Math.max(0, delta - 8);
+  const d = Math.max(0, delta - 10);
   return Math.min(35, 0.40 * d * d);
 }
 

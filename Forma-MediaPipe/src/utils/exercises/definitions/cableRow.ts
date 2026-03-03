@@ -18,9 +18,11 @@
 
 import {
   Keypoint,
-  calculateAngle2D,
+  calculateAngle,
+  calculateVerticalAngle,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
@@ -58,9 +60,9 @@ const FORM_THRESHOLDS = {
   /** Max elbow angle below which arm extension is insufficient */
   EXTENSION_FAIL: 145,
   /** Shoulder retraction angle delta below which retraction is insufficient */
-  RETRACTION_FAIL: 12,
+  RETRACTION_FAIL: 15,
   /** Torso deviation from vertical above which there is excessive lean */
-  TORSO_LEAN_WARN: 15,
+  TORSO_LEAN_WARN: 20,
   /** Concentric (pull) too fast threshold (seconds) */
   TEMPO_PULL_MIN: 0.3,
   /** Eccentric (return) too fast threshold (seconds) */
@@ -84,8 +86,8 @@ const FORM_THRESHOLDS = {
 const PENALTY_CONFIGS = {
   PULL_DEPTH:        { cap: 30, deadzone: 0, scale: 0.04 } as PenaltyConfig,
   EXTENSION_ROM:     { cap: 20, deadzone: 0, scale: 0.03 } as PenaltyConfig,
-  SHOULDER_RETRACT:  { cap: 25, deadzone: 8, scale: 0.04 } as PenaltyConfig,
-  TORSO_LEAN:        { cap: 25, deadzone: 5, scale: 0.12 } as PenaltyConfig,
+  SHOULDER_RETRACT:  { cap: 25, deadzone: 10, scale: 0.04 } as PenaltyConfig,
+  TORSO_LEAN:        { cap: 25, deadzone: 8, scale: 0.10 } as PenaltyConfig,
   TEMPO_PULL:        { cap: 12, deadzone: 0.3, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:      { cap: 8,  deadzone: 0.4, scale: 40 } as PenaltyConfig,
 } as const;
@@ -250,15 +252,10 @@ function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
 // ANGLE CALCULATION
 // ============================================================================
 
-type Point2D = { x: number; y: number };
-
-function getPoint(kp: Keypoint | null): Point2D | null {
-  if (!kp) return null;
-  return { x: kp.x, y: kp.y };
-}
-
 /**
- * Calculate the elbow angle (shoulder-elbow-wrist) in 2D.
+ * Calculate the elbow angle (shoulder-elbow-wrist) in 3D.
+ * Uses full 3D coordinates from world landmarks for accuracy — the rowing
+ * motion has significant depth (Z-axis) movement that 2D projection misses.
  * ~150-170deg when extended (arms out), ~50-80deg when contracted (pulled in).
  */
 function calculateElbowAngle(
@@ -278,15 +275,11 @@ function calculateElbowAngle(
     return null;
   }
 
-  return calculateAngle2D(
-    getPoint(shoulder)!,
-    getPoint(elbow)!,
-    getPoint(wrist)!
-  );
+  return calculateAngle(shoulder, elbow, wrist);
 }
 
 /**
- * Calculate the upper arm angle relative to the torso (hip-shoulder-elbow) in 2D.
+ * Calculate the upper arm angle relative to the torso (hip-shoulder-elbow) in 3D.
  * Measures shoulder extension/retraction during the row.
  * At start (arms extended): angle is smaller (~30-50deg, elbow in front).
  * At contraction (elbows back): angle increases (~70-90deg+, elbow alongside/behind torso).
@@ -308,16 +301,14 @@ function calculateShoulderAngle(
     return null;
   }
 
-  return calculateAngle2D(
-    getPoint(hip)!,
-    getPoint(shoulder)!,
-    getPoint(elbow)!
-  );
+  return calculateAngle(hip, shoulder, elbow);
 }
 
 /**
  * Calculate torso deviation from vertical using the shoulder-hip line.
  * Returns the absolute angle from vertical in degrees (0 = perfectly upright).
+ * Uses calculateVerticalAngle() which handles both Y-up (world landmarks)
+ * and Y-down (image landmarks) coordinate systems correctly.
  */
 function calculateTorsoDeviation(
   keypoints: Keypoint[],
@@ -334,18 +325,7 @@ function calculateTorsoDeviation(
     return null;
   }
 
-  // Torso vector: hip -> shoulder (should point roughly upward)
-  const dx = shoulder.x - hip.x;
-  const dy = shoulder.y - hip.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 1e-8) return null;
-
-  // In screen coords, Y points down. Straight up = (0, -1).
-  // cos(theta) = dot((dx,dy), (0,-1)) / len = -dy / len
-  const cosTheta = -dy / len;
-  const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosTheta))) * (180 / Math.PI);
-
-  return angleDeg;
+  return calculateVerticalAngle(hip, shoulder);
 }
 
 // ============================================================================
@@ -520,8 +500,10 @@ function updateCableRowState(
     currentState.warmedUp = true;
   }
 
-  // Select visible side
-  const visibleSide = selectVisibleSide(keypoints);
+  // Only update visible side in REST — lock it during active rep phases
+  // to prevent mid-rep side switching that corrupts angle measurements.
+  const inActiveRep = currentState.fsm.phase !== 'REST';
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
 
   // Calculate raw angles
   const rawElbow = calculateElbowAngle(keypoints, visibleSide);
@@ -582,17 +564,30 @@ function updateCableRowState(
     }
 
     // Track shoulder angle delta from baseline (measures retraction)
+    // Only update when the three keypoints used by calculateShoulderAngle
+    // (hip, shoulder, elbow) all have sufficient confidence.
     if (!isNaN(smoothedShoulder)) {
       if (window.shoulderAngleBaseline === null) {
         window.shoulderAngleBaseline = smoothedShoulder;
       }
-      const delta = Math.abs(smoothedShoulder - window.shoulderAngleBaseline);
-      window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
+      const shoulderConf = minKeypointConfidence(keypoints, [
+        `${visibleSide}_hip`, `${visibleSide}_shoulder`, `${visibleSide}_elbow`,
+      ]);
+      if (shoulderConf >= 0.3) {
+        const delta = Math.abs(smoothedShoulder - window.shoulderAngleBaseline);
+        window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
+      }
     }
 
     // Track torso deviation
+    // Only update when shoulder + hip have sufficient confidence.
     if (!isNaN(smoothedTorso)) {
-      window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
+      const torsoConf = minKeypointConfidence(keypoints, [
+        `${visibleSide}_shoulder`, `${visibleSide}_hip`,
+      ]);
+      if (torsoConf >= 0.3) {
+        window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
+      }
     }
 
     // Record contracted timestamp

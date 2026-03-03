@@ -17,6 +17,7 @@ import {
   calculateVerticalAngle,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import type {
@@ -69,8 +70,8 @@ const FORM_THRESHOLDS = {
   // ROM
   ROM_MIN: 50,        // minimum ROM in degrees (max - min knee angle)
   // Torso lean (forward lean from vertical, via hip-shoulder vector)
-  TORSO_LEAN_WARN: 50, // max torso lean > 50 degrees
-  TORSO_LEAN_FAIL: 55, // max torso lean > 55 degrees
+  TORSO_LEAN_WARN: 40, // max torso lean > 40 degrees (natural squat lean is 15-35°)
+  TORSO_LEAN_FAIL: 50, // max torso lean > 50 degrees
   // Tempo
   TEMPO_CONCENTRIC_MIN: 0.3,  // ascent too fast (seconds)
   TEMPO_ECCENTRIC_MIN: 0.8,   // descent too fast (seconds) — measured from DESCENDING_ENTER to ASCENDING_ENTER
@@ -92,7 +93,7 @@ const FORM_THRESHOLDS = {
 const SCORE_CURVES = {
   DEPTH:   { deadzone: 95,  scale: 0.035, cap: 35 },
   LOCKOUT: { ideal: 165,    scale: 0.08,  cap: 20 },
-  TORSO:   { deadzone: 35,  scale: 0.06,  cap: 30 },
+  TORSO:   { deadzone: 30,  scale: 0.06,  cap: 30 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 8 },
   TEMPO_ECCENTRIC:  { deadzone: 0.8, scale: 40, cap: 7 },
 } as const;
@@ -248,9 +249,12 @@ function getPoint(kp: Keypoint | null): Point2D | null {
 }
 
 /**
- * Calculate torso forward lean: angle of the hip->shoulder vector from vertical.
+ * Calculate torso forward lean: deviation of the hip->shoulder vector from vertical.
  * 0 = perfectly upright, 90 = horizontal.
  * Uses midpoints when both sides are visible.
+ *
+ * Delegates to calculateVerticalAngle() which handles both Y-up (world landmarks)
+ * and Y-down (image landmarks) coordinate systems correctly.
  */
 function calculateTorsoLean(
   keypoints: Keypoint[],
@@ -261,8 +265,8 @@ function calculateTorsoLean(
   const lh = getKeypoint(keypoints, 'left_hip');
   const rh = getKeypoint(keypoints, 'right_hip');
 
-  let shoulderX: number, shoulderY: number;
-  let hipX: number, hipY: number;
+  let shoulder: { x: number; y: number; z?: number };
+  let hip: { x: number; y: number; z?: number };
 
   const lsVis = isVisible(ls, VISIBILITY_THRESHOLD);
   const rsVis = isVisible(rs, VISIBILITY_THRESHOLD);
@@ -270,36 +274,30 @@ function calculateTorsoLean(
   const rhVis = isVisible(rh, VISIBILITY_THRESHOLD);
 
   if (lsVis && rsVis) {
-    shoulderX = (ls!.x + rs!.x) / 2;
-    shoulderY = (ls!.y + rs!.y) / 2;
+    shoulder = {
+      x: (ls!.x + rs!.x) / 2,
+      y: (ls!.y + rs!.y) / 2,
+      z: ((ls!.z ?? 0) + (rs!.z ?? 0)) / 2,
+    };
   } else {
     const s = getKeypoint(keypoints, `${side}_shoulder`);
     if (!s || !isVisible(s, VISIBILITY_THRESHOLD)) return null;
-    shoulderX = s.x;
-    shoulderY = s.y;
+    shoulder = s;
   }
 
   if (lhVis && rhVis) {
-    hipX = (lh!.x + rh!.x) / 2;
-    hipY = (lh!.y + rh!.y) / 2;
+    hip = {
+      x: (lh!.x + rh!.x) / 2,
+      y: (lh!.y + rh!.y) / 2,
+      z: ((lh!.z ?? 0) + (rh!.z ?? 0)) / 2,
+    };
   } else {
     const h = getKeypoint(keypoints, `${side}_hip`);
     if (!h || !isVisible(h, VISIBILITY_THRESHOLD)) return null;
-    hipX = h.x;
-    hipY = h.y;
+    hip = h;
   }
 
-  // Vector from hip to shoulder
-  const dx = shoulderX - hipX;
-  const dy = shoulderY - hipY;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 1e-8) return null;
-
-  // Angle from vertical (Y-up in screen coords means Y points down)
-  // Vertical vector is (0, -1) in screen coords (up)
-  // cos(theta) = dot((dx,dy), (0,-1)) / len = -dy / len
-  const cosTheta = -dy / len;
-  return Math.acos(Math.max(-1, Math.min(1, cosTheta))) * (180 / Math.PI);
+  return calculateVerticalAngle(hip, shoulder);
 }
 
 // ============================================================================
@@ -662,7 +660,12 @@ function updateSquatState(
       window.maxKnee = Math.max(window.maxKnee, smoothed.knee);
     }
     if (!isNaN(smoothed.torsoLean)) {
-      window.maxTorsoLean = Math.max(window.maxTorsoLean, smoothed.torsoLean);
+      // Only update max torso lean when shoulder+hip are detected with sufficient
+      // confidence to avoid noise-spike false positives from low-confidence frames.
+      const torsoConf = minKeypointConfidence(keypoints, [`${visibleSide}_shoulder`, `${visibleSide}_hip`]);
+      if (torsoConf >= 0.3) {
+        window.maxTorsoLean = Math.max(window.maxTorsoLean, smoothed.torsoLean);
+      }
     }
 
     // Set tBottom at the BOTTOM→ASCENDING transition (knee starts rising above BOTTOM_EXIT).

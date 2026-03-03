@@ -55,6 +55,40 @@ const MEDIAPIPE_LANDMARK_NAMES = [
   'left_foot_index', 'right_foot_index'
 ];
 
+/* ── Self-contained Duration Display (memo'd to avoid re-rendering parent) ──── */
+
+const CameraDurationDisplay = React.memo(({
+  isRecording,
+  isPausedRef,
+  workoutStartTime,
+  durationRef,
+}: {
+  isRecording: boolean;
+  isPausedRef: React.RefObject<boolean>;
+  workoutStartTime: Date | null;
+  durationRef: React.RefObject<number>;
+}) => {
+  const [display, setDisplay] = useState('-');
+
+  useEffect(() => {
+    if (!isRecording || !workoutStartTime) {
+      setDisplay('-');
+      return;
+    }
+    const update = () => {
+      if (isPausedRef.current) return;
+      const elapsed = Math.floor((Date.now() - workoutStartTime.getTime()) / 1000);
+      durationRef.current = elapsed;
+      setDisplay(`${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}`);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [isRecording, workoutStartTime, isPausedRef, durationRef]);
+
+  return <MonoText style={styles.metricValue}>{display}</MonoText>;
+});
+
 export const CameraScreen: React.FC = () => {
   const navigation = useNavigation<CameraScreenNavigationProp>();
   const route = useRoute<CameraScreenRouteProp>();
@@ -75,8 +109,8 @@ export const CameraScreen: React.FC = () => {
     totalReps: 0,
     formScores: [] as number[],
     repFeedback: [] as string[],
-    duration: 0,
   });
+  const durationRef = useRef(0);
   const [feedbackFeed, setFeedbackFeed] = useState<FeedbackFeedItem[]>([]);
   const feedbackIdRef = useRef(0);
   const [exerciseDebug, setExerciseDebug] = useState<Record<string, unknown> | null>(null);
@@ -217,19 +251,7 @@ export const CameraScreen: React.FC = () => {
     }
   }, [exerciseNameFromRoute]);
 
-  // Track workout duration
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording && !isPaused && workoutStartTime) {
-      interval = setInterval(() => {
-        const elapsed = Math.floor((new Date().getTime() - workoutStartTime.getTime()) / 1000);
-        setWorkoutData(prev => ({ ...prev, duration: elapsed }));
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRecording, isPaused, workoutStartTime]);
+  // Duration is tracked via durationRef + CameraDurationDisplay (no state update here)
 
   // Convert MediaPipe landmark data to our Keypoint format.
   // Prefer worldLandmarks (3D body-centric coords) for view-angle-robust angle calculations.
@@ -487,7 +509,7 @@ export const CameraScreen: React.FC = () => {
 
       if (returnToCurrentWorkout && exerciseNameFromRoute && exerciseId) {
         const wasRecording = screenRecAttemptedRef.current;
-        const durationSeconds = workoutDataRef.current.duration;
+        const durationSeconds = durationRef.current;
         const newSet = {
           exerciseName: exerciseNameFromRoute,
           reps: totalReps,
@@ -536,8 +558,8 @@ export const CameraScreen: React.FC = () => {
         }, 450);
       } else {
         // Original flow: navigate to SaveWorkout
-        const minutes = Math.floor(workoutDataRef.current.duration / 60);
-        const seconds = workoutDataRef.current.duration % 60;
+        const minutes = Math.floor(durationRef.current / 60);
+        const seconds = durationRef.current % 60;
         const durationString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
         const workoutDataToSave = {
@@ -573,8 +595,8 @@ export const CameraScreen: React.FC = () => {
         totalReps: 0,
         formScores: [],
         repFeedback: [],
-        duration: 0,
       });
+      durationRef.current = 0;
       accumulatedFormScoresRef.current = [];
       accumulatedRepFeedbackRef.current = [];
       ttsResetCoach();
@@ -620,6 +642,24 @@ export const CameraScreen: React.FC = () => {
   const handlePausePress = useCallback(() => {
     setIsPaused(prev => !prev);
   }, []);
+
+  const handleSettingsPress = useCallback(() => {
+    ttsStopCoach();
+    (navigation as any).navigate('WorkoutSettings');
+  }, [navigation]);
+
+  const handleSetupGuidePress = useCallback(() => {
+    if (guideData) {
+      (navigation as any).navigate('ExerciseGuide', {
+        exerciseName: exerciseNameFromRoute ?? '',
+        category,
+        viewType: guideData.viewType,
+        keySetup: guideData.keySetup,
+        reasonText: guideData.reasonText,
+        cameraTips: guideData.cameraTips,
+      });
+    }
+  }, [navigation, guideData, exerciseNameFromRoute, category]);
 
   const handleCameraFlip = useCallback(() => {
     switchCamera();
@@ -692,23 +732,17 @@ export const CameraScreen: React.FC = () => {
     modelName: poseModel,
   }), [effectiveShowSkeleton, poseModel]);
 
-  // Memoize display values to avoid recalculation
+  // Memoize display values to avoid recalculation (timer handled by CameraDurationDisplay)
   const displayValues = useMemo(() => {
     const formDisplay = repCount > 0 && currentFormScore !== null
       ? Number(currentFormScore).toFixed(1)
       : '-';
-    const totalSeconds = workoutData.duration;
-    const timerDisplay = isRecording
-      ? `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, '0')}`
-      : '-';
-    const values = {
+    return {
       reps: repCount > 0 ? repCount : '-',
       form: formDisplay,
-      timer: timerDisplay,
       exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
     };
-    return values;
-  }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute, workoutData.duration, isRecording]);
+  }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute]);
 
   // Dynamic positioning for the setup guide ("?") button so it stays centered
   // between the discard "X" button and the exercise title text,
@@ -840,18 +874,7 @@ export const CameraScreen: React.FC = () => {
             ]}
           >
             <SetupGuideButton
-              onPress={() => {
-                if (guideData) {
-                  (navigation as any).navigate('ExerciseGuide', {
-                    exerciseName: exerciseNameFromRoute ?? '',
-                    category,
-                    viewType: guideData.viewType,
-                    keySetup: guideData.keySetup,
-                    reasonText: guideData.reasonText,
-                    cameraTips: guideData.cameraTips,
-                  });
-                }
-              }}
+              onPress={handleSetupGuidePress}
             />
           </View>
 
@@ -889,7 +912,7 @@ export const CameraScreen: React.FC = () => {
           <View style={styles.headerRightGroup} onLayout={handleSettingsLayout}>
             <TouchableOpacity
               style={styles.settingsButton}
-              onPress={() => { ttsStopCoach(); (navigation as any).navigate('WorkoutSettings'); }}
+              onPress={handleSettingsPress}
               activeOpacity={0.8}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
@@ -1263,7 +1286,12 @@ export const CameraScreen: React.FC = () => {
               </View>
               <View style={styles.metricBlock}>
                 <Text style={styles.metricLabel}>TIME</Text>
-                <MonoText style={styles.metricValue}>{displayValues.timer}</MonoText>
+                <CameraDurationDisplay
+                  isRecording={isRecording}
+                  isPausedRef={isPausedRef}
+                  workoutStartTime={workoutStartTime}
+                  durationRef={durationRef}
+                />
               </View>
             </View>
           </View>

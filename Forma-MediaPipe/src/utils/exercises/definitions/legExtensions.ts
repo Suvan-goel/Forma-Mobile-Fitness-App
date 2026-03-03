@@ -16,8 +16,10 @@
 import {
   Keypoint,
   calculateAngle2D,
+  calculateVerticalAngle,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
@@ -51,13 +53,13 @@ const THRESHOLDS = {
 /** Form heuristic thresholds (discrete messages) */
 const FORM_THRESHOLDS = {
   /** Max knee angle below which extension is insufficient */
-  EXTENSION_FAIL: 155,
+  EXTENSION_FAIL: 150,
   /** Min knee angle above which starting flexion is insufficient */
   FLEXION_FAIL: 100,
   /** Torso deviation from vertical above which there is excessive lean */
-  TORSO_LEAN_WARN: 15,
+  TORSO_LEAN_WARN: 18,
   /** Hip angle change that indicates lifting hips off the seat */
-  HIP_LIFT_WARN: 18,
+  HIP_LIFT_WARN: 22,
   /** Concentric (extend) too fast threshold (seconds) */
   TEMPO_EXTEND_MIN: 0.3,
   /** Eccentric (return) too fast threshold (seconds) */
@@ -81,8 +83,8 @@ const FORM_THRESHOLDS = {
 const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 0.05 } as PenaltyConfig,
   FLEXION_ROM:   { cap: 20, deadzone: 0, scale: 0.04 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 8, scale: 0.12 } as PenaltyConfig,
-  HIP_LIFT:      { cap: 25, deadzone: 10, scale: 0.08 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 25, deadzone: 8, scale: 0.10 } as PenaltyConfig,
+  HIP_LIFT:      { cap: 25, deadzone: 12, scale: 0.08 } as PenaltyConfig,
   TEMPO_EXTEND:  { cap: 12, deadzone: 0.4, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
 } as const;
@@ -316,6 +318,8 @@ function calculateHipAngle(
 /**
  * Calculate torso deviation from vertical using the shoulder-hip line.
  * Returns the absolute angle from vertical in degrees (0 = perfectly upright).
+ * Uses calculateVerticalAngle() which handles both Y-up (world landmarks)
+ * and Y-down (image landmarks) coordinate systems correctly.
  */
 function calculateTorsoDeviation(
   keypoints: Keypoint[],
@@ -332,18 +336,7 @@ function calculateTorsoDeviation(
     return null;
   }
 
-  // Torso vector: hip -> shoulder (should point roughly upward)
-  const dx = shoulder.x - hip.x;
-  const dy = shoulder.y - hip.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 1e-8) return null;
-
-  // In screen coords, Y points down. Straight up = (0, -1).
-  // cos(theta) = dot((dx,dy), (0,-1)) / len = -dy / len
-  const cosTheta = -dy / len;
-  const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosTheta))) * (180 / Math.PI);
-
-  return angleDeg;
+  return calculateVerticalAngle(hip, shoulder);
 }
 
 // ============================================================================
@@ -516,8 +509,10 @@ function updateLegExtensionState(
     currentState.warmedUp = true;
   }
 
-  // Select visible side
-  const visibleSide = selectVisibleSide(keypoints);
+  // Only update visible side in REST — lock it during active rep phases
+  // to prevent mid-rep side switching that corrupts angle measurements.
+  const inActiveRep = currentState.fsm.phase !== 'REST';
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
 
   // Calculate raw angles
   const rawKnee = calculateKneeAngle(keypoints, visibleSide);
@@ -578,17 +573,29 @@ function updateLegExtensionState(
     }
 
     // Track hip angle delta from baseline
+    // Only update when shoulder, hip, and knee all have sufficient confidence.
     if (!isNaN(smoothedHip)) {
       if (window.hipAngleBaseline === null) {
         window.hipAngleBaseline = smoothedHip;
       }
-      const delta = Math.abs(smoothedHip - window.hipAngleBaseline);
-      window.maxHipDelta = Math.max(window.maxHipDelta, delta);
+      const hipConf = minKeypointConfidence(keypoints, [
+        `${visibleSide}_shoulder`, `${visibleSide}_hip`, `${visibleSide}_knee`,
+      ]);
+      if (hipConf >= 0.3) {
+        const delta = Math.abs(smoothedHip - window.hipAngleBaseline);
+        window.maxHipDelta = Math.max(window.maxHipDelta, delta);
+      }
     }
 
     // Track torso deviation
+    // Only update when shoulder + hip have sufficient confidence.
     if (!isNaN(smoothedTorso)) {
-      window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
+      const torsoConf = minKeypointConfidence(keypoints, [
+        `${visibleSide}_shoulder`, `${visibleSide}_hip`,
+      ]);
+      if (torsoConf >= 0.3) {
+        window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
+      }
     }
 
     // Record extended timestamp

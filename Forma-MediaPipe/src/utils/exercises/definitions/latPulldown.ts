@@ -14,8 +14,10 @@
 import {
   Keypoint,
   calculateAngle2D,
+  calculateVerticalAngle,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
@@ -58,11 +60,15 @@ const FORM_THRESHOLDS = {
   /** Max elbow angle below which extension is insufficient */
   EXTENSION_ROM_FAIL: 130,
   /** Torso lean above which there is excessive lean (degrees from vertical) */
-  TORSO_LEAN_WARN: 20,
-  /** Concentric (pull down) too fast threshold (seconds) */
-  TEMPO_PULL_MIN: 0.2,
-  /** Eccentric (return) too fast threshold (seconds) */
-  TEMPO_RETURN_MIN: 0.4,
+  TORSO_LEAN_WARN: 25,
+  /** Concentric (pull down) too fast threshold (seconds).
+   *  With the tRestPeakElbow fix providing accurate timing, this can be
+   *  set close to the raw biomechanical minimum for an explosive pull. */
+  TEMPO_PULL_MIN: 0.35,
+  /** Eccentric (return) too fast threshold (seconds).
+   *  tReturn includes bottom hold + return, so this must be well above
+   *  a raw eccentric minimum to trigger for genuinely rushed returns. */
+  TEMPO_RETURN_MIN: 0.8,
 } as const;
 
 /**
@@ -73,17 +79,17 @@ const FORM_THRESHOLDS = {
  * | ROM pull         | 30  | 0        | 0.04  | min elbow shortfall from 85   |
  * | ROM extension    | 25  | 0        | 0.03  | max elbow shortfall from 155  |
  * | Torso lean       | 25  | 8        | 0.12  | max torso lean from vertical  |
- * | Tempo pull       | 10  | 0.4s     | 50    | concentric time deficit       |
- * | Tempo return     | 10  | 0.5s     | 40    | eccentric time deficit        |
+ * | Tempo pull       | 10  | 0.5s     | 50    | concentric time deficit       |
+ * | Tempo return     | 10  | 1.0s     | 40    | eccentric time deficit        |
  *
  * Max total penalty: 100 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
   PULL_ROM:      { cap: 30, deadzone: 0, scale: 0.04 } as PenaltyConfig,
   EXTENSION_ROM: { cap: 25, deadzone: 0, scale: 0.03 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 8, scale: 0.12 } as PenaltyConfig,
-  TEMPO_PULL:    { cap: 10, deadzone: 0.4, scale: 50 } as PenaltyConfig,
-  TEMPO_RETURN:  { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 25, deadzone: 12, scale: 0.10 } as PenaltyConfig,
+  TEMPO_PULL:    { cap: 10, deadzone: 0.5, scale: 50 } as PenaltyConfig,
+  TEMPO_RETURN:  { cap: 10, deadzone: 1.0, scale: 40 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -134,6 +140,11 @@ interface LatPulldownState {
   activeSide: 'left' | 'right';
   /** Max elbow observed during REST (pre-pull extension) */
   restMaxElbow: number;
+  /** Timestamp of peak elbow during REST — used as the true pull start for
+   *  tempo calculation so that the measurement is independent of when the FSM
+   *  actually transitions to PULLING (which can be delayed by the extension gate
+   *  timeout when the smoothed angle doesn't reach PULLING_ENTER). */
+  tRestPeakElbow: number | null;
   /** Current smoothed values (for debug) */
   smoothedElbow: number;
   smoothedTorsoLean: number;
@@ -181,6 +192,7 @@ function initializeState(): LatPulldownState {
     warmedUp: false,
     activeSide: 'right',
     restMaxElbow: -Infinity,
+    tRestPeakElbow: null,
     requireExtensionBeforeNextRep: false,
     tRepCompleted: null,
     smoothedElbow: 180,
@@ -239,13 +251,12 @@ function computeElbowAngle(
 
 /**
  * Compute torso lean from vertical using a single shoulder + hip.
- * Works from side, diagonal, or front view.
- * Returns absolute lean angle in degrees.
+ * Uses calculateVerticalAngle() which handles both Y-up (world landmarks)
+ * and Y-down (image landmarks) coordinate systems correctly.
+ * Returns absolute lean angle in degrees (0 = perfectly upright).
  */
 function computeTorsoLean(shoulder: Keypoint, hip: Keypoint): number {
-  const dx = shoulder.x - hip.x;
-  const dy = hip.y - shoulder.y; // positive: hip is below shoulder in image coords
-  return Math.abs(Math.atan2(dx, dy) * (180 / Math.PI));
+  return calculateVerticalAngle(hip, shoulder);
 }
 
 // ============================================================================
@@ -443,7 +454,10 @@ function updateLatPulldownState(
 
   // -- Track max elbow during REST (pre-pull extension) --
   if (state.phase === 'REST') {
-    state.restMaxElbow = Math.max(state.restMaxElbow, smoothedElbow);
+    if (smoothedElbow >= state.restMaxElbow) {
+      state.restMaxElbow = smoothedElbow;
+      state.tRestPeakElbow = t;
+    }
     if (state.requireExtensionBeforeNextRep) {
       const extensionReached = smoothedElbow >= THRESHOLDS.PULLING_ENTER;
       const timedOut = state.tRepCompleted !== null && (t - state.tRepCompleted) > 1.5;
@@ -462,9 +476,15 @@ function updateLatPulldownState(
   // -- Track rep start --
   if (prevPhase === 'REST' && state.phase === 'PULLING') {
     state.tRepStart = t;
-    state.repWindow = initRepWindow(t);
+    // Use the time of peak elbow extension during REST as the true pull start
+    // for tempo calculation.  This avoids artificially short tPull when the
+    // extension-gate timeout fires and the FSM enters PULLING late (with the
+    // smoothed angle already well below PULLING_ENTER).
+    const pullStartTime = state.tRestPeakElbow ?? t;
+    state.repWindow = initRepWindow(pullStartTime);
     state.repWindow.maxElbow = state.restMaxElbow;
     state.restMaxElbow = -Infinity;
+    state.tRestPeakElbow = null;
   }
 
   // -- Accumulate rep window while in a rep --
@@ -475,7 +495,13 @@ function updateLatPulldownState(
     w.frameCount++;
     w.minElbow = Math.min(w.minElbow, smoothedElbow);
     w.maxElbow = Math.max(w.maxElbow, smoothedElbow);
-    w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+    // Only update torso lean max when shoulder + hip have sufficient confidence.
+    const torsoConf = minKeypointConfidence(keypoints, [
+      `${side}_shoulder`, `${side}_hip`,
+    ]);
+    if (torsoConf >= 0.3) {
+      w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+    }
 
     if (state.phase === 'BOTTOM' && w.tBottom === null) {
       w.tBottom = t;
@@ -508,6 +534,7 @@ function updateLatPulldownState(
     state.tRepStart = null;
     state.requireExtensionBeforeNextRep = false;
     state.tRepCompleted = null;
+    state.tRestPeakElbow = null;
   }
 
   // -- Clear feedback after 2 seconds --

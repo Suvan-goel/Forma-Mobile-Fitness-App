@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -76,6 +76,63 @@ const getTimerParts = (totalSeconds: number) => {
   ];
 };
 
+/* ── Self-contained Timer Display (memo'd to avoid re-rendering parent) ──── */
+
+const WorkoutTimerDisplay = React.memo(({
+  startTimeRef,
+  isPausedRef,
+  contextElapsed,
+  elapsedSecondsRef,
+  timerFontSize,
+  timerLineHeight,
+}: {
+  startTimeRef: React.RefObject<number | null>;
+  isPausedRef: React.RefObject<boolean>;
+  contextElapsed: number;
+  elapsedSecondsRef: React.RefObject<number>;
+  timerFontSize: number;
+  timerLineHeight: number;
+}) => {
+  const [seconds, setSeconds] = useState(contextElapsed);
+
+  useEffect(() => {
+    const startFrom = contextElapsed > 0 ? contextElapsed : 0;
+    startTimeRef.current = Date.now() - startFrom * 1000;
+    setSeconds(startFrom);
+    elapsedSecondsRef.current = startFrom;
+
+    const interval = setInterval(() => {
+      if (isPausedRef.current) return;
+      if (startTimeRef.current !== null) {
+        const val = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setSeconds(val);
+        elapsedSecondsRef.current = val;
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [contextElapsed, startTimeRef, isPausedRef, elapsedSecondsRef]);
+
+  const digitStyle = useMemo(
+    () => [styles.timerDigit, { fontSize: timerFontSize, lineHeight: timerLineHeight }],
+    [timerFontSize, timerLineHeight],
+  );
+  const colonStyle = useMemo(
+    () => [styles.timerColon, { fontSize: timerFontSize * 0.7, lineHeight: timerLineHeight }],
+    [timerFontSize, timerLineHeight],
+  );
+
+  return (
+    <View style={styles.timerDisplay}>
+      {getTimerParts(seconds).map((part, i) => (
+        <MonoText key={i} style={part === ':' ? colonStyle : digitStyle}>
+          {part}
+        </MonoText>
+      ))}
+    </View>
+  );
+});
+
 /* ── Main Screen ──────────────────────────── */
 
 const TIMER_FONT_SIZE_MAX = 26;
@@ -94,7 +151,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const timerLineHeight = Math.round(timerFontSize * 1.15);
   const {
     exercises,
-    sets,
     addSet,
     clearSets,
     updateSetWeight,
@@ -110,7 +166,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     pendingRecording,
     setPendingRecording,
   } = useCurrentWorkout();
-  const [elapsedSeconds, setElapsedSeconds] = useState(contextElapsed);
+  const elapsedSecondsRef = useRef(contextElapsed);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
   const [notesModalSet, setNotesModalSet] = useState<{
     set: LoggedSet;
@@ -134,12 +190,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
   } | null>(null);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPausedRef = useRef(false);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const exercisesRef = useRef(exercises);
   exercisesRef.current = exercises;
+  const weightModalDataRef = useRef(weightModalData);
+  weightModalDataRef.current = weightModalData;
   const { restTimerEnabled, restTimerDurationSeconds } = useCameraSettings();
   isPausedRef.current = workoutPaused;
 
@@ -154,37 +211,21 @@ export const CurrentWorkoutScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  /* ── Timer logic ──── */
+  /* ── Timer logic (interval lives inside WorkoutTimerDisplay) ──── */
 
   useEffect(() => {
     setWorkoutInProgress(true);
-    const startFrom = contextElapsed > 0 ? contextElapsed : 0;
-    startTimeRef.current = Date.now() - startFrom * 1000;
-    setElapsedSeconds(startFrom);
+  }, [setWorkoutInProgress]);
 
-    intervalRef.current = setInterval(() => {
-      if (isPausedRef.current) return;
-      if (startTimeRef.current !== null) {
-        setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
-      }
-    }, 1000);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      startTimeRef.current = null;
-    };
-  }, [setWorkoutInProgress, contextElapsed]);
-
-  const handlePausePress = () => {
+  const handlePausePress = useCallback(() => {
     setWorkoutPaused((p) => {
       const next = !p;
       if (!next) {
-        startTimeRef.current = Date.now() - elapsedSeconds * 1000;
+        startTimeRef.current = Date.now() - elapsedSecondsRef.current * 1000;
       }
       return next;
     });
-  };
+  }, [setWorkoutPaused]);
 
   /* ── Rest timer logic ──── */
 
@@ -262,7 +303,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   /* ── Handlers ──── */
 
-  const toggleExerciseExpanded = (exerciseId: string) => {
+  const toggleExerciseExpanded = useCallback((exerciseId: string) => {
     setExpandedExerciseIds((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(exerciseId)) {
@@ -272,42 +313,44 @@ export const CurrentWorkoutScreen: React.FC = () => {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const handleAddExercise = () => {
+  const handleAddExercise = useCallback(() => {
     navigation.navigate('ChooseExercise');
-  };
+  }, [navigation]);
 
-  const handleAddSet = (exercise: { id: string; name: string; category: string }) => {
+  const handleAddSet = useCallback((exercise: { id: string; name: string; category: string }) => {
     navigation.navigate('Camera', {
       exerciseName: exercise.name,
       category: exercise.category,
       exerciseId: exercise.id,
       returnToCurrentWorkout: true,
     });
-  };
+  }, [navigation]);
 
-  const handleEndWorkout = () => {
-    if (sets.length === 0) {
+  const handleEndWorkout = useCallback(() => {
+    const currentExercises = exercisesRef.current;
+    const currentSets = currentExercises.flatMap((ex) => ex.sets);
+    if (currentSets.length === 0) {
       showAlert('No sets recorded', 'Add at least one set before ending the workout.');
       return;
     }
-    const totalSets = sets.length;
-    const totalReps = sets.reduce((sum, set) => sum + set.reps, 0);
+    const totalSets = currentSets.length;
+    const totalReps = currentSets.reduce((sum, set) => sum + set.reps, 0);
     const avgFormScore = Math.round(
-      sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
+      currentSets.reduce((sum, set) => sum + set.formScore, 0) / currentSets.length
     );
-    const category = exercises[0]?.name || 'General';
-    const duration = formatStopwatch(elapsedSeconds);
+    const category = currentExercises[0]?.name || 'General';
+    const duration = formatStopwatch(elapsedSecondsRef.current);
     navigation.navigate('SaveWorkout', {
       workoutData: { category, duration, totalSets, totalReps, avgFormScore },
     });
-  };
+  }, [navigation, showAlert]);
 
-  const handleGoBack = () => {
-    setWorkoutElapsedSeconds(elapsedSeconds);
+  const handleGoBack = useCallback(() => {
+    setWorkoutElapsedSeconds(elapsedSecondsRef.current);
     navigation.reset({ index: 0, routes: [{ name: 'RecordLanding' }] });
-  };
+  }, [setWorkoutElapsedSeconds, navigation]);
 
   // Auto-attach pending recording to the latest set when it arrives
   useEffect(() => {
@@ -330,18 +373,20 @@ export const CurrentWorkoutScreen: React.FC = () => {
   }, [pendingRecording, exercises, attachRecordingToSet, setPendingRecording]);
 
   const handleSaveRecordingPrefs = useCallback((saveToLibrary: boolean, saveToCameraRoll: boolean) => {
-    if (!weightModalData) return;
-    updateSetRecordingFlags(weightModalData.exerciseId, weightModalData.setIndex, { saveToLibrary, saveToCameraRoll });
-  }, [weightModalData, updateSetRecordingFlags]);
+    const data = weightModalDataRef.current;
+    if (!data) return;
+    updateSetRecordingFlags(data.exerciseId, data.setIndex, { saveToLibrary, saveToCameraRoll });
+  }, [updateSetRecordingFlags]);
 
-  const handleWeightSubmit = (weight: number, unit: 'kg' | 'lbs') => {
-    if (weightModalData) {
-      updateSetWeight(weightModalData.exerciseId, weightModalData.setIndex, weight, unit);
+  const handleWeightSubmit = useCallback((weight: number, unit: 'kg' | 'lbs') => {
+    const data = weightModalDataRef.current;
+    if (data) {
+      updateSetWeight(data.exerciseId, data.setIndex, weight, unit);
       setWeightModalData(null);
     }
-  };
+  }, [updateSetWeight]);
 
-  const handleEditWeight = (
+  const handleEditWeight = useCallback((
     exerciseId: string,
     exerciseName: string,
     setIndex: number,
@@ -355,9 +400,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
       currentWeight,
       currentUnit: currentUnit || 'kg',
     });
-  };
+  }, []);
 
-  const handleDeleteExercise = (exerciseId: string, exerciseName: string, setCount: number) => {
+  const handleDeleteExercise = useCallback((exerciseId: string, exerciseName: string, setCount: number) => {
     showAlert(
       'Remove exercise?',
       `Remove ${exerciseName}${setCount > 0 ? ` and its ${setCount} ${setCount === 1 ? 'set' : 'sets'}` : ''}? This cannot be undone.`,
@@ -370,9 +415,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
         },
       ]
     );
-  };
+  }, [showAlert, removeExercise]);
 
-  const handleDeleteSet = (exerciseId: string, exerciseName: string, setIndex: number) => {
+  const handleDeleteSet = useCallback((exerciseId: string, exerciseName: string, setIndex: number) => {
     showAlert(
       'Delete set?',
       `Are you sure you want to delete Set ${setIndex + 1} for ${exerciseName}? This cannot be undone.`,
@@ -385,9 +430,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
         },
       ]
     );
-  };
+  }, [showAlert, removeSetFromExercise]);
 
-  const handleDiscardWorkout = () => {
+  const handleDiscardWorkout = useCallback(() => {
     showAlert(
       'Discard Workout',
       'Are you sure? This will delete all recorded sets and cannot be undone.',
@@ -398,7 +443,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           style: 'destructive',
           onPress: () => {
             // Clean up all temp recording files
-            for (const ex of exercises) {
+            for (const ex of exercisesRef.current) {
               for (const s of ex.sets) {
                 if (s.tempRecordingUrl) {
                   cleanupTempRecording(s.tempRecordingUrl).catch(() => {});
@@ -413,7 +458,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         },
       ]
     );
-  };
+  }, [showAlert, clearSets, setWorkoutElapsedSeconds, setWorkoutInProgress, navigation]);
 
   /* ── Computed ──── */
 
@@ -429,19 +474,14 @@ export const CurrentWorkoutScreen: React.FC = () => {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <View style={styles.timerDisplay}>
-            {getTimerParts(elapsedSeconds).map((part, i) => (
-              <MonoText
-                key={i}
-                style={part === ':'
-                  ? [styles.timerColon, { fontSize: timerFontSize * 0.7, lineHeight: timerLineHeight }]
-                  : [styles.timerDigit, { fontSize: timerFontSize, lineHeight: timerLineHeight }]
-                }
-              >
-                {part}
-              </MonoText>
-            ))}
-          </View>
+          <WorkoutTimerDisplay
+            startTimeRef={startTimeRef}
+            isPausedRef={isPausedRef}
+            contextElapsed={contextElapsed}
+            elapsedSecondsRef={elapsedSecondsRef}
+            timerFontSize={timerFontSize}
+            timerLineHeight={timerLineHeight}
+          />
         </View>
 
         <TouchableOpacity
@@ -526,7 +566,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
               return (
                 <View key={exercise.id} style={styles.exerciseCardOuter}>
                   <LinearGradient
-                    colors={[...CARD_GRADIENT_COLORS]}
+                    colors={CARD_GRADIENT_COLORS as any}
                     start={CARD_GRADIENT_START}
                     end={CARD_GRADIENT_END}
                     style={styles.exerciseCardGradient}

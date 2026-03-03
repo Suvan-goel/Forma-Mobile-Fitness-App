@@ -316,6 +316,21 @@ export function isVisible(keypoint: Keypoint | null, threshold = 0.8): keypoint 
 }
 
 /**
+ * Returns the minimum confidence score among the given keypoint names.
+ * Used for confidence-gating form metric accumulation — only record max
+ * deviations (torso lean, hip lift, etc.) when the relevant joints are
+ * detected with sufficient confidence to avoid noise-spike false positives.
+ */
+export function minKeypointConfidence(keypoints: Keypoint[], names: string[]): number {
+  let min = 1.0;
+  for (const name of names) {
+    const kp = getKeypoint(keypoints, name);
+    min = Math.min(min, kp?.score ?? 0);
+  }
+  return min;
+}
+
+/**
  * Calculate torso height with caching to avoid redundant computation
  */
 function getTorsoHeight(keypoints: Keypoint[]): number {
