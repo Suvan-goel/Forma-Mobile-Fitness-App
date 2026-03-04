@@ -488,6 +488,21 @@ export const CameraScreen: React.FC = () => {
           }
           console.log('=== LANDMARK_RECORDING_END ===');
           console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
+
+          // Also write to device filesystem for easy pull via scripts/pull-recordings.sh
+          (async () => {
+            try {
+              const FS = require('expo-file-system');
+              const ts = new Date().toISOString().replace(/[:.]/g, '-');
+              const safeName = (exerciseNameFromRoute || 'Unknown').replace(/\s+/g, '_');
+              const filename = `recording_${safeName}_${ts}.json`;
+              const uri = FS.documentDirectory + filename;
+              await FS.writeAsStringAsync(uri, json);
+              console.log(`[LandmarkRecording] Saved to: ${uri}`);
+            } catch (e) {
+              console.warn('[LandmarkRecording] Failed to write file:', e);
+            }
+          })();
         }
         landmarkBufferRef.current = [];
       }
