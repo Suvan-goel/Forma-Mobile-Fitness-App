@@ -13,11 +13,11 @@ interface Top3PodiumProps {
   entries: LeaderboardEntry[];
 }
 
-const PODIUM_COLORS = ['#F5A623', '#A1A1AA', '#CD7F32']; // Gold, Silver, Bronze
+const PODIUM_COLORS = ['#FFFFFF', '#A1A1AA', '#52525B']; // 1st White, 2nd Grey, 3rd Dark Grey
 const PODIUM_GRADIENTS: [string, string][] = [
-  ['rgba(245, 166, 35, 0.12)', 'rgba(245, 166, 35, 0.03)'],
+  ['rgba(139, 92, 246, 0.12)', 'rgba(139, 92, 246, 0.03)'],
   ['rgba(161, 161, 170, 0.10)', 'rgba(161, 161, 170, 0.02)'],
-  ['rgba(205, 127, 50, 0.10)', 'rgba(205, 127, 50, 0.02)'],
+  ['rgba(82, 82, 91, 0.10)', 'rgba(82, 82, 91, 0.02)'],
 ];
 const PODIUM_HEIGHTS = [110, 88, 72];
 
@@ -51,7 +51,7 @@ const PodiumItem = memo(({ entry, index }: { entry: LeaderboardEntry; index: num
         </LinearGradient>
         {isFirst && (
           <View style={styles.crownContainer}>
-            <Crown size={16} color="#F5A623" fill="#F5A623" />
+            <Crown size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
           </View>
         )}
       </View>

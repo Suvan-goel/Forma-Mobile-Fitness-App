@@ -23,15 +23,15 @@ const StatusIndicator = memo(({ status }: { status: UserSearchResult['relationsh
   switch (status) {
     case 'friends':
       return (
-        <View style={[styles.statusBadge, { backgroundColor: 'rgba(52, 211, 153, 0.08)', borderColor: 'rgba(52, 211, 153, 0.15)' }]}>
-          <Check size={14} color="#34D399" />
-          <Text style={[styles.statusText, { color: '#34D399' }]}>Friends</Text>
+        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.04)', borderColor: 'rgba(255, 255, 255, 0.08)' }]}>
+          <Check size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+          <Text style={[styles.statusText, { color: COLORS.textSecondary }]}>Friends</Text>
         </View>
       );
     case 'pending_sent':
       return (
         <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.04)', borderColor: 'rgba(255, 255, 255, 0.08)' }]}>
-          <Clock size={14} color={COLORS.textTertiary} />
+          <Clock size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
           <Text style={[styles.statusText, { color: COLORS.textTertiary }]}>Pending</Text>
         </View>
       );
@@ -89,9 +89,9 @@ export const AddFriendScreen: React.FC = memo(() => {
           >
             <Heart
               size={18}
-              color={isFollowingUser(item.userId) ? '#F472B6' : COLORS.textTertiary}
-              fill={isFollowingUser(item.userId) ? '#F472B6' : 'none'}
-              strokeWidth={1.8}
+              color={isFollowingUser(item.userId) ? COLORS.accent : COLORS.textTertiary}
+              fill={isFollowingUser(item.userId) ? COLORS.accent : 'none'}
+              strokeWidth={1.5}
             />
           </TouchableOpacity>
           <TouchableOpacity
@@ -99,7 +99,7 @@ export const AddFriendScreen: React.FC = memo(() => {
             onPress={() => handleAdd(item.userId)}
             activeOpacity={0.7}
           >
-            <UserPlus size={15} color={COLORS.text} />
+            <UserPlus size={15} color={COLORS.text} strokeWidth={1.5} />
             <Text style={styles.addButtonText}>Add</Text>
           </TouchableOpacity>
         </View>
@@ -113,9 +113,9 @@ export const AddFriendScreen: React.FC = memo(() => {
           >
             <Heart
               size={18}
-              color={isFollowingUser(item.userId) ? '#F472B6' : COLORS.textTertiary}
-              fill={isFollowingUser(item.userId) ? '#F472B6' : 'none'}
-              strokeWidth={1.8}
+              color={isFollowingUser(item.userId) ? COLORS.accent : COLORS.textTertiary}
+              fill={isFollowingUser(item.userId) ? COLORS.accent : 'none'}
+              strokeWidth={1.5}
             />
           </TouchableOpacity>
           <StatusIndicator status={item.relationshipStatus} />
@@ -144,7 +144,7 @@ export const AddFriendScreen: React.FC = memo(() => {
 
       {/* Search bar */}
       <View style={styles.searchContainer}>
-        <Search size={16} color={COLORS.textTertiary} />
+        <Search size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by name..."
@@ -175,7 +175,7 @@ export const AddFriendScreen: React.FC = memo(() => {
             ) : (
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconContainer}>
-                  <Search size={24} color={COLORS.textTertiary} />
+                  <Search size={24} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.emptyText}>Search for friends by name</Text>
                 <Text style={styles.emptySubtext}>Type at least 2 characters</Text>

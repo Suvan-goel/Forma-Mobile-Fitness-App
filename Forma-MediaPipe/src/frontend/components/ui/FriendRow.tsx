@@ -44,7 +44,7 @@ export const FriendRow: React.FC<FriendRowProps> = memo(({ friend, onCompare, on
             <View style={styles.subtitleRow}>
               {friend.streakDays > 0 && (
                 <>
-                  <Flame size={11} color="#E07856" />
+                  <Flame size={11} color={COLORS.textSecondary} strokeWidth={1.5} />
                   <Text style={styles.streakText}>{friend.streakDays}d</Text>
                 </>
               )}
@@ -69,7 +69,7 @@ export const FriendRow: React.FC<FriendRowProps> = memo(({ friend, onCompare, on
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <GitCompare size={15} color={COLORS.primary} />
+            <GitCompare size={15} color={COLORS.primary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   streakText: {
     fontFamily: FONTS.mono.regular,
     fontSize: 11,
-    color: '#E07856',
+    color: COLORS.textSecondary,
   },
   subtitle: {
     fontFamily: FONTS.ui.regular,

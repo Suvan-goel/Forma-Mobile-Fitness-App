@@ -119,8 +119,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   };
 
   /* Reusable single-row card */
-  const RowCard = ({ icon: Icon, iconBg, iconColor, label, onPress, right }: {
-    icon: any; iconBg: string; iconColor: string; label: string;
+  const RowCard = ({ icon: Icon, label, onPress, right }: {
+    icon: any; label: string;
     onPress?: () => void; right?: React.ReactNode;
   }) => (
     <TouchableOpacity activeOpacity={onPress ? 0.7 : 1} onPress={onPress} disabled={!onPress}>
@@ -132,9 +132,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       >
         <View style={styles.cardEdge}>
           <View style={styles.row}>
-            <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-              <Icon size={14} color={iconColor} strokeWidth={1.5} />
-            </View>
+            <Icon size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
             <Text style={styles.rowLabel}>{label}</Text>
             {right ?? <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />}
           </View>
@@ -144,8 +142,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   );
 
   /* Reusable single-row card with sub-label */
-  const RowCardWithSub = ({ icon: Icon, iconBg, iconColor, label, sub, onPress }: {
-    icon: any; iconBg: string; iconColor: string; label: string; sub: string; onPress: () => void;
+  const RowCardWithSub = ({ icon: Icon, label, sub, onPress }: {
+    icon: any; label: string; sub: string; onPress: () => void;
   }) => (
     <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
       <LinearGradient
@@ -156,9 +154,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       >
         <View style={styles.cardEdge}>
           <View style={styles.row}>
-            <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-              <Icon size={14} color={iconColor} strokeWidth={1.5} />
-            </View>
+            <Icon size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
             <View style={styles.rowLabelCol}>
               <Text style={styles.rowLabel}>{label}</Text>
               <Text style={styles.rowSubLabel}>{sub}</Text>
@@ -171,8 +167,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   );
 
   /* Toggle card */
-  const ToggleCard = ({ icon: Icon, iconBg, iconColor, label, value, onToggle }: {
-    icon: any; iconBg: string; iconColor: string; label: string;
+  const ToggleCard = ({ icon: Icon, label, value, onToggle }: {
+    icon: any; label: string;
     value: boolean; onToggle: (v: boolean) => void;
   }) => (
     <LinearGradient
@@ -183,9 +179,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     >
       <View style={styles.cardEdge}>
         <View style={styles.row}>
-          <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-            <Icon size={14} color={iconColor} strokeWidth={1.5} />
-          </View>
+          <Icon size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
           <Text style={styles.rowLabel}>{label}</Text>
           <Switch
             value={value}
@@ -295,25 +289,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           >
             <View style={styles.groupEdge}>
               <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('ProfileSettings')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                  <User size={14} color="#A78BFA" strokeWidth={1.5} />
-                </View>
+                <User size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Profile</Text>
                 <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
               </TouchableOpacity>
               <View style={styles.rowDivider} />
               <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('NotificationSettings')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                  <Bell size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                </View>
+                <Bell size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Notifications</Text>
                 <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
               </TouchableOpacity>
               <View style={styles.rowDivider} />
               <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('PrivacySettings')} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
-                  <Lock size={14} color="#34D399" strokeWidth={1.5} />
-                </View>
+                <Lock size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Privacy</Text>
                 <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
               </TouchableOpacity>
@@ -335,9 +323,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                  <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
-                </View>
+                <Eye size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Visual Feedback</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Visual Feedback')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -351,9 +337,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
-                  <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
-                </View>
+                <Volume2 size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Voice Coaching</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Voice Coaching')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -367,9 +351,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                  <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                </View>
+                <Bone size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Skeleton Overlay</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -383,9 +365,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.10)' }]}>
-                  <Video size={14} color="#EF4444" strokeWidth={1.5} />
-                </View>
+                <Video size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Auto Screen Recording</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Auto Screen Recording')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -399,9 +379,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               </View>
               <View style={styles.rowDivider} />
               <TouchableOpacity style={styles.groupRow} onPress={handleTrainingTargetPress} activeOpacity={0.7}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
-                  <Calendar size={14} color="#34D399" strokeWidth={1.5} />
-                </View>
+                <Calendar size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <View style={styles.rowLabelCol}>
                   <Text style={styles.rowLabel}>Training Frequency</Text>
                   <Text style={styles.rowSubLabel}>{TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}</Text>
@@ -422,7 +400,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </View>
           </View>
           <View style={styles.cardStack}>
-            <RowCard icon={UserRound} iconBg="rgba(244, 114, 182, 0.10)" iconColor="#F472B6" label="Choose Trainer" onPress={() => navigation.navigate('TrainerPicker')} />
+            <RowCard icon={UserRound} label="Choose Trainer" onPress={() => navigation.navigate('TrainerPicker')} />
           </View>
 
           {/* Your Plan Section */}
@@ -433,7 +411,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </View>
           </View>
           <View style={styles.cardStack}>
-            <RowCard icon={Crown} iconBg="rgba(245, 166, 35, 0.10)" iconColor="#F5A623" label="Membership" onPress={() => navigation.navigate('Membership')} />
+            <RowCard icon={Crown} label="Membership" onPress={() => navigation.navigate('Membership')} />
           </View>
 
           {/* Support Section */}
@@ -444,7 +422,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </View>
           </View>
           <View style={styles.cardStack}>
-            <RowCard icon={HelpCircle} iconBg="rgba(96, 165, 250, 0.10)" iconColor="#60A5FA" label="Help Center" onPress={() => navigation.navigate('HelpCenter')} />
+            <RowCard icon={HelpCircle} label="Help Center" onPress={() => navigation.navigate('HelpCenter')} />
           </View>
 
           {/* Back to Onboarding (dev only) */}
@@ -700,13 +678,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   rowLabel: {
     flex: 1,
