@@ -248,9 +248,7 @@ export const HomeScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                    </View>
+                    <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
                   </View>
                   <Text style={styles.statValue}>
                     {homeData.streakDays > 0 ? homeData.streakDays : '—'}
@@ -275,9 +273,7 @@ export const HomeScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
-                    </View>
+                    <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
                   <Text style={styles.statValue}>{homeData.workoutCount}</Text>
                   <Text style={styles.statLabel}>workouts</Text>
@@ -342,9 +338,7 @@ export const HomeScreen: React.FC = () => {
             >
               <View style={styles.achieveEdge}>
                 <View style={styles.achieveTopRow}>
-                  <View style={styles.achieveIconWrap}>
-                    <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
-                  </View>
+                  <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
                   <View style={styles.achieveInfo}>
                     <Text style={styles.achievePts}>
                       {homeData.totalPoints.toLocaleString()}
@@ -538,11 +532,9 @@ export const HomeScreen: React.FC = () => {
                     >
                       <View style={styles.newsEdge}>
                         <View style={styles.newsTopRow}>
-                          <View style={[styles.newsPill, { backgroundColor: catColor + '18' }]}>
-                            <Text style={[styles.newsPillText, { color: catColor }]}>
-                              {NEWS_CATEGORY_LABELS[item.category]}
-                            </Text>
-                          </View>
+                          <Text style={[styles.newsPillText, { color: catColor }]}>
+                            {NEWS_CATEGORY_LABELS[item.category]}
+                          </Text>
                           <Text style={styles.newsDate}>{item.date}</Text>
                         </View>
                         <Text style={styles.newsTitle}>{item.title}</Text>
@@ -739,13 +731,6 @@ const styles = StyleSheet.create({
   statIconRow: {
     marginBottom: 12,
   },
-  statIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   statValue: {
     fontFamily: FONTS.display.bold,
     fontSize: 30,
@@ -857,14 +842,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  achieveIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(245, 166, 35, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   achieveInfo: {
     flex: 1,
