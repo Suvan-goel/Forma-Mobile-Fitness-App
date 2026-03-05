@@ -337,7 +337,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
+                <Volume2 size={14} color="#A78BFA" strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Voice Coaching</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Voice Coaching')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -365,7 +365,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <Video size={14} color="#EF4444" strokeWidth={1.5} />
+                <Video size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Auto Screen Recording</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Auto Screen Recording')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -400,7 +400,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </View>
           </View>
           <View style={styles.cardStack}>
-            <RowCard icon={UserRound} iconColor="#F472B6" label="Choose Trainer" onPress={() => navigation.navigate('TrainerPicker')} />
+            <RowCard icon={UserRound} iconColor="#A78BFA" label="Choose Trainer" onPress={() => navigation.navigate('TrainerPicker')} />
           </View>
 
           {/* Your Plan Section */}
@@ -422,7 +422,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             </View>
           </View>
           <View style={styles.cardStack}>
-            <RowCard icon={HelpCircle} iconColor="#60A5FA" label="Help Center" onPress={() => navigation.navigate('HelpCenter')} />
+            <RowCard icon={HelpCircle} iconColor="#34D399" label="Help Center" onPress={() => navigation.navigate('HelpCenter')} />
           </View>
 
           {/* Back to Onboarding (dev only) */}
