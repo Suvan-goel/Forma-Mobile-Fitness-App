@@ -70,16 +70,11 @@ const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds, isRedeemed, isRede
       >
         <View style={[styles.cardGlassEdge, !isUnlocked && styles.cardLocked]}>
           {/* Icon */}
-          <View style={[
-            styles.iconCircle,
-            isUnlocked && { backgroundColor: accent + '1A', borderWidth: 1, borderColor: accent + '44' },
-          ]}>
-            {isUnlocked ? (
-              <Icon size={20} color={accent} strokeWidth={1.5} />
-            ) : (
-              <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
-            )}
-          </View>
+          {isUnlocked ? (
+            <Icon size={20} color={accent} strokeWidth={1.5} />
+          ) : (
+            <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
+          )}
 
           {/* Info */}
           <View style={styles.cardInfo}>
@@ -516,15 +511,6 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
 
-  /* ── Icon Circle ───────────────────────────── */
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#1A1A1A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   /* ── Card Info ─────────────────────────────── */
   cardInfo: {

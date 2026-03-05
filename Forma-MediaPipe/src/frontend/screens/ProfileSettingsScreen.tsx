@@ -224,7 +224,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           {/* Display Name */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <User size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <User size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>DISPLAY NAME</Text>
             </View>
           </View>
@@ -261,7 +261,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           {/* Bio */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <AlignLeft size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <AlignLeft size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>BIO</Text>
             </View>
           </View>
@@ -303,7 +303,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           {/* Name */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <User size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <User size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>NAME</Text>
             </View>
           </View>
@@ -315,7 +315,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           >
             <View style={styles.cardEdge}>
               <View style={styles.infoRow}>
-                <User size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <User size={14} color="#A78BFA" strokeWidth={1.5} />
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>First name</Text>
                   <TextInput
@@ -331,7 +331,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
               </View>
               <View style={styles.divider} />
               <View style={styles.infoRow}>
-                <User size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <User size={14} color="#A78BFA" strokeWidth={1.5} />
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Last name</Text>
                   <TextInput
@@ -362,7 +362,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           {/* Account Details */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Shield size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <Shield size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>ACCOUNT</Text>
             </View>
           </View>
@@ -374,7 +374,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           >
             <View style={styles.cardEdge}>
               <View style={styles.infoRow}>
-                <Mail size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Mail size={14} color="#A78BFA" strokeWidth={1.5} />
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Email</Text>
                   <Text style={styles.infoValue}>{user?.email ?? ''}</Text>
@@ -384,7 +384,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                 <>
                   <View style={styles.divider} />
                   <View style={styles.infoRow}>
-                    <Calendar size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <Calendar size={14} color="#34D399" strokeWidth={1.5} />
                     <View style={styles.infoContent}>
                       <Text style={styles.infoLabel}>Member Since</Text>
                       <Text style={styles.infoValue}>{joinDate}</Text>

@@ -80,7 +80,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           {/* Alerts Section */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Bell size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <Bell size={13} color={COLORS.yellow} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>ALERTS</Text>
             </View>
           </View>
@@ -93,7 +93,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           >
             <View style={styles.cardEdge}>
               <View style={styles.toggleRow}>
-                <Timer size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Timer size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 <View style={styles.toggleContent}>
                   <Text style={styles.toggleLabel}>Rest Timer</Text>
                   <Text style={styles.toggleDesc}>

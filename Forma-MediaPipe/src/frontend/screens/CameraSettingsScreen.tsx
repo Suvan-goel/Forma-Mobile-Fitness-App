@@ -341,7 +341,7 @@ export const CameraSettingsScreen: React.FC = () => {
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <Eye size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
                 <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Form Messages</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Form Messages')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -356,7 +356,7 @@ export const CameraSettingsScreen: React.FC = () => {
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <Volume2 size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Volume2 size={14} color="#60A5FA" strokeWidth={1.5} />
                 <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Voice Coaching</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Voice Coaching')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -391,7 +391,7 @@ export const CameraSettingsScreen: React.FC = () => {
             >
               <View style={styles.cardEdge}>
                 <View style={styles.row}>
-                  <UserRound size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <UserRound size={14} color="#F472B6" strokeWidth={1.5} />
                   <View style={styles.rowLabelCol}>
                     <Text style={styles.rowLabel}>Choose Trainer</Text>
                     <Text style={styles.rowSubLabel}>{currentTrainerName}</Text>
@@ -417,7 +417,7 @@ export const CameraSettingsScreen: React.FC = () => {
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <Bone size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -432,7 +432,7 @@ export const CameraSettingsScreen: React.FC = () => {
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <Video size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Video size={14} color="#EF4444" strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Auto Screen Recording</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Auto Screen Recording')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -462,7 +462,7 @@ export const CameraSettingsScreen: React.FC = () => {
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <Timer size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Timer size={14} color="#34D399" strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Rest Timer</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Rest Timer')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -478,6 +478,7 @@ export const CameraSettingsScreen: React.FC = () => {
                 <>
                   <View style={styles.rowDivider} />
                   <View style={styles.groupRow}>
+                    <View style={{ width: 14 }} />
                     <MonoText bold style={styles.restTimerValueText}>{formattedDuration}</MonoText>
                     <TouchableOpacity style={styles.changeButton} onPress={openTimerModal} activeOpacity={0.7}>
                       <Text style={styles.changeButtonText}>Change</Text>
@@ -503,7 +504,7 @@ export const CameraSettingsScreen: React.FC = () => {
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <Bug size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <Bug size={14} color={debugMode ? COLORS.orange : COLORS.textTertiary} strokeWidth={1.5} />
                 <Text style={[styles.rowLabel, debugMode && { color: COLORS.orange }]}>Debug Mode</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Debug Mode')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -517,7 +518,7 @@ export const CameraSettingsScreen: React.FC = () => {
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <SlidersHorizontal size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                <SlidersHorizontal size={14} color={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : COLORS.textTertiary} strokeWidth={1.5} />
                 <Text style={[styles.rowLabel, poseModel === 'pose_landmarker_heavy' && { color: '#60A5FA' }]}>Heavy Model</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Heavy Model')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />

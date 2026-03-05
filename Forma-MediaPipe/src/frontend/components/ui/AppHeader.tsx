@@ -37,10 +37,10 @@ export const AppHeader: React.FC = memo(() => {
       </View>
       <View style={styles.headerIcons}>
         <TouchableOpacity style={styles.iconButton}>
-          <Search size={22} color={COLORS.text} strokeWidth={1.5} />
+          <Search size={22} color={COLORS.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconButton}>
-          <Bell size={22} color={COLORS.text} strokeWidth={1.5} />
+          <Bell size={22} color={COLORS.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconButton} onPress={handleSettingsPress}>
           <Menu size={22} color={COLORS.text} strokeWidth={1.5} />

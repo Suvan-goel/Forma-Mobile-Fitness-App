@@ -99,9 +99,7 @@ export const WorkoutExercisesScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
-            <Icon size={32} color={color} />
-          </View>
+          <Icon size={32} color={color} />
           <Text style={styles.headerTitle}>{category}</Text>
         </View>
 
@@ -126,9 +124,7 @@ export const WorkoutExercisesScreen: React.FC = () => {
               const InstructionIcon = instruction.icon;
               return (
                 <View key={index} style={styles.instructionItem}>
-                  <View style={[styles.instructionIconContainer, { backgroundColor: color + '20' }]}>
-                    <InstructionIcon size={20} color={color} />
-                  </View>
+                  <InstructionIcon size={20} color={color} />
                   <View style={styles.instructionContent}>
                     <Text style={styles.instructionTitle}>{instruction.title}</Text>
                     <Text style={styles.instructionDescription}>{instruction.description}</Text>
@@ -189,13 +185,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
     paddingRight: SPACING.md,
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerTitle: {
     fontSize: 28,
     fontFamily: FONTS.ui.bold,
@@ -236,13 +225,6 @@ const styles = StyleSheet.create({
     ...CARD_STYLE,
     padding: SPACING.md,
     gap: SPACING.md,
-  },
-  instructionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   instructionContent: {
     flex: 1,

@@ -27,9 +27,7 @@ export const EmptyState: React.FC<EmptyStateProps> = memo(({
 }) => {
   return (
     <View style={[styles.container, style]}>
-      <View style={styles.iconContainer}>
-        <Icon size={32} color={COLORS.textSecondary} />
-      </View>
+      <Icon size={32} color={COLORS.textSecondary} />
       <Text style={styles.title}>{title}</Text>
       {message && <Text style={styles.message}>{message}</Text>}
       {actionLabel && onAction && (
@@ -51,15 +49,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.cardBackgroundLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.sm,
   },
   title: {
     fontSize: 18,

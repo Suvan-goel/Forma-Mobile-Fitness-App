@@ -35,10 +35,10 @@ function getRelativeTime(date: Date): string {
 }
 
 const EVENT_CONFIG: Record<string, { icon: any; color: string }> = {
-  workout_completed: { icon: Activity, color: COLORS.textSecondary },
-  badge_earned: { icon: Award, color: COLORS.textSecondary },
-  personal_record: { icon: TrendingUp, color: COLORS.textSecondary },
-  streak_milestone: { icon: Flame, color: COLORS.textSecondary },
+  workout_completed: { icon: Activity, color: COLORS.primary },
+  badge_earned: { icon: Award, color: '#F5A623' },
+  personal_record: { icon: TrendingUp, color: '#34D399' },
+  streak_milestone: { icon: Flame, color: '#E07856' },
 };
 
 export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event, reactions, onToggleReaction }) => {

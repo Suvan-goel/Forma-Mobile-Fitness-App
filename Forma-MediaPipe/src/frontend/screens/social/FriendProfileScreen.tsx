@@ -175,7 +175,9 @@ export const FriendProfileScreen: React.FC = memo(() => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Dumbbell size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>{profile.totalWorkouts}</Text>
                   <Text style={styles.statLabel}>workouts</Text>
@@ -192,7 +194,9 @@ export const FriendProfileScreen: React.FC = memo(() => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Flame size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>
                     {profile.streakDays > 0 ? profile.streakDays : '—'}
@@ -266,13 +270,13 @@ export const FriendProfileScreen: React.FC = memo(() => {
             <>
               <View style={styles.sectionRow}>
                 <View style={styles.sectionLabelRow}>
-                  <Trophy size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
                   <Text style={styles.sectionLabel}>BADGES</Text>
                 </View>
               </View>
 
               <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
+                colors={['#1A1510', '#111008', '#0E0C07']}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.badgeCard}
@@ -281,7 +285,7 @@ export const FriendProfileScreen: React.FC = memo(() => {
                   <View style={styles.badgeRow}>
                     {profile.earnedBadgeIds.map(badgeId => (
                       <View key={badgeId} style={styles.badge}>
-                        <Award size={18} color={COLORS.textSecondary} strokeWidth={1.5} />
+                        <Award size={18} color={COLORS.yellow} />
                       </View>
                     ))}
                   </View>
@@ -474,6 +478,13 @@ const styles = StyleSheet.create({
   statIconRow: {
     marginBottom: 12,
   },
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statValue: {
     fontFamily: FONTS.display.bold,
     fontSize: 30,
@@ -581,7 +592,7 @@ const styles = StyleSheet.create({
   badgeEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(245, 166, 35, 0.12)',
     padding: 16,
   },
   badgeRow: {
@@ -593,7 +604,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(245, 166, 35, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },

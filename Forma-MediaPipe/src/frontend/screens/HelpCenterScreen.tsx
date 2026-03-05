@@ -48,7 +48,7 @@ const FAQ_SECTIONS: FAQSection[] = [
   {
     title: 'Camera Positioning',
     icon: Camera,
-    iconColor: COLORS.textSecondary,
+    iconColor: '#60A5FA',
     items: [
       {
         question: 'How should I position my phone?',
@@ -67,7 +67,7 @@ const FAQ_SECTIONS: FAQSection[] = [
   {
     title: 'Exercise Form',
     icon: Dumbbell,
-    iconColor: COLORS.textSecondary,
+    iconColor: '#F472B6',
     items: [
       {
         question: 'How does Forma analyze my form?',
@@ -86,7 +86,7 @@ const FAQ_SECTIONS: FAQSection[] = [
   {
     title: 'Scoring System',
     icon: BarChart2,
-    iconColor: COLORS.textSecondary,
+    iconColor: '#34D399',
     items: [
       {
         question: 'How is my rep score calculated?',
@@ -105,7 +105,7 @@ const FAQ_SECTIONS: FAQSection[] = [
   {
     title: 'Rewards & Points',
     icon: Star,
-    iconColor: COLORS.textSecondary,
+    iconColor: COLORS.yellow,
     items: [
       {
         question: 'How do I earn points?',
@@ -124,7 +124,7 @@ const FAQ_SECTIONS: FAQSection[] = [
   {
     title: 'Voice Coaching',
     icon: Volume2,
-    iconColor: COLORS.textSecondary,
+    iconColor: '#A78BFA',
     items: [
       {
         question: 'How do I enable voice coaching?',

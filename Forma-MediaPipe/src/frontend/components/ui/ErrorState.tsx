@@ -21,9 +21,7 @@ export const ErrorState: React.FC<ErrorStateProps> = memo(({
 }) => {
   return (
     <View style={[styles.container, style]}>
-      <View style={styles.iconContainer}>
-        <AlertCircle size={32} color={COLORS.orange} />
-      </View>
+      <AlertCircle size={32} color={COLORS.orange} />
       <Text style={styles.message}>{message}</Text>
       {onRetry && (
         <NeonButton
@@ -44,14 +42,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.md,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.cardBackgroundLight,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   message: {
     fontSize: 14,

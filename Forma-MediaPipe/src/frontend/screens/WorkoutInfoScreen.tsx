@@ -117,9 +117,7 @@ export const WorkoutInfoScreen: React.FC = () => {
               const iconColors = instruction.colors || { faded: color + '20', full: color };
               return (
                 <View key={index} style={styles.instructionItem}>
-                  <View style={[styles.instructionIconContainer, { backgroundColor: iconColors.faded }]}>
-                    <InstructionIcon size={20} color={COLORS.text} />
-                  </View>
+                  <InstructionIcon size={20} color={COLORS.text} />
                   <View style={styles.instructionContent}>
                     <Text style={styles.instructionTitle}>{instruction.title}</Text>
                     <Text style={styles.instructionDescription}>{instruction.description}</Text>
@@ -190,13 +188,6 @@ const styles = StyleSheet.create({
     ...CARD_STYLE,
     padding: SPACING.md,
     gap: SPACING.md,
-  },
-  instructionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   instructionContent: {
     flex: 1,

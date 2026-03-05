@@ -52,14 +52,14 @@ const RequestItem = memo(({
       onPress={() => onAccept(request.friendshipId)}
       activeOpacity={0.7}
     >
-      <Check size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+      <Check size={16} color="#34D399" />
     </TouchableOpacity>
     <TouchableOpacity
       style={styles.declineButton}
       onPress={() => onDecline(request.friendshipId)}
       activeOpacity={0.7}
     >
-      <X size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+      <X size={16} color={COLORS.textTertiary} />
     </TouchableOpacity>
   </View>
 ));
@@ -90,7 +90,7 @@ const SuggestedCard = memo(({
       onPress={() => onAdd(suggestion.userId)}
       activeOpacity={0.7}
     >
-      <UserPlus size={13} color={COLORS.primary} strokeWidth={1.5} />
+      <UserPlus size={13} color={COLORS.primary} />
     </TouchableOpacity>
   </View>
 ));
@@ -225,14 +225,14 @@ export const FriendsView: React.FC = memo(() => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconContainer}>
-              <Users size={32} color={COLORS.textTertiary} strokeWidth={1.5} />
+              <Users size={32} color={COLORS.textTertiary} />
             </View>
             <Text style={styles.emptyTitle}>No friends yet</Text>
             <Text style={styles.emptySubtitle}>
               Add friends to compare stats and stay motivated
             </Text>
             <TouchableOpacity style={styles.addButton} onPress={handleAddFriend} activeOpacity={0.7}>
-              <UserPlus size={18} color={COLORS.text} strokeWidth={1.5} />
+              <UserPlus size={18} color={COLORS.text} />
               <Text style={styles.addButtonText}>Add Friends</Text>
             </TouchableOpacity>
           </View>
@@ -251,7 +251,7 @@ export const FriendsView: React.FC = memo(() => {
       {/* FAB */}
       {friends.length > 0 && (
         <TouchableOpacity style={styles.fab} onPress={handleAddFriend} activeOpacity={0.7}>
-          <UserPlus size={20} color={COLORS.text} strokeWidth={1.5} />
+          <UserPlus size={20} color={COLORS.text} />
         </TouchableOpacity>
       )}
     </View>
@@ -362,12 +362,12 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(52, 211, 153, 0.2)',
   },
   declineButton: {
     width: 34,

@@ -59,15 +59,15 @@ import type { RootStackParamList } from '../app/RootNavigator';
 // ── Helpers ────────────────────────────────────────
 
 const RANK_COLORS: Record<number, string> = {
-  1: '#FFFFFF',
-  2: '#A1A1AA',
-  3: '#52525B',
+  1: '#FFD700',
+  2: '#C0C0C0',
+  3: '#CD7F32',
 };
 
 const NEWS_CATEGORY_COLORS: Record<string, string> = {
   tip: COLORS.accent,
-  update: COLORS.accent,
-  new: COLORS.accent,
+  update: COLORS.yellow,
+  new: '#34D399',
 };
 
 const NEWS_CATEGORY_LABELS: Record<string, string> = {
@@ -248,7 +248,9 @@ export const HomeScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Flame size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>
                     {homeData.streakDays > 0 ? homeData.streakDays : '—'}
@@ -273,7 +275,9 @@ export const HomeScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Dumbbell size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>{homeData.workoutCount}</Text>
                   <Text style={styles.statLabel}>workouts</Text>
@@ -321,7 +325,7 @@ export const HomeScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Trophy size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>ACHIEVEMENTS</Text>
             </View>
           </View>
@@ -331,14 +335,16 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigation.navigate('Rewards')}
           >
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
+              colors={['#1A1510', '#111008', '#0E0C07']}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.achieveCard}
             >
               <View style={styles.achieveEdge}>
                 <View style={styles.achieveTopRow}>
-                  <Trophy size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <View style={styles.achieveIconWrap}>
+                    <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
+                  </View>
                   <View style={styles.achieveInfo}>
                     <Text style={styles.achievePts}>
                       {homeData.totalPoints.toLocaleString()}
@@ -352,20 +358,20 @@ export const HomeScreen: React.FC = () => {
                       <Text style={styles.achieveNext}>All badges unlocked</Text>
                     )}
                   </View>
-                  <ChevronRight size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <ChevronRight size={16} color={COLORS.yellow} strokeWidth={1.5} />
                 </View>
 
                 {homeData.nextBadge && (
                   <View style={styles.achieveProgressWrap}>
                     <View style={styles.progressTrack}>
                       <LinearGradient
-                        colors={[COLORS.accent + 'BB', COLORS.accent]}
+                        colors={[homeData.nextBadge.color + 'BB', homeData.nextBadge.color]}
                         start={{ x: 0, y: 0.5 }}
                         end={{ x: 1, y: 0.5 }}
                         style={[styles.progressFill, { width: `${Math.min((homeData.nextBadge.current / homeData.nextBadge.required) * 100, 100)}%` }]}
                       />
                     </View>
-                    <Text style={[styles.achievePct, { color: COLORS.accent }]}>
+                    <Text style={[styles.achievePct, { color: homeData.nextBadge.color }]}>
                       {Math.round((homeData.nextBadge.current / homeData.nextBadge.required) * 100)}%
                     </Text>
                   </View>
@@ -379,7 +385,7 @@ export const HomeScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Users size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <Users size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>SOCIAL</Text>
             </View>
             <TouchableOpacity style={styles.seeAllBtn} activeOpacity={0.7} onPress={handleGoToSocial}>
@@ -450,7 +456,7 @@ export const HomeScreen: React.FC = () => {
             <>
               <View style={styles.sectionRow}>
                 <View style={styles.sectionLabelRow}>
-                  <Flame size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <Flame size={13} color={COLORS.accent} strokeWidth={1.5} />
                   <Text style={styles.sectionLabel}>CHALLENGES</Text>
                 </View>
               </View>
@@ -515,7 +521,7 @@ export const HomeScreen: React.FC = () => {
             <>
               <View style={styles.sectionRow}>
                 <View style={styles.sectionLabelRow}>
-                  <Newspaper size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <Newspaper size={13} color={COLORS.accent} strokeWidth={1.5} />
                   <Text style={styles.sectionLabel}>NEWS</Text>
                 </View>
               </View>
@@ -733,6 +739,13 @@ const styles = StyleSheet.create({
   statIconRow: {
     marginBottom: 12,
   },
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statValue: {
     fontFamily: FONTS.display.bold,
     fontSize: 30,
@@ -837,13 +850,21 @@ const styles = StyleSheet.create({
   achieveEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(245, 166, 35, 0.12)',
     padding: 16,
   },
   achieveTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  achieveIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(245, 166, 35, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   achieveInfo: {
     flex: 1,

@@ -203,7 +203,9 @@ export const AnalyticsScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Dumbbell size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>{summary.workoutCount}</Text>
                   <Text style={styles.statLabel}>workouts</Text>
@@ -220,7 +222,9 @@ export const AnalyticsScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Flame size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>
                     {summary.streakDays > 0 ? summary.streakDays : '\u2014'}
@@ -241,7 +245,9 @@ export const AnalyticsScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Zap size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
+                      <Zap size={14} color="#34D399" strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>
                     {summary.totalReps >= 1000
@@ -259,7 +265,7 @@ export const AnalyticsScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Activity size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <Activity size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>ACTIVITY</Text>
             </View>
           </View>
@@ -275,7 +281,9 @@ export const AnalyticsScreen: React.FC = () => {
               >
                 <View style={styles.activityCardEdge}>
                   <View style={styles.activityIconRow}>
-                    <Trophy size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.activityIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Trophy size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.activityCardValue}>{hasData ? formattedVolume : '--'}</Text>
                   <Text style={styles.activityCardUnit}>KG volume</Text>
@@ -291,7 +299,9 @@ export const AnalyticsScreen: React.FC = () => {
               >
                 <View style={styles.activityCardEdge}>
                   <View style={styles.activityIconRow}>
-                    <Timer size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.activityIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.activityCardValue}>
                     {hasData ? (workoutHours > 0 ? `${workoutHours}h ${workoutMins}m` : `${workoutMins}m`) : '--'}
@@ -307,7 +317,7 @@ export const AnalyticsScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <TrendingUp size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <TrendingUp size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>TRENDS</Text>
             </View>
           </View>
@@ -356,20 +366,22 @@ export const AnalyticsScreen: React.FC = () => {
             <>
               <View style={styles.sectionRow}>
                 <View style={styles.sectionLabelRow}>
-                  <Trophy size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
                   <Text style={styles.sectionLabel}>PERSONAL BEST</Text>
                 </View>
               </View>
 
               <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
+                colors={['#1A1510', '#111008', '#0E0C07']}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.cardGradient}
               >
                 <View style={styles.pbEdge}>
                   <View style={styles.pbTopRow}>
-                    <Trophy size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={styles.pbIconWrap}>
+                      <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
                     <View style={styles.pbInfo}>
                       <Text style={styles.pbExerciseName}>{summary.personalBest.exercise}</Text>
                       {summary.mostTrainedExercise && (
@@ -391,7 +403,7 @@ export const AnalyticsScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <BarChart3 size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <BarChart3 size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>DURATION</Text>
             </View>
           </View>
@@ -569,6 +581,13 @@ const styles = StyleSheet.create({
   statIconRow: {
     marginBottom: 10,
   },
+  statIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statValue: {
     fontFamily: FONTS.display.bold,
     fontSize: 24,
@@ -624,6 +643,13 @@ const styles = StyleSheet.create({
   activityIconRow: {
     marginBottom: 12,
   },
+  activityIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   activityCardValue: {
     fontFamily: FONTS.display.bold,
     fontSize: 30,
@@ -653,13 +679,21 @@ const styles = StyleSheet.create({
   pbEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(245, 166, 35, 0.12)',
     padding: 16,
   },
   pbTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  pbIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(245, 166, 35, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pbInfo: {
     flex: 1,

@@ -3,7 +3,7 @@
  *
  * Absolute-positioned at the bottom of the screen. Uses expo-blur
  * on iOS for the frosted glass effect, with a dark fallback on Android.
- * Active tab: Electric Violet stroke + neon glow, no background plate.
+ * Active tab gets an acid-lime glow circle behind its icon.
  */
 
 import React, { memo, useCallback } from 'react';
@@ -50,16 +50,15 @@ const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
       style={styles.tabItem}
       activeOpacity={0.7}
     >
-      <View style={[styles.iconWrap, isFocused && styles.iconGlow]}>
+      <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
         <Icon
           size={20}
-          color={isFocused ? COLORS.accent : COLORS.textSecondary}
-          strokeWidth={1.5}
+          color={isFocused ? '#FFFFFF' : COLORS.textSecondary}
         />
+        {isFocused && (
+          <Text style={styles.activeLabel}>{config.label}</Text>
+        )}
       </View>
-      <Text style={[styles.label, isFocused && styles.labelActive]}>
-        {config.label}
-      </Text>
     </TouchableOpacity>
   );
 });
@@ -157,33 +156,28 @@ const styles = StyleSheet.create({
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
   },
   iconWrap: {
+    height: 36,
+    minHeight: 36,
+    borderRadius: 999,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    flexDirection: 'row',
+    paddingHorizontal: 12,
   },
-  iconGlow: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOpacity: 0.6,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+  iconWrapActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    paddingHorizontal: 14,
   },
-  label: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.2,
-  },
-  labelActive: {
-    color: COLORS.accent,
+  activeLabel: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 11,
+    color: COLORS.text,
+    marginLeft: 6,
+    letterSpacing: 0.3,
   },
 });

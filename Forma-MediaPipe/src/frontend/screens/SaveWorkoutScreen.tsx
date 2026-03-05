@@ -236,7 +236,9 @@ export const SaveWorkoutScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Dumbbell size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>{workoutData.totalReps}</Text>
                   <Text style={styles.statLabel}>total reps</Text>
@@ -253,7 +255,9 @@ export const SaveWorkoutScreen: React.FC = () => {
               >
                 <View style={styles.statEdge}>
                   <View style={styles.statIconRow}>
-                    <Layers size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Layers size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.statValue}>{workoutData.totalSets}</Text>
                   <Text style={styles.statLabel}>sets</Text>
@@ -491,6 +495,13 @@ const styles = StyleSheet.create({
   },
   statIconRow: {
     marginBottom: 12,
+  },
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statValue: {
     fontFamily: FONTS.display.bold,

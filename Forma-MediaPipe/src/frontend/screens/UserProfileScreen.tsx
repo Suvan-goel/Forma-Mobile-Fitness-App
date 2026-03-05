@@ -257,7 +257,7 @@ export const UserProfileScreen: React.FC = () => {
                     <Text style={styles.heroLabel}>PROFILE</Text>
                   </View>
                   <View style={styles.editChip}>
-                    <Edit2 size={10} color={COLORS.accent} strokeWidth={1.5} />
+                    <Edit2 size={10} color={COLORS.accent} strokeWidth={2} />
                     <Text style={styles.editChipText}>Edit</Text>
                   </View>
                 </View>
@@ -332,7 +332,7 @@ export const UserProfileScreen: React.FC = () => {
             >
               <View style={styles.ctaInner}>
                 <View style={styles.ctaIconWrap}>
-                  <Edit2 size={16} color="#FFFFFF" strokeWidth={1.5} />
+                  <Edit2 size={16} color="#FFFFFF" strokeWidth={2} />
                 </View>
                 <View style={styles.ctaTextWrap}>
                   <Text style={styles.ctaTitle}>Edit Profile</Text>
@@ -348,30 +348,32 @@ export const UserProfileScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Trophy size={13} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>REWARDS</Text>
             </View>
             <TouchableOpacity style={styles.seeAllBtn} activeOpacity={0.7} onPress={handleRewards}>
               <Text style={styles.seeAllText}>View All</Text>
-              <ChevronRight size={11} color={COLORS.textSecondary} strokeWidth={1.5} />
+              <ChevronRight size={11} color={COLORS.accent} strokeWidth={2} />
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity activeOpacity={0.85} onPress={handleRewards}>
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
+              colors={['#1A1510', '#111008', '#0E0C07']}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.rewardsCard}
             >
               <View style={styles.rewardsEdge}>
                 <View style={styles.rewardsRow}>
-                  <Gift size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <View style={styles.rewardsIconWrap}>
+                    <Gift size={20} color={COLORS.yellow} strokeWidth={1.5} />
+                  </View>
                   <View style={styles.rewardsTextWrap}>
                     <Text style={styles.rewardsTitle}>Badges & Points</Text>
                     <Text style={styles.rewardsSubtitle}>View your badges & points</Text>
                   </View>
-                  <ChevronRight size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <ChevronRight size={16} color={COLORS.yellow} strokeWidth={1.5} />
                 </View>
               </View>
             </LinearGradient>
@@ -495,7 +497,9 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <Flame size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
+                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.perfValue}>{streakDays > 0 ? String(streakDays) : '—'}</Text>
                   <Text style={styles.perfUnit}>days</Text>
@@ -513,15 +517,17 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <TrendingUp size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <TrendingUp size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                     {formTrendDirection !== 'flat' && formTrendPercent > 0 && (
                       <View style={[
                         styles.trendBadge,
                         { backgroundColor: formTrendDirection === 'up' ? 'rgba(52, 211, 153, 0.12)' : 'rgba(248, 113, 113, 0.12)' },
                       ]}>
                         {formTrendDirection === 'up'
-                          ? <TrendingUp size={9} color="#34D399" strokeWidth={1.5} />
-                          : <TrendingDown size={9} color="#F87171" strokeWidth={1.5} />}
+                          ? <TrendingUp size={9} color="#34D399" strokeWidth={2} />
+                          : <TrendingDown size={9} color="#F87171" strokeWidth={2} />}
                         <Text style={[
                           styles.trendBadgeText,
                           { color: formTrendDirection === 'up' ? '#34D399' : '#F87171' },
@@ -549,7 +555,9 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.perfValue}>{totalReps > 0 ? String(totalReps) : '—'}</Text>
                   <Text style={styles.perfUnit}>{totalReps > 0 ? 'reps' : ''}</Text>
@@ -567,7 +575,9 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
+                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
                   </View>
                   <Text style={styles.perfValue} numberOfLines={1} adjustsFontSizeToFit>
                     {mostTrained ?? '—'}
@@ -869,20 +879,28 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
 
-  /* ── Rewards Card ─────────────────────────────── */
+  /* ── Rewards Card (Gold-tinted like Achievements) ─ */
   rewardsCard: {
     borderRadius: 18,
   },
   rewardsEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(245, 166, 35, 0.12)',
     padding: 16,
   },
   rewardsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  rewardsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(245, 166, 35, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rewardsTextWrap: {
     flex: 1,
@@ -1021,6 +1039,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 10,
+  },
+  perfIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   perfValue: {
     fontFamily: FONTS.mono.bold,
