@@ -85,7 +85,7 @@ export const RecordLandingScreen: React.FC = () => {
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
-  const cardGap = 14;
+  const cardGap = 0;
   const bottomPadding = navigationBarHeight + cardGap;
 
   // ── Entrance animations ──
@@ -348,9 +348,7 @@ export const RecordLandingScreen: React.FC = () => {
                 style={styles.heroGradient}
               >
                 <View style={styles.heroContent}>
-                  <View style={styles.heroIconWrap}>
-                    <Zap size={32} color="#FFFFFF" strokeWidth={2} />
-                  </View>
+                  <Zap size={32} color="#FFFFFF" strokeWidth={2} />
                   <Text style={styles.heroTitle}>New Session</Text>
                   <Text style={styles.heroDesc}>
                     Start a free-form workout with{'\n'}real-time AI form analysis
@@ -377,9 +375,7 @@ export const RecordLandingScreen: React.FC = () => {
               >
                 <View style={styles.secondaryGlass}>
                   <View style={styles.secondaryContent}>
-                    <View style={styles.secondaryIconWrap}>
-                      <LayoutTemplate size={24} color={COLORS.accent} strokeWidth={1.5} />
-                    </View>
+                    <LayoutTemplate size={24} color={COLORS.accent} strokeWidth={1.5} />
                     <Text style={styles.secondaryTitle}>Templates</Text>
                     <Text style={styles.secondaryDesc}>
                       Pick from your saved routines
@@ -527,15 +523,6 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 12,
   },
-  heroIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: 'rgba(139, 92, 246, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
   heroTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 26,
@@ -567,7 +554,7 @@ const styles = StyleSheet.create({
 
   /* ── Secondary Card (Templates) ────────────── */
   secondaryCard: {
-    flex: 0.6,
+    minHeight: 180,
     borderRadius: 18,
     overflow: 'hidden',
   },
@@ -589,15 +576,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 14,
     gap: 10,
-  },
-  secondaryIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
   },
   secondaryTitle: {
     fontFamily: FONTS.display.semibold,
