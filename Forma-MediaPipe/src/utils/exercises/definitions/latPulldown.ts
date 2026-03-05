@@ -60,11 +60,11 @@ const FORM_THRESHOLDS = {
   /** Max elbow angle below which extension is insufficient */
   EXTENSION_ROM_FAIL: 130,
   /** Torso lean above which there is excessive lean (degrees from vertical) */
-  TORSO_LEAN_WARN: 25,
+  TORSO_LEAN_WARN: 95,
   /** Concentric (pull down) too fast threshold (seconds).
    *  With the tRestPeakElbow fix providing accurate timing, this can be
    *  set close to the raw biomechanical minimum for an explosive pull. */
-  TEMPO_PULL_MIN: 0.35,
+  TEMPO_PULL_MIN: 0.20,
   /** Eccentric (return) too fast threshold (seconds).
    *  tReturn includes bottom hold + return, so this must be well above
    *  a raw eccentric minimum to trigger for genuinely rushed returns. */
@@ -86,10 +86,10 @@ const FORM_THRESHOLDS = {
  */
 const PENALTY_CONFIGS = {
   PULL_ROM:      { cap: 30, deadzone: 0, scale: 0.04 } as PenaltyConfig,
-  EXTENSION_ROM: { cap: 25, deadzone: 0, scale: 0.03 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 12, scale: 0.10 } as PenaltyConfig,
-  TEMPO_PULL:    { cap: 10, deadzone: 0.5, scale: 50 } as PenaltyConfig,
-  TEMPO_RETURN:  { cap: 10, deadzone: 1.0, scale: 40 } as PenaltyConfig,
+  EXTENSION_ROM: { cap: 25, deadzone: 25, scale: 0.03 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 25, deadzone: 90, scale: 0.10 } as PenaltyConfig,
+  TEMPO_PULL:    { cap: 10, deadzone: 0.35, scale: 50 } as PenaltyConfig,
+  TEMPO_RETURN:  { cap: 40, deadzone: 0.85, scale: 2500 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
