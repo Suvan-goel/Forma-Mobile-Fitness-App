@@ -366,9 +366,7 @@ export const UserProfileScreen: React.FC = () => {
             >
               <View style={styles.rewardsEdge}>
                 <View style={styles.rewardsRow}>
-                  <View style={styles.rewardsIconWrap}>
-                    <Gift size={20} color={COLORS.yellow} strokeWidth={1.5} />
-                  </View>
+                  <Gift size={20} color={COLORS.yellow} strokeWidth={1.5} />
                   <View style={styles.rewardsTextWrap}>
                     <Text style={styles.rewardsTitle}>Badges & Points</Text>
                     <Text style={styles.rewardsSubtitle}>View your badges & points</Text>
@@ -440,9 +438,7 @@ export const UserProfileScreen: React.FC = () => {
             >
               <View style={styles.linkEdge}>
                 <View style={styles.linkRow}>
-                  <View style={styles.linkIconWrap}>
-                    <BookOpen size={18} color={COLORS.accent} strokeWidth={1.5} />
-                  </View>
+                  <BookOpen size={18} color={COLORS.accent} strokeWidth={1.5} />
                   <View style={styles.linkTextWrap}>
                     <Text style={styles.linkTitle}>Exercise Tutorials</Text>
                     <Text style={styles.linkSubtitle}>Browse exercise guides</Text>
@@ -464,9 +460,7 @@ export const UserProfileScreen: React.FC = () => {
             >
               <View style={styles.linkEdge}>
                 <View style={styles.linkRow}>
-                  <View style={styles.linkIconWrap}>
-                    <Video size={18} color={COLORS.accent} strokeWidth={1.5} />
-                  </View>
+                  <Video size={18} color={COLORS.accent} strokeWidth={1.5} />
                   <View style={styles.linkTextWrap}>
                     <Text style={styles.linkTitle}>Video Library</Text>
                     <Text style={styles.linkSubtitle}>Your recorded workouts</Text>
@@ -497,9 +491,7 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                    </View>
+                    <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
                   </View>
                   <Text style={styles.perfValue}>{streakDays > 0 ? String(streakDays) : '—'}</Text>
                   <Text style={styles.perfUnit}>days</Text>
@@ -517,9 +509,7 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                      <TrendingUp size={14} color={COLORS.accent} strokeWidth={1.5} />
-                    </View>
+                    <TrendingUp size={14} color={COLORS.accent} strokeWidth={1.5} />
                     {formTrendDirection !== 'flat' && formTrendPercent > 0 && (
                       <View style={[
                         styles.trendBadge,
@@ -555,9 +545,7 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                      <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />
-                    </View>
+                    <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
                   <Text style={styles.perfValue}>{totalReps > 0 ? String(totalReps) : '—'}</Text>
                   <Text style={styles.perfUnit}>{totalReps > 0 ? 'reps' : ''}</Text>
@@ -575,9 +563,7 @@ export const UserProfileScreen: React.FC = () => {
               >
                 <View style={styles.perfEdge}>
                   <View style={styles.perfIconRow}>
-                    <View style={[styles.perfIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
-                    </View>
+                    <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
                   <Text style={styles.perfValue} numberOfLines={1} adjustsFontSizeToFit>
                     {mostTrained ?? '—'}
@@ -894,14 +880,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  rewardsIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(245, 166, 35, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   rewardsTextWrap: {
     flex: 1,
     gap: 2,
@@ -974,17 +952,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  linkIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  linkIconWrapDim: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
   linkTextWrap: {
     flex: 1,
     gap: 2,
@@ -1039,13 +1006,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 10,
-  },
-  perfIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   perfValue: {
     fontFamily: FONTS.mono.bold,
