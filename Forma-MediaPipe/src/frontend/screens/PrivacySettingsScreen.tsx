@@ -111,9 +111,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           {/* Privacy Banner */}
           <View style={styles.banner}>
-            <View style={styles.bannerIconWrap}>
-              <ShieldCheck size={16} color="#34D399" strokeWidth={1.5} />
-            </View>
+            <ShieldCheck size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
             <Text style={styles.bannerText}>
               Your privacy is important. Pose detection runs entirely on-device — no video ever leaves your phone.
             </Text>
@@ -179,9 +177,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
           >
             <View style={styles.cardEdge}>
               <View style={styles.dataRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                  <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
-                </View>
+                <Eye size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <View style={styles.dataContent}>
                   <Text style={styles.dataTitle}>Workout Data</Text>
                   <Text style={styles.dataDesc}>Reps, sets, form scores, and workout duration to track your progress.</Text>
@@ -189,9 +185,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
               </View>
               <View style={styles.divider} />
               <View style={styles.dataRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.10)' }]}>
-                  <Smartphone size={14} color="#34D399" strokeWidth={1.5} />
-                </View>
+                <Smartphone size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <View style={styles.dataContent}>
                   <Text style={styles.dataTitle}>Pose Detection</Text>
                   <Text style={styles.dataDesc}>Pose landmarks are processed entirely on your device. No video or camera frames are ever uploaded.</Text>
@@ -199,9 +193,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
               </View>
               <View style={styles.divider} />
               <View style={styles.dataRow}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(96, 165, 250, 0.10)' }]}>
-                  <Database size={14} color="#60A5FA" strokeWidth={1.5} />
-                </View>
+                <Database size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
                 <View style={styles.dataContent}>
                   <Text style={styles.dataTitle}>Profile Information</Text>
                   <Text style={styles.dataDesc}>Your name, email, and avatar to personalize your experience.</Text>
@@ -247,9 +239,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
             onPress={handleDeleteAccount}
           >
             <View style={styles.deleteInner}>
-              <View style={styles.deleteIconWrap}>
-                <Trash2 size={16} color="#EF4444" strokeWidth={1.5} />
-              </View>
+              <Trash2 size={16} color="#EF4444" strokeWidth={1.5} />
               <View style={styles.deleteContent}>
                 <Text style={styles.deleteText}>Delete Account</Text>
                 <Text style={styles.deleteDesc}>Permanently remove your account and all data</Text>
@@ -316,15 +306,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(52, 211, 153, 0.10)',
     marginTop: 18,
     marginBottom: 8,
-  },
-  bannerIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(52, 211, 153, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
   },
   bannerText: {
     flex: 1,
@@ -432,14 +413,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 6,
   },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
   dataContent: {
     flex: 1,
   },
@@ -478,14 +451,6 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingVertical: 16,
     paddingHorizontal: 16,
-  },
-  deleteIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   deleteContent: {
     flex: 1,

@@ -52,8 +52,8 @@ const FORM_THRESHOLDS = {
   ROM_MIN: 80,
   /** Elbow angle below this triggers "keep arms straighter" */
   ELBOW_BEND_WARN: 140,
-  /** Torso lateral lean above this triggers "stay upright" (lowered: 8→6 to catch mild sway) */
-  TORSO_LEAN_WARN: 6,
+  /** Torso lateral lean above this triggers "stay upright" (lowered: 6→1.8 to catch subtle momentum sway) */
+  TORSO_LEAN_WARN: 1.8,
   /** Abduction difference between arms above this triggers asymmetry */
   ASYMMETRY_WARN: 18,
   /**
@@ -65,9 +65,9 @@ const FORM_THRESHOLDS = {
   /**
    * Shoulder elevation (shrug) as percentage of torso height.
    * Measured as how much shoulders RISE above the rest-state baseline.
-   * Raised from 6→8 to account for ~3–5% of natural shoulder rise during abduction.
+   * Raised from 8→12 to account for ~8–10% of natural shoulder rise during clean abduction.
    */
-  SHRUG_WARN: 8,
+  SHRUG_WARN: 12,
 } as const;
 
 /** Ideal targets used by the scoring system (separate from penalty deadzones) */
@@ -89,22 +89,22 @@ const IDEAL = {
  *
  * | Category     | Cap | Deadzone | Scale | Input                                         |
  * |--------------|-----|----------|-------|-----------------------------------------------|
- * | ROM          | 30  | 5°       | 0.25  | ideal 85° − maxAbduction                      |
- * | Elbow bend   | 20  | 10°      | 0.10  | ideal 160° − minElbowAngle                    |
- * | Torso lean   | 25  | 3°       | 0.20  | maxTorsoLean from vertical (tightened: 5→3)   |
- * | Tempo lower  | 15  | 0.05s    | 100   | ideal 0.7s − actual eccentric time (tightened)|
+ * | ROM          | 50  | 0°       | 0.50  | ideal 85° − maxAbduction                      |
+ * | Elbow bend   | 20  | 20°      | 0.10  | ideal 160° − minElbowAngle                    |
+ * | Torso lean   | 25  | 1.8°     | 200   | maxTorsoLean from vertical (tightened heavily) |
+ * | Tempo lower  | 35  | 0.05s    | 1800  | ideal 0.55s − actual eccentric time            |
  * | Asymmetry    | 15  | 10°      | 0.04  | maxAbductionDiff between arms                 |
- * | Shrug        | 20  | 5%       | 0.50  | shoulder elevation % above rest baseline      |
+ * | Shrug        | 20  | 10%      | 0.50  | shoulder elevation % above rest baseline       |
  *
- * Max total penalty: 125 → worst possible rep = 0.
+ * Max total penalty: 165 → worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  ROM:         { cap: 30, deadzone: 5,    scale: 0.25 } as PenaltyConfig,
-  ELBOW_BEND:  { cap: 20, deadzone: 10,   scale: 0.10 } as PenaltyConfig,
-  TORSO_LEAN:  { cap: 25, deadzone: 3,    scale: 0.20 } as PenaltyConfig,
-  TEMPO_LOWER: { cap: 15, deadzone: 0.12, scale: 100  } as PenaltyConfig,
+  ROM:         { cap: 50, deadzone: 0,    scale: 0.50 } as PenaltyConfig,
+  ELBOW_BEND:  { cap: 20, deadzone: 20,   scale: 0.10 } as PenaltyConfig,
+  TORSO_LEAN:  { cap: 25, deadzone: 1.8,  scale: 200  } as PenaltyConfig,
+  TEMPO_LOWER: { cap: 35, deadzone: 0.05, scale: 1800 } as PenaltyConfig,
   ASYMMETRY:   { cap: 15, deadzone: 10,   scale: 0.04 } as PenaltyConfig,
-  SHRUG:       { cap: 20, deadzone: 5,    scale: 0.50 } as PenaltyConfig,
+  SHRUG:       { cap: 20, deadzone: 10,   scale: 0.50 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;

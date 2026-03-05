@@ -83,6 +83,35 @@ function pad(s: string, width: number): string {
   return s.padEnd(width);
 }
 
+/** Keys in debugInfo that are not useful for angle display */
+const SKIP_DEBUG_KEYS = new Set(['phase', 'warmedUp', 'side']);
+
+/**
+ * Extract numeric values from debugInfo, flattening one level of nested objects.
+ * Returns a string like "elbow=72.3 torso=5.1" suitable for log output.
+ */
+function formatDebugInfo(debugInfo: Record<string, unknown> | undefined): string {
+  if (!debugInfo) return '';
+  const parts: string[] = [];
+
+  for (const [key, value] of Object.entries(debugInfo)) {
+    if (SKIP_DEBUG_KEYS.has(key)) continue;
+
+    if (typeof value === 'number') {
+      parts.push(`${key}=${fmt(value)}`);
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // Flatten one level: e.g. { current: { leftElbow: 72 } } → "current.leftElbow=72.0"
+      for (const [subKey, subVal] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof subVal === 'number') {
+          parts.push(`${key}.${subKey}=${fmt(subVal)}`);
+        }
+      }
+    }
+  }
+
+  return parts.join('  ');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Core replay function
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,8 +151,22 @@ function replayRecording(recording: RecordingFile, verbose: boolean): ReplayResu
           recording.frames[0].timestamp) / 1000
       : 0;
 
+  // ── Mock Date.now() so exercise timing logic works correctly ───────────
+  // Frames are replayed instantly, but exercises use Date.now() for min-rep-time
+  // guards, tempo scoring, etc. We mock it to match the original recording timestamps.
+  const originalDateNow = Date.now;
+  const baseTimeMs = recording.metadata?.recordedAt
+    ? new Date(recording.metadata.recordedAt).getTime()
+    : originalDateNow();
+
+  try {
+
   for (let i = 0; i < recording.frames.length; i++) {
     const frame = recording.frames[i];
+
+    // Advance Date.now() to match when this frame was originally captured
+    Date.now = () => baseTimeMs + frame.timestamp;
+
     const prevState = state;
     state = definition.update(frame.keypoints, state);
 
@@ -131,9 +174,11 @@ function replayRecording(recording: RecordingFile, verbose: boolean): ReplayResu
     const currentPhase = state.debugInfo?.phase as string | undefined;
     if (currentPhase && currentPhase !== lastPhase) {
       if (verbose) {
+        const angles = formatDebugInfo(state.debugInfo);
         console.log(
           `  [f${pad(String(i), 4)}  t=${pad(fmt(frame.timestamp / 1000, 2) + 's', 7)}]` +
-          `  Phase: ${lastPhase ?? '—'} → ${currentPhase}`
+          `  Phase: ${lastPhase ?? '—'} → ${currentPhase}` +
+          (angles ? `  │ ${angles}` : '')
         );
       }
       if (currentPhase) {
@@ -182,11 +227,20 @@ function replayRecording(recording: RecordingFile, verbose: boolean): ReplayResu
         console.log(`  │  Issues:   none (clean rep)`);
       }
       console.log(`  │  Phases:   ${currentPhaseSequence.join(' → ')}`);
+      const repAngles = formatDebugInfo(state.debugInfo);
+      if (repAngles) {
+        console.log(`  │  Angles:   ${repAngles}`);
+      }
       console.log(`  └${'─'.repeat(60)}`);
 
       currentPhaseSequence = [];
       lastRepCount = state.repCount;
     }
+  }
+
+  } finally {
+    // Always restore the real Date.now, even if replay throws
+    Date.now = originalDateNow;
   }
 
   return {

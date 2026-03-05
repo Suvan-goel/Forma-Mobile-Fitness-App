@@ -35,10 +35,10 @@ function getRelativeTime(date: Date): string {
 }
 
 const EVENT_CONFIG: Record<string, { icon: any; color: string }> = {
-  workout_completed: { icon: Activity, color: COLORS.primary },
-  badge_earned: { icon: Award, color: '#F5A623' },
-  personal_record: { icon: TrendingUp, color: '#34D399' },
-  streak_milestone: { icon: Flame, color: '#E07856' },
+  workout_completed: { icon: Activity, color: COLORS.textSecondary },
+  badge_earned: { icon: Award, color: COLORS.textSecondary },
+  personal_record: { icon: TrendingUp, color: COLORS.textSecondary },
+  streak_milestone: { icon: Flame, color: COLORS.textSecondary },
 };
 
 export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event, reactions, onToggleReaction }) => {
@@ -74,9 +74,7 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
         <View style={styles.cardEdge}>
           {/* Header row */}
           <View style={styles.header}>
-            <View style={[styles.iconContainer, { backgroundColor: `${config.color}15` }]}>
-              <Icon size={16} color={config.color} />
-            </View>
+            <Icon size={16} color={config.color} strokeWidth={1.5} />
 
             <View style={styles.headerText}>
               <Text style={styles.name} numberOfLines={1}>
@@ -187,13 +185,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: SPACING.sm,
-  },
-  iconContainer: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerText: {
     flex: 1,

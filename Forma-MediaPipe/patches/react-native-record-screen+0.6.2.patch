@@ -7,8 +7,7 @@ index 0000000..0d259dd
 +o/classes
 diff --git a/node_modules/react-native-record-screen/android/build/.transforms/386a4b15d3484969f2f432838ebb986e/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-record-screen/android/build/.transforms/386a4b15d3484969f2f432838ebb986e/transformed/classes/classes_dex/classes.dex
 new file mode 100644
-index 0000000..20b6706
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/.transforms/386a4b15d3484969f2f432838ebb986e/transformed/classes/classes_dex/classes.dex differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/results.bin b/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/results.bin
 new file mode 100644
 index 0000000..0d259dd
@@ -18,8 +17,7 @@ index 0000000..0d259dd
 +o/classes
 diff --git a/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/transformed/classes/classes_dex/classes.dex
 new file mode 100644
-index 0000000..70778f5
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/.transforms/9ce684a17bfd54a2e8abdde0cf3b7477/transformed/classes/classes_dex/classes.dex differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/generated/source/buildConfig/debug/com/recordscreen/BuildConfig.java b/node_modules/react-native-record-screen/android/build/generated/source/buildConfig/debug/com/recordscreen/BuildConfig.java
 new file mode 100644
 index 0000000..d9f1a9c
@@ -99,12 +97,10 @@ index 0000000..9e26dfe
 \ No newline at end of file
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/react-native-record-screen/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
 new file mode 100644
-index 0000000..b4b5394
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/react-native-record-screen/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
 new file mode 100644
-index 0000000..0d2f377
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/react-native-record-screen/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
 new file mode 100644
 index 0000000..e69de29
@@ -153,12 +149,10 @@ index 0000000..847ed86
 \ No newline at end of file
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/java_res/debug/processDebugJavaRes/out/META-INF/react-native-record-screen_debug.kotlin_module b/node_modules/react-native-record-screen/android/build/intermediates/java_res/debug/processDebugJavaRes/out/META-INF/react-native-record-screen_debug.kotlin_module
 new file mode 100644
-index 0000000..c998a4c
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/intermediates/java_res/debug/processDebugJavaRes/out/META-INF/react-native-record-screen_debug.kotlin_module differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/recordscreen/BuildConfig.class b/node_modules/react-native-record-screen/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/recordscreen/BuildConfig.class
 new file mode 100644
-index 0000000..3fc4c51
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/recordscreen/BuildConfig.class differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/react-native-record-screen/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
 new file mode 100644
 index 0000000..78ac5b8
@@ -212,8 +206,7 @@ index 0000000..08f4ebe
 \ No newline at end of file
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/react-native-record-screen/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
 new file mode 100644
-index 0000000..13fc5ae
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/react-native-record-screen/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
 new file mode 100644
 index 0000000..ef3b96e
@@ -223,256 +216,193 @@ index 0000000..ef3b96e
 +com.recordscreen
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab
 new file mode 100644
-index 0000000..8a42c49
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream
 new file mode 100644
-index 0000000..5277b62
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len
 new file mode 100644
-index 0000000..0495d41
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len
 new file mode 100644
-index 0000000..01bdaa1
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at
 new file mode 100644
-index 0000000..b1dc423
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i
 new file mode 100644
-index 0000000..f3befe3
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab
 new file mode 100644
-index 0000000..0da636c
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream
 new file mode 100644
-index 0000000..cbb4c56
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len
 new file mode 100644
-index 0000000..6033372
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len
 new file mode 100644
-index 0000000..a9f80ae
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at
 new file mode 100644
-index 0000000..fe23964
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i
 new file mode 100644
-index 0000000..338bd74
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab
 new file mode 100644
-index 0000000..6f5f66e
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream
 new file mode 100644
-index 0000000..cbb4c56
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len
 new file mode 100644
-index 0000000..6033372
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len
 new file mode 100644
-index 0000000..a9f80ae
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at
 new file mode 100644
-index 0000000..b1ab0ed
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i
 new file mode 100644
-index 0000000..338bd74
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab
 new file mode 100644
-index 0000000..bdf584a
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream
 new file mode 100644
-index 0000000..91fea34
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len
 new file mode 100644
-index 0000000..7f1939e
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len
 new file mode 100644
-index 0000000..2a17e6e
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at
 new file mode 100644
-index 0000000..599211f
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i
 new file mode 100644
-index 0000000..26b6213
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab
 new file mode 100644
-index 0000000..2958266
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream
 new file mode 100644
-index 0000000..cc598f5
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len
 new file mode 100644
-index 0000000..575d132
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len
 new file mode 100644
-index 0000000..93a595b
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at
 new file mode 100644
-index 0000000..98e1609
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i
 new file mode 100644
-index 0000000..e6778b4
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab
 new file mode 100644
-index 0000000..ddfba0b
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream
 new file mode 100644
-index 0000000..f80f12f
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len
 new file mode 100644
-index 0000000..2c37006
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len
 new file mode 100644
-index 0000000..93a595b
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at
 new file mode 100644
-index 0000000..647e252
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i
 new file mode 100644
-index 0000000..5827a39
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab
 new file mode 100644
-index 0000000..527fd0d
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream
 new file mode 100644
-index 0000000..5277b62
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len
 new file mode 100644
-index 0000000..0495d41
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len
 new file mode 100644
-index 0000000..01bdaa1
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at
 new file mode 100644
-index 0000000..6e57231
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i
 new file mode 100644
-index 0000000..f3befe3
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab
 new file mode 100644
-index 0000000..45abc54
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream
 new file mode 100644
-index 0000000..3bf7b05
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len
 new file mode 100644
-index 0000000..ec8f944
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len
 new file mode 100644
-index 0000000..93a595b
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at
 new file mode 100644
-index 0000000..37640ec
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i
 new file mode 100644
-index 0000000..3526a44
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab
 new file mode 100644
-index 0000000..3d5ef77
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream
 new file mode 100644
-index 0000000..0141c34
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len
 new file mode 100644
-index 0000000..37934e8
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len
 new file mode 100644
-index 0000000..01bdaa1
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at
 new file mode 100644
-index 0000000..36ae40c
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i
 new file mode 100644
-index 0000000..5758a8c
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab
 new file mode 100644
 index 0000000..2ceb12b
@@ -484,100 +414,76 @@ index 0000000..2ceb12b
 \ No newline at end of file
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab
 new file mode 100644
-index 0000000..58563a2
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream
 new file mode 100644
-index 0000000..5277b62
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len
 new file mode 100644
-index 0000000..0495d41
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len
 new file mode 100644
-index 0000000..01bdaa1
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at
 new file mode 100644
-index 0000000..7d30a43
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i
 new file mode 100644
-index 0000000..f3befe3
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab
 new file mode 100644
-index 0000000..beae67f
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream
 new file mode 100644
-index 0000000..100d205
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len
 new file mode 100644
-index 0000000..ccfcbf4
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len
 new file mode 100644
-index 0000000..01bdaa1
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at
 new file mode 100644
-index 0000000..cc06806
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i
 new file mode 100644
-index 0000000..f768a77
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab
 new file mode 100644
-index 0000000..981faf5
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream
 new file mode 100644
-index 0000000..e58f22a
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len
 new file mode 100644
-index 0000000..86c4be7
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len
 new file mode 100644
-index 0000000..2679781
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at
 new file mode 100644
-index 0000000..d38bacd
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i
 new file mode 100644
-index 0000000..823fe04
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin
 new file mode 100644
-index 0000000..2b4027b
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin
 new file mode 100644
-index 0000000..745e222
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin
 new file mode 100644
-index 0000000..052fe00
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/react-native-record-screen/android/build/outputs/logs/manifest-merger-debug-report.txt
 new file mode 100644
 index 0000000..8f4fe4f
@@ -602,28 +508,22 @@ index 0000000..8f4fe4f
 +		INJECTED from /Users/suvangoel/Forma-Mobile-Fitness-App/Forma-MediaPipe/node_modules/react-native-record-screen/android/src/main/AndroidManifestNew.xml
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin b/node_modules/react-native-record-screen/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
 new file mode 100644
-index 0000000..41b2de6
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/META-INF/react-native-record-screen_debug.kotlin_module b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/META-INF/react-native-record-screen_debug.kotlin_module
 new file mode 100644
-index 0000000..c998a4c
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/META-INF/react-native-record-screen_debug.kotlin_module differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$Companion.class b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$Companion.class
 new file mode 100644
-index 0000000..271f26c
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$mActivityEventListener$1.class b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$mActivityEventListener$1.class
 new file mode 100644
-index 0000000..5177a89
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule$mActivityEventListener$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule.class b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule.class
 new file mode 100644
-index 0000000..5256f3a
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenModule.class differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenPackage.class b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenPackage.class
 new file mode 100644
-index 0000000..56676f8
-Binary files /dev/null and b/node_modules/react-native-record-screen/android/build/tmp/kotlin-classes/debug/com/recordscreen/RecordScreenPackage.class differ
+index 0000000..e69de29
 diff --git a/node_modules/react-native-record-screen/android/src/main/java/com/recordscreen/RecordScreenModule.kt b/node_modules/react-native-record-screen/android/src/main/java/com/recordscreen/RecordScreenModule.kt
 index e3850d5..67a1ceb 100644
 --- a/node_modules/react-native-record-screen/android/src/main/java/com/recordscreen/RecordScreenModule.kt
@@ -702,14 +602,20 @@ index e3850d5..67a1ceb 100644
  
    override fun HBRecorderOnPause() {
 diff --git a/node_modules/react-native-record-screen/ios/RecordScreen.mm b/node_modules/react-native-record-screen/ios/RecordScreen.mm
-index 67ac51f..cf75823 100644
+index 67ac51f..e71cae3 100644
 --- a/node_modules/react-native-record-screen/ios/RecordScreen.mm
 +++ b/node_modules/react-native-record-screen/ios/RecordScreen.mm
-@@ -4,6 +4,7 @@
- @implementation RecordScreen
+@@ -1,9 +1,10 @@
+ #import "RecordScreen.h"
+ #import <React/RCTConvert.h>
  
- UIBackgroundTaskIdentifier _backgroundRenderingID;
-+dispatch_queue_t _writingQueue;
+-@implementation RecordScreen
+-
+-UIBackgroundTaskIdentifier _backgroundRenderingID;
++@implementation RecordScreen {
++    UIBackgroundTaskIdentifier _backgroundRenderingID;
++    dispatch_queue_t _writingQueue;
++}
  
  - (NSDictionary *)errorResponse:(NSDictionary *)result;
  {
@@ -800,3 +706,15 @@ index 67ac51f..cf75823 100644
          }
      });
  }
+diff --git a/node_modules/react-native-record-screen/react-native-record-screen.podspec b/node_modules/react-native-record-screen/react-native-record-screen.podspec
+index f1abde9..c55af56 100644
+--- a/node_modules/react-native-record-screen/react-native-record-screen.podspec
++++ b/node_modules/react-native-record-screen/react-native-record-screen.podspec
+@@ -15,6 +15,7 @@ Pod::Spec.new do |s|
+   s.source       = { :git => "https://github.com/yutasuzuki/react-native-record-screen.git", :tag => "#{s.version}" }
+ 
+   s.source_files = "ios/**/*.{h,m,mm}"
++  s.frameworks   = "ReplayKit", "AVFoundation"
+ 
+   # Use install_modules_dependencies helper to install the dependencies if React Native version >=0.71.0.
+   # See https://github.com/facebook/react-native/blob/febf6b7f33fdb4904669f99d795eba4c0f95d7bf/scripts/cocoapods/new_architecture.rb#L79.

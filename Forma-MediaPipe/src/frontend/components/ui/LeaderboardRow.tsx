@@ -56,7 +56,7 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCu
               {isCurrentUser ? 'You' : entry.displayName}
             </Text>
             <View style={styles.trendRow}>
-              <TrendIcon size={12} color={trendColor} />
+              <TrendIcon size={12} color={trendColor} strokeWidth={1.5} />
               <Text style={[styles.trendLabel, { color: trendColor }]}>
                 {entry.trend === 'up' ? 'Rising' : entry.trend === 'down' ? 'Falling' : 'Steady'}
               </Text>
