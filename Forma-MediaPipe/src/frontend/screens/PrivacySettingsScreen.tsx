@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   /* Banner */
   banner: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     padding: SPACING.md,
     borderRadius: 16,
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   /* Data Items */
   dataRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     paddingVertical: 6,
   },

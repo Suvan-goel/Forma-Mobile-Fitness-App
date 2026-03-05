@@ -100,13 +100,11 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
           >
             <View style={[styles.planCardEdge, isPremium && styles.planCardEdgePremium]}>
               <View style={styles.planBadgeRow}>
-                <View style={[styles.planIconWrap, isPremium && styles.planIconWrapPremium]}>
-                  {isPremium ? (
-                    <Crown size={20} color="#F5A623" strokeWidth={1.5} />
-                  ) : (
-                    <Star size={20} color="#A78BFA" strokeWidth={1.5} />
-                  )}
-                </View>
+                {isPremium ? (
+                  <Crown size={20} color="#F5A623" strokeWidth={1.5} />
+                ) : (
+                  <Star size={20} color="#A78BFA" strokeWidth={1.5} />
+                )}
                 <View style={styles.planInfo}>
                   <Text style={styles.planBadgeLabel}>CURRENT PLAN</Text>
                   <Text style={styles.planName}>
@@ -261,17 +259,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     marginBottom: 12,
-  },
-  planIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  planIconWrapPremium: {
-    backgroundColor: 'rgba(245, 166, 35, 0.12)',
   },
   planInfo: {
     flex: 1,

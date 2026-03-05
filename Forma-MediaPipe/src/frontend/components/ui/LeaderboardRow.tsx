@@ -37,11 +37,9 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCu
       >
         <View style={[styles.cardEdge, isCurrentUser && styles.cardEdgeHighlight]}>
           {/* Rank badge */}
-          <View style={[styles.rankBadge, isCurrentUser && styles.rankBadgeHighlight]}>
-            <Text style={[styles.rank, isCurrentUser && styles.rankHighlight]}>
-              {entry.rank}
-            </Text>
-          </View>
+          <Text style={[styles.rank, isCurrentUser && styles.rankHighlight]}>
+            {entry.rank}
+          </Text>
 
           {/* Avatar */}
           <View style={[styles.avatar, isCurrentUser && styles.avatarHighlight]}>
@@ -97,17 +95,6 @@ const styles = StyleSheet.create({
   },
   cardEdgeHighlight: {
     borderColor: 'rgba(139, 92, 246, 0.25)',
-  },
-  rankBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankBadgeHighlight: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
   },
   rank: {
     fontFamily: FONTS.mono.bold,

@@ -73,7 +73,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
           {/* Exercise header row */}
           <View style={styles.exerciseHeader}>
             <Text style={styles.exerciseName} numberOfLines={1}>{exercise.name}</Text>
-            <View style={[styles.avgScoreBadge, { backgroundColor: `${avgScoreColor}18` }]}>
+            <View style={styles.avgScoreBadge}>
               <Target size={10} color={avgScoreColor} strokeWidth={1.5} />
               <MonoText style={[styles.avgScoreText, { color: avgScoreColor }]}>{avgScore}</MonoText>
             </View>
