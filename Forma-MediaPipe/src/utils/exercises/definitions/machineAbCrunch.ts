@@ -57,11 +57,11 @@ const FORM_THRESHOLDS = {
   /** Max hip angle below which extension is incomplete */
   EXTENSION_ROM_FAIL: 150,
   /** Concentric (crunch down) too fast threshold (seconds) */
-  TEMPO_CRUNCH_MIN: 0.3,
+  TEMPO_CRUNCH_MIN: 0.25,
   /** Eccentric (return) too fast threshold (seconds) */
   TEMPO_RETURN_MIN: 0.4,
   /** Neck forward deviation threshold (degrees) — neck shouldn't jut forward */
-  NECK_FORWARD_WARN: 30,
+  NECK_FORWARD_WARN: 90,
 } as const;
 
 /**
@@ -70,19 +70,19 @@ const FORM_THRESHOLDS = {
  * | Category         | Cap | Deadzone         | Scale | Key Input                              |
  * |------------------|-----|------------------|-------|----------------------------------------|
  * | ROM crunch       | 30  | 0 (from ideal)   | 0.04  | min hip angle shortfall from 115       |
- * | ROM extension    | 25  | 0 (from ideal)   | 0.03  | max hip angle shortfall from 155       |
- * | Tempo crunch     | 15  | 0.4s             | 50    | concentric time deficit                |
+ * | ROM extension    | 50  | 0 (from ideal)   | 0.12  | max hip angle shortfall from 155       |
+ * | Tempo crunch     | 40  | 0.27s            | 3000  | concentric time deficit                |
  * | Tempo return     | 15  | 0.5s             | 40    | eccentric time deficit                 |
- * | Neck forward     | 20  | 20°              | 0.08  | neck forward angle deviation           |
+ * | Neck forward     | 5   | 90°              | 0.01  | neck forward angle deviation           |
  *
- * Max total penalty: 105 -> worst possible rep = 0.
+ * Max total penalty: 140 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
   CRUNCH_ROM:    { cap: 30, deadzone: 0, scale: 0.04 } as PenaltyConfig,
-  EXTENSION_ROM: { cap: 25, deadzone: 0, scale: 0.03 } as PenaltyConfig,
-  TEMPO_CRUNCH:  { cap: 15, deadzone: 0.4, scale: 50 } as PenaltyConfig,
+  EXTENSION_ROM: { cap: 50, deadzone: 0, scale: 0.12 } as PenaltyConfig,
+  TEMPO_CRUNCH:  { cap: 40, deadzone: 0.27, scale: 3000 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 15, deadzone: 0.5, scale: 40 } as PenaltyConfig,
-  NECK_FORWARD:  { cap: 20, deadzone: 20, scale: 0.08 } as PenaltyConfig,
+  NECK_FORWARD:  { cap: 5, deadzone: 90, scale: 0.01 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
