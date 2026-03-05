@@ -406,11 +406,9 @@ export const HomeScreen: React.FC = () => {
                       idx < 2 && styles.lbRowBorder,
                     ]}
                   >
-                    <View style={[styles.lbRankWrap, { backgroundColor: (RANK_COLORS[entry.rank] || COLORS.textTertiary) + '18' }]}>
-                      <Text style={[styles.lbRank, { color: RANK_COLORS[entry.rank] || COLORS.textSecondary }]}>
-                        {entry.rank}
-                      </Text>
-                    </View>
+                    <Text style={[styles.lbRank, { color: RANK_COLORS[entry.rank] || COLORS.textSecondary }]}>
+                      {entry.rank}
+                    </Text>
                     <View style={[styles.lbAvatar, entry.isCurrentUser && styles.lbAvatarAccent]}>
                       <Text style={styles.lbAvatarText}>{entry.displayName[0]}</Text>
                     </View>
@@ -921,13 +919,6 @@ const styles = StyleSheet.create({
   lbRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  lbRankWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   lbRank: {
     fontFamily: FONTS.display.bold,
