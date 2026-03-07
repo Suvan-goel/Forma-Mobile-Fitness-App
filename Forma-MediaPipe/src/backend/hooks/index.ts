@@ -27,3 +27,4 @@ export { useFollowing } from './useFollowing';
 export { useSubscription } from './useSubscription';
 export { useScreenRecording } from './useScreenRecording';
 export { useVideoLibrary } from './useVideoLibrary';
+export { useCreateActivityPost } from './useCreateActivityPost';

@@ -2,7 +2,7 @@
  * ActivityView — Activity feed tab content within SocialScreen
  */
 
-import React, { memo, useState, useCallback, useMemo } from 'react';
+import React, { memo, useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,11 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { Inbox } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Inbox, Plus } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useActivityFeed, useReactions } from '../../../backend/hooks';
 import { ActivityEvent, ActivityFilter } from '../../../backend/services/api/types';
@@ -46,6 +49,7 @@ const FilterRow = memo(({ active, onSelect }: { active: ActivityFilter; onSelect
 export const ActivityView: React.FC = memo(() => {
   const [filter, setFilter] = useState<ActivityFilter>('all');
   const { events, isLoading, isLoadingMore, error, hasMore, loadMore, refetch } = useActivityFeed(filter);
+  const navigation = useNavigation<any>();
 
   const eventIds = useMemo(() => events.map(e => e.id), [events]);
   const { reactions, toggleReaction } = useReactions(eventIds);
@@ -75,10 +79,46 @@ export const ActivityView: React.FC = memo(() => {
     return null;
   }, [isLoadingMore]);
 
+  // Refetch feed when returning from CreateActivityPost
+  const didNavigateRef = React.useRef(false);
+
+  const handleCreatePost = useCallback(() => {
+    didNavigateRef.current = true;
+    navigation.navigate('CreateActivityPost');
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (didNavigateRef.current) {
+        didNavigateRef.current = false;
+        refetch();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, refetch]);
+
+  const fab = (
+    <TouchableOpacity
+      style={styles.fab}
+      onPress={handleCreatePost}
+      activeOpacity={0.85}
+    >
+      <LinearGradient
+        colors={['#8B5CF6', '#7C3AED']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.fabGradient}
+      >
+        <Plus size={24} color="#FFFFFF" strokeWidth={2.5} />
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
   if (isLoading && events.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator color={COLORS.primary} size="large" />
+        {fab}
       </View>
     );
   }
@@ -90,44 +130,51 @@ export const ActivityView: React.FC = memo(() => {
         <TouchableOpacity onPress={refetch} style={styles.retryButton}>
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
+        {fab}
       </View>
     );
   }
 
   return (
-    <FlatList
-      data={events}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      ListHeaderComponent={ListHeader}
-      ListFooterComponent={ListFooter}
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconContainer}>
-            <Inbox size={28} color={COLORS.textTertiary} />
+    <View style={styles.feedContainer}>
+      <FlatList
+        data={events}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeader}
+        ListFooterComponent={ListFooter}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconContainer}>
+              <Inbox size={28} color={COLORS.textTertiary} />
+            </View>
+            <Text style={styles.emptyTitle}>No activity yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Add friends to see their workout activity here
+            </Text>
           </View>
-          <Text style={styles.emptyTitle}>No activity yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Add friends to see their workout activity here
-          </Text>
-        </View>
-      }
-      onEndReached={hasMore ? loadMore : undefined}
-      onEndReachedThreshold={0.3}
-      contentContainerStyle={styles.listContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={isLoading && events.length > 0}
-          onRefresh={refetch}
-          tintColor={COLORS.primary}
-        />
-      }
-      showsVerticalScrollIndicator={false}
-    />
+        }
+        onEndReached={hasMore ? loadMore : undefined}
+        onEndReachedThreshold={0.3}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading && events.length > 0}
+            onRefresh={refetch}
+            tintColor={COLORS.primary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      />
+      {fab}
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
+  feedContainer: {
+    flex: 1,
+  },
   centerContainer: {
     flex: 1,
     alignItems: 'center',
@@ -136,6 +183,32 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 120,
+  },
+
+  /* ── FAB ── */
+  fab: {
+    position: 'absolute',
+    bottom: 100,
+    right: SPACING.screenHorizontal + 4,
+    borderRadius: 28,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.45,
+        shadowRadius: 16,
+      },
+      android: { elevation: 10 },
+    }),
+  },
+  fabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
 
   /* ── Filter tabs ── */

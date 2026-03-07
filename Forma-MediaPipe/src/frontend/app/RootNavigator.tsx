@@ -37,6 +37,7 @@ import { WorkoutTemplatesScreen } from '../screens/WorkoutTemplatesScreen';
 import { CameraSettingsScreen } from '../screens/CameraSettingsScreen';
 import { ExerciseGuideScreen } from '../screens/ExerciseGuideScreen';
 import { VideoLibraryScreen } from '../screens/VideoLibraryScreen';
+import { CreateActivityPostScreen } from '../screens/CreateActivityPostScreen';
 import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlow';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
@@ -78,6 +79,7 @@ export type RootStackParamList = {
   UserProfile: undefined;
   Tutorials: undefined;
   VideoLibrary: undefined;
+  CreateActivityPost: undefined;
   Onboarding: undefined;
 };
 
@@ -352,6 +354,14 @@ const RootStackNavigator: React.FC = () => {
             name="VideoLibrary"
             component={VideoLibraryScreen}
             options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="CreateActivityPost"
+            component={CreateActivityPostScreen}
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
           />
           {__DEV__ && (
             <Stack.Screen
