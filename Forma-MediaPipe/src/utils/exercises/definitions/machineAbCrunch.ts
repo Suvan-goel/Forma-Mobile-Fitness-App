@@ -39,13 +39,15 @@ import type {
 /** FSM thresholds (degrees — hip angle: shoulder-hip-knee) */
 const THRESHOLDS = {
   /** Hip angle below which we transition REST -> CRUNCHING */
-  CRUNCHING_ENTER: 145,
+  CRUNCHING_ENTER: 112,
   /** Hip angle below which we consider bottom position (CRUNCHING -> BOTTOM) */
-  BOTTOM_ENTER: 115,
+  BOTTOM_ENTER: 105,
   /** Hip angle above which we leave BOTTOM (hysteresis) (BOTTOM -> RETURNING) */
-  BOTTOM_EXIT: 120,
+  BOTTOM_EXIT: 110,
+  /** Hip angle above which CRUNCHING aborts (must be higher than REST_REENTER) */
+  CRUNCHING_EXIT: 117,
   /** Hip angle above which the return is complete (RETURNING -> REST) */
-  REST_REENTER: 145,
+  REST_REENTER: 114,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.5,
 } as const;
@@ -55,7 +57,7 @@ const FORM_THRESHOLDS = {
   /** Min hip angle above which crunch is too shallow */
   CRUNCH_ROM_FAIL: 125,
   /** Max hip angle below which extension is incomplete */
-  EXTENSION_ROM_FAIL: 150,
+  EXTENSION_ROM_FAIL: 114,
   /** Concentric (crunch down) too fast threshold (seconds) */
   TEMPO_CRUNCH_MIN: 0.25,
   /** Eccentric (return) too fast threshold (seconds) */
@@ -69,8 +71,8 @@ const FORM_THRESHOLDS = {
  *
  * | Category         | Cap | Deadzone         | Scale | Key Input                              |
  * |------------------|-----|------------------|-------|----------------------------------------|
- * | ROM crunch       | 30  | 0 (from ideal)   | 0.04  | min hip angle shortfall from 115       |
- * | ROM extension    | 50  | 0 (from ideal)   | 0.12  | max hip angle shortfall from 155       |
+ * | ROM crunch       | 30  | 0 (from ideal)   | 0.04  | min hip angle shortfall from 106       |
+ * | ROM extension    | 50  | 0 (from ideal)   | 0.12  | max hip angle shortfall from 122       |
  * | Tempo crunch     | 40  | 0.27s            | 3000  | concentric time deficit                |
  * | Tempo return     | 15  | 0.5s             | 40    | eccentric time deficit                 |
  * | Neck forward     | 5   | 90°              | 0.01  | neck forward angle deviation           |
@@ -310,7 +312,7 @@ function updateFSM(
     case 'CRUNCHING':
       if (hipAngle < THRESHOLDS.BOTTOM_ENTER) {
         phase = 'BOTTOM';
-      } else if (hipAngle > THRESHOLDS.REST_REENTER) {
+      } else if (hipAngle >= THRESHOLDS.CRUNCHING_EXIT) {
         // Went back without crunching deep enough — reset
         phase = 'REST';
       }
@@ -324,7 +326,7 @@ function updateFSM(
 
     case 'RETURNING':
       if (
-        hipAngle > THRESHOLDS.REST_REENTER &&
+        hipAngle >= THRESHOLDS.REST_REENTER &&
         tRepStart !== null &&
         (t - tRepStart) >= THRESHOLDS.MIN_REP_TIME
       ) {
@@ -347,12 +349,12 @@ function updateFSM(
 function computeAbCrunchScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. Crunch ROM: ideal min hip angle is 115 or below. Shortfall = max(0, minHipAngle - 115)
-  const crunchShortfall = Math.max(0, repWindow.minHipAngle - 115);
+  // 1. Crunch ROM: ideal min hip angle is 106 or below. Shortfall = max(0, minHipAngle - 106)
+  const crunchShortfall = Math.max(0, repWindow.minHipAngle - 106);
   penalties.push({ value: crunchShortfall, config: PENALTY_CONFIGS.CRUNCH_ROM });
 
-  // 2. Extension ROM: ideal max hip angle is 155 or above. Shortfall = max(0, 155 - maxHipAngle)
-  const extensionShortfall = Math.max(0, 155 - repWindow.maxHipAngle);
+  // 2. Extension ROM: ideal max hip angle is 122 or above. Shortfall = max(0, 122 - maxHipAngle)
+  const extensionShortfall = Math.max(0, 122 - repWindow.maxHipAngle);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
   // 3. Neck forward deviation
