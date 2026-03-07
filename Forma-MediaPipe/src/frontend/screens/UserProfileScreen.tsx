@@ -3,7 +3,7 @@
  * Redesigned to match HomeScreen design language.
  */
 
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,17 +22,12 @@ import {
   ChevronLeft,
   Menu,
   Edit2,
-  Gift,
-  BarChart2,
-  Video,
-  BookOpen,
   ChevronRight,
   Flame,
   TrendingUp,
   TrendingDown,
   Activity,
   Dumbbell,
-  Trophy,
   User,
 } from 'lucide-react-native';
 import {
@@ -46,107 +41,8 @@ import {
 } from '../constants/theme';
 import { useUser, useWorkouts, useFriends, useAnalytics, useFollowing } from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
-import type { WorkoutBarData } from '../../backend/services/api';
 
 type UserProfileNavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-/* ── Mini Bar Chart ──────────────────────────────── */
-
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-const MiniBarChart: React.FC<{
-  data: WorkoutBarData[];
-  selectedIndex: number | null;
-  onSelect: (i: number | null) => void;
-}> = ({ data, selectedIndex, onSelect }) => {
-  const maxVal = Math.max(...data.map(d => d.value), 1);
-  const hasSelection = selectedIndex !== null;
-  return (
-    <View style={chartStyles.container}>
-      {data.map((d, i) => {
-        const heightPct = d.value > 0 ? Math.max(14, Math.round((d.value / maxVal) * 100)) : 4;
-        const isSelected = selectedIndex === i;
-        const isDimmed = hasSelection && !isSelected;
-        return (
-          <TouchableOpacity
-            key={i}
-            style={chartStyles.barWrap}
-            onPress={() => onSelect(isSelected ? null : i)}
-            activeOpacity={0.7}
-          >
-            <View style={[chartStyles.barTrack, isSelected && chartStyles.barTrackSelected]}>
-              <View
-                style={[
-                  chartStyles.barFill,
-                  { height: `${heightPct}%` as any },
-                  d.value === 0 && chartStyles.barEmpty,
-                  isDimmed && chartStyles.barDimmed,
-                  isSelected && chartStyles.barSelected,
-                ]}
-              />
-            </View>
-            <Text style={[chartStyles.dayLabel, isSelected && chartStyles.dayLabelSelected]}>
-              {DAY_LABELS[i % 7]}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-};
-
-const chartStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 5,
-    height: 120,
-    marginTop: 14,
-  },
-  barWrap: {
-    flex: 1,
-    alignItems: 'center',
-    height: '100%',
-  },
-  barTrack: {
-    flex: 1,
-    width: '62%',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 4,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 4,
-    opacity: 0.9,
-  },
-  barEmpty: {
-    opacity: 0.2,
-    backgroundColor: COLORS.textTertiary,
-  },
-  barDimmed: {
-    opacity: 0.3,
-  },
-  barSelected: {
-    opacity: 1,
-  },
-  barTrackSelected: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-  },
-  dayLabel: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 9,
-    color: COLORS.textTertiary,
-    marginTop: 5,
-    letterSpacing: 0.5,
-  },
-  dayLabelSelected: {
-    color: COLORS.primary,
-    fontFamily: FONTS.mono.bold,
-  },
-});
 
 /* ── Main Screen ─────────────────────────────────── */
 
@@ -165,8 +61,6 @@ export const UserProfileScreen: React.FC = () => {
 
   const workoutCount = workouts.length;
   const friendsCount = friends.length;
-  const weeklyBarData = analytics?.weeklyBarData ?? [];
-  const totalMinutes = analytics?.summary.totalDurationMinutes ?? 0;
   const streakDays = analytics?.summary.streakDays ?? 0;
   const totalReps = analytics?.summary.totalReps ?? 0;
   const mostTrained = analytics?.summary.mostTrainedExercise ?? null;
@@ -176,9 +70,6 @@ export const UserProfileScreen: React.FC = () => {
   const avgFormScore = formValues.length > 0
     ? Math.round(formValues.reduce((a, b) => a + b, 0) / formValues.length)
     : 0;
-
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
-  const selectedDayData = selectedDayIndex !== null ? weeklyBarData[selectedDayIndex] : null;
 
   useEffect(() => {
     Animated.parallel([
@@ -198,8 +89,6 @@ export const UserProfileScreen: React.FC = () => {
   const handleGoBack = useCallback(() => navigation.navigate('MainTabs', { screen: 'Home' }), [navigation]);
   const handleSettings = useCallback(() => navigation.navigate('Settings'), [navigation]);
   const handleEditProfile = useCallback(() => navigation.navigate('ProfileSettings'), [navigation]);
-  const handleRewards = useCallback(() => navigation.navigate('Rewards'), [navigation]);
-  const handleTutorials = useCallback(() => navigation.navigate('Tutorials'), [navigation]);
 
   const initial = user?.displayName ? user.displayName[0].toUpperCase() : '?';
 
@@ -315,157 +204,6 @@ export const UserProfileScreen: React.FC = () => {
                     <Text style={styles.heroStatValue}>{friendsCount}</Text>
                     <Text style={styles.heroStatLabel}>friends</Text>
                   </View>
-                </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* ═══════════════════════════════════════════
-              EDIT PROFILE CTA (Quick Start style)
-              ═══════════════════════════════════════════ */}
-          <TouchableOpacity activeOpacity={0.85} onPress={handleEditProfile}>
-            <LinearGradient
-              colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGradient}
-            >
-              <View style={styles.ctaInner}>
-                <View style={styles.ctaIconWrap}>
-                  <Edit2 size={16} color="#FFFFFF" strokeWidth={2} />
-                </View>
-                <View style={styles.ctaTextWrap}>
-                  <Text style={styles.ctaTitle}>Edit Profile</Text>
-                  <Text style={styles.ctaSub}>Customize your public profile</Text>
-                </View>
-                <ChevronRight size={18} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* ═══════════════════════════════════════════
-              REWARDS — Section header + card
-              ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>REWARDS</Text>
-            </View>
-            <TouchableOpacity style={styles.seeAllBtn} activeOpacity={0.7} onPress={handleRewards}>
-              <Text style={styles.seeAllText}>View All</Text>
-              <ChevronRight size={11} color={COLORS.accent} strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity activeOpacity={0.85} onPress={handleRewards}>
-            <LinearGradient
-              colors={['#1A1510', '#111008', '#0E0C07']}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.rewardsCard}
-            >
-              <View style={styles.rewardsEdge}>
-                <View style={styles.rewardsRow}>
-                  <Gift size={20} color={COLORS.yellow} strokeWidth={1.5} />
-                  <View style={styles.rewardsTextWrap}>
-                    <Text style={styles.rewardsTitle}>Badges & Points</Text>
-                    <Text style={styles.rewardsSubtitle}>View your badges & points</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.yellow} strokeWidth={1.5} />
-                </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* ═══════════════════════════════════════════
-              PROGRESS — Weekly activity
-              ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <BarChart2 size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>PROGRESS</Text>
-            </View>
-          </View>
-
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.progressCard}
-          >
-            <View style={styles.progressEdge}>
-              <View style={styles.progressTopRow}>
-                <View style={styles.progressTextWrap}>
-                  <Text style={styles.progressTitle}>
-                    {selectedDayData
-                      ? `${DAY_LABELS[selectedDayIndex!]} · ${selectedDayData.value} min`
-                      : 'Minutes active this week'}
-                  </Text>
-                </View>
-                <View style={styles.minutesBadge}>
-                  <Text style={styles.minutesValue}>
-                    {selectedDayData ? selectedDayData.value : totalMinutes}
-                  </Text>
-                  <Text style={styles.minutesUnit}>min</Text>
-                </View>
-              </View>
-              {weeklyBarData.length > 0 && (
-                <MiniBarChart
-                  data={weeklyBarData}
-                  selectedIndex={selectedDayIndex}
-                  onSelect={setSelectedDayIndex}
-                />
-              )}
-            </View>
-          </LinearGradient>
-
-          {/* ═══════════════════════════════════════════
-              EXPLORE — Link cards
-              ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <BookOpen size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>EXPLORE</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity activeOpacity={0.85} onPress={handleTutorials}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.linkCard}
-            >
-              <View style={styles.linkEdge}>
-                <View style={styles.linkRow}>
-                  <BookOpen size={18} color={COLORS.accent} strokeWidth={1.5} />
-                  <View style={styles.linkTextWrap}>
-                    <Text style={styles.linkTitle}>Exercise Tutorials</Text>
-                    <Text style={styles.linkSubtitle}>Browse exercise guides</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <View style={{ height: 8 }} />
-
-          <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('VideoLibrary')}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.linkCard}
-            >
-              <View style={styles.linkEdge}>
-                <View style={styles.linkRow}>
-                  <Video size={18} color={COLORS.accent} strokeWidth={1.5} />
-                  <View style={styles.linkTextWrap}>
-                    <Text style={styles.linkTitle}>Video Library</Text>
-                    <Text style={styles.linkSubtitle}>Your recorded workouts</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </View>
               </View>
             </LinearGradient>
@@ -770,9 +508,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     letterSpacing: -0.5,
   },
-  heroStatValueDim: {
-    color: COLORS.textTertiary,
-  },
   heroStatLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
@@ -799,42 +534,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
   },
 
-  /* ── CTA Button (Quick Start style) ────────────── */
-  ctaGradient: {
-    borderRadius: 16,
-    marginBottom: 4,
-  },
-  ctaInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    gap: 14,
-  },
-  ctaIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  ctaTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  ctaSub: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.55)',
-  },
-
   /* ── Section Headers (Home-style) ──────────────── */
   sectionRow: {
     flexDirection: 'row',
@@ -853,122 +552,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.text,
     letterSpacing: 2,
-  },
-  seeAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  seeAllText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.accent,
-  },
-
-  /* ── Rewards Card (Gold-tinted like Achievements) ─ */
-  rewardsCard: {
-    borderRadius: 18,
-  },
-  rewardsEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 166, 35, 0.12)',
-    padding: 16,
-  },
-  rewardsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  rewardsTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  rewardsTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  rewardsSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-
-  /* ── Progress Card ─────────────────────────────── */
-  progressCard: {
-    borderRadius: 18,
-  },
-  progressEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 16,
-  },
-  progressTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  progressTextWrap: {
-    flex: 1,
-  },
-  progressTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  minutesBadge: {
-    alignItems: 'center',
-  },
-  minutesValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 22,
-    color: COLORS.primary,
-    letterSpacing: -0.5,
-    lineHeight: 26,
-  },
-  minutesUnit: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-
-  /* ── Link Cards ────────────────────────────────── */
-  linkCard: {
-    borderRadius: 16,
-  },
-  linkEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  linkTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  linkTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  linkTitleDim: {
-    color: COLORS.textSecondary,
-  },
-  linkSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
   },
 
   /* ── Performance Grid ──────────────────────────── */

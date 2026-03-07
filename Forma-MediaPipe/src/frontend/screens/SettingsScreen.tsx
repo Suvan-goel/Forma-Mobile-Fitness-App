@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
   ChevronRight,
-  User,
   Bell,
   Lock,
   HelpCircle,
@@ -288,12 +287,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             style={styles.cardGradient}
           >
             <View style={styles.groupEdge}>
-              <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('ProfileSettings')} activeOpacity={0.7}>
-                <User size={14} color="#A78BFA" strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Profile</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
-              <View style={styles.rowDivider} />
               <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('NotificationSettings')} activeOpacity={0.7}>
                 <Bell size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Notifications</Text>

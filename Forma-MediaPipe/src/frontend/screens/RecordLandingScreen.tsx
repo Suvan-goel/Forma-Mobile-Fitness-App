@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Dumbbell,
   ArrowRight,
+  BookOpen,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
@@ -389,6 +390,31 @@ export const RecordLandingScreen: React.FC = () => {
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* ── Exercise Tutorials ── */}
+            <TouchableOpacity
+              onPress={() => rootNavigation.navigate('Tutorials')}
+              activeOpacity={0.7}
+              style={styles.tutorialsCard}
+            >
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.tutorialsGradient}
+              >
+                <View style={styles.tutorialsEdge}>
+                  <View style={styles.tutorialsRow}>
+                    <BookOpen size={16} color={COLORS.accent} strokeWidth={1.5} />
+                    <View style={styles.tutorialsTextWrap}>
+                      <Text style={styles.tutorialsTitle}>Exercise Tutorials</Text>
+                      <Text style={styles.tutorialsSubtitle}>Browse exercise guides</Text>
+                    </View>
+                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  </View>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
             {/* ── Bottom hint ── */}
             <View style={styles.hintRow}>
               <Dumbbell size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -603,6 +629,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     letterSpacing: 0.3,
+  },
+
+  /* ── Exercise Tutorials ─────────────────── */
+  tutorialsCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  tutorialsGradient: {
+    borderRadius: 16,
+  },
+  tutorialsEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+  },
+  tutorialsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tutorialsTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  tutorialsTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  tutorialsSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
   },
 
   /* ── Hint row ─────────────────────────────── */

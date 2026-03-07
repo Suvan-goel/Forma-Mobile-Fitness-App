@@ -25,6 +25,7 @@ import {
   X,
   Check,
   BookOpen,
+  Video,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
@@ -456,6 +457,31 @@ export const LogbookScreen: React.FC = () => {
 
   const ListHeader = useCallback(() => (
     <View>
+      {/* ── VIDEO LIBRARY LINK ─────────────────── */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('VideoLibrary')}
+        style={styles.videoLibraryCard}
+      >
+        <LinearGradient
+          colors={[...CARD_GRADIENT_COLORS]}
+          start={CARD_GRADIENT_START}
+          end={CARD_GRADIENT_END}
+          style={styles.videoLibraryGradient}
+        >
+          <View style={styles.videoLibraryEdge}>
+            <View style={styles.videoLibraryRow}>
+              <Video size={16} color={COLORS.accent} strokeWidth={1.5} />
+              <View style={styles.videoLibraryTextWrap}>
+                <Text style={styles.videoLibraryTitle}>Video Library</Text>
+                <Text style={styles.videoLibrarySubtitle}>Your recorded workouts</Text>
+              </View>
+              <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+
       {/* ── FILTER TABS ───────────────────────── */}
       <View style={styles.filterTabRow}>
         <TouchableOpacity
@@ -522,7 +548,7 @@ export const LogbookScreen: React.FC = () => {
         </View>
       )}
     </View>
-  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, workouts, filteredWorkouts.length]);
+  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, workouts, filteredWorkouts.length, navigation]);
 
   /* ── Loading ──── */
   if (isLoading) {
@@ -789,6 +815,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
   },
+  /* ── Video Library Link ─────────────────── */
+  videoLibraryCard: {
+    marginTop: 14,
+    marginBottom: 4,
+    borderRadius: 16,
+  },
+  videoLibraryGradient: {
+    borderRadius: 16,
+  },
+  videoLibraryEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+  },
+  videoLibraryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  videoLibraryTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  videoLibraryTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  videoLibrarySubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+
   /* ── Filter Tabs ─────────────────────────── */
   filterTabRow: {
     flexDirection: 'row',
