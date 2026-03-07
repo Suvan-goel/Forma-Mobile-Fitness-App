@@ -39,13 +39,13 @@ import type {
 /** FSM thresholds (degrees) -- knee angle */
 const THRESHOLDS = {
   /** Knee angle above which we transition REST -> EXTENDING */
-  EXTENDING_ENTER: 105,
+  EXTENDING_ENTER: 90,
   /** Knee angle above which we consider near-full extension (EXTENDING -> EXTENDED) */
-  EXTENDED_ENTER: 155,
+  EXTENDED_ENTER: 110,
   /** Knee angle below which we leave EXTENDED (hysteresis) (EXTENDED -> RETURNING) */
-  EXTENDED_EXIT: 150,
+  EXTENDED_EXIT: 95,
   /** Knee angle below which the return is complete (RETURNING -> REST) */
-  REST_REENTER: 105,
+  REST_REENTER: 85,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
 } as const;
@@ -57,11 +57,11 @@ const FORM_THRESHOLDS = {
   /** Min knee angle above which starting flexion is insufficient */
   FLEXION_FAIL: 100,
   /** Torso deviation from vertical above which there is excessive lean */
-  TORSO_LEAN_WARN: 18,
+  TORSO_LEAN_WARN: 75,
   /** Hip angle change that indicates lifting hips off the seat */
-  HIP_LIFT_WARN: 22,
+  HIP_LIFT_WARN: 7,
   /** Concentric (extend) too fast threshold (seconds) */
-  TEMPO_EXTEND_MIN: 0.3,
+  TEMPO_EXTEND_MIN: 0.1,
   /** Eccentric (return) too fast threshold (seconds) */
   TEMPO_RETURN_MIN: 0.4,
 } as const;
@@ -81,11 +81,11 @@ const FORM_THRESHOLDS = {
  * Max total penalty: 122 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 0.05 } as PenaltyConfig,
-  FLEXION_ROM:   { cap: 20, deadzone: 0, scale: 0.04 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 8, scale: 0.10 } as PenaltyConfig,
-  HIP_LIFT:      { cap: 25, deadzone: 12, scale: 0.08 } as PenaltyConfig,
-  TEMPO_EXTEND:  { cap: 12, deadzone: 0.4, scale: 60 } as PenaltyConfig,
+  EXTENSION_ROM: { cap: 45, deadzone: 0, scale: 0.05 } as PenaltyConfig,
+  FLEXION_ROM:   { cap: 20, deadzone: 20, scale: 0.04 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 25, deadzone: 70, scale: 0.04 } as PenaltyConfig,
+  HIP_LIFT:      { cap: 30, deadzone: 5, scale: 0.15 } as PenaltyConfig,
+  TEMPO_EXTEND:  { cap: 8, deadzone: 0.15, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
 } as const;
 
@@ -202,7 +202,7 @@ function initializeLegExtensionState(): LegExtensionState {
     repCount: 0,
     repWindow: null,
     lastRepResult: null,
-    kneeTracker: new SmoothedAngleTracker(),
+    kneeTracker: new SmoothedAngleTracker({ medianWindow: 3, emaAlpha: 0.5 }),
     hipTracker: new SmoothedAngleTracker(),
     torsoTracker: new SmoothedAngleTracker(),
     warmupGate: new WarmupGate({
