@@ -7,6 +7,11 @@
 #   ./scripts/pull-recordings.sh              # auto-detect platform
 #   ./scripts/pull-recordings.sh --android    # pull from Android device via adb
 #   ./scripts/pull-recordings.sh --ios-sim    # pull from iOS Simulator
+#   ./scripts/pull-recordings.sh --ios        # pull from physical iOS via Finder
+#
+# Physical iOS: plug in iPhone, open Finder, select device > Files > Forma.
+# iTunes File Sharing is enabled via UIFileSharingEnabled in app.json.
+# This script copies from the Finder-mounted path automatically.
 #
 
 set -euo pipefail
@@ -14,10 +19,37 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEST_DIR="$SCRIPT_DIR/recordings"
 BUNDLE_ID="com.forma.app"
+APP_NAME="Forma"
 
 mkdir -p "$DEST_DIR"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+copy_recordings_from_dir() {
+  local src_dir="$1"
+  local label="$2"
+
+  if [ ! -d "$src_dir" ]; then
+    echo "No directory found at $src_dir"
+    return 1
+  fi
+
+  local count=0
+  for file in "$src_dir"/recording_*.json; do
+    [ -e "$file" ] || continue
+    local filename
+    filename=$(basename "$file")
+    echo "  Copying $filename..."
+    cp "$file" "$DEST_DIR/$filename"
+    count=$((count + 1))
+  done
+
+  if [ "$count" -eq 0 ]; then
+    echo "No recording files found in $label"
+  else
+    echo "Pulled $count recording(s) to $DEST_DIR"
+  fi
+}
 
 pull_android() {
   if ! command -v adb &>/dev/null; then
@@ -28,7 +60,6 @@ pull_android() {
   echo "Pulling recordings from Android device..."
   local app_dir="/data/user/0/$BUNDLE_ID/files"
 
-  # List recording files on device
   local files
   files=$(adb shell "ls '$app_dir'/recording_*.json 2>/dev/null" 2>/dev/null || true)
 
@@ -39,7 +70,6 @@ pull_android() {
 
   local count=0
   while IFS= read -r remote_path; do
-    # Trim carriage return from adb output
     remote_path=$(echo "$remote_path" | tr -d '\r')
     [ -z "$remote_path" ] && continue
     local filename
@@ -60,7 +90,6 @@ pull_ios_sim() {
 
   echo "Pulling recordings from iOS Simulator..."
 
-  # Get the app container for the booted simulator
   local container
   container=$(xcrun simctl get_app_container booted "$BUNDLE_ID" data 2>/dev/null || true)
 
@@ -70,27 +99,36 @@ pull_ios_sim() {
     exit 1
   fi
 
-  local docs_dir="$container/Documents"
+  copy_recordings_from_dir "$container/Documents" "$container/Documents"
+}
 
-  if [ ! -d "$docs_dir" ]; then
-    echo "No Documents directory found at $docs_dir"
-    return
-  fi
+pull_ios_device() {
+  echo "Pulling recordings from physical iOS device (Finder file sharing)..."
+  echo ""
+  echo "  1. Plug in your iPhone"
+  echo "  2. Open Finder > select your device > Files > $APP_NAME"
+  echo "  3. Drag recording_*.json files into this folder:"
+  echo "     $DEST_DIR"
+  echo ""
 
-  local count=0
-  for file in "$docs_dir"/recording_*.json; do
+  # Check if any were already dragged in
+  local existing=0
+  for file in "$DEST_DIR"/recording_*.json; do
     [ -e "$file" ] || continue
-    local filename
-    filename=$(basename "$file")
-    echo "  Copying $filename..."
-    cp "$file" "$DEST_DIR/$filename"
-    count=$((count + 1))
+    existing=$((existing + 1))
   done
 
-  if [ "$count" -eq 0 ]; then
-    echo "No recording files found in $docs_dir"
+  if [ "$existing" -gt 0 ]; then
+    echo "Found $existing recording(s) already in $DEST_DIR — ready to replay."
   else
-    echo "Pulled $count recording(s) to $DEST_DIR"
+    echo "Waiting... drop files then press Enter."
+    read -r
+    local count=0
+    for file in "$DEST_DIR"/recording_*.json; do
+      [ -e "$file" ] || continue
+      count=$((count + 1))
+    done
+    echo "Found $count recording(s) — ready to replay."
   fi
 }
 
@@ -103,10 +141,12 @@ case "${1:-}" in
   --ios-sim)
     pull_ios_sim
     ;;
+  --ios)
+    pull_ios_device
+    ;;
   "")
-    # Auto-detect: try iOS simulator first (macOS-only), then Android
+    # Auto-detect: try iOS simulator first, then Android, fallback to physical iOS instructions
     if [[ "$(uname)" == "Darwin" ]] && command -v xcrun &>/dev/null; then
-      # Check if a simulator is booted
       if xcrun simctl get_app_container booted "$BUNDLE_ID" data &>/dev/null; then
         pull_ios_sim
         exit 0
@@ -116,12 +156,17 @@ case "${1:-}" in
       pull_android
       exit 0
     fi
+    # Default to physical iOS guide on macOS
+    if [[ "$(uname)" == "Darwin" ]]; then
+      pull_ios_device
+      exit 0
+    fi
     echo "No connected device or booted simulator found."
-    echo "Usage: $0 [--android | --ios-sim]"
+    echo "Usage: $0 [--android | --ios-sim | --ios]"
     exit 1
     ;;
   *)
-    echo "Usage: $0 [--android | --ios-sim]"
+    echo "Usage: $0 [--android | --ios-sim | --ios]"
     exit 1
     ;;
 esac
