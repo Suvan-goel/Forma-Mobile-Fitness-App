@@ -8,8 +8,10 @@ import {
   Platform,
   useWindowDimensions,
   Animated,
+  AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { startWorkoutActivity, updateWorkoutActivity, endWorkoutActivity } from 'expo-live-activity';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -101,16 +103,26 @@ const WorkoutTimerDisplay = React.memo(({
     setSeconds(startFrom);
     elapsedSecondsRef.current = startFrom;
 
-    const interval = setInterval(() => {
+    const recalc = () => {
       if (isPausedRef.current) return;
       if (startTimeRef.current !== null) {
         const val = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setSeconds(val);
         elapsedSecondsRef.current = val;
       }
-    }, 1000);
+    };
 
-    return () => clearInterval(interval);
+    const interval = setInterval(recalc, 1000);
+
+    // Force immediate recalculation when app returns from background
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') recalc();
+    });
+
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
   }, [contextElapsed, startTimeRef, isPausedRef, elapsedSecondsRef]);
 
   const digitStyle = useMemo(
@@ -215,6 +227,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   useEffect(() => {
     setWorkoutInProgress(true);
+    startWorkoutActivity(contextElapsed);
   }, [setWorkoutInProgress]);
 
   const handlePausePress = useCallback(() => {
@@ -223,6 +236,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
       if (!next) {
         startTimeRef.current = Date.now() - elapsedSecondsRef.current * 1000;
       }
+      updateWorkoutActivity(next, elapsedSecondsRef.current);
       return next;
     });
   }, [setWorkoutPaused]);
@@ -342,6 +356,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     );
     const category = currentExercises[0]?.name || 'General';
     const duration = formatStopwatch(elapsedSecondsRef.current);
+    endWorkoutActivity();
     navigation.navigate('SaveWorkout', {
       workoutData: { category, duration, totalSets, totalReps, avgFormScore },
     });
@@ -450,6 +465,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                 }
               }
             }
+            endWorkoutActivity();
             clearSets();
             setWorkoutElapsedSeconds(0);
             setWorkoutInProgress(false);

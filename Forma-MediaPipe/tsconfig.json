@@ -17,7 +17,8 @@
     "allowJs": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "expo-pose-detection": ["./modules/expo-pose-detection/index"]
+      "expo-pose-detection": ["./modules/expo-pose-detection/index"],
+      "expo-live-activity": ["./modules/expo-live-activity/index"]
     }
   },
   "include": [
