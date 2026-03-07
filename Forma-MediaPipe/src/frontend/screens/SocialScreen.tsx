@@ -7,7 +7,6 @@ import { View, Text, Animated, StyleSheet, TouchableOpacity, Image } from 'react
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ChevronLeft } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { SocialTabSelector, SocialTab } from '../components/ui/SocialTabSelector';
 import { LeaderboardView } from './social/LeaderboardView';
@@ -36,10 +35,6 @@ export const SocialScreen: React.FC = memo(() => {
     }).start();
   }, [fadeAnim]);
 
-  const handleBack = useCallback(() => {
-    navigation.navigate('MainTabs', { screen: 'Home' });
-  }, [navigation]);
-
   const handleTabChange = useCallback((tab: SocialTab) => {
     setActiveTab(tab);
   }, []);
@@ -57,12 +52,9 @@ export const SocialScreen: React.FC = memo(() => {
 
   return (
     <View style={styles.container}>
-      {/* ── HEADER (HomeScreen style) ────────────── */}
+      {/* ── HEADER (matches Analytics/Logbook style) ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={handleBack} activeOpacity={0.7} style={styles.backBtn}>
-            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-          </TouchableOpacity>
           <View style={styles.logoWrap}>
             <Image
               source={require('../assets/forma_purple_logo.png')}
@@ -128,14 +120,7 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  backBtn: {
-    width: 24,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
+    gap: 12,
   },
   logoWrap: {
     width: 50,

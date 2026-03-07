@@ -349,7 +349,7 @@ export const CameraScreen: React.FC = () => {
     if (!keypoints || keypoints.length === 0) return;
 
     // __DEV__-only: buffer keypoints for landmark recording
-    if (__DEV__ && isRecordingLandmarksRef.current) {
+    if (debugModeRef.current && isRecordingLandmarksRef.current) {
       landmarkBufferRef.current.push({
         timestamp: Date.now() - landmarkRecordingStartRef.current,
         keypoints,
@@ -465,8 +465,8 @@ export const CameraScreen: React.FC = () => {
       setIsRecording(false);
       setExerciseDebug(null);
 
-      // __DEV__-only: dump landmark recording to Metro console
-      if (__DEV__) {
+      // Save landmark recording when debug mode was on
+      if (isRecordingLandmarksRef.current || landmarkBufferRef.current.length > 0) {
         isRecordingLandmarksRef.current = false;
         if (landmarkBufferRef.current.length > 0) {
           const recording = {
@@ -481,15 +481,19 @@ export const CameraScreen: React.FC = () => {
             frames: landmarkBufferRef.current,
           };
           const json = JSON.stringify(recording);
-          console.log('=== LANDMARK_RECORDING_START ===');
-          const CHUNK = 4000;
-          for (let i = 0; i < json.length; i += CHUNK) {
-            console.log(json.slice(i, i + CHUNK));
-          }
-          console.log('=== LANDMARK_RECORDING_END ===');
-          console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
 
-          // Also write to device filesystem for easy pull via scripts/pull-recordings.sh
+          // Console dump only in dev (no Metro in Release)
+          if (__DEV__) {
+            console.log('=== LANDMARK_RECORDING_START ===');
+            const CHUNK = 4000;
+            for (let i = 0; i < json.length; i += CHUNK) {
+              console.log(json.slice(i, i + CHUNK));
+            }
+            console.log('=== LANDMARK_RECORDING_END ===');
+            console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
+          }
+
+          // Write to device filesystem (works in Release builds too)
           (async () => {
             try {
               const FS = require('expo-file-system');
@@ -498,9 +502,9 @@ export const CameraScreen: React.FC = () => {
               const filename = `recording_${safeName}_${ts}.json`;
               const uri = FS.documentDirectory + filename;
               await FS.writeAsStringAsync(uri, json);
-              console.log(`[LandmarkRecording] Saved to: ${uri}`);
+              if (__DEV__) console.log(`[LandmarkRecording] Saved to: ${uri}`);
             } catch (e) {
-              console.warn('[LandmarkRecording] Failed to write file:', e);
+              if (__DEV__) console.warn('[LandmarkRecording] Failed to write file:', e);
             }
           })();
         }
@@ -616,8 +620,8 @@ export const CameraScreen: React.FC = () => {
       accumulatedRepFeedbackRef.current = [];
       ttsResetCoach();
 
-      // __DEV__-only: start landmark recording
-      if (__DEV__) {
+      // Start landmark recording when debug mode is on (works in Release builds too)
+      if (debugModeRef.current) {
         landmarkRecordingStartRef.current = Date.now();
         landmarkBufferRef.current = [];
         isRecordingLandmarksRef.current = true;
@@ -912,13 +916,18 @@ export const CameraScreen: React.FC = () => {
             <TouchableOpacity
               onPress={handleAutoRecToggle}
               activeOpacity={0.8}
-              style={styles.autoRecToggle}
+              style={isRecordingScreen ? styles.autoRecToggleActive : styles.autoRecToggle}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel={isRecordingScreen ? 'Screen recording active' : autoScreenRecording ? 'Disable auto screen recording' : 'Enable auto screen recording'}
             >
               {isRecordingScreen
-                ? <Animated.View style={[styles.screenRecDot, { opacity: screenRecPulseAnim }]} />
+                ? (
+                  <Animated.View style={[styles.recPill, { opacity: screenRecPulseAnim }]}>
+                    <View style={styles.recPillDot} />
+                    <Text style={styles.recPillText}>REC</Text>
+                  </Animated.View>
+                )
                 : autoScreenRecording
                   ? <Video size={20} color={COLORS.text} strokeWidth={2} />
                   : <VideoOff size={20} color="rgba(255,255,255,0.4)" strokeWidth={2} />}
@@ -1444,11 +1453,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  screenRecDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+  autoRecToggleActive: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  recPillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#EF4444',
+  },
+  recPillText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: '#EF4444',
+    letterSpacing: 1,
   },
   autoRecToast: {
     position: 'absolute',

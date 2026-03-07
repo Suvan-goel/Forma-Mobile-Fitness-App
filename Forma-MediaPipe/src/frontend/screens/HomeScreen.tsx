@@ -1,15 +1,13 @@
 /**
- * HomeScreen — Central hub / landing page (Redesigned)
+ * HomeScreen — Streamlined central hub
  *
  * Sections:
- *   1. Welcome Header (greeting, avatar initial, settings)
- *   2. Hero Form Score (large arc-inspired card)
- *   3. Stats Row (streak + workouts — bento)
- *   4. Quick Start CTA (gradient accent button)
- *   5. Achievements Teaser (compact progress card)
- *   6. Social Snapshot (top-3 leaderboard, compact)
- *   7. Active Challenges (streamlined)
- *   8. News Feed (minimal)
+ *   1. Welcome Header (greeting, logo, settings)
+ *   2. Active Workout Banner (conditional — only when workout in progress)
+ *   3. Start Workout CTA + Template Chips
+ *   4. Weekly Snapshot (form score, streak, weekly goal progress)
+ *   5. Last Workout Card (most recent session)
+ *   6. Achievements Row (condensed points + next badge)
  */
 
 import React, { useRef, useEffect, useCallback } from 'react';
@@ -27,8 +25,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Target,
-  Users,
-  Newspaper,
   ChevronRight,
   TrendingUp,
   TrendingDown,
@@ -37,43 +33,42 @@ import {
   Dumbbell,
   Menu,
   Flame,
-  Quote,
-  Zap,
   Play,
+  Clock,
+  Calendar,
+  Layers,
 } from 'lucide-react-native';
 import {
   COLORS,
   SPACING,
   FONTS,
-  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   getScoreColor,
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
+import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useHomeData } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import type { RootStackParamList } from '../app/RootNavigator';
 
+// ── Template chips (first 3 from WorkoutTemplatesScreen) ──
+
+const QUICK_TEMPLATES = [
+  { id: 'push-press', label: 'Push & Press' },
+  { id: 'pull-curl', label: 'Pull & Curl' },
+  { id: 'leg-day', label: 'Leg Day' },
+];
+
 // ── Helpers ────────────────────────────────────────
 
-const RANK_COLORS: Record<number, string> = {
-  1: '#FFD700',
-  2: '#C0C0C0',
-  3: '#CD7F32',
-};
-
-const NEWS_CATEGORY_COLORS: Record<string, string> = {
-  tip: COLORS.accent,
-  update: COLORS.yellow,
-  new: '#34D399',
-};
-
-const NEWS_CATEGORY_LABELS: Record<string, string> = {
-  tip: 'TIP',
-  update: 'UPDATE',
-  new: 'NEW',
+const formatElapsed = (totalSeconds: number): string => {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
 // ── Main Screen ────────────────────────────────────
@@ -84,6 +79,7 @@ export const HomeScreen: React.FC = () => {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { homeData, isLoading, error, refetch } = useHomeData();
+  const { workoutInProgress, workoutElapsedSeconds, workoutPaused, exercises, sets } = useCurrentWorkout();
 
   useEffect(() => {
     if (homeData) {
@@ -106,8 +102,13 @@ export const HomeScreen: React.FC = () => {
     navigation.navigate('MainTabs', { screen: tab });
   }, [navigation]);
 
-  const handleGoToSocial = useCallback(() => {
-    navigateToTab('Social');
+  const handleStartWorkout = useCallback(() => {
+    navigateToTab('Record');
+  }, [navigateToTab]);
+
+  const handleTemplatePress = useCallback(() => {
+    // Navigate to Record tab — templates are accessible from there
+    navigateToTab('Record');
   }, [navigateToTab]);
 
   // ── Loading ────────────────────────────────────
@@ -117,14 +118,10 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.container}>
         <View style={styles.loadingWrap}>
           <LoadingSkeleton variant="card" height={60} style={{ marginBottom: SPACING.lg }} />
-          <LoadingSkeleton variant="card" height={160} style={{ marginBottom: SPACING.md }} />
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: SPACING.md }}>
-            <LoadingSkeleton variant="card" height={110} style={{ flex: 1 }} />
-            <LoadingSkeleton variant="card" height={110} style={{ flex: 1 }} />
-          </View>
-          <LoadingSkeleton variant="card" height={64} style={{ marginBottom: SPACING.lg }} />
-          <LoadingSkeleton variant="card" height={120} style={{ marginBottom: SPACING.md }} />
-          <LoadingSkeleton variant="card" height={160} />
+          <LoadingSkeleton variant="card" height={70} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={140} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={90} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={60} />
         </View>
       </View>
     );
@@ -147,6 +144,14 @@ export const HomeScreen: React.FC = () => {
   const trendColor = homeData.formTrendDirection === 'up' ? '#34D399'
     : homeData.formTrendDirection === 'down' ? COLORS.orange : COLORS.textSecondary;
   const scoreColor = getScoreColor(homeData.formScore);
+  const weeklyProgress = homeData.weeklyGoal.target > 0
+    ? Math.min((homeData.weeklyGoal.current / homeData.weeklyGoal.target) * 100, 100)
+    : 0;
+  const weeklyComplete = homeData.weeklyGoal.current >= homeData.weeklyGoal.target;
+
+  // Active workout stats
+  const totalSetsInProgress = sets.length;
+  const totalRepsInProgress = sets.reduce((acc, s) => acc + s.reps, 0);
 
   return (
     <View style={styles.container}>
@@ -185,139 +190,260 @@ export const HomeScreen: React.FC = () => {
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
           {/* ═══════════════════════════════════════════
-              HERO: FORM SCORE CARD
+              ACTIVE WORKOUT BANNER (conditional)
               ═══════════════════════════════════════════ */}
+          {workoutInProgress && (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleStartWorkout}
+              style={styles.activeBannerOuter}
+            >
+              <LinearGradient
+                colors={['rgba(139, 92, 246, 0.20)', 'rgba(139, 92, 246, 0.08)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.activeBannerGradient}
+              >
+                <View style={styles.activeBannerEdge}>
+                  <View style={styles.activeBannerTopRow}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveLabel}>
+                      {workoutPaused ? 'PAUSED' : 'LIVE'}
+                    </Text>
+                    <Text style={styles.activeBannerTitle}>Workout in Progress</Text>
+                  </View>
+                  <View style={styles.activeBannerStatsRow}>
+                    <Text style={styles.activeBannerStat}>
+                      {formatElapsed(workoutElapsedSeconds)}
+                    </Text>
+                    <View style={styles.activeBannerDivider} />
+                    <Text style={styles.activeBannerStat}>
+                      {totalSetsInProgress} {totalSetsInProgress === 1 ? 'set' : 'sets'}
+                    </Text>
+                    <View style={styles.activeBannerDivider} />
+                    <Text style={styles.activeBannerStat}>
+                      {totalRepsInProgress} {totalRepsInProgress === 1 ? 'rep' : 'reps'}
+                    </Text>
+                    <View style={{ flex: 1 }} />
+                    <Text style={styles.resumeText}>Resume</Text>
+                    <ChevronRight size={14} color={COLORS.accent} strokeWidth={2} />
+                  </View>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {/* ═══════════════════════════════════════════
+              START WORKOUT CTA + TEMPLATE CHIPS
+              ═══════════════════════════════════════════ */}
+          {!workoutInProgress && (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleStartWorkout}
+            >
+              <LinearGradient
+                colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaGradient}
+              >
+                <View style={styles.ctaInner}>
+                  <View style={styles.ctaIconWrap}>
+                    <Play size={16} color="#FFFFFF" strokeWidth={2} fill="#FFFFFF" />
+                  </View>
+                  <View style={styles.ctaTextWrap}>
+                    <Text style={styles.ctaTitle}>Start Workout</Text>
+                    <Text style={styles.ctaSub}>AI-powered form tracking</Text>
+                  </View>
+                  <ChevronRight size={18} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {/* Template Chips */}
+          {!workoutInProgress && (
+            <View style={styles.templateRow}>
+              {QUICK_TEMPLATES.map((t) => (
+                <TouchableOpacity
+                  key={t.id}
+                  style={styles.templateChip}
+                  activeOpacity={0.7}
+                  onPress={handleTemplatePress}
+                >
+                  <Layers size={10} color={COLORS.accent} strokeWidth={2} />
+                  <Text style={styles.templateChipText}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={styles.templateChip}
+                activeOpacity={0.7}
+                onPress={handleTemplatePress}
+              >
+                <Text style={styles.templateChipText}>+ More</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ═══════════════════════════════════════════
+              WEEKLY SNAPSHOT
+              ═══════════════════════════════════════════ */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Calendar size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>THIS WEEK</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.seeAllBtn}
+              activeOpacity={0.7}
+              onPress={() => navigateToTab('Analytics')}
+            >
+              <Text style={styles.seeAllText}>Analytics</Text>
+              <ChevronRight size={11} color={COLORS.accent} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => navigateToTab('Analytics')}
           >
             <LinearGradient
-              colors={SCREEN_GRADIENT_COLORS}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.weeklyCard}
             >
-              <View style={styles.heroEdge}>
-                {/* Top label row */}
-                <View style={styles.heroTopRow}>
-                  <View style={styles.heroLabelRow}>
-                    <Target size={13} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.heroLabel}>FORM SCORE</Text>
+              <View style={styles.weeklyEdge}>
+                {/* Stats row: Form Score + Streak */}
+                <View style={styles.weeklyStatsRow}>
+                  <View style={styles.weeklyStatCell}>
+                    <View style={styles.weeklyStatLabelRow}>
+                      <Target size={11} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.weeklyStatLabel}>FORM</Text>
+                    </View>
+                    <View style={styles.weeklyStatValueRow}>
+                      <Text style={[styles.weeklyStatValue, { color: scoreColor }]}>
+                        {homeData.formScore}
+                      </Text>
+                      <View style={[styles.trendChip, { backgroundColor: trendColor + '15' }]}>
+                        <TrendIcon size={10} color={trendColor} strokeWidth={2} />
+                        <Text style={[styles.trendChipText, { color: trendColor }]}>
+                          {homeData.formTrendPercent > 0 ? '+' : ''}{homeData.formTrendPercent}%
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={[styles.trendChip, { backgroundColor: trendColor + '15' }]}>
-                    <TrendIcon size={11} color={trendColor} strokeWidth={2} />
-                    <Text style={[styles.trendChipText, { color: trendColor }]}>
-                      {homeData.formTrendPercent > 0 ? '+' : ''}{homeData.formTrendPercent}%
+
+                  <View style={styles.weeklyStatDivider} />
+
+                  <View style={styles.weeklyStatCell}>
+                    <View style={styles.weeklyStatLabelRow}>
+                      <Flame size={11} color={COLORS.yellow} strokeWidth={1.5} />
+                      <Text style={styles.weeklyStatLabel}>STREAK</Text>
+                    </View>
+                    <Text style={styles.weeklyStatValue}>
+                      {homeData.streakDays > 0 ? homeData.streakDays : '—'}
+                      <Text style={styles.weeklyStatUnit}>
+                        {homeData.streakDays > 0 ? ' days' : ''}
+                      </Text>
                     </Text>
                   </View>
                 </View>
 
-                {/* Big score */}
-                <View style={styles.heroScoreRow}>
-                  <Text style={[styles.heroScore, { color: scoreColor }]}>
-                    {homeData.formScore}
+                {/* Weekly goal progress */}
+                <View style={styles.weeklyGoalRow}>
+                  <Dumbbell size={11} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <Text style={styles.weeklyGoalLabel}>Workouts</Text>
+                  <View style={styles.progressTrack}>
+                    {weeklyProgress > 0 && (
+                      <LinearGradient
+                        colors={weeklyComplete ? ['#34D399BB', '#34D399'] : [COLORS.accent + 'BB', COLORS.accent]}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
+                        style={[styles.progressFill, { width: `${weeklyProgress}%` }]}
+                      />
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.weeklyGoalCount,
+                    weeklyComplete && styles.weeklyGoalComplete,
+                  ]}>
+                    {homeData.weeklyGoal.current}/{homeData.weeklyGoal.target}
                   </Text>
-                  <Text style={styles.heroScoreUnit}>/100</Text>
-                </View>
-
-                <Text style={styles.heroSubtext}>7-day average</Text>
-
-                {/* Bottom CTA hint */}
-                <View style={styles.heroCta}>
-                  <Text style={styles.heroCtaText}>View Analytics</Text>
-                  <ChevronRight size={13} color={COLORS.accent} strokeWidth={2} />
                 </View>
               </View>
             </LinearGradient>
           </TouchableOpacity>
 
           {/* ═══════════════════════════════════════════
-              STATS ROW: STREAK + WORKOUTS
+              LAST WORKOUT
               ═══════════════════════════════════════════ */}
-          <View style={styles.statsRow}>
-            <TouchableOpacity
-              style={styles.statCell}
-              activeOpacity={0.8}
-              onPress={() => navigateToTab('Analytics')}
-            >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.statGradient}
-              >
-                <View style={styles.statEdge}>
-                  <View style={styles.statIconRow}>
-                    <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                  </View>
-                  <Text style={styles.statValue}>
-                    {homeData.streakDays > 0 ? homeData.streakDays : '—'}
-                  </Text>
-                  <Text style={styles.statLabel}>
-                    {homeData.streakDays === 1 ? 'day streak' : homeData.streakDays > 0 ? 'day streak' : 'start today'}
-                  </Text>
+          {homeData.lastWorkout ? (
+            <>
+              <View style={styles.sectionRow}>
+                <View style={styles.sectionLabelRow}>
+                  <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>LAST WORKOUT</Text>
                 </View>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.statCell}
-              activeOpacity={0.8}
-              onPress={() => navigateToTab('Logbook')}
-            >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.statGradient}
-              >
-                <View style={styles.statEdge}>
-                  <View style={styles.statIconRow}>
-                    <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
-                  </View>
-                  <Text style={styles.statValue}>{homeData.workoutCount}</Text>
-                  <Text style={styles.statLabel}>workouts</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          {/* ═══════════════════════════════════════════
-              QUICK START — Accent gradient CTA
-              ═══════════════════════════════════════════ */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => navigateToTab('Record')}
-          >
-            <LinearGradient
-              colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGradient}
-            >
-              <View style={styles.ctaInner}>
-                <View style={styles.ctaIconWrap}>
-                  <Play size={16} color="#FFFFFF" strokeWidth={2} fill="#FFFFFF" />
-                </View>
-                <View style={styles.ctaTextWrap}>
-                  <Text style={styles.ctaTitle}>Start Workout</Text>
-                  <Text style={styles.ctaSub}>AI-powered form tracking</Text>
-                </View>
-                <ChevronRight size={18} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
+                <TouchableOpacity
+                  style={styles.seeAllBtn}
+                  activeOpacity={0.7}
+                  onPress={() => navigateToTab('Logbook')}
+                >
+                  <Text style={styles.seeAllText}>Logbook</Text>
+                  <ChevronRight size={11} color={COLORS.accent} strokeWidth={2} />
+                </TouchableOpacity>
               </View>
-            </LinearGradient>
-          </TouchableOpacity>
 
-          {/* ── Motivational Quote ─────────────────── */}
-          {homeData.motivationalQuote ? (
-            <View style={styles.quoteWrap}>
-              <Quote size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
-              <Text style={styles.quoteText}>{homeData.motivationalQuote}</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('WorkoutDetails', { workoutId: homeData.lastWorkout!.id })}
+              >
+                <LinearGradient
+                  colors={[...CARD_GRADIENT_COLORS]}
+                  start={CARD_GRADIENT_START}
+                  end={CARD_GRADIENT_END}
+                  style={styles.lastWorkoutCard}
+                >
+                  <View style={styles.lastWorkoutEdge}>
+                    <View style={styles.lastWorkoutTopRow}>
+                      <Text style={styles.lastWorkoutName} numberOfLines={1}>
+                        {homeData.lastWorkout.name}
+                      </Text>
+                      <Text style={styles.lastWorkoutTimeAgo}>{homeData.lastWorkout.timeAgo}</Text>
+                    </View>
+                    <View style={styles.lastWorkoutStatsRow}>
+                      <View style={styles.lastWorkoutStatItem}>
+                        <Clock size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
+                        <Text style={styles.lastWorkoutStatText}>{homeData.lastWorkout.duration}</Text>
+                      </View>
+                      <View style={styles.lastWorkoutStatItem}>
+                        <Layers size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
+                        <Text style={styles.lastWorkoutStatText}>{homeData.lastWorkout.totalSets} sets</Text>
+                      </View>
+                      <View style={styles.lastWorkoutStatItem}>
+                        <Target size={11} color={getScoreColor(homeData.lastWorkout.formScore)} strokeWidth={1.5} />
+                        <Text style={[styles.lastWorkoutStatText, { color: getScoreColor(homeData.lastWorkout.formScore) }]}>
+                          {homeData.lastWorkout.formScore}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }} />
+                      <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    </View>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.emptyLastWorkout}>
+              <Text style={styles.emptyLastWorkoutText}>
+                Complete your first workout to see it here
+              </Text>
             </View>
-          ) : null}
+          )}
 
           {/* ═══════════════════════════════════════════
-              ACHIEVEMENTS — Compact rewards card
+              ACHIEVEMENTS — Condensed row
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
@@ -337,26 +463,25 @@ export const HomeScreen: React.FC = () => {
               style={styles.achieveCard}
             >
               <View style={styles.achieveEdge}>
-                <View style={styles.achieveTopRow}>
-                  <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
-                  <View style={styles.achieveInfo}>
-                    <Text style={styles.achievePts}>
-                      {homeData.totalPoints.toLocaleString()}
-                      <Text style={styles.achievePtsSuffix}> pts</Text>
-                    </Text>
-                    {homeData.nextBadge ? (
+                <View style={styles.achieveRow}>
+                  <Trophy size={16} color={COLORS.yellow} strokeWidth={1.5} />
+                  <Text style={styles.achievePts}>
+                    {homeData.totalPoints.toLocaleString()}
+                    <Text style={styles.achievePtsSuffix}> pts</Text>
+                  </Text>
+                  {homeData.nextBadge ? (
+                    <>
+                      <View style={styles.achieveDot} />
                       <Text style={styles.achieveNext} numberOfLines={1}>
                         Next: {homeData.nextBadge.name}
                       </Text>
-                    ) : (
-                      <Text style={styles.achieveNext}>All badges unlocked</Text>
-                    )}
-                  </View>
-                  <ChevronRight size={16} color={COLORS.yellow} strokeWidth={1.5} />
+                    </>
+                  ) : null}
+                  <View style={{ flex: 1 }} />
+                  <ChevronRight size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 </View>
-
                 {homeData.nextBadge && (
-                  <View style={styles.achieveProgressWrap}>
+                  <View style={styles.achieveProgressRow}>
                     <View style={styles.progressTrack}>
                       <LinearGradient
                         colors={[homeData.nextBadge.color + 'BB', homeData.nextBadge.color]}
@@ -373,177 +498,6 @@ export const HomeScreen: React.FC = () => {
               </View>
             </LinearGradient>
           </TouchableOpacity>
-
-          {/* ═══════════════════════════════════════════
-              SOCIAL — Compact top-3 leaderboard
-              ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Users size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>SOCIAL</Text>
-            </View>
-            <TouchableOpacity style={styles.seeAllBtn} activeOpacity={0.7} onPress={handleGoToSocial}>
-              <Text style={styles.seeAllText}>See All</Text>
-              <ChevronRight size={11} color={COLORS.accent} strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity activeOpacity={0.85} onPress={handleGoToSocial}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.socialCard}
-            >
-              <View style={styles.socialEdge}>
-                {/* Top 3 leaderboard */}
-                {homeData.socialPreview.leaderboard.slice(0, 3).map((entry, idx) => (
-                  <View
-                    key={entry.rank}
-                    style={[
-                      styles.lbRow,
-                      entry.isCurrentUser && styles.lbRowHighlight,
-                      idx < 2 && styles.lbRowBorder,
-                    ]}
-                  >
-                    <Text style={[styles.lbRank, { color: RANK_COLORS[entry.rank] || COLORS.textSecondary }]}>
-                      {entry.rank}
-                    </Text>
-                    <View style={[styles.lbAvatar, entry.isCurrentUser && styles.lbAvatarAccent]}>
-                      <Text style={styles.lbAvatarText}>{entry.displayName[0]}</Text>
-                    </View>
-                    <Text style={[styles.lbName, entry.isCurrentUser && styles.lbNameAccent]} numberOfLines={1}>
-                      {entry.displayName}{entry.isCurrentUser ? ' (You)' : ''}
-                    </Text>
-                    <Text style={styles.lbPts}>{entry.points.toLocaleString()}</Text>
-                  </View>
-                ))}
-
-                {/* Recent activity preview */}
-                {homeData.socialPreview.friendActivity.length > 0 && (
-                  <>
-                    <View style={styles.divider} />
-                    <View style={styles.activityPreview}>
-                      <Zap size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
-                      <Text style={styles.activityPreviewText} numberOfLines={1}>
-                        <Text style={styles.activityPreviewName}>
-                          {homeData.socialPreview.friendActivity[0].displayName}
-                        </Text>
-                        {' '}{homeData.socialPreview.friendActivity[0].action}
-                      </Text>
-                      <Text style={styles.activityPreviewTime}>
-                        {homeData.socialPreview.friendActivity[0].timeAgo}
-                      </Text>
-                    </View>
-                  </>
-                )}
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* ═══════════════════════════════════════════
-              CHALLENGES — Streamlined
-              ═══════════════════════════════════════════ */}
-          {homeData.challenges.length > 0 && (
-            <>
-              <View style={styles.sectionRow}>
-                <View style={styles.sectionLabelRow}>
-                  <Flame size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.sectionLabel}>CHALLENGES</Text>
-                </View>
-              </View>
-
-              {homeData.challenges.map((challenge) => {
-                const progress = challenge.targetValue > 0
-                  ? Math.min((challenge.currentValue / challenge.targetValue) * 100, 100)
-                  : 0;
-                const isComplete = challenge.currentValue >= challenge.targetValue;
-
-                return (
-                  <TouchableOpacity
-                    key={challenge.id}
-                    activeOpacity={0.8}
-                    onPress={() => navigateToTab(challenge.navigateTo)}
-                    style={styles.challengeOuter}
-                  >
-                    <LinearGradient
-                      colors={[...CARD_GRADIENT_COLORS]}
-                      start={CARD_GRADIENT_START}
-                      end={CARD_GRADIENT_END}
-                      style={styles.challengeGradient}
-                    >
-                      <View style={styles.challengeEdge}>
-                        <View style={styles.challengeTopRow}>
-                          <View style={styles.challengeTextWrap}>
-                            <Text style={styles.challengeTitle}>{challenge.title}</Text>
-                            <Text style={styles.challengeDesc} numberOfLines={1}>{challenge.description}</Text>
-                          </View>
-                          {isComplete ? (
-                            <View style={styles.donePill}>
-                              <Text style={styles.doneText}>DONE</Text>
-                            </View>
-                          ) : (
-                            <Text style={styles.challengeCounter}>
-                              {challenge.currentValue}/{challenge.targetValue}
-                            </Text>
-                          )}
-                        </View>
-                        <View style={styles.progressTrack}>
-                          {progress > 0 && (
-                            <LinearGradient
-                              colors={isComplete ? ['#34D399BB', '#34D399'] : [COLORS.accent + 'BB', COLORS.accent]}
-                              start={{ x: 0, y: 0.5 }}
-                              end={{ x: 1, y: 0.5 }}
-                              style={[styles.progressFill, { width: `${progress}%` }]}
-                            />
-                          )}
-                        </View>
-                      </View>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                );
-              })}
-            </>
-          )}
-
-          {/* ═══════════════════════════════════════════
-              NEWS — Minimal feed
-              ═══════════════════════════════════════════ */}
-          {homeData.news.length > 0 && (
-            <>
-              <View style={styles.sectionRow}>
-                <View style={styles.sectionLabelRow}>
-                  <Newspaper size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.sectionLabel}>NEWS</Text>
-                </View>
-              </View>
-
-              {homeData.news.map((item) => {
-                const catColor = NEWS_CATEGORY_COLORS[item.category] || COLORS.accent;
-                return (
-                  <View key={item.id} style={styles.newsOuter}>
-                    <LinearGradient
-                      colors={[...CARD_GRADIENT_COLORS]}
-                      start={CARD_GRADIENT_START}
-                      end={CARD_GRADIENT_END}
-                      style={styles.newsGradient}
-                    >
-                      <View style={styles.newsEdge}>
-                        <View style={styles.newsTopRow}>
-                          <Text style={[styles.newsPillText, { color: catColor }]}>
-                            {NEWS_CATEGORY_LABELS[item.category]}
-                          </Text>
-                          <Text style={styles.newsDate}>{item.date}</Text>
-                        </View>
-                        <Text style={styles.newsTitle}>{item.title}</Text>
-                        <Text style={styles.newsBody} numberOfLines={2}>{item.body}</Text>
-                      </View>
-                    </LinearGradient>
-                  </View>
-                );
-              })}
-            </>
-          )}
 
         </Animated.View>
       </ScrollView>
@@ -628,125 +582,68 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* ── Hero Form Score ─────────────────────────── */
-  heroCard: {
-    borderRadius: 22,
+  /* ── Active Workout Banner ─────────────────── */
+  activeBannerOuter: {
+    marginTop: 18,
     marginBottom: 12,
-    marginTop: 18,
   },
-  heroEdge: {
-    borderRadius: 22,
+  activeBannerGradient: {
+    borderRadius: 16,
+  },
+  activeBannerEdge: {
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 20,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    padding: 14,
   },
-  heroTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroLabelRow: {
+  activeBannerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    marginBottom: 10,
   },
-  heroLabel: {
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#34D399',
+  },
+  liveLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
+    fontSize: 10,
+    color: '#34D399',
+    letterSpacing: 1.5,
   },
-  trendChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  trendChipText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    letterSpacing: -0.3,
-  },
-  heroScoreRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  heroScore: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 56,
-    letterSpacing: -2,
-    lineHeight: 60,
-  },
-  heroScoreUnit: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 16,
-    color: COLORS.textTertiary,
-  },
-  heroSubtext: {
+  activeBannerTitle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    marginTop: 4,
+    fontSize: 13,
+    color: COLORS.text,
   },
-  heroCta: {
+  activeBannerStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 18,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.10)',
+    gap: 8,
   },
-  heroCtaText: {
+  activeBannerStat: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  activeBannerDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+  },
+  resumeText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.accent,
-    letterSpacing: 0.2,
   },
 
-  /* ── Stats Row ───────────────────────────────── */
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  statCell: {
-    flex: 1,
-  },
-  statGradient: {
-    borderRadius: 18,
-  },
-  statEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 16,
-  },
-  statIconRow: {
-    marginBottom: 12,
-  },
-  statValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 30,
-    color: COLORS.text,
-    letterSpacing: -1,
-    lineHeight: 34,
-  },
-  statLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    marginTop: 2,
-  },
-
-  /* ── Quick Start CTA ─────────────────────────── */
+  /* ── Start Workout CTA ─────────────────────── */
   ctaGradient: {
     borderRadius: 16,
-    marginBottom: 12,
+    marginTop: 18,
   },
   ctaInner: {
     flexDirection: 'row',
@@ -779,24 +676,31 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.55)',
   },
 
-  /* ── Quote ───────────────────────────────────── */
-  quoteWrap: {
+  /* ── Template Chips ────────────────────────── */
+  templateRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 8,
-    paddingHorizontal: 2,
-    marginBottom: 6,
+    marginTop: 10,
+    flexWrap: 'wrap',
   },
-  quoteText: {
+  templateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.20)',
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+  },
+  templateChipText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    fontStyle: 'italic',
-    flex: 1,
-    lineHeight: 18,
+    fontSize: 11,
+    color: COLORS.textSecondary,
   },
 
-  /* ── Section Headers ─────────────────────────── */
+  /* ── Section Headers ───────────────────────── */
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -826,55 +730,201 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
 
-  /* ── Achievements Card ───────────────────────── */
-  achieveCard: {
+  /* ── Weekly Snapshot ───────────────────────── */
+  weeklyCard: {
     borderRadius: 18,
   },
-  achieveEdge: {
+  weeklyEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(245, 166, 35, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     padding: 16,
   },
-  achieveTopRow: {
+  weeklyStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  weeklyStatCell: {
+    flex: 1,
+  },
+  weeklyStatLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  weeklyStatLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
+  },
+  weeklyStatValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  weeklyStatValue: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 28,
+    color: COLORS.text,
+    letterSpacing: -1,
+    lineHeight: 32,
+  },
+  weeklyStatUnit: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+  },
+  weeklyStatDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginHorizontal: 16,
+  },
+  trendChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  trendChipText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    letterSpacing: -0.3,
+  },
+  weeklyGoalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  weeklyGoalLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  weeklyGoalCount: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  weeklyGoalComplete: {
+    color: '#34D399',
+  },
+
+  /* ── Last Workout ──────────────────────────── */
+  lastWorkoutCard: {
+    borderRadius: 16,
+  },
+  lastWorkoutEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+  },
+  lastWorkoutTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  lastWorkoutName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+    flex: 1,
+    marginRight: 12,
+  },
+  lastWorkoutTimeAgo: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  lastWorkoutStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  achieveInfo: {
-    flex: 1,
-    gap: 2,
+  lastWorkoutStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  lastWorkoutStatText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  emptyLastWorkout: {
+    marginTop: 12,
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  emptyLastWorkoutText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+  },
+
+  /* ── Achievements Card ─────────────────────── */
+  achieveCard: {
+    borderRadius: 16,
+  },
+  achieveEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 166, 35, 0.12)',
+    padding: 14,
+  },
+  achieveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   achievePts: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 16,
     color: COLORS.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   achievePtsSuffix: {
     fontFamily: FONTS.mono.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textTertiary,
     letterSpacing: 0,
   },
+  achieveDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: COLORS.textTertiary,
+  },
   achieveNext: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textSecondary,
+    flexShrink: 1,
   },
-  achieveProgressWrap: {
+  achieveProgressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 14,
+    marginTop: 10,
   },
   achievePct: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 11,
     letterSpacing: -0.3,
   },
 
-  /* ── Shared Progress Bar ─────────────────────── */
+  /* ── Shared Progress Bar ───────────────────── */
   progressTrack: {
     flex: 1,
     height: 4,
@@ -885,199 +935,5 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: 2,
-  },
-
-  /* ── Divider ─────────────────────────────────── */
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginVertical: 10,
-  },
-
-  /* ── Social Card ─────────────────────────────── */
-  socialCard: {
-    borderRadius: 18,
-  },
-  socialEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  lbRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-  },
-  lbRowHighlight: {
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
-    borderRadius: 10,
-    marginHorizontal: -6,
-    paddingHorizontal: 6,
-  },
-  lbRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  lbRank: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
-  },
-  lbAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#27272A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lbAvatarAccent: {
-    borderWidth: 1.5,
-    borderColor: COLORS.accent,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-  },
-  lbAvatarText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    color: COLORS.text,
-  },
-  lbName: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.text,
-    flex: 1,
-  },
-  lbNameAccent: {
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.accent,
-  },
-  lbPts: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-
-  /* Activity preview row */
-  activityPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  activityPreviewText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    flex: 1,
-  },
-  activityPreviewName: {
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.textSecondary,
-  },
-  activityPreviewTime: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-  },
-
-  /* ── Challenges ──────────────────────────────── */
-  challengeOuter: {
-    marginBottom: 8,
-  },
-  challengeGradient: {
-    borderRadius: 16,
-  },
-  challengeEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  challengeTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  challengeTextWrap: {
-    flex: 1,
-    marginRight: 12,
-  },
-  challengeTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  challengeDesc: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    marginTop: 2,
-  },
-  challengeCounter: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  donePill: {
-    backgroundColor: '#34D3991A',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  doneText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 9,
-    color: '#34D399',
-    letterSpacing: 1,
-  },
-
-  /* ── News ────────────────────────────────────── */
-  newsOuter: {
-    marginBottom: 8,
-  },
-  newsGradient: {
-    borderRadius: 16,
-  },
-  newsEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  newsTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  newsPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  newsPillText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 9,
-    letterSpacing: 1,
-  },
-  newsDate: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-  },
-  newsTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-    marginBottom: 4,
-  },
-  newsBody: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    lineHeight: 17,
   },
 });

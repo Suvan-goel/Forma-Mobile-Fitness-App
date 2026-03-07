@@ -7,7 +7,7 @@ import { UserStats, Reward } from '../../api/types';
 export const mockUserStats: UserStats = {
   formScore: 147,        // ~8 workouts of solid form (realistic earned total)
   consistencyScore: 50,  // ~2-3 weeks of hitting weekly target
-  earnedBadgeIds: ['1'], // 197 total pts exceeds First Step threshold (75 pts)
+  earnedBadgeIds: ['1'], // 197 total pts exceeds First Step threshold (1 pt)
 };
 
 export const mockRewards: Reward[] = [
@@ -15,7 +15,7 @@ export const mockRewards: Reward[] = [
     id: '1',
     title: 'First Step',
     description: 'Complete your first scored Forma workout',
-    pointsRequired: 75,
+    pointsRequired: 1,
     iconName: 'Zap',
     color: '#CD7F32',
     category: 'Bronze',
