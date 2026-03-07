@@ -130,6 +130,8 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                     value={weight}
                     onChangeText={setWeight}
                     keyboardType="decimal-pad"
+                    returnKeyType="done"
+                    onSubmitEditing={handleSubmit}
                     placeholder="0"
                     placeholderTextColor="rgba(139, 92, 246, 0.25)"
                     autoFocus

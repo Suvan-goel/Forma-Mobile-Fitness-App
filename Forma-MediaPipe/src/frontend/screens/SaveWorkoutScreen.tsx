@@ -8,6 +8,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
@@ -156,9 +158,13 @@ export const SaveWorkoutScreen: React.FC = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { marginBottom: -insets.bottom }]}
+      style={styles.container}
       edges={['top', 'left', 'right']}
     >
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       {/* ── HEADER ──────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -362,6 +368,7 @@ export const SaveWorkoutScreen: React.FC = () => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -372,6 +379,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  keyboardAvoid: {
+    flex: 1,
   },
 
   /* ── Header ──────────────────────────────────── */
