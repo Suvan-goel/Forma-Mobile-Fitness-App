@@ -30,6 +30,7 @@ import {
   Dumbbell,
   Trophy,
   User,
+  Video,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -346,6 +347,33 @@ export const UserProfileScreen: React.FC = () => {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* ═══════════════════════════════════════════
+              VIDEO LIBRARY — Link card
+              ═══════════════════════════════════════════ */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('VideoLibrary')}
+            style={styles.videoCardWrap}
+          >
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.videoGradient}
+            >
+              <View style={styles.videoEdge}>
+                <View style={styles.rewardsRow}>
+                  <Video size={16} color={COLORS.accent} strokeWidth={1.5} />
+                  <View style={styles.rewardsTextWrap}>
+                    <Text style={styles.rewardsTitle}>Video Library</Text>
+                    <Text style={styles.rewardsSubtitle}>View your recorded workouts</Text>
+                  </View>
+                  <ChevronRight size={14} color={COLORS.accent} strokeWidth={1.5} />
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
         </Animated.View>
       </ScrollView>
     </View>
@@ -599,6 +627,20 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
+  },
+
+  /* ── Video Library Card ─────────────────────────── */
+  videoCardWrap: {
+    marginTop: 10,
+  },
+  videoGradient: {
+    borderRadius: 16,
+  },
+  videoEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.12)',
+    padding: 14,
   },
 
   /* ── Section Headers (Home-style) ──────────────── */
