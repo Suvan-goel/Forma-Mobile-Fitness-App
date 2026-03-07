@@ -49,7 +49,7 @@ const FORM_THRESHOLDS = {
   /** Max elbow angle below which extension is insufficient */
   EXTENSION_FAIL: 155,
   /** Min elbow angle above which starting flexion is insufficient */
-  FLEXION_FAIL: 95,
+  FLEXION_FAIL: 105,
   /** Shoulder angle delta above which elbows are drifting */
   ELBOW_DRIFT_WARN: 20,
   /** Torso deviation from vertical above which there is excessive lean */
@@ -78,7 +78,7 @@ const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 0.06 } as PenaltyConfig,
   FLEXION_ROM:   { cap: 20, deadzone: 0, scale: 0.04 } as PenaltyConfig,
   ELBOW_DRIFT:   { cap: 25, deadzone: 15, scale: 0.03 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 5, scale: 0.15 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 40, deadzone: 5, scale: 0.15 } as PenaltyConfig,
   TEMPO_PUSH:    { cap: 12, deadzone: 0.3, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 8,  deadzone: 0.4, scale: 40 } as PenaltyConfig,
 } as const;
