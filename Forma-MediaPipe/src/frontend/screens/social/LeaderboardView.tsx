@@ -30,35 +30,39 @@ const TIME_WINDOWS: { key: TimeWindow; label: string }[] = [
   { key: 'all_time', label: 'All' },
 ];
 
-const MetricSelector = memo(({ active, onSelect }: { active: LeaderboardMetric; onSelect: (m: LeaderboardMetric) => void }) => (
-  <View style={styles.selectorRow}>
-    {METRICS.map(m => (
-      <TouchableOpacity
-        key={m.key}
-        style={styles.tab}
-        onPress={() => onSelect(m.key)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.tabText, active === m.key && styles.tabTextActive]}>
-          {m.label}
-        </Text>
-        {active === m.key && <View style={styles.underline} />}
-      </TouchableOpacity>
-    ))}
-  </View>
-));
+const FilterBar = memo(({
+  metric, onMetric, time, onTime,
+}: {
+  metric: LeaderboardMetric; onMetric: (m: LeaderboardMetric) => void;
+  time: TimeWindow; onTime: (t: TimeWindow) => void;
+}) => (
+  <View style={styles.filterBar}>
+    {/* Metric — primary pills (left) */}
+    <View style={styles.metricTrack}>
+      {METRICS.map(m => (
+        <TouchableOpacity
+          key={m.key}
+          style={[styles.metricPill, metric === m.key && styles.metricPillActive]}
+          onPress={() => onMetric(m.key)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.metricText, metric === m.key && styles.metricTextActive]}>
+            {m.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
 
-const TimeSelector = memo(({ active, onSelect }: { active: TimeWindow; onSelect: (t: TimeWindow) => void }) => (
-  <View style={styles.timeRow}>
+    {/* Time — secondary chips (right) */}
     <View style={styles.timeTrack}>
       {TIME_WINDOWS.map(t => (
         <TouchableOpacity
           key={t.key}
-          style={[styles.timePill, active === t.key && styles.timePillActive]}
-          onPress={() => onSelect(t.key)}
+          style={[styles.timePill, time === t.key && styles.timePillActive]}
+          onPress={() => onTime(t.key)}
           activeOpacity={0.7}
         >
-          <Text style={[styles.timeText, active === t.key && styles.timeTextActive]}>
+          <Text style={[styles.timeText, time === t.key && styles.timeTextActive]}>
             {t.label}
           </Text>
         </TouchableOpacity>
@@ -89,8 +93,7 @@ export const LeaderboardView: React.FC = memo(() => {
 
   const ListHeader = useMemo(() => (
     <View>
-      <MetricSelector active={metric} onSelect={setMetric} />
-      <TimeSelector active={timeWindow} onSelect={setTimeWindow} />
+      <FilterBar metric={metric} onMetric={setMetric} time={timeWindow} onTime={setTimeWindow} />
 
       {isLoading && entries.length === 0 ? (
         <View style={styles.loadingContainer}>
@@ -163,23 +166,42 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  /* ── Metric Selector ── */
-  selectorRow: {
+  /* ── Combined Filter Bar ── */
+  filterBar: {
     flexDirection: 'row',
-    paddingHorizontal: SPACING.screenHorizontal + 50,
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    marginTop: 4,
-    marginBottom: 4,
-    gap: 20,
-  },
-
-  /* ── Time Window Selector ── */
-  timeRow: {
-    alignItems: 'center',
-    paddingTop: SPACING.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
   },
+
+  /* Metric pills (primary — left) */
+  metricTrack: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 12,
+    padding: 3,
+  },
+  metricPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 9,
+  },
+  metricPillActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.20)',
+  },
+  metricText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: -0.2,
+  },
+  metricTextActive: {
+    color: COLORS.text,
+  },
+
+  /* Time chips (secondary — right) */
   timeTrack: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
@@ -188,43 +210,20 @@ const styles = StyleSheet.create({
   },
   timePill: {
     paddingVertical: 6,
-    paddingHorizontal: 22,
+    paddingHorizontal: 12,
     borderRadius: 8,
   },
   timePillActive: {
     backgroundColor: 'rgba(139, 92, 246, 0.15)',
   },
   timeText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontFamily: FONTS.mono.regular,
+    fontSize: 11,
     color: COLORS.textTertiary,
   },
   timeTextActive: {
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.mono.bold,
     color: COLORS.text,
-  },
-
-  /* ── Shared tab styles ── */
-  tab: {
-    alignItems: 'center',
-    paddingBottom: 6,
-  },
-  tabText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
-  underline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
   },
 
   /* ── List Header ── */

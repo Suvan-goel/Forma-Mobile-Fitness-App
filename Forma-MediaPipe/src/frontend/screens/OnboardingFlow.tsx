@@ -61,12 +61,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComp
   const handleQuestionsComplete = useCallback(
     (answers: { goal: string; frequency: string; experience: string }) => {
       const target = FREQUENCY_TO_TARGET[answers.frequency];
-      if (target) {
-        AsyncStorage.getItem(CAMERA_SETTINGS_KEY).then((raw) => {
-          const stored = raw ? JSON.parse(raw) : {};
-          return AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...stored, weeklyTrainingTarget: target }));
-        }).catch(() => {});
-      }
+      AsyncStorage.getItem(CAMERA_SETTINGS_KEY).then((raw) => {
+        const stored = raw ? JSON.parse(raw) : {};
+        const updates: Record<string, string> = {};
+        if (target) updates.weeklyTrainingTarget = target;
+        if (answers.goal) updates.onboardingGoal = answers.goal;
+        if (answers.experience) updates.onboardingExperience = answers.experience;
+        return AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...stored, ...updates }));
+      }).catch(() => {});
       transitionTo('interstitial');
     },
     [transitionTo],
