@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,14 +7,17 @@ import {
   ScrollView,
   Platform,
   Animated,
+  PanResponder,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Dumbbell, Layers, Zap } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
-import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
+import { ChevronLeft, ChevronRight, Dumbbell, Layers, Plus, Sparkles, X, Zap } from 'lucide-react-native';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { useAlert } from '../contexts/AlertContext';
+import { useWorkoutPreferences, useCustomTemplates } from '../../backend/hooks';
+import type { CustomTemplate } from '../../backend/services/api';
 import type { RecordStackParamList } from '../app/RootNavigator';
 
 type WorkoutTemplatesNavigationProp = NativeStackNavigationProp<
@@ -106,6 +109,14 @@ const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   },
 ];
 
+/* ── Frequency → Recommended Template IDs ─ */
+
+const RECOMMENDED_BY_FREQUENCY: Record<string, string[]> = {
+  '1-2': ['full-body-power', 'upper-body-blast'],
+  '3-4': ['push-press', 'pull-curl', 'leg-day'],
+  '5+': ['push-press', 'pull-curl', 'leg-day', 'upper-body-blast', 'full-body-power'],
+};
+
 /* ── Exercise Chip ──────────────────────── */
 
 const ExerciseChip: React.FC<{ name: string }> = ({ name }) => (
@@ -161,14 +172,140 @@ const TemplateCard: React.FC<{
   </TouchableOpacity>
 );
 
+/* ── Custom Template Card (swipe-to-delete) ── */
+
+const DELETE_AREA_WIDTH = 72;
+
+const CustomTemplateCard: React.FC<{
+  template: CustomTemplate;
+  onPress: (template: CustomTemplate) => void;
+  onDelete: (id: string) => void;
+}> = ({ template, onPress, onDelete }) => {
+  const { showAlert } = useAlert();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isSwipeOpen = useRef(false);
+
+  const closeSwipe = useCallback(() => {
+    isSwipeOpen.current = false;
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+  }, [translateX]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > Math.abs(gs.dy) * 2 && Math.abs(gs.dx) > 8,
+      onPanResponderGrant: () => {
+        translateX.stopAnimation();
+      },
+      onPanResponderMove: (_, gs) => {
+        const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
+        const newValue = startOffset + gs.dx;
+        translateX.setValue(Math.min(0, Math.max(newValue, -DELETE_AREA_WIDTH)));
+      },
+      onPanResponderRelease: (_, gs) => {
+        const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
+        const projected = startOffset + gs.dx;
+        const shouldOpen = projected < -(DELETE_AREA_WIDTH / 2);
+        isSwipeOpen.current = shouldOpen;
+        Animated.spring(translateX, {
+          toValue: shouldOpen ? -DELETE_AREA_WIDTH : 0,
+          useNativeDriver: true,
+          bounciness: 4,
+        }).start();
+      },
+    })
+  ).current;
+
+  const handlePress = useCallback(() => {
+    if (isSwipeOpen.current) {
+      closeSwipe();
+      return;
+    }
+    onPress(template);
+  }, [template, onPress, closeSwipe]);
+
+  const handleDelete = useCallback(() => {
+    closeSwipe();
+    showAlert(
+      'Delete Template?',
+      `Delete "${template.name}"? This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => onDelete(template.id) },
+      ],
+    );
+  }, [closeSwipe, showAlert, template.name, template.id, onDelete]);
+
+  return (
+    <View style={styles.customSwipeContainer}>
+      <View style={styles.customDeleteArea}>
+        <TouchableOpacity style={styles.customDeleteButton} onPress={handleDelete} activeOpacity={0.7}>
+          <X size={18} color="#EF4444" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        <TouchableOpacity
+          style={styles.cardOuter}
+          onPress={handlePress}
+          activeOpacity={0.85}
+        >
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardGlassEdge}>
+              <View style={styles.cardTopRow}>
+                <View style={styles.cardTitleBlock}>
+                  <Text style={styles.cardName}>{template.name}</Text>
+                  {template.description ? (
+                    <Text style={styles.focusTag} numberOfLines={1}>{template.description.toUpperCase()}</Text>
+                  ) : null}
+                </View>
+                <View style={styles.cardTopRight}>
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countBadgeText}>{template.exercises.length}</Text>
+                    <Text style={styles.countBadgeLabel}>EX</Text>
+                  </View>
+                  <ChevronRight size={16} color={COLORS.accent} strokeWidth={1.5} />
+                </View>
+              </View>
+              <View style={styles.chipsRow}>
+                {template.exercises.map((ex) => (
+                  <ExerciseChip key={ex.id} name={ex.name} />
+                ))}
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
+
 /* ── Main Screen ────────────────────────── */
 
 export const WorkoutTemplatesScreen: React.FC = () => {
   const navigation = useNavigation<WorkoutTemplatesNavigationProp>();
   const insets = useSafeAreaInsets();
-  const { addExercise, clearSets } = useCurrentWorkout();
+  const { prefs } = useWorkoutPreferences();
+  const { templates: customTemplates, isLoading: templatesLoading, deleteTemplate } = useCustomTemplates();
+  const { showAlert } = useAlert();
+  const [showAll, setShowAll] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+
+  const recommendedIds = RECOMMENDED_BY_FREQUENCY[prefs.weeklyTrainingTarget] ?? RECOMMENDED_BY_FREQUENCY['3-4'];
+
+  const recommended = useMemo(
+    () => WORKOUT_TEMPLATES.filter((t) => recommendedIds.includes(t.id)),
+    [recommendedIds],
+  );
+  const remaining = useMemo(
+    () => WORKOUT_TEMPLATES.filter((t) => !recommendedIds.includes(t.id)),
+    [recommendedIds],
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -186,15 +323,39 @@ export const WorkoutTemplatesScreen: React.FC = () => {
   }, [fadeAnim, slideAnim]);
 
   const handleSelectTemplate = useCallback((template: WorkoutTemplate) => {
-    clearSets();
-    template.exercises.forEach((ex) => {
-      addExercise({ name: ex.name, category: ex.category });
+    navigation.navigate('TemplatePreview', {
+      templateName: template.name,
+      description: template.description,
+      exercises: template.exercises.map(ex => ({ name: ex.name, category: ex.category, targetSets: 3 })),
     });
-    navigation.navigate('CurrentWorkout');
-  }, [addExercise, clearSets, navigation]);
+  }, [navigation]);
 
   const handleGoBack = useCallback(() => {
     navigation.goBack();
+  }, [navigation]);
+
+  const handleToggleShowAll = useCallback(() => {
+    setShowAll((prev) => !prev);
+  }, []);
+
+  const handleSelectCustomTemplate = useCallback((template: CustomTemplate) => {
+    navigation.navigate('TemplatePreview', {
+      templateName: template.name,
+      description: template.description,
+      exercises: template.exercises.map(ex => ({
+        name: ex.name,
+        category: ex.category,
+        targetSets: ex.targetSets,
+      })),
+    });
+  }, [navigation]);
+
+  const handleDeleteCustomTemplate = useCallback(async (id: string) => {
+    await deleteTemplate(id);
+  }, [deleteTemplate]);
+
+  const handleCreateTemplate = useCallback(() => {
+    navigation.navigate('CreateTemplate');
   }, [navigation]);
 
   return (
@@ -207,7 +368,7 @@ export const WorkoutTemplatesScreen: React.FC = () => {
           </TouchableOpacity>
           <View style={styles.headerTextWrap}>
             <Text style={styles.headerTitle}>Templates</Text>
-            <Text style={styles.headerSubtitle}>{WORKOUT_TEMPLATES.length} routines</Text>
+            <Text style={styles.headerSubtitle}>{WORKOUT_TEMPLATES.length + customTemplates.length} routines</Text>
           </View>
         </View>
       </View>
@@ -219,43 +380,54 @@ export const WorkoutTemplatesScreen: React.FC = () => {
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-          {/* ── Hero Intro Card ─────────────────── */}
-          <LinearGradient
-            colors={SCREEN_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <View style={styles.heroEdge}>
-              <View style={styles.heroTopRow}>
-                <View style={styles.heroIconWrap}>
-                  <Layers size={18} color={COLORS.accent} strokeWidth={1.5} />
-                </View>
-                <View style={styles.heroTextWrap}>
-                  <Text style={styles.heroTitle}>Quick Start</Text>
-                  <Text style={styles.heroSubtext}>
-                    Select a template to pre-load exercises into your workout
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </LinearGradient>
-
-          {/* ── Section Header ──────────────────── */}
+          {/* ── My Templates Section ──────────────── */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>ROUTINES</Text>
+              <Layers size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>MY TEMPLATES</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.seeAllBtn}
+              activeOpacity={0.7}
+              onPress={handleCreateTemplate}
+            >
+              <Plus size={11} color={COLORS.accent} strokeWidth={2} />
+              <Text style={styles.seeAllText}>Create</Text>
+            </TouchableOpacity>
+          </View>
+
+          {customTemplates.length === 0 ? (
+            <TouchableOpacity style={styles.emptyCustomCard} onPress={handleCreateTemplate} activeOpacity={0.7}>
+              <Text style={styles.emptyCustomText}>Create your first custom template</Text>
+              <Text style={styles.emptyCustomLink}>Create</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.templateList}>
+              {customTemplates.map((template) => (
+                <CustomTemplateCard
+                  key={template.id}
+                  template={template}
+                  onPress={handleSelectCustomTemplate}
+                  onDelete={handleDeleteCustomTemplate}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* ── Recommended Section ─────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Sparkles size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>RECOMMENDED</Text>
             </View>
             <View style={styles.templateCountPill}>
               <Zap size={10} color={COLORS.accent} strokeWidth={2} />
-              <Text style={styles.templateCountText}>{WORKOUT_TEMPLATES.length}</Text>
+              <Text style={styles.templateCountText}>{recommended.length}</Text>
             </View>
           </View>
 
-          {/* ── Template List ────────────────────── */}
           <View style={styles.templateList}>
-            {WORKOUT_TEMPLATES.map((template) => (
+            {recommended.map((template) => (
               <TemplateCard
                 key={template.id}
                 template={template}
@@ -263,6 +435,43 @@ export const WorkoutTemplatesScreen: React.FC = () => {
               />
             ))}
           </View>
+
+          {/* ── All Routines Section ────────────── */}
+          {remaining.length > 0 && (
+            <>
+              <View style={styles.sectionRow}>
+                <View style={styles.sectionLabelRow}>
+                  <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>ALL ROUTINES</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.seeAllBtn}
+                  activeOpacity={0.7}
+                  onPress={handleToggleShowAll}
+                >
+                  <Text style={styles.seeAllText}>{showAll ? 'Hide' : 'See All'}</Text>
+                  <ChevronRight
+                    size={11}
+                    color={COLORS.accent}
+                    strokeWidth={2}
+                    style={showAll ? { transform: [{ rotate: '90deg' }] } : undefined}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {showAll && (
+                <View style={styles.templateList}>
+                  {remaining.map((template) => (
+                    <TemplateCard
+                      key={template.id}
+                      template={template}
+                      onPress={handleSelectTemplate}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
 
         </Animated.View>
       </ScrollView>
@@ -323,48 +532,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
     paddingBottom: 160,
-  },
-
-  /* ── Hero Intro Card ─────────────────────── */
-  heroCard: {
-    borderRadius: 22,
-    marginTop: 18,
-  },
-  heroEdge: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 20,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  heroIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroTextWrap: {
-    flex: 1,
-    gap: 4,
-  },
-  heroTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
-    color: COLORS.text,
-    letterSpacing: -0.3,
-  },
-  heroSubtext: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    lineHeight: 17,
   },
 
   /* ── Section Header ──────────────────────── */
@@ -400,6 +569,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.accent,
     letterSpacing: -0.3,
+  },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  seeAllText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.accent,
   },
 
   /* ── Template List ───────────────────────── */
@@ -513,5 +692,48 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     letterSpacing: 0.2,
+  },
+
+  /* ── Custom Template Swipe-to-Delete ────── */
+  customSwipeContainer: {
+    overflow: 'hidden',
+    borderRadius: 18,
+  },
+  customDeleteArea: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 12,
+  },
+  customDeleteButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Empty Custom Templates ────────────── */
+  emptyCustomCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderStyle: 'dashed',
+    paddingVertical: 20,
+    alignItems: 'center',
+    gap: 6,
+  },
+  emptyCustomText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+  },
+  emptyCustomLink: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.accent,
   },
 });

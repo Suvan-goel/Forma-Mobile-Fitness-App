@@ -38,6 +38,8 @@ import { CameraSettingsScreen } from '../screens/CameraSettingsScreen';
 import { ExerciseGuideScreen } from '../screens/ExerciseGuideScreen';
 import { VideoLibraryScreen } from '../screens/VideoLibraryScreen';
 import { CreateActivityPostScreen } from '../screens/CreateActivityPostScreen';
+import { CreateTemplateScreen } from '../screens/CreateTemplateScreen';
+import { TemplatePreviewScreen } from '../screens/TemplatePreviewScreen';
 import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlow';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
@@ -90,8 +92,14 @@ export type RecordStackParamList = {
     newSet?: LoggedSet;
     showWeightFor?: { exerciseId: string; hasRecording?: boolean };
   } | undefined;
-  ChooseExercise: undefined;
+  ChooseExercise: { mode?: 'template' } | undefined;
   WorkoutTemplates: undefined;
+  CreateTemplate: undefined;
+  TemplatePreview: {
+    templateName: string;
+    description?: string;
+    exercises: { name: string; category: string; targetSets: number }[];
+  };
   Camera: { exerciseName: string; category: string; exerciseId?: string; returnToCurrentWorkout?: true };
   ExerciseGuide: {
     exerciseName: string;
@@ -130,6 +138,8 @@ const RecordStackNavigator: React.FC = memo(() => {
       <RecordStack.Screen name="CurrentWorkout" component={CurrentWorkoutScreen} />
       <RecordStack.Screen name="ChooseExercise" component={ChooseExerciseScreen} />
       <RecordStack.Screen name="WorkoutTemplates" component={WorkoutTemplatesScreen} />
+      <RecordStack.Screen name="CreateTemplate" component={CreateTemplateScreen} />
+      <RecordStack.Screen name="TemplatePreview" component={TemplatePreviewScreen} />
       <RecordStack.Screen name="Camera" component={CameraScreen} />
       <RecordStack.Screen name="ExerciseGuide" component={ExerciseGuideScreen} />
       <RecordStack.Screen

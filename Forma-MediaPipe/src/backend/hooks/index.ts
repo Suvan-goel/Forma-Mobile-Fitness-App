@@ -28,3 +28,4 @@ export { useSubscription } from './useSubscription';
 export { useScreenRecording } from './useScreenRecording';
 export { useVideoLibrary } from './useVideoLibrary';
 export { useCreateActivityPost } from './useCreateActivityPost';
+export { useCustomTemplates } from './useCustomTemplates';

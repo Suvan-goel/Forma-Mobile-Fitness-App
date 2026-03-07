@@ -13,7 +13,8 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { addPendingTemplateExercise } from './CreateTemplateScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search, X } from 'lucide-react-native';
@@ -161,6 +162,7 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
 
 export const ChooseExerciseScreen: React.FC = () => {
   const navigation = useNavigation<ChooseExerciseNavigationProp>();
+  const route = useRoute<RouteProp<RecordStackParamList, 'ChooseExercise'>>();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('all');
@@ -179,9 +181,14 @@ export const ChooseExerciseScreen: React.FC = () => {
   const cardHeight = 32 + imageSize + 8 + textBlockHeight + bottomPadding;
 
   const handleSelectExercise = useCallback((exercise: Exercise) => {
+    if (route.params?.mode === 'template') {
+      addPendingTemplateExercise({ name: exercise.name, category: exercise.category });
+      navigation.goBack();
+      return;
+    }
     addExercise({ name: exercise.name, category: exercise.category });
     navigation.navigate('CurrentWorkout');
-  }, [addExercise, navigation]);
+  }, [addExercise, navigation, route.params?.mode]);
 
   const handleInfoPress = useCallback((exercise: Exercise) => {
     const def = ExerciseRegistry.has(exercise.name) ? ExerciseRegistry.get(exercise.name) : null;

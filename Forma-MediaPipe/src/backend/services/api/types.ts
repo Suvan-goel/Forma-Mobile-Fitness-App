@@ -324,6 +324,30 @@ export interface EventReactions {
   userReaction: ReactionType | null;
 }
 
+// ── Custom Template types ────────────────────────────────────
+
+export interface CustomTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  exercises: CustomTemplateExercise[];
+  createdAt: Date;
+}
+
+export interface CustomTemplateExercise {
+  id: string;
+  name: string;
+  category: string;
+  orderIndex: number;
+  targetSets: number;
+}
+
+export interface CreateTemplatePayload {
+  name: string;
+  description?: string;
+  exercises: { name: string; category: string; orderIndex: number; targetSets: number }[];
+}
+
 // ── Subscription types ──────────────────────────────────────
 
 export type SubscriptionPlan = 'free' | 'premium';
