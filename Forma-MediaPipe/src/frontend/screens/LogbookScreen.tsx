@@ -319,14 +319,12 @@ export const LogbookScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'year' | 'month' | 'week' | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const { showAlert } = useAlert();
   const { workouts, isLoading, error, refetch } = useWorkouts();
   const { deleteWorkout } = useDeleteWorkout();
   useFocusEffect(
     React.useCallback(() => {
-      setRefreshKey((prev) => prev + 1);
       refetch();
     }, [refetch]),
   );

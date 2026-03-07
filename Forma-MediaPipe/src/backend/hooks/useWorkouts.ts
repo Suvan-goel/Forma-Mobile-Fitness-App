@@ -26,8 +26,10 @@ export const useWorkouts = (): UseWorkoutsReturn => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchWorkouts = useCallback(async (uid: string) => {
-    setIsLoading(true);
+  const fetchWorkouts = useCallback(async (uid: string, silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const response = await workoutsService.getAll(uid);
@@ -53,7 +55,7 @@ export const useWorkouts = (): UseWorkoutsReturn => {
   }, [authLoading, user, fetchWorkouts]);
 
   const refetch = useCallback(async () => {
-    if (user) await fetchWorkouts(user.id);
+    if (user) await fetchWorkouts(user.id, true);
   }, [user, fetchWorkouts]);
 
   return { workouts, isLoading: isLoading || authLoading, error, refetch };
