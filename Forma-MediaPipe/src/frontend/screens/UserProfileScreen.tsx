@@ -28,6 +28,7 @@ import {
   TrendingDown,
   Activity,
   Dumbbell,
+  Trophy,
   User,
 } from 'lucide-react-native';
 import {
@@ -231,8 +232,10 @@ export const UserProfileScreen: React.FC = () => {
                   <View style={styles.perfIconRow}>
                     <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
                   </View>
-                  <Text style={styles.perfValue}>{streakDays > 0 ? String(streakDays) : '—'}</Text>
-                  <Text style={styles.perfUnit}>days</Text>
+                  <Text style={styles.perfValueRow}>
+                    <Text style={styles.perfValue}>{streakDays > 0 ? String(streakDays) : '—'}</Text>
+                    <Text style={styles.perfUnit}> days</Text>
+                  </Text>
                   <Text style={styles.perfLabel}>Day Streak</Text>
                 </View>
               </LinearGradient>
@@ -265,8 +268,10 @@ export const UserProfileScreen: React.FC = () => {
                       </View>
                     )}
                   </View>
-                  <Text style={styles.perfValue}>{avgFormScore > 0 ? String(avgFormScore) : '—'}</Text>
-                  <Text style={styles.perfUnit}>{avgFormScore > 0 ? '%' : ''}</Text>
+                  <Text style={styles.perfValueRow}>
+                    <Text style={styles.perfValue}>{avgFormScore > 0 ? String(avgFormScore) : '—'}</Text>
+                    <Text style={styles.perfUnit}>{avgFormScore > 0 ? '%' : ''}</Text>
+                  </Text>
                   <Text style={styles.perfLabel}>Avg Form</Text>
                 </View>
               </LinearGradient>
@@ -285,8 +290,10 @@ export const UserProfileScreen: React.FC = () => {
                   <View style={styles.perfIconRow}>
                     <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
-                  <Text style={styles.perfValue}>{totalReps > 0 ? String(totalReps) : '—'}</Text>
-                  <Text style={styles.perfUnit}>{totalReps > 0 ? 'reps' : ''}</Text>
+                  <Text style={styles.perfValueRow}>
+                    <Text style={styles.perfValue}>{totalReps > 0 ? String(totalReps) : '—'}</Text>
+                    <Text style={styles.perfUnit}>{totalReps > 0 ? ' reps' : ''}</Text>
+                  </Text>
                   <Text style={styles.perfLabel}>Total Reps</Text>
                 </View>
               </LinearGradient>
@@ -303,15 +310,41 @@ export const UserProfileScreen: React.FC = () => {
                   <View style={styles.perfIconRow}>
                     <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
-                  <Text style={styles.perfValue} numberOfLines={1} adjustsFontSizeToFit>
+                  <Text style={styles.perfLabel}>Top Exercise</Text>
+                  <Text style={styles.perfTextValue} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {mostTrained ?? '—'}
                   </Text>
-                  <Text style={styles.perfUnit}> </Text>
-                  <Text style={styles.perfLabel}>Top Exercise</Text>
                 </View>
               </LinearGradient>
             </View>
           </View>
+
+          {/* ═══════════════════════════════════════════
+              REWARDS — Link card
+              ═══════════════════════════════════════════ */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('Rewards')}
+            style={styles.rewardsCardWrap}
+          >
+            <LinearGradient
+              colors={['#1A1510', '#111008', '#0E0C07']}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.rewardsGradient}
+            >
+              <View style={styles.rewardsEdge}>
+                <View style={styles.rewardsRow}>
+                  <Trophy size={16} color={COLORS.yellow} strokeWidth={1.5} />
+                  <View style={styles.rewardsTextWrap}>
+                    <Text style={styles.rewardsTitle}>Badges & Points</Text>
+                    <Text style={styles.rewardsSubtitle}>View your rewards</Text>
+                  </View>
+                  <ChevronRight size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
 
         </Animated.View>
       </ScrollView>
@@ -534,6 +567,40 @@ const styles = StyleSheet.create({
     fontSize: 9,
   },
 
+  /* ── Rewards Card ────────────────────────────────── */
+  rewardsCardWrap: {
+    marginTop: 4,
+  },
+  rewardsGradient: {
+    borderRadius: 16,
+  },
+  rewardsEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 166, 35, 0.12)',
+    padding: 14,
+  },
+  rewardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rewardsTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  rewardsTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  rewardsSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+
   /* ── Section Headers (Home-style) ──────────────── */
   sectionRow: {
     flexDirection: 'row',
@@ -562,7 +629,7 @@ const styles = StyleSheet.create({
   },
   perfCell: {
     flex: 1,
-    height: 150,
+    minHeight: 150,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -590,25 +657,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+  perfValueRow: {
+    marginBottom: 4,
+  },
   perfValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 24,
+    fontSize: 28,
     color: COLORS.text,
     letterSpacing: -0.5,
-    marginBottom: 2,
   },
   perfUnit: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-    marginBottom: 2,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
+  },
+  perfTextValue: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 18,
+    color: COLORS.text,
+    letterSpacing: -0.3,
+    lineHeight: 24,
+    marginTop: 6,
   },
   perfLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
     letterSpacing: 0.3,
+    marginTop: 2,
   },
 });
