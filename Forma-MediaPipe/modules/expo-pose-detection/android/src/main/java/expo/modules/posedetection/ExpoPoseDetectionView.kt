@@ -39,7 +39,7 @@ class ExpoPoseDetectionView(
   val onLandmark by EventDispatcher()
 
   // Configuration
-  private var frameLimit: Int = 20
+  private var frameLimit: Int = 30
   private var showSkeleton: Boolean = false
   private var currentModelName: String = "pose_landmarker_heavy"
 

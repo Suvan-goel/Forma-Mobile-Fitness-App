@@ -27,7 +27,7 @@ class ExpoPoseDetectionView: ExpoView {
   )
 
   // MARK: - Configuration
-  private var frameLimit: Int = 20
+  private var frameLimit: Int = 30
   private var showSkeleton: Bool = false
   private var modelName: String = "pose_landmarker_heavy"
   private var isSessionRunning = false
