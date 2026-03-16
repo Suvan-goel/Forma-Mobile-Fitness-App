@@ -36,6 +36,14 @@ export interface WeeklyGoal {
   target: number;
 }
 
+export interface WeeklyChallenge {
+  id: string;
+  title: string;
+  current: number;
+  target: number;
+  completed: boolean;
+}
+
 export interface HomeData {
   displayName: string;
   streakDays: number;
@@ -46,6 +54,7 @@ export interface HomeData {
   lastWorkout: LastWorkout | null;
   totalPoints: number;
   nextBadge: NextBadge | null;
+  challenges: WeeklyChallenge[];
 }
 
 // ── Helpers ───────────────────────────────────────
@@ -123,6 +132,63 @@ export function useHomeData() {
       target: weeklyTarget,
     };
 
+    // Weekly challenges (derived from analytics summary)
+    const totalReps = analytics.summary.totalReps;
+    const totalDuration = analytics.summary.totalDurationMinutes;
+    const workoutCount = analytics.summary.workoutCount;
+
+    // Count unique exercises from this week's workouts
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    const thisWeekWorkouts = (workouts ?? []).filter(
+      w => new Date(w.fullDate).getTime() >= weekStart.getTime()
+    );
+    const uniqueExercises = new Set<string>();
+    thisWeekWorkouts.forEach(w => {
+      // Exercise name is encoded in workout name for single-exercise sessions
+      // For multi-exercise, count distinct workout names as proxy
+      uniqueExercises.add(w.name);
+    });
+
+    const challenges: WeeklyChallenge[] = [
+      {
+        id: 'workouts',
+        title: `Complete ${weeklyTarget} workouts`,
+        current: Math.min(workoutCount, weeklyTarget),
+        target: weeklyTarget,
+        completed: workoutCount >= weeklyTarget,
+      },
+      {
+        id: 'reps',
+        title: 'Hit 100 reps',
+        current: Math.min(totalReps, 100),
+        target: 100,
+        completed: totalReps >= 100,
+      },
+      {
+        id: 'form',
+        title: 'Score 90+ avg form',
+        current: Math.min(avgFormScore, 90),
+        target: 90,
+        completed: avgFormScore >= 90,
+      },
+      {
+        id: 'streak',
+        title: 'Build a 3-day streak',
+        current: Math.min(streakDays, 3),
+        target: 3,
+        completed: streakDays >= 3,
+      },
+      {
+        id: 'duration',
+        title: 'Train for 60 minutes',
+        current: Math.min(totalDuration, 60),
+        target: 60,
+        completed: totalDuration >= 60,
+      },
+    ];
+
     return {
       displayName,
       streakDays,
@@ -133,6 +199,7 @@ export function useHomeData() {
       lastWorkout,
       totalPoints: userPoints,
       nextBadge,
+      challenges,
     };
   }, [user, analytics, rewards, userStats, userPoints, workouts, weeklyTarget]);
 

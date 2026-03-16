@@ -14,6 +14,7 @@ export { useNotificationPreferences } from './useNotificationPreferences';
 export { useUpdateUser } from './useUpdateUser';
 export { useFavouriteExercises } from './useFavouriteExercises';
 export { useHomeData } from './useHomeData';
+export type { WeeklyChallenge } from './useHomeData';
 export { useLeaderboard } from './useLeaderboard';
 export { useFriends } from './useFriends';
 export { useActivityFeed } from './useActivityFeed';

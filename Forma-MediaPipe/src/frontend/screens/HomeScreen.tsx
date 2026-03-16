@@ -10,7 +10,7 @@
  *   6. Achievements Row (condensed points + next badge)
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -21,7 +21,7 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Target,
@@ -37,6 +37,8 @@ import {
   Clock,
   Calendar,
   Layers,
+  Zap,
+  Check,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -53,13 +55,7 @@ import { useHomeData } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import type { RootStackParamList } from '../app/RootNavigator';
 
-// ── Template chips (first 3 from WorkoutTemplatesScreen) ──
-
-const QUICK_TEMPLATES = [
-  { id: 'push-press', label: 'Push & Press' },
-  { id: 'pull-curl', label: 'Pull & Curl' },
-  { id: 'leg-day', label: 'Leg Day' },
-];
+// ── Constants ────────────────────────────────────
 
 // ── Helpers ────────────────────────────────────────
 
@@ -71,6 +67,13 @@ const formatElapsed = (totalSeconds: number): string => {
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
+// ── Challenge progress color ──────────────────────
+const getChallengeBarColors = (pct: number, done: boolean): [string, string] => {
+  if (done) return ['#34D399BB', '#34D399'];       // green — complete
+  if (pct >= 0.6) return [COLORS.accent + 'BB', COLORS.accent]; // purple — almost there
+  return [COLORS.orange + 'BB', COLORS.orange];     // orange — early progress
+};
+
 // ── Main Screen ────────────────────────────────────
 
 export const HomeScreen: React.FC = () => {
@@ -80,6 +83,7 @@ export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { homeData, isLoading, error, refetch } = useHomeData();
   const { workoutInProgress, workoutElapsedSeconds, workoutPaused, exercises, sets } = useCurrentWorkout();
+  const [showAllChallenges, setShowAllChallenges] = useState(false);
 
   useEffect(() => {
     if (homeData) {
@@ -106,10 +110,6 @@ export const HomeScreen: React.FC = () => {
     navigateToTab('Record');
   }, [navigateToTab]);
 
-  const handleTemplatePress = useCallback(() => {
-    // Navigate to Record tab — templates are accessible from there
-    navigateToTab('Record');
-  }, [navigateToTab]);
 
   // ── Loading ────────────────────────────────────
 
@@ -261,26 +261,24 @@ export const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           )}
 
-          {/* Template Chips */}
+          {/* Template Buttons */}
           {!workoutInProgress && (
             <View style={styles.templateRow}>
-              {QUICK_TEMPLATES.map((t) => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={styles.templateChip}
-                  activeOpacity={0.7}
-                  onPress={handleTemplatePress}
-                >
-                  <Layers size={10} color={COLORS.accent} strokeWidth={2} />
-                  <Text style={styles.templateChipText}>{t.label}</Text>
-                </TouchableOpacity>
-              ))}
               <TouchableOpacity
-                style={styles.templateChip}
+                style={styles.templateBtn}
                 activeOpacity={0.7}
-                onPress={handleTemplatePress}
+                onPress={() => navigation.dispatch(CommonActions.navigate({ name: 'MainTabs', params: { screen: 'Record', params: { screen: 'WorkoutTemplates' } } }))}
               >
-                <Text style={styles.templateChipText}>+ More</Text>
+                <Layers size={12} color={COLORS.accent} strokeWidth={2} />
+                <Text style={styles.templateBtnText}>Choose Template</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.templateBtn}
+                activeOpacity={0.7}
+                onPress={() => navigation.dispatch(CommonActions.navigate({ name: 'MainTabs', params: { screen: 'Record', params: { screen: 'CreateTemplate' } } }))}
+              >
+                <Text style={styles.templateBtnPlus}>+</Text>
+                <Text style={styles.templateBtnText}>Create New</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -374,6 +372,95 @@ export const HomeScreen: React.FC = () => {
               </View>
             </LinearGradient>
           </TouchableOpacity>
+
+          {/* ═══════════════════════════════════════════
+              WEEKLY CHALLENGES
+              ═══════════════════════════════════════════ */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Zap size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>WEEKLY CHALLENGES</Text>
+            </View>
+            <View style={styles.challengeCountChip}>
+              <Text style={styles.challengeCountText}>
+                {homeData.challenges.filter(c => c.completed).length}/{homeData.challenges.length}
+              </Text>
+            </View>
+          </View>
+
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.challengesCard}
+          >
+            <View style={styles.challengesEdge}>
+              {homeData.challenges.slice(0, showAllChallenges ? homeData.challenges.length : 2).map((challenge, idx, arr) => (
+                <View
+                  key={challenge.id}
+                  style={[
+                    styles.challengeRow,
+                    idx < arr.length - 1 && styles.challengeRowBorder,
+                  ]}
+                >
+                  <View style={[
+                    styles.challengeIcon,
+                    challenge.completed && styles.challengeIconDone,
+                  ]}>
+                    {challenge.completed
+                      ? <Check size={10} color="#FFFFFF" strokeWidth={3} />
+                      : <Zap size={10} color={COLORS.accent} strokeWidth={2} />}
+                  </View>
+                  <View style={styles.challengeInfo}>
+                    <View style={styles.challengeTitleRow}>
+                      <Text style={[
+                        styles.challengeTitle,
+                        challenge.completed && styles.challengeTitleDone,
+                      ]} numberOfLines={1}>
+                        {challenge.title}
+                      </Text>
+                      <Text style={[
+                        styles.challengeProgress,
+                        challenge.completed && styles.challengeProgressDone,
+                      ]}>
+                        {challenge.completed ? 'Done' : `${challenge.current}/${challenge.target}`}
+                      </Text>
+                    </View>
+                    <View style={styles.challengeProgressTrack}>
+                      {(challenge.current / challenge.target) > 0 && (
+                        <LinearGradient
+                          colors={getChallengeBarColors(challenge.current / challenge.target, challenge.completed)}
+                          start={{ x: 0, y: 0.5 }}
+                          end={{ x: 1, y: 0.5 }}
+                          style={[
+                            styles.progressFill,
+                            { width: `${Math.min((challenge.current / challenge.target) * 100, 100)}%` },
+                          ]}
+                        />
+                      )}
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {/* See all / collapse toggle */}
+              <TouchableOpacity
+                style={styles.challengeSeeAllRow}
+                activeOpacity={0.7}
+                onPress={() => setShowAllChallenges(prev => !prev)}
+              >
+                <Text style={styles.challengeSeeAllText}>
+                  {showAllChallenges ? 'Show less' : `See all ${homeData.challenges.length} challenges`}
+                </Text>
+                <ChevronRight
+                  size={11}
+                  color={COLORS.accent}
+                  strokeWidth={2}
+                  style={showAllChallenges ? { transform: [{ rotate: '-90deg' }] } : { transform: [{ rotate: '90deg' }] }}
+                />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
           {/* ═══════════════════════════════════════════
               LAST WORKOUT
@@ -676,28 +763,34 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.55)',
   },
 
-  /* ── Template Chips ────────────────────────── */
+  /* ── Template Buttons ─────────────────────── */
   templateRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     marginTop: 10,
-    flexWrap: 'wrap',
   },
-  templateChip: {
+  templateBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.20)',
     backgroundColor: 'rgba(139, 92, 246, 0.06)',
   },
-  templateChipText: {
+  templateBtnText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  templateBtnPlus: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.accent,
+    marginTop: -1,
   },
 
   /* ── Section Headers ───────────────────────── */
@@ -922,6 +1015,97 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.semibold,
     fontSize: 11,
     letterSpacing: -0.3,
+  },
+
+  /* ── Challenges ──────────────────────────────── */
+  challengeCountChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+  },
+  challengeCountText: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 11,
+    color: COLORS.accent,
+  },
+  challengesCard: {
+    borderRadius: 16,
+  },
+  challengesEdge: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 14,
+    paddingTop: 4,
+  },
+  challengeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 11,
+  },
+  challengeRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  challengeIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  challengeIconDone: {},
+  challengeInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  challengeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  challengeTitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.text,
+    flex: 1,
+  },
+  challengeTitleDone: {
+    color: COLORS.textTertiary,
+    textDecorationLine: 'line-through',
+  },
+  challengeProgressTrack: {
+    height: 3,
+    backgroundColor: '#27272A',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  challengeProgress: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+    minWidth: 28,
+    textAlign: 'right',
+  },
+  challengeProgressDone: {
+    color: '#34D399',
+    fontFamily: FONTS.display.semibold,
+  },
+  challengeSeeAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  challengeSeeAllText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.accent,
   },
 
   /* ── Shared Progress Bar ───────────────────── */
