@@ -6,7 +6,7 @@ const NativePoseDetectionView: React.ComponentType<any> =
   requireNativeViewManager('ExpoPoseDetection');
 
 export function PoseDetectionView(props: PoseDetectionViewProps) {
-  const { style, frameLimit = 20, showSkeleton = false, modelName = 'pose_landmarker_full', onLandmark, ...rest } = props;
+  const { style, frameLimit = 20, showSkeleton = false, modelName = 'pose_landmarker_heavy', onLandmark, ...rest } = props;
 
   const handleLandmark = useCallback(
     (event: any) => {

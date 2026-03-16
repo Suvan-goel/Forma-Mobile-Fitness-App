@@ -240,9 +240,21 @@ export const CameraScreen: React.FC = () => {
     debugModeRef.current = debugMode;
   }, [debugMode]);
 
+  // Angle variance tracker — ring buffer of per-frame angle snapshots for static hold analysis
+  const VARIANCE_WINDOW = 30; // ~1s at 30fps
+  const STATIC_RANGE_THRESHOLD = 5; // degrees — if all angles vary < this, consider static
+  const angleBufferRef = useRef<Record<string, number[]>>({});
+  const [varianceStats, setVarianceStats] = useState<{
+    isStatic: boolean;
+    angles: Record<string, { mean: number; stdev: number }>;
+    frameCount: number;
+  } | null>(null);
+
   // Clear debug info and initialize exercise state when route exercise changes
   useEffect(() => {
     setExerciseDebug(null);
+    angleBufferRef.current = {};
+    setVarianceStats(null);
     const def = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (def) {
       exerciseStateRef.current = def.createState();
@@ -329,6 +341,46 @@ export const CameraScreen: React.FC = () => {
             : prev.repFeedback,
         }));
       }
+
+      // Compute variance stats from angle buffer (debug mode only)
+      if (debugModeRef.current) {
+        const buf = angleBufferRef.current;
+        const keys = Object.keys(buf);
+        if (keys.length > 0) {
+          const minFrames = 15; // need at least 0.5s of data
+          const angles: Record<string, { mean: number; stdev: number }> = {};
+          let allStatic = true;
+          let totalFrames = 0;
+
+          for (const key of keys) {
+            const vals = buf[key];
+            if (vals.length < minFrames) continue;
+            totalFrames = Math.max(totalFrames, vals.length);
+            const n = vals.length;
+            let sum = 0;
+            let min = vals[0];
+            let max = vals[0];
+            for (let i = 0; i < n; i++) {
+              sum += vals[i];
+              if (vals[i] < min) min = vals[i];
+              if (vals[i] > max) max = vals[i];
+            }
+            const mean = sum / n;
+            let sumSq = 0;
+            for (let i = 0; i < n; i++) {
+              const d = vals[i] - mean;
+              sumSq += d * d;
+            }
+            const stdev = Math.sqrt(sumSq / n);
+            angles[key] = { mean, stdev };
+            if (max - min >= STATIC_RANGE_THRESHOLD) allStatic = false;
+          }
+
+          if (Object.keys(angles).length > 0) {
+            setVarianceStats({ isStatic: allStatic, angles, frameCount: totalFrames });
+          }
+        }
+      }
     });
   }, []);
 
@@ -388,6 +440,22 @@ export const CameraScreen: React.FC = () => {
         }
       }
       pendingUIStateRef.current = pending;
+
+      // Accumulate angle data for variance tracker (debug mode only, lightweight)
+      if (debugModeRef.current && newState.debugInfo) {
+        const current = (newState.debugInfo as any).current;
+        if (current && typeof current === 'object') {
+          const buf = angleBufferRef.current;
+          for (const key of Object.keys(current)) {
+            const val = current[key];
+            if (typeof val === 'number' && !isNaN(val)) {
+              if (!buf[key]) buf[key] = [];
+              buf[key].push(val);
+              if (buf[key].length > VARIANCE_WINDOW) buf[key].shift();
+            }
+          }
+        }
+      }
 
       // Flush immediately when rep completes; otherwise throttle
       const repJustCompleted = newState.repCount > repCountRef.current;
@@ -977,6 +1045,31 @@ export const CameraScreen: React.FC = () => {
                   </View>
                 );
               })}
+            </View>
+          );
+        })()}
+
+        {/* Angle Variance Panel — exercise-agnostic, auto-detects static hold */}
+        {debugMode && varianceStats && (() => {
+          const { isStatic, angles, frameCount } = varianceStats;
+          const keys = Object.keys(angles);
+          if (keys.length === 0) return null;
+          return (
+            <View style={[styles.varianceContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={[styles.torsoDebugTitle, { color: isStatic ? '#34D399' : '#FBBF24' }]}>
+                  {isStatic ? 'STATIC' : 'MOVING'} ({frameCount}f)
+                </Text>
+                {keys.map((key) => {
+                  const { mean, stdev } = angles[key];
+                  return (
+                    <Text key={key} style={styles.torsoDebugText}>
+                      {key}: {mean.toFixed(1)}° <Text style={{ color: stdev < 1.5 ? '#34D399' : stdev < 3 ? '#FBBF24' : '#F87171' }}>(σ {stdev.toFixed(2)}°)</Text>
+                    </Text>
+                  );
+                })}
+                <Text style={styles.torsoDebugHint}>σ &lt;1.5° good | 1.5–3° ok | &gt;3° noisy</Text>
+              </View>
             </View>
           );
         })()}
@@ -1653,6 +1746,13 @@ const styles = StyleSheet.create({
   },
   feedbackFeedTextGood: {
     color: '#34D399',
+  },
+  varianceContainer: {
+    position: 'absolute',
+    left: SPACING.screenHorizontal,
+    bottom: SPACING.lg + 80,
+    maxWidth: '50%',
+    zIndex: 11,
   },
   torsoDebugContainer: {
     position: 'absolute',

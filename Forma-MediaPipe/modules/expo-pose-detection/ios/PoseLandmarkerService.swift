@@ -43,14 +43,22 @@ class PoseLandmarkerService: NSObject {
     options.minPosePresenceConfidence = minPosePresenceConfidence
     options.minTrackingConfidence = minTrackingConfidence
     options.baseOptions.modelAssetPath = modelPath
-    options.baseOptions.delegate = .CPU
+    options.baseOptions.delegate = .GPU
     options.poseLandmarkerLiveStreamDelegate = self
 
     do {
       poseLandmarker = try PoseLandmarker(options: options)
+      print("[PoseLandmarkerService] Initialized with GPU delegate")
     } catch {
-      print("[PoseLandmarkerService] Failed to create PoseLandmarker: \(error)")
-      return nil
+      print("[PoseLandmarkerService] GPU delegate failed, falling back to CPU: \(error)")
+      options.baseOptions.delegate = .CPU
+      do {
+        poseLandmarker = try PoseLandmarker(options: options)
+        print("[PoseLandmarkerService] Initialized with CPU delegate (fallback)")
+      } catch {
+        print("[PoseLandmarkerService] Failed to create PoseLandmarker: \(error)")
+        return nil
+      }
     }
   }
 

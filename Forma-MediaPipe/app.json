@@ -89,8 +89,7 @@
       [
         "./plugins/withGradleJavaHome",
         "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
-      ],
-      "./plugins/withLiveActivity"
+      ]
     ]
   }
 }

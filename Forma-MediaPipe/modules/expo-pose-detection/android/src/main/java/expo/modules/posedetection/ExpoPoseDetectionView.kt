@@ -41,7 +41,7 @@ class ExpoPoseDetectionView(
   // Configuration
   private var frameLimit: Int = 20
   private var showSkeleton: Boolean = false
-  private var currentModelName: String = "pose_landmarker_full"
+  private var currentModelName: String = "pose_landmarker_heavy"
 
   // Camera
   private var cameraProvider: ProcessCameraProvider? = null
@@ -113,7 +113,7 @@ class ExpoPoseDetectionView(
   }
 
   fun configureModelName(name: String) {
-    val validName = if (ALLOWED_MODELS.contains(name)) name else "pose_landmarker_full"
+    val validName = if (ALLOWED_MODELS.contains(name)) name else "pose_landmarker_heavy"
     if (validName == currentModelName) return
     currentModelName = validName
     backgroundExecutor.execute {

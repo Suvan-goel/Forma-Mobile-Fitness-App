@@ -36,7 +36,7 @@ const defaultSettings: CameraSettings = {
   restTimerDurationSeconds: 90,
   selectedTrainerId: 'marcus',
   autoScreenRecording: false,
-  poseModel: 'pose_landmarker_full',
+  poseModel: 'pose_landmarker_heavy',
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);

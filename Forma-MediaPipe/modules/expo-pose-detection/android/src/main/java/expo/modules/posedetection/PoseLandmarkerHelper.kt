@@ -14,7 +14,7 @@ import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 
 class PoseLandmarkerHelper(
   private val context: Context,
-  private val modelAsset: String = "pose_landmarker_full.task",
+  private val modelAsset: String = "pose_landmarker_heavy.task",
   private val listener: ((PoseLandmarkerResult, Int, Int) -> Unit)? = null
 ) {
   companion object {
@@ -33,7 +33,7 @@ class PoseLandmarkerHelper(
   private fun setupPoseLandmarker() {
     try {
       val baseOptions = BaseOptions.builder()
-        .setDelegate(Delegate.CPU)
+        .setDelegate(Delegate.GPU)
         .setModelAssetPath(modelAsset)
         .build()
 
@@ -49,8 +49,31 @@ class PoseLandmarkerHelper(
         .build()
 
       poseLandmarker = PoseLandmarker.createFromOptions(context, options)
+      Log.d(TAG, "PoseLandmarker initialized with GPU delegate")
     } catch (e: Exception) {
-      Log.e(TAG, "Failed to setup PoseLandmarker: ${e.message}")
+      Log.w(TAG, "GPU delegate failed, falling back to CPU: ${e.message}")
+      try {
+        val baseOptions = BaseOptions.builder()
+          .setDelegate(Delegate.CPU)
+          .setModelAssetPath(modelAsset)
+          .build()
+
+        val options = PoseLandmarker.PoseLandmarkerOptions.builder()
+          .setBaseOptions(baseOptions)
+          .setRunningMode(RunningMode.LIVE_STREAM)
+          .setNumPoses(1)
+          .setMinPoseDetectionConfidence(MIN_POSE_DETECTION_CONFIDENCE)
+          .setMinTrackingConfidence(MIN_POSE_TRACKING_CONFIDENCE)
+          .setMinPosePresenceConfidence(MIN_POSE_PRESENCE_CONFIDENCE)
+          .setResultListener(this::returnLivestreamResult)
+          .setErrorListener(this::returnLivestreamError)
+          .build()
+
+        poseLandmarker = PoseLandmarker.createFromOptions(context, options)
+        Log.d(TAG, "PoseLandmarker initialized with CPU delegate (fallback)")
+      } catch (e2: Exception) {
+        Log.e(TAG, "Failed to setup PoseLandmarker: ${e2.message}")
+      }
     }
   }
 

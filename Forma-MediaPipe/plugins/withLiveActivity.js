@@ -158,11 +158,20 @@ function withLiveActivity(config) {
     );
 
     // Add Assets.xcassets
-    xcodeProject.addResourceFile(
+    // Note: can't use addResourceFile because the xcode lib assumes a
+    // "Resources" PBXGroup exists (correctForResourcesPath crashes if not).
+    // Instead, add via addFile + manually wire into the Resources build phase.
+    const assetFile = xcodeProject.addFile(
       `${groupName}/Assets.xcassets`,
-      { target: target.uuid },
-      widgetGroupKey
+      widgetGroupKey,
+      { target: target.uuid, lastKnownFileType: 'folder.assetcatalog' }
     );
+    if (assetFile) {
+      assetFile.fileRef = xcodeProject.generateUuid();
+      xcodeProject.addToPbxFileReferenceSection(assetFile);
+      xcodeProject.addToPbxBuildFileSection(assetFile);
+      xcodeProject.addToPbxResourcesBuildPhase(assetFile);
+    }
 
     // Configure build settings for the widget target
     const configurations = xcodeProject.pbxXCBuildConfigurationSection();

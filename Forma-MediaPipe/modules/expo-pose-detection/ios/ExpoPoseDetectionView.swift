@@ -29,7 +29,7 @@ class ExpoPoseDetectionView: ExpoView {
   // MARK: - Configuration
   private var frameLimit: Int = 20
   private var showSkeleton: Bool = false
-  private var modelName: String = "pose_landmarker_full"
+  private var modelName: String = "pose_landmarker_heavy"
   private var isSessionRunning = false
 
   private static let allowedModels: Set<String> = [
@@ -99,7 +99,7 @@ class ExpoPoseDetectionView: ExpoView {
   }
 
   func configureModelName(_ name: String) {
-    let validName = Self.allowedModels.contains(name) ? name : "pose_landmarker_full"
+    let validName = Self.allowedModels.contains(name) ? name : "pose_landmarker_heavy"
     guard validName != modelName else { return }
     modelName = validName
     sessionQueue.async { [weak self] in
