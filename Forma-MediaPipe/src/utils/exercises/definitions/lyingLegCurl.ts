@@ -1,16 +1,18 @@
 /**
  * Lying Leg Curl -- Exercise Definition
  *
- * Side view, knee angle (hip-knee-ankle) as primary driver.
- * Person lies prone on a leg curl machine. Legs start extended (~160-170deg),
- * curl up to peak flexion (~40-70deg), then return.
+ * Side view, knee reach ratio (hip-ankle distance / leg-chain length) as
+ * primary driver.  Ratio is camera-distance-invariant.
+ *
+ * Person lies prone on a leg curl machine. Legs start extended (ratio ~0.96-0.98),
+ * curl up to peak flexion (ratio ~0.35-0.50), then return.
  *
  * FSM: REST -> CURLING -> CURLED -> LOWERING -> REST
  * One rep = full curl up + controlled lower back down.
  *
  * Form checks:
- *   1. Knee flexion ROM   -- did they curl far enough?
- *   2. Knee extension ROM -- did they fully extend at the bottom?
+ *   1. Knee flexion ROM   -- did they curl far enough?  (minRatio)
+ *   2. Knee extension ROM -- did they fully extend?     (maxRatio)
  *   3. Hip lift            -- hips rising off the pad (torso angle change)
  *   4. Tempo               -- concentric (curl) and eccentric (lower) speed
  *
@@ -35,29 +37,61 @@ import type {
 } from '../types';
 
 // ============================================================================
+// MODULE-PRIVATE HELPERS
+// ============================================================================
+
+type Point2D = { x: number; y: number };
+
+/** Euclidean distance between two 2D points. */
+function dist2D(a: Point2D, b: Point2D): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Compute "reach ratio" for a three-joint chain: A-B-C.
+ *   ratio = dist(A,C) / (dist(A,B) + dist(B,C))
+ *
+ * Returns 1.0 when perfectly straight, approaches 0 when fully folded.
+ * Camera-distance-invariant because both numerator and denominator scale
+ * identically with distance.
+ */
+function computeReachRatio(a: Point2D, b: Point2D, c: Point2D): number {
+  const chainLen = dist2D(a, b) + dist2D(b, c);
+  if (chainLen === 0) return 1;
+  return dist2D(a, c) / chainLen;
+}
+
+function getPoint(kp: Keypoint | null): Point2D | null {
+  if (!kp) return null;
+  return { x: kp.x, y: kp.y };
+}
+
+// ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees) — knee angle (hip-knee-ankle) */
+/** FSM thresholds — knee reach ratio (hip-ankle / chain length) */
 const THRESHOLDS = {
-  /** Knee angle below which we transition REST -> CURLING (legs start to bend) */
-  CURLING_ENTER: 140,
-  /** Knee angle below which we consider peak flexion (CURLING -> CURLED) */
-  CURLED_ENTER: 80,
-  /** Knee angle above which we leave CURLED (hysteresis) (CURLED -> LOWERING) */
-  CURLED_EXIT: 85,
-  /** Knee angle above which the extension is complete (LOWERING -> REST) */
-  REST_REENTER: 140,
+  /** Ratio below which we transition REST -> CURLING (legs start to bend) */
+  CURLING_ENTER: 0.90,
+  /** Ratio below which we consider peak flexion (CURLING -> CURLED) */
+  CURLED_ENTER: 0.55,
+  /** Ratio above which we leave CURLED (hysteresis) (CURLED -> LOWERING) */
+  CURLED_EXIT: 0.58,
+  /** Ratio above which the extension is complete (LOWERING -> REST) */
+  REST_REENTER: 0.90,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
 const FORM_THRESHOLDS = {
-  /** Min knee angle above which flexion is insufficient (didn't curl enough) */
-  FLEXION_FAIL: 80,
-  /** Max knee angle below which extension is insufficient (didn't straighten) */
-  EXTENSION_FAIL: 150,
+  /** Min ratio above which flexion is insufficient (didn't curl enough) */
+  FLEXION_FAIL: 0.55,
+  /** Max ratio below which extension is insufficient (didn't straighten) */
+  EXTENSION_FAIL: 0.93,
   /** Hip angle delta from baseline above which hips are lifting */
   HIP_LIFT_WARN: 12,
   /** Concentric (curl up) too fast threshold (seconds) */
@@ -69,19 +103,19 @@ const FORM_THRESHOLDS = {
 /**
  * Continuous penalty curve parameters for scoring.
  *
- * | Category          | Cap | Deadzone         | Scale | Key Input                          |
- * |-------------------|-----|------------------|-------|------------------------------------|
- * | ROM flexion       | 30  | 70 (minKnee)     | 0.04  | min knee angle - ideal flex angle  |
- * | ROM extension     | 25  | 155 (maxKnee)    | 0.05  | ideal extension - max knee angle   |
- * | Hip lift          | 30  | 8                | 0.10  | max hip angle delta from baseline  |
- * | Tempo curl        | 12  | 0.4s             | 60    | concentric time deficit            |
- * | Tempo lower       | 10  | 0.5s             | 40    | eccentric time deficit             |
+ * | Category          | Cap | Deadzone | Scale | Key Input                            |
+ * |-------------------|-----|----------|-------|--------------------------------------|
+ * | ROM flexion       | 30  | 0        | 500   | max(0, minRatio - 0.45) excess       |
+ * | ROM extension     | 25  | 0        | 800   | max(0, 0.96 - maxRatio) shortfall    |
+ * | Hip lift          | 30  | 8        | 0.10  | max hip angle delta from baseline     |
+ * | Tempo curl        | 12  | 0.4s     | 60    | concentric time deficit              |
+ * | Tempo lower       | 10  | 0.5s     | 40    | eccentric time deficit               |
  *
  * Max total penalty: 107 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  FLEXION_ROM:    { cap: 30, deadzone: 0, scale: 0.04 } as PenaltyConfig,
-  EXTENSION_ROM:  { cap: 25, deadzone: 0, scale: 0.05 } as PenaltyConfig,
+  FLEXION_ROM:    { cap: 30, deadzone: 0, scale: 500 } as PenaltyConfig,
+  EXTENSION_ROM:  { cap: 25, deadzone: 0, scale: 800 } as PenaltyConfig,
   HIP_LIFT:       { cap: 30, deadzone: 8, scale: 0.10 } as PenaltyConfig,
   TEMPO_CURL:     { cap: 12, deadzone: 0.4, scale: 60 } as PenaltyConfig,
   TEMPO_LOWER:    { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
@@ -106,10 +140,10 @@ interface LyingLegCurlFSM {
 }
 
 interface RepWindow {
-  /** Min knee angle during rep (should be low -- peak flexion) */
-  minKnee: number;
-  /** Max knee angle during rep (should be high -- full extension at start/end) */
-  maxKnee: number;
+  /** Min ratio during rep (should be low -- peak flexion) */
+  minRatio: number;
+  /** Max ratio during rep (should be high -- full extension at start/end) */
+  maxRatio: number;
   /** Hip angle at rep start (baseline for detecting lift) */
   hipAngleBaseline: number | null;
   /** Max absolute hip angle delta from baseline during rep */
@@ -133,14 +167,14 @@ interface LyingLegCurlState {
   repCount: number;
   repWindow: RepWindow | null;
   lastRepResult: RepResult | null;
-  /** Smoothed angle trackers */
-  kneeTracker: SmoothedAngleTracker;
+  /** Smoothed trackers */
+  ratioTracker: SmoothedAngleTracker;
   hipTracker: SmoothedAngleTracker;
   /** Warmup gate */
   warmupGate: WarmupGate;
   warmedUp: boolean;
-  /** Current smoothed angles for debug */
-  smoothedKnee: number | null;
+  /** Current smoothed values for debug */
+  smoothedRatio: number | null;
   smoothedHip: number | null;
   /** Feedback */
   feedback: string | null;
@@ -153,11 +187,11 @@ interface LyingLegCurlDebugInfo {
   phase: LyingLegCurlPhase;
   side: 'left' | 'right';
   warmedUp: boolean;
-  knee: number | null;
+  ratio: number | null;
   hipAngle: number | null;
   // Rep window
-  kneeMin: number | null;
-  kneeMax: number | null;
+  ratioMin: number | null;
+  ratioMax: number | null;
   hipDelta: number | null;
 }
 
@@ -176,8 +210,8 @@ function initFSM(): LyingLegCurlFSM {
 
 function initRepWindow(tStart: number): RepWindow {
   return {
-    minKnee: Infinity,
-    maxKnee: -Infinity,
+    minRatio: Infinity,
+    maxRatio: -Infinity,
     hipAngleBaseline: null,
     maxHipDelta: 0,
     tStart,
@@ -193,7 +227,7 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
     repCount: 0,
     repWindow: null,
     lastRepResult: null,
-    kneeTracker: new SmoothedAngleTracker(),
+    ratioTracker: new SmoothedAngleTracker(),
     hipTracker: new SmoothedAngleTracker(),
     warmupGate: new WarmupGate({
       requiredJoints: [
@@ -204,7 +238,7 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
       visibilityThreshold: 0.2,
     }),
     warmedUp: false,
-    smoothedKnee: null,
+    smoothedRatio: null,
     smoothedHip: null,
     feedback: null,
     lastFeedbackTime: 0,
@@ -236,21 +270,14 @@ function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
 }
 
 // ============================================================================
-// ANGLE CALCULATION
+// RATIO & ANGLE CALCULATION
 // ============================================================================
 
-type Point2D = { x: number; y: number };
-
-function getPoint(kp: Keypoint | null): Point2D | null {
-  if (!kp) return null;
-  return { x: kp.x, y: kp.y };
-}
-
 /**
- * Calculate the knee angle (hip-knee-ankle) in 2D.
- * ~160-170deg when legs extended, ~40-70deg when fully curled.
+ * Calculate the knee reach ratio (hip-ankle / chain) in 2D.
+ * ~0.96-0.98 when legs extended, ~0.35-0.50 when fully curled.
  */
-function calculateKneeAngle(
+function calculateKneeRatio(
   keypoints: Keypoint[],
   side: 'left' | 'right'
 ): number | null {
@@ -267,11 +294,11 @@ function calculateKneeAngle(
     return null;
   }
 
-  return calculateAngle2D(
-    getPoint(hip)!,
-    getPoint(knee)!,
-    getPoint(ankle)!
-  );
+  const hipPt = getPoint(hip)!;
+  const kneePt = getPoint(knee)!;
+  const anklePt = getPoint(ankle)!;
+
+  return computeReachRatio(hipPt, kneePt, anklePt);
 }
 
 /**
@@ -315,7 +342,7 @@ interface FSMUpdateResult {
 
 function updateFSM(
   currentFSM: LyingLegCurlFSM,
-  kneeAngle: number,
+  ratio: number,
   t: number
 ): FSMUpdateResult {
   const fsm = { ...currentFSM };
@@ -323,8 +350,8 @@ function updateFSM(
 
   switch (fsm.phase) {
     case 'REST':
-      // Legs extended. When knee starts flexing (angle drops), begin curl.
-      if (kneeAngle < THRESHOLDS.CURLING_ENTER) {
+      // Legs extended (high ratio). When ratio drops, begin curl.
+      if (ratio < THRESHOLDS.CURLING_ENTER) {
         fsm.phase = 'CURLING';
         fsm.tRepStart = t;
         fsm.tCurled = null;
@@ -333,11 +360,11 @@ function updateFSM(
       break;
 
     case 'CURLING':
-      // Actively curling up. When peak flexion reached, transition.
-      if (kneeAngle < THRESHOLDS.CURLED_ENTER) {
+      // Actively curling up. When peak flexion reached (low ratio), transition.
+      if (ratio < THRESHOLDS.CURLED_ENTER) {
         fsm.phase = 'CURLED';
         fsm.tCurled = t;
-      } else if (kneeAngle > THRESHOLDS.REST_REENTER && fsm.tRepStart !== null) {
+      } else if (ratio > THRESHOLDS.REST_REENTER && fsm.tRepStart !== null) {
         // Extended back out without curling far enough -- reset
         fsm.phase = 'REST';
         fsm.tRepStart = null;
@@ -345,23 +372,23 @@ function updateFSM(
       break;
 
     case 'CURLED':
-      // At peak flexion. When knee starts extending back (hysteresis), transition.
-      if (kneeAngle > THRESHOLDS.CURLED_EXIT) {
+      // At peak flexion (low ratio). When ratio rises back (hysteresis), transition.
+      if (ratio > THRESHOLDS.CURLED_EXIT) {
         fsm.phase = 'LOWERING';
       }
       break;
 
     case 'LOWERING':
-      // Controlled eccentric. When legs return to extended position, rep complete.
+      // Controlled eccentric. When legs return to extended position (high ratio), rep complete.
       if (
-        kneeAngle > THRESHOLDS.REST_REENTER &&
+        ratio > THRESHOLDS.REST_REENTER &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_REP_TIME
       ) {
         fsm.phase = 'REST';
         fsm.tRepEnd = t;
         repCompleted = true;
-      } else if (kneeAngle < THRESHOLDS.CURLED_ENTER) {
+      } else if (ratio < THRESHOLDS.CURLED_ENTER) {
         // Went back to curled position -- return to CURLED
         fsm.phase = 'CURLED';
       }
@@ -378,15 +405,15 @@ function updateFSM(
 function computeLyingLegCurlScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM -- flexion: ideal min knee angle is 70 or below. Excess = max(0, minKnee - 70)
-  const flexionExcess = Math.max(0, repWindow.minKnee - 70);
+  // 1. ROM -- flexion: ideal minRatio is 0.45 or below. Excess = max(0, minRatio - 0.45)
+  const flexionExcess = Math.max(0, repWindow.minRatio - 0.45);
   penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
 
-  // 2. ROM -- extension: ideal max knee angle is 155+. Shortfall = max(0, 155 - maxKnee)
-  const extensionShortfall = Math.max(0, 155 - repWindow.maxKnee);
+  // 2. ROM -- extension: ideal maxRatio is 0.96+. Shortfall = max(0, 0.96 - maxRatio)
+  const extensionShortfall = Math.max(0, 0.96 - repWindow.maxRatio);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
-  // 3. Hip lift (hip angle delta)
+  // 3. Hip lift (hip angle delta -- already camera-invariant)
   penalties.push({ value: repWindow.maxHipDelta, config: PENALTY_CONFIGS.HIP_LIFT });
 
   // 4. Tempo
@@ -415,13 +442,13 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
 function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
-  // 1. Flexion ROM -- didn't curl far enough
-  if (repWindow.minKnee > FORM_THRESHOLDS.FLEXION_FAIL) {
+  // 1. Flexion ROM -- didn't curl far enough (minRatio too high)
+  if (repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL) {
     messages.push('Curl higher \u2014 bring your heels closer to your glutes.');
   }
 
-  // 2. Extension ROM -- didn't straighten fully
-  if (repWindow.maxKnee < FORM_THRESHOLDS.EXTENSION_FAIL) {
+  // 2. Extension ROM -- didn't straighten fully (maxRatio too low)
+  if (repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL) {
     messages.push('Extend fully \u2014 straighten your legs at the bottom.');
   }
 
@@ -468,22 +495,22 @@ function updateLyingLegCurlState(
   // Select visible side
   const visibleSide = selectVisibleSide(keypoints);
 
-  // Calculate raw angles
-  const rawKnee = calculateKneeAngle(keypoints, visibleSide);
+  // Calculate raw ratio and hip angle
+  const rawRatio = calculateKneeRatio(keypoints, visibleSide);
   const rawHip = calculateHipAngle(keypoints, visibleSide);
 
-  // If we can't even see the knee, bail out
-  if (rawKnee === null) {
+  // If we can't even compute the ratio, bail out
+  if (rawRatio === null) {
     return {
       ...currentState,
       visibleSide,
-      smoothedKnee: null,
+      smoothedRatio: null,
       smoothedHip: null,
     };
   }
 
-  // Smooth angles
-  const smoothedKnee = currentState.kneeTracker.push(rawKnee);
+  // Smooth values through tracker pipeline
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio);
   const smoothedHip = rawHip !== null
     ? currentState.hipTracker.push(rawHip)
     : currentState.hipTracker.value;
@@ -491,16 +518,16 @@ function updateLyingLegCurlState(
   const newState: LyingLegCurlState = {
     ...currentState,
     visibleSide,
-    smoothedKnee,
+    smoothedRatio,
     smoothedHip: isNaN(smoothedHip) ? null : smoothedHip,
   };
 
-  if (isNaN(smoothedKnee)) {
+  if (isNaN(smoothedRatio)) {
     return newState;
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothedKnee, t);
+  const fsmResult = updateFSM(currentState.fsm, smoothedRatio, t);
   newState.fsm = fsmResult.fsm;
 
   // Track rep window while actively in a rep (not REST)
@@ -514,10 +541,10 @@ function updateLyingLegCurlState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update knee min/max
-    if (!isNaN(smoothedKnee)) {
-      window.minKnee = Math.min(window.minKnee, smoothedKnee);
-      window.maxKnee = Math.max(window.maxKnee, smoothedKnee);
+    // Update ratio min/max
+    if (!isNaN(smoothedRatio)) {
+      window.minRatio = Math.min(window.minRatio, smoothedRatio);
+      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
     }
 
     // Track hip angle delta from baseline
@@ -576,16 +603,21 @@ function getDebugInfo(state: LyingLegCurlState): LyingLegCurlDebugInfo {
   const fmt = (v: number | null | undefined): number | null =>
     v !== null && v !== undefined && !isNaN(v) && isFinite(v) ? v : null;
 
+  const fmtRatio = (v: number | null | undefined): number | null => {
+    if (v === null || v === undefined || isNaN(v) || !isFinite(v)) return null;
+    return Math.round(v * 1000) / 1000; // 3 decimal places for ratios
+  };
+
   const repWin = state.repWindow;
 
   return {
     phase: state.fsm.phase,
     side: state.visibleSide,
     warmedUp: state.warmedUp,
-    knee: fmt(state.smoothedKnee),
+    ratio: fmtRatio(state.smoothedRatio),
     hipAngle: fmt(state.smoothedHip),
-    kneeMin: repWin && repWin.minKnee !== Infinity ? fmt(repWin.minKnee) : null,
-    kneeMax: repWin && repWin.maxKnee !== -Infinity ? fmt(repWin.maxKnee) : null,
+    ratioMin: repWin && repWin.minRatio !== Infinity ? fmtRatio(repWin.minRatio) : null,
+    ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmtRatio(repWin.maxRatio) : null,
     hipDelta: repWin ? fmt(repWin.maxHipDelta) : null,
   };
 }
