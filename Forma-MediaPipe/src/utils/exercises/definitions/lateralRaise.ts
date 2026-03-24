@@ -1,19 +1,20 @@
 /**
  * Standing Dumbbell Lateral Raises -- Exercise Definition
  *
- * Front-view exercise tracking shoulder abduction angle as the primary driver.
- * Both arms are tracked independently for symmetry checking. Average abduction
- * drives the FSM; per-arm values feed the scoring system.
+ * Uses ratio-based metrics for camera-angle-invariant form detection.
+ * Primary metric: arm height ratio = (hip.y - wrist.y) / (hip.y - shoulder.y)
+ *   - Arms at sides: ~0.0-0.3
+ *   - Arms at shoulder level: ~1.0
+ *   - Camera-invariant: normalized by torso height
+ * Secondary: arm straightness ratio = dist(shoulder,wrist) / (dist(shoulder,elbow) + dist(elbow,wrist))
  *
  * FSM: REST -> RAISING -> TOP -> LOWERING -> REST
- * Primary angle: shoulder abduction (hip-shoulder-elbow)
  *
  * The only export is `lateralRaiseDefinition`.
  */
 
 import {
   Keypoint,
-  calculateAngle2D,
   getKeypoint,
   isVisible,
 } from '../../poseAnalysis';
@@ -32,51 +33,48 @@ import { computeScore, PenaltyConfig } from '../shared/scoring';
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees of shoulder abduction) */
+/**
+ * FSM thresholds — ratio-based (camera-angle invariant).
+ * Arm height ratio: (hip.y - wrist.y) / (hip.y - shoulder.y)
+ *   0.0 = wrist at hip level, 1.0 = wrist at shoulder level
+ */
 const THRESHOLDS = {
-  /** Abduction above which we leave REST and enter RAISING */
-  RAISING_ENTER: 25,
-  /** Abduction above which we transition RAISING -> TOP */
-  TOP_ENTER: 70,
-  /** Abduction below which we leave TOP (hysteresis) */
-  TOP_EXIT: 65,
-  /** Abduction below which we complete the rep (LOWERING -> REST) */
-  REST_ENTER: 25,
+  /** Height ratio above which we leave REST and enter RAISING */
+  RAISING_ENTER: 0.30,
+  /** Height ratio above which we transition RAISING -> TOP */
+  TOP_ENTER: 0.85,
+  /** Height ratio below which we leave TOP (hysteresis) */
+  TOP_EXIT: 0.80,
+  /** Height ratio below which we complete the rep (LOWERING -> REST) */
+  REST_ENTER: 0.30,
   /** Minimum time (seconds) for a rep to count */
   MIN_REP_TIME: 0.5,
 } as const;
 
-/** Form heuristic thresholds (discrete -- for visual feedback messages) */
+/** Form heuristic thresholds — ratio-based where applicable */
 const FORM_THRESHOLDS = {
-  /** Max abduction should reach at least this for good ROM */
-  ROM_MIN: 80,
-  /** Elbow angle below this triggers "keep arms straighter" */
-  ELBOW_BEND_WARN: 140,
-  /** Torso lateral lean above this triggers "stay upright" (lowered: 6→1.8 to catch subtle momentum sway) */
+  /** Max height ratio should reach at least this for good ROM (1.0 = shoulder level) */
+  ROM_MIN: 0.92,
+  /** Arm straightness ratio below this triggers "keep arms straighter".
+   *  1.0 = perfectly straight, ~0.85 = noticeably bent. */
+  ELBOW_STRAIGHTNESS_WARN: 0.88,
+  /** Torso lateral lean above this triggers "stay upright" */
   TORSO_LEAN_WARN: 1.8,
-  /** Abduction difference between arms above this triggers asymmetry */
-  ASYMMETRY_WARN: 18,
-  /**
-   * Eccentric tempo threshold (seconds).
-   * Measured from TOP→LOWERING transition (65°) to rep end (25°) — ~40° of travel.
-   * A natural controlled lower covers this in ~0.4–0.6s, so only flag clearly dropped reps.
-   */
+  /** Height ratio difference between arms above this triggers asymmetry */
+  ASYMMETRY_WARN: 0.18,
+  /** Eccentric tempo threshold (seconds). */
   TEMPO_LOWER_MIN: 0.35,
-  /**
-   * Shoulder elevation (shrug) as percentage of torso height.
-   * Measured as how much shoulders RISE above the rest-state baseline.
-   * Raised from 8→12 to account for ~8–10% of natural shoulder rise during clean abduction.
-   */
+  /** Shoulder elevation (shrug) as percentage of torso height (already ratio-based). */
   SHRUG_WARN: 12,
 } as const;
 
 /** Ideal targets used by the scoring system (separate from penalty deadzones) */
 const IDEAL = {
-  /** Shoulder-level abduction (degrees) */
-  MAX_ABDUCTION: 85,
-  /** Nearly straight arm (degrees) */
-  MIN_ELBOW_ANGLE: 160,
-  /** Controlled eccentric time (seconds) — ideal for scoring, not the feedback cutoff */
+  /** Shoulder-level height ratio */
+  MAX_HEIGHT_RATIO: 1.0,
+  /** Nearly straight arm (straightness ratio) */
+  MIN_STRAIGHTNESS: 0.97,
+  /** Controlled eccentric time (seconds) */
   ECCENTRIC_TIME: 0.55,
 } as const;
 
@@ -84,27 +82,25 @@ const IDEAL = {
  * Continuous penalty curve configs for scoring.
  *
  * Formula: min(cap, scale × max(0, value − deadzone)²)
- * "value" is the measured deviation from ideal (computed in computeRepWindowScore).
- * "deadzone" is the tolerance before penalty kicks in (NOT the ideal target).
  *
- * | Category     | Cap | Deadzone | Scale | Input                                         |
- * |--------------|-----|----------|-------|-----------------------------------------------|
- * | ROM          | 50  | 0°       | 0.50  | ideal 85° − maxAbduction                      |
- * | Elbow bend   | 20  | 20°      | 0.10  | ideal 160° − minElbowAngle                    |
- * | Torso lean   | 25  | 1.8°     | 200   | maxTorsoLean from vertical (tightened heavily) |
+ * | Category     | Cap | Deadzone | Scale | Input                                          |
+ * |--------------|-----|----------|-------|------------------------------------------------|
+ * | ROM          | 50  | 0        | 500   | ideal 1.0 − maxHeightRatio                     |
+ * | Arm straight | 20  | 0.05     | 1500  | ideal 0.97 − minStraightnessRatio              |
+ * | Torso lean   | 25  | 1.8°     | 200   | maxTorsoLean from vertical                     |
  * | Tempo lower  | 35  | 0.05s    | 1800  | ideal 0.55s − actual eccentric time            |
- * | Asymmetry    | 15  | 10°      | 0.04  | maxAbductionDiff between arms                 |
+ * | Asymmetry    | 15  | 0.08     | 800   | maxHeightRatioDiff between arms                |
  * | Shrug        | 20  | 10%      | 0.50  | shoulder elevation % above rest baseline       |
  *
  * Max total penalty: 165 → worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  ROM:         { cap: 50, deadzone: 0,    scale: 0.50 } as PenaltyConfig,
-  ELBOW_BEND:  { cap: 20, deadzone: 20,   scale: 0.10 } as PenaltyConfig,
-  TORSO_LEAN:  { cap: 25, deadzone: 1.8,  scale: 200  } as PenaltyConfig,
-  TEMPO_LOWER: { cap: 35, deadzone: 0.05, scale: 1800 } as PenaltyConfig,
-  ASYMMETRY:   { cap: 15, deadzone: 10,   scale: 0.04 } as PenaltyConfig,
-  SHRUG:       { cap: 20, deadzone: 10,   scale: 0.50 } as PenaltyConfig,
+  ROM:            { cap: 50, deadzone: 0,    scale: 500  } as PenaltyConfig,
+  ARM_STRAIGHT:   { cap: 20, deadzone: 0.05, scale: 1500 } as PenaltyConfig,
+  TORSO_LEAN:     { cap: 25, deadzone: 1.8,  scale: 200  } as PenaltyConfig,
+  TEMPO_LOWER:    { cap: 35, deadzone: 0.05, scale: 1800 } as PenaltyConfig,
+  ASYMMETRY:      { cap: 15, deadzone: 0.08, scale: 800  } as PenaltyConfig,
+  SHRUG:          { cap: 20, deadzone: 10,   scale: 0.50 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -122,20 +118,20 @@ interface RepWindow {
   /** Timestamp of the TOP→LOWERING transition — the true eccentric start */
   tLoweringStart: number | null;
   tEnd: number;
-  /** Max abduction reached (average of both arms) */
-  maxAbduction: number;
-  /** Max abduction per arm (for asymmetry) */
-  maxLeftAbduction: number;
-  maxRightAbduction: number;
-  /** Max difference in abduction between arms at any frame */
-  maxAbductionDiff: number;
-  /** Min elbow angle during the rep (lower = more bend) */
-  minElbowAngle: number;
-  /** Max torso lateral lean during the rep */
+  /** Max arm height ratio reached (average of both arms) */
+  maxHeightRatio: number;
+  /** Max height ratio per arm (for asymmetry) */
+  maxLeftHeightRatio: number;
+  maxRightHeightRatio: number;
+  /** Max height ratio difference between arms at any frame */
+  maxHeightRatioDiff: number;
+  /** Min arm straightness ratio during the rep (lower = more bent) */
+  minStraightnessRatio: number;
+  /** Max torso lateral lean during the rep (degrees — already camera-invariant) */
   maxTorsoLean: number;
   /** Baseline torso height at rep start (for shrug detection) */
   baselineTorsoHeight: number | null;
-  /** Max shoulder shrug as percentage of torso height compression */
+  /** Max shoulder shrug as percentage of torso height (already ratio-based) */
   maxShrugPct: number;
   /** Frame count */
   frameCount: number;
@@ -150,11 +146,11 @@ interface LateralRaiseState {
   repWindow: RepWindow | null;
   /** Last completed rep result */
   lastRepResult: RepResult | null;
-  /** Smoothed angle trackers */
-  leftAbductionTracker: SmoothedAngleTracker;
-  rightAbductionTracker: SmoothedAngleTracker;
-  leftElbowTracker: SmoothedAngleTracker;
-  rightElbowTracker: SmoothedAngleTracker;
+  /** Smoothed ratio/angle trackers */
+  leftHeightRatioTracker: SmoothedAngleTracker;
+  rightHeightRatioTracker: SmoothedAngleTracker;
+  leftStraightnessTracker: SmoothedAngleTracker;
+  rightStraightnessTracker: SmoothedAngleTracker;
   torsoLeanTracker: SmoothedAngleTracker;
   /** Warmup gate */
   warmupGate: WarmupGate;
@@ -162,16 +158,15 @@ interface LateralRaiseState {
   warmedUp: boolean;
   /**
    * Torso height (midHipY − midShoulderY) captured during REST.
-   * Used as the shrug baseline so we measure shoulder ELEVATION above rest,
-   * not torso height compression (which was incorrectly signed and noisy).
+   * Used as the shrug baseline so we measure shoulder ELEVATION above rest.
    */
   restTorsoHeight: number | null;
   /** Current smoothed values (for debug) */
-  smoothedLeftAbduction: number;
-  smoothedRightAbduction: number;
-  smoothedAvgAbduction: number;
-  smoothedLeftElbow: number;
-  smoothedRightElbow: number;
+  smoothedLeftHeightRatio: number;
+  smoothedRightHeightRatio: number;
+  smoothedAvgHeightRatio: number;
+  smoothedLeftStraightness: number;
+  smoothedRightStraightness: number;
   smoothedTorsoLean: number;
   /** Visual feedback */
   feedback: string | null;
@@ -188,15 +183,15 @@ interface RepResult {
 interface LateralRaiseDebugInfo {
   phase: LateralRaisePhase;
   warmedUp: boolean;
-  leftAbduction: number | null;
-  rightAbduction: number | null;
-  avgAbduction: number | null;
-  leftElbow: number | null;
-  rightElbow: number | null;
+  leftHeightRatio: number | null;
+  rightHeightRatio: number | null;
+  avgHeightRatio: number | null;
+  leftStraightness: number | null;
+  rightStraightness: number | null;
   torsoLean: number | null;
-  maxAbduction: number | null;
-  maxAbductionDiff: number | null;
-  minElbow: number | null;
+  maxHeightRatio: number | null;
+  maxHeightRatioDiff: number | null;
+  minStraightness: number | null;
   maxTorsoLean: number | null;
   shrugPct: number | null;
 }
@@ -212,10 +207,10 @@ function initializeState(): LateralRaiseState {
     tRepStart: null,
     repWindow: null,
     lastRepResult: null,
-    leftAbductionTracker: new SmoothedAngleTracker(),
-    rightAbductionTracker: new SmoothedAngleTracker(),
-    leftElbowTracker: new SmoothedAngleTracker(),
-    rightElbowTracker: new SmoothedAngleTracker(),
+    leftHeightRatioTracker: new SmoothedAngleTracker(),
+    rightHeightRatioTracker: new SmoothedAngleTracker(),
+    leftStraightnessTracker: new SmoothedAngleTracker(),
+    rightStraightnessTracker: new SmoothedAngleTracker(),
     torsoLeanTracker: new SmoothedAngleTracker(),
     warmupGate: new WarmupGate({
       requiredJoints: [
@@ -227,11 +222,11 @@ function initializeState(): LateralRaiseState {
     }),
     warmedUp: false,
     restTorsoHeight: null,
-    smoothedLeftAbduction: 0,
-    smoothedRightAbduction: 0,
-    smoothedAvgAbduction: 0,
-    smoothedLeftElbow: 180,
-    smoothedRightElbow: 180,
+    smoothedLeftHeightRatio: 0,
+    smoothedRightHeightRatio: 0,
+    smoothedAvgHeightRatio: 0,
+    smoothedLeftStraightness: 1.0,
+    smoothedRightStraightness: 1.0,
     smoothedTorsoLean: 0,
     feedback: null,
     lastFeedbackTime: 0,
@@ -244,11 +239,11 @@ function initRepWindow(tStart: number, baselineTorsoHeight: number | null): RepW
     tTop: null,
     tLoweringStart: null,
     tEnd: tStart,
-    maxAbduction: 0,
-    maxLeftAbduction: 0,
-    maxRightAbduction: 0,
-    maxAbductionDiff: 0,
-    minElbowAngle: 180,
+    maxHeightRatio: 0,
+    maxLeftHeightRatio: 0,
+    maxRightHeightRatio: 0,
+    maxHeightRatioDiff: 0,
+    minStraightnessRatio: 1.0,
     maxTorsoLean: 0,
     baselineTorsoHeight,
     maxShrugPct: 0,
@@ -257,44 +252,58 @@ function initRepWindow(tStart: number, baselineTorsoHeight: number | null): RepW
 }
 
 // ============================================================================
-// GEOMETRY HELPERS
+// GEOMETRY HELPERS (ratio-based)
 // ============================================================================
 
-type Point2D = { x: number; y: number };
-
-function getPoint(kp: Keypoint): Point2D {
-  return { x: kp.x, y: kp.y };
+/** Euclidean distance in 2D */
+function dist2D(a: Keypoint, b: Keypoint): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 /**
- * Compute shoulder abduction angle for one side.
- * Measured as the angle at the shoulder between hip-shoulder-elbow (2D).
- * Arms at sides: ~0-15 degrees. Arms at shoulder height: ~80-90 degrees.
+ * Compute arm height ratio for one side.
+ * Ratio = (hip.y - wrist.y) / (hip.y - shoulder.y)
+ *   0.0 = wrist at hip level (arms at sides)
+ *   1.0 = wrist at shoulder level
+ *   >1.0 = wrist above shoulders
+ * Camera-invariant: normalized by torso height.
+ * Uses midpoint of both hips for stability.
  */
-function computeAbduction(
-  hip: Keypoint,
-  shoulder: Keypoint,
-  elbow: Keypoint,
+function computeArmHeightRatio(
+  wrist: Keypoint,
+  leftHip: Keypoint,
+  rightHip: Keypoint,
+  leftShoulder: Keypoint,
+  rightShoulder: Keypoint,
 ): number {
-  return calculateAngle2D(getPoint(hip), getPoint(shoulder), getPoint(elbow));
+  const midHipY = (leftHip.y + rightHip.y) / 2;
+  const midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+  const torsoHeight = midHipY - midShoulderY; // positive (Y increases downward)
+  if (torsoHeight < 0.01) return 0;
+  return (midHipY - wrist.y) / torsoHeight;
 }
 
 /**
- * Compute elbow angle (shoulder-elbow-wrist).
- * Straight arm: ~170-180 degrees. Bent: lower.
+ * Compute arm straightness ratio for one side.
+ * Ratio = dist(shoulder, wrist) / (dist(shoulder, elbow) + dist(elbow, wrist))
+ *   1.0 = perfectly straight, ~0.85 = noticeably bent
+ * Camera-invariant: foreshortening scales numerator and denominator equally.
  */
-function computeElbowAngle(
+function computeArmStraightnessRatio(
   shoulder: Keypoint,
   elbow: Keypoint,
   wrist: Keypoint,
 ): number {
-  return calculateAngle2D(getPoint(shoulder), getPoint(elbow), getPoint(wrist));
+  const chainLen = dist2D(shoulder, elbow) + dist2D(elbow, wrist);
+  if (chainLen < 1e-6) return 1.0;
+  return dist2D(shoulder, wrist) / chainLen;
 }
 
 /**
- * Compute lateral torso lean from front view.
- * Uses midpoint of shoulders and midpoint of hips.
- * Returns absolute lean angle in degrees from vertical.
+ * Compute lateral torso lean from front view (degrees from vertical).
+ * Already camera-invariant as a ratio of dx/dy.
  */
 function computeTorsoLean(
   leftShoulder: Keypoint,
@@ -307,12 +316,9 @@ function computeTorsoLean(
   const midHipX = (leftHip.x + rightHip.x) / 2;
   const midHipY = (leftHip.y + rightHip.y) / 2;
 
-  // Angle of the shoulder-hip midline from vertical (Y axis)
-  // atan2(dx, dy) gives angle from vertical; positive = lean right
   const dx = midHipX - midShoulderX;
   const dy = midHipY - midShoulderY;
 
-  // Absolute lateral lean in degrees
   return Math.abs(Math.atan2(dx, dy) * (180 / Math.PI));
 }
 
@@ -325,9 +331,13 @@ interface FSMResult {
   repCompleted: boolean;
 }
 
+/**
+ * Update FSM using average arm height ratio (camera-invariant).
+ * 0.0 = arms at sides, 1.0 = shoulder level.
+ */
 function updateFSM(
   currentPhase: LateralRaisePhase,
-  avgAbduction: number,
+  avgHeightRatio: number,
   t: number,
   tRepStart: number | null,
 ): FSMResult {
@@ -336,34 +346,34 @@ function updateFSM(
 
   switch (phase) {
     case 'REST':
-      if (avgAbduction > THRESHOLDS.RAISING_ENTER) {
+      if (avgHeightRatio > THRESHOLDS.RAISING_ENTER) {
         phase = 'RAISING';
       }
       break;
 
     case 'RAISING':
-      if (avgAbduction >= THRESHOLDS.TOP_ENTER) {
+      if (avgHeightRatio >= THRESHOLDS.TOP_ENTER) {
         phase = 'TOP';
-      } else if (avgAbduction < THRESHOLDS.REST_ENTER) {
+      } else if (avgHeightRatio < THRESHOLDS.REST_ENTER) {
         // Aborted raise -- back to rest without counting
         phase = 'REST';
       }
       break;
 
     case 'TOP':
-      if (avgAbduction < THRESHOLDS.TOP_EXIT) {
+      if (avgHeightRatio < THRESHOLDS.TOP_EXIT) {
         phase = 'LOWERING';
       }
       break;
 
     case 'LOWERING':
-      if (avgAbduction < THRESHOLDS.REST_ENTER) {
+      if (avgHeightRatio < THRESHOLDS.REST_ENTER) {
         // Rep complete if enough time has passed
         if (tRepStart !== null && (t - tRepStart) >= THRESHOLDS.MIN_REP_TIME) {
           repCompleted = true;
         }
         phase = 'REST';
-      } else if (avgAbduction >= THRESHOLDS.TOP_ENTER) {
+      } else if (avgHeightRatio >= THRESHOLDS.TOP_ENTER) {
         // User raised arms again before completing descent
         phase = 'TOP';
       }
@@ -380,20 +390,18 @@ function updateFSM(
 function computeRepWindowScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM shortfall -- ideal is 85° (shoulder level). FSM ensures ≥70° so range is 0-15°.
-  const romShortfall = Math.max(0, IDEAL.MAX_ABDUCTION - repWindow.maxAbduction);
+  // 1. ROM shortfall — ideal is ratio 1.0 (shoulder level). FSM ensures ≥0.85.
+  const romShortfall = Math.max(0, IDEAL.MAX_HEIGHT_RATIO - repWindow.maxHeightRatio);
   penalties.push({ value: romShortfall, config: PENALTY_CONFIGS.ROM });
 
-  // 2. Elbow bend -- ideal is 160° (slight bend OK). Lower = more bend = worse.
-  const elbowBendExcess = Math.max(0, IDEAL.MIN_ELBOW_ANGLE - repWindow.minElbowAngle);
-  penalties.push({ value: elbowBendExcess, config: PENALTY_CONFIGS.ELBOW_BEND });
+  // 2. Arm straightness — ideal is 0.97 (slight bend OK). Lower = more bend = worse.
+  const straightnessDeficit = Math.max(0, IDEAL.MIN_STRAIGHTNESS - repWindow.minStraightnessRatio);
+  penalties.push({ value: straightnessDeficit, config: PENALTY_CONFIGS.ARM_STRAIGHT });
 
-  // 3. Torso lean -- lower is better (deadzone handles small amounts)
+  // 3. Torso lean — lower is better (deadzone handles small amounts)
   penalties.push({ value: repWindow.maxTorsoLean, config: PENALTY_CONFIGS.TORSO_LEAN });
 
-  // 4. Eccentric tempo only -- no penalty for concentric speed.
-  // Use tLoweringStart (TOP→LOWERING transition) not tTop, so we measure only the
-  // actual descent phase and don't inflate the time with the concentric + hold at peak.
+  // 4. Eccentric tempo only — no penalty for concentric speed.
   if (repWindow.tLoweringStart !== null) {
     const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < IDEAL.ECCENTRIC_TIME) {
@@ -402,10 +410,10 @@ function computeRepWindowScore(repWindow: RepWindow): number {
     }
   }
 
-  // 5. Asymmetry -- max abduction difference between arms
-  penalties.push({ value: repWindow.maxAbductionDiff, config: PENALTY_CONFIGS.ASYMMETRY });
+  // 5. Asymmetry — max height ratio difference between arms
+  penalties.push({ value: repWindow.maxHeightRatioDiff, config: PENALTY_CONFIGS.ASYMMETRY });
 
-  // 6. Shoulder shrug -- torso height compression percentage
+  // 6. Shoulder shrug — torso height compression percentage (already ratio-based)
   penalties.push({ value: repWindow.maxShrugPct, config: PENALTY_CONFIGS.SHRUG });
 
   return computeScore(penalties);
@@ -418,13 +426,13 @@ function computeRepWindowScore(repWindow: RepWindow): number {
 function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
-  // 1. ROM -- raise height
-  if (repWindow.maxAbduction < FORM_THRESHOLDS.ROM_MIN) {
+  // 1. ROM — raise height (ratio-based)
+  if (repWindow.maxHeightRatio < FORM_THRESHOLDS.ROM_MIN) {
     messages.push('Raise higher \u2014 aim for shoulder level.');
   }
 
-  // 2. Elbow bend
-  if (repWindow.minElbowAngle < FORM_THRESHOLDS.ELBOW_BEND_WARN) {
+  // 2. Arm straightness (ratio-based)
+  if (repWindow.minStraightnessRatio < FORM_THRESHOLDS.ELBOW_STRAIGHTNESS_WARN) {
     messages.push('Keep your arms straighter \u2014 avoid excessive elbow bend.');
   }
 
@@ -433,13 +441,12 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Stay upright \u2014 avoid swaying or leaning.');
   }
 
-  // 4. Asymmetry
-  if (repWindow.maxAbductionDiff > FORM_THRESHOLDS.ASYMMETRY_WARN) {
+  // 4. Asymmetry (ratio-based)
+  if (repWindow.maxHeightRatioDiff > FORM_THRESHOLDS.ASYMMETRY_WARN) {
     messages.push('Even it out \u2014 raise both arms to the same height.');
   }
 
-  // 5. Eccentric tempo only (no concentric check).
-  // Measured from TOP→LOWERING transition to rep end — excludes the concentric + top hold.
+  // 5. Eccentric tempo only
   if (repWindow.tLoweringStart !== null) {
     const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN) {
@@ -496,17 +503,22 @@ function updateLateralRaiseState(
     return state;
   }
 
-  // -- Compute raw angles --
-  const rawLeftAbduction = computeAbduction(lh!, ls!, le!);
-  const rawRightAbduction = computeAbduction(rh!, rs!, re!);
+  // -- Compute raw ratios --
+  // Arm height ratio: wrist height relative to torso (0 = hip, 1.0 = shoulder)
+  // Uses elbow as fallback for wrist if wrist not visible (arms still track via elbow height)
+  const leftWristPoint = isVisible(lw, VISIBILITY_THRESHOLD) ? lw! : le!;
+  const rightWristPoint = isVisible(rw, VISIBILITY_THRESHOLD) ? rw! : re!;
+  const rawLeftHeightRatio = computeArmHeightRatio(leftWristPoint, lh!, rh!, ls!, rs!);
+  const rawRightHeightRatio = computeArmHeightRatio(rightWristPoint, lh!, rh!, ls!, rs!);
 
-  let rawLeftElbow = 180;
-  let rawRightElbow = 180;
+  // Arm straightness ratio (only when wrist visible)
+  let rawLeftStraightness = 1.0;
+  let rawRightStraightness = 1.0;
   if (isVisible(lw, VISIBILITY_THRESHOLD)) {
-    rawLeftElbow = computeElbowAngle(ls!, le!, lw!);
+    rawLeftStraightness = computeArmStraightnessRatio(ls!, le!, lw!);
   }
   if (isVisible(rw, VISIBILITY_THRESHOLD)) {
-    rawRightElbow = computeElbowAngle(rs!, re!, rw!);
+    rawRightStraightness = computeArmStraightnessRatio(rs!, re!, rw!);
   }
 
   let rawTorsoLean = 0;
@@ -519,24 +531,24 @@ function updateLateralRaiseState(
     rawTorsoLean = computeTorsoLean(ls!, rs!, lh!, rh!);
   }
 
-  // -- Smooth angles --
-  const smoothedLeftAbduction = state.leftAbductionTracker.push(rawLeftAbduction);
-  const smoothedRightAbduction = state.rightAbductionTracker.push(rawRightAbduction);
-  const smoothedAvgAbduction = (smoothedLeftAbduction + smoothedRightAbduction) / 2;
-  const smoothedLeftElbow = state.leftElbowTracker.push(rawLeftElbow);
-  const smoothedRightElbow = state.rightElbowTracker.push(rawRightElbow);
+  // -- Smooth ratios --
+  const smoothedLeftHeightRatio = state.leftHeightRatioTracker.push(rawLeftHeightRatio);
+  const smoothedRightHeightRatio = state.rightHeightRatioTracker.push(rawRightHeightRatio);
+  const smoothedAvgHeightRatio = (smoothedLeftHeightRatio + smoothedRightHeightRatio) / 2;
+  const smoothedLeftStraightness = state.leftStraightnessTracker.push(rawLeftStraightness);
+  const smoothedRightStraightness = state.rightStraightnessTracker.push(rawRightStraightness);
   const smoothedTorsoLean = state.torsoLeanTracker.push(rawTorsoLean);
 
   // Update display values (mutate in place for perf)
-  state.smoothedLeftAbduction = smoothedLeftAbduction;
-  state.smoothedRightAbduction = smoothedRightAbduction;
-  state.smoothedAvgAbduction = smoothedAvgAbduction;
-  state.smoothedLeftElbow = smoothedLeftElbow;
-  state.smoothedRightElbow = smoothedRightElbow;
+  state.smoothedLeftHeightRatio = smoothedLeftHeightRatio;
+  state.smoothedRightHeightRatio = smoothedRightHeightRatio;
+  state.smoothedAvgHeightRatio = smoothedAvgHeightRatio;
+  state.smoothedLeftStraightness = smoothedLeftStraightness;
+  state.smoothedRightStraightness = smoothedRightStraightness;
   state.smoothedTorsoLean = smoothedTorsoLean;
 
-  // -- FSM update --
-  const fsmResult = updateFSM(state.phase, smoothedAvgAbduction, t, state.tRepStart);
+  // -- FSM update (ratio-based) --
+  const fsmResult = updateFSM(state.phase, smoothedAvgHeightRatio, t, state.tRepStart);
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
@@ -570,17 +582,17 @@ function updateLateralRaiseState(
     w.tEnd = t;
     w.frameCount++;
 
-    // Max abduction (average)
-    w.maxAbduction = Math.max(w.maxAbduction, smoothedAvgAbduction);
-    // Per-arm max abduction
-    w.maxLeftAbduction = Math.max(w.maxLeftAbduction, smoothedLeftAbduction);
-    w.maxRightAbduction = Math.max(w.maxRightAbduction, smoothedRightAbduction);
-    // Max difference between arms at this frame
-    const abductionDiff = Math.abs(smoothedLeftAbduction - smoothedRightAbduction);
-    w.maxAbductionDiff = Math.max(w.maxAbductionDiff, abductionDiff);
-    // Min elbow angle (worst bend)
-    const minElbow = Math.min(smoothedLeftElbow, smoothedRightElbow);
-    w.minElbowAngle = Math.min(w.minElbowAngle, minElbow);
+    // Max height ratio (average)
+    w.maxHeightRatio = Math.max(w.maxHeightRatio, smoothedAvgHeightRatio);
+    // Per-arm max height ratio
+    w.maxLeftHeightRatio = Math.max(w.maxLeftHeightRatio, smoothedLeftHeightRatio);
+    w.maxRightHeightRatio = Math.max(w.maxRightHeightRatio, smoothedRightHeightRatio);
+    // Max height ratio difference between arms at this frame
+    const heightRatioDiff = Math.abs(smoothedLeftHeightRatio - smoothedRightHeightRatio);
+    w.maxHeightRatioDiff = Math.max(w.maxHeightRatioDiff, heightRatioDiff);
+    // Min arm straightness ratio (worst bend)
+    const minStraightness = Math.min(smoothedLeftStraightness, smoothedRightStraightness);
+    w.minStraightnessRatio = Math.min(w.minStraightnessRatio, minStraightness);
     // Max torso lean
     w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
 
@@ -666,15 +678,15 @@ function getDebugInfo(state: LateralRaiseState): LateralRaiseDebugInfo {
   return {
     phase: state.phase,
     warmedUp: state.warmedUp,
-    leftAbduction: fmt(state.smoothedLeftAbduction),
-    rightAbduction: fmt(state.smoothedRightAbduction),
-    avgAbduction: fmt(state.smoothedAvgAbduction),
-    leftElbow: fmt(state.smoothedLeftElbow),
-    rightElbow: fmt(state.smoothedRightElbow),
+    leftHeightRatio: fmt(state.smoothedLeftHeightRatio),
+    rightHeightRatio: fmt(state.smoothedRightHeightRatio),
+    avgHeightRatio: fmt(state.smoothedAvgHeightRatio),
+    leftStraightness: fmt(state.smoothedLeftStraightness),
+    rightStraightness: fmt(state.smoothedRightStraightness),
     torsoLean: fmt(state.smoothedTorsoLean),
-    maxAbduction: w ? fmt(w.maxAbduction) : null,
-    maxAbductionDiff: w ? fmt(w.maxAbductionDiff) : null,
-    minElbow: w ? (w.minElbowAngle < 180 ? fmt(w.minElbowAngle) : null) : null,
+    maxHeightRatio: w ? fmt(w.maxHeightRatio) : null,
+    maxHeightRatioDiff: w ? fmt(w.maxHeightRatioDiff) : null,
+    minStraightness: w ? (w.minStraightnessRatio < 1.0 ? fmt(w.minStraightnessRatio) : null) : null,
     maxTorsoLean: w ? fmt(w.maxTorsoLean) : null,
     shrugPct: w ? fmt(w.maxShrugPct) : null,
   };
