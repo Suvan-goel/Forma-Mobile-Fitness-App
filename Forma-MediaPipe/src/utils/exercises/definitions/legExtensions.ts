@@ -1,10 +1,13 @@
 /**
  * Leg Extensions -- Exercise Definition
  *
- * Side view, knee angle as primary driver.
+ * Side view, knee reach ratio as primary driver.
  * FSM: REST -> EXTENDING -> EXTENDED -> RETURNING -> REST
- * Legs start bent (~80-100deg at the knee), extend to near-full extension (~160-175deg),
+ * Legs start bent (ratio ~0.55-0.65), extend to near-full extension (ratio ~0.93-1.0),
  * then return. One rep = full extension + controlled return.
+ *
+ * Ratio = dist2D(hip,ankle) / (dist2D(hip,knee) + dist2D(knee,ankle))
+ * High ratio = leg extended (straight). Low ratio = leg bent.
  *
  * Seated machine exercise -- the user sits with back supported and extends
  * their lower legs against a padded lever. Camera should be positioned to the
@@ -33,29 +36,81 @@ import type {
 } from '../types';
 
 // ============================================================================
+// MODULE-PRIVATE HELPERS
+// ============================================================================
+
+type Point2D = { x: number; y: number };
+
+function getPoint(kp: Keypoint | null): Point2D | null {
+  if (!kp) return null;
+  return { x: kp.x, y: kp.y };
+}
+
+/** Euclidean distance between two 2D points. */
+function dist2D(a: Point2D, b: Point2D): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Compute normalized knee reach ratio.
+ * ratio = dist2D(hip,ankle) / (dist2D(hip,knee) + dist2D(knee,ankle))
+ *
+ * ~0.55-0.65 = leg bent (seated start position)
+ * ~0.93-1.0  = leg nearly straight (full extension)
+ */
+function computeReachRatio(
+  keypoints: Keypoint[],
+  side: 'left' | 'right'
+): number | null {
+  const hipKp = getKeypoint(keypoints, `${side}_hip`);
+  const kneeKp = getKeypoint(keypoints, `${side}_knee`);
+  const ankleKp = getKeypoint(keypoints, `${side}_ankle`);
+
+  if (
+    !hipKp || !kneeKp || !ankleKp ||
+    !isVisible(hipKp, VISIBILITY_THRESHOLD) ||
+    !isVisible(kneeKp, VISIBILITY_THRESHOLD) ||
+    !isVisible(ankleKp, VISIBILITY_THRESHOLD)
+  ) {
+    return null;
+  }
+
+  const hip = getPoint(hipKp)!;
+  const knee = getPoint(kneeKp)!;
+  const ankle = getPoint(ankleKp)!;
+
+  const segmentSum = dist2D(hip, knee) + dist2D(knee, ankle);
+  if (segmentSum < 1e-6) return null;
+
+  return dist2D(hip, ankle) / segmentSum;
+}
+
+// ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees) -- knee angle */
+/** FSM thresholds (reach ratio) -- knee reach ratio */
 const THRESHOLDS = {
-  /** Knee angle above which we transition REST -> EXTENDING */
-  EXTENDING_ENTER: 90,
-  /** Knee angle above which we consider near-full extension (EXTENDING -> EXTENDED) */
-  EXTENDED_ENTER: 110,
-  /** Knee angle below which we leave EXTENDED (hysteresis) (EXTENDED -> RETURNING) */
-  EXTENDED_EXIT: 95,
-  /** Knee angle below which the return is complete (RETURNING -> REST) */
-  REST_REENTER: 85,
+  /** Ratio above which we transition REST -> EXTENDING */
+  EXTENDING_ENTER: 0.60,
+  /** Ratio above which we consider near-full extension (EXTENDING -> EXTENDED) */
+  EXTENDED_ENTER: 0.72,
+  /** Ratio below which we leave EXTENDED (hysteresis) (EXTENDED -> RETURNING) */
+  EXTENDED_EXIT: 0.63,
+  /** Ratio below which the return is complete (RETURNING -> REST) */
+  REST_REENTER: 0.58,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
 const FORM_THRESHOLDS = {
-  /** Max knee angle below which extension is insufficient */
-  EXTENSION_FAIL: 150,
-  /** Min knee angle above which starting flexion is insufficient */
-  FLEXION_FAIL: 100,
+  /** Max ratio below which extension is insufficient */
+  EXTENSION_FAIL: 0.93,
+  /** Min ratio above which starting flexion is insufficient */
+  FLEXION_FAIL: 0.65,
   /** Torso deviation from vertical above which there is excessive lean */
   TORSO_LEAN_WARN: 75,
   /** Hip angle change that indicates lifting hips off the seat */
@@ -69,20 +124,20 @@ const FORM_THRESHOLDS = {
 /**
  * Continuous penalty curve parameters for scoring.
  *
- * | Category             | Cap | Deadzone        | Scale | Key Input                          |
- * |----------------------|-----|-----------------|-------|------------------------------------|
- * | ROM extension        | 30  | 0 (shortfall)   | 0.05  | ideal extension - max knee angle   |
- * | ROM flexion          | 20  | 0 (excess)      | 0.04  | min knee - ideal start angle       |
- * | Torso lean           | 25  | 8               | 0.12  | max torso deviation from vertical  |
- * | Hip lift             | 25  | 10              | 0.08  | max hip angle delta from baseline  |
- * | Tempo extend         | 12  | 0.4s            | 60    | concentric time deficit            |
- * | Tempo return         | 10  | 0.5s            | 40    | eccentric time deficit             |
+ * | Category             | Cap | Deadzone        | Scale | Key Input                             |
+ * |----------------------|-----|-----------------|-------|---------------------------------------|
+ * | ROM extension        | 45  | 0 (shortfall)   | 800   | ideal ratio (0.97) - maxRatio         |
+ * | ROM flexion          | 20  | 0.10            | 400   | minRatio - ideal start ratio (0.58)   |
+ * | Torso lean           | 25  | 70              | 0.04  | max torso deviation from vertical     |
+ * | Hip lift             | 30  | 5               | 0.15  | max hip angle delta from baseline     |
+ * | Tempo extend         | 8   | 0.15s           | 60    | concentric time deficit               |
+ * | Tempo return         | 10  | 0.5s            | 40    | eccentric time deficit                |
  *
- * Max total penalty: 122 -> worst possible rep = 0.
+ * Max total penalty: 128 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  EXTENSION_ROM: { cap: 45, deadzone: 0, scale: 0.05 } as PenaltyConfig,
-  FLEXION_ROM:   { cap: 20, deadzone: 20, scale: 0.04 } as PenaltyConfig,
+  EXTENSION_ROM: { cap: 45, deadzone: 0, scale: 800 } as PenaltyConfig,
+  FLEXION_ROM:   { cap: 20, deadzone: 0.10, scale: 400 } as PenaltyConfig,
   TORSO_LEAN:    { cap: 25, deadzone: 70, scale: 0.04 } as PenaltyConfig,
   HIP_LIFT:      { cap: 30, deadzone: 5, scale: 0.15 } as PenaltyConfig,
   TEMPO_EXTEND:  { cap: 8, deadzone: 0.15, scale: 60 } as PenaltyConfig,
@@ -108,10 +163,10 @@ interface LegExtensionFSM {
 }
 
 interface RepWindow {
-  /** Min knee angle during rep (should be low -- bent position at start/end) */
-  minKnee: number;
-  /** Max knee angle during rep (should be high -- extended) */
-  maxKnee: number;
+  /** Min ratio during rep (should be low -- bent position at start/end) */
+  minRatio: number;
+  /** Max ratio during rep (should be high -- extended) */
+  maxRatio: number;
   /** Hip angle at rep start (baseline) */
   hipAngleBaseline: number | null;
   /** Max absolute hip angle delta from baseline during rep */
@@ -137,15 +192,15 @@ interface LegExtensionState {
   repCount: number;
   repWindow: RepWindow | null;
   lastRepResult: RepResult | null;
-  /** Smoothed angle trackers */
-  kneeTracker: SmoothedAngleTracker;
+  /** Smoothed trackers */
+  ratioTracker: SmoothedAngleTracker;
   hipTracker: SmoothedAngleTracker;
   torsoTracker: SmoothedAngleTracker;
   /** Warmup gate */
   warmupGate: WarmupGate;
   warmedUp: boolean;
-  /** Current smoothed angles for debug */
-  smoothedKnee: number | null;
+  /** Current smoothed values for debug */
+  smoothedRatio: number | null;
   smoothedHip: number | null;
   smoothedTorso: number | null;
   /** Feedback */
@@ -159,12 +214,12 @@ interface LegExtensionDebugInfo {
   phase: LegExtensionPhase;
   side: 'left' | 'right';
   warmedUp: boolean;
-  knee: number | null;
+  ratio: number | null;
   hipAngle: number | null;
   torsoDev: number | null;
   // Rep window
-  kneeMin: number | null;
-  kneeMax: number | null;
+  ratioMin: number | null;
+  ratioMax: number | null;
   hipDelta: number | null;
   torsoDevMax: number | null;
 }
@@ -184,8 +239,8 @@ function initFSM(): LegExtensionFSM {
 
 function initRepWindow(tStart: number): RepWindow {
   return {
-    minKnee: Infinity,
-    maxKnee: -Infinity,
+    minRatio: Infinity,
+    maxRatio: -Infinity,
     hipAngleBaseline: null,
     maxHipDelta: 0,
     maxTorsoDev: 0,
@@ -202,7 +257,7 @@ function initializeLegExtensionState(): LegExtensionState {
     repCount: 0,
     repWindow: null,
     lastRepResult: null,
-    kneeTracker: new SmoothedAngleTracker({ medianWindow: 3, emaAlpha: 0.5 }),
+    ratioTracker: new SmoothedAngleTracker({ medianWindow: 3, emaAlpha: 0.5 }),
     hipTracker: new SmoothedAngleTracker(),
     torsoTracker: new SmoothedAngleTracker(),
     warmupGate: new WarmupGate({
@@ -215,7 +270,7 @@ function initializeLegExtensionState(): LegExtensionState {
       visibilityThreshold: 0.2,
     }),
     warmedUp: false,
-    smoothedKnee: null,
+    smoothedRatio: null,
     smoothedHip: null,
     smoothedTorso: null,
     feedback: null,
@@ -248,47 +303,12 @@ function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
 }
 
 // ============================================================================
-// ANGLE CALCULATION
+// ANGLE CALCULATION (hip angle + torso deviation kept as-is)
 // ============================================================================
-
-type Point2D = { x: number; y: number };
-
-function getPoint(kp: Keypoint | null): Point2D | null {
-  if (!kp) return null;
-  return { x: kp.x, y: kp.y };
-}
-
-/**
- * Calculate the knee angle (hip-knee-ankle) in 2D.
- * ~80-100deg when bent (seated start), ~160-175deg when fully extended.
- */
-function calculateKneeAngle(
-  keypoints: Keypoint[],
-  side: 'left' | 'right'
-): number | null {
-  const hip = getKeypoint(keypoints, `${side}_hip`);
-  const knee = getKeypoint(keypoints, `${side}_knee`);
-  const ankle = getKeypoint(keypoints, `${side}_ankle`);
-
-  if (
-    !hip || !knee || !ankle ||
-    !isVisible(hip, VISIBILITY_THRESHOLD) ||
-    !isVisible(knee, VISIBILITY_THRESHOLD) ||
-    !isVisible(ankle, VISIBILITY_THRESHOLD)
-  ) {
-    return null;
-  }
-
-  return calculateAngle2D(
-    getPoint(hip)!,
-    getPoint(knee)!,
-    getPoint(ankle)!
-  );
-}
 
 /**
  * Calculate the hip angle (shoulder-hip-knee) in 2D.
- * Measures how much the torso-thigh angle deviates — if the user lifts
+ * Measures how much the torso-thigh angle deviates -- if the user lifts
  * their hips off the seat, this angle changes from baseline.
  */
 function calculateHipAngle(
@@ -350,7 +370,7 @@ interface FSMUpdateResult {
 
 function updateFSM(
   currentFSM: LegExtensionFSM,
-  kneeAngle: number,
+  ratio: number,
   t: number
 ): FSMUpdateResult {
   const fsm = { ...currentFSM };
@@ -358,9 +378,9 @@ function updateFSM(
 
   switch (fsm.phase) {
     case 'REST':
-      // Waiting for extension to begin. When knee starts extending past threshold,
+      // Waiting for extension to begin. When ratio exceeds threshold,
       // transition to EXTENDING.
-      if (kneeAngle > THRESHOLDS.EXTENDING_ENTER) {
+      if (ratio > THRESHOLDS.EXTENDING_ENTER) {
         fsm.phase = 'EXTENDING';
         fsm.tRepStart = t;
         fsm.tExtended = null;
@@ -370,10 +390,10 @@ function updateFSM(
 
     case 'EXTENDING':
       // Actively extending. When near-full extension reached, transition.
-      if (kneeAngle > THRESHOLDS.EXTENDED_ENTER) {
+      if (ratio > THRESHOLDS.EXTENDED_ENTER) {
         fsm.phase = 'EXTENDED';
         fsm.tExtended = t;
-      } else if (kneeAngle < THRESHOLDS.REST_REENTER && fsm.tRepStart !== null) {
+      } else if (ratio < THRESHOLDS.REST_REENTER && fsm.tRepStart !== null) {
         // Went back to bent without extending -- reset
         fsm.phase = 'REST';
         fsm.tRepStart = null;
@@ -381,23 +401,23 @@ function updateFSM(
       break;
 
     case 'EXTENDED':
-      // At full extension. When knee starts bending back (hysteresis), transition.
-      if (kneeAngle < THRESHOLDS.EXTENDED_EXIT) {
+      // At full extension. When ratio drops back (hysteresis), transition.
+      if (ratio < THRESHOLDS.EXTENDED_EXIT) {
         fsm.phase = 'RETURNING';
       }
       break;
 
     case 'RETURNING':
-      // Controlled return. When knee returns to bent position, rep is complete.
+      // Controlled return. When ratio returns to bent position, rep is complete.
       if (
-        kneeAngle < THRESHOLDS.REST_REENTER &&
+        ratio < THRESHOLDS.REST_REENTER &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_REP_TIME
       ) {
         fsm.phase = 'REST';
         fsm.tRepEnd = t;
         repCompleted = true;
-      } else if (kneeAngle > THRESHOLDS.EXTENDED_ENTER) {
+      } else if (ratio > THRESHOLDS.EXTENDED_ENTER) {
         // Went back to extension -- return to EXTENDED
         fsm.phase = 'EXTENDED';
       }
@@ -414,12 +434,12 @@ function updateFSM(
 function computeLegExtensionScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM -- extension: ideal max knee is 165+. Shortfall = max(0, 165 - maxKnee)
-  const extensionShortfall = Math.max(0, 165 - repWindow.maxKnee);
+  // 1. ROM -- extension: ideal maxRatio is 0.97+. Shortfall = max(0, 0.97 - maxRatio)
+  const extensionShortfall = Math.max(0, 0.97 - repWindow.maxRatio);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
-  // 2. ROM -- flexion: ideal min knee is 95 or below. Excess = max(0, minKnee - 95)
-  const flexionExcess = Math.max(0, repWindow.minKnee - 95);
+  // 2. ROM -- flexion: ideal minRatio is 0.58 or below. Excess = max(0, minRatio - 0.58)
+  const flexionExcess = Math.max(0, repWindow.minRatio - 0.58);
   penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
 
   // 3. Torso lean
@@ -455,12 +475,12 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
   // 1. Extension ROM -- didn't reach full extension
-  if (repWindow.maxKnee < FORM_THRESHOLDS.EXTENSION_FAIL) {
+  if (repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL) {
     messages.push('Extend fully \u2014 straighten your legs completely at the top.');
   }
 
   // 2. Flexion ROM -- didn't bend enough at the bottom
-  if (repWindow.minKnee > FORM_THRESHOLDS.FLEXION_FAIL) {
+  if (repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL) {
     messages.push('Lower the weight more \u2014 start from a deeper bend.');
   }
 
@@ -509,29 +529,29 @@ function updateLegExtensionState(
     currentState.warmedUp = true;
   }
 
-  // Only update visible side in REST — lock it during active rep phases
-  // to prevent mid-rep side switching that corrupts angle measurements.
+  // Only update visible side in REST -- lock it during active rep phases
+  // to prevent mid-rep side switching that corrupts measurements.
   const inActiveRep = currentState.fsm.phase !== 'REST';
   const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
 
-  // Calculate raw angles
-  const rawKnee = calculateKneeAngle(keypoints, visibleSide);
+  // Calculate raw values
+  const rawRatio = computeReachRatio(keypoints, visibleSide);
   const rawHip = calculateHipAngle(keypoints, visibleSide);
   const rawTorsoDev = calculateTorsoDeviation(keypoints, visibleSide);
 
-  // If we can't even see the knee, bail out
-  if (rawKnee === null) {
+  // If we can't compute the ratio, bail out
+  if (rawRatio === null) {
     return {
       ...currentState,
       visibleSide,
-      smoothedKnee: null,
+      smoothedRatio: null,
       smoothedHip: null,
       smoothedTorso: null,
     };
   }
 
-  // Smooth angles
-  const smoothedKnee = currentState.kneeTracker.push(rawKnee);
+  // Smooth values
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio);
   const smoothedHip = rawHip !== null
     ? currentState.hipTracker.push(rawHip)
     : currentState.hipTracker.value;
@@ -542,17 +562,17 @@ function updateLegExtensionState(
   const newState: LegExtensionState = {
     ...currentState,
     visibleSide,
-    smoothedKnee,
+    smoothedRatio,
     smoothedHip: isNaN(smoothedHip) ? null : smoothedHip,
     smoothedTorso: isNaN(smoothedTorso) ? null : smoothedTorso,
   };
 
-  if (isNaN(smoothedKnee)) {
+  if (isNaN(smoothedRatio)) {
     return newState;
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothedKnee, t);
+  const fsmResult = updateFSM(currentState.fsm, smoothedRatio, t);
   newState.fsm = fsmResult.fsm;
 
   // Track rep window while actively in a rep (not REST)
@@ -566,10 +586,10 @@ function updateLegExtensionState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update knee min/max
-    if (!isNaN(smoothedKnee)) {
-      window.minKnee = Math.min(window.minKnee, smoothedKnee);
-      window.maxKnee = Math.max(window.maxKnee, smoothedKnee);
+    // Update ratio min/max
+    if (!isNaN(smoothedRatio)) {
+      window.minRatio = Math.min(window.minRatio, smoothedRatio);
+      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
     }
 
     // Track hip angle delta from baseline
@@ -651,11 +671,11 @@ function getDebugInfo(state: LegExtensionState): LegExtensionDebugInfo {
     phase: state.fsm.phase,
     side: state.visibleSide,
     warmedUp: state.warmedUp,
-    knee: fmt(state.smoothedKnee),
+    ratio: fmt(state.smoothedRatio),
     hipAngle: fmt(state.smoothedHip),
     torsoDev: fmt(state.smoothedTorso),
-    kneeMin: repWin && repWin.minKnee !== Infinity ? fmt(repWin.minKnee) : null,
-    kneeMax: repWin && repWin.maxKnee !== -Infinity ? fmt(repWin.maxKnee) : null,
+    ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,
+    ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmt(repWin.maxRatio) : null,
     hipDelta: repWin ? fmt(repWin.maxHipDelta) : null,
     torsoDevMax: repWin ? fmt(repWin.maxTorsoDev) : null,
   };
