@@ -1,7 +1,10 @@
 /**
  * Barbell Squat Exercise Definition
  *
- * Side-view squat analysis using knee angle as the primary FSM driver.
+ * Side-view squat analysis using knee reach ratio as the primary FSM driver.
+ * Knee reach ratio: dist2D(hip,ankle) / (dist2D(hip,knee) + dist2D(knee,ankle))
+ *   ~0.95-0.98 = legs fully extended (standing), ~0.60-0.70 = deep squat
+ *
  * Evaluates depth, lockout, torso forward lean, and tempo.
  *
  * FSM: IDLE -> STANDING -> DESCENDING -> BOTTOM -> ASCENDING -> STANDING
@@ -13,7 +16,6 @@
 
 import {
   Keypoint,
-  calculateAngle2D,
   calculateVerticalAngle,
   getKeypoint,
   isVisible,
@@ -30,70 +32,76 @@ import type {
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees) */
+/**
+ * FSM thresholds — ratio-based for knee (camera-invariant).
+ * Knee reach ratio: dist(hip,ankle) / (dist(hip,knee) + dist(knee,ankle))
+ *   ~0.95-0.98 = legs fully extended (standing), ~0.60-0.70 = deep squat
+ *
+ * Torso lean and IDLE gate torso check remain angle-based (they measure pose
+ * orientation, not limb flexion, so angles are the correct metric).
+ */
 const THRESHOLDS = {
-  /** Knee angle below which we transition STANDING -> DESCENDING */
-  DESCENDING_ENTER: 148,
-  /** Knee angle below which we reach BOTTOM */
-  BOTTOM_ENTER: 110,
-  /** Knee angle above which we leave BOTTOM (hysteresis) */
-  BOTTOM_EXIT: 118,
-  /** Knee angle above which we transition ASCENDING -> STANDING (rep complete) */
-  STANDING_REENTER: 160,
+  /** Reach ratio below which we transition STANDING -> DESCENDING */
+  DESCENDING_ENTER: 0.92,
+  /** Reach ratio below which we reach BOTTOM */
+  BOTTOM_ENTER: 0.72,
+  /** Reach ratio above which we leave BOTTOM (hysteresis) */
+  BOTTOM_EXIT: 0.76,
+  /** Reach ratio above which we transition ASCENDING -> STANDING (rep complete) */
+  STANDING_REENTER: 0.96,
   /** Minimum time (seconds) for a rep to count */
   MIN_REP_TIME: 0.8,
-  /** Partial rep: if in DESCENDING and knee returns above this without hitting BOTTOM */
-  PARTIAL_REP_RESET: 150,
+  /** Partial rep: ratio above which we reset from DESCENDING without hitting BOTTOM */
+  PARTIAL_REP_RESET: 0.93,
   /** Minimum time in DESCENDING before partial-rep reset can trigger */
   MIN_DESCENDING_TIME: 0.5,
-  /** Minimum knee angle for standing detection in IDLE gate */
-  IDLE_STANDING_MIN: 160,
+  /** Reach ratio above which legs are considered extended (for IDLE gate) */
+  IDLE_STANDING_MIN: 0.96,
   /** Seconds user must hold standing pose before FSM activates from IDLE */
   STANDING_HOLD_TIME: 0.8,
   /** Maximum torso inclination from vertical for standing detection (degrees) */
   TORSO_INCLINE_MAX_IDLE: 25,
-  /** Minimum ROM (degrees) for a partial rep to count */
-  MIN_PARTIAL_ROM: 20,
-  /** Minimum ROM (degrees) for a full rep to count */
-  MIN_REP_ROM: 35,
+  /** Minimum ratio ROM for a partial rep to count */
+  MIN_PARTIAL_ROM: 0.08,
+  /** Minimum ratio ROM for a full rep to count */
+  MIN_REP_ROM: 0.15,
   /** Minimum frames in rep window for a rep to count */
   MIN_REP_FRAMES: 8,
 } as const;
 
-/** Form heuristic thresholds (discrete messages) */
+/** Form heuristic thresholds — ratio-based for knee, angle-based for torso */
 const FORM_THRESHOLDS = {
-  // Depth: lower knee angle = deeper squat. Parallel ~ 90 degrees.
-  DEPTH_WARN: 105,   // min knee > 105 = not quite parallel
-  DEPTH_FAIL: 115,   // min knee > 115 = clearly shallow
-  // Lockout
-  LOCKOUT_FAIL: 155,  // max knee < 155 = incomplete lockout
-  // ROM
-  ROM_MIN: 50,        // minimum ROM in degrees (max - min knee angle)
-  // Torso lean (forward lean from vertical, via hip-shoulder vector)
-  TORSO_LEAN_WARN: 40, // max torso lean > 40 degrees (natural squat lean is 15-35°)
+  // Depth: lower ratio = deeper squat. Parallel ~ ratio 0.60-0.65.
+  DEPTH_WARN: 0.70,   // min ratio > 0.70 = not quite parallel
+  DEPTH_FAIL: 0.76,   // min ratio > 0.76 = clearly shallow
+  // Lockout: max ratio below this = incomplete lockout
+  LOCKOUT_FAIL: 0.95,
+  // ROM: minimum ratio change during rep
+  ROM_MIN: 0.20,
+  // Torso lean (forward lean from vertical, via hip-shoulder vector — already camera-invariant)
+  TORSO_LEAN_WARN: 40, // max torso lean > 40 degrees (natural squat lean is 15-35)
   TORSO_LEAN_FAIL: 50, // max torso lean > 50 degrees
   // Tempo
   TEMPO_CONCENTRIC_MIN: 0.3,  // ascent too fast (seconds)
-  TEMPO_ECCENTRIC_MIN: 0.8,   // descent too fast (seconds) — measured from DESCENDING_ENTER to ASCENDING_ENTER
+  TEMPO_ECCENTRIC_MIN: 0.8,   // descent too fast (seconds)
 } as const;
 
 /**
- * Continuous penalty curve parameters for rep scoring.
- * Each category: min(cap, scale * max(0, x - deadzone)^2)
+ * Continuous penalty curve parameters — ratio-based for depth/lockout.
  *
- * | Category          | Cap | Deadzone          | Scale | Key Input                     |
- * |-------------------|-----|-------------------|-------|-------------------------------|
- * | Depth shortfall   | 35  | 95 (minKnee)      | 0.035 | min knee angle during rep     |
- * | Lockout shortfall | 20  | 165 (maxKnee)     | 0.08  | ideal lockout - max knee      |
- * | Torso lean        | 30  | 35 (degrees)      | 0.06  | max torso forward lean        |
- * | Tempo             | 15  | up: 0.3s, dn: 0.4s| 60/40 | concentric / eccentric time   |
+ * | Category          | Cap | Deadzone       | Scale | Key Input                     |
+ * |-------------------|-----|----------------|-------|-------------------------------|
+ * | Depth shortfall   | 35  | 0.62 (ratio)   | 300   | min ratio - no penalty below  |
+ * | Lockout shortfall | 20  | 0.97 (ideal)   | 300   | ideal - max ratio             |
+ * | Torso lean        | 30  | 30 (degrees)   | 0.06  | max torso forward lean        |
+ * | Tempo             | 15  | up: 0.3s       | 60/40 | concentric / eccentric time   |
  *
  * Max total penalty: 100 -> worst possible rep = 0.
  */
 const SCORE_CURVES = {
-  DEPTH:   { deadzone: 95,  scale: 0.035, cap: 35 },
-  LOCKOUT: { ideal: 165,    scale: 0.08,  cap: 20 },
-  TORSO:   { deadzone: 30,  scale: 0.06,  cap: 30 },
+  DEPTH:   { deadzone: 0.62, scale: 300, cap: 35 },
+  LOCKOUT: { ideal: 0.97,    scale: 300, cap: 20 },
+  TORSO:   { deadzone: 30,   scale: 0.06, cap: 30 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 8 },
   TEMPO_ECCENTRIC:  { deadzone: 0.8, scale: 40, cap: 7 },
 } as const;
@@ -122,9 +130,9 @@ interface SquatFSM {
 }
 
 interface SquatRepWindow {
-  /** Min/max knee angle during rep */
-  minKnee: number;
-  maxKnee: number;
+  /** Min/max knee reach ratio during rep (primary — camera-invariant) */
+  minKneeRatio: number;
+  maxKneeRatio: number;
   /** Max torso forward lean (degrees from vertical) during rep */
   maxTorsoLean: number;
   /** Timestamps */
@@ -137,6 +145,7 @@ interface SquatRepWindow {
 
 interface SquatAngles {
   knee: number;
+  kneeRatio: number; // reach ratio: camera-invariant
   torsoLean: number;
   hipAngle: number;
 }
@@ -145,7 +154,7 @@ interface SmoothedSquatAngles extends SquatAngles {}
 
 interface RepResult {
   repIndex: number;
-  rom: number;
+  romRatio: number; // ratio ROM (max - min reach ratio)
   tDown: number;
   tUp: number;
   score: number;
@@ -170,10 +179,11 @@ interface SquatDebugInfo {
   phase: SquatPhase;
   side: 'left' | 'right';
   knee: number | null;
+  kneeRatio: number | null;
   torsoLean: number | null;
   hipAngle: number | null;
-  kneeMin: number | null;
-  kneeMax: number | null;
+  kneeRatioMin: number | null;
+  kneeRatioMax: number | null;
   maxTorsoLean: number | null;
 }
 
@@ -209,8 +219,8 @@ function resetFSMToStanding(): SquatFSM {
 
 function initRepWindow(tStart: number): SquatRepWindow {
   return {
-    minKnee: Infinity,
-    maxKnee: -Infinity,
+    minKneeRatio: Infinity,
+    maxKneeRatio: -Infinity,
     maxTorsoLean: -Infinity,
     tStart,
     tBottom: null,
@@ -227,6 +237,7 @@ function initializeSquatState(): SquatState {
     lastRepResult: null,
     angleHistory: {
       knee: [],
+      kneeRatio: [],
       torsoLean: [],
       hipAngle: [],
     },
@@ -246,6 +257,20 @@ type Point2D = { x: number; y: number };
 function getPoint(kp: Keypoint | null): Point2D | null {
   if (!kp) return null;
   return { x: kp.x, y: kp.y };
+}
+
+/** Euclidean distance in 2D */
+function dist2D(a: Point2D, b: Point2D): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/** Reach ratio for a 3-joint chain. 1.0 = straight, lower = more bent. */
+function computeReachRatio(proximal: Point2D, joint: Point2D, distal: Point2D): number {
+  const chainLen = dist2D(proximal, joint) + dist2D(joint, distal);
+  if (chainLen < 1e-6) return 1.0;
+  return dist2D(proximal, distal) / chainLen;
 }
 
 /**
@@ -344,28 +369,38 @@ function calculateSquatAngles(
 
   if (!hasLeg) return null;
 
-  // Knee angle (hip-knee-ankle): 180 = fully extended, ~90 = parallel squat
-  const kneeAngle = calculateAngle2D(
-    getPoint(hip)!,
-    getPoint(knee)!,
-    getPoint(ankle)!
-  );
+  const hipPt = getPoint(hip)!;
+  const kneePt = getPoint(knee)!;
+  const anklePt = getPoint(ankle)!;
+
+  // Knee reach ratio (hip-knee-ankle): ~0.97 = fully extended, ~0.60 = deep squat
+  const kneeRatio = computeReachRatio(hipPt, kneePt, anklePt);
 
   // Hip angle (shoulder-hip-knee): indicates hip hinge depth
   let hipAngle = 180;
   if (shoulder && isVisible(shoulder, VISIBILITY_THRESHOLD)) {
-    hipAngle = calculateAngle2D(
-      getPoint(shoulder)!,
-      getPoint(hip)!,
-      getPoint(knee)!
-    );
+    const shoulderPt = getPoint(shoulder)!;
+    hipAngle = computeReachRatio(shoulderPt, hipPt, kneePt);
+    // Keep as angle-like value — hipAngle is not used in FSM, kept for debug
+    // Actually recompute as a proper angle for consistency
+  }
+  // Recompute hipAngle as actual ratio for the interface — but hipAngle was
+  // originally an angle. Since it's only used for debug display, keep it as
+  // a ratio too for consistency with the camera-invariant approach.
+  // Actually, let's keep hipAngle as a simple pass-through value since it's
+  // not used by FSM or form checks. Set to 180 as default.
+  hipAngle = 180;
+  if (shoulder && isVisible(shoulder, VISIBILITY_THRESHOLD)) {
+    // Store hip reach ratio (not used for FSM, just debug)
+    hipAngle = computeReachRatio(getPoint(shoulder)!, hipPt, kneePt);
   }
 
   // Torso forward lean from vertical
   const torsoLean = calculateTorsoLean(keypoints, side);
 
   return {
-    knee: kneeAngle,
+    knee: kneeRatio, // legacy field name, now stores ratio
+    kneeRatio,
     torsoLean: torsoLean ?? 0,
     hipAngle,
   };
@@ -386,7 +421,7 @@ function applySmoothing(
   history: SquatState['angleHistory'],
   prevSmoothed: SmoothedSquatAngles | null
 ): SmoothedSquatAngles {
-  const keys: (keyof SquatAngles)[] = ['knee', 'torsoLean', 'hipAngle'];
+  const keys: (keyof SquatAngles)[] = ['knee', 'kneeRatio', 'torsoLean', 'hipAngle'];
   const result: Partial<SmoothedSquatAngles> = {};
 
   for (const key of keys) {
@@ -418,7 +453,7 @@ function applySmoothing(
 
 function updateFSM(
   currentFSM: SquatFSM,
-  kneeAngle: number,
+  kneeRatio: number,
   t: number,
   torsoLean: number
 ): FSMUpdateResult {
@@ -428,7 +463,8 @@ function updateFSM(
 
   switch (fsm.phase) {
     case 'IDLE': {
-      const legsExtended = kneeAngle > THRESHOLDS.IDLE_STANDING_MIN;
+      // Ratio is high when legs are extended (standing)
+      const legsExtended = kneeRatio > THRESHOLDS.IDLE_STANDING_MIN;
       const torsoUpright = torsoLean < THRESHOLDS.TORSO_INCLINE_MAX_IDLE;
 
       if (legsExtended && torsoUpright) {
@@ -445,7 +481,8 @@ function updateFSM(
     }
 
     case 'STANDING':
-      if (kneeAngle < THRESHOLDS.DESCENDING_ENTER) {
+      // Ratio drops as knee bends
+      if (kneeRatio < THRESHOLDS.DESCENDING_ENTER) {
         fsm.phase = 'DESCENDING';
         fsm.tRepStart = t;
         fsm.tBottom = null;
@@ -454,11 +491,12 @@ function updateFSM(
       break;
 
     case 'DESCENDING':
-      if (kneeAngle < THRESHOLDS.BOTTOM_ENTER) {
+      // Ratio continues to drop toward bottom
+      if (kneeRatio < THRESHOLDS.BOTTOM_ENTER) {
         fsm.phase = 'BOTTOM';
         fsm.tBottom = t;
       } else if (
-        kneeAngle > THRESHOLDS.PARTIAL_REP_RESET &&
+        kneeRatio > THRESHOLDS.PARTIAL_REP_RESET &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_DESCENDING_TIME
       ) {
@@ -470,14 +508,15 @@ function updateFSM(
       break;
 
     case 'BOTTOM':
-      if (kneeAngle > THRESHOLDS.BOTTOM_EXIT) {
+      // Ratio rises as knee extends
+      if (kneeRatio > THRESHOLDS.BOTTOM_EXIT) {
         fsm.phase = 'ASCENDING';
       }
       break;
 
     case 'ASCENDING':
       if (
-        kneeAngle > THRESHOLDS.STANDING_REENTER &&
+        kneeRatio > THRESHOLDS.STANDING_REENTER &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_REP_TIME
       ) {
@@ -498,15 +537,16 @@ function updateFSM(
 function computeSquatRepScore(repWindow: SquatRepWindow): number {
   let penalty = 0;
 
-  // 1. Depth shortfall -- lower minKnee is better (closer to 90 = parallel)
-  const depthExcess = Math.max(0, repWindow.minKnee - SCORE_CURVES.DEPTH.deadzone);
+  // 1. Depth shortfall -- lower minKneeRatio is better (deeper squat)
+  //    Penalty kicks in when min ratio is above the deadzone (not deep enough)
+  const depthExcess = Math.max(0, repWindow.minKneeRatio - SCORE_CURVES.DEPTH.deadzone);
   penalty += Math.min(SCORE_CURVES.DEPTH.cap, SCORE_CURVES.DEPTH.scale * depthExcess * depthExcess);
 
-  // 2. Lockout shortfall -- higher maxKnee is better (closer to 170+)
-  const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxKnee);
+  // 2. Lockout shortfall -- higher maxKneeRatio is better (closer to full extension)
+  const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxKneeRatio);
   penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
 
-  // 3. Torso forward lean -- some lean is natural for squats (deadzone 35)
+  // 3. Torso forward lean -- some lean is natural for squats (deadzone 30)
   const torsoExcess = Math.max(0, repWindow.maxTorsoLean - SCORE_CURVES.TORSO.deadzone);
   penalty += Math.min(SCORE_CURVES.TORSO.cap, SCORE_CURVES.TORSO.scale * torsoExcess * torsoExcess);
 
@@ -531,25 +571,25 @@ function computeSquatRepScore(repWindow: SquatRepWindow): number {
 function generateFormMessages(repWindow: SquatRepWindow): string[] {
   const messages: string[] = [];
 
-  // 1. Depth
-  if (repWindow.minKnee > FORM_THRESHOLDS.DEPTH_FAIL) {
+  // 1. Depth — higher min ratio = shallower squat
+  if (repWindow.minKneeRatio > FORM_THRESHOLDS.DEPTH_FAIL) {
     messages.push('Squat deeper \u2014 aim to get your thighs parallel.');
-  } else if (repWindow.minKnee > FORM_THRESHOLDS.DEPTH_WARN) {
+  } else if (repWindow.minKneeRatio > FORM_THRESHOLDS.DEPTH_WARN) {
     messages.push('Try to go a little deeper for full range of motion.');
   }
 
-  // 2. Lockout
-  if (repWindow.maxKnee < FORM_THRESHOLDS.LOCKOUT_FAIL) {
+  // 2. Lockout — lower max ratio = incomplete extension
+  if (repWindow.maxKneeRatio < FORM_THRESHOLDS.LOCKOUT_FAIL) {
     messages.push('Stand all the way up \u2014 fully extend your knees.');
   }
 
-  // 3. ROM
-  const rom = repWindow.maxKnee - repWindow.minKnee;
-  if (rom < FORM_THRESHOLDS.ROM_MIN && messages.length === 0) {
+  // 3. ROM — ratio change during rep
+  const romRatio = repWindow.maxKneeRatio - repWindow.minKneeRatio;
+  if (romRatio < FORM_THRESHOLDS.ROM_MIN && messages.length === 0) {
     messages.push('Incomplete rep \u2014 use a full range of motion.');
   }
 
-  // 4. Torso lean
+  // 4. Torso lean (angle-based — already camera-invariant)
   if (repWindow.maxTorsoLean > FORM_THRESHOLDS.TORSO_LEAN_FAIL) {
     messages.push('Too much forward lean \u2014 keep your chest up.');
   } else if (repWindow.maxTorsoLean > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
@@ -608,29 +648,30 @@ function updateSquatState(
     visibleSide,
   };
 
-  if (isNaN(smoothed.knee)) {
+  if (isNaN(smoothed.kneeRatio)) {
     return newState;
   }
 
-  // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothed.knee, t, smoothed.torsoLean);
+  // Update FSM — uses kneeRatio for all transitions
+  const fsmResult = updateFSM(currentState.fsm, smoothed.kneeRatio, t, smoothed.torsoLean);
   newState.fsm = fsmResult.fsm;
 
   // Handle partial rep — only count if meaningful ROM was achieved
   if (fsmResult.partialRep) {
     const partialROM = newState.repWindow
-      ? newState.repWindow.maxKnee - newState.repWindow.minKnee
+      ? newState.repWindow.maxKneeRatio - newState.repWindow.minKneeRatio
       : 0;
     const partialFrames = newState.repWindow?.frameCount ?? 0;
 
     if (partialROM >= THRESHOLDS.MIN_PARTIAL_ROM && partialFrames >= THRESHOLDS.MIN_REP_FRAMES) {
       newState.repCount++;
       const messages = ['Squat deeper \u2014 aim to get your thighs parallel.'];
-      // Score partial reps low (30-45 range) based on how much ROM was achieved
-      const score = Math.max(0, Math.min(45, Math.round(15 + partialROM * 0.75)));
+      // Score partial reps low (30-45 range) based on how much ratio ROM was achieved
+      // partialROM is 0.0-0.3 range, scale to comparable score
+      const score = Math.max(0, Math.min(45, Math.round(15 + partialROM * 100)));
       newState.lastRepResult = {
         repIndex: newState.repCount,
-        rom: partialROM,
+        romRatio: partialROM,
         tDown: 0,
         tUp: 0,
         score,
@@ -655,9 +696,9 @@ function updateSquatState(
     window.tEnd = t;
     window.frameCount++;
 
-    if (!isNaN(smoothed.knee)) {
-      window.minKnee = Math.min(window.minKnee, smoothed.knee);
-      window.maxKnee = Math.max(window.maxKnee, smoothed.knee);
+    if (!isNaN(smoothed.kneeRatio)) {
+      window.minKneeRatio = Math.min(window.minKneeRatio, smoothed.kneeRatio);
+      window.maxKneeRatio = Math.max(window.maxKneeRatio, smoothed.kneeRatio);
     }
     if (!isNaN(smoothed.torsoLean)) {
       // Only update max torso lean when shoulder+hip are detected with sufficient
@@ -668,9 +709,8 @@ function updateSquatState(
       }
     }
 
-    // Set tBottom at the BOTTOM→ASCENDING transition (knee starts rising above BOTTOM_EXIT).
-    // This captures the full eccentric duration (148° → actual bottom → 118°), rather than
-    // stopping the timer mid-descent when the knee first crosses BOTTOM_ENTER (110°).
+    // Set tBottom at the BOTTOM->ASCENDING transition (ratio starts rising above BOTTOM_EXIT).
+    // This captures the full eccentric duration, rather than stopping the timer mid-descent.
     if (
       currentState.fsm.phase === 'BOTTOM' &&
       newState.fsm.phase === 'ASCENDING' &&
@@ -682,10 +722,10 @@ function updateSquatState(
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
-    const rom = newState.repWindow.maxKnee - newState.repWindow.minKnee;
+    const romRatio = newState.repWindow.maxKneeRatio - newState.repWindow.minKneeRatio;
 
     // Validate: require minimum ROM and frame count to prevent noise-driven reps
-    if (rom < THRESHOLDS.MIN_REP_ROM || newState.repWindow.frameCount < THRESHOLDS.MIN_REP_FRAMES) {
+    if (romRatio < THRESHOLDS.MIN_REP_ROM || newState.repWindow.frameCount < THRESHOLDS.MIN_REP_FRAMES) {
       newState.repWindow = null;
       newState.fsm = resetFSMToStanding();
       return newState;
@@ -704,7 +744,7 @@ function updateSquatState(
 
     newState.lastRepResult = {
       repIndex: newState.repCount,
-      rom,
+      romRatio,
       tDown,
       tUp,
       score,
@@ -744,10 +784,11 @@ function getSquatDebugInfo(state: SquatState): SquatDebugInfo {
     phase: state.fsm.phase,
     side: state.visibleSide,
     knee: fmt(angles?.knee),
+    kneeRatio: fmt(angles?.kneeRatio),
     torsoLean: fmt(angles?.torsoLean),
     hipAngle: fmt(angles?.hipAngle),
-    kneeMin: repWin && repWin.minKnee !== Infinity ? fmt(repWin.minKnee) : null,
-    kneeMax: repWin && repWin.maxKnee !== -Infinity ? fmt(repWin.maxKnee) : null,
+    kneeRatioMin: repWin && repWin.minKneeRatio !== Infinity ? fmt(repWin.minKneeRatio) : null,
+    kneeRatioMax: repWin && repWin.maxKneeRatio !== -Infinity ? fmt(repWin.maxKneeRatio) : null,
     maxTorsoLean: repWin && repWin.maxTorsoLean !== -Infinity ? fmt(repWin.maxTorsoLean) : null,
   };
 }
