@@ -25,82 +25,81 @@ import type {
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees) */
+/**
+ * FSM thresholds — ratio-based for elbow (camera-invariant).
+ * Elbow reach ratio: dist(shoulder,wrist) / (dist(shoulder,elbow) + dist(elbow,wrist))
+ *   ~0.95-0.98 = arms fully extended (plank), ~0.60-0.70 = bottom of pushup
+ *
+ * Body alignment and IDLE gate remain angle-based (they measure pose orientation,
+ * not limb flexion, so angles are the correct metric).
+ */
 const THRESHOLDS = {
-  /** Elbow angle below which we transition PLANK -> DESCENDING */
-  DESCENDING_ENTER: 150,
-  /** Elbow angle above which we transition ASCENDING -> PLANK.
-   *  A fully extended arm reads 155-170 in 2D CV depending on camera angle
-   *  and whether the user hyperextends. 155 accepts a "soft lockout" (e.g.
-   *  164.2 observed) while still requiring meaningful extension from BOTTOM. */
-  PLANK_REENTER: 155,
-  /** Elbow angle below which we reach BOTTOM.
-   *  Relaxed from 95 to 105 -- a physical 90 often reads 96-100 in 2D
-   *  camera projection due to foreshortening and landmark jitter. */
-  BOTTOM_ENTER: 105,
-  /** Elbow angle above which we leave BOTTOM (hysteresis above BOTTOM_ENTER) */
-  BOTTOM_EXIT: 112,
+  /** Reach ratio below which we transition PLANK -> DESCENDING */
+  DESCENDING_ENTER: 0.93,
+  /** Reach ratio above which we transition ASCENDING -> PLANK */
+  PLANK_REENTER: 0.95,
+  /** Reach ratio below which we reach BOTTOM.
+   *  Camera-invariant — no foreshortening compensation needed. */
+  BOTTOM_ENTER: 0.70,
+  /** Reach ratio above which we leave BOTTOM (hysteresis) */
+  BOTTOM_EXIT: 0.73,
   /** Minimum time (seconds) for a rep to count */
   MIN_REP_TIME: 0.4,
-  /** Partial rep: if in DESCENDING and elbow returns above this without hitting BOTTOM */
-  PARTIAL_REP_RESET: 150,
-  /** Minimum time (seconds) in DESCENDING before a partial-rep reset can trigger.
-   *  Prevents flip-flopping when hovering near the DESCENDING_ENTER threshold. */
+  /** Partial rep: ratio above which we reset from DESCENDING without hitting BOTTOM */
+  PARTIAL_REP_RESET: 0.93,
+  /** Minimum time (seconds) in DESCENDING before a partial-rep reset can trigger */
   MIN_DESCENDING_TIME: 0.25,
-  /** Minimum body alignment angle for plank detection in IDLE gate */
+  /** Minimum body alignment angle for plank detection in IDLE gate (degrees — pose metric) */
   PLANK_BODY_MIN: 165,
   /** Maximum body alignment angle for plank detection in IDLE gate */
   PLANK_BODY_MAX: 195,
   /** Seconds the user must hold plank before FSM activates from IDLE */
   PLANK_HOLD_TIME: 1.0,
-  /** Minimum torso inclination from vertical for plank detection (degrees).
-   *  Standing = 0, planking = 90. 65 rejects upright postures. */
+  /** Minimum torso inclination from vertical for plank detection (degrees) */
   TORSO_INCLINE_MIN: 65,
-  /** Maximum torso inclination from vertical for plank detection (degrees).
-   *  Allows slight decline/incline pushups but rejects inverted poses. */
+  /** Maximum torso inclination from vertical for plank detection (degrees) */
   TORSO_INCLINE_MAX: 115,
+  /** Reach ratio above which arms are considered extended (for IDLE gate) */
+  IDLE_ARMS_EXTENDED: 0.95,
 } as const;
 
-/** Form heuristic thresholds */
+/** Form heuristic thresholds — ratio-based for elbow, angle-based for hip/body */
 const FORM_THRESHOLDS = {
-  // Depth (aligned with BOTTOM_ENTER -- if the FSM accepted it, only penalize beyond this)
-  DEPTH_FAIL: 110, // min elbow > 110 means insufficient depth
-  // Lockout (aligned with PLANK_REENTER -- penalize only if clearly short of extension)
-  LOCKOUT_FAIL: 150, // max elbow < 150 means incomplete lockout
-  // ROM
-  ROM_MIN: 60, // minimum ROM in degrees
-  // Hip alignment (shoulder-hip-ankle angle)
+  // Depth: min ratio above this = insufficient depth
+  DEPTH_FAIL: 0.73,
+  // Lockout: max ratio below this = incomplete lockout
+  LOCKOUT_FAIL: 0.93,
+  // ROM: minimum ratio change during rep
+  ROM_MIN: 0.22,
+  // Hip alignment (shoulder-hip-ankle angle — already camera-invariant as a body pose metric)
   HIP_SAG_FAIL: 155,
   HIP_SAG_WARN: 165,
   HIP_PIKE_FAIL: 195,
   HIP_PIKE_WARN: 185,
-  // Hip deviation (as fraction of shoulder-ankle distance)
+  // Hip deviation (as fraction of shoulder-ankle distance — already ratio-based)
   HIP_DEV_SAG_FAIL: 0.10,
   HIP_DEV_SAG_WARN: 0.05,
   HIP_DEV_PIKE_FAIL: 0.10,
   HIP_DEV_PIKE_WARN: 0.05,
   // Tempo
-  TEMPO_CONCENTRIC_MIN: 0.15, // seconds -- ascent too fast
-  TEMPO_ECCENTRIC_MIN: 0.20, // seconds -- descent too fast
+  TEMPO_CONCENTRIC_MIN: 0.15,
+  TEMPO_ECCENTRIC_MIN: 0.20,
 } as const;
 
 /**
- * Continuous penalty curve parameters for `computePushupRepScore()`.
- * Each category: min(cap, scale * max(0, x - deadzone)^2)
+ * Continuous penalty curve parameters — ratio-based for depth/lockout.
  *
- * | Category          | Cap | Deadzone           | Scale | Key Input                     |
- * |-------------------|-----|--------------------|-------|-------------------------------|
- * | Depth shortfall   | 30  | 90 (minElbow)      | 0.03  | min elbow angle during rep    |
- * | Lockout shortfall | 25  | 165 (maxElbow)     | 0.10  | ideal lockout - max elbow     |
- * | Hip alignment     | 35  | +/-8 from 180      | 0.04  | worst body-angle deviation    |
- * | Tempo             | 20  | up: 0.3s, dn: 0.4s | 60/40 | concentric / eccentric time   |
- *
- * Max total penalty: 110 -> worst possible rep = 0.
+ * | Category          | Cap | Deadzone     | Scale | Key Input                     |
+ * |-------------------|-----|--------------|-------|-------------------------------|
+ * | Depth shortfall   | 30  | 0.62 (ratio) | 300   | min ratio - no penalty below  |
+ * | Lockout shortfall | 25  | 0.97 (ideal) | 300   | ideal - max ratio             |
+ * | Hip alignment     | 35  | +/-8 from 180| 0.04  | worst body-angle deviation    |
+ * | Tempo             | 20  | up: 0.3s     | 60/40 | concentric / eccentric time   |
  */
 const SCORE_CURVES = {
-  DEPTH:   { deadzone: 90,  scale: 0.03, cap: 30 },
-  LOCKOUT: { ideal: 165,    scale: 0.10, cap: 25 },
-  HIP:     { deadzone: 8,   scale: 0.04, cap: 35, neutral: 180 },
+  DEPTH:   { deadzone: 0.62, scale: 300, cap: 30 },
+  LOCKOUT: { ideal: 0.97,    scale: 300, cap: 25 },
+  HIP:     { deadzone: 8,    scale: 0.04, cap: 35, neutral: 180 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 10 },
   TEMPO_ECCENTRIC:  { deadzone: 0.4, scale: 40, cap: 10 },
 } as const;
@@ -129,9 +128,9 @@ interface PushupFSM {
 }
 
 interface PushupRepWindow {
-  /** Min/max elbow angle during rep */
-  minElbow: number;
-  maxElbow: number;
+  /** Min/max elbow reach ratio during rep (primary — camera-invariant) */
+  minElbowRatio: number;
+  maxElbowRatio: number;
   /** Min/max body alignment angle (shoulder-hip-ankle) */
   minBodyAngle: number;
   maxBodyAngle: number;
@@ -151,6 +150,7 @@ interface PushupRepWindow {
 
 interface PushupAngles {
   elbow: number;
+  elbowRatio: number; // reach ratio: camera-invariant
   bodyAlignment: number;
   hipDeviation: number; // normalized: positive = sag, negative = pike
   headSpine: number;
@@ -160,7 +160,7 @@ interface SmoothedPushupAngles extends PushupAngles {}
 
 interface RepResult {
   repIndex: number;
-  rom: number;
+  romRatio: number; // ratio ROM (max - min reach ratio)
   tDown: number; // eccentric (descent)
   tUp: number; // concentric (ascent)
   score: number;
@@ -188,20 +188,17 @@ interface PushupDebugInfo {
   phase: PushupPhase;
   side: 'left' | 'right';
   elbow: number | null;
+  elbowRatio: number | null;
   bodyAlignment: number | null;
   hipDev: number | null;
   headSpine: number | null;
-  /** Torso inclination from vertical (0=standing, 90=plank) */
   torsoInclination: number | null;
-  // Rep window deltas (min/max during current rep)
-  elbowMin: number | null;
-  elbowMax: number | null;
+  elbowRatioMin: number | null;
+  elbowRatioMax: number | null;
   bodyAngleMin: number | null;
   bodyAngleMax: number | null;
   hipDevMin: number | null;
   hipDevMax: number | null;
-  headSpineMin: number | null;
-  headSpineMax: number | null;
 }
 
 interface FSMUpdateResult {
@@ -237,8 +234,8 @@ function resetFSMToPlank(): PushupFSM {
 
 function initRepWindow(tStart: number): PushupRepWindow {
   return {
-    minElbow: Infinity,
-    maxElbow: -Infinity,
+    minElbowRatio: Infinity,
+    maxElbowRatio: -Infinity,
     minBodyAngle: Infinity,
     maxBodyAngle: -Infinity,
     minHipDev: Infinity,
@@ -260,6 +257,7 @@ function initializePushupState(): PushupState {
     lastRepResult: null,
     angleHistory: {
       elbow: [],
+      elbowRatio: [],
       bodyAlignment: [],
       hipDeviation: [],
       headSpine: [],
@@ -282,6 +280,20 @@ type Point3D = { x: number; y: number; z?: number };
 function getPoint(kp: Keypoint | null): Point3D | null {
   if (!kp) return null;
   return { x: kp.x, y: kp.y, z: kp.z };
+}
+
+/** Euclidean distance in 2D */
+function dist2D(a: Point3D, b: Point3D): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/** Reach ratio for a 3-joint chain. 1.0 = straight, lower = more bent. */
+function computeReachRatio(proximal: Point3D, joint: Point3D, distal: Point3D): number {
+  const chainLen = dist2D(proximal, joint) + dist2D(joint, distal);
+  if (chainLen < 1e-6) return 1.0;
+  return dist2D(proximal, distal) / chainLen;
 }
 
 /**
@@ -441,8 +453,15 @@ function calculatePushupAngles(
 
   if (!hasArm) return null;
 
-  // Elbow angle (2D -- side view, XY plane captures flexion)
+  // Elbow angle (2D -- kept for debug display)
   const elbowAngle = calculateAngle2D(
+    getPoint(shoulder)!,
+    getPoint(elbow)!,
+    getPoint(wrist)!
+  );
+
+  // Elbow reach ratio (camera-invariant primary metric)
+  const elbowRatioVal = computeReachRatio(
     getPoint(shoulder)!,
     getPoint(elbow)!,
     getPoint(wrist)!
@@ -488,6 +507,7 @@ function calculatePushupAngles(
 
   return {
     elbow: elbowAngle,
+    elbowRatio: elbowRatioVal,
     bodyAlignment: bodyAlignmentAngle,
     hipDeviation,
     headSpine: headSpineAngle,
@@ -509,7 +529,7 @@ function applySmoothing(
   history: PushupState['angleHistory'],
   prevSmoothed: SmoothedPushupAngles | null
 ): SmoothedPushupAngles {
-  const keys: (keyof PushupAngles)[] = ['elbow', 'bodyAlignment', 'hipDeviation', 'headSpine'];
+  const keys: (keyof PushupAngles)[] = ['elbow', 'elbowRatio', 'bodyAlignment', 'hipDeviation', 'headSpine'];
   const result: Partial<SmoothedPushupAngles> = {};
 
   for (const key of keys) {
@@ -543,9 +563,14 @@ function applySmoothing(
 // FSM LOGIC
 // ============================================================================
 
+/**
+ * Update FSM using elbow reach ratio (camera-invariant).
+ * Ratio: 1.0 = fully extended, ~0.6 = bottom of pushup.
+ * IDLE gate still uses body alignment angle and torso inclination (pose metrics).
+ */
 function updateFSM(
   currentFSM: PushupFSM,
-  elbowAngle: number,
+  elbowRatio: number,
   t: number,
   bodyAlignment: number,
   torsoInclination: number | null
@@ -556,14 +581,11 @@ function updateFSM(
 
   switch (fsm.phase) {
     case 'IDLE': {
-      const armsExtended = elbowAngle > THRESHOLDS.PLANK_REENTER;
+      const armsExtended = elbowRatio > THRESHOLDS.IDLE_ARMS_EXTENDED;
       const bodyAligned =
         bodyAlignment >= THRESHOLDS.PLANK_BODY_MIN &&
         bodyAlignment <= THRESHOLDS.PLANK_BODY_MAX;
 
-      // torsoInclination can be null when landmarks are momentarily lost.
-      // Treat null as "no data" -- don't advance the timer, but don't reset it
-      // either. Only a definitive out-of-range reading resets.
       const torsoHorizontal =
         torsoInclination !== null &&
         torsoInclination >= THRESHOLDS.TORSO_INCLINE_MIN &&
@@ -579,17 +601,13 @@ function updateFSM(
           fsm.tIdleStableSince = null;
         }
       } else if (!armsExtended || !bodyAligned || torsoDefinitelyNot) {
-        // Reset only on definitive failure -- null torso (lost landmarks) is
-        // tolerated so jittery frames don't restart the hold timer.
         fsm.tIdleStableSince = null;
       }
-      // else: torsoInclination is null but arms/body are fine -- hold timer
-      // continues without advancing (we just skip this frame).
       break;
     }
 
     case 'PLANK':
-      if (elbowAngle < THRESHOLDS.DESCENDING_ENTER) {
+      if (elbowRatio < THRESHOLDS.DESCENDING_ENTER) {
         fsm.phase = 'DESCENDING';
         fsm.tRepStart = t;
         fsm.tBottom = null;
@@ -598,17 +616,14 @@ function updateFSM(
       break;
 
     case 'DESCENDING':
-      if (elbowAngle < THRESHOLDS.BOTTOM_ENTER) {
+      if (elbowRatio < THRESHOLDS.BOTTOM_ENTER) {
         fsm.phase = 'BOTTOM';
         fsm.tBottom = t;
       } else if (
-        elbowAngle > THRESHOLDS.PARTIAL_REP_RESET &&
+        elbowRatio > THRESHOLDS.PARTIAL_REP_RESET &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_DESCENDING_TIME
       ) {
-        // Returned to extension without reaching depth -- partial rep
-        // (debounced: must have been descending for MIN_DESCENDING_TIME to avoid
-        //  flip-flopping when the user hovers near the DESCENDING_ENTER threshold)
         fsm.phase = 'PLANK';
         partialRep = true;
         fsm.tRepStart = null;
@@ -616,14 +631,14 @@ function updateFSM(
       break;
 
     case 'BOTTOM':
-      if (elbowAngle > THRESHOLDS.BOTTOM_EXIT) {
+      if (elbowRatio > THRESHOLDS.BOTTOM_EXIT) {
         fsm.phase = 'ASCENDING';
       }
       break;
 
     case 'ASCENDING':
       if (
-        elbowAngle > THRESHOLDS.PLANK_REENTER &&
+        elbowRatio > THRESHOLDS.PLANK_REENTER &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_REP_TIME
       ) {
@@ -652,14 +667,12 @@ function updateFSM(
 function computePushupRepScore(repWindow: PushupRepWindow): number {
   let penalty = 0;
 
-  // 1. Depth shortfall -- lower minElbow is better (closer to 90)
-  //    At 90: 0, at 95: 0.75, at 100: 3, at 105: 6.75, at 110: 12
-  const depthExcess = Math.max(0, repWindow.minElbow - SCORE_CURVES.DEPTH.deadzone);
+  // 1. Depth shortfall — lower minRatio is better (closer to 0.60)
+  const depthExcess = Math.max(0, repWindow.minElbowRatio - SCORE_CURVES.DEPTH.deadzone);
   penalty += Math.min(SCORE_CURVES.DEPTH.cap, SCORE_CURVES.DEPTH.scale * depthExcess * depthExcess);
 
-  // 2. Lockout shortfall -- higher maxElbow is better (closer to 170+)
-  //    At 165+: 0, at 160: 2.5, at 155: 10, at 150: 22.5
-  const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxElbow);
+  // 2. Lockout shortfall — higher maxRatio is better (closer to 0.97+)
+  const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxElbowRatio);
   penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
 
   // 3. Hip alignment -- body should be ~180 (straight line)
@@ -701,19 +714,19 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
 function generateFormMessages(repWindow: PushupRepWindow): string[] {
   const messages: string[] = [];
 
-  // 1. Depth
-  if (repWindow.minElbow > FORM_THRESHOLDS.DEPTH_FAIL) {
+  // 1. Depth (ratio-based)
+  if (repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL) {
     messages.push('Go deeper \u2014 aim for elbows at 90 degrees.');
   }
 
-  // 2. Lockout
-  if (repWindow.maxElbow < FORM_THRESHOLDS.LOCKOUT_FAIL) {
+  // 2. Lockout (ratio-based)
+  if (repWindow.maxElbowRatio < FORM_THRESHOLDS.LOCKOUT_FAIL) {
     messages.push('Lock out your arms fully at the top.');
   }
 
-  // 3. ROM (only if depth and lockout didn't already flag)
-  const rom = repWindow.maxElbow - repWindow.minElbow;
-  if (rom < FORM_THRESHOLDS.ROM_MIN && messages.length === 0) {
+  // 3. ROM (ratio-based)
+  const romRatio = repWindow.maxElbowRatio - repWindow.minElbowRatio;
+  if (romRatio < FORM_THRESHOLDS.ROM_MIN && messages.length === 0) {
     messages.push('Incomplete rep \u2014 full range of motion from lockout to 90 degrees.');
   }
 
@@ -794,18 +807,17 @@ function updatePushupState(
     visibleSide,
   };
 
-  // Skip FSM if elbow angle is NaN
-  if (isNaN(smoothed.elbow)) {
+  // Skip FSM if elbow ratio is NaN
+  if (isNaN(smoothed.elbowRatio)) {
     return newState;
   }
 
-  // Compute torso inclination for IDLE gate (uses raw keypoints, not smoothed --
-  // the 1s hold timer provides sufficient noise filtering)
+  // Compute torso inclination for IDLE gate (uses raw keypoints, not smoothed)
   const torsoInclination = calculateTorsoInclination(keypoints, visibleSide);
   newState.lastTorsoInclination = torsoInclination;
 
-  // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothed.elbow, t, smoothed.bodyAlignment, torsoInclination);
+  // Update FSM using ratio (camera-invariant)
+  const fsmResult = updateFSM(currentState.fsm, smoothed.elbowRatio, t, smoothed.bodyAlignment, torsoInclination);
   newState.fsm = fsmResult.fsm;
 
   // Handle partial rep -- still counts but flags shallow depth
@@ -828,10 +840,10 @@ function updatePushupState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update min/max for all angles
-    if (!isNaN(smoothed.elbow)) {
-      window.minElbow = Math.min(window.minElbow, smoothed.elbow);
-      window.maxElbow = Math.max(window.maxElbow, smoothed.elbow);
+    // Update min/max for elbow ratio (primary metric)
+    if (!isNaN(smoothed.elbowRatio)) {
+      window.minElbowRatio = Math.min(window.minElbowRatio, smoothed.elbowRatio);
+      window.maxElbowRatio = Math.max(window.maxElbowRatio, smoothed.elbowRatio);
     }
     if (!isNaN(smoothed.bodyAlignment)) {
       window.minBodyAngle = Math.min(window.minBodyAngle, smoothed.bodyAlignment);
@@ -856,7 +868,7 @@ function updatePushupState(
   if (fsmResult.repCompleted && newState.repWindow) {
     newState.repCount++;
 
-    const rom = newState.repWindow.maxElbow - newState.repWindow.minElbow;
+    const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
     const tDown = newState.repWindow.tBottom
       ? newState.repWindow.tBottom - newState.repWindow.tStart
       : 0;
@@ -868,7 +880,7 @@ function updatePushupState(
 
     newState.lastRepResult = {
       repIndex: newState.repCount,
-      rom,
+      romRatio,
       tDown,
       tUp,
       score,
@@ -911,18 +923,17 @@ function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
     phase: state.fsm.phase,
     side: state.visibleSide,
     elbow: fmt(angles?.elbow),
+    elbowRatio: fmt(angles?.elbowRatio),
     bodyAlignment: fmt(angles?.bodyAlignment),
     hipDev: fmt(angles?.hipDeviation),
     headSpine: fmt(angles?.headSpine),
     torsoInclination: fmt(state.lastTorsoInclination ?? undefined),
-    elbowMin: repWin ? fmtW(repWin.minElbow, repWin.maxElbow) && fmt(repWin.minElbow) : null,
-    elbowMax: repWin ? fmtW(repWin.minElbow, repWin.maxElbow) && fmt(repWin.maxElbow) : null,
+    elbowRatioMin: repWin ? fmtW(repWin.minElbowRatio, repWin.maxElbowRatio) && fmt(repWin.minElbowRatio) : null,
+    elbowRatioMax: repWin ? fmtW(repWin.minElbowRatio, repWin.maxElbowRatio) && fmt(repWin.maxElbowRatio) : null,
     bodyAngleMin: repWin ? fmtW(repWin.minBodyAngle, repWin.maxBodyAngle) && fmt(repWin.minBodyAngle) : null,
     bodyAngleMax: repWin ? fmtW(repWin.minBodyAngle, repWin.maxBodyAngle) && fmt(repWin.maxBodyAngle) : null,
     hipDevMin: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.minHipDev) : null,
     hipDevMax: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.maxHipDev) : null,
-    headSpineMin: repWin ? fmtW(repWin.minHeadSpine, repWin.maxHeadSpine) && fmt(repWin.minHeadSpine) : null,
-    headSpineMax: repWin ? fmtW(repWin.minHeadSpine, repWin.maxHeadSpine) && fmt(repWin.maxHeadSpine) : null,
   };
 }
 
