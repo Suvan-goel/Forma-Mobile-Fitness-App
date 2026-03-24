@@ -1,17 +1,20 @@
 /**
  * Cable Pushdowns -- Exercise Definition
  *
- * Side view, elbow angle as primary driver.
+ * Side view, reach ratio as primary driver (camera-invariant).
  * FSM: REST -> EXTENDING -> EXTENDED -> RETURNING -> REST
- * Arms start bent (~70-100deg), push down to near-full extension (~160-170deg),
+ * Arms start bent (ratio ~0.50-0.65), push down to near-full extension (ratio ~0.95-1.0),
  * then return. One rep = full push-down + controlled return.
+ *
+ * Reach ratio = dist2D(shoulder,wrist) / (dist2D(shoulder,elbow) + dist2D(elbow,wrist))
+ *   low ratio  = arm bent (start/rest position)
+ *   high ratio = arm extended (lockout position)
  *
  * The only export is `cablePushdownDefinition`.
  */
 
 import {
   Keypoint,
-  calculateAngle2D,
   getKeypoint,
   isVisible,
 } from '../../poseAnalysis';
@@ -27,29 +30,81 @@ import type {
 } from '../types';
 
 // ============================================================================
+// HELPERS (module-private)
+// ============================================================================
+
+type Point2D = { x: number; y: number };
+
+function getPoint(kp: Keypoint | null): Point2D | null {
+  if (!kp) return null;
+  return { x: kp.x, y: kp.y };
+}
+
+/** Euclidean distance using only x, y. */
+function dist2D(a: Point2D, b: Point2D): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Compute normalized arm reach ratio.
+ * reach = dist2D(shoulder, wrist) / (dist2D(shoulder, elbow) + dist2D(elbow, wrist))
+ *
+ * ~0.95-1.0  = arm nearly straight (full extension / lockout)
+ * ~0.50-0.65 = arm bent (start position)
+ */
+function computeReachRatio(
+  keypoints: Keypoint[],
+  side: 'left' | 'right'
+): number {
+  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
+  const elbow = getKeypoint(keypoints, `${side}_elbow`);
+  const wrist = getKeypoint(keypoints, `${side}_wrist`);
+
+  if (
+    !shoulder || !elbow || !wrist ||
+    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
+    !isVisible(elbow, VISIBILITY_THRESHOLD) ||
+    !isVisible(wrist, VISIBILITY_THRESHOLD)
+  ) {
+    return NaN;
+  }
+
+  const shoulderPt = getPoint(shoulder)!;
+  const elbowPt = getPoint(elbow)!;
+  const wristPt = getPoint(wrist)!;
+
+  const segmentLength = dist2D(shoulderPt, elbowPt) + dist2D(elbowPt, wristPt);
+  if (segmentLength < 1e-6) return NaN;
+
+  return dist2D(shoulderPt, wristPt) / segmentLength;
+}
+
+// ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees) */
+/** FSM thresholds (reach ratios) */
 const THRESHOLDS = {
-  /** Elbow angle above which we transition REST -> EXTENDING */
-  EXTENDING_ENTER: 100,
-  /** Elbow angle above which we consider near-full extension (EXTENDING -> EXTENDED) */
-  EXTENDED_ENTER: 155,
-  /** Elbow angle below which we leave EXTENDED (hysteresis) (EXTENDED -> RETURNING) */
-  EXTENDED_EXIT: 150,
-  /** Elbow angle below which the return is complete (RETURNING -> REST) */
-  REST_REENTER: 100,
+  /** Ratio above which we transition REST -> EXTENDING (arm starting to straighten) */
+  EXTENDING_ENTER: 0.65,
+  /** Ratio above which we consider near-full extension (EXTENDING -> EXTENDED) */
+  EXTENDED_ENTER: 0.95,
+  /** Ratio below which we leave EXTENDED (hysteresis) (EXTENDED -> RETURNING) */
+  EXTENDED_EXIT: 0.93,
+  /** Ratio below which the return is complete (RETURNING -> REST) */
+  REST_REENTER: 0.65,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.5,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
 const FORM_THRESHOLDS = {
-  /** Max elbow angle below which extension is insufficient */
-  EXTENSION_FAIL: 155,
-  /** Min elbow angle above which starting flexion is insufficient */
-  FLEXION_FAIL: 105,
+  /** Max ratio below which extension is insufficient (didn't lock out) */
+  EXTENSION_FAIL: 0.95,
+  /** Min ratio above which starting flexion is insufficient (didn't bend enough) */
+  FLEXION_FAIL: 0.68,
   /** Shoulder angle delta above which elbows are drifting */
   ELBOW_DRIFT_WARN: 20,
   /** Torso deviation from vertical above which there is excessive lean */
@@ -63,20 +118,20 @@ const FORM_THRESHOLDS = {
 /**
  * Continuous penalty curve parameters for scoring.
  *
- * | Category             | Cap | Deadzone        | Scale | Key Input                         |
- * |----------------------|-----|-----------------|-------|-----------------------------------|
- * | ROM extension        | 30  | 160 (maxElbow)  | 0.06  | ideal extension - max elbow       |
- * | ROM flexion          | 20  | 90 (minElbow)   | 0.04  | min elbow - ideal start angle     |
- * | Elbow drift          | 25  | 10              | 0.03  | max shoulder angle delta          |
- * | Torso lean           | 25  | 5               | 0.15  | max torso deviation from vertical |
- * | Tempo push           | 12  | 0.3s            | 60    | concentric time deficit           |
- * | Tempo return         | 8   | 0.4s            | 40    | eccentric time deficit            |
+ * | Category             | Cap | Deadzone           | Scale | Key Input                         |
+ * |----------------------|-----|--------------------|-------|-----------------------------------|
+ * | ROM extension        | 30  | 0 (ratio shortfall)| 300   | ideal ratio - max ratio           |
+ * | ROM flexion          | 20  | 0 (ratio excess)   | 200   | min ratio - ideal start ratio     |
+ * | Elbow drift          | 25  | 15                 | 0.03  | max shoulder angle delta          |
+ * | Torso lean           | 25  | 5                  | 0.15  | max torso deviation from vertical |
+ * | Tempo push           | 12  | 0.3s               | 60    | concentric time deficit           |
+ * | Tempo return         | 8   | 0.4s               | 40    | eccentric time deficit            |
  *
  * Max total penalty: 120 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 0.06 } as PenaltyConfig,
-  FLEXION_ROM:   { cap: 20, deadzone: 0, scale: 0.04 } as PenaltyConfig,
+  EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 300 } as PenaltyConfig,
+  FLEXION_ROM:   { cap: 20, deadzone: 0, scale: 200 } as PenaltyConfig,
   ELBOW_DRIFT:   { cap: 25, deadzone: 15, scale: 0.03 } as PenaltyConfig,
   TORSO_LEAN:    { cap: 40, deadzone: 5, scale: 0.15 } as PenaltyConfig,
   TEMPO_PUSH:    { cap: 12, deadzone: 0.3, scale: 60 } as PenaltyConfig,
@@ -102,10 +157,10 @@ interface CablePushdownFSM {
 }
 
 interface RepWindow {
-  /** Min elbow angle during rep (should be low -- bent position at start/end) */
-  minElbow: number;
-  /** Max elbow angle during rep (should be high -- extended at bottom) */
-  maxElbow: number;
+  /** Min reach ratio during rep (should be low -- bent position at start/end) */
+  minRatio: number;
+  /** Max reach ratio during rep (should be high -- extended at bottom) */
+  maxRatio: number;
   /** Shoulder angle at rep start (baseline) */
   shoulderAngleBaseline: number | null;
   /** Max absolute shoulder angle delta from baseline during rep */
@@ -131,15 +186,15 @@ interface CablePushdownState {
   repCount: number;
   repWindow: RepWindow | null;
   lastRepResult: RepResult | null;
-  /** Smoothed angle trackers */
-  elbowTracker: SmoothedAngleTracker;
+  /** Smoothed trackers */
+  ratioTracker: SmoothedAngleTracker;
   shoulderTracker: SmoothedAngleTracker;
   torsoTracker: SmoothedAngleTracker;
   /** Warmup gate */
   warmupGate: WarmupGate;
   warmedUp: boolean;
-  /** Current smoothed angles for debug */
-  smoothedElbow: number | null;
+  /** Current smoothed values for debug */
+  smoothedRatio: number | null;
   smoothedShoulder: number | null;
   smoothedTorso: number | null;
   /** Feedback */
@@ -147,140 +202,27 @@ interface CablePushdownState {
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
-  /** Minimum smoothed elbow angle observed during REST phase (pre-seeds rep window) */
-  restMinElbow: number;
+  /** Minimum smoothed ratio observed during REST phase (pre-seeds rep window) */
+  restMinRatio: number;
 }
 
 interface CablePushdownDebugInfo {
   phase: CablePushdownPhase;
   side: 'left' | 'right';
   warmedUp: boolean;
-  elbow: number | null;
+  ratio: number | null;
   shoulderAngle: number | null;
   torsoDev: number | null;
   // Rep window
-  elbowMin: number | null;
-  elbowMax: number | null;
+  ratioMin: number | null;
+  ratioMax: number | null;
   shoulderDelta: number | null;
   torsoDevMax: number | null;
 }
 
 // ============================================================================
-// INITIALIZATION
+// ANGLE CALCULATION (shoulder angle & torso — kept as angles, already camera-invariant deltas)
 // ============================================================================
-
-function initFSM(): CablePushdownFSM {
-  return {
-    phase: 'REST',
-    tRepStart: null,
-    tExtended: null,
-    tRepEnd: null,
-  };
-}
-
-function initRepWindow(tStart: number): RepWindow {
-  return {
-    minElbow: Infinity,
-    maxElbow: -Infinity,
-    shoulderAngleBaseline: null,
-    maxShoulderDelta: 0,
-    maxTorsoDev: 0,
-    tStart,
-    tExtended: null,
-    tEnd: tStart,
-    frameCount: 0,
-  };
-}
-
-function initializeCablePushdownState(): CablePushdownState {
-  return {
-    fsm: initFSM(),
-    repCount: 0,
-    repWindow: null,
-    lastRepResult: null,
-    elbowTracker: new SmoothedAngleTracker(),
-    shoulderTracker: new SmoothedAngleTracker(),
-    torsoTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_shoulder', 'left_elbow', 'left_wrist', 'left_hip',
-        'right_shoulder', 'right_elbow', 'right_wrist', 'right_hip',
-      ],
-      requiredFrames: 10,
-      visibilityThreshold: 0.2,
-    }),
-    warmedUp: false,
-    smoothedElbow: null,
-    smoothedShoulder: null,
-    smoothedTorso: null,
-    feedback: null,
-    lastFeedbackTime: 0,
-    visibleSide: 'left',
-    restMinElbow: Infinity,
-  };
-}
-
-// ============================================================================
-// VISIBLE SIDE SELECTION
-// ============================================================================
-
-function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
-  const leftParts = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip'];
-  const rightParts = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip'];
-
-  let leftScore = 0;
-  let rightScore = 0;
-
-  for (const name of leftParts) {
-    const kp = getKeypoint(keypoints, name);
-    if (kp) leftScore += kp.score;
-  }
-  for (const name of rightParts) {
-    const kp = getKeypoint(keypoints, name);
-    if (kp) rightScore += kp.score;
-  }
-
-  return leftScore >= rightScore ? 'left' : 'right';
-}
-
-// ============================================================================
-// ANGLE CALCULATION
-// ============================================================================
-
-type Point2D = { x: number; y: number };
-
-function getPoint(kp: Keypoint | null): Point2D | null {
-  if (!kp) return null;
-  return { x: kp.x, y: kp.y };
-}
-
-/**
- * Calculate the elbow angle (shoulder-elbow-wrist) in 2D.
- * ~70-90deg when bent, ~160-170deg when extended.
- */
-function calculateElbowAngle(
-  keypoints: Keypoint[],
-  side: 'left' | 'right'
-): number | null {
-  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
-  const elbow = getKeypoint(keypoints, `${side}_elbow`);
-  const wrist = getKeypoint(keypoints, `${side}_wrist`);
-
-  if (
-    !shoulder || !elbow || !wrist ||
-    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
-    !isVisible(elbow, VISIBILITY_THRESHOLD) ||
-    !isVisible(wrist, VISIBILITY_THRESHOLD)
-  ) {
-    return null;
-  }
-
-  return calculateAngle2D(
-    getPoint(shoulder)!,
-    getPoint(elbow)!,
-    getPoint(wrist)!
-  );
-}
 
 /**
  * Calculate the upper arm angle relative to the torso (hip-shoulder-elbow) in 2D.
@@ -304,11 +246,24 @@ function calculateShoulderAngle(
     return null;
   }
 
-  return calculateAngle2D(
-    getPoint(hip)!,
-    getPoint(shoulder)!,
-    getPoint(elbow)!
-  );
+  const hipPt = getPoint(hip)!;
+  const shoulderPt = getPoint(shoulder)!;
+  const elbowPt = getPoint(elbow)!;
+
+  // Vectors from shoulder
+  const v1x = hipPt.x - shoulderPt.x;
+  const v1y = hipPt.y - shoulderPt.y;
+  const v2x = elbowPt.x - shoulderPt.x;
+  const v2y = elbowPt.y - shoulderPt.y;
+
+  const dot = v1x * v2x + v1y * v2y;
+  const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
+  const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
+
+  if (len1 < 1e-8 || len2 < 1e-8) return null;
+
+  const cosTheta = Math.max(-1, Math.min(1, dot / (len1 * len2)));
+  return Math.acos(cosTheta) * (180 / Math.PI);
 }
 
 /**
@@ -345,6 +300,84 @@ function calculateTorsoDeviation(
 }
 
 // ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+function initFSM(): CablePushdownFSM {
+  return {
+    phase: 'REST',
+    tRepStart: null,
+    tExtended: null,
+    tRepEnd: null,
+  };
+}
+
+function initRepWindow(tStart: number): RepWindow {
+  return {
+    minRatio: Infinity,
+    maxRatio: -Infinity,
+    shoulderAngleBaseline: null,
+    maxShoulderDelta: 0,
+    maxTorsoDev: 0,
+    tStart,
+    tExtended: null,
+    tEnd: tStart,
+    frameCount: 0,
+  };
+}
+
+function initializeCablePushdownState(): CablePushdownState {
+  return {
+    fsm: initFSM(),
+    repCount: 0,
+    repWindow: null,
+    lastRepResult: null,
+    ratioTracker: new SmoothedAngleTracker(),
+    shoulderTracker: new SmoothedAngleTracker(),
+    torsoTracker: new SmoothedAngleTracker(),
+    warmupGate: new WarmupGate({
+      requiredJoints: [
+        'left_shoulder', 'left_elbow', 'left_wrist', 'left_hip',
+        'right_shoulder', 'right_elbow', 'right_wrist', 'right_hip',
+      ],
+      requiredFrames: 10,
+      visibilityThreshold: 0.2,
+    }),
+    warmedUp: false,
+    smoothedRatio: null,
+    smoothedShoulder: null,
+    smoothedTorso: null,
+    feedback: null,
+    lastFeedbackTime: 0,
+    visibleSide: 'left',
+    restMinRatio: Infinity,
+  };
+}
+
+// ============================================================================
+// VISIBLE SIDE SELECTION
+// ============================================================================
+
+function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
+  const leftParts = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip'];
+  const rightParts = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip'];
+
+  let leftScore = 0;
+  let rightScore = 0;
+
+  for (const name of leftParts) {
+    const kp = getKeypoint(keypoints, name);
+    if (kp) leftScore += kp.score;
+  }
+  for (const name of rightParts) {
+    const kp = getKeypoint(keypoints, name);
+    if (kp) rightScore += kp.score;
+  }
+
+  return leftScore >= rightScore ? 'left' : 'right';
+}
+
+// ============================================================================
 // FSM LOGIC
 // ============================================================================
 
@@ -355,7 +388,7 @@ interface FSMUpdateResult {
 
 function updateFSM(
   currentFSM: CablePushdownFSM,
-  elbowAngle: number,
+  ratio: number,
   t: number
 ): FSMUpdateResult {
   const fsm = { ...currentFSM };
@@ -363,9 +396,9 @@ function updateFSM(
 
   switch (fsm.phase) {
     case 'REST':
-      // Waiting for push to begin. When elbow starts extending past threshold,
+      // Waiting for push to begin. When ratio rises past threshold (arm straightening),
       // transition to EXTENDING.
-      if (elbowAngle > THRESHOLDS.EXTENDING_ENTER) {
+      if (ratio > THRESHOLDS.EXTENDING_ENTER) {
         fsm.phase = 'EXTENDING';
         fsm.tRepStart = t;
         fsm.tExtended = null;
@@ -375,10 +408,10 @@ function updateFSM(
 
     case 'EXTENDING':
       // Actively pushing down. When near-full extension reached, transition.
-      if (elbowAngle > THRESHOLDS.EXTENDED_ENTER) {
+      if (ratio > THRESHOLDS.EXTENDED_ENTER) {
         fsm.phase = 'EXTENDED';
         fsm.tExtended = t;
-      } else if (elbowAngle < THRESHOLDS.REST_REENTER && fsm.tRepStart !== null) {
+      } else if (ratio < THRESHOLDS.REST_REENTER && fsm.tRepStart !== null) {
         // Went back to bent without extending -- reset
         fsm.phase = 'REST';
         fsm.tRepStart = null;
@@ -386,23 +419,23 @@ function updateFSM(
       break;
 
     case 'EXTENDED':
-      // At full extension. When elbow starts bending back (hysteresis), transition.
-      if (elbowAngle < THRESHOLDS.EXTENDED_EXIT) {
+      // At full extension. When ratio drops (arm bending back), transition.
+      if (ratio < THRESHOLDS.EXTENDED_EXIT) {
         fsm.phase = 'RETURNING';
       }
       break;
 
     case 'RETURNING':
-      // Controlled return. When elbow returns to bent position, rep is complete.
+      // Controlled return. When ratio drops to bent position, rep is complete.
       if (
-        elbowAngle < THRESHOLDS.REST_REENTER &&
+        ratio < THRESHOLDS.REST_REENTER &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_REP_TIME
       ) {
         fsm.phase = 'REST';
         fsm.tRepEnd = t;
         repCompleted = true;
-      } else if (elbowAngle > THRESHOLDS.EXTENDED_ENTER) {
+      } else if (ratio > THRESHOLDS.EXTENDED_ENTER) {
         // Went back to extension -- return to EXTENDED
         fsm.phase = 'EXTENDED';
       }
@@ -419,12 +452,12 @@ function updateFSM(
 function computeCablePushdownScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM -- extension: ideal max elbow is 160+. Shortfall = max(0, 160 - maxElbow)
-  const extensionShortfall = Math.max(0, 160 - repWindow.maxElbow);
+  // 1. ROM -- extension: ideal max ratio is 0.98+. Shortfall = max(0, 0.98 - maxRatio)
+  const extensionShortfall = Math.max(0, 0.98 - repWindow.maxRatio);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
-  // 2. ROM -- flexion: ideal min elbow is 90 or below. Excess = max(0, minElbow - 90)
-  const flexionExcess = Math.max(0, repWindow.minElbow - 90);
+  // 2. ROM -- flexion: ideal min ratio is 0.55 or below. Excess = max(0, minRatio - 0.55)
+  const flexionExcess = Math.max(0, repWindow.minRatio - 0.55);
   penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
 
   // 3. Elbow drift (shoulder angle delta)
@@ -459,13 +492,13 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
 function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
-  // 1. Extension ROM -- didn't lock out fully
-  if (repWindow.maxElbow < FORM_THRESHOLDS.EXTENSION_FAIL) {
+  // 1. Extension ROM -- didn't lock out fully (max ratio too low)
+  if (repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL) {
     messages.push('Extend fully \u2014 lock out at the bottom of each rep.');
   }
 
-  // 2. Flexion ROM -- didn't bend enough at the top
-  if (repWindow.minElbow > FORM_THRESHOLDS.FLEXION_FAIL) {
+  // 2. Flexion ROM -- didn't bend enough at the top (min ratio too high)
+  if (repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL) {
     messages.push('Start with a deeper bend \u2014 bring your forearms closer to your biceps.');
   }
 
@@ -517,24 +550,24 @@ function updateCablePushdownState(
   // Select visible side
   const visibleSide = selectVisibleSide(keypoints);
 
-  // Calculate raw angles
-  const rawElbow = calculateElbowAngle(keypoints, visibleSide);
+  // Calculate raw values
+  const rawRatio = computeReachRatio(keypoints, visibleSide);
   const rawShoulder = calculateShoulderAngle(keypoints, visibleSide);
   const rawTorsoDev = calculateTorsoDeviation(keypoints, visibleSide);
 
-  // If we can't even see the elbow, bail out
-  if (rawElbow === null) {
+  // If we can't compute the ratio, bail out
+  if (isNaN(rawRatio)) {
     return {
       ...currentState,
       visibleSide,
-      smoothedElbow: null,
+      smoothedRatio: null,
       smoothedShoulder: null,
       smoothedTorso: null,
     };
   }
 
-  // Smooth angles
-  const smoothedElbow = currentState.elbowTracker.push(rawElbow);
+  // Smooth values
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio);
   const smoothedShoulder = rawShoulder !== null
     ? currentState.shoulderTracker.push(rawShoulder)
     : currentState.shoulderTracker.value;
@@ -545,33 +578,33 @@ function updateCablePushdownState(
   const newState: CablePushdownState = {
     ...currentState,
     visibleSide,
-    smoothedElbow,
+    smoothedRatio,
     smoothedShoulder: isNaN(smoothedShoulder) ? null : smoothedShoulder,
     smoothedTorso: isNaN(smoothedTorso) ? null : smoothedTorso,
   };
 
-  if (isNaN(smoothedElbow)) {
+  if (isNaN(smoothedRatio)) {
     return newState;
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothedElbow, t);
+  const fsmResult = updateFSM(currentState.fsm, smoothedRatio, t);
   newState.fsm = fsmResult.fsm;
 
-  // Track minimum elbow angle during REST (captures true starting bent position)
-  if (newState.fsm.phase === 'REST' && !isNaN(smoothedElbow)) {
-    newState.restMinElbow = Math.min(newState.restMinElbow, smoothedElbow);
+  // Track minimum ratio during REST (captures true starting bent position)
+  if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
+    newState.restMinRatio = Math.min(newState.restMinRatio, smoothedRatio);
   }
 
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
     newState.repWindow = initRepWindow(t);
-    // Pre-seed minElbow with the resting bent angle so flexion ROM is measured correctly
-    if (currentState.restMinElbow !== Infinity) {
-      newState.repWindow.minElbow = currentState.restMinElbow;
+    // Pre-seed minRatio with the resting bent ratio so flexion ROM is measured correctly
+    if (currentState.restMinRatio !== Infinity) {
+      newState.repWindow.minRatio = currentState.restMinRatio;
     }
-    newState.restMinElbow = Infinity; // Reset for next rep
+    newState.restMinRatio = Infinity; // Reset for next rep
   }
 
   if (newState.repWindow && inRep) {
@@ -579,10 +612,10 @@ function updateCablePushdownState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update elbow min/max
-    if (!isNaN(smoothedElbow)) {
-      window.minElbow = Math.min(window.minElbow, smoothedElbow);
-      window.maxElbow = Math.max(window.maxElbow, smoothedElbow);
+    // Update ratio min/max
+    if (!isNaN(smoothedRatio)) {
+      window.minRatio = Math.min(window.minRatio, smoothedRatio);
+      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
     }
 
     // Track shoulder angle delta from baseline
@@ -652,11 +685,11 @@ function getDebugInfo(state: CablePushdownState): CablePushdownDebugInfo {
     phase: state.fsm.phase,
     side: state.visibleSide,
     warmedUp: state.warmedUp,
-    elbow: fmt(state.smoothedElbow),
+    ratio: fmt(state.smoothedRatio),
     shoulderAngle: fmt(state.smoothedShoulder),
     torsoDev: fmt(state.smoothedTorso),
-    elbowMin: repWin && repWin.minElbow !== Infinity ? fmt(repWin.minElbow) : null,
-    elbowMax: repWin && repWin.maxElbow !== -Infinity ? fmt(repWin.maxElbow) : null,
+    ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,
+    ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmt(repWin.maxRatio) : null,
     shoulderDelta: repWin ? fmt(repWin.maxShoulderDelta) : null,
     torsoDevMax: repWin ? fmt(repWin.maxTorsoDev) : null,
   };
