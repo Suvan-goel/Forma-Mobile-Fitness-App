@@ -1,8 +1,12 @@
 /**
  * Barbell Curl — Exercise Definition (Exercise Framework)
  *
- * Wraps the existing barbell curl heuristics into the ExerciseDefinition interface.
- * All logic is copied from barbellCurlHeuristics.ts and kept module-private.
+ * Uses ratio-based metrics for camera-angle-invariant form detection.
+ * Primary metric: reach ratio = dist(shoulder,wrist) / (dist(shoulder,elbow) + dist(elbow,wrist))
+ *   - Fully extended arm: ~0.95-1.0
+ *   - Fully curled (top of curl): ~0.40-0.50
+ *   - Camera-invariant: foreshortening scales numerator and denominator equally
+ *
  * The only export is `barbellCurlDefinition`.
  */
 
@@ -22,41 +26,51 @@ import type { ExerciseDefinition, ExerciseState, RepResult as FrameworkRepResult
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
 
-/** FSM thresholds (degrees) — 3D angles are view-invariant; values match frontal-view ranges */
+/**
+ * FSM thresholds — ratio-based (camera-angle invariant).
+ * Reach ratio: dist(shoulder,wrist) / (dist(shoulder,elbow) + dist(elbow,wrist))
+ *   1.0 = perfectly straight arm, 0.0 = wrist at shoulder
+ */
 const THRESHOLDS = {
-  EXTENDED_ENTER: 150,  // arm extended past this -> rep complete
-  EXTENDED_EXIT: 145,   // arm drops below this -> start detecting upward motion
-  FLEXED_ENTER: 70,     // arm curled below this -> reached top of curl
-  FLEXED_EXIT: 75,      // arm rises above this -> start detecting downward motion
+  /** Reach ratio above which arm is considered fully extended → rep complete */
+  EXTENDED_ENTER: 0.93,
+  /** Reach ratio below which we start detecting upward motion from REST */
+  EXTENDED_EXIT: 0.90,
+  /** Reach ratio below which arm is considered fully curled → top of curl */
+  FLEXED_ENTER: 0.50,
+  /** Reach ratio above which we start detecting downward motion from TOP */
+  FLEXED_EXIT: 0.53,
   MIN_REP_TIME: 0.25, // seconds
   SYNC_WINDOW: 0.50, // seconds between arms
-  ROM_MIN: 80, // degrees
-  /** Min seconds the arm must be in DOWN state before normal (full-extension) completion.
-   *  Filters pose-estimation noise spikes that briefly push the elbow angle above 150°
-   *  mid-lowering, which would otherwise produce a near-zero tDown and cascade reps. */
+  /** Minimum reach ratio ROM (max - min) for a valid rep */
+  ROM_MIN: 0.38,
+  /** Min seconds the arm must be in DOWN state before normal completion.
+   *  Filters pose-estimation noise spikes. */
   MIN_DOWN_GUARD: 0.10,
 } as const;
 
-/** Form heuristic thresholds (degrees) - relaxed for fewer false positives */
+/** Form heuristic thresholds — ratios where applicable, degrees for angular metrics */
 const FORM_THRESHOLDS = {
+  // Shoulder movement delta (degrees) — already camera-invariant as a delta
   SHOULDER_WARN: 45,
   SHOULDER_FAIL: 65,
+  // Torso swing delta (degrees) — already camera-invariant (sagittal projection)
   TORSO_WARN: 15,
   TORSO_FAIL: 22,
   WRIST_NEUTRAL: 180, // straight wrist reference
   WRIST_DEV_WARN: 25,
-  WRIST_DEV_DURATION: 0.5, // 50% of rep (trigger only if bent for half the rep)
+  WRIST_DEV_DURATION: 0.5, // 50% of rep
   TEMPO_UP_MIN: 0.05,
   TEMPO_DOWN_MIN: 0.15,
-  SYMMETRY_MIN: 50,
-  SYMMETRY_ROM: 55,
-  /** Min reach ratio to consider arm fully extended at frontal view.
-   *  Below this, forearm is likely foreshortened (pointing into depth). */
-  REACH_RATIO_MIN: 0.88,
-  /** Elbow flare: angle of the upper arm from vertical in the frontal plane.
-   *  0° = elbow directly below shoulder; higher = more lateral flare. */
-  ELBOW_FLARE_WARN: 30, // degrees — elbows drifting outward
-  ELBOW_FLARE_FAIL: 45, // degrees — significant elbow flare
+  /** Symmetry: max allowed ratio difference between arms */
+  SYMMETRY_MIN_RATIO: 0.10, // min reach ratio difference between arms
+  SYMMETRY_ROM_RATIO: 0.12, // ROM ratio difference between arms
+  /** Elbow flare: angle of the upper arm from vertical in the frontal plane. */
+  ELBOW_FLARE_WARN: 30,
+  ELBOW_FLARE_FAIL: 45,
+  /** Reach ratio thresholds for form messages */
+  FLEX_RATIO_WARN: 0.55,  // min ratio above this → "flex more at top"
+  EXTEND_RATIO_WARN: 0.90, // max ratio below this → "extend fully"
 } as const;
 
 /** Smoothing parameters */
@@ -68,65 +82,45 @@ const VISIBILITY_THRESHOLD = 0.15;
 const WARMUP_REQUIRED = 12;          // ~0.6s at 20fps
 const WARMUP_VISIBILITY_MIN = 0.3;   // avg visibility of 8 key joints must exceed this
 
-/** Scoring penalties (legacy — kept for reference) */
-const _PENALTIES = {
-  INCOMPLETE_ROM: 30,
-  SHOULDER_WARN: 15,
-  SHOULDER_FAIL: 25,
-  TORSO_WARN: 15,
-  TORSO_FAIL: 25,
-  WRIST_BEND: 10,
-  TEMPO_ISSUE: 10,
-  ASYMMETRY: 10,
-} as const;
-
 // ============================================================================
-// CONTINUOUS PENALTY FUNCTIONS
+// CONTINUOUS PENALTY FUNCTIONS (ratio-based where applicable)
 // All use quadratic ramps: penalty(x) = min(cap, scale * max(0, x - deadzone)^2)
 // ============================================================================
 
-/** Torso swing penalty — max 35 pts. Deadzone 10deg (shoulder drift + breathing/sway/noise). */
+/** Torso swing penalty — max 35 pts. Deadzone 10deg (shoulder drift + breathing/sway/noise).
+ *  Already camera-invariant: measures delta within a single rep. */
 function penaltyTorso(delta: number): number {
   const d = Math.max(0, delta - 10);
   return Math.min(35, 0.40 * d * d);
 }
 
-/** Shoulder movement penalty — max 30 pts. Deadzone 10deg (normal stabilisation). */
+/** Shoulder movement penalty — max 30 pts. Deadzone 10deg (normal stabilisation).
+ *  Already camera-invariant: measures delta within a single rep. */
 function penaltyShoulder(delta: number): number {
   const d = Math.max(0, delta - 10);
   return Math.min(30, 0.018 * d * d);
 }
 
-/** ROM shortfall penalty — max 35 pts. Flex + extension sub-components.
- *  Compensates for foreshortening at oblique views.
- *  Optional reachData adds penalty for low reach ratio at frontal view. */
-function penaltyROM(
-  minFlex: number,
-  maxExt: number,
-  viewAngleDeg: number,
-  reachData?: RepWindow['reach']
-): number {
-  const FLEX_TARGET = adjustFlexionThreshold(50, viewAngleDeg);
-  const EXT_TARGET = adjustExtensionThreshold(140, viewAngleDeg);
-  const flexShortfall = Math.max(0, minFlex - FLEX_TARGET);
-  const flexPenalty = Math.min(20, 0.03 * flexShortfall * flexShortfall);
-  const extShortfall = Math.max(0, EXT_TARGET - maxExt);
-  const extPenalty = Math.min(20, 0.03 * extShortfall * extShortfall);
+/** ROM shortfall penalty — ratio-based, no foreshortening compensation needed.
+ *  max 35 pts. Flex (min ratio too high) + extension (max ratio too low).
+ *
+ *  Target: minRatio ≤ 0.48 (fully curled), maxRatio ≥ 0.93 (fully extended).
+ *  Ratios are inherently camera-invariant. */
+function penaltyROM(minRatio: number, maxRatio: number): number {
+  // Flex shortfall: penalize if min ratio is above 0.48 (didn't curl enough)
+  const FLEX_TARGET = 0.48;
+  const flexShortfall = Math.max(0, minRatio - FLEX_TARGET);
+  // Scale: at ratio 0.58 (10% short), penalty = 300 * 0.10^2 = 3pts
+  // At ratio 0.68 (20% short), penalty = 300 * 0.20^2 = 12pts
+  const flexPenalty = Math.min(20, 300 * flexShortfall * flexShortfall);
 
-  // Supplementary reach-ratio penalty (frontal only)
-  let reachPenalty = 0;
-  if (reachData) {
-    const leftOk = isFinite(reachData.maxLeftReachRatio);
-    const rightOk = isFinite(reachData.maxRightReachRatio);
-    const worstReach = Math.min(
-      leftOk ? reachData.maxLeftReachRatio : 1.0,
-      rightOk ? reachData.maxRightReachRatio : 1.0
-    );
-    const reachDeficit = Math.max(0, FORM_THRESHOLDS.REACH_RATIO_MIN - worstReach);
-    reachPenalty = Math.min(15, 500 * reachDeficit * reachDeficit);
-  }
+  // Extension shortfall: penalize if max ratio is below 0.93 (didn't extend enough)
+  const EXT_TARGET = 0.93;
+  const extShortfall = Math.max(0, EXT_TARGET - maxRatio);
+  // Scale: at ratio 0.83 (10% short), penalty = 300 * 0.10^2 = 3pts
+  const extPenalty = Math.min(20, 300 * extShortfall * extShortfall);
 
-  return Math.min(35, flexPenalty + extPenalty + reachPenalty);
+  return Math.min(35, flexPenalty + extPenalty);
 }
 
 /** Tempo penalty — max 20 pts. Concentric < 0.4s or eccentric < 0.5s. */
@@ -144,38 +138,22 @@ function penaltyTempo(tUp: number, tDown: number): number {
   return Math.min(20, upPenalty + downPenalty);
 }
 
-/** Elbow flare penalty — max 20 pts. Deadzone 15deg (some natural abduction is normal).
- *  At 30deg (warn threshold): ~5pts. At 45deg (fail threshold): ~20pts. */
+/** Elbow flare penalty — max 20 pts. Deadzone 15deg (some natural abduction is normal). */
 function penaltyElbowFlare(maxFlareDeg: number): number {
   const d = Math.max(0, maxFlareDeg - 15);
   return Math.min(20, 0.022 * d * d);
 }
 
-/** Asymmetry penalty — max 15 pts. Min-angle + ROM asymmetry. */
-function penaltyAsymmetry(deltaMin: number, deltaRom: number): number {
-  const minPenalty = Math.min(10, 0.005 * deltaMin * deltaMin);
-  const romPenalty = Math.min(10, 0.004 * deltaRom * deltaRom);
+/** Asymmetry penalty — ratio-based. max 15 pts.
+ *  Compares reach ratio differences between arms (camera-invariant). */
+function penaltyAsymmetry(deltaMinRatio: number, deltaRomRatio: number): number {
+  // Scale: at 0.10 diff, penalty = 500 * 0.10^2 = 5pts. At 0.20 diff = 20pts (capped at 10).
+  const minPenalty = Math.min(10, 500 * deltaMinRatio * deltaMinRatio);
+  const romPenalty = Math.min(10, 500 * deltaRomRatio * deltaRomRatio);
   return Math.min(15, minPenalty + romPenalty);
 }
 
-// ============================================================================
-// FORESHORTENING COMPENSATION
-// ============================================================================
-
-/** How much to relax extension threshold per degree of view angle. */
-const FORESHORTENING_FACTOR = 0.35;
-
-/** Adjust extension threshold downward for oblique views (easier to hit). */
-function adjustExtensionThreshold(baseThreshold: number, viewAngleDeg: number): number {
-  return baseThreshold - FORESHORTENING_FACTOR * Math.min(viewAngleDeg, 50);
-}
-
-/** Adjust flexion threshold upward for oblique views (easier to hit). */
-function adjustFlexionThreshold(baseThreshold: number, viewAngleDeg: number): number {
-  return baseThreshold + FORESHORTENING_FACTOR * Math.min(viewAngleDeg, 50);
-}
-
-/** Compute a continuous rep score from raw measurements. */
+/** Compute a continuous rep score from ratio-based measurements. */
 function computeRepScore(
   repWindow: RepWindow,
   leftArm: ArmFSM,
@@ -187,16 +165,13 @@ function computeRepScore(
   const isSide = viewAngle.zone === 'side';
   const primaryIsLeft = viewAngle.primarySide !== 'right';
 
-  const leftElbowOk = isFinite(minAngles.leftElbow) && isFinite(maxAngles.leftElbow);
-  const rightElbowOk = isFinite(minAngles.rightElbow) && isFinite(maxAngles.rightElbow);
-
-  // Torso penalty (works at all angles)
+  // Torso penalty (delta-based, already camera-invariant)
   const deltaTorso = isFinite(maxAngles.torso - minAngles.torso)
     ? maxAngles.torso - minAngles.torso
     : 0;
   const torsoP = penaltyTorso(deltaTorso);
 
-  // Shoulder penalty (skip at side angles)
+  // Shoulder penalty (delta-based, skip at side angles)
   let shoulderP = 0;
   if (!isSide) {
     const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
@@ -208,30 +183,34 @@ function computeRepScore(
     shoulderP = penaltyShoulder(maxDeltaSh);
   }
 
-  // ROM penalty (use primary arm in non-frontal)
-  let minFlex: number;
-  let maxExt: number;
+  // ROM penalty — ratio-based (camera-invariant, no foreshortening compensation)
+  const leftRatioOk = isFinite(repWindow.ratios.minLeftRatio) && isFinite(repWindow.ratios.maxLeftRatio);
+  const rightRatioOk = isFinite(repWindow.ratios.minRightRatio) && isFinite(repWindow.ratios.maxRightRatio);
+  let minRatio: number;
+  let maxRatio: number;
   if (isFrontal) {
-    minFlex = Math.min(
-      leftElbowOk ? minAngles.leftElbow : Infinity,
-      rightElbowOk ? minAngles.rightElbow : Infinity
+    minRatio = Math.min(
+      leftRatioOk ? repWindow.ratios.minLeftRatio : Infinity,
+      rightRatioOk ? repWindow.ratios.minRightRatio : Infinity
     );
-    maxExt = Math.max(
-      leftElbowOk ? maxAngles.leftElbow : -Infinity,
-      rightElbowOk ? maxAngles.rightElbow : -Infinity
+    maxRatio = Math.max(
+      leftRatioOk ? repWindow.ratios.maxLeftRatio : -Infinity,
+      rightRatioOk ? repWindow.ratios.maxRightRatio : -Infinity
     );
   } else {
-    minFlex = primaryIsLeft
-      ? (leftElbowOk ? minAngles.leftElbow : 50)
-      : (rightElbowOk ? minAngles.rightElbow : 50);
-    maxExt = primaryIsLeft
-      ? (leftElbowOk ? maxAngles.leftElbow : 140)
-      : (rightElbowOk ? maxAngles.rightElbow : 140);
+    minRatio = primaryIsLeft
+      ? (leftRatioOk ? repWindow.ratios.minLeftRatio : 0.45)
+      : (rightRatioOk ? repWindow.ratios.minRightRatio : 0.45);
+    maxRatio = primaryIsLeft
+      ? (leftRatioOk ? repWindow.ratios.maxLeftRatio : 0.95)
+      : (rightRatioOk ? repWindow.ratios.maxRightRatio : 0.95);
   }
-  const reachForPenalty = isFrontal ? repWindow.reach : undefined;
-  const romP = penaltyROM(isFinite(minFlex) ? minFlex : 50, isFinite(maxExt) ? maxExt : 140, viewAngle.smoothedAngleDeg, reachForPenalty);
+  const romP = penaltyROM(
+    isFinite(minRatio) ? minRatio : 0.45,
+    isFinite(maxRatio) ? maxRatio : 0.95
+  );
 
-  // Tempo penalty — average across both arms in frontal mode (mirrors evaluateForm logic)
+  // Tempo penalty — average across both arms in frontal mode
   const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
   const tUpR = _rightArm.tUpToTop && _rightArm.tRestToUp ? _rightArm.tUpToTop - _rightArm.tRestToUp : 0;
   const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
@@ -248,14 +227,14 @@ function computeRepScore(
   }
   const tempoP = penaltyTempo(tUp, tDown);
 
-  // Asymmetry penalty (only frontal — can't compare when one arm is occluded)
+  // Asymmetry penalty — ratio-based (camera-invariant)
   let asymmetryP = 0;
-  if (isFrontal && leftElbowOk && rightElbowOk) {
-    const romL = maxAngles.leftElbow - minAngles.leftElbow;
-    const romR = maxAngles.rightElbow - minAngles.rightElbow;
-    const deltaMin = Math.abs(minAngles.leftElbow - minAngles.rightElbow);
-    const deltaRom = Math.abs(romL - romR);
-    asymmetryP = penaltyAsymmetry(deltaMin, deltaRom);
+  if (isFrontal && leftRatioOk && rightRatioOk) {
+    const romLRatio = repWindow.ratios.maxLeftRatio - repWindow.ratios.minLeftRatio;
+    const romRRatio = repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio;
+    const deltaMinRatio = Math.abs(repWindow.ratios.minLeftRatio - repWindow.ratios.minRightRatio);
+    const deltaRomRatio = Math.abs(romLRatio - romRRatio);
+    asymmetryP = penaltyAsymmetry(deltaMinRatio, deltaRomRatio);
   }
 
   // Elbow flare penalty (frontal only)
@@ -284,23 +263,30 @@ interface ArmFSM {
   state: ArmState;
   /** Time when transitioned to REST (for MIN_REP_TIME check) */
   tRestEntry: number | null;
-  /** Min/max elbow angle during current rep */
-  minElbow: number;
-  maxElbow: number;
+  /** Min/max reach ratio during current rep */
+  minRatio: number;
+  maxRatio: number;
   /** Timestamps for tempo calculation */
   tRestToUp: number | null;
   tUpToTop: number | null;
   tTopToDown: number | null;
   tDownToRest: number | null;
-  /** Guard: arm must reach full extension (>= EXTENDED_EXIT) while in REST before a new rep
+  /** Guard: arm must reach full extension (ratio >= EXTENDED_EXIT) while in REST before a new rep
    *  can start. Prevents cascade false reps after a premature noise-spike completion. */
   hasReachedExtension: boolean;
 }
 
 interface RepWindow {
-  /** Rolling min/max for all 8 angles during the rep */
+  /** Rolling min/max for angular metrics during the rep (torso, shoulder, wrist — still angle-based) */
   minAngles: AngleSet;
   maxAngles: AngleSet;
+  /** Rolling min/max reach ratios per arm — the primary metric for ROM/flex/extend evaluation */
+  ratios: {
+    minLeftRatio: number;
+    maxLeftRatio: number;
+    minRightRatio: number;
+    maxRightRatio: number;
+  };
   /** Start/end timestamps */
   tStart: number;
   tEnd: number;
@@ -308,9 +294,6 @@ interface RepWindow {
   frameCount: number;
   /** Wrist deviation history (for duration check) */
   wristDevFrames: { left: number; right: number };
-  /** Normalized arm reach ratio — tracks max (most extended) per arm.
-   *  Used at frontal view to detect foreshortened extension the 2D angle misses. */
-  reach: { maxLeftReachRatio: number; maxRightReachRatio: number };
   /** Max elbow flare angle (upper arm from vertical, coronal plane) per arm during the rep.
    *  Frontal view only — lateral deviation is most accurate when facing the camera. */
   elbowFlare: { maxLeftFlareDeg: number; maxRightFlareDeg: number };
@@ -326,6 +309,10 @@ interface AngleSet {
   torso: number; // midline (hip center -> shoulder center) for better swing detection
   leftWrist: number;
   rightWrist: number;
+  /** Reach ratio: dist(shoulder,wrist) / (dist(shoulder,elbow) + dist(elbow,wrist)).
+   *  ~1.0 = fully extended, ~0.4 = fully curled. Camera-angle invariant. */
+  leftRatio: number;
+  rightRatio: number;
 }
 
 interface SmoothedAngles extends AngleSet {}
@@ -333,8 +320,9 @@ interface SmoothedAngles extends AngleSet {}
 /** Exercise-specific RepResult (richer than framework RepResult) */
 interface RepResult {
   repIndex: number;
-  romL: number;
-  romR: number;
+  /** ROM as ratio delta (maxRatio - minRatio) per arm */
+  romLRatio: number;
+  romRRatio: number;
   tUp: number;
   tDown: number;
   score: number;
@@ -378,8 +366,8 @@ function initArmFSM(): ArmFSM {
   return {
     state: 'REST',
     tRestEntry: null,
-    minElbow: Infinity,
-    maxElbow: -Infinity,
+    minRatio: Infinity,
+    maxRatio: -Infinity,
     tRestToUp: null,
     tUpToTop: null,
     tTopToDown: null,
@@ -400,6 +388,8 @@ function initRepWindow(tStart: number): RepWindow {
       torso: Infinity,
       leftWrist: Infinity,
       rightWrist: Infinity,
+      leftRatio: Infinity,
+      rightRatio: Infinity,
     },
     maxAngles: {
       leftElbow: -Infinity,
@@ -411,12 +401,19 @@ function initRepWindow(tStart: number): RepWindow {
       torso: -Infinity,
       leftWrist: -Infinity,
       rightWrist: -Infinity,
+      leftRatio: -Infinity,
+      rightRatio: -Infinity,
+    },
+    ratios: {
+      minLeftRatio: Infinity,
+      maxLeftRatio: -Infinity,
+      minRightRatio: Infinity,
+      maxRightRatio: -Infinity,
     },
     tStart,
     tEnd: tStart,
     frameCount: 0,
     wristDevFrames: { left: 0, right: 0 },
-    reach: { maxLeftReachRatio: -Infinity, maxRightReachRatio: -Infinity },
     elbowFlare: { maxLeftFlareDeg: -Infinity, maxRightFlareDeg: -Infinity },
   };
 }
@@ -438,6 +435,8 @@ function initializeBarbellCurlState(): BarbellCurlState {
       torso: [],
       leftWrist: [],
       rightWrist: [],
+      leftRatio: [],
+      rightRatio: [],
     },
     smoothed: null,
     displayAngles: null,
@@ -722,6 +721,14 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
       ? calculateAngle2D(getPoint(rightElbow)!, getPoint(rightWrist)!, getPoint(rightIndex)!)
       : 180;
 
+  // Reach ratios — the primary camera-invariant metric for curl detection
+  const leftRatio = leftOk
+    ? computeArmReachRatio(keypoints, 'left')
+    : NaN;
+  const rightRatio = rightOk
+    ? computeArmReachRatio(keypoints, 'right')
+    : NaN;
+
   return {
     leftElbow: leftElbowAngle,
     rightElbow: rightElbowAngle,
@@ -732,6 +739,8 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
     torso: torsoAngle,
     leftWrist: leftWristAngle,
     rightWrist: rightWristAngle,
+    leftRatio,
+    rightRatio,
   };
 }
 
@@ -760,6 +769,8 @@ function applySmoothing(
     'torso',
     'leftWrist',
     'rightWrist',
+    'leftRatio',
+    'rightRatio',
   ];
 
   const medianFiltered: Partial<SmoothedAngles> = {};
@@ -795,58 +806,58 @@ function applySmoothing(
 // FSM LOGIC
 // ============================================================================
 
-function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
+/**
+ * Update arm FSM using reach ratio (camera-angle invariant).
+ * Ratio: 1.0 = fully extended, ~0.4 = fully curled.
+ * Transitions are inverted vs angle: low ratio = curled (was low angle), high ratio = extended.
+ */
+function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
   const newArm = { ...arm };
 
   switch (arm.state) {
     case 'REST':
       // Track whether the arm has returned to full extension since the last rep.
-      // This prevents the cascade false-rep pattern: a noise spike at 150° causes a
-      // premature completion mid-lowering, the FSMs reset, and the arm (still at ~100°)
-      // would immediately re-enter UP. Requiring the arm to reach EXTENDED_EXIT first
-      // forces the user to complete the lowering before the next rep can start.
-      if (elbowAngle >= THRESHOLDS.EXTENDED_EXIT) {
+      // Prevents cascade false reps: a noise spike causes premature completion,
+      // FSMs reset, and the arm (still curled at ~0.5) would immediately re-enter UP.
+      if (reachRatio >= THRESHOLDS.EXTENDED_EXIT) {
         newArm.hasReachedExtension = true;
       }
-      if (newArm.hasReachedExtension && elbowAngle < THRESHOLDS.EXTENDED_EXIT) {
+      if (newArm.hasReachedExtension && reachRatio < THRESHOLDS.EXTENDED_EXIT) {
         newArm.state = 'UP';
         newArm.tRestEntry = null;
         newArm.tRestToUp = t;
-        newArm.minElbow = elbowAngle;
-        newArm.maxElbow = elbowAngle;
+        newArm.minRatio = reachRatio;
+        newArm.maxRatio = reachRatio;
         newArm.hasReachedExtension = false;
       }
       break;
 
     case 'UP':
-      newArm.minElbow = Math.min(newArm.minElbow, elbowAngle);
-      newArm.maxElbow = Math.max(newArm.maxElbow, elbowAngle);
-      if (elbowAngle < THRESHOLDS.FLEXED_ENTER) {
+      newArm.minRatio = Math.min(newArm.minRatio, reachRatio);
+      newArm.maxRatio = Math.max(newArm.maxRatio, reachRatio);
+      if (reachRatio < THRESHOLDS.FLEXED_ENTER) {
         newArm.state = 'TOP';
         newArm.tUpToTop = t;
       }
       break;
 
     case 'TOP':
-      newArm.minElbow = Math.min(newArm.minElbow, elbowAngle);
-      newArm.maxElbow = Math.max(newArm.maxElbow, elbowAngle);
-      if (elbowAngle > THRESHOLDS.FLEXED_EXIT) {
+      newArm.minRatio = Math.min(newArm.minRatio, reachRatio);
+      newArm.maxRatio = Math.max(newArm.maxRatio, reachRatio);
+      if (reachRatio > THRESHOLDS.FLEXED_EXIT) {
         newArm.state = 'DOWN';
         newArm.tTopToDown = t;
       }
       break;
 
     case 'DOWN':
-      newArm.minElbow = Math.min(newArm.minElbow, elbowAngle);
-      newArm.maxElbow = Math.max(newArm.maxElbow, elbowAngle);
+      newArm.minRatio = Math.min(newArm.minRatio, reachRatio);
+      newArm.maxRatio = Math.max(newArm.maxRatio, reachRatio);
       if (
-        elbowAngle > THRESHOLDS.EXTENDED_ENTER &&
+        reachRatio > THRESHOLDS.EXTENDED_ENTER &&
         newArm.tRestToUp !== null &&
         t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME &&
-        // Require a minimum dwell in DOWN before completing — filters noise spikes that
-        // briefly push the angle above 150° mid-lowering, which would produce a near-zero
-        // tDown and trigger a false 'Control the lowering' message. The re-flexion escape
-        // below has had this guard since it was introduced; now the normal path does too.
+        // Require minimum dwell in DOWN before completing — filters noise spikes
         (newArm.tTopToDown === null || t - newArm.tTopToDown >= THRESHOLDS.MIN_DOWN_GUARD)
       ) {
         // Normal completion: full extension reached
@@ -854,14 +865,12 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
         newArm.tRestEntry = t;
         newArm.tDownToRest = t;
       } else if (
-        elbowAngle < THRESHOLDS.FLEXED_EXIT &&
+        reachRatio < THRESHOLDS.FLEXED_EXIT &&
         newArm.tRestToUp !== null &&
         t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME &&
         newArm.tTopToDown !== null && t - newArm.tTopToDown >= FORM_THRESHOLDS.TEMPO_DOWN_MIN
       ) {
         // Re-flexion escape: arm is curling again without full extension.
-        // Guard: must have been in DOWN for >= TEMPO_DOWN_MIN to avoid noise spikes at the TOP
-        // triggering a false completion with near-zero tDown.
         // Force completion — rep will be counted and penalized for incomplete ROM.
         newArm.state = 'REST';
         newArm.tRestEntry = t;
@@ -871,16 +880,6 @@ function updateArmFSM(arm: ArmFSM, elbowAngle: number, t: number): ArmFSM {
   }
 
   return newArm;
-}
-
-/** Check if reach ratio indicates incomplete extension (frontal view only). */
-function isReachRatioLow(reach: RepWindow['reach']): boolean {
-  const leftOk = isFinite(reach.maxLeftReachRatio);
-  const rightOk = isFinite(reach.maxRightReachRatio);
-  if (!leftOk && !rightOk) return false;
-  if (leftOk && reach.maxLeftReachRatio < FORM_THRESHOLDS.REACH_RATIO_MIN) return true;
-  if (rightOk && reach.maxRightReachRatio < FORM_THRESHOLDS.REACH_RATIO_MIN) return true;
-  return false;
 }
 
 // ============================================================================
@@ -894,64 +893,62 @@ function evaluateForm(
   viewAngle: ViewAngle,
   repIndex: number = 0
 ): { score: number; messages: string[] } {
-  const { minAngles, maxAngles } = repWindow;
+  const { minAngles, maxAngles, ratios } = repWindow;
   const messages: string[] = [];
   const isFrontal = viewAngle.zone === 'frontal';
   const isSide = viewAngle.zone === 'side';
-
-  const leftElbowOk = isFinite(minAngles.leftElbow) && isFinite(maxAngles.leftElbow);
-  const rightElbowOk = isFinite(minAngles.rightElbow) && isFinite(maxAngles.rightElbow);
   const primaryIsLeft = viewAngle.primarySide !== 'right';
 
-  const minFlex = isFrontal
-    ? Math.min(
-        leftElbowOk ? minAngles.leftElbow : Infinity,
-        rightElbowOk ? minAngles.rightElbow : Infinity
-      )
-    : primaryIsLeft
-      ? (leftElbowOk ? minAngles.leftElbow : Infinity)
-      : (rightElbowOk ? minAngles.rightElbow : Infinity);
+  const leftRatioOk = isFinite(ratios.minLeftRatio) && isFinite(ratios.maxLeftRatio);
+  const rightRatioOk = isFinite(ratios.minRightRatio) && isFinite(ratios.maxRightRatio);
 
-  const maxExt = isFrontal
-    ? Math.max(
-        leftElbowOk ? maxAngles.leftElbow : -Infinity,
-        rightElbowOk ? maxAngles.rightElbow : -Infinity
-      )
-    : primaryIsLeft
-      ? (leftElbowOk ? maxAngles.leftElbow : -Infinity)
-      : (rightElbowOk ? maxAngles.rightElbow : -Infinity);
+  // Determine min/max ratios based on view
+  let minRatio: number;
+  let maxRatio: number;
+  if (isFrontal) {
+    minRatio = Math.min(
+      leftRatioOk ? ratios.minLeftRatio : Infinity,
+      rightRatioOk ? ratios.minRightRatio : Infinity
+    );
+    maxRatio = Math.max(
+      leftRatioOk ? ratios.maxLeftRatio : -Infinity,
+      rightRatioOk ? ratios.maxRightRatio : -Infinity
+    );
+  } else {
+    minRatio = primaryIsLeft
+      ? (leftRatioOk ? ratios.minLeftRatio : Infinity)
+      : (rightRatioOk ? ratios.minRightRatio : Infinity);
+    maxRatio = primaryIsLeft
+      ? (leftRatioOk ? ratios.maxLeftRatio : -Infinity)
+      : (rightRatioOk ? ratios.maxRightRatio : -Infinity);
+  }
 
-  // 1. Flex/extend depth — compensate for foreshortening at oblique views
-  const adjFlexed = adjustFlexionThreshold(THRESHOLDS.FLEXED_ENTER, viewAngle.smoothedAngleDeg);
-  const adjExtended = adjustExtensionThreshold(THRESHOLDS.EXTENDED_ENTER, viewAngle.smoothedAngleDeg);
-  if (isFinite(minFlex) && minFlex > adjFlexed) {
+  // 1. Flex depth — ratio-based (no foreshortening compensation needed)
+  if (isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN) {
     messages.push('Flex more at the top of the curl.');
   }
 
-  // Extension check: 2D angle + reach ratio (frontal supplement).
-  const angleExtensionBad = isFinite(maxExt) && maxExt < adjExtended;
-  const reachExtensionBad = isFrontal && isReachRatioLow(repWindow.reach);
-  if (angleExtensionBad || reachExtensionBad) {
+  // 2. Extension — ratio-based
+  if (isFinite(maxRatio) && maxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN) {
     messages.push('Extend fully at the bottom.');
   }
 
-  // 2. ROM — compensate for foreshortening
-  const romL = leftElbowOk ? maxAngles.leftElbow - minAngles.leftElbow : 0;
-  const romR = rightElbowOk ? maxAngles.rightElbow - minAngles.rightElbow : 0;
-  const primaryRom = primaryIsLeft ? romL : romR;
-  const adjRomMin = adjustExtensionThreshold(THRESHOLDS.ROM_MIN, viewAngle.smoothedAngleDeg);
+  // 3. ROM — ratio-based
+  const romLRatio = leftRatioOk ? ratios.maxLeftRatio - ratios.minLeftRatio : 0;
+  const romRRatio = rightRatioOk ? ratios.maxRightRatio - ratios.minRightRatio : 0;
+  const primaryRomRatio = primaryIsLeft ? romLRatio : romRRatio;
 
   if (isFrontal) {
-    if ((romL < THRESHOLDS.ROM_MIN || romR < THRESHOLDS.ROM_MIN) && messages.length === 0) {
+    if ((romLRatio < THRESHOLDS.ROM_MIN || romRRatio < THRESHOLDS.ROM_MIN) && messages.length === 0) {
       messages.push('Incomplete rep — curl all the way up and fully extend.');
     }
   } else {
-    if (primaryRom < adjRomMin && messages.length === 0) {
+    if (primaryRomRatio < THRESHOLDS.ROM_MIN && messages.length === 0) {
       messages.push('Incomplete rep — curl all the way up and fully extend.');
     }
   }
 
-  // 3. Shoulder takeover (skip at side angles — cross-arm data unreliable)
+  // 4. Shoulder takeover (delta-based, already camera-invariant; skip at side angles)
   const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
   const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
   if (!isSide) {
@@ -967,7 +964,7 @@ function evaluateForm(
     }
   }
 
-  // 3b. Elbow flare (frontal only — lateral deviation is most detectable head-on)
+  // 4b. Elbow flare (frontal only)
   if (isFrontal) {
     const leftFlareOk = isFinite(repWindow.elbowFlare.maxLeftFlareDeg);
     const rightFlareOk = isFinite(repWindow.elbowFlare.maxRightFlareDeg);
@@ -982,7 +979,7 @@ function evaluateForm(
     }
   }
 
-  // 4. Torso swing (works at all angles — sagittal projection is rotation-invariant)
+  // 5. Torso swing (delta-based, already camera-invariant)
   const deltaTorso = maxAngles.torso - minAngles.torso;
   const torsoWarnThreshold = repIndex === 0
     ? FORM_THRESHOLDS.TORSO_FAIL
@@ -995,14 +992,7 @@ function evaluateForm(
     }
   }
 
-  // 5. Wrist neutrality (disabled - no feedback)
-
-  // 6. Tempo — average across both arms in frontal mode.
-  // Hardcoding left-arm-only in frontal mode ignores the right arm entirely; if the left arm
-  // happens to be slightly faster (asymmetric biomechanics or noisier detection), it fires
-  // false positives regardless of how controlled the right arm is. Averaging requires BOTH
-  // arms to be fast before flagging. When only one arm has valid timestamps, fall back to
-  // that arm's data (Math.max of 0 and the valid value = the valid value).
+  // 6. Tempo — average across both arms in frontal mode
   const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
   const tUpR = rightArm.tUpToTop && rightArm.tRestToUp ? rightArm.tUpToTop - rightArm.tRestToUp : 0;
   const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
@@ -1026,11 +1016,11 @@ function evaluateForm(
     messages.push("Control the lowering — don't drop the weight.");
   }
 
-  // 7. Symmetry (only in frontal — can't compare arms when one is occluded)
-  if (isFrontal && leftElbowOk && rightElbowOk) {
-    const deltaMin = Math.abs(minAngles.leftElbow - minAngles.rightElbow);
-    const deltaRom = Math.abs(romL - romR);
-    if (deltaMin > FORM_THRESHOLDS.SYMMETRY_MIN || deltaRom > FORM_THRESHOLDS.SYMMETRY_ROM) {
+  // 7. Symmetry — ratio-based (only frontal)
+  if (isFrontal && leftRatioOk && rightRatioOk) {
+    const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
+    const deltaRomRatio = Math.abs(romLRatio - romRRatio);
+    if (deltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO || deltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO) {
       messages.push('Arms are uneven — curl both sides together.');
     }
   }
@@ -1086,9 +1076,9 @@ function updateBarbellCurlState(
     return newState;
   }
 
-  // Determine which arms have valid elbow angles
-  const leftValid = !isNaN(smoothed.leftElbow);
-  const rightValid = !isNaN(smoothed.rightElbow);
+  // Determine which arms have valid reach ratios
+  const leftValid = !isNaN(smoothed.leftRatio);
+  const rightValid = !isNaN(smoothed.rightRatio);
 
   // If neither arm is valid, bail
   if (!leftValid && !rightValid) {
@@ -1097,14 +1087,14 @@ function updateBarbellCurlState(
 
   const isSingleArm = !leftValid || !rightValid;
 
-  // Update per-arm FSMs (only for valid arms)
+  // Update per-arm FSMs using reach ratios (camera-invariant)
   const prevLeftState = currentState.leftArm.state;
   const prevRightState = currentState.rightArm.state;
   if (leftValid) {
-    newState.leftArm = updateArmFSM(currentState.leftArm, smoothed.leftElbow, t);
+    newState.leftArm = updateArmFSM(currentState.leftArm, smoothed.leftRatio, t);
   }
   if (rightValid) {
-    newState.rightArm = updateArmFSM(currentState.rightArm, smoothed.rightElbow, t);
+    newState.rightArm = updateArmFSM(currentState.rightArm, smoothed.rightRatio, t);
   }
 
   // Track rep window (accumulate data while any active arm is not in REST)
@@ -1126,13 +1116,14 @@ function updateBarbellCurlState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update min/max for all angles (NaN-safe)
+    // Update min/max for all angles + ratios (NaN-safe)
     const keys: (keyof AngleSet)[] = [
       'leftElbow', 'rightElbow',
       'leftShoulder', 'rightShoulder',
       'leftTorso', 'rightTorso',
       'torso',
       'leftWrist', 'rightWrist',
+      'leftRatio', 'rightRatio',
     ];
     for (const key of keys) {
       const val = smoothed[key];
@@ -1140,6 +1131,16 @@ function updateBarbellCurlState(
         window.minAngles[key] = Math.min(window.minAngles[key], val);
         window.maxAngles[key] = Math.max(window.maxAngles[key], val);
       }
+    }
+
+    // Track reach ratios in dedicated ratio fields (primary metric for all views)
+    if (!isNaN(smoothed.leftRatio)) {
+      window.ratios.minLeftRatio = Math.min(window.ratios.minLeftRatio, smoothed.leftRatio);
+      window.ratios.maxLeftRatio = Math.max(window.ratios.maxLeftRatio, smoothed.leftRatio);
+    }
+    if (!isNaN(smoothed.rightRatio)) {
+      window.ratios.minRightRatio = Math.min(window.ratios.minRightRatio, smoothed.rightRatio);
+      window.ratios.maxRightRatio = Math.max(window.ratios.maxRightRatio, smoothed.rightRatio);
     }
 
     // Track wrist deviation duration
@@ -1150,18 +1151,8 @@ function updateBarbellCurlState(
       window.wristDevFrames.right++;
     }
 
-    // Track arm reach ratio (frontal only — detects foreshortened extension)
+    // Track elbow flare (frontal only — lateral deviation is visible facing the camera)
     if (viewAngle.zone === 'frontal') {
-      const leftReach = computeArmReachRatio(keypoints, 'left');
-      const rightReach = computeArmReachRatio(keypoints, 'right');
-      if (!isNaN(leftReach)) {
-        window.reach.maxLeftReachRatio = Math.max(window.reach.maxLeftReachRatio, leftReach);
-      }
-      if (!isNaN(rightReach)) {
-        window.reach.maxRightReachRatio = Math.max(window.reach.maxRightReachRatio, rightReach);
-      }
-
-      // Track elbow flare (frontal only — lateral deviation is visible facing the camera)
       const leftFlare = computeElbowFlareDeg(keypoints, 'left');
       const rightFlare = computeElbowFlareDeg(keypoints, 'right');
       if (!isNaN(leftFlare)) {
@@ -1236,8 +1227,8 @@ function completeRep(
 ): void {
   newState.repCount++;
 
-  const romL = newState.leftArm.maxElbow - newState.leftArm.minElbow;
-  const romR = newState.rightArm.maxElbow - newState.rightArm.minElbow;
+  const romLRatio = newState.leftArm.maxRatio - newState.leftArm.minRatio;
+  const romRRatio = newState.rightArm.maxRatio - newState.rightArm.minRatio;
 
   // Use primary arm for tempo in non-frontal modes
   const tempoArm = viewAngle.zone === 'frontal'
@@ -1263,8 +1254,8 @@ function completeRep(
 
   newState.lastRepResult = {
     repIndex: newState.repCount,
-    romL,
-    romR,
+    romLRatio,
+    romRRatio,
     tUp,
     tDown,
     score,
@@ -1299,13 +1290,21 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
   current: {
     leftElbow: number | null;
     rightElbow: number | null;
+    leftRatio: number | null;
+    rightRatio: number | null;
     leftShoulder: number | null;
     rightShoulder: number | null;
     torso: number | null;
   };
+  repRatios: {
+    minLeft: number | null;
+    maxLeft: number | null;
+    minRight: number | null;
+    maxRight: number | null;
+    romLeft: number | null;
+    romRight: number | null;
+  } | null;
   repDelta: {
-    leftElbow: number | null;
-    rightElbow: number | null;
     leftShoulder: number | null;
     rightShoulder: number | null;
     torso: number | null;
@@ -1316,14 +1315,26 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
   const current = {
     leftElbow: _formatAngle(angles?.leftElbow ?? NaN),
     rightElbow: _formatAngle(angles?.rightElbow ?? NaN),
+    leftRatio: _formatAngle(angles?.leftRatio ?? NaN),
+    rightRatio: _formatAngle(angles?.rightRatio ?? NaN),
     leftShoulder: _formatAngle(angles?.leftShoulder ?? NaN),
     rightShoulder: _formatAngle(angles?.rightShoulder ?? NaN),
     torso: _formatAngle(angles?.torso ?? NaN),
   };
+  const repRatios = window
+    ? {
+        minLeft: _formatAngle(window.ratios.minLeftRatio),
+        maxLeft: _formatAngle(window.ratios.maxLeftRatio),
+        minRight: _formatAngle(window.ratios.minRightRatio),
+        maxRight: _formatAngle(window.ratios.maxRightRatio),
+        romLeft: isFinite(window.ratios.maxLeftRatio) && isFinite(window.ratios.minLeftRatio)
+          ? _formatAngle(window.ratios.maxLeftRatio - window.ratios.minLeftRatio) : null,
+        romRight: isFinite(window.ratios.maxRightRatio) && isFinite(window.ratios.minRightRatio)
+          ? _formatAngle(window.ratios.maxRightRatio - window.ratios.minRightRatio) : null,
+      }
+    : null;
   const repDelta = window
     ? {
-        leftElbow: _safeDelta(window.minAngles.leftElbow, window.maxAngles.leftElbow),
-        rightElbow: _safeDelta(window.minAngles.rightElbow, window.maxAngles.rightElbow),
         leftShoulder: _safeDelta(window.minAngles.leftShoulder, window.maxAngles.leftShoulder),
         rightShoulder: _safeDelta(window.minAngles.rightShoulder, window.maxAngles.rightShoulder),
         torso: _safeDelta(window.minAngles.torso, window.maxAngles.torso),
@@ -1333,6 +1344,7 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
     leftArmState: state.leftArm.state,
     rightArmState: state.rightArm.state,
     current,
+    repRatios,
     repDelta,
   };
 }
