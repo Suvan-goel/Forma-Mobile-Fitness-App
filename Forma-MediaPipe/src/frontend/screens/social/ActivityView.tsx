@@ -13,7 +13,6 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Inbox, Plus } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
@@ -98,20 +97,16 @@ export const ActivityView: React.FC = memo(() => {
   }, [navigation, refetch]);
 
   const fab = (
-    <TouchableOpacity
-      style={styles.fab}
-      onPress={handleCreatePost}
-      activeOpacity={0.85}
-    >
-      <LinearGradient
-        colors={['#8B5CF6', '#7C3AED']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.fabGradient}
+    <View style={styles.fabWrapper} pointerEvents="box-none">
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={handleCreatePost}
+        activeOpacity={0.8}
       >
-        <Plus size={24} color="#FFFFFF" strokeWidth={2.5} />
-      </LinearGradient>
-    </TouchableOpacity>
+        <Plus size={18} color={COLORS.primary} strokeWidth={2.5} />
+        <Text style={styles.fabText}>New Post</Text>
+      </TouchableOpacity>
+    </View>
   );
 
   if (isLoading && events.length === 0) {
@@ -186,29 +181,38 @@ const styles = StyleSheet.create({
   },
 
   /* ── FAB ── */
-  fab: {
+  fabWrapper: {
     position: 'absolute',
     bottom: 100,
-    right: SPACING.screenHorizontal + 4,
-    borderRadius: 28,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  fab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.45,
-        shadowRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
       },
-      android: { elevation: 10 },
+      android: { elevation: 6 },
     }),
   },
-  fabGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+  fabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.primary,
+    letterSpacing: 0.3,
   },
 
   /* ── Filter tabs ── */

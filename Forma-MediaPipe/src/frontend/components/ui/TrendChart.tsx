@@ -8,7 +8,7 @@
 import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G } from 'react-native-svg';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -33,11 +33,21 @@ interface Point {
   y: number;
 }
 
-function catmullRomToBezierPath(points: Point[], tension: number = 0.3): string {
+function catmullRomToBezierPath(
+  points: Point[],
+  tension: number = 0.3,
+  yMin?: number,
+  yMax?: number,
+): string {
   if (points.length < 2) return '';
   if (points.length === 2) {
     return `M${points[0].x},${points[0].y} L${points[1].x},${points[1].y}`;
   }
+
+  const clampY = (y: number) =>
+    yMin !== undefined && yMax !== undefined
+      ? Math.min(Math.max(y, yMin), yMax)
+      : y;
 
   let path = `M${points[0].x},${points[0].y}`;
 
@@ -48,9 +58,9 @@ function catmullRomToBezierPath(points: Point[], tension: number = 0.3): string 
     const p3 = points[Math.min(points.length - 1, i + 2)];
 
     const cp1x = p1.x + (p2.x - p0.x) * tension;
-    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp1y = clampY(p1.y + (p2.y - p0.y) * tension);
     const cp2x = p2.x - (p3.x - p1.x) * tension;
-    const cp2y = p2.y - (p3.y - p1.y) * tension;
+    const cp2y = clampY(p2.y - (p3.y - p1.y) * tension);
 
     path += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
   }
@@ -101,8 +111,8 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - SPACING.xl * 2;
   const padLeft = 32;
   const padRight = 8;
-  const padTop = 16;
-  const padBottom = 20;
+  const padTop = 26;
+  const padBottom = 32;
   const graphW = chartWidth - padLeft - padRight;
   const graphH = height - padTop - padBottom;
 
@@ -112,7 +122,12 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
     const vals = data.values;
     const minVal = Math.min(...vals);
     const maxVal = Math.max(...vals);
-    const range = maxVal - minVal || 1;
+    const rawRange = maxVal - minVal || 1;
+    // Pad the data range by 10% so min/max values don't sit at the very
+    // edge of the chart — gives the bezier curves room to stay smooth.
+    const rangePad = rawRange * 0.1;
+    const displayMin = minVal - rangePad;
+    const displayRange = rawRange + rangePad * 2;
 
     // Single data point — render a dot with a horizontal baseline
     if (vals.length === 1) {
@@ -128,25 +143,26 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
       };
     }
 
-    // Compute points
+    // Compute points with padded range
     const points: Point[] = vals.map((v, i) => ({
       x: padLeft + (i / (vals.length - 1)) * graphW,
-      y: padTop + graphH - ((v - minVal) / range) * graphH,
+      y: padTop + graphH - ((v - displayMin) / displayRange) * graphH,
     }));
 
-    // Line path
-    const linePath = catmullRomToBezierPath(points);
+    // Line path (clamp control points to chart bounds to prevent overshoot)
+    const linePath = catmullRomToBezierPath(points, 0.15, padTop, padTop + graphH);
 
     // Area path — line path + close along bottom
     const lastPt = points[points.length - 1];
     const firstPt = points[0];
     const areaPath = `${linePath} L${lastPt.x},${padTop + graphH} L${firstPt.x},${padTop + graphH} Z`;
 
-    // Y-axis labels
+    // Y-axis labels — position using the same padded mapping as data points
+    const valToY = (v: number) => padTop + graphH - ((v - displayMin) / displayRange) * graphH;
     const yLabels = [
-      { value: maxVal, y: padTop + 4 },
-      { value: Math.round((maxVal + minVal) / 2), y: padTop + graphH / 2 },
-      { value: minVal, y: padTop + graphH },
+      { value: maxVal, y: valToY(maxVal) },
+      { value: Math.round((maxVal + minVal) / 2), y: valToY((maxVal + minVal) / 2) },
+      { value: minVal, y: valToY(minVal) },
     ];
 
     // X-axis labels
@@ -245,47 +261,52 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                   <Stop offset="0" stopColor="#8B5CF6" stopOpacity="0.25" />
                   <Stop offset="1" stopColor="#8B5CF6" stopOpacity="0" />
                 </SvgGradient>
+                <ClipPath id="chartClip">
+                  <Rect x={0} y={padTop} width={chartWidth} height={graphH} />
+                </ClipPath>
               </Defs>
 
-              {/* Area fill — faded purple under the line */}
-              <Path d={svgContent.areaPath} fill="url(#areaGrad)" />
+              <G clipPath="url(#chartClip)">
+                {/* Area fill — faded purple under the line */}
+                <Path d={svgContent.areaPath} fill="url(#areaGrad)" />
 
-              {/* Line */}
-              <Path
-                d={svgContent.linePath}
-                stroke={COLORS.accent}
-                strokeWidth={2.5}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-
-              {/* Data point dots */}
-              {svgContent.points.map((pt, i) => (
-                <Circle
-                  key={i}
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={
-                    activeIndex === i
-                      ? 6
-                      : activeIndex == null && i === svgContent.points.length - 1
-                        ? 4
-                        : 0
-                  }
-                  fill={COLORS.accent}
+                {/* Line */}
+                <Path
+                  d={svgContent.linePath}
+                  stroke={COLORS.accent}
+                  strokeWidth={2.5}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
-              ))}
 
-              {/* Last point glow */}
-              {activePoint && (
-                <Circle
-                  cx={activePoint.x}
-                  cy={activePoint.y}
-                  r={8}
-                  fill="rgba(139,92,246,0.2)"
-                />
-              )}
+                {/* Data point dots */}
+                {svgContent.points.map((pt, i) => (
+                  <Circle
+                    key={i}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={
+                      activeIndex === i
+                        ? 6
+                        : activeIndex == null && i === svgContent.points.length - 1
+                          ? 4
+                          : 0
+                    }
+                    fill={COLORS.accent}
+                  />
+                ))}
+
+                {/* Last point glow */}
+                {activePoint && (
+                  <Circle
+                    cx={activePoint.x}
+                    cy={activePoint.y}
+                    r={8}
+                    fill="rgba(139,92,246,0.2)"
+                  />
+                )}
+              </G>
 
               {/* Y-axis labels */}
               {svgContent.yLabels.map((yl, i) => (
@@ -331,7 +352,7 @@ const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: 19,
     overflow: 'hidden',
-    marginBottom: 10,
+    marginBottom: 20,
     ...Platform.select({
       ios: {
         shadowColor: '#8B5CF6',

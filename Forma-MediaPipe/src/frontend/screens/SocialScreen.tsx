@@ -5,6 +5,7 @@
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
@@ -52,9 +53,12 @@ export const SocialScreen: React.FC = memo(() => {
 
   return (
     <View style={styles.container}>
-      {/* ── HEADER (matches Analytics/Logbook style) ── */}
+      {/* ── HEADER (matches Rewards style) ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
+            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+          </TouchableOpacity>
           <View style={styles.logoWrap}>
             <Image
               source={require('../assets/forma_purple_logo.png')}
@@ -120,7 +124,14 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
+  },
+  backBtn: {
+    width: 24,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -6,
   },
   logoWrap: {
     width: 50,

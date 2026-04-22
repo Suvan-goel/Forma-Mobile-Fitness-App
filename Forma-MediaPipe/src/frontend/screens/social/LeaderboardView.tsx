@@ -2,7 +2,7 @@
  * LeaderboardView — Leaderboard tab content within SocialScreen
  */
 
-import React, { memo, useState, useCallback, useMemo } from 'react';
+import React, { memo, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { COLORS, FONTS, SPACING, getScoreColor } from '../../constants/theme';
 import { useLeaderboard } from '../../../backend/hooks';
@@ -35,41 +37,93 @@ const FilterBar = memo(({
 }: {
   metric: LeaderboardMetric; onMetric: (m: LeaderboardMetric) => void;
   time: TimeWindow; onTime: (t: TimeWindow) => void;
-}) => (
-  <View style={styles.filterBar}>
-    {/* Metric — primary pills (left) */}
-    <View style={styles.metricTrack}>
-      {METRICS.map(m => (
-        <TouchableOpacity
-          key={m.key}
-          style={[styles.metricPill, metric === m.key && styles.metricPillActive]}
-          onPress={() => onMetric(m.key)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.metricText, metric === m.key && styles.metricTextActive]}>
-            {m.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
+}) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [triggerLayout, setTriggerLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const triggerRef = useRef<View>(null);
 
-    {/* Time — secondary chips (right) */}
-    <View style={styles.timeTrack}>
-      {TIME_WINDOWS.map(t => (
+  const currentMetricLabel = METRICS.find(m => m.key === metric)?.label ?? '';
+  const currentTimeIdx = TIME_WINDOWS.findIndex(t2 => t2.key === time);
+  const currentTimeLabel = TIME_WINDOWS[currentTimeIdx].label;
+
+  const cycleTime = useCallback(() => {
+    const nextIdx = (currentTimeIdx + 1) % TIME_WINDOWS.length;
+    onTime(TIME_WINDOWS[nextIdx].key);
+  }, [currentTimeIdx, onTime]);
+
+  const openDropdown = useCallback(() => {
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      setTriggerLayout({ x, y, width, height });
+      setDropdownOpen(true);
+    });
+  }, []);
+
+  const selectMetric = useCallback((m: LeaderboardMetric) => {
+    onMetric(m);
+    setDropdownOpen(false);
+  }, [onMetric]);
+
+  return (
+    <View style={styles.filterBar}>
+      {/* Metric dropdown trigger */}
+      <View ref={triggerRef} collapsable={false}>
         <TouchableOpacity
-          key={t.key}
-          style={[styles.timePill, time === t.key && styles.timePillActive]}
-          onPress={() => onTime(t.key)}
+          style={styles.metricTrigger}
+          onPress={openDropdown}
           activeOpacity={0.7}
         >
-          <Text style={[styles.timeText, time === t.key && styles.timeTextActive]}>
-            {t.label}
-          </Text>
+          <View style={styles.underlineWrap}>
+            <Text style={styles.metricTriggerText}>{currentMetricLabel}</Text>
+            <View style={styles.filterUnderline} />
+          </View>
+          <Text style={styles.metricChevron}>▾</Text>
         </TouchableOpacity>
-      ))}
+      </View>
+
+      {/* Time — single cycling chip */}
+      <TouchableOpacity
+        style={styles.timeChip}
+        onPress={cycleTime}
+        activeOpacity={0.7}
+      >
+        <View style={styles.underlineWrap}>
+          <Text style={styles.timeChipText}>{currentTimeLabel}</Text>
+          <View style={styles.filterUnderline} />
+        </View>
+      </TouchableOpacity>
+
+      {/* Dropdown menu */}
+      <Modal
+        visible={dropdownOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDropdownOpen(false)}
+      >
+        <Pressable style={styles.dropdownBackdrop} onPress={() => setDropdownOpen(false)}>
+          <View
+            style={[
+              styles.dropdownMenu,
+              { top: triggerLayout.y + triggerLayout.height + 4, left: triggerLayout.x },
+            ]}
+          >
+            {METRICS.map(m => (
+              <TouchableOpacity
+                key={m.key}
+                style={[styles.dropdownItem, metric === m.key && styles.dropdownItemActive]}
+                onPress={() => selectMetric(m.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.dropdownItemText, metric === m.key && styles.dropdownItemTextActive]}>
+                  {m.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
-  </View>
-));
+  );
+});
 
 export const LeaderboardView: React.FC = memo(() => {
   const [metric, setMetric] = useState<LeaderboardMetric>('form_score');
@@ -170,60 +224,95 @@ const styles = StyleSheet.create({
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
+    gap: SPACING.sm,
+    justifyContent: 'space-between',
   },
 
-  /* Metric pills (primary — left) */
-  metricTrack: {
+  /* Metric dropdown trigger */
+  metricTrigger: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 12,
-    padding: 3,
-  },
-  metricPill: {
-    paddingVertical: 7,
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 9,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
-  metricPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.20)',
-  },
-  metricText: {
+  metricTriggerText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
+    fontSize: 15,
+    color: COLORS.text,
     letterSpacing: -0.2,
   },
-  metricTextActive: {
+  metricChevron: {
+    fontSize: 18,
+    color: COLORS.textTertiary,
+  },
+
+  /* Dropdown menu */
+  dropdownBackdrop: {
+    flex: 1,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    minWidth: 160,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  dropdownItemActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+  },
+  dropdownItemText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    letterSpacing: -0.2,
+  },
+  dropdownItemTextActive: {
     color: COLORS.text,
   },
 
-  /* Time chips (secondary — right) */
-  timeTrack: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  /* Text + underline wrapper */
+  underlineWrap: {
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
+  filterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.accent,
+  },
+
+  /* Time — single cycling chip */
+  timeChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
     borderRadius: 10,
-    padding: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  timePill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  timePillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-  },
-  timeText: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
-  timeTextActive: {
+  timeChipText: {
     fontFamily: FONTS.mono.bold,
-    color: COLORS.text,
+    fontSize: 12,
+    color: COLORS.textSecondary,
   },
 
   /* ── List Header ── */

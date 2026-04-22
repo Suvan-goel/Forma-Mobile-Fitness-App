@@ -69,8 +69,9 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
 
-  // Hide on certain Record sub-screens
+  // Hide on Social tab and certain Record sub-screens
   const hideTabBar =
+    currentTabRoute?.name === 'Social' ||
     (currentTabRoute?.name === 'Record' &&
     (focusedRouteName === 'ChooseExercise' ||
      focusedRouteName === 'WorkoutTemplates' ||

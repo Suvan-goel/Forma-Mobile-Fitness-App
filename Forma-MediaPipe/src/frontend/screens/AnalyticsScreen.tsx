@@ -257,39 +257,30 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ═══════════════════════════════════════════
               SECTION: ACTIVITY
               ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Activity size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>ACTIVITY</Text>
-            </View>
-          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={[styles.cardGradient, { marginTop: 10 }]}
+          >
+            <View style={styles.cardEdge}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.sectionLabelRow}>
+                  <Activity size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>ACTIVITY</Text>
+                </View>
+              </View>
 
-          {/* ── VOLUME + TIME SIDE-BY-SIDE ─────────── */}
-          <View style={styles.activityRow}>
-            <View style={styles.activityCardOuter}>
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.activityCardGradient}
-              >
-                <View style={styles.activityCardEdge}>
+              <View style={styles.activityInnerRow}>
+                <View style={styles.activityInnerCell}>
                   <View style={styles.activityIconRow}>
                     <Trophy size={14} color={COLORS.yellow} strokeWidth={1.5} />
                   </View>
                   <Text style={styles.activityCardValue}>{hasData ? formattedVolume : '--'}</Text>
                   <Text style={styles.activityCardUnit}>KG volume</Text>
                 </View>
-              </LinearGradient>
-            </View>
-            <View style={styles.activityCardOuter}>
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.activityCardGradient}
-              >
-                <View style={styles.activityCardEdge}>
+                <View style={styles.activityDivider} />
+                <View style={styles.activityInnerCell}>
                   <View style={styles.activityIconRow}>
                     <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
@@ -298,28 +289,24 @@ export const AnalyticsScreen: React.FC = () => {
                   </Text>
                   <Text style={styles.activityCardUnit}>{periodLabel.toLowerCase()}</Text>
                 </View>
-              </LinearGradient>
+              </View>
             </View>
-          </View>
+          </LinearGradient>
 
           {/* ═══════════════════════════════════════════
-              SECTION: TRENDS
+              SECTION: TRENDS (self-labeled via TrendChart headers)
               ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <TrendingUp size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>TRENDS</Text>
-            </View>
-          </View>
 
           {/* ── FORM SCORE TREND CHART ─────────────── */}
-          <TrendChart
-            title="FORM SCORE"
-            icon={Activity}
-            data={analytics.formData}
-            unit="pts"
-            timeRange={selectedTimeRange}
-          />
+          <View style={{ marginTop: 20 }}>
+            <TrendChart
+              title="FORM SCORE"
+              icon={Activity}
+              data={analytics.formData}
+              unit="pts"
+              timeRange={selectedTimeRange}
+            />
+          </View>
 
           {/* ── VOLUME TREND CHART ─────────────────── */}
           <TrendChart
@@ -353,49 +340,40 @@ export const AnalyticsScreen: React.FC = () => {
               PERSONAL BEST CARD
               ═══════════════════════════════════════════ */}
           {summary.personalBest && (
-            <>
-              <View style={styles.sectionRow}>
-                <View style={styles.sectionLabelRow}>
-                  <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
-                  <Text style={styles.sectionLabel}>PERSONAL BEST</Text>
-                </View>
-              </View>
-
-              <LinearGradient
-                colors={['#1A1510', '#111008', '#0E0C07']}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.cardGradient}
-              >
-                <View style={styles.pbEdge}>
-                  <View style={styles.pbTopRow}>
-                    <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
-                    <View style={styles.pbInfo}>
-                      <Text style={styles.pbExerciseName}>{summary.personalBest.exercise}</Text>
-                      {summary.mostTrainedExercise && (
-                        <Text style={styles.pbMostTrained}>Most trained: {summary.mostTrainedExercise}</Text>
-                      )}
-                    </View>
-                    <View style={styles.pbValueWrap}>
-                      <Text style={styles.pbValue}>{summary.personalBest.weight}</Text>
-                      <Text style={styles.pbUnit}>KG</Text>
-                    </View>
+            <LinearGradient
+              colors={['#1A1510', '#111008', '#0E0C07']}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={[styles.cardGradient, { marginBottom: 20 }]}
+            >
+              <View style={styles.pbEdge}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.sectionLabelRow}>
+                    <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
+                    <Text style={styles.sectionLabel}>PERSONAL BEST</Text>
                   </View>
                 </View>
-              </LinearGradient>
-            </>
+
+                <View style={styles.pbTopRow}>
+                  <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
+                  <View style={styles.pbInfo}>
+                    <Text style={styles.pbExerciseName}>{summary.personalBest.exercise}</Text>
+                    {summary.mostTrainedExercise && (
+                      <Text style={styles.pbMostTrained}>Most trained: {summary.mostTrainedExercise}</Text>
+                    )}
+                  </View>
+                  <View style={styles.pbValueWrap}>
+                    <Text style={styles.pbValue}>{summary.personalBest.weight}</Text>
+                    <Text style={styles.pbUnit}>KG</Text>
+                  </View>
+                </View>
+              </View>
+            </LinearGradient>
           )}
 
           {/* ═══════════════════════════════════════════
               WORKOUT DURATION BARS
               ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <BarChart3 size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>DURATION</Text>
-            </View>
-          </View>
-
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
@@ -403,6 +381,12 @@ export const AnalyticsScreen: React.FC = () => {
             style={styles.cardGradient}
           >
             <View style={styles.cardEdge}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.sectionLabelRow}>
+                  <BarChart3 size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>DURATION</Text>
+                </View>
+              </View>
               <View style={styles.weekTitleRow}>
                 <Text style={styles.weekTitle}>{periodLabel}</Text>
                 {selectedBarIndex !== null && analytics.weeklyBarData[selectedBarIndex].value > 0 && (
@@ -552,7 +536,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   statCell: {
     flex: 1,
@@ -583,13 +567,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* ── Section Headers (matches HomeScreen) ─── */
-  sectionRow: {
+  /* ── Card Header Row (matches HomeScreen) ─── */
+  cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.015)',
+    marginHorizontal: -16,
+    marginTop: -16,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopLeftRadius: 17,
+    borderTopRightRadius: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -603,23 +595,18 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  /* ── Activity Row (Volume + Time) ────────── */
-  activityRow: {
+  /* ── Activity Card (Volume + Time) ─────────── */
+  activityInnerRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
   },
-  activityCardOuter: {
+  activityInnerCell: {
     flex: 1,
+    paddingHorizontal: 4,
   },
-  activityCardGradient: {
-    borderRadius: 18,
-  },
-  activityCardEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 16,
+  activityDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginVertical: 4,
   },
   activityIconRow: {
     marginBottom: 12,

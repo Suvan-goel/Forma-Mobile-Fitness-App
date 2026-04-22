@@ -231,8 +231,8 @@ export const FriendsView: React.FC = memo(() => {
             <Text style={styles.emptySubtitle}>
               Add friends to compare stats and stay motivated
             </Text>
-            <TouchableOpacity style={styles.addButton} onPress={handleAddFriend} activeOpacity={0.7}>
-              <UserPlus size={18} color={COLORS.text} />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddFriend} activeOpacity={0.8}>
+              <UserPlus size={16} color={COLORS.primary} />
               <Text style={styles.addButtonText}>Add Friends</Text>
             </TouchableOpacity>
           </View>
@@ -250,9 +250,12 @@ export const FriendsView: React.FC = memo(() => {
 
       {/* FAB */}
       {friends.length > 0 && (
-        <TouchableOpacity style={styles.fab} onPress={handleAddFriend} activeOpacity={0.7}>
-          <UserPlus size={20} color={COLORS.text} />
-        </TouchableOpacity>
+        <View style={styles.fabWrapper} pointerEvents="box-none">
+          <TouchableOpacity style={styles.fab} onPress={handleAddFriend} activeOpacity={0.8}>
+            <UserPlus size={16} color={COLORS.primary} />
+            <Text style={styles.fabText}>Add Friend</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -423,14 +426,14 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   addSmallButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
   },
   emptyContainer: {
     paddingTop: 80,
@@ -463,26 +466,19 @@ const styles = StyleSheet.create({
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 6,
     marginTop: SPACING.xl,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
-      },
-      android: { elevation: 6 },
-    }),
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
   },
   addButtonText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 14,
-    color: COLORS.text,
+    color: COLORS.primary,
     letterSpacing: 0.3,
   },
   errorText: {
@@ -505,24 +501,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.primary,
   },
-  fab: {
+  fabWrapper: {
     position: 'absolute',
     bottom: 100,
-    right: SPACING.xl,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.primary,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  fab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
       },
-      android: { elevation: 8 },
+      android: { elevation: 6 },
     }),
+  },
+  fabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.primary,
+    letterSpacing: 0.3,
   },
 });
