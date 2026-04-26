@@ -37,12 +37,12 @@ const THRESHOLDS = {
   /** Reach ratio below which we transition PLANK -> DESCENDING */
   DESCENDING_ENTER: 0.93,
   /** Reach ratio above which we transition ASCENDING -> PLANK */
-  PLANK_REENTER: 0.95,
+  PLANK_REENTER: 0.92,
   /** Reach ratio below which we reach BOTTOM.
    *  Camera-invariant — no foreshortening compensation needed. */
-  BOTTOM_ENTER: 0.70,
+  BOTTOM_ENTER: 0.73,
   /** Reach ratio above which we leave BOTTOM (hysteresis) */
-  BOTTOM_EXIT: 0.73,
+  BOTTOM_EXIT: 0.77,
   /** Minimum time (seconds) for a rep to count */
   MIN_REP_TIME: 0.4,
   /** Partial rep: ratio above which we reset from DESCENDING without hitting BOTTOM */
@@ -60,7 +60,7 @@ const THRESHOLDS = {
   /** Maximum torso inclination from vertical for plank detection (degrees) */
   TORSO_INCLINE_MAX: 115,
   /** Reach ratio above which arms are considered extended (for IDLE gate) */
-  IDLE_ARMS_EXTENDED: 0.95,
+  IDLE_ARMS_EXTENDED: 0.92,
 } as const;
 
 /** Form heuristic thresholds — ratio-based for elbow, angle-based for hip/body */
@@ -107,7 +107,7 @@ const SCORE_CURVES = {
 /** Smoothing parameters */
 const MEDIAN_WINDOW = 5;
 const EMA_ALPHA = 0.3;
-const VISIBILITY_THRESHOLD = 0.1;
+const VISIBILITY_THRESHOLD = 0.2;
 
 // ============================================================================
 // TYPES (module-private)
@@ -174,6 +174,8 @@ interface PushupState {
   lastRepResult: RepResult | null;
   angleHistory: Record<keyof PushupAngles, number[]>;
   smoothed: SmoothedPushupAngles | null;
+  /** Median-only values (no EMA) — used for FSM to avoid smoothing lag at extremes. */
+  fast: SmoothedPushupAngles | null;
   displayAngles: PushupAngles | null;
   feedback: string | null;
   lastFeedbackTime: number;
@@ -263,6 +265,7 @@ function initializePushupState(): PushupState {
       headSpine: [],
     },
     smoothed: null,
+    fast: null,
     displayAngles: null,
     feedback: null,
     lastFeedbackTime: 0,
@@ -528,35 +531,40 @@ function applySmoothing(
   rawAngles: PushupAngles,
   history: PushupState['angleHistory'],
   prevSmoothed: SmoothedPushupAngles | null
-): SmoothedPushupAngles {
+): { smoothed: SmoothedPushupAngles; fast: SmoothedPushupAngles } {
   const keys: (keyof PushupAngles)[] = ['elbow', 'elbowRatio', 'bodyAlignment', 'hipDeviation', 'headSpine'];
-  const result: Partial<SmoothedPushupAngles> = {};
+  const smoothedResult: Partial<SmoothedPushupAngles> = {};
+  const fastResult: Partial<SmoothedPushupAngles> = {};
 
   for (const key of keys) {
     const value = rawAngles[key];
     if (isNaN(value)) {
-      result[key] = prevSmoothed?.[key] ?? NaN;
+      const fallback = prevSmoothed?.[key] ?? NaN;
+      smoothedResult[key] = fallback;
+      fastResult[key] = fallback;
       continue;
     }
 
-    // Update circular buffer
     history[key].push(value);
     if (history[key].length > MEDIAN_WINDOW) {
       history[key].shift();
     }
 
-    // Median filter
     const medianValue = median(history[key]);
+    // fast = median only: tracks extremes within ~1-2 frames for FSM decisions
+    fastResult[key] = medianValue;
 
-    // EMA
     const prev = prevSmoothed?.[key];
-    result[key] =
+    smoothedResult[key] =
       prev !== undefined && !isNaN(prev)
         ? EMA_ALPHA * medianValue + (1 - EMA_ALPHA) * prev
         : medianValue;
   }
 
-  return result as SmoothedPushupAngles;
+  return {
+    smoothed: smoothedResult as SmoothedPushupAngles,
+    fast: fastResult as SmoothedPushupAngles,
+  };
 }
 
 // ============================================================================
@@ -797,18 +805,19 @@ function updatePushupState(
     return { ...currentState, displayAngles: null, visibleSide };
   }
 
-  // Apply smoothing
-  const smoothed = applySmoothing(rawAngles, currentState.angleHistory, currentState.smoothed);
+  // Apply smoothing — returns fast (median-only) and smoothed (median+EMA)
+  const { smoothed, fast } = applySmoothing(rawAngles, currentState.angleHistory, currentState.smoothed);
 
   const newState: PushupState = {
     ...currentState,
     smoothed,
+    fast,
     displayAngles: smoothed,
     visibleSide,
   };
 
-  // Skip FSM if elbow ratio is NaN
-  if (isNaN(smoothed.elbowRatio)) {
+  // Use fast (median-only) ratio for FSM: avoids EMA lag that prevents reaching extremes
+  if (isNaN(fast.elbowRatio)) {
     return newState;
   }
 
@@ -816,8 +825,8 @@ function updatePushupState(
   const torsoInclination = calculateTorsoInclination(keypoints, visibleSide);
   newState.lastTorsoInclination = torsoInclination;
 
-  // Update FSM using ratio (camera-invariant)
-  const fsmResult = updateFSM(currentState.fsm, smoothed.elbowRatio, t, smoothed.bodyAlignment, torsoInclination);
+  // Update FSM using fast ratio to avoid smoothing-induced misses at BOTTOM and PLANK
+  const fsmResult = updateFSM(currentState.fsm, fast.elbowRatio, t, fast.bodyAlignment, torsoInclination);
   newState.fsm = fsmResult.fsm;
 
   // Handle partial rep -- still counts but flags shallow depth
@@ -840,10 +849,10 @@ function updatePushupState(
     window.tEnd = t;
     window.frameCount++;
 
-    // Update min/max for elbow ratio (primary metric)
-    if (!isNaN(smoothed.elbowRatio)) {
-      window.minElbowRatio = Math.min(window.minElbowRatio, smoothed.elbowRatio);
-      window.maxElbowRatio = Math.max(window.maxElbowRatio, smoothed.elbowRatio);
+    // Update min/max elbow ratio using fast (median-only) to capture true depth/lockout
+    if (!isNaN(fast.elbowRatio)) {
+      window.minElbowRatio = Math.min(window.minElbowRatio, fast.elbowRatio);
+      window.maxElbowRatio = Math.max(window.maxElbowRatio, fast.elbowRatio);
     }
     if (!isNaN(smoothed.bodyAlignment)) {
       window.minBodyAngle = Math.min(window.minBodyAngle, smoothed.bodyAlignment);

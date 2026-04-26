@@ -33,15 +33,15 @@ import type { ExerciseDefinition, ExerciseState, RepResult as FrameworkRepResult
  */
 const THRESHOLDS = {
   /** Reach ratio above which arm is considered fully extended → rep complete */
-  EXTENDED_ENTER: 0.93,
+  EXTENDED_ENTER: 0.90,
   /** Reach ratio below which we start detecting upward motion from REST */
   EXTENDED_EXIT: 0.90,
   /** Reach ratio below which arm is considered fully curled → top of curl */
-  FLEXED_ENTER: 0.50,
+  FLEXED_ENTER: 0.54,
   /** Reach ratio above which we start detecting downward motion from TOP */
-  FLEXED_EXIT: 0.53,
+  FLEXED_EXIT: 0.57,
   MIN_REP_TIME: 0.25, // seconds
-  SYNC_WINDOW: 0.50, // seconds between arms
+  SYNC_WINDOW: 0.75, // seconds between arms
   /** Minimum reach ratio ROM (max - min) for a valid rep */
   ROM_MIN: 0.38,
   /** Min seconds the arm must be in DOWN state before normal completion.
@@ -350,6 +350,8 @@ interface BarbellCurlState {
   lastRepResult: RepResult | null;
   angleHistory: { [K in keyof AngleSet]: number[] }; // For median filter
   smoothed: SmoothedAngles | null; // EMA smoothed angles
+  /** Median-only values (no EMA) — fed to FSM to avoid smoothing lag at extremes. */
+  fast: SmoothedAngles | null;
   displayAngles: AngleSet | null; // Smoothed angles for UI
   feedback: string | null;
   lastFeedbackTime: number;
@@ -439,6 +441,7 @@ function initializeBarbellCurlState(): BarbellCurlState {
       rightRatio: [],
     },
     smoothed: null,
+    fast: null,
     displayAngles: null,
     feedback: null,
     lastFeedbackTime: 0,
@@ -762,7 +765,7 @@ function applySmoothing(
   rawAngles: AngleSet,
   history: BarbellCurlState['angleHistory'],
   prevSmoothed: SmoothedAngles | null
-): SmoothedAngles {
+): { smoothed: SmoothedAngles; fast: SmoothedAngles } {
   const keys: (keyof AngleSet)[] = [
     'leftElbow',
     'rightElbow',
@@ -777,33 +780,38 @@ function applySmoothing(
     'rightRatio',
   ];
 
-  const medianFiltered: Partial<SmoothedAngles> = {};
+  const smoothedResult: Partial<SmoothedAngles> = {};
+  const fastResult: Partial<SmoothedAngles> = {};
 
   for (const key of keys) {
     const value = rawAngles[key];
     if (isNaN(value)) {
-      medianFiltered[key] = prevSmoothed?.[key] ?? NaN;
+      const fallback = prevSmoothed?.[key] ?? NaN;
+      smoothedResult[key] = fallback;
+      fastResult[key] = fallback;
       continue;
     }
 
-    // Update circular buffer
     history[key].push(value);
     if (history[key].length > MEDIAN_WINDOW) {
       history[key].shift();
     }
 
-    // Apply median filter
     const medianValue = median(history[key]);
+    // fast = median only: used for FSM transitions to avoid EMA lag at extremes
+    fastResult[key] = medianValue;
 
-    // Apply EMA
     const prev = prevSmoothed?.[key];
-    medianFiltered[key] =
+    smoothedResult[key] =
       prev !== undefined && !isNaN(prev)
         ? EMA_ALPHA * medianValue + (1 - EMA_ALPHA) * prev
         : medianValue;
   }
 
-  return medianFiltered as SmoothedAngles;
+  return {
+    smoothed: smoothedResult as SmoothedAngles,
+    fast: fastResult as SmoothedAngles,
+  };
 }
 
 // ============================================================================
@@ -842,6 +850,14 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
       if (reachRatio < THRESHOLDS.FLEXED_ENTER) {
         newArm.state = 'TOP';
         newArm.tUpToTop = t;
+      } else if (reachRatio >= THRESHOLDS.EXTENDED_EXIT) {
+        // Arm returned to near-full extension without curling deep enough — reset cleanly.
+        // Prevents the FSM from getting permanently stuck in UP if the EMA-smoothed ratio
+        // never reaches FLEXED_ENTER (e.g. abandoned or partial curl).
+        newArm.state = 'REST';
+        newArm.hasReachedExtension = true;
+        newArm.tRestToUp = null;
+        newArm.tUpToTop = null;
       }
       break;
 
@@ -1054,8 +1070,8 @@ function updateBarbellCurlState(
     return { ...currentState, displayAngles: null, viewAngle };
   }
 
-  // Apply smoothing
-  const smoothed = applySmoothing(rawAngles, currentState.angleHistory, currentState.smoothed);
+  // Apply smoothing — returns fast (median-only) and smoothed (median+EMA)
+  const { smoothed, fast } = applySmoothing(rawAngles, currentState.angleHistory, currentState.smoothed);
 
   // Warm-up gate: require consecutive stable frames before enabling FSM
   const frameStable = isFrameStable(keypoints);
@@ -1070,6 +1086,7 @@ function updateBarbellCurlState(
   const newState: BarbellCurlState = {
     ...currentState,
     smoothed,
+    fast,
     displayAngles: smoothed,
     viewAngle,
     warmupFrames,
@@ -1080,9 +1097,9 @@ function updateBarbellCurlState(
     return newState;
   }
 
-  // Determine which arms have valid reach ratios
-  const leftValid = !isNaN(smoothed.leftRatio);
-  const rightValid = !isNaN(smoothed.rightRatio);
+  // Use fast (median-only) ratios for FSM: avoids EMA lag that prevents reaching extremes
+  const leftValid = !isNaN(fast.leftRatio);
+  const rightValid = !isNaN(fast.rightRatio);
 
   // If neither arm is valid, bail
   if (!leftValid && !rightValid) {
@@ -1091,14 +1108,14 @@ function updateBarbellCurlState(
 
   const isSingleArm = !leftValid || !rightValid;
 
-  // Update per-arm FSMs using reach ratios (camera-invariant)
+  // Update per-arm FSMs using fast (median-only) reach ratios
   const prevLeftState = currentState.leftArm.state;
   const prevRightState = currentState.rightArm.state;
   if (leftValid) {
-    newState.leftArm = updateArmFSM(currentState.leftArm, smoothed.leftRatio, t);
+    newState.leftArm = updateArmFSM(currentState.leftArm, fast.leftRatio, t);
   }
   if (rightValid) {
-    newState.rightArm = updateArmFSM(currentState.rightArm, smoothed.rightRatio, t);
+    newState.rightArm = updateArmFSM(currentState.rightArm, fast.rightRatio, t);
   }
 
   // Track rep window (accumulate data while any active arm is not in REST)
@@ -1137,14 +1154,14 @@ function updateBarbellCurlState(
       }
     }
 
-    // Track reach ratios in dedicated ratio fields (primary metric for all views)
-    if (!isNaN(smoothed.leftRatio)) {
-      window.ratios.minLeftRatio = Math.min(window.ratios.minLeftRatio, smoothed.leftRatio);
-      window.ratios.maxLeftRatio = Math.max(window.ratios.maxLeftRatio, smoothed.leftRatio);
+    // Track reach ratios using fast (median-only) values to capture true depth/lockout
+    if (!isNaN(fast.leftRatio)) {
+      window.ratios.minLeftRatio = Math.min(window.ratios.minLeftRatio, fast.leftRatio);
+      window.ratios.maxLeftRatio = Math.max(window.ratios.maxLeftRatio, fast.leftRatio);
     }
-    if (!isNaN(smoothed.rightRatio)) {
-      window.ratios.minRightRatio = Math.min(window.ratios.minRightRatio, smoothed.rightRatio);
-      window.ratios.maxRightRatio = Math.max(window.ratios.maxRightRatio, smoothed.rightRatio);
+    if (!isNaN(fast.rightRatio)) {
+      window.ratios.minRightRatio = Math.min(window.ratios.minRightRatio, fast.rightRatio);
+      window.ratios.maxRightRatio = Math.max(window.ratios.maxRightRatio, fast.rightRatio);
     }
 
     // Track wrist deviation duration

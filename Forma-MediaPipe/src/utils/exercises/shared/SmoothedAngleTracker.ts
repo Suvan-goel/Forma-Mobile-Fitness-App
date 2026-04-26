@@ -93,6 +93,21 @@ export class SmoothedAngleTracker {
     return this.smoothedValue ?? NaN;
   }
 
+  /**
+   * Last median-filtered value before EMA is applied.
+   * Use this for FSM transition decisions — it responds faster to extremes
+   * (~1–2 frame lag) without the additional EMA lag that would cause the FSM
+   * to miss brief peaks/valleys at the top and bottom of a rep.
+   */
+  get medianValue(): number {
+    if (this.sortedBuffer.length === 0) return NaN;
+    const len = this.sortedBuffer.length;
+    const mid = len >> 1;
+    return len % 2 === 0
+      ? (this.sortedBuffer[mid - 1] + this.sortedBuffer[mid]) * 0.5
+      : this.sortedBuffer[mid];
+  }
+
   /** Reset to initial state */
   reset(): void {
     this.buffer = [];
