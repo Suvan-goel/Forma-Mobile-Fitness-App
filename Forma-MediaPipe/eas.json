@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 13.2.0"
+    "version": ">= 13.2.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -15,9 +16,12 @@
       }
     },
     "preview": {
-      "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "distribution": "internal"
+      },
+      "ios": {
+        "distribution": "store"
       }
     },
     "production": {

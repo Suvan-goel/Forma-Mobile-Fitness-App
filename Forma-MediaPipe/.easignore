@@ -7,6 +7,3 @@ docs/
 # Test fixture recordings — development-only JSON files
 scripts/recordings/
 
-# iOS native module — not needed for Android EAS builds.
-# Remove this line if you ever run: eas build --platform ios
-modules/expo-pose-detection/ios/
