@@ -82,14 +82,17 @@
           "android": {
             "minSdkVersion": 26,
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35
+            "targetSdkVersion": 35,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
       [
         "./plugins/withGradleJavaHome",
         "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
-      ]
+      ],
+      "./plugins/withArmOnly"
     ]
   }
 }
