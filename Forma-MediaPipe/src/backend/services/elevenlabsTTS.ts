@@ -5,6 +5,8 @@
  * configuration to avoid conflicts with the camera.
  */
 
+import { supabase } from './supabase/client';
+
 let Audio: any = null;
 let FileSystem: any = null;
 let nativeModulesAvailable = false;
@@ -18,9 +20,7 @@ try {
   nativeModulesAvailable = false;
 }
 
-// TODO: EXPO_PUBLIC_ keys are bundled into the JS and extractable from production builds.
-// When Supabase is set up, proxy TTS requests through an Edge Function and move this key server-side.
-const ELEVENLABS_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY;
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 let activeVoiceId = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default: Rachel
 
 interface ActiveVoiceSettings {
@@ -110,13 +110,29 @@ async function initializeAudio(): Promise<void> {
  * Call ElevenLabs API and save audio to a temporary file.
  * Returns the file URI for playback.
  */
+async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.ok) return response;
+    if (response.status !== 429 && response.status !== 503) {
+      throw new Error(`TTS error: ${response.status}`);
+    }
+    if (attempt < retries) {
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 500 * Math.pow(2, attempt)));
+    } else {
+      throw new Error(`TTS error: ${response.status}`);
+    }
+  }
+  throw new Error('TTS request failed');
+}
+
 async function generateSpeech(text: string): Promise<string> {
   if (!nativeModulesAvailable || !FileSystem) {
     throw new Error('Native modules not available - rebuild development client');
   }
 
-  if (!ELEVENLABS_API_KEY) {
-    throw new Error('ElevenLabs API key not configured');
+  if (!SUPABASE_URL) {
+    throw new Error('Supabase URL not configured');
   }
 
   // Check cache — same voice + same text = identical audio, skip the API call
@@ -130,22 +146,23 @@ async function generateSpeech(text: string): Promise<string> {
     audioCache.delete(cacheKey); // File was cleaned up — re-generate
   }
 
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${activeVoiceId}`;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Not authenticated');
+  }
 
-  // Fetch audio from ElevenLabs
-  // Using eleven_turbo_v2_5: ~300ms latency vs ~1-2s for eleven_multilingual_v2.
-  // All coaching cues are English-only, so multilingual support is not needed.
-  const response = await fetch(url, {
+  // Proxy through Supabase Edge Function — ElevenLabs key stays server-side
+  const response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/tts`, {
     method: 'POST',
     headers: {
       'Accept': 'audio/mpeg',
       'Content-Type': 'application/json',
-      'xi-api-key': ELEVENLABS_API_KEY,
+      'Authorization': `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({
       text,
-      model_id: 'eleven_turbo_v2_5',
-      voice_settings: {
+      voiceId: activeVoiceId,
+      voiceSettings: {
         stability: activeVoiceSettings.stability,
         similarity_boost: activeVoiceSettings.similarity,
         speed: activeVoiceSettings.speed,
@@ -153,10 +170,6 @@ async function generateSpeech(text: string): Promise<string> {
       },
     }),
   });
-
-  if (!response.ok) {
-    throw new Error(`ElevenLabs API error: ${response.status}`);
-  }
 
   // Convert response to base64 via arrayBuffer + pure JS encoder
   // (FileReader.readAsDataURL hangs indefinitely on JSC with binary blobs)
@@ -286,5 +299,5 @@ export async function stopSpeech(): Promise<void> {
  * Check if ElevenLabs is configured and available.
  */
 export function isElevenLabsAvailable(): boolean {
-  return nativeModulesAvailable && !!ELEVENLABS_API_KEY;
+  return nativeModulesAvailable && !!SUPABASE_URL;
 }

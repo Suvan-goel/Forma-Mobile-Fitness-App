@@ -23,7 +23,9 @@ export const WelcomeScreen: React.FC = () => {
     try {
       await signInWithGoogle();
     } catch (e: any) {
-      setErrorMessage(e?.message ?? 'Sign-in failed. Please try again.');
+      if (!e?.cancelled) {
+        setErrorMessage(e?.message ?? 'Sign-in failed. Please try again.');
+      }
     } finally {
       setIsSigningIn(null);
     }
@@ -35,7 +37,9 @@ export const WelcomeScreen: React.FC = () => {
     try {
       await signInWithApple();
     } catch (e: any) {
-      setErrorMessage(e?.message ?? 'Sign-in failed. Please try again.');
+      if (!e?.cancelled) {
+        setErrorMessage(e?.message ?? 'Sign-in failed. Please try again.');
+      }
     } finally {
       setIsSigningIn(null);
     }

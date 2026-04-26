@@ -41,6 +41,7 @@ import { CreateActivityPostScreen } from '../screens/CreateActivityPostScreen';
 import { CreateTemplateScreen } from '../screens/CreateTemplateScreen';
 import { TemplatePreviewScreen } from '../screens/TemplatePreviewScreen';
 import { OnboardingFlow, ONBOARDING_STORAGE_KEY } from '../screens/OnboardingFlow';
+import { OnboardingAuth } from '../screens/OnboardingAuth';
 import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider } from '../contexts/ScrollContext';
@@ -382,7 +383,7 @@ const RootStackNavigator: React.FC = () => {
           )}
         </>
       ) : (
-        <Stack.Screen name="Welcome" component={WelcomeScreen} />
+        <Stack.Screen name="Welcome" component={OnboardingAuth} />
       )}
     </Stack.Navigator>
   );

@@ -60,6 +60,9 @@ export async function signInWithGoogle(): Promise<void> {
   if (!data.url) throw new Error('No OAuth URL returned');
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type === 'cancel' || result.type === 'dismiss') {
+    throw Object.assign(new Error('Sign-in was cancelled'), { cancelled: true });
+  }
   await handleOAuthResult(result);
 }
 
@@ -78,6 +81,9 @@ export async function signInWithApple(): Promise<void> {
   if (!data.url) throw new Error('No OAuth URL returned');
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type === 'cancel' || result.type === 'dismiss') {
+    throw Object.assign(new Error('Sign-in was cancelled'), { cancelled: true });
+  }
   await handleOAuthResult(result);
 }
 

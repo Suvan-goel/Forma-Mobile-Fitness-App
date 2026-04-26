@@ -562,6 +562,10 @@ function dist2D(a: Point3D, b: Point3D): number {
  * ~0.70-0.85 = forearm foreshortened (pointing into depth axis)
  */
 function computeArmReachRatio(keypoints: Keypoint[], side: 'left' | 'right'): number {
+  // Reach ratio is calibrated on world (3D) landmarks. Image landmarks lack z and
+  // produce foreshortened distances that make the ratio unreliable for front-on curls.
+  if (keypoints.length === 0 || keypoints[0].z === undefined) return NaN;
+
   const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
   const elbow = getKeypoint(keypoints, `${side}_elbow`);
   const wrist = getKeypoint(keypoints, `${side}_wrist`);

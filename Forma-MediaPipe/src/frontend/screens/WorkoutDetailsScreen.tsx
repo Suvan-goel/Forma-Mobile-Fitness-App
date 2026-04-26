@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated, Modal, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -29,6 +29,7 @@ import { useVideoLibrary } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutExercise } from '../../backend/services/api';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
+import { useAlert } from '../contexts/AlertContext';
 
 let VideoComponent: any = null;
 try {
@@ -47,6 +48,7 @@ interface ExerciseCardProps {
 }
 
 const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPlayRecording }) => {
+  const { showAlert } = useAlert();
   const [expandedSets, setExpandedSets] = useState<Record<number, boolean>>({});
 
   const toggleSetNotes = (setNumber: number) => {
@@ -127,7 +129,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                       if (recording) {
                         onPlayRecording(recording);
                       } else {
-                        Alert.alert('No Recording', 'Set recording was not saved for this set.');
+                        showAlert('No Recording', 'Set recording was not saved for this set.');
                       }
                     }}
                   >

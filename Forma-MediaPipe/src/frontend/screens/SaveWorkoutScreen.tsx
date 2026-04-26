@@ -106,13 +106,13 @@ export const SaveWorkoutScreen: React.FC = () => {
             name: 'MainTabs',
             state: {
               routes: [
+                { name: 'Home' },
                 { name: 'Logbook' },
-                { name: 'Analytics' },
                 { name: 'Record' },
-                { name: 'Trainer' },
-                { name: 'Rewards' },
+                { name: 'Analytics' },
+                { name: 'Social' },
               ],
-              index: 0,
+              index: 1,
             },
           },
         ],
