@@ -21,7 +21,7 @@ interface WorkoutPreferences {
 
 const defaults: WorkoutPreferences = {
   showFeedback: true,
-  isTTSEnabled: false,
+  isTTSEnabled: true,
   showSkeletonOverlay: false,
   selectedTrainerId: 'marcus',
   weeklyTrainingTarget: '3-4',
