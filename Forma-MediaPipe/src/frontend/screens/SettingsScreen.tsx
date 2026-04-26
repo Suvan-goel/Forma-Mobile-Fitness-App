@@ -35,6 +35,7 @@ import { useAuth } from '../../backend/contexts/AuthContext';
 import { useWorkoutPreferences, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 
 const formatHeaderDate = (): string => {
   const d = new Date();
@@ -342,20 +343,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                   thumbColor={prefs.isTTSEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
-              <View style={styles.rowDivider} />
-              <View style={styles.groupRow}>
-                <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Skeleton Overlay</Text>
-                <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <Switch
-                  value={prefs.showSkeletonOverlay}
-                  onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={prefs.showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
+              {DEV_FEATURES_ENABLED && (
+                <>
+                  <View style={styles.rowDivider} />
+                  <View style={styles.groupRow}>
+                    <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    <Text style={styles.rowLabel}>Skeleton Overlay</Text>
+                    <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    </TouchableOpacity>
+                    <Switch
+                      value={prefs.showSkeletonOverlay}
+                      onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                      thumbColor={prefs.showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                    />
+                  </View>
+                </>
+              )}
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
                 <Video size={14} color={COLORS.yellow} strokeWidth={1.5} />

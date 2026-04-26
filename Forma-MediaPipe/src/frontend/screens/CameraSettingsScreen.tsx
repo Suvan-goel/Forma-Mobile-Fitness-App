@@ -36,6 +36,7 @@ import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { MonoText } from '../components/typography/MonoText';
 import { TRAINERS } from '../constants/trainers';
+import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 
 /* ── Scroll Wheel Picker ─────────────────── */
 
@@ -416,21 +417,25 @@ export const CameraSettingsScreen: React.FC = () => {
             style={styles.cardGradient}
           >
             <View style={styles.groupEdge}>
-              <View style={styles.groupRow}>
-                <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
-                <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <Switch
-                  value={showSkeletonOverlay}
-                  onValueChange={setShowSkeletonOverlay}
-                  disabled={debugMode}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
-              <View style={styles.rowDivider} />
+              {DEV_FEATURES_ENABLED && (
+                <>
+                  <View style={styles.groupRow}>
+                    <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                    <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
+                    <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    </TouchableOpacity>
+                    <Switch
+                      value={showSkeletonOverlay}
+                      onValueChange={setShowSkeletonOverlay}
+                      disabled={debugMode}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                      thumbColor={showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                    />
+                  </View>
+                  <View style={styles.rowDivider} />
+                </>
+              )}
               <View style={styles.groupRow}>
                 <Video size={14} color={COLORS.yellow} strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Auto Screen Recording</Text>
@@ -489,49 +494,53 @@ export const CameraSettingsScreen: React.FC = () => {
             </View>
           </LinearGradient>
 
-          {/* ── DEVELOPER Section ─────────────────── */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Wrench size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>DEVELOPER</Text>
-            </View>
-          </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.groupEdge}>
-              <View style={styles.groupRow}>
-                <Bug size={14} color={debugMode ? COLORS.orange : COLORS.textTertiary} strokeWidth={1.5} />
-                <Text style={[styles.rowLabel, debugMode && { color: COLORS.orange }]}>Debug Mode</Text>
-                <TouchableOpacity onPress={() => setInfoModal('Debug Mode')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <Switch
-                  value={debugMode}
-                  onValueChange={handleDebugChange}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(224, 120, 86, 0.4)' }}
-                  thumbColor={debugMode ? COLORS.orange : 'rgba(255, 255, 255, 0.3)'}
-                />
+          {DEV_FEATURES_ENABLED && (
+            <>
+              {/* ── DEVELOPER Section ─────────────────── */}
+              <View style={styles.sectionRow}>
+                <View style={styles.sectionLabelRow}>
+                  <Wrench size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>DEVELOPER</Text>
+                </View>
               </View>
-              <View style={styles.rowDivider} />
-              <View style={styles.groupRow}>
-                <SlidersHorizontal size={14} color={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : COLORS.textTertiary} strokeWidth={1.5} />
-                <Text style={[styles.rowLabel, poseModel === 'pose_landmarker_heavy' && { color: '#60A5FA' }]}>Heavy Model</Text>
-                <TouchableOpacity onPress={() => setInfoModal('Heavy Model')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <Switch
-                  value={poseModel === 'pose_landmarker_heavy'}
-                  onValueChange={(val) => setPoseModel(val ? 'pose_landmarker_heavy' : 'pose_landmarker_full')}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(96, 165, 250, 0.4)' }}
-                  thumbColor={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
-            </View>
-          </LinearGradient>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.cardGradient}
+              >
+                <View style={styles.groupEdge}>
+                  <View style={styles.groupRow}>
+                    <Bug size={14} color={debugMode ? COLORS.orange : COLORS.textTertiary} strokeWidth={1.5} />
+                    <Text style={[styles.rowLabel, debugMode && { color: COLORS.orange }]}>Debug Mode</Text>
+                    <TouchableOpacity onPress={() => setInfoModal('Debug Mode')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    </TouchableOpacity>
+                    <Switch
+                      value={debugMode}
+                      onValueChange={handleDebugChange}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(224, 120, 86, 0.4)' }}
+                      thumbColor={debugMode ? COLORS.orange : 'rgba(255, 255, 255, 0.3)'}
+                    />
+                  </View>
+                  <View style={styles.rowDivider} />
+                  <View style={styles.groupRow}>
+                    <SlidersHorizontal size={14} color={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : COLORS.textTertiary} strokeWidth={1.5} />
+                    <Text style={[styles.rowLabel, poseModel === 'pose_landmarker_heavy' && { color: '#60A5FA' }]}>Heavy Model</Text>
+                    <TouchableOpacity onPress={() => setInfoModal('Heavy Model')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    </TouchableOpacity>
+                    <Switch
+                      value={poseModel === 'pose_landmarker_heavy'}
+                      onValueChange={(val) => setPoseModel(val ? 'pose_landmarker_heavy' : 'pose_landmarker_full')}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(96, 165, 250, 0.4)' }}
+                      thumbColor={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : 'rgba(255, 255, 255, 0.3)'}
+                    />
+                  </View>
+                </View>
+              </LinearGradient>
+            </>
+          )}
 
         </Animated.View>
       </ScrollView>

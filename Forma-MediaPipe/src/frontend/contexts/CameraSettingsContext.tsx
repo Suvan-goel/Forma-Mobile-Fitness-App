@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
 import type { PoseModelName } from 'expo-pose-detection';
+import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 
 export type CameraSettings = {
   showFeedback: boolean;
@@ -36,7 +37,7 @@ const defaultSettings: CameraSettings = {
   restTimerDurationSeconds: 90,
   selectedTrainerId: 'marcus',
   autoScreenRecording: false,
-  poseModel: 'pose_landmarker_heavy',
+  poseModel: 'pose_landmarker_full',
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
@@ -60,12 +61,12 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         const saved = JSON.parse(raw);
         if (typeof saved.showFeedback === 'boolean') setShowFeedbackRaw(saved.showFeedback);
         if (typeof saved.isTTSEnabled === 'boolean') setIsTTSEnabledRaw(saved.isTTSEnabled);
-        if (typeof saved.showSkeletonOverlay === 'boolean') setShowSkeletonOverlayRaw(saved.showSkeletonOverlay);
+        if (DEV_FEATURES_ENABLED && typeof saved.showSkeletonOverlay === 'boolean') setShowSkeletonOverlayRaw(saved.showSkeletonOverlay);
         if (typeof saved.restTimerEnabled === 'boolean') setRestTimerEnabledRaw(saved.restTimerEnabled);
         if (typeof saved.restTimerDurationSeconds === 'number') setRestTimerDurationSecondsRaw(saved.restTimerDurationSeconds);
         if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
         if (typeof saved.autoScreenRecording === 'boolean') setAutoScreenRecordingRaw(saved.autoScreenRecording);
-        if (saved.poseModel === 'pose_landmarker_full' || saved.poseModel === 'pose_landmarker_heavy') setPoseModelRaw(saved.poseModel);
+        if (DEV_FEATURES_ENABLED && (saved.poseModel === 'pose_landmarker_full' || saved.poseModel === 'pose_landmarker_heavy')) setPoseModelRaw(saved.poseModel);
       } catch { /* ignore corrupt data */ }
     });
   }, []);
@@ -120,13 +121,13 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const contextValue = useMemo<CameraSettingsContextValue>(() => ({
     showFeedback,
     isTTSEnabled,
-    showSkeletonOverlay,
-    debugMode,
+    showSkeletonOverlay: DEV_FEATURES_ENABLED ? showSkeletonOverlay : false,
+    debugMode: DEV_FEATURES_ENABLED ? debugMode : false,
     restTimerEnabled,
     restTimerDurationSeconds,
     selectedTrainerId,
     autoScreenRecording,
-    poseModel,
+    poseModel: DEV_FEATURES_ENABLED ? poseModel : 'pose_landmarker_full',
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
