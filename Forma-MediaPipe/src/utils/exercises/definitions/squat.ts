@@ -44,11 +44,11 @@ const THRESHOLDS = {
   /** Reach ratio below which we transition STANDING -> DESCENDING */
   DESCENDING_ENTER: 0.92,
   /** Reach ratio below which we reach BOTTOM */
-  BOTTOM_ENTER: 0.72,
+  BOTTOM_ENTER: 0.76,
   /** Reach ratio above which we leave BOTTOM (hysteresis) */
-  BOTTOM_EXIT: 0.76,
+  BOTTOM_EXIT: 0.80,
   /** Reach ratio above which we transition ASCENDING -> STANDING (rep complete) */
-  STANDING_REENTER: 0.96,
+  STANDING_REENTER: 0.93,
   /** Minimum time (seconds) for a rep to count */
   MIN_REP_TIME: 0.8,
   /** Partial rep: ratio above which we reset from DESCENDING without hitting BOTTOM */
@@ -56,7 +56,7 @@ const THRESHOLDS = {
   /** Minimum time in DESCENDING before partial-rep reset can trigger */
   MIN_DESCENDING_TIME: 0.5,
   /** Reach ratio above which legs are considered extended (for IDLE gate) */
-  IDLE_STANDING_MIN: 0.96,
+  IDLE_STANDING_MIN: 0.93,
   /** Seconds user must hold standing pose before FSM activates from IDLE */
   STANDING_HOLD_TIME: 0.8,
   /** Maximum torso inclination from vertical for standing detection (degrees) */
@@ -109,7 +109,7 @@ const SCORE_CURVES = {
 /** Smoothing parameters */
 const MEDIAN_WINDOW = 5;
 const EMA_ALPHA = 0.3;
-const VISIBILITY_THRESHOLD = 0.1;
+const VISIBILITY_THRESHOLD = 0.2;
 
 // ============================================================================
 // TYPES (module-private)
@@ -168,6 +168,8 @@ interface SquatState {
   lastRepResult: RepResult | null;
   angleHistory: Record<keyof SquatAngles, number[]>;
   smoothed: SmoothedSquatAngles | null;
+  /** Median-only values (no EMA) — used for FSM transitions to avoid smoothing lag. */
+  fast: SmoothedSquatAngles | null;
   feedback: string | null;
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
@@ -180,6 +182,8 @@ interface SquatDebugInfo {
   side: 'left' | 'right';
   knee: number | null;
   kneeRatio: number | null;
+  /** Median-only ratio fed to FSM — should track extremes faster than kneeRatio (EMA) */
+  fastKneeRatio: number | null;
   torsoLean: number | null;
   hipAngle: number | null;
   kneeRatioMin: number | null;
@@ -242,6 +246,7 @@ function initializeSquatState(): SquatState {
       hipAngle: [],
     },
     smoothed: null,
+    fast: null,
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
@@ -399,9 +404,9 @@ function calculateSquatAngles(
   const torsoLean = calculateTorsoLean(keypoints, side);
 
   return {
-    knee: kneeRatio, // legacy field name, now stores ratio
+    knee: kneeRatio,
     kneeRatio,
-    torsoLean: torsoLean ?? 0,
+    torsoLean: torsoLean ?? NaN,
     hipAngle,
   };
 }
@@ -420,14 +425,17 @@ function applySmoothing(
   rawAngles: SquatAngles,
   history: SquatState['angleHistory'],
   prevSmoothed: SmoothedSquatAngles | null
-): SmoothedSquatAngles {
+): { smoothed: SmoothedSquatAngles; fast: SmoothedSquatAngles } {
   const keys: (keyof SquatAngles)[] = ['knee', 'kneeRatio', 'torsoLean', 'hipAngle'];
-  const result: Partial<SmoothedSquatAngles> = {};
+  const smoothedResult: Partial<SmoothedSquatAngles> = {};
+  const fastResult: Partial<SmoothedSquatAngles> = {};
 
   for (const key of keys) {
     const value = rawAngles[key];
     if (isNaN(value)) {
-      result[key] = prevSmoothed?.[key] ?? NaN;
+      const fallback = prevSmoothed?.[key] ?? NaN;
+      smoothedResult[key] = fallback;
+      fastResult[key] = fallback;
       continue;
     }
 
@@ -437,14 +445,21 @@ function applySmoothing(
     }
 
     const medianValue = median(history[key]);
+    // fast = median only: responds to extremes within ~1-2 frames, used for FSM
+    fastResult[key] = medianValue;
+
+    // smoothed = median + EMA: stable for form evaluation
     const prev = prevSmoothed?.[key];
-    result[key] =
+    smoothedResult[key] =
       prev !== undefined && !isNaN(prev)
         ? EMA_ALPHA * medianValue + (1 - EMA_ALPHA) * prev
         : medianValue;
   }
 
-  return result as SmoothedSquatAngles;
+  return {
+    smoothed: smoothedResult as SmoothedSquatAngles,
+    fast: fastResult as SmoothedSquatAngles,
+  };
 }
 
 // ============================================================================
@@ -640,20 +655,23 @@ function updateSquatState(
     return { ...currentState, visibleSide };
   }
 
-  const smoothed = applySmoothing(rawAngles, currentState.angleHistory, currentState.smoothed);
+  const { smoothed, fast } = applySmoothing(rawAngles, currentState.angleHistory, currentState.smoothed);
 
   const newState: SquatState = {
     ...currentState,
     smoothed,
+    fast,
     visibleSide,
   };
 
-  if (isNaN(smoothed.kneeRatio)) {
+  // Use the fast (median-only) ratio for FSM decisions: it tracks extremes within ~1-2
+  // frames, whereas the EMA-smoothed value lags by ~250ms and can miss brief peaks.
+  if (isNaN(fast.kneeRatio)) {
     return newState;
   }
 
-  // Update FSM — uses kneeRatio for all transitions
-  const fsmResult = updateFSM(currentState.fsm, smoothed.kneeRatio, t, smoothed.torsoLean);
+  // Update FSM — uses fast (median-only) ratio to avoid smoothing-induced misses
+  const fsmResult = updateFSM(currentState.fsm, fast.kneeRatio, t, fast.torsoLean);
   newState.fsm = fsmResult.fsm;
 
   // Handle partial rep — only count if meaningful ROM was achieved
@@ -696,9 +714,9 @@ function updateSquatState(
     window.tEnd = t;
     window.frameCount++;
 
-    if (!isNaN(smoothed.kneeRatio)) {
-      window.minKneeRatio = Math.min(window.minKneeRatio, smoothed.kneeRatio);
-      window.maxKneeRatio = Math.max(window.maxKneeRatio, smoothed.kneeRatio);
+    if (!isNaN(fast.kneeRatio)) {
+      window.minKneeRatio = Math.min(window.minKneeRatio, fast.kneeRatio);
+      window.maxKneeRatio = Math.max(window.maxKneeRatio, fast.kneeRatio);
     }
     if (!isNaN(smoothed.torsoLean)) {
       // Only update max torso lean when shoulder+hip are detected with sufficient
@@ -785,6 +803,7 @@ function getSquatDebugInfo(state: SquatState): SquatDebugInfo {
     side: state.visibleSide,
     knee: fmt(angles?.knee),
     kneeRatio: fmt(angles?.kneeRatio),
+    fastKneeRatio: fmt(state.fast?.kneeRatio),
     torsoLean: fmt(angles?.torsoLean),
     hipAngle: fmt(angles?.hipAngle),
     kneeRatioMin: repWin && repWin.minKneeRatio !== Infinity ? fmt(repWin.minKneeRatio) : null,
