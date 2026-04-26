@@ -1,54 +1,86 @@
 /**
  * SmoothedAngleTracker — Median filter + EMA smoothing for a single tracked angle.
  *
- * Extracted from barbellCurlHeuristics / pushupHeuristics where the same
- * median→EMA pipeline is duplicated per angle.
+ * Pipeline: velocity clamp → median filter → confidence-weighted EMA
  *
  * Usage:
  *   const tracker = new SmoothedAngleTracker();
  *   const smoothed = tracker.push(rawAngle); // returns smoothed value
+ *   const smoothed = tracker.push(rawAngle, confidence); // confidence-weighted
  */
 
 export interface SmoothedAngleTrackerConfig {
-  medianWindow?: number;   // Default: 5
-  emaAlpha?: number;       // Default: 0.3
+  medianWindow?: number;       // Default: 5
+  emaAlpha?: number;           // Default: 0.3
+  maxDegPerFrame?: number;     // Velocity clamp: max allowed change per frame (default: undefined = disabled)
 }
 
 export class SmoothedAngleTracker {
   private buffer: number[];
+  private sortedBuffer: number[];
   private smoothedValue: number | null;
   private readonly medianWindow: number;
   private readonly emaAlpha: number;
+  private readonly maxDegPerFrame: number | undefined;
 
   constructor(config?: SmoothedAngleTrackerConfig) {
     this.medianWindow = config?.medianWindow ?? 5;
     this.emaAlpha = config?.emaAlpha ?? 0.3;
+    this.maxDegPerFrame = config?.maxDegPerFrame;
     this.buffer = [];
+    this.sortedBuffer = [];
     this.smoothedValue = null;
   }
 
   /**
-   * Push a raw angle value through the median→EMA pipeline.
+   * Push a raw angle value through the velocity-clamp → median → EMA pipeline.
    * Returns the smoothed result.
    * If rawAngle is NaN, returns the previous smoothed value (or NaN if none).
+   * Optional confidence (0-1) scales the EMA alpha — low confidence trusts previous value more.
    */
-  push(rawAngle: number): number {
+  push(rawAngle: number, confidence?: number): number {
     if (isNaN(rawAngle)) {
       return this.smoothedValue ?? NaN;
     }
 
-    // Update circular buffer
-    this.buffer.push(rawAngle);
-    if (this.buffer.length > this.medianWindow) {
+    // Velocity clamp — reject teleportation spikes
+    if (this.maxDegPerFrame !== undefined && this.buffer.length > 0) {
+      const prev = this.buffer[this.buffer.length - 1];
+      const delta = rawAngle - prev;
+      if (Math.abs(delta) > this.maxDegPerFrame) {
+        rawAngle = prev + Math.sign(delta) * this.maxDegPerFrame;
+      }
+    }
+
+    // Remove oldest value from sorted buffer if at capacity
+    if (this.buffer.length >= this.medianWindow) {
+      const oldest = this.buffer[0];
+      const idx = binarySearch(this.sortedBuffer, oldest);
+      if (idx >= 0) {
+        this.sortedBuffer.splice(idx, 1);
+      }
       this.buffer.shift();
     }
 
-    // Median filter
-    const medianValue = median(this.buffer);
+    // Add new value to both buffers
+    this.buffer.push(rawAngle);
+    const insertIdx = binarySearchInsert(this.sortedBuffer, rawAngle);
+    this.sortedBuffer.splice(insertIdx, 0, rawAngle);
 
-    // EMA
+    // Median from pre-sorted buffer
+    const len = this.sortedBuffer.length;
+    const mid = len >> 1;
+    const medianValue = len % 2 === 0
+      ? (this.sortedBuffer[mid - 1] + this.sortedBuffer[mid]) * 0.5
+      : this.sortedBuffer[mid];
+
+    // Confidence-weighted EMA
+    const effectiveAlpha = confidence !== undefined
+      ? this.emaAlpha * Math.min(1, confidence / 0.5)
+      : this.emaAlpha;
+
     if (this.smoothedValue !== null && !isNaN(this.smoothedValue)) {
-      this.smoothedValue = this.emaAlpha * medianValue + (1 - this.emaAlpha) * this.smoothedValue;
+      this.smoothedValue = effectiveAlpha * medianValue + (1 - effectiveAlpha) * this.smoothedValue;
     } else {
       this.smoothedValue = medianValue;
     }
@@ -64,13 +96,32 @@ export class SmoothedAngleTracker {
   /** Reset to initial state */
   reset(): void {
     this.buffer = [];
+    this.sortedBuffer = [];
     this.smoothedValue = null;
   }
 }
 
-/** Compute the median of a non-empty array. */
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+/** Find exact index of value in sorted array, or -1. */
+function binarySearch(arr: number[], value: number): number {
+  let lo = 0;
+  let hi = arr.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] === value) return mid;
+    if (arr[mid] < value) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}
+
+/** Find insertion index to maintain sorted order. */
+function binarySearchInsert(arr: number[], value: number): number {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] < value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
