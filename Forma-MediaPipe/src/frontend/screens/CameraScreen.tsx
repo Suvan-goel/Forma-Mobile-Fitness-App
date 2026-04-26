@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator, PermissionsAndroid } from 'react-native';
 import { PoseDetectionView, switchCamera } from 'expo-pose-detection';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -161,15 +161,24 @@ export const CameraScreen: React.FC = () => {
   // Unmount camera before leaving so native layer can release it; avoids "Camera initialization failed" on next open
   const [cameraMounted, setCameraMounted] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [cameraPermissionGranted, setCameraPermissionGranted] = useState(Platform.OS !== 'android');
+
+  // Android requires runtime camera permission — the manifest declaration alone is not enough.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA).then((result) => {
+      setCameraPermissionGranted(result === PermissionsAndroid.RESULTS.GRANTED);
+    });
+  }, []);
 
   // Mount camera when screen gains focus. Short delay lets previous native camera release.
   useFocusEffect(
     useCallback(() => {
-      if (isClosing) return;
+      if (isClosing || !cameraPermissionGranted) return;
       setCameraMounted(false);
       const t = setTimeout(() => setCameraMounted(true), 150);
       return () => clearTimeout(t);
-    }, [isClosing])
+    }, [isClosing, cameraPermissionGranted])
   );
 
   // Speak set-start message as soon as camera screen loads (debug mode overrides TTS off)
