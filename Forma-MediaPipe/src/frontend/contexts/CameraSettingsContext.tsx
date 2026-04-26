@@ -37,7 +37,7 @@ const defaultSettings: CameraSettings = {
   restTimerDurationSeconds: 90,
   selectedTrainerId: 'marcus',
   autoScreenRecording: false,
-  poseModel: 'pose_landmarker_full',
+  poseModel: 'pose_landmarker_heavy',
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
@@ -127,7 +127,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     restTimerDurationSeconds,
     selectedTrainerId,
     autoScreenRecording,
-    poseModel: DEV_FEATURES_ENABLED ? poseModel : 'pose_landmarker_full',
+    poseModel: DEV_FEATURES_ENABLED ? poseModel : 'pose_landmarker_heavy',
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
