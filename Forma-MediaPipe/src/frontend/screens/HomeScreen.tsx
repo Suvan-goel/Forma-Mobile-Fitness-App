@@ -17,14 +17,13 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ChevronRight,
-  Settings,
   Play,
-  Plus,
-  List,
+  Settings,
   Trophy,
   Zap,
 } from 'lucide-react-native';
@@ -38,13 +37,16 @@ import {
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useHomeData } from '../../backend/hooks';
+import { useUser } from '../../backend/hooks/useUser';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import type { RootStackParamList } from '../app/RootNavigator';
 
-const HOME_BACKGROUND_GRADIENT: readonly [string, string, string] = ['#273039', '#1B242A', '#10171C'];
-const HOME_CARD_GRADIENT: readonly [string, string, string] = ['#263037', '#1C252B', '#141B20'];
-const HOME_CARD_BORDER = 'rgba(255,255,255,0.075)';
+const HOME_BACKGROUND_GRADIENT: readonly [string, string, string] = ['#353B40', '#252B30', '#11181D'];
+const HOME_CARD_GRADIENT: readonly [string, string, string] = ['#2A3136', '#222A30', '#192126'];
+const HOME_CARD_BORDER = 'rgba(255,255,255,0.085)';
 const HOME_CARD_SHADOW = 'rgba(0,0,0,0.22)';
+const HOME_VIOLET = '#7C5CFF';
+const HOME_VIOLET_DARK = '#6746E8';
 
 const getGreeting = () => {
   const h = new Date().getHours();
@@ -69,8 +71,8 @@ const getReadinessText = (score: number) => {
 const ScoreRing = ({
   value,
   color,
-  size = 84,
-  valueSize = 30,
+  size = 78,
+  valueSize = 31,
   showLabel = true,
 }: {
   value: number;
@@ -125,7 +127,9 @@ export const HomeScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const { homeData, isLoading, error, refetch } = useHomeData();
+  const { user: profileUser } = useUser();
 
   useEffect(() => {
     if (homeData) {
@@ -179,7 +183,7 @@ export const HomeScreen: React.FC = () => {
     <LinearGradient colors={[...HOME_BACKGROUND_GRADIENT]} style={styles.container}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 18 }]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
@@ -190,11 +194,19 @@ export const HomeScreen: React.FC = () => {
               <Text style={styles.brandText}>FORMA</Text>
               <View style={styles.identityRow}>
                 <View style={styles.avatarWrap}>
+                  {profileUser?.avatarUrl ? (
                   <Image
-                    source={require('../assets/forma_purple_logo.png')}
+                    source={{ uri: profileUser.avatarUrl }}
                     style={styles.avatarImage}
-                    resizeMode="contain"
+                    resizeMode="cover"
                   />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarInitial}>
+                        {(homeData.displayName || 'A').trim().charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <View style={styles.headerTextWrap}>
                   <Text style={styles.greetingText}>{getGreeting()},</Text>
@@ -204,7 +216,7 @@ export const HomeScreen: React.FC = () => {
               </View>
             </View>
             <TouchableOpacity
-              style={styles.settingsBtn}
+              style={styles.headerIconBtn}
               onPress={() => navigation.navigate('Settings')}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -213,74 +225,46 @@ export const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...HOME_CARD_GRADIENT]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.readinessCard}
+          <View style={styles.readinessSection}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardTitle}>FORM READINESS</Text>
+              <Text style={styles.infoDot}>i</Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigateToTab('Analytics')}
+              style={styles.readinessBody}
             >
-              <View style={styles.readinessEdge}>
-                <View style={styles.cardTitleRow}>
-                  <Text style={styles.cardTitle}>FORM READINESS</Text>
-                  <Text style={styles.infoDot}>i</Text>
-                </View>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => navigateToTab('Analytics')}
-                  style={styles.readinessBody}
-                >
-                  <ScoreRing value={homeData.formScore} color={scoreColor} />
-                  <View style={styles.readinessCopy}>
-                    <Text style={[styles.readinessStatus, { color: hasWorkouts ? scoreColor : COLORS.textSecondary }]}>
-                      {hasWorkouts ? getReadinessStatus(homeData.formScore) : 'Ready when you are'}
-                    </Text>
-                    <Text style={styles.readinessText}>
-                      {hasWorkouts ? getReadinessText(homeData.formScore) : 'Complete a workout to see your first form score.'}
-                    </Text>
-                  </View>
-                  <ChevronRight size={18} color={COLORS.textSecondary} strokeWidth={1.5} />
-                </TouchableOpacity>
+              <ScoreRing value={homeData.formScore} color={scoreColor} />
+              <View style={styles.readinessCopy}>
+                <Text style={[styles.readinessStatus, { color: hasWorkouts ? scoreColor : COLORS.textSecondary }]}>
+                  {hasWorkouts ? getReadinessStatus(homeData.formScore) : 'Ready when you are'}
+                </Text>
+                <Text style={styles.readinessText}>
+                  {hasWorkouts ? getReadinessText(homeData.formScore) : 'Complete a workout to see your first form score.'}
+                </Text>
+              </View>
+              <ChevronRight size={17} color={COLORS.textSecondary} strokeWidth={1.5} />
+            </TouchableOpacity>
+          </View>
 
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => navigateToTab('Record')}
-                  style={styles.ctaOuter}
-                >
-                  <LinearGradient
-                    colors={['#7C5CFF', '#6846E8']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.ctaGradient}
-                  >
-                    <View style={styles.ctaInner}>
-                      <Play size={14} color="#FFFFFF" strokeWidth={2} fill="#FFFFFF" />
-                      <Text style={styles.ctaTitle}>Start Workout</Text>
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => navigateToTab('Record')}
+            style={styles.ctaOuter}
+          >
+            <LinearGradient
+              colors={[HOME_VIOLET, HOME_VIOLET_DARK]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.ctaGradient}
+            >
+              <View style={styles.ctaInner}>
+                <Play size={14} color="#FFFFFF" strokeWidth={2} fill="#FFFFFF" />
+                <Text style={styles.ctaTitle}>Start Workout</Text>
               </View>
             </LinearGradient>
-          </View>
-
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              activeOpacity={0.7}
-              onPress={() => navigateToTab('Record')}
-            >
-              <List size={17} color={COLORS.text} strokeWidth={1.5} />
-              <Text style={styles.actionBtnText}>Choose Template</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              activeOpacity={0.7}
-              onPress={() => navigateToTab('Record')}
-            >
-              <Plus size={18} color={COLORS.text} strokeWidth={1.8} />
-              <Text style={styles.actionBtnText}>Create New</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.85}
@@ -301,7 +285,7 @@ export const HomeScreen: React.FC = () => {
                 <Text style={styles.weeklyCount}>{homeData.weeklyGoal.current} of {homeData.weeklyGoal.target} workouts</Text>
                 <View style={styles.progressTrack}>
                   <LinearGradient
-                    colors={[COLORS.accent, COLORS.primaryDark]}
+                    colors={[HOME_VIOLET, HOME_VIOLET_DARK]}
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
                     style={[styles.progressFill, { width: `${weeklyProgress}%` }]}
@@ -327,7 +311,7 @@ export const HomeScreen: React.FC = () => {
                 style={styles.sessionCard}
               >
                 <View style={styles.sessionEdge}>
-                  <Text style={styles.cardTitle}>LAST SESSION</Text>
+                  <Text style={styles.cardTitle}>RECENT SESSION</Text>
                   <View style={styles.sessionRow}>
                     <Image
                       source={require('../assets/exercises/barbell_squat.png')}
@@ -345,8 +329,8 @@ export const HomeScreen: React.FC = () => {
                       <ScoreRing
                         value={homeData.lastWorkout.formScore}
                         color={lastScoreColor}
-                        size={50}
-                        valueSize={18}
+                        size={56}
+                        valueSize={21}
                         showLabel={false}
                       />
                     </View>
@@ -363,7 +347,7 @@ export const HomeScreen: React.FC = () => {
               style={[styles.sessionCard, styles.cardOuter]}
             >
               <View style={styles.sessionEdge}>
-                <Text style={styles.cardTitle}>LAST SESSION</Text>
+                <Text style={styles.cardTitle}>RECENT SESSION</Text>
                 <Text style={styles.emptyText}>No workouts yet. Start your first one.</Text>
               </View>
             </LinearGradient>
@@ -408,8 +392,6 @@ export const HomeScreen: React.FC = () => {
               <Text style={styles.stripValueSmall}>{homeData.totalPoints.toLocaleString()}</Text>
             </TouchableOpacity>
           </View>
-
-          <View style={styles.belowFoldSpacer} />
 
           <TouchableOpacity
             activeOpacity={0.85}
@@ -537,36 +519,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 15,
-    paddingTop: 5,
-    paddingBottom: 128,
+    paddingHorizontal: 18,
+    paddingBottom: 116,
   },
 
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: 30,
   },
   headerMain: {
     flex: 1,
-    gap: 10,
+    gap: 14,
   },
   brandText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontSize: 17,
     color: COLORS.text,
-    letterSpacing: 3.8,
+    letterSpacing: 3.6,
   },
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    gap: 10,
   },
   avatarWrap: {
-    width: 39,
-    height: 39,
-    borderRadius: 19.5,
+    width: 37,
+    height: 37,
+    borderRadius: 18.5,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -575,57 +556,64 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   avatarImage: {
-    width: 42,
-    height: 42,
+    width: 37,
+    height: 37,
   },
   headerTextWrap: {
     flex: 1,
   },
   greetingText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textSecondary,
-    lineHeight: 15,
+    lineHeight: 17,
   },
   nameText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 19,
     color: COLORS.text,
     letterSpacing: -0.4,
-    lineHeight: 21,
+    lineHeight: 23,
   },
   taglineText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textTertiary,
-    lineHeight: 14,
+    lineHeight: 16,
   },
-  settingsBtn: {
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 19.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2B3339',
+  },
+  avatarInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+  headerIconBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 19,
+    marginTop: -5,
   },
 
   cardOuter: {
-    marginBottom: 7,
+    marginBottom: 17,
     shadowColor: HOME_CARD_SHADOW,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.18,
     shadowRadius: 12,
     elevation: 2,
   },
-  readinessCard: {
-    borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
-  },
-  readinessEdge: {
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: HOME_CARD_BORDER,
-    padding: 10,
+  readinessSection: {
+    marginBottom: 31,
   },
   cardTitleRow: {
     flexDirection: 'row',
@@ -634,43 +622,43 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 10.5,
+    fontSize: 11.75,
     color: COLORS.textSecondary,
     letterSpacing: 0.45,
   },
   infoDot: {
-    width: 13,
-    height: 13,
-    borderRadius: 6.5,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
     borderWidth: 1,
     borderColor: COLORS.textTertiary,
     color: COLORS.textTertiary,
     fontFamily: FONTS.ui.bold,
-    fontSize: 9,
-    lineHeight: 11,
+    fontSize: 10,
+    lineHeight: 13,
     textAlign: 'center',
   },
   readinessBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 13,
-    marginTop: 11,
+    gap: 25,
+    marginTop: 15,
   },
   readinessCopy: {
     flex: 1,
-    gap: 6,
+    gap: 7,
     minWidth: 0,
   },
   readinessStatus: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontSize: 14,
     letterSpacing: -0.2,
   },
   readinessText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 13.25,
     color: COLORS.text,
-    lineHeight: 18,
+    lineHeight: 19,
   },
 
   scoreRingWrap: {
@@ -696,9 +684,14 @@ const styles = StyleSheet.create({
   },
 
   ctaOuter: {
-    marginTop: 11,
+    marginBottom: 17,
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
+    shadowColor: HOME_CARD_SHADOW,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 2,
   },
   ctaGradient: {
     borderRadius: CARD_RADIUS,
@@ -708,37 +701,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    minHeight: 39,
+    minHeight: 48,
     paddingHorizontal: 16,
   },
   ctaTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 15,
     color: '#FFFFFF',
     letterSpacing: -0.2,
-  },
-
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 7,
-  },
-  actionBtn: {
-    flex: 1,
-    minHeight: 43,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: HOME_CARD_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.032)',
-  },
-  actionBtnText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11.5,
-    color: COLORS.text,
   },
 
   weeklyCard: {
@@ -749,7 +719,11 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: HOME_CARD_BORDER,
-    padding: 10,
+    minHeight: 154,
+    paddingHorizontal: 17,
+    paddingTop: 20,
+    paddingBottom: 18,
+    justifyContent: 'center',
   },
   weeklyHeaderRow: {
     flexDirection: 'row',
@@ -758,26 +732,26 @@ const styles = StyleSheet.create({
   },
   weeklyPercent: {
     fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.accent,
+    fontSize: 23,
+    color: HOME_VIOLET,
     letterSpacing: -0.8,
-    lineHeight: 25,
+    lineHeight: 27,
   },
   weeklyCount: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12.5,
+    fontSize: 13.5,
     color: COLORS.text,
-    marginTop: 7,
-    marginBottom: 7,
+    marginTop: 18,
+    marginBottom: 14,
   },
   weeklySubtext: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: 7,
+    marginTop: 14,
   },
   progressTrack: {
-    height: 4,
+    height: 5,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 2,
     overflow: 'hidden',
@@ -796,56 +770,60 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: HOME_CARD_BORDER,
-    padding: 10,
+    minHeight: 145,
+    paddingHorizontal: 17,
+    paddingTop: 20,
+    paddingBottom: 18,
+    justifyContent: 'center',
   },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 9,
+    gap: 12,
+    marginTop: 17,
   },
   sessionThumb: {
-    width: 54,
-    height: 54,
+    width: 64,
+    height: 64,
     borderRadius: 6,
     backgroundColor: COLORS.cardBackgroundLight,
   },
   sessionInfo: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 4,
   },
   sessionName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 14.25,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
   sessionTime: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
+    fontSize: 12.25,
     color: COLORS.textSecondary,
   },
   sessionMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
+    fontSize: 12.25,
     color: COLORS.textTertiary,
   },
   sessionScoreWrap: {
-    width: 50,
-    height: 50,
+    width: 56,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.textTertiary,
     marginTop: 8,
   },
 
   statsStrip: {
-    marginBottom: 0,
+    marginBottom: 17,
     minHeight: 52,
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -868,28 +846,28 @@ const styles = StyleSheet.create({
   },
   stripLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 7.5,
+    fontSize: 8.5,
     color: COLORS.textTertiary,
     letterSpacing: 0.45,
     marginBottom: 3,
   },
   stripValue: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontSize: 17.5,
     color: COLORS.text,
     letterSpacing: -0.5,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   stripValueSmall: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontSize: 13.5,
     color: COLORS.text,
     letterSpacing: -0.3,
-    lineHeight: 16,
+    lineHeight: 17,
   },
   stripUnit: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 8.5,
+    fontSize: 9.5,
     color: COLORS.textSecondary,
   },
 
@@ -903,9 +881,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(245,166,35,0.12)',
     padding: 12,
   },
-  belowFoldSpacer: {
-    height: 72,
-  },
   rewardRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -918,7 +893,7 @@ const styles = StyleSheet.create({
   },
   rewardText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textSecondary,
   },
   rewardProgressRow: {
@@ -929,7 +904,7 @@ const styles = StyleSheet.create({
   },
   rewardPct: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: -0.2,
   },
 
@@ -955,7 +930,7 @@ const styles = StyleSheet.create({
   },
   challengeCounter: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.accent,
   },
   challengeItem: {
@@ -976,13 +951,13 @@ const styles = StyleSheet.create({
   challengeTitleText: {
     flex: 1,
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
   challengeCount: {
     fontFamily: FONTS.mono.regular,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textSecondary,
   },
 });

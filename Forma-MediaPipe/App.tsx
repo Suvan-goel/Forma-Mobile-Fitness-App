@@ -40,7 +40,7 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.accent} />
-            <StatusBar style="light" />
+            <StatusBar style="light" translucent backgroundColor="transparent" />
           </View>
         </GestureHandlerRootView>
       </SafeAreaProvider>
@@ -57,7 +57,7 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer>
           <RootNavigator />
-          <StatusBar style="light" />
+          <StatusBar style="light" translucent backgroundColor="transparent" />
         </NavigationContainer>
       </GestureHandlerRootView>
     </SafeAreaProvider>

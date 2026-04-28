@@ -2,7 +2,6 @@ import React, { memo, useCallback, useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -167,10 +166,8 @@ const RecordTabWithProvider: React.FC = memo(() => (
 
 // Inner component — header is non-collapsible and scrolls with page content
 const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: string) => void }> = memo(({ currentTab, onTabChange }) => {
-  const insets = useSafeAreaInsets();
-
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       {/* Header - Hidden for Record tab; no collapse/sticky logic */}
       {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Social' && currentTab !== 'Home' && <AppHeader />}
 
