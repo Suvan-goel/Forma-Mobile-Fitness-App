@@ -363,11 +363,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
   }, [navigation, showAlert]);
 
   const handleGoBack = useCallback(() => {
-    endWorkoutActivity();
     setWorkoutElapsedSeconds(elapsedSecondsRef.current);
-    setWorkoutInProgress(false);
     navigation.reset({ index: 0, routes: [{ name: 'RecordLanding' }] });
-  }, [setWorkoutElapsedSeconds, setWorkoutInProgress, navigation]);
+  }, [setWorkoutElapsedSeconds, navigation]);
 
   // Auto-attach pending recording to the latest set when it arrives
   useEffect(() => {
