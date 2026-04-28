@@ -9,9 +9,12 @@ import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G } from 'react-native-svg';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 
 const SCREEN_W = Dimensions.get('window').width;
+const CHART_CARD_GRADIENT: readonly [string, string, string] = ['#2A3136', '#222A30', '#192126'];
+const CHART_CARD_BORDER = 'rgba(255,255,255,0.085)';
+const CHART_CARD_SHADOW = 'rgba(0,0,0,0.22)';
 
 interface TrendChartProps {
   title: string;
@@ -24,6 +27,9 @@ interface TrendChartProps {
   /** When provided, shown in the card header by default (period average).
    *  Tapping a data point temporarily shows that point's value instead. */
   headerValue?: number;
+  headerLabel?: string;
+  accentColor?: string;
+  compact?: boolean;
 }
 
 // ── Catmull-Rom → Cubic Bezier conversion ───────────────────────
@@ -105,14 +111,24 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   formatValue,
   timeRange,
   headerValue,
+  headerLabel,
+  accentColor = COLORS.accent,
+  compact = false,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const accentGlow = accentColor === '#34D399'
+    ? 'rgba(52,211,153,0.22)'
+    : 'rgba(124,92,255,0.22)';
+  const accentArea = accentColor === '#34D399'
+    ? 'rgba(52,211,153,0.25)'
+    : 'rgba(124,92,255,0.25)';
+  const chartId = title.replace(/[^a-zA-Z0-9]/g, '');
 
   const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - SPACING.xl * 2;
-  const padLeft = 32;
+  const padLeft = compact ? 28 : 32;
   const padRight = 8;
-  const padTop = 26;
-  const padBottom = 32;
+  const padTop = compact ? 18 : 26;
+  const padBottom = compact ? 24 : 32;
   const graphW = chartWidth - padLeft - padRight;
   const graphH = height - padTop - padBottom;
 
@@ -220,25 +236,26 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   return (
     <View style={styles.cardOuter}>
       <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
+        colors={[...CHART_CARD_GRADIENT]}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
         style={styles.cardGradient}
       >
-        <View style={styles.cardGlassEdge}>
+        <View style={[styles.cardGlassEdge, compact && styles.cardGlassEdgeCompact]}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, compact && styles.headerCompact]}>
             <View style={styles.headerLeft}>
-              <Icon size={14} color={COLORS.accent} strokeWidth={1.5} />
+              <Icon size={14} color={accentColor} strokeWidth={1.5} />
               <Text style={styles.headerTitle}>{title}</Text>
             </View>
             <View style={styles.headerRight}>
+              {headerLabel ? <Text style={styles.headerValueLabel}>{headerLabel}</Text> : null}
               <View style={styles.avgRow}>
-                <Text style={styles.currentValue}>{displayValue}</Text>
+                <Text style={[styles.currentValue, compact && styles.currentValueCompact, { color: accentColor }]}>{displayValue}</Text>
                 {unit ? <Text style={styles.unitText}>{unit}</Text> : null}
               </View>
               {selectedDisplayValue != null && (
-                <Text style={styles.selectedPointText}>
+                <Text style={[styles.selectedPointText, { color: accentColor }]}>
                   {selectedDisplayValue}{unit ? ` ${unit}` : ''} · {selectedDateLabel}
                 </Text>
               )}
@@ -251,29 +268,29 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
               <Defs>
                 {/* userSpaceOnUse + pixel coords so gradient renders correctly on native (objectBoundingBox can show solid fill) */}
                 <SvgGradient
-                  id="areaGrad"
+                  id={`areaGrad${chartId}`}
                   x1={padLeft}
                   y1={padTop}
                   x2={padLeft}
                   y2={padTop + graphH}
                   gradientUnits="userSpaceOnUse"
                 >
-                  <Stop offset="0" stopColor="#8B5CF6" stopOpacity="0.25" />
-                  <Stop offset="1" stopColor="#8B5CF6" stopOpacity="0" />
+                  <Stop offset="0" stopColor={accentArea} stopOpacity="1" />
+                  <Stop offset="1" stopColor={accentArea} stopOpacity="0" />
                 </SvgGradient>
-                <ClipPath id="chartClip">
+                <ClipPath id={`chartClip${chartId}`}>
                   <Rect x={0} y={padTop} width={chartWidth} height={graphH} />
                 </ClipPath>
               </Defs>
 
-              <G clipPath="url(#chartClip)">
+              <G clipPath={`url(#chartClip${chartId})`}>
                 {/* Area fill — faded purple under the line */}
-                <Path d={svgContent.areaPath} fill="url(#areaGrad)" />
+                <Path d={svgContent.areaPath} fill={`url(#areaGrad${chartId})`} />
 
                 {/* Line */}
                 <Path
                   d={svgContent.linePath}
-                  stroke={COLORS.accent}
+                  stroke={accentColor}
                   strokeWidth={2.5}
                   fill="none"
                   strokeLinecap="round"
@@ -293,7 +310,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                           ? 4
                           : 0
                     }
-                    fill={COLORS.accent}
+                    fill={accentColor}
                   />
                 ))}
 
@@ -303,7 +320,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                     cx={activePoint.x}
                     cy={activePoint.y}
                     r={8}
-                    fill="rgba(139,92,246,0.2)"
+                    fill={accentGlow}
                   />
                 )}
               </G>
@@ -350,27 +367,34 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 
 const styles = StyleSheet.create({
   cardOuter: {
-    borderRadius: 19,
+    borderRadius: 8,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: 16,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowColor: CHART_CARD_SHADOW,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.16,
         shadowRadius: 12,
       },
-      android: { elevation: 4 },
+      android: { elevation: 2 },
     }),
   },
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: 8,
   },
   cardGlassEdge: {
-    borderRadius: 19,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: SPACING.xl,
+    borderColor: CHART_CARD_BORDER,
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 12,
+  },
+  cardGlassEdgeCompact: {
+    paddingHorizontal: 13,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   header: {
     flexDirection: 'row',
@@ -378,16 +402,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  headerCompact: {
+    marginBottom: 4,
+  },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   headerTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11.75,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
+    letterSpacing: 0.45,
   },
   headerRight: {
     flexDirection: 'column',
@@ -402,15 +429,22 @@ const styles = StyleSheet.create({
   selectedPointText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
-    color: COLORS.accent,
     letterSpacing: 0.3,
+  },
+  headerValueLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
   },
   currentValue: {
     fontFamily: FONTS.display.semibold,
     fontSize: 28,
-    color: COLORS.text,
     lineHeight: 34,
     letterSpacing: -1,
+  },
+  currentValueCompact: {
+    fontSize: 25,
+    lineHeight: 30,
   },
   unitText: {
     fontFamily: FONTS.ui.regular,

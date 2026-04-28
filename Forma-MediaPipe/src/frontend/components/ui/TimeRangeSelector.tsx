@@ -32,8 +32,8 @@ const Tab = memo(({ label, isActive, onPress }: { label: string; isActive: boole
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
     {isActive && <View style={styles.underline} />}
+    <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
   </TouchableOpacity>
 ));
 
@@ -62,30 +62,40 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    marginBottom: 10,
-    marginTop: 12,
-    gap: 20,
+    justifyContent: 'space-between',
+    height: 36,
+    marginBottom: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.085)',
+    backgroundColor: 'rgba(9,14,18,0.25)',
+    padding: 3,
   },
   tab: {
+    flex: 1,
+    height: '100%',
     alignItems: 'center',
-    paddingBottom: 6,
+    justifyContent: 'center',
+    borderRadius: 6,
   },
   tabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    fontSize: 11.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
+    zIndex: 1,
   },
   tabTextActive: {
     color: '#FFFFFF',
   },
   underline: {
     position: 'absolute',
+    top: 0,
+    right: 0,
     bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
+    left: 0,
+    borderRadius: 6,
+    backgroundColor: '#7C5CFF',
+    opacity: 0.86,
   },
 });

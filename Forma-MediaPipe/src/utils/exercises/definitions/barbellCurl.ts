@@ -57,14 +57,11 @@ const FORM_THRESHOLDS = {
   // Torso swing delta (degrees) — already camera-invariant (sagittal projection)
   TORSO_WARN: 15,
   TORSO_FAIL: 22,
-  WRIST_NEUTRAL: 180, // straight wrist reference
-  WRIST_DEV_WARN: 25,
-  WRIST_DEV_DURATION: 0.5, // 50% of rep
   /** Tempo thresholds for visual feedback. These are intentionally lower than
    * scoring thresholds because phase timestamps measure threshold-crossing time,
    * not the user's full bottom-to-top / top-to-bottom movement. */
   TEMPO_UP_FEEDBACK_MIN: 0.25,
-  TEMPO_DOWN_FEEDBACK_MIN: 0.30,
+  TEMPO_DOWN_FEEDBACK_MIN: 0.20,
   TEMPO_DOWN_ESCAPE_MIN: 0.15,
   TEMPO_UP_SCORE_WARN: 0.4,
   TEMPO_DOWN_SCORE_WARN: 0.5,
@@ -324,8 +321,6 @@ interface RepWindow {
   tEnd: number;
   /** Frame count for duration calculations */
   frameCount: number;
-  /** Wrist deviation history (for duration check) */
-  wristDevFrames: { left: number; right: number };
   /** Max elbow flare angle (upper arm from vertical, coronal plane) per arm during the rep.
    *  Frontal view only — lateral deviation is most accurate when facing the camera. */
   elbowFlare: { maxLeftFlareDeg: number; maxRightFlareDeg: number };
@@ -336,8 +331,6 @@ interface RepWindow {
     leftShoulderFrames: number;
     rightShoulderFrames: number;
     torsoFrames: number;
-    leftWristFrames: number;
-    rightWristFrames: number;
     frontalFrames: number;
   };
 }
@@ -458,7 +451,6 @@ function initRepWindow(tStart: number): RepWindow {
     tStart,
     tEnd: tStart,
     frameCount: 0,
-    wristDevFrames: { left: 0, right: 0 },
     elbowFlare: { maxLeftFlareDeg: -Infinity, maxRightFlareDeg: -Infinity },
     quality: {
       leftRatioFrames: 0,
@@ -466,8 +458,6 @@ function initRepWindow(tStart: number): RepWindow {
       leftShoulderFrames: 0,
       rightShoulderFrames: 0,
       torsoFrames: 0,
-      leftWristFrames: 0,
-      rightWristFrames: 0,
       frontalFrames: 0,
     },
   };
@@ -980,8 +970,6 @@ function evaluateForm(
   const rightShoulderCoverage = coverage(repWindow.quality.rightShoulderFrames);
   const torsoCoverage = coverage(repWindow.quality.torsoFrames);
   const frontalCoverage = coverage(repWindow.quality.frontalFrames);
-  const leftWristCoverage = coverage(repWindow.quality.leftWristFrames);
-  const rightWristCoverage = coverage(repWindow.quality.rightWristFrames);
   const hasPrimaryRatioQuality = primaryRatioCoverage >= QUALITY_THRESHOLDS.MIN_PRIMARY_RATIO_COVERAGE;
   const hasBilateralRatioQuality =
     leftRatioCoverage >= QUALITY_THRESHOLDS.MIN_BILATERAL_RATIO_COVERAGE &&
@@ -1107,20 +1095,7 @@ function evaluateForm(
     messages.push("Control the lowering — don't drop the weight.");
   }
 
-  // 7. Wrist position — only if the wrist signal was readable for most of the rep
-  const leftWristReadable = leftWristCoverage >= QUALITY_THRESHOLDS.MIN_METRIC_COVERAGE;
-  const rightWristReadable = rightWristCoverage >= QUALITY_THRESHOLDS.MIN_METRIC_COVERAGE;
-  const leftWristDeviated =
-    leftWristReadable &&
-    repWindow.wristDevFrames.left / Math.max(1, repWindow.quality.leftWristFrames) >= FORM_THRESHOLDS.WRIST_DEV_DURATION;
-  const rightWristDeviated =
-    rightWristReadable &&
-    repWindow.wristDevFrames.right / Math.max(1, repWindow.quality.rightWristFrames) >= FORM_THRESHOLDS.WRIST_DEV_DURATION;
-  if (leftWristDeviated || rightWristDeviated) {
-    messages.push('Keep your wrists neutral through the curl.');
-  }
-
-  // 8. Symmetry — ratio-based (only frontal)
+  // 7. Symmetry — ratio-based (only frontal)
   if (hasFrontalQuality && hasBilateralRatioQuality && leftRatioOk && rightRatioOk) {
     const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
     const deltaRomRatio = Math.abs(romLRatio - romRRatio);
@@ -1262,22 +1237,8 @@ function updateBarbellCurlState(
     if (!isNaN(rawAngles.torso)) {
       window.quality.torsoFrames++;
     }
-    if (!isNaN(rawAngles.leftWrist)) {
-      window.quality.leftWristFrames++;
-    }
-    if (!isNaN(rawAngles.rightWrist)) {
-      window.quality.rightWristFrames++;
-    }
     if (viewAngle.zone === 'frontal') {
       window.quality.frontalFrames++;
-    }
-
-    // Track wrist deviation duration
-    if (leftValid && Math.abs(smoothed.leftWrist - FORM_THRESHOLDS.WRIST_NEUTRAL) > FORM_THRESHOLDS.WRIST_DEV_WARN) {
-      window.wristDevFrames.left++;
-    }
-    if (rightValid && Math.abs(smoothed.rightWrist - FORM_THRESHOLDS.WRIST_NEUTRAL) > FORM_THRESHOLDS.WRIST_DEV_WARN) {
-      window.wristDevFrames.right++;
     }
 
     // Track elbow flare (frontal only — lateral deviation is visible facing the camera)
@@ -1532,7 +1493,6 @@ export const barbellCurlDefinition: ExerciseDefinition = {
       'Arms are uneven — curl both sides together.': 'asymmetry',
       "Keep your elbows in — don't flare them out to the sides.": 'elbow_flare',
       "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
-      'Keep your wrists neutral through the curl.': 'wrist_neutral',
       "Couldn't read that rep clearly.": 'tracking_uncertain',
     },
     issueDefinitions: [
@@ -1543,15 +1503,6 @@ export const barbellCurlDefinition: ExerciseDefinition = {
           'Keep your elbows tucked.',
           'Bring your elbows closer to your sides.',
           'Do not let your elbows flare out.',
-        ],
-      },
-      {
-        issueType: 'wrist_neutral',
-        priority: 8,
-        messages: [
-          'Keep your wrists neutral.',
-          'Straight wrists on the curl.',
-          'Lock your wrists in line.',
         ],
       },
       {
@@ -1579,7 +1530,6 @@ export const barbellCurlDefinition: ExerciseDefinition = {
     'Arms are uneven — curl both sides together.': 'Focus on symmetry — curl both arms at the same speed.',
     "Keep your elbows in — don't flare them out to the sides.": 'Keep elbows pinned to your sides — flaring reduces bicep isolation.',
     "Tuck your elbows in — they're drifting outward.": 'Focus on keeping elbows close to your body throughout the curl.',
-    'Keep your wrists neutral through the curl.': 'Keep wrists stacked and neutral rather than curling or bending them.',
     "Couldn't read that rep clearly.": 'Keep your full upper body and both arms clearly visible to improve tracking accuracy.',
   },
 };
