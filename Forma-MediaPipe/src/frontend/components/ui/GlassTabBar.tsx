@@ -1,9 +1,8 @@
 /**
- * GlassTabBar — Floating glass-morphism pill navigation
+ * GlassTabBar — App navigation
  *
- * Absolute-positioned at the bottom of the screen. Uses expo-blur
- * on iOS for the frosted glass effect, with a dark fallback on Android.
- * Active tab gets an acid-lime glow circle behind its icon.
+ * Full-width bottom dock matching the refined Home reference while preserving
+ * the existing tab routes and Capture-centered navigation structure.
  */
 
 import React, { memo, useCallback } from 'react';
@@ -14,16 +13,14 @@ import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Home, BookOpen, BarChart2, Video, Users } from 'lucide-react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 
-// Icon + label config for each tab
 const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
   Home:      { icon: Home,       label: 'Home' },
   Logbook:   { icon: BookOpen,   label: 'Logbook' },
-  Analytics: { icon: BarChart2,  label: 'Analytics' },
   Record:    { icon: Video,      label: 'Capture' },
+  Analytics: { icon: BarChart2,  label: 'Progress' },
   Social:    { icon: Users,      label: 'Social' },
 };
 
-/** Single tab item */
 const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
   routeName: string;
   routeKey: string;
@@ -48,31 +45,29 @@ const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
     <TouchableOpacity
       onPress={onPress}
       style={styles.tabItem}
-      activeOpacity={0.7}
+      activeOpacity={0.72}
     >
       <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
         <Icon
-          size={20}
-          color={isFocused ? '#FFFFFF' : COLORS.textSecondary}
+          size={19}
+          color={isFocused ? COLORS.accent : COLORS.textSecondary}
+          strokeWidth={isFocused ? 2.2 : 1.7}
         />
-        {isFocused && (
-          <Text style={styles.activeLabel}>{config.label}</Text>
-        )}
       </View>
+      <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]} numberOfLines={1}>
+        {config.label}
+      </Text>
     </TouchableOpacity>
   );
 });
 
-/** The full floating tab bar */
 export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
   const insets = useSafeAreaInsets();
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
 
-  // Hide on Social tab and certain Record sub-screens
   const hideTabBar =
-    currentTabRoute?.name === 'Social' ||
-    (currentTabRoute?.name === 'Record' &&
+    currentTabRoute?.name === 'Record' &&
     (focusedRouteName === 'ChooseExercise' ||
      focusedRouteName === 'WorkoutTemplates' ||
      focusedRouteName === 'Camera' ||
@@ -81,19 +76,16 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
      focusedRouteName === 'WorkoutSettings' ||
      focusedRouteName === 'ExerciseGuide' ||
      focusedRouteName === 'CreateTemplate' ||
-     focusedRouteName === 'TemplatePreview'));
+     focusedRouteName === 'TemplatePreview');
 
-  // Notify parent of tab changes
   React.useEffect(() => {
     if (currentTabRoute?.name && onTabChange) {
       onTabChange(currentTabRoute.name);
     }
   }, [state.index, onTabChange, currentTabRoute?.name]);
 
-  const bottomOffset = Math.max(insets.bottom, 12) + 8;
-
   const inner = (
-    <View style={styles.pillContent}>
+    <View style={[styles.dockContent, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       {state.routes.map((route: any, index: number) => (
         <GlassTabItem
           key={route.key}
@@ -109,17 +101,17 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
   if (hideTabBar) return null;
 
   return (
-    <View style={[styles.outerWrap, { bottom: bottomOffset }]}>
+    <View style={styles.outerWrap}>
       {Platform.OS === 'ios' ? (
         <BlurView
-          intensity={40}
+          intensity={26}
           tint="systemUltraThinMaterialDark"
-          style={styles.pill}
+          style={styles.dock}
         >
           {inner}
         </BlurView>
       ) : (
-        <View style={[styles.pill, styles.pillAndroid]}>
+        <View style={[styles.dock, styles.dockAndroid]}>
           {inner}
         </View>
       )}
@@ -130,56 +122,50 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
 const styles = StyleSheet.create({
   outerWrap: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 20,
   },
-  pill: {
-    borderRadius: 40,
+  dock: {
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.075)',
+    backgroundColor: 'rgba(16,22,26,0.90)',
   },
-  pillAndroid: {
-    backgroundColor: 'rgba(28, 28, 30, 0.92)',
+  dockAndroid: {
+    backgroundColor: 'rgba(15,21,25,0.97)',
   },
-  pillContent: {
+  dockContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: 15,
-    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingHorizontal: 6,
   },
   tabItem: {
+    flex: 1,
+    minHeight: 45,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 3,
   },
   iconWrap: {
-    height: 36,
-    minHeight: 36,
-    borderRadius: 999,
-    overflow: 'hidden',
+    width: 32,
+    height: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 12,
   },
   iconWrapActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    paddingHorizontal: 14,
+    transform: [{ translateY: -1 }],
   },
-  activeLabel: {
+  tabLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9,
+    color: COLORS.textSecondary,
+  },
+  tabLabelActive: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 11,
-    color: COLORS.text,
-    marginLeft: 6,
-    letterSpacing: 0.3,
+    color: COLORS.accent,
   },
 });
