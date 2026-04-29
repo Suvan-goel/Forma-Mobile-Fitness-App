@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator, PermissionsAndroid } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator, PermissionsAndroid, NativeModules } from 'react-native';
 import { PoseDetectionView, switchCamera } from 'expo-pose-detection';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -37,6 +37,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
 const CAMERA_BORDER_RADIUS = 20;
+const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
@@ -54,6 +55,48 @@ const MEDIAPIPE_LANDMARK_NAMES = [
   'left_ankle', 'right_ankle', 'left_heel', 'right_heel',
   'left_foot_index', 'right_foot_index'
 ];
+
+function getLandmarkRecordingUploadUrl(): string | null {
+  const configuredUrl = process.env.EXPO_PUBLIC_LANDMARK_RECORDING_UPLOAD_URL;
+  if (configuredUrl) return configuredUrl;
+
+  const scriptURL = NativeModules.SourceCode?.scriptURL;
+  if (typeof scriptURL !== 'string') return null;
+
+  const match = scriptURL.match(/^(?:https?|exp):\/\/([^/:]+)(?::\d+)?/);
+  const host = match?.[1];
+  if (!host) return null;
+
+  return `http://${host}:${LANDMARK_RECORDING_UPLOAD_PORT}/recording`;
+}
+
+async function uploadLandmarkRecordingToDevServer(json: string, filename: string): Promise<void> {
+  if (!__DEV__) return;
+
+  const uploadUrl = getLandmarkRecordingUploadUrl();
+  if (!uploadUrl) {
+    console.log('[LandmarkRecording] No dev upload URL available; using device file only.');
+    return;
+  }
+
+  try {
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Recording-Filename': filename,
+      },
+      body: json,
+    });
+    if (!response.ok) {
+      console.warn(`[LandmarkRecording] Dev upload failed: ${response.status} ${response.statusText}`);
+      return;
+    }
+    console.log(`[LandmarkRecording] Uploaded to dev server: ${filename}`);
+  } catch (error: any) {
+    console.warn('[LandmarkRecording] Dev upload failed:', error?.message ?? error);
+  }
+}
 
 /* ── Self-contained Duration Display (memo'd to avoid re-rendering parent) ──── */
 
@@ -570,13 +613,15 @@ export const CameraScreen: React.FC = () => {
             console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
           }
 
+          const ts = new Date().toISOString().replace(/[:.]/g, '-');
+          const safeName = (exerciseNameFromRoute || 'Unknown').replace(/\s+/g, '_');
+          const filename = `recording_${safeName}_${ts}.json`;
+          uploadLandmarkRecordingToDevServer(json, filename);
+
           // Write to device filesystem (works in Release builds too)
           (async () => {
             try {
               const FS = require('expo-file-system');
-              const ts = new Date().toISOString().replace(/[:.]/g, '-');
-              const safeName = (exerciseNameFromRoute || 'Unknown').replace(/\s+/g, '_');
-              const filename = `recording_${safeName}_${ts}.json`;
               const uri = FS.documentDirectory + filename;
               await FS.writeAsStringAsync(uri, json);
               if (__DEV__) console.log(`[LandmarkRecording] Saved to: ${uri}`);
@@ -1802,4 +1847,3 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
-

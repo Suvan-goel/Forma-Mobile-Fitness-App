@@ -35,7 +35,7 @@ import type {
  */
 const THRESHOLDS = {
   /** Reach ratio below which we transition PLANK -> DESCENDING */
-  DESCENDING_ENTER: 0.93,
+  DESCENDING_ENTER: 0.985,
   /** Reach ratio above which we transition ASCENDING -> PLANK */
   PLANK_REENTER: 0.92,
   /** Reach ratio below which we reach BOTTOM.
@@ -100,6 +100,7 @@ const SCORE_CURVES = {
   DEPTH:   { deadzone: 0.62, scale: 300, cap: 30 },
   LOCKOUT: { ideal: 0.97,    scale: 300, cap: 25 },
   HIP:     { deadzone: 8,    scale: 0.04, cap: 35, neutral: 180 },
+  HIP_DEV: { deadzone: 0.04, scale: 1200, cap: 35 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 10 },
   TEMPO_ECCENTRIC:  { deadzone: 0.4, scale: 40, cap: 10 },
 } as const;
@@ -181,6 +182,10 @@ interface PushupState {
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
+  /** Side locked for the current active rep; prevents side switching mid-rep. */
+  activeSide: 'left' | 'right' | null;
+  /** Best extended elbow ratio observed while waiting in plank. Seeds top lockout ROM. */
+  plankMaxElbowRatio: number;
   /** Last computed torso inclination from vertical (for debug display) */
   lastTorsoInclination: number | null;
 }
@@ -270,6 +275,8 @@ function initializePushupState(): PushupState {
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
+    activeSide: null,
+    plankMaxElbowRatio: -Infinity,
     lastTorsoInclination: null,
   };
 }
@@ -301,33 +308,27 @@ function computeReachRatio(proximal: Point3D, joint: Point3D, distal: Point3D): 
 
 /**
  * Perpendicular distance from point P to line AB, normalized by AB length.
- * Positive = P is below the line (sag), Negative = P is above (pike).
- * "Below" is defined by the cross product sign in the XY plane.
+ * Positive = hip is visually below the shoulder-ankle line (sag), negative = above (pike).
+ * Uses screen Y direction for sign so facing left/right does not invert feedback.
  */
 function calculateHipDeviation(
   shoulder: Point3D,
   hip: Point3D,
   ankle: Point3D
 ): number {
-  // Vector AB = ankle - shoulder
   const abx = ankle.x - shoulder.x;
   const aby = ankle.y - shoulder.y;
-  const abLen = Math.sqrt(abx * abx + aby * aby);
+  const abLenSq = abx * abx + aby * aby;
+  const abLen = Math.sqrt(abLenSq);
   if (abLen < 1e-8) return 0;
 
-  // Vector AP = hip - shoulder
   const apx = hip.x - shoulder.x;
   const apy = hip.y - shoulder.y;
 
-  // Cross product (2D): AB x AP = abx*apy - aby*apx
-  // Positive cross = hip is on one side; negative = other side
-  const cross = abx * apy - aby * apx;
+  const projectionT = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+  const lineYAtHip = shoulder.y + projectionT * aby;
 
-  // Normalized perpendicular distance
-  // Convention: positive = sag (hip below line), negative = pike (hip above line)
-  // In screen coords (Y down), if shoulder is to the left and ankle to the right:
-  //   positive cross = hip is below the line = sag
-  return cross / abLen;
+  return (hip.y - lineYAtHip) / abLen;
 }
 
 /**
@@ -488,12 +489,7 @@ function calculatePushupAngles(
     const shoulderPt = getPoint(shoulder)!;
     const hipPt = getPoint(hip)!;
     const anklePt = getPoint(ankle)!;
-    const saDistX = anklePt.x - shoulderPt.x;
-    const saDistY = anklePt.y - shoulderPt.y;
-    const saDist = Math.sqrt(saDistX * saDistX + saDistY * saDistY);
-    if (saDist > 1e-8) {
-      hipDeviation = calculateHipDeviation(shoulderPt, hipPt, anklePt) / saDist;
-    }
+    hipDeviation = calculateHipDeviation(shoulderPt, hipPt, anklePt);
   }
 
   // Head-spine angle (hip -> shoulder -> nose)
@@ -689,8 +685,12 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
   //    worst direction drives the penalty.
   const sagDev = Math.max(0, (SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone) - repWindow.minBodyAngle);
   const pikeDev = Math.max(0, repWindow.maxBodyAngle - (SCORE_CURVES.HIP.neutral + SCORE_CURVES.HIP.deadzone));
-  const worstHipDev = Math.max(sagDev, pikeDev);
-  penalty += Math.min(SCORE_CURVES.HIP.cap, SCORE_CURVES.HIP.scale * worstHipDev * worstHipDev);
+  const worstHipAngleDev = Math.max(sagDev, pikeDev);
+  const signedHipDev = Math.max(Math.abs(repWindow.minHipDev), Math.abs(repWindow.maxHipDev));
+  const hipDevExcess = Math.max(0, signedHipDev - SCORE_CURVES.HIP_DEV.deadzone);
+  const hipAnglePenalty = SCORE_CURVES.HIP.scale * worstHipAngleDev * worstHipAngleDev;
+  const hipDevPenalty = SCORE_CURVES.HIP_DEV.scale * hipDevExcess * hipDevExcess;
+  penalty += Math.min(SCORE_CURVES.HIP.cap, Math.max(hipAnglePenalty, hipDevPenalty));
 
   // 4. Tempo -- too fast in either direction
   if (repWindow.tBottom !== null) {
@@ -744,13 +744,13 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
   const minDev = repWindow.minHipDev;
   const maxDev = repWindow.maxHipDev;
 
-  if (minBody < FORM_THRESHOLDS.HIP_SAG_FAIL && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
+  if (maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
     messages.push('Hips are sagging \u2014 engage your core to maintain a straight line.');
   } else if (minBody < FORM_THRESHOLDS.HIP_SAG_WARN && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN) {
     messages.push('Keep your hips up \u2014 your body line is dropping.');
   }
 
-  if (maxBody > FORM_THRESHOLDS.HIP_PIKE_FAIL && minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL) {
+  if (minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL) {
     messages.push('Hips are piking up \u2014 lower them to maintain a straight plank.');
   } else if (maxBody > FORM_THRESHOLDS.HIP_PIKE_WARN && minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_WARN) {
     messages.push('Hips are riding high \u2014 aim for a straight body line.');
@@ -796,8 +796,9 @@ function updatePushupState(
 ): PushupState {
   const t = Date.now() / 1000;
 
-  // Update visible side periodically (every ~30 frames via side check)
-  const visibleSide = selectVisibleSide(keypoints);
+  const currentInRep = currentState.fsm.phase !== 'PLANK' && currentState.fsm.phase !== 'IDLE';
+  const detectedSide = selectVisibleSide(keypoints);
+  const visibleSide = currentInRep && currentState.activeSide ? currentState.activeSide : detectedSide;
 
   // Calculate raw angles using the more visible side
   const rawAngles = calculatePushupAngles(keypoints, visibleSide);
@@ -826,15 +827,24 @@ function updatePushupState(
   newState.lastTorsoInclination = torsoInclination;
 
   // Update FSM using fast ratio to avoid smoothing-induced misses at BOTTOM and PLANK
+  const prevPhase = currentState.fsm.phase;
   const fsmResult = updateFSM(currentState.fsm, fast.elbowRatio, t, fast.bodyAlignment, torsoInclination);
   newState.fsm = fsmResult.fsm;
 
-  // Handle partial rep -- still counts but flags shallow depth
+  if (prevPhase === 'PLANK' || prevPhase === 'IDLE') {
+    newState.plankMaxElbowRatio = Math.max(currentState.plankMaxElbowRatio, fast.elbowRatio);
+  }
+
+  if (prevPhase === 'PLANK' && newState.fsm.phase === 'DESCENDING') {
+    newState.activeSide = visibleSide;
+  }
+
+  // Handle partial rep as a no-count reset. A shallow pulse should not inflate rep count.
   if (fsmResult.partialRep) {
-    newState.repCount++;
     newState.feedback = 'Go deeper \u2014 try to hit 90 degrees.';
     newState.lastFeedbackTime = t;
     newState.repWindow = null;
+    newState.activeSide = null;
     return newState;
   }
 
@@ -842,6 +852,9 @@ function updatePushupState(
   const inRep = newState.fsm.phase !== 'PLANK' && newState.fsm.phase !== 'IDLE';
   if (inRep && !currentState.repWindow) {
     newState.repWindow = initRepWindow(t);
+    if (isFinite(currentState.plankMaxElbowRatio)) {
+      newState.repWindow.maxElbowRatio = Math.max(newState.repWindow.maxElbowRatio, currentState.plankMaxElbowRatio);
+    }
   }
 
   if (newState.repWindow && inRep) {
@@ -906,6 +919,8 @@ function updatePushupState(
     // Reset rep window and FSM timestamps (skip IDLE -- gate only applies at start)
     newState.repWindow = null;
     newState.fsm = resetFSMToPlank();
+    newState.activeSide = null;
+    newState.plankMaxElbowRatio = -Infinity;
   }
 
   // Clear feedback after 2 seconds

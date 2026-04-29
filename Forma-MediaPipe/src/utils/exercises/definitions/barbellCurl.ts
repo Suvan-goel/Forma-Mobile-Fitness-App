@@ -33,13 +33,15 @@ import type { ExerciseDefinition, ExerciseState, RepResult as FrameworkRepResult
  */
 const THRESHOLDS = {
   /** Reach ratio above which arm is considered fully extended → rep complete */
-  EXTENDED_ENTER: 0.92,
+  EXTENDED_ENTER: 0.90,
   /** Reach ratio below which we start detecting upward motion from REST */
-  EXTENDED_EXIT: 0.88,
+  EXTENDED_EXIT: 0.90,
   /** Reach ratio below which arm is considered fully curled → top of curl */
   FLEXED_ENTER: 0.54,
   /** Reach ratio above which we start detecting downward motion from TOP */
   FLEXED_EXIT: 0.57,
+  /** Ratio rebound from the deepest curl that marks the start of lowering. */
+  FLEXED_EXIT_DELTA: 0.04,
   MIN_REP_TIME: 0.25, // seconds
   SYNC_WINDOW: 0.75, // seconds between arms
   /** Minimum reach ratio ROM (max - min) for a valid rep */
@@ -57,14 +59,11 @@ const FORM_THRESHOLDS = {
   // Torso swing delta (degrees) — already camera-invariant (sagittal projection)
   TORSO_WARN: 15,
   TORSO_FAIL: 22,
-  /** Tempo thresholds for visual feedback. These are intentionally lower than
-   * scoring thresholds because phase timestamps measure threshold-crossing time,
-   * not the user's full bottom-to-top / top-to-bottom movement. */
-  TEMPO_UP_FEEDBACK_MIN: 0.25,
-  TEMPO_DOWN_FEEDBACK_MIN: 0.20,
-  TEMPO_DOWN_ESCAPE_MIN: 0.15,
-  TEMPO_UP_SCORE_WARN: 0.4,
-  TEMPO_DOWN_SCORE_WARN: 0.5,
+  WRIST_NEUTRAL: 180, // straight wrist reference
+  WRIST_DEV_WARN: 25,
+  WRIST_DEV_DURATION: 0.5, // 50% of rep
+  TEMPO_UP_MIN: 0.05,
+  TEMPO_DOWN_MIN: 0.15,
   /** Symmetry: max allowed ratio difference between arms */
   SYMMETRY_MIN_RATIO: 0.10, // min reach ratio difference between arms
   SYMMETRY_ROM_RATIO: 0.12, // ROM ratio difference between arms
@@ -74,16 +73,6 @@ const FORM_THRESHOLDS = {
   /** Reach ratio thresholds for form messages */
   FLEX_RATIO_WARN: 0.55,  // min ratio above this → "flex more at top"
   EXTEND_RATIO_WARN: 0.90, // max ratio below this → "extend fully"
-} as const;
-
-/** Reliability gates for per-rep feedback. */
-const QUALITY_THRESHOLDS = {
-  MIN_METRIC_COVERAGE: 0.60,
-  MIN_PRIMARY_RATIO_COVERAGE: 0.70,
-  MIN_BILATERAL_RATIO_COVERAGE: 0.60,
-  MIN_FRONTAL_COVERAGE: 0.70,
-  MIN_TORSO_COVERAGE: 0.60,
-  UNCERTAIN_SCORE_CAP: 80,
 } as const;
 
 /** Smoothing parameters */
@@ -139,13 +128,13 @@ function penaltyROM(minRatio: number, maxRatio: number): number {
 /** Tempo penalty — max 20 pts. Concentric < 0.4s or eccentric < 0.5s. */
 function penaltyTempo(tUp: number, tDown: number): number {
   let upPenalty = 0;
-  if (tUp > 0 && tUp < FORM_THRESHOLDS.TEMPO_UP_SCORE_WARN) {
-    const deficit = FORM_THRESHOLDS.TEMPO_UP_SCORE_WARN - tUp;
+  if (tUp > 0 && tUp < 0.4) {
+    const deficit = 0.4 - tUp;
     upPenalty = Math.min(10, 60 * deficit * deficit);
   }
   let downPenalty = 0;
-  if (tDown > 0 && tDown < FORM_THRESHOLDS.TEMPO_DOWN_SCORE_WARN) {
-    const deficit = FORM_THRESHOLDS.TEMPO_DOWN_SCORE_WARN - tDown;
+  if (tDown > 0 && tDown < 0.5) {
+    const deficit = 0.5 - tDown;
     downPenalty = Math.min(10, 40 * deficit * deficit);
   }
   return Math.min(20, upPenalty + downPenalty);
@@ -166,6 +155,15 @@ function penaltyAsymmetry(deltaMinRatio: number, deltaRomRatio: number): number 
   return Math.min(15, minPenalty + romPenalty);
 }
 
+function getConcentricDuration(arm: ArmFSM): number {
+  return arm.tUpToTop !== null && arm.tRestToUp !== null ? arm.tUpToTop - arm.tRestToUp : 0;
+}
+
+function getEccentricDuration(arm: ArmFSM): number {
+  const loweringStart = arm.tTopToDown !== null ? arm.tTopToDown : arm.tUpToTop;
+  return arm.tDownToRest !== null && loweringStart !== null ? arm.tDownToRest - loweringStart : 0;
+}
+
 /** Compute a continuous rep score from ratio-based measurements. */
 function computeRepScore(
   repWindow: RepWindow,
@@ -177,26 +175,12 @@ function computeRepScore(
   const isFrontal = viewAngle.zone === 'frontal';
   const isSide = viewAngle.zone === 'side';
   const primaryIsLeft = viewAngle.primarySide !== 'right';
-  const frameCount = Math.max(1, repWindow.frameCount);
-  const coverage = (frames: number) => frames / frameCount;
-  const leftRatioCoverage = coverage(repWindow.quality.leftRatioFrames);
-  const rightRatioCoverage = coverage(repWindow.quality.rightRatioFrames);
-  const primaryRatioCoverage = primaryIsLeft ? leftRatioCoverage : rightRatioCoverage;
-  const hasPrimaryRatioQuality = primaryRatioCoverage >= QUALITY_THRESHOLDS.MIN_PRIMARY_RATIO_COVERAGE;
-  const hasBilateralRatioQuality =
-    leftRatioCoverage >= QUALITY_THRESHOLDS.MIN_BILATERAL_RATIO_COVERAGE &&
-    rightRatioCoverage >= QUALITY_THRESHOLDS.MIN_BILATERAL_RATIO_COVERAGE;
-  const hasRatioQuality = isFrontal ? hasBilateralRatioQuality : hasPrimaryRatioQuality;
-  const hasFrontalQuality = isFrontal && coverage(repWindow.quality.frontalFrames) >= QUALITY_THRESHOLDS.MIN_FRONTAL_COVERAGE;
-  const hasTorsoQuality = coverage(repWindow.quality.torsoFrames) >= QUALITY_THRESHOLDS.MIN_TORSO_COVERAGE;
-  const leftShoulderQuality = coverage(repWindow.quality.leftShoulderFrames) >= QUALITY_THRESHOLDS.MIN_METRIC_COVERAGE;
-  const rightShoulderQuality = coverage(repWindow.quality.rightShoulderFrames) >= QUALITY_THRESHOLDS.MIN_METRIC_COVERAGE;
 
   // Torso penalty (delta-based, already camera-invariant)
   const deltaTorso = isFinite(maxAngles.torso - minAngles.torso)
     ? maxAngles.torso - minAngles.torso
     : 0;
-  const torsoP = hasTorsoQuality ? penaltyTorso(deltaTorso) : 0;
+  const torsoP = penaltyTorso(deltaTorso);
 
   // Shoulder penalty (delta-based, skip at side angles)
   let shoulderP = 0;
@@ -204,8 +188,8 @@ function computeRepScore(
     const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
     const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
     const shValues: number[] = [];
-    if (leftShoulderQuality && isFinite(deltaShL)) shValues.push(deltaShL);
-    if (rightShoulderQuality && isFinite(deltaShR)) shValues.push(deltaShR);
+    if (isFinite(deltaShL)) shValues.push(deltaShL);
+    if (isFinite(deltaShR)) shValues.push(deltaShR);
     const maxDeltaSh = shValues.length > 0 ? Math.max(...shValues) : 0;
     shoulderP = penaltyShoulder(maxDeltaSh);
   }
@@ -232,18 +216,16 @@ function computeRepScore(
       ? (leftRatioOk ? repWindow.ratios.maxLeftRatio : 0.95)
       : (rightRatioOk ? repWindow.ratios.maxRightRatio : 0.95);
   }
-  const romP = hasRatioQuality
-    ? penaltyROM(
-        isFinite(minRatio) ? minRatio : 0.45,
-        isFinite(maxRatio) ? maxRatio : 0.95
-      )
-    : 0;
+  const romP = penaltyROM(
+    isFinite(minRatio) ? minRatio : 0.45,
+    isFinite(maxRatio) ? maxRatio : 0.95
+  );
 
   // Tempo penalty — average across both arms in frontal mode
-  const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
-  const tUpR = _rightArm.tUpToTop && _rightArm.tRestToUp ? _rightArm.tUpToTop - _rightArm.tRestToUp : 0;
-  const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
-  const tDownR = _rightArm.tDownToRest && _rightArm.tTopToDown ? _rightArm.tDownToRest - _rightArm.tTopToDown : 0;
+  const tUpL = getConcentricDuration(leftArm);
+  const tUpR = getConcentricDuration(_rightArm);
+  const tDownL = getEccentricDuration(leftArm);
+  const tDownR = getEccentricDuration(_rightArm);
   let tUp: number;
   let tDown: number;
   if (isFrontal) {
@@ -251,14 +233,14 @@ function computeRepScore(
     tDown = tDownL > 0 && tDownR > 0 ? (tDownL + tDownR) / 2 : Math.max(tDownL, tDownR);
   } else {
     const tempoArm = primaryIsLeft ? leftArm : _rightArm;
-    tUp   = tempoArm.tUpToTop   && tempoArm.tRestToUp  ? tempoArm.tUpToTop   - tempoArm.tRestToUp  : 0;
-    tDown = tempoArm.tDownToRest && tempoArm.tTopToDown ? tempoArm.tDownToRest - tempoArm.tTopToDown : 0;
+    tUp = getConcentricDuration(tempoArm);
+    tDown = getEccentricDuration(tempoArm);
   }
   const tempoP = penaltyTempo(tUp, tDown);
 
   // Asymmetry penalty — ratio-based (camera-invariant)
   let asymmetryP = 0;
-  if (hasFrontalQuality && hasBilateralRatioQuality && leftRatioOk && rightRatioOk) {
+  if (isFrontal && leftRatioOk && rightRatioOk) {
     const romLRatio = repWindow.ratios.maxLeftRatio - repWindow.ratios.minLeftRatio;
     const romRRatio = repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio;
     const deltaMinRatio = Math.abs(repWindow.ratios.minLeftRatio - repWindow.ratios.minRightRatio);
@@ -268,7 +250,7 @@ function computeRepScore(
 
   // Elbow flare penalty (frontal only)
   let elbowFlareP = 0;
-  if (hasFrontalQuality) {
+  if (isFrontal) {
     const leftFlareOk = isFinite(repWindow.elbowFlare.maxLeftFlareDeg);
     const rightFlareOk = isFinite(repWindow.elbowFlare.maxRightFlareDeg);
     const maxFlare = Math.max(
@@ -321,18 +303,11 @@ interface RepWindow {
   tEnd: number;
   /** Frame count for duration calculations */
   frameCount: number;
+  /** Wrist deviation history (for duration check) */
+  wristDevFrames: { left: number; right: number };
   /** Max elbow flare angle (upper arm from vertical, coronal plane) per arm during the rep.
    *  Frontal view only — lateral deviation is most accurate when facing the camera. */
   elbowFlare: { maxLeftFlareDeg: number; maxRightFlareDeg: number };
-  /** Per-rep signal coverage. Used to avoid giving form criticism from weak/stale landmarks. */
-  quality: {
-    leftRatioFrames: number;
-    rightRatioFrames: number;
-    leftShoulderFrames: number;
-    rightShoulderFrames: number;
-    torsoFrames: number;
-    frontalFrames: number;
-  };
 }
 
 interface AngleSet {
@@ -451,15 +426,8 @@ function initRepWindow(tStart: number): RepWindow {
     tStart,
     tEnd: tStart,
     frameCount: 0,
+    wristDevFrames: { left: 0, right: 0 },
     elbowFlare: { maxLeftFlareDeg: -Infinity, maxRightFlareDeg: -Infinity },
-    quality: {
-      leftRatioFrames: 0,
-      rightRatioFrames: 0,
-      leftShoulderFrames: 0,
-      rightShoulderFrames: 0,
-      torsoFrames: 0,
-      frontalFrames: 0,
-    },
   };
 }
 
@@ -907,7 +875,10 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
     case 'TOP':
       newArm.minRatio = Math.min(newArm.minRatio, reachRatio);
       newArm.maxRatio = Math.max(newArm.maxRatio, reachRatio);
-      if (reachRatio > THRESHOLDS.FLEXED_EXIT) {
+      if (
+        reachRatio > THRESHOLDS.FLEXED_EXIT ||
+        reachRatio > newArm.minRatio + THRESHOLDS.FLEXED_EXIT_DELTA
+      ) {
         newArm.state = 'DOWN';
         newArm.tTopToDown = t;
       }
@@ -931,7 +902,7 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
         reachRatio < THRESHOLDS.FLEXED_EXIT &&
         newArm.tRestToUp !== null &&
         t - newArm.tRestToUp >= THRESHOLDS.MIN_REP_TIME &&
-        newArm.tTopToDown !== null && t - newArm.tTopToDown >= FORM_THRESHOLDS.TEMPO_DOWN_ESCAPE_MIN
+        newArm.tTopToDown !== null && t - newArm.tTopToDown >= FORM_THRESHOLDS.TEMPO_DOWN_MIN
       ) {
         // Re-flexion escape: arm is curling again without full extension.
         // Force completion — rep will be counted and penalized for incomplete ROM.
@@ -961,22 +932,6 @@ function evaluateForm(
   const isFrontal = viewAngle.zone === 'frontal';
   const isSide = viewAngle.zone === 'side';
   const primaryIsLeft = viewAngle.primarySide !== 'right';
-  const frameCount = Math.max(1, repWindow.frameCount);
-  const coverage = (frames: number) => frames / frameCount;
-  const leftRatioCoverage = coverage(repWindow.quality.leftRatioFrames);
-  const rightRatioCoverage = coverage(repWindow.quality.rightRatioFrames);
-  const primaryRatioCoverage = primaryIsLeft ? leftRatioCoverage : rightRatioCoverage;
-  const leftShoulderCoverage = coverage(repWindow.quality.leftShoulderFrames);
-  const rightShoulderCoverage = coverage(repWindow.quality.rightShoulderFrames);
-  const torsoCoverage = coverage(repWindow.quality.torsoFrames);
-  const frontalCoverage = coverage(repWindow.quality.frontalFrames);
-  const hasPrimaryRatioQuality = primaryRatioCoverage >= QUALITY_THRESHOLDS.MIN_PRIMARY_RATIO_COVERAGE;
-  const hasBilateralRatioQuality =
-    leftRatioCoverage >= QUALITY_THRESHOLDS.MIN_BILATERAL_RATIO_COVERAGE &&
-    rightRatioCoverage >= QUALITY_THRESHOLDS.MIN_BILATERAL_RATIO_COVERAGE;
-  const hasRatioQuality = isFrontal ? hasBilateralRatioQuality : hasPrimaryRatioQuality;
-  const hasFrontalQuality = isFrontal && frontalCoverage >= QUALITY_THRESHOLDS.MIN_FRONTAL_COVERAGE;
-  const hasTorsoQuality = torsoCoverage >= QUALITY_THRESHOLDS.MIN_TORSO_COVERAGE;
 
   const leftRatioOk = isFinite(ratios.minLeftRatio) && isFinite(ratios.maxLeftRatio);
   const rightRatioOk = isFinite(ratios.minRightRatio) && isFinite(ratios.maxRightRatio);
@@ -1003,12 +958,12 @@ function evaluateForm(
   }
 
   // 1. Flex depth — ratio-based (no foreshortening compensation needed)
-  if (hasRatioQuality && isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN) {
+  if (isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN) {
     messages.push('Flex more at the top of the curl.');
   }
 
   // 2. Extension — ratio-based
-  if (hasRatioQuality && isFinite(maxRatio) && maxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN) {
+  if (isFinite(maxRatio) && maxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN) {
     messages.push('Extend fully at the bottom.');
   }
 
@@ -1017,11 +972,11 @@ function evaluateForm(
   const romRRatio = rightRatioOk ? ratios.maxRightRatio - ratios.minRightRatio : 0;
   const primaryRomRatio = primaryIsLeft ? romLRatio : romRRatio;
 
-  if (hasRatioQuality && isFrontal) {
+  if (isFrontal) {
     if ((romLRatio < THRESHOLDS.ROM_MIN || romRRatio < THRESHOLDS.ROM_MIN) && messages.length === 0) {
       messages.push('Incomplete rep — curl all the way up and fully extend.');
     }
-  } else if (hasRatioQuality) {
+  } else {
     if (primaryRomRatio < THRESHOLDS.ROM_MIN && messages.length === 0) {
       messages.push('Incomplete rep — curl all the way up and fully extend.');
     }
@@ -1032,8 +987,8 @@ function evaluateForm(
   const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
   if (!isSide) {
     const shValues: number[] = [];
-    if (isFinite(deltaShL) && leftShoulderCoverage >= QUALITY_THRESHOLDS.MIN_METRIC_COVERAGE) shValues.push(deltaShL);
-    if (isFinite(deltaShR) && rightShoulderCoverage >= QUALITY_THRESHOLDS.MIN_METRIC_COVERAGE) shValues.push(deltaShR);
+    if (isFinite(deltaShL)) shValues.push(deltaShL);
+    if (isFinite(deltaShR)) shValues.push(deltaShR);
     const maxDeltaSh = shValues.length > 0 ? Math.max(...shValues) : 0;
 
     if (maxDeltaSh > FORM_THRESHOLDS.SHOULDER_FAIL) {
@@ -1044,7 +999,7 @@ function evaluateForm(
   }
 
   // 4b. Elbow flare (frontal only)
-  if (hasFrontalQuality) {
+  if (isFrontal) {
     const leftFlareOk = isFinite(repWindow.elbowFlare.maxLeftFlareDeg);
     const rightFlareOk = isFinite(repWindow.elbowFlare.maxRightFlareDeg);
     const maxFlare = Math.max(
@@ -1063,7 +1018,7 @@ function evaluateForm(
   const torsoWarnThreshold = repIndex === 0
     ? FORM_THRESHOLDS.TORSO_FAIL
     : FORM_THRESHOLDS.TORSO_WARN;
-  if (hasTorsoQuality && isFinite(deltaTorso)) {
+  if (isFinite(deltaTorso)) {
     if (deltaTorso > FORM_THRESHOLDS.TORSO_FAIL) {
       messages.push('Excessive body swing — this is cheating the rep.');
     } else if (deltaTorso > torsoWarnThreshold) {
@@ -1072,10 +1027,10 @@ function evaluateForm(
   }
 
   // 6. Tempo — average across both arms in frontal mode
-  const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
-  const tUpR = rightArm.tUpToTop && rightArm.tRestToUp ? rightArm.tUpToTop - rightArm.tRestToUp : 0;
-  const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
-  const tDownR = rightArm.tDownToRest && rightArm.tTopToDown ? rightArm.tDownToRest - rightArm.tTopToDown : 0;
+  const tUpL = getConcentricDuration(leftArm);
+  const tUpR = getConcentricDuration(rightArm);
+  const tDownL = getEccentricDuration(leftArm);
+  const tDownR = getEccentricDuration(rightArm);
 
   let tUp: number;
   let tDown: number;
@@ -1084,19 +1039,19 @@ function evaluateForm(
     tDown = tDownL > 0 && tDownR > 0 ? (tDownL + tDownR) / 2 : Math.max(tDownL, tDownR);
   } else {
     const tempoArm = primaryIsLeft ? leftArm : rightArm;
-    tUp   = tempoArm.tUpToTop   && tempoArm.tRestToUp  ? tempoArm.tUpToTop   - tempoArm.tRestToUp  : 0;
-    tDown = tempoArm.tDownToRest && tempoArm.tTopToDown ? tempoArm.tDownToRest - tempoArm.tTopToDown : 0;
+    tUp = getConcentricDuration(tempoArm);
+    tDown = getEccentricDuration(tempoArm);
   }
 
-  if (tUp < FORM_THRESHOLDS.TEMPO_UP_FEEDBACK_MIN && tUp > 0) {
+  if (tUp < FORM_THRESHOLDS.TEMPO_UP_MIN && tUp > 0) {
     messages.push('Slow down — control the curl.');
   }
-  if (tDown >= 0.05 && tDown < FORM_THRESHOLDS.TEMPO_DOWN_FEEDBACK_MIN) {
+  if (tDown >= 0.05 && tDown < FORM_THRESHOLDS.TEMPO_DOWN_MIN) {
     messages.push("Control the lowering — don't drop the weight.");
   }
 
   // 7. Symmetry — ratio-based (only frontal)
-  if (hasFrontalQuality && hasBilateralRatioQuality && leftRatioOk && rightRatioOk) {
+  if (isFrontal && leftRatioOk && rightRatioOk) {
     const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
     const deltaRomRatio = Math.abs(romLRatio - romRRatio);
     if (deltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO || deltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO) {
@@ -1105,11 +1060,7 @@ function evaluateForm(
   }
 
   // Score: continuous penalty curves
-  let score = computeRepScore(repWindow, leftArm, rightArm, viewAngle);
-  if (!hasRatioQuality) {
-    messages.unshift("Couldn't read that rep clearly.");
-    score = Math.min(score, QUALITY_THRESHOLDS.UNCERTAIN_SCORE_CAP);
-  }
+  const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle);
 
   return { score, messages };
 }
@@ -1221,24 +1172,18 @@ function updateBarbellCurlState(
     if (!isNaN(fast.leftRatio)) {
       window.ratios.minLeftRatio = Math.min(window.ratios.minLeftRatio, fast.leftRatio);
       window.ratios.maxLeftRatio = Math.max(window.ratios.maxLeftRatio, fast.leftRatio);
-      window.quality.leftRatioFrames++;
     }
     if (!isNaN(fast.rightRatio)) {
       window.ratios.minRightRatio = Math.min(window.ratios.minRightRatio, fast.rightRatio);
       window.ratios.maxRightRatio = Math.max(window.ratios.maxRightRatio, fast.rightRatio);
-      window.quality.rightRatioFrames++;
     }
-    if (!isNaN(rawAngles.leftShoulder)) {
-      window.quality.leftShoulderFrames++;
+
+    // Track wrist deviation duration
+    if (leftValid && Math.abs(smoothed.leftWrist - FORM_THRESHOLDS.WRIST_NEUTRAL) > FORM_THRESHOLDS.WRIST_DEV_WARN) {
+      window.wristDevFrames.left++;
     }
-    if (!isNaN(rawAngles.rightShoulder)) {
-      window.quality.rightShoulderFrames++;
-    }
-    if (!isNaN(rawAngles.torso)) {
-      window.quality.torsoFrames++;
-    }
-    if (viewAngle.zone === 'frontal') {
-      window.quality.frontalFrames++;
+    if (rightValid && Math.abs(smoothed.rightWrist - FORM_THRESHOLDS.WRIST_NEUTRAL) > FORM_THRESHOLDS.WRIST_DEV_WARN) {
+      window.wristDevFrames.right++;
     }
 
     // Track elbow flare (frontal only — lateral deviation is visible facing the camera)
@@ -1325,14 +1270,8 @@ function completeRep(
     ? newState.leftArm
     : (viewAngle.primarySide === 'right' ? newState.rightArm : newState.leftArm);
 
-  const tUp =
-    tempoArm.tUpToTop && tempoArm.tRestToUp
-      ? tempoArm.tUpToTop - tempoArm.tRestToUp
-      : 0;
-  const tDown =
-    tempoArm.tDownToRest && tempoArm.tTopToDown
-      ? tempoArm.tDownToRest - tempoArm.tTopToDown
-      : 0;
+  const tUp = getConcentricDuration(tempoArm);
+  const tDown = getEccentricDuration(tempoArm);
 
   const { score, messages } = evaluateForm(
     newState.repWindow!,
@@ -1377,11 +1316,15 @@ const _safeDelta = (min: number, max: number) =>
 function getBarbellCurlDebugInfo(state: BarbellCurlState): {
   leftArmState: string;
   rightArmState: string;
+  view: ViewAngle;
+  warmupFrames: number;
   current: {
     leftElbow: number | null;
     rightElbow: number | null;
     leftRatio: number | null;
     rightRatio: number | null;
+    fastLeftRatio: number | null;
+    fastRightRatio: number | null;
     leftShoulder: number | null;
     rightShoulder: number | null;
     torso: number | null;
@@ -1407,6 +1350,8 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
     rightElbow: _formatAngle(angles?.rightElbow ?? NaN),
     leftRatio: _formatAngle(angles?.leftRatio ?? NaN),
     rightRatio: _formatAngle(angles?.rightRatio ?? NaN),
+    fastLeftRatio: _formatAngle(state.fast?.leftRatio ?? NaN),
+    fastRightRatio: _formatAngle(state.fast?.rightRatio ?? NaN),
     leftShoulder: _formatAngle(angles?.leftShoulder ?? NaN),
     rightShoulder: _formatAngle(angles?.rightShoulder ?? NaN),
     torso: _formatAngle(angles?.torso ?? NaN),
@@ -1433,6 +1378,8 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
   return {
     leftArmState: state.leftArm.state,
     rightArmState: state.rightArm.state,
+    view: state.viewAngle,
+    warmupFrames: state.warmupFrames,
     current,
     repRatios,
     repDelta,
@@ -1493,28 +1440,7 @@ export const barbellCurlDefinition: ExerciseDefinition = {
       'Arms are uneven — curl both sides together.': 'asymmetry',
       "Keep your elbows in — don't flare them out to the sides.": 'elbow_flare',
       "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
-      "Couldn't read that rep clearly.": 'tracking_uncertain',
     },
-    issueDefinitions: [
-      {
-        issueType: 'elbow_flare',
-        priority: 15,
-        messages: [
-          'Keep your elbows tucked.',
-          'Bring your elbows closer to your sides.',
-          'Do not let your elbows flare out.',
-        ],
-      },
-      {
-        issueType: 'tracking_uncertain',
-        priority: 5,
-        messages: [
-          'I lost the read on that rep.',
-          'Make sure your arms stay visible.',
-          'Stay in frame so I can track the rep.',
-        ],
-      },
-    ],
   },
 
   summaryConfig: {
@@ -1530,6 +1456,5 @@ export const barbellCurlDefinition: ExerciseDefinition = {
     'Arms are uneven — curl both sides together.': 'Focus on symmetry — curl both arms at the same speed.',
     "Keep your elbows in — don't flare them out to the sides.": 'Keep elbows pinned to your sides — flaring reduces bicep isolation.',
     "Tuck your elbows in — they're drifting outward.": 'Focus on keeping elbows close to your body throughout the curl.',
-    "Couldn't read that rep clearly.": 'Keep your full upper body and both arms clearly visible to improve tracking accuracy.',
   },
 };

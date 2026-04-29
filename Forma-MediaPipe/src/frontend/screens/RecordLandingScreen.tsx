@@ -8,10 +8,8 @@ import {
   Modal,
   Image,
   Animated,
-  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,40 +25,17 @@ import {
   Dumbbell,
   ArrowRight,
   BookOpen,
-  Bell,
-  Camera as CameraIcon,
 } from 'lucide-react-native';
-import { COLORS, FONTS } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 import { CameraSetupGuide } from './CameraSetupGuide';
 
 import type { RecordStackParamList, RootStackParamList } from '../app/RootNavigator';
+import { useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
-const CAPTURE_BACKGROUND_GRADIENT: readonly [string, string, string] = ['#283036', '#182126', '#0E1519'];
-const CAPTURE_CARD_GRADIENT: readonly [string, string, string] = ['#263037', '#1B242A', '#141B20'];
-const CAPTURE_CARD_BORDER = 'rgba(255,255,255,0.08)';
-const CAPTURE_VIOLET = '#7557F4';
-
-const RECENT_TEMPLATES = [
-  {
-    name: 'Lower Body Strength',
-    exercises: '5 exercises',
-    image: require('../assets/weightlifting_bg.png'),
-  },
-  {
-    name: 'Upper Body Push',
-    exercises: '5 exercises',
-    image: require('../assets/sports_bg.png'),
-  },
-  {
-    name: 'Full Body Strength',
-    exercises: '6 exercises',
-    image: require('../assets/calisthenics_bg.png'),
-  },
-] as const;
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -91,36 +66,16 @@ const getTimerParts = (totalSeconds: number) => {
 
 const formatHeaderDate = (): string => {
   const d = new Date();
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
 };
-
-const MuscleFigure = () => (
-  <View style={styles.figureWrap}>
-    <Svg width={92} height={142} viewBox="0 0 92 142">
-      <Ellipse cx={46} cy={72} rx={27} ry={59} fill="rgba(255,255,255,0.035)" />
-      <Circle cx={46} cy={16} r={8} fill="#8C9297" stroke="#CED4DA" strokeWidth={1} opacity={0.85} />
-      <Path d="M37 27 L55 27 L61 63 L53 88 L39 88 L31 63 Z" fill="#6F747A" stroke="#C6CDD2" strokeWidth={1} opacity={0.82} />
-      <Path d="M36 43 C27 52 25 68 26 86" stroke="#9EA6AC" strokeWidth={5} strokeLinecap="round" opacity={0.72} />
-      <Path d="M56 43 C65 52 67 68 66 86" stroke="#9EA6AC" strokeWidth={5} strokeLinecap="round" opacity={0.72} />
-      <Path d="M39 88 C36 103 34 117 33 134" stroke="#A9B0B6" strokeWidth={6} strokeLinecap="round" opacity={0.78} />
-      <Path d="M53 88 C56 103 58 117 59 134" stroke="#A9B0B6" strokeWidth={6} strokeLinecap="round" opacity={0.78} />
-      <Path d="M33 62 C39 65 53 65 59 62 L56 87 C51 91 41 91 36 87 Z" fill={CAPTURE_VIOLET} opacity={0.88} />
-      <Path d="M36 62 C40 70 43 79 42 89" stroke="#9C82FF" strokeWidth={2} strokeLinecap="round" opacity={0.65} />
-      <Path d="M56 62 C52 70 49 79 50 89" stroke="#9C82FF" strokeWidth={2} strokeLinecap="round" opacity={0.65} />
-      <Line x1={46} y1={26} x2={46} y2={88} stroke="rgba(255,255,255,0.28)" strokeWidth={1} />
-      <Line x1={36} y1={34} x2={56} y2={34} stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
-      <Rect x={28} y={133} width={13} height={4} rx={2} fill="#7C8389" opacity={0.8} />
-      <Rect x={51} y={133} width={13} height={4} rx={2} fill="#7C8389" opacity={0.8} />
-    </Svg>
-  </View>
-);
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
+  const { user: profileUser } = useUser();
   const {
     workoutInProgress,
     sets,
@@ -181,10 +136,6 @@ export const RecordLandingScreen: React.FC = () => {
     navigation.navigate('WorkoutTemplates');
   };
 
-  const handleCameraSetup = () => {
-    setShowSetupGuide(true);
-  };
-
   const handleDiscardWorkout = () => {
     showAlert(
       'Discard workout',
@@ -238,32 +189,54 @@ export const RecordLandingScreen: React.FC = () => {
   }
 
   return (
-    <LinearGradient colors={[...CAPTURE_BACKGROUND_GRADIENT]} style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerSide} />
-        <Text style={styles.headerName}>Capture</Text>
+    <View style={styles.container}>
+      {/* ── HEADER (HomeScreen style) ────────────── */}
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>CAPTURE</Text>
+            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
+          </View>
+        </View>
         <TouchableOpacity
-          onPress={() => rootNavigation.navigate('NotificationSettings')}
+          onPress={() => rootNavigation.navigate('UserProfile')}
           activeOpacity={0.7}
-          style={styles.headerIconBtn}
+          style={styles.profileBtn}
         >
-          <Bell size={19} color={COLORS.textSecondary} strokeWidth={1.7} />
+          {profileUser?.avatarUrl ? (
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
+          ) : profileUser ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.profileGradient}
+            >
+              <Text style={styles.profileInitial}>
+                {profileUser.displayName[0].toUpperCase()}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.profilePlaceholder} />
+          )}
         </TouchableOpacity>
       </View>
 
       {/* ── CONTENT ────────────────────────────── */}
-      <Animated.ScrollView
+      <Animated.View
         style={[
           styles.contentArea,
+          { paddingBottom: bottomPadding },
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
           workoutInProgress && styles.contentCentered,
         ]}
-        contentContainerStyle={[
-          styles.contentInner,
-          { paddingBottom: bottomPadding },
-          workoutInProgress && styles.contentInnerActive,
-        ]}
-        showsVerticalScrollIndicator={false}
       >
         {workoutInProgress ? (
           /* ── Active Workout Card ── */
@@ -363,142 +336,96 @@ export const RecordLandingScreen: React.FC = () => {
           </View>
         ) : (
           <>
-            <Text style={styles.dateText}>{formatHeaderDate()}</Text>
-
-            <View style={styles.currentCard}>
-              <LinearGradient colors={[...CAPTURE_CARD_GRADIENT]} style={styles.currentGradient}>
-                <View style={styles.currentCopy}>
-                  <Text style={styles.kicker}>CURRENT WORKOUT</Text>
-                  <Text style={styles.currentTitle}>Lower Body Strength</Text>
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaItem}>
-                      <Dumbbell size={10} color={COLORS.textTertiary} strokeWidth={1.6} />
-                      <Text style={styles.metaText}>5 exercises</Text>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Text style={styles.metaDot}>○</Text>
-                      <Text style={styles.metaText}>45 min</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    onPress={handleStartWorkout}
-                    activeOpacity={0.85}
-                    style={styles.startButton}
-                  >
-                    <LinearGradient
-                      colors={[CAPTURE_VIOLET, '#6042D8']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.startButtonGradient}
-                    >
-                      <Play size={12} color="#FFFFFF" fill="#FFFFFF" strokeWidth={1.5} />
-                      <Text style={styles.startButtonText}>Start Workout</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-                <MuscleFigure />
-              </LinearGradient>
-            </View>
-
-            <View style={styles.sectionBlock}>
-              <Text style={styles.sectionLabel}>TOOLS</Text>
-              <View style={styles.toolPanel}>
-                <TouchableOpacity
-                  style={styles.toolRow}
-                  onPress={handleChooseTemplate}
-                  activeOpacity={0.72}
-                >
-                  <View style={styles.toolIconBox}>
-                    <LayoutTemplate size={17} color={COLORS.textSecondary} strokeWidth={1.5} />
-                  </View>
-                  <View style={styles.toolTextWrap}>
-                    <Text style={styles.toolTitle}>Choose Template</Text>
-                    <Text style={styles.toolSubtitle}>Browse saved workouts</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.6} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.toolRow}
-                  onPress={() => rootNavigation.navigate('Tutorials')}
-                  activeOpacity={0.72}
-                >
-                  <View style={styles.toolIconBox}>
-                    <BookOpen size={17} color={COLORS.textSecondary} strokeWidth={1.5} />
-                  </View>
-                  <View style={styles.toolTextWrap}>
-                    <Text style={styles.toolTitle}>Exercise Guide</Text>
-                    <Text style={styles.toolSubtitle}>Learn form and technique</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.6} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toolRow, styles.toolRowLast]}
-                  onPress={handleCameraSetup}
-                  activeOpacity={0.72}
-                >
-                  <View style={styles.toolIconBox}>
-                    <CameraIcon size={17} color={COLORS.textSecondary} strokeWidth={1.5} />
-                  </View>
-                  <View style={styles.toolTextWrap}>
-                    <Text style={styles.toolTitle}>Camera Setup</Text>
-                    <Text style={styles.toolSubtitle}>Check angles and positioning</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.6} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.templateHeaderRow}>
-              <Text style={styles.sectionLabel}>RECENT TEMPLATES</Text>
-              <TouchableOpacity onPress={handleChooseTemplate} activeOpacity={0.7}>
-                <Text style={styles.viewAllText}>View all</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.templateList}
-            >
-              {RECENT_TEMPLATES.map((template) => (
-                <TouchableOpacity
-                  key={template.name}
-                  style={styles.templateCard}
-                  activeOpacity={0.78}
-                  onPress={handleChooseTemplate}
-                >
-                  <Image source={template.image} style={styles.templateImage} resizeMode="cover" />
-                  <LinearGradient
-                    colors={['rgba(0,0,0,0)', 'rgba(9,13,16,0.95)']}
-                    style={styles.templateImageShade}
-                  />
-                  <View style={styles.templateCopy}>
-                    <Text style={styles.templateName} numberOfLines={2}>{template.name}</Text>
-                    <Text style={styles.templateExercises}>{template.exercises}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
+            {/* ── Primary CTA: New Session ── */}
             <TouchableOpacity
               onPress={handleStartWorkout}
-              activeOpacity={0.8}
-              style={styles.quickStartRow}
+              activeOpacity={0.85}
+              style={styles.heroCta}
             >
               <LinearGradient
-                colors={['rgba(117,87,244,0.18)', 'rgba(255,255,255,0.035)']}
+                colors={['rgba(139, 92, 246, 0.55)', 'rgba(124, 58, 237, 0.25)']}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.quickStartGradient}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroGradient}
               >
-                <Zap size={14} color={CAPTURE_VIOLET} strokeWidth={1.8} />
-                <Text style={styles.quickStartText}>Start a free-form session</Text>
-                <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.6} />
+                <View style={styles.heroContent}>
+                  <Zap size={32} color="#FFFFFF" strokeWidth={2} />
+                  <Text style={styles.heroTitle}>New Session</Text>
+                  <Text style={styles.heroDesc}>
+                    Start a free-form workout with{'\n'}real-time AI form analysis
+                  </Text>
+                </View>
+                <View style={styles.heroFooter}>
+                  <Text style={styles.heroAction}>Start workout</Text>
+                  <ChevronRight size={16} color={COLORS.accent} strokeWidth={2} />
+                </View>
               </LinearGradient>
             </TouchableOpacity>
+
+            {/* ── Secondary: Templates ── */}
+            <TouchableOpacity
+              onPress={handleChooseTemplate}
+              activeOpacity={0.85}
+              style={styles.secondaryCard}
+            >
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.secondaryGradient}
+              >
+                <View style={styles.secondaryGlass}>
+                  <View style={styles.secondaryContent}>
+                    <LayoutTemplate size={24} color={COLORS.accent} strokeWidth={1.5} />
+                    <Text style={styles.secondaryTitle}>Templates</Text>
+                    <Text style={styles.secondaryDesc}>
+                      Pick from your saved routines
+                    </Text>
+                  </View>
+                  <View style={styles.secondaryFooter}>
+                    <Text style={styles.secondaryAction}>Browse templates</Text>
+                    <ChevronRight size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  </View>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* ── Exercise Tutorials ── */}
+            <TouchableOpacity
+              onPress={() => rootNavigation.navigate('Tutorials')}
+              activeOpacity={0.7}
+              style={styles.tutorialsCard}
+            >
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.tutorialsGradient}
+              >
+                <View style={styles.tutorialsEdge}>
+                  <View style={styles.tutorialsRow}>
+                    <BookOpen size={16} color={COLORS.accent} strokeWidth={1.5} />
+                    <View style={styles.tutorialsTextWrap}>
+                      <Text style={styles.tutorialsTitle}>Exercise Tutorials</Text>
+                      <Text style={styles.tutorialsSubtitle}>Browse exercise guides</Text>
+                    </View>
+                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  </View>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* ── Bottom hint ── */}
+            <View style={styles.hintRow}>
+              <Dumbbell size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+              <Text style={styles.hintText}>
+                AI form analysis activates during exercises
+              </Text>
+            </View>
           </>
         )}
-      </Animated.ScrollView>
-    </LinearGradient>
+      </Animated.View>
+    </View>
   );
 };
 
@@ -508,270 +435,88 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
 
-  /* ── Reference-style Header ────────────── */
+  /* ── Header (HomeScreen style) ────────────── */
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
   },
-  headerSide: {
-    width: 36,
-    height: 36,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 13,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 55,
+    height: 55,
+  },
+  headerTextWrap: {
+    gap: 1,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.3,
   },
   headerName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: 0,
+    letterSpacing: -0.4,
   },
-  headerIconBtn: {
+  profileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  profileGradient: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.035)',
+  },
+  profilePlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#27272A',
+  },
+  profileInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 
   /* ── Content Area ──────────────────────────── */
   contentArea: {
     flex: 1,
-  },
-  contentInner: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 16,
+    gap: 14,
   },
   contentCentered: {
-  },
-  contentInnerActive: {
-    flexGrow: 1,
     justifyContent: 'center',
-  },
-  dateText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: '#B1B7BC',
-    marginBottom: 10,
-  },
-
-  /* ── Current Workout ─────────────────────── */
-  currentCard: {
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 14,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.18,
-        shadowRadius: 18,
-      },
-      android: { elevation: 4 },
-    }),
-  },
-  currentGradient: {
-    minHeight: 158,
-    borderWidth: 1,
-    borderColor: CAPTURE_CARD_BORDER,
-    borderRadius: 8,
-    flexDirection: 'row',
-    overflow: 'hidden',
-  },
-  currentCopy: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 15,
-    paddingBottom: 14,
-    justifyContent: 'space-between',
-  },
-  kicker: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 9,
-    color: '#899199',
-    letterSpacing: 0.8,
-    marginBottom: 7,
-  },
-  currentTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
-    lineHeight: 20,
-    color: COLORS.text,
-    letterSpacing: 0,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    marginTop: 9,
-    marginBottom: 12,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  metaText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-  },
-  metaDot: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-    lineHeight: 10,
-  },
-  startButton: {
-    width: 154,
-    height: 43,
-    borderRadius: 7,
-    overflow: 'hidden',
-  },
-  startButtonGradient: {
-    flex: 1,
-    borderRadius: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  startButtonText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12,
-    color: COLORS.text,
-  },
-  figureWrap: {
-    width: 106,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingRight: 5,
-  },
-
-  /* ── Tools ──────────────────────────────── */
-  sectionBlock: {
-    marginBottom: 14,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 10,
-    color: '#7D858C',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  toolPanel: {
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: CAPTURE_CARD_BORDER,
-    backgroundColor: 'rgba(20,28,33,0.72)',
-  },
-  toolRow: {
-    minHeight: 66,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.055)',
-  },
-  toolRowLast: {
-    borderBottomWidth: 0,
-  },
-  toolIconBox: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  toolTextWrap: {
-    flex: 1,
-    gap: 3,
-  },
-  toolTitle: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13,
-    color: '#DDE3E8',
-  },
-  toolSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-  },
-
-  /* ── Recent Templates ───────────────────── */
-  templateHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  viewAllText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 10,
-    color: CAPTURE_VIOLET,
-  },
-  templateList: {
-    gap: 10,
-    paddingRight: 20,
-    paddingBottom: 14,
-  },
-  templateCard: {
-    width: 100,
-    height: 132,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: CAPTURE_CARD_BORDER,
-    backgroundColor: '#111A20',
-  },
-  templateImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-    opacity: 0.82,
-  },
-  templateImageShade: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  templateCopy: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    padding: 9,
-  },
-  templateName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    lineHeight: 14,
-    color: COLORS.text,
-    letterSpacing: 0,
-    marginBottom: 4,
-  },
-  templateExercises: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-  },
-  quickStartRow: {
-    height: 46,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(117,87,244,0.18)',
-  },
-  quickStartGradient: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 10,
-  },
-  quickStartText: {
-    flex: 1,
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12,
-    color: COLORS.textSecondary,
   },
 
   /* ── Hero CTA (New Session) ────────────────── */

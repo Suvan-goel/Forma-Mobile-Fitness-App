@@ -43,6 +43,8 @@ import type {
 const THRESHOLDS = {
   /** Reach ratio below which we transition STANDING -> DESCENDING */
   DESCENDING_ENTER: 0.92,
+  /** Reach ratio below which we start timing the descent before committing a rep */
+  DESCENT_CLOCK_START: 0.985,
   /** Reach ratio below which we reach BOTTOM */
   BOTTOM_ENTER: 0.76,
   /** Reach ratio above which we leave BOTTOM (hysteresis) */
@@ -121,6 +123,8 @@ interface SquatFSM {
   phase: SquatPhase;
   /** Timestamp when rep started (STANDING -> DESCENDING) */
   tRepStart: number | null;
+  /** Timestamp when the user first moved out of the top position */
+  tDescentStart: number | null;
   /** Timestamp when BOTTOM was reached */
   tBottom: number | null;
   /** Timestamp when rep completed (ASCENDING -> STANDING) */
@@ -174,6 +178,8 @@ interface SquatState {
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
+  /** Best top-position knee extension seen before the current rep starts */
+  standingKneeRatioPeak: number;
 }
 
 /** Debug info for on-screen diagnostics */
@@ -205,6 +211,7 @@ function initFSM(): SquatFSM {
   return {
     phase: 'IDLE',
     tRepStart: null,
+    tDescentStart: null,
     tBottom: null,
     tRepEnd: null,
     tIdleStableSince: null,
@@ -215,16 +222,17 @@ function resetFSMToStanding(): SquatFSM {
   return {
     phase: 'STANDING',
     tRepStart: null,
+    tDescentStart: null,
     tBottom: null,
     tRepEnd: null,
     tIdleStableSince: null,
   };
 }
 
-function initRepWindow(tStart: number): SquatRepWindow {
+function initRepWindow(tStart: number, initialKneeRatio?: number): SquatRepWindow {
   return {
-    minKneeRatio: Infinity,
-    maxKneeRatio: -Infinity,
+    minKneeRatio: initialKneeRatio ?? Infinity,
+    maxKneeRatio: initialKneeRatio ?? -Infinity,
     maxTorsoLean: -Infinity,
     tStart,
     tBottom: null,
@@ -250,6 +258,7 @@ function initializeSquatState(): SquatState {
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
+    standingKneeRatioPeak: -Infinity,
   };
 }
 
@@ -497,9 +506,15 @@ function updateFSM(
 
     case 'STANDING':
       // Ratio drops as knee bends
+      if (kneeRatio < THRESHOLDS.DESCENT_CLOCK_START) {
+        fsm.tDescentStart ??= t;
+      } else {
+        fsm.tDescentStart = null;
+      }
+
       if (kneeRatio < THRESHOLDS.DESCENDING_ENTER) {
         fsm.phase = 'DESCENDING';
-        fsm.tRepStart = t;
+        fsm.tRepStart = fsm.tDescentStart ?? t;
         fsm.tBottom = null;
         fsm.tRepEnd = null;
       }
@@ -519,6 +534,7 @@ function updateFSM(
         fsm.phase = 'STANDING';
         partialRep = true;
         fsm.tRepStart = null;
+        fsm.tDescentStart = null;
       }
       break;
 
@@ -670,11 +686,19 @@ function updateSquatState(
     return newState;
   }
 
+  if (currentState.fsm.phase === 'IDLE' || currentState.fsm.phase === 'STANDING') {
+    newState.standingKneeRatioPeak = Math.max(
+      currentState.standingKneeRatioPeak,
+      fast.kneeRatio
+    );
+  }
+
   // Update FSM — uses fast (median-only) ratio to avoid smoothing-induced misses
   const fsmResult = updateFSM(currentState.fsm, fast.kneeRatio, t, fast.torsoLean);
   newState.fsm = fsmResult.fsm;
 
-  // Handle partial rep — only count if meaningful ROM was achieved
+  // Handle partial rep — provide feedback, but do not increment the rep count.
+  // Shallow pulses should not be treated as completed squat reps.
   if (fsmResult.partialRep) {
     const partialROM = newState.repWindow
       ? newState.repWindow.maxKneeRatio - newState.repWindow.minKneeRatio
@@ -682,31 +706,27 @@ function updateSquatState(
     const partialFrames = newState.repWindow?.frameCount ?? 0;
 
     if (partialROM >= THRESHOLDS.MIN_PARTIAL_ROM && partialFrames >= THRESHOLDS.MIN_REP_FRAMES) {
-      newState.repCount++;
       const messages = ['Squat deeper \u2014 aim to get your thighs parallel.'];
-      // Score partial reps low (30-45 range) based on how much ratio ROM was achieved
-      // partialROM is 0.0-0.3 range, scale to comparable score
-      const score = Math.max(0, Math.min(45, Math.round(15 + partialROM * 100)));
-      newState.lastRepResult = {
-        repIndex: newState.repCount,
-        romRatio: partialROM,
-        tDown: 0,
-        tUp: 0,
-        score,
-        messages,
-      };
       newState.feedback = messages[0];
       newState.lastFeedbackTime = t;
     }
     // Either way, reset the rep window and let FSM return to STANDING
     newState.repWindow = null;
+    newState.standingKneeRatioPeak = fast.kneeRatio;
     return newState;
   }
 
   // Track rep window while actively in a rep
   const inRep = newState.fsm.phase !== 'STANDING' && newState.fsm.phase !== 'IDLE';
   if (inRep && !currentState.repWindow) {
-    newState.repWindow = initRepWindow(t);
+    const standingRatio = isFinite(currentState.standingKneeRatioPeak)
+      ? currentState.standingKneeRatioPeak
+      : currentState.fast?.kneeRatio;
+    newState.repWindow = initRepWindow(
+      newState.fsm.tRepStart ?? t,
+      standingRatio !== undefined && !isNaN(standingRatio) ? standingRatio : fast.kneeRatio
+    );
+    newState.standingKneeRatioPeak = -Infinity;
   }
 
   if (newState.repWindow && inRep) {
@@ -727,11 +747,11 @@ function updateSquatState(
       }
     }
 
-    // Set tBottom at the BOTTOM->ASCENDING transition (ratio starts rising above BOTTOM_EXIT).
-    // This captures the full eccentric duration, rather than stopping the timer mid-descent.
+    // Set tBottom as soon as depth is reached so tempo reflects the full descent
+    // and the whole ascent, rather than starting the ascent clock after bottom exit.
     if (
-      currentState.fsm.phase === 'BOTTOM' &&
-      newState.fsm.phase === 'ASCENDING' &&
+      currentState.fsm.phase === 'DESCENDING' &&
+      newState.fsm.phase === 'BOTTOM' &&
       window.tBottom === null
     ) {
       window.tBottom = t;
@@ -746,6 +766,7 @@ function updateSquatState(
     if (romRatio < THRESHOLDS.MIN_REP_ROM || newState.repWindow.frameCount < THRESHOLDS.MIN_REP_FRAMES) {
       newState.repWindow = null;
       newState.fsm = resetFSMToStanding();
+      newState.standingKneeRatioPeak = fast.kneeRatio;
       return newState;
     }
 
@@ -778,6 +799,7 @@ function updateSquatState(
 
     newState.repWindow = null;
     newState.fsm = resetFSMToStanding();
+    newState.standingKneeRatioPeak = fast.kneeRatio;
   }
 
   // Clear feedback after 2 seconds

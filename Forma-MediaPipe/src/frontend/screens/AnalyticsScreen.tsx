@@ -1,10 +1,10 @@
 /**
- * AnalyticsScreen — Home-style progress dashboard
+ * AnalyticsScreen — Cyber-minimalist fitness dashboard
  *
  * Layout:
- *   1. Header: Title "Progress" + quick actions
- *   2. Overview segment + time range selector
- *   3. Overview cards: Form score trend, summary, activity, and history
+ *   1. Header: Title "Analytics" + date + avatar (matches HomeScreen style)
+ *   2. Time range selector (1W / 1M / 3M / 1Y / ALL)
+ *   3. Hero: NeonArc gauge showing Form Score + trend arrow
  *   4. Summary strip: Workouts | Streak | Total Reps
  *   5. Activity section: Volume + Workout Time cards
  *   6. Trends section: Form Score, Volume, Consistency charts
@@ -13,28 +13,21 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Animated, Dimensions, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CalendarDays, Timer, Trophy, Target, Activity, TrendingUp, BarChart3, Flame, Dumbbell, Zap, Settings, Check } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Timer, Trophy, Target, Activity, TrendingUp, BarChart3, Flame, Dumbbell, Zap } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useAnalytics, useWorkoutPreferences } from '../../backend/hooks';
+import { useAnalytics, useUser, useWorkoutPreferences } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { NeonArc } from '../components/ui/NeonArc';
 import { TimeRangeSelector, TIME_RANGE_OPTIONS } from '../components/ui/TimeRangeSelector';
 import { TrendChart } from '../components/ui/TrendChart';
 import type { RootStackParamList } from '../app/RootNavigator';
 
-const HOME_BACKGROUND_GRADIENT: readonly [string, string, string] = ['#353B40', '#252B30', '#11181D'];
-const HOME_CARD_GRADIENT: readonly [string, string, string] = ['#2A3136', '#222A30', '#192126'];
-const HOME_CARD_BORDER = 'rgba(255,255,255,0.085)';
-const HOME_CARD_SHADOW = 'rgba(0,0,0,0.22)';
-const HOME_VIOLET = '#7C5CFF';
-const HOME_GREEN = '#34D399';
-
-type ProgressTab = 'Overview' | 'Workouts' | 'Exercises';
+const { width: SCREEN_W } = Dimensions.get('window');
 
 const formatHeaderDate = (): string => {
   const d = new Date();
@@ -55,14 +48,13 @@ export const AnalyticsScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const insets = useSafeAreaInsets();
+  const { user: profileUser } = useUser();
 
   const { prefs } = useWorkoutPreferences();
   const WEEKLY_TARGET_MAP: Record<string, number> = { '1-2': 2, '3-4': 4, '5+': 6 };
   const weeklyTarget = WEEKLY_TARGET_MAP[prefs.weeklyTrainingTarget] ?? 4;
 
   const [selectedTimeRange, setSelectedTimeRange] = useState('1 week');
-  const [selectedProgressTab, setSelectedProgressTab] = useState<ProgressTab>('Overview');
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
   const { analytics, isLoading, error, refetch } = useAnalytics('1 week', weeklyTarget);
 
@@ -90,7 +82,7 @@ export const AnalyticsScreen: React.FC = () => {
 
   if (isLoading || !analytics) {
     return (
-      <LinearGradient colors={[...HOME_BACKGROUND_GRADIENT]} style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.loadingWrap}>
           <LoadingSkeleton variant="card" height={60} style={{ marginBottom: SPACING.md }} />
           <LoadingSkeleton variant="card" height={34} style={{ marginBottom: SPACING.md }} />
@@ -102,17 +94,17 @@ export const AnalyticsScreen: React.FC = () => {
           </View>
           <LoadingSkeleton variant="card" height={150} style={{ marginTop: SPACING.md }} />
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <LinearGradient colors={[...HOME_BACKGROUND_GRADIENT]} style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.errorWrap}>
           <ErrorState message={error} onRetry={() => refetch()} />
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -131,323 +123,323 @@ export const AnalyticsScreen: React.FC = () => {
   const totalMinutes = summary.totalDurationMinutes;
   const workoutHours = Math.floor(totalMinutes / 60);
   const workoutMins = totalMinutes % 60;
-  const completedWorkoutDays = analytics.weeklyBarData.filter(day => day.value > 0).length;
-  const consistencyGoalLabel = `${completedWorkoutDays} of ${weeklyTarget} workouts`;
 
   const periodLabel = TIME_RANGE_LABELS[selectedTimeRange] || 'THIS WEEK';
 
   return (
-    <LinearGradient colors={[...HOME_BACKGROUND_GRADIENT]} style={styles.container}>
+    <View style={styles.container}>
+      {/* ── HEADER (HomeScreen style) ────────────── */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/forma_purple_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerName}>ANALYTICS</Text>
+            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('UserProfile')}
+          activeOpacity={0.7}
+          style={styles.profileBtn}
+        >
+          {profileUser?.avatarUrl ? (
+            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
+          ) : profileUser ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.profileGradient}
+            >
+              <Text style={styles.profileInitial}>
+                {profileUser.displayName[0].toUpperCase()}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.profilePlaceholder} />
+          )}
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 18 }]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.headerName}>Progress</Text>
-              <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
-            </View>
-            <View style={styles.headerActions}>
-              <View style={styles.headerIconBtn}>
-                <CalendarDays size={18} color={COLORS.textSecondary} strokeWidth={1.7} />
-              </View>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.headerIconBtn}
-                onPress={() => navigation.navigate('Settings')}
-              >
-                <Settings size={18} color={COLORS.textSecondary} strokeWidth={1.7} />
-              </TouchableOpacity>
-            </View>
-          </View>
+          {/* ── TIME RANGE SELECTOR ──────────────── */}
+          <TimeRangeSelector
+            options={TIME_RANGE_OPTIONS}
+            selected={selectedTimeRange}
+            onSelect={handleTimeRangeChange}
+          />
 
-          <View style={styles.segmentedControl}>
-            {(['Overview', 'Workouts', 'Exercises'] as const).map((tab, index) => (
-              <React.Fragment key={tab}>
-                {index > 0 && <View style={styles.segmentDivider} />}
-                <TouchableOpacity
-                  style={[styles.segment, selectedProgressTab === tab && styles.segmentActive]}
-                  activeOpacity={0.75}
-                  onPress={() => setSelectedProgressTab(tab)}
-                >
-                  <Text style={[
-                    styles.segmentText,
-                    selectedProgressTab === tab && styles.segmentTextActive,
-                  ]}>
-                    {tab}
-                  </Text>
-                </TouchableOpacity>
-              </React.Fragment>
-            ))}
-          </View>
+          {/* ── HERO ARC GAUGE ─────────────────────── */}
+          <NeonArc
+            value={formScore}
+            label="Form score"
+            displayValue={hasData ? undefined : '--'}
+            size={SCREEN_W - SPACING.screenHorizontal * 2}
+            trendDirection={hasData ? summary.formTrendDirection : undefined}
+            trendPercent={hasData ? summary.formTrendPercent : undefined}
+          />
 
-          {selectedProgressTab === 'Overview' && (
-            <>
-              <TrendChart
-                title="FORM SCORE TREND"
-                icon={Activity}
-                data={analytics.formData}
-                unit=""
-                timeRange={selectedTimeRange}
-                headerValue={formScore}
-                accentColor={HOME_GREEN}
-                headerLabel="Average"
-                height={118}
-                compact
-              />
-
-              <TimeRangeSelector
-                options={TIME_RANGE_OPTIONS}
-                selected={selectedTimeRange}
-                onSelect={handleTimeRangeChange}
-              />
-
+          {/* ── SUMMARY STATS ROW (bento grid) ─────── */}
+          <View style={styles.statsRow}>
+            <View style={styles.statCell}>
               <LinearGradient
-                colors={[...HOME_CARD_GRADIENT]}
+                colors={[...CARD_GRADIENT_COLORS]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
-                style={styles.cardGradient}
+                style={styles.statGradient}
               >
-                <View style={styles.cardEdge}>
-                  <View style={styles.compactHeaderRow}>
-                    <View style={styles.sectionLabelRow}>
-                      <Target size={13} color={HOME_GREEN} strokeWidth={1.6} />
-                      <Text style={styles.sectionLabel}>CONSISTENCY</Text>
-                    </View>
-                    <Text style={styles.headerMetric}>{consistencyGoalLabel}</Text>
+                <View style={styles.statEdge}>
+                  <View style={styles.statIconRow}>
+                    <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
                   </View>
-                  <View style={styles.consistencyRow}>
-                    {analytics.weeklyBarData.map((day) => {
-                      const completed = day.value > 0;
-                      return (
-                        <View key={day.day} style={styles.consistencyDay}>
-                          <Text style={styles.consistencyLabel}>{day.day.slice(0, 1)}</Text>
-                          <View style={[
-                            styles.consistencyDot,
-                            completed ? styles.consistencyDotDone : styles.consistencyDotOpen,
-                          ]}>
-                            {completed && <Check size={9} color="#102019" strokeWidth={2.5} />}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
+                  <Text style={styles.statValue}>{summary.workoutCount}</Text>
+                  <Text style={styles.statLabel}>workouts</Text>
                 </View>
               </LinearGradient>
+            </View>
 
-              {summary.personalBest && (
-                <LinearGradient
-                  colors={[...HOME_CARD_GRADIENT]}
-                  start={CARD_GRADIENT_START}
-                  end={CARD_GRADIENT_END}
-                  style={styles.cardGradient}
-                >
-                  <View style={styles.cardEdge}>
-                    <View style={styles.compactHeaderRow}>
-                      <View style={styles.sectionLabelRow}>
-                        <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
-                        <Text style={styles.sectionLabel}>RECENT PERSONAL BESTS</Text>
-                      </View>
-                      <Text style={styles.headerLink}>View all</Text>
-                    </View>
-                    <View style={styles.pbListRow}>
-                      <View style={styles.pbIconBox}>
-                        <Trophy size={16} color={COLORS.yellow} strokeWidth={1.5} />
-                      </View>
-                      <View style={styles.pbInfo}>
-                        <Text style={styles.pbExerciseName}>{summary.personalBest.exercise}</Text>
-                        <Text style={styles.pbMostTrained}>1RM</Text>
-                      </View>
-                      <View style={styles.pbValueWrap}>
-                        <Text style={styles.pbValueSmall}>{summary.personalBest.weight} kg</Text>
-                        <Text style={styles.pbMostTrained}>Best lift</Text>
-                      </View>
-                    </View>
-                    {summary.mostTrainedExercise && (
-                      <View style={styles.pbListRow}>
-                        <View style={styles.pbIconBox}>
-                          <Dumbbell size={16} color={HOME_VIOLET} strokeWidth={1.5} />
-                        </View>
-                        <View style={styles.pbInfo}>
-                          <Text style={styles.pbExerciseName}>{summary.mostTrainedExercise}</Text>
-                          <Text style={styles.pbMostTrained}>Most trained</Text>
-                        </View>
-                        <Text style={styles.pbValueSmall}>{summary.workoutCount} workouts</Text>
-                      </View>
-                    )}
+            <View style={styles.statCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.statGradient}
+              >
+                <View style={styles.statEdge}>
+                  <View style={styles.statIconRow}>
+                    <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
                   </View>
-                </LinearGradient>
-              )}
-
-              <View style={styles.statsStrip}>
-                <View style={styles.stripStat}>
-                  <Text style={styles.stripLabel}>WORKOUTS</Text>
-                  <Text style={styles.stripValue}>{summary.workoutCount}</Text>
-                </View>
-                <View style={styles.stripDivider} />
-                <View style={styles.stripStat}>
-                  <Text style={styles.stripLabel}>STREAK</Text>
-                  <Text style={styles.stripValue}>{summary.streakDays || '--'}</Text>
-                </View>
-                <View style={styles.stripDivider} />
-                <View style={styles.stripStat}>
-                  <Text style={styles.stripLabel}>REPS</Text>
-                  <Text style={styles.stripValue}>{summary.totalReps}</Text>
-                </View>
-              </View>
-            </>
-          )}
-
-          {selectedProgressTab === 'Workouts' && (
-            <>
-              <TimeRangeSelector
-                options={TIME_RANGE_OPTIONS}
-                selected={selectedTimeRange}
-                onSelect={handleTimeRangeChange}
-              />
-              <View style={styles.statsRow}>
-                <View style={styles.statCell}>
-                  <LinearGradient colors={[...HOME_CARD_GRADIENT]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.statGradient}>
-                    <View style={styles.statEdge}>
-                      <Dumbbell size={14} color={HOME_VIOLET} strokeWidth={1.5} />
-                      <Text style={styles.statValue}>{summary.workoutCount}</Text>
-                      <Text style={styles.statLabel}>workouts</Text>
-                    </View>
-                  </LinearGradient>
-                </View>
-                <View style={styles.statCell}>
-                  <LinearGradient colors={[...HOME_CARD_GRADIENT]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.statGradient}>
-                    <View style={styles.statEdge}>
-                      <Timer size={14} color={HOME_VIOLET} strokeWidth={1.5} />
-                      <Text style={styles.statValue}>{workoutHours > 0 ? `${workoutHours}h` : `${workoutMins}m`}</Text>
-                      <Text style={styles.statLabel}>training time</Text>
-                    </View>
-                  </LinearGradient>
-                </View>
-                <View style={styles.statCell}>
-                  <LinearGradient colors={[...HOME_CARD_GRADIENT]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.statGradient}>
-                    <View style={styles.statEdge}>
-                      <Zap size={14} color={HOME_GREEN} strokeWidth={1.5} />
-                      <Text style={styles.statValue}>{summary.totalReps}</Text>
-                      <Text style={styles.statLabel}>total reps</Text>
-                    </View>
-                  </LinearGradient>
-                </View>
-              </View>
-              <LinearGradient colors={[...HOME_CARD_GRADIENT]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-                <View style={styles.cardEdge}>
-                  <View style={styles.compactHeaderRow}>
-                    <View style={styles.sectionLabelRow}>
-                      <BarChart3 size={13} color={HOME_VIOLET} strokeWidth={1.5} />
-                      <Text style={styles.sectionLabel}>DURATION</Text>
-                    </View>
-                    {selectedBarIndex !== null && analytics.weeklyBarData[selectedBarIndex].value > 0 && (
-                      <Text style={styles.weekBarTooltip}>
-                        {analytics.weeklyBarData[selectedBarIndex].day} · {analytics.weeklyBarData[selectedBarIndex].value}m
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.weekBarsRow}>
-                    {analytics.weeklyBarData.map((d, i) => {
-                      const maxVal = Math.max(...analytics.weeklyBarData.map(b => b.value), 1);
-                      const h = Math.max(3, (d.value / maxVal) * 64);
-                      const isSelected = selectedBarIndex === i;
-                      return (
-                        <TouchableOpacity
-                          key={d.day}
-                          style={styles.weekBarCol}
-                          activeOpacity={0.7}
-                          onPress={() => setSelectedBarIndex(isSelected ? null : i)}
-                        >
-                          <View style={styles.weekBarTrack}>
-                            <View style={[
-                              styles.weekBar,
-                              {
-                                height: h,
-                                opacity: d.value > 0 ? 0.5 + (d.value / maxVal) * 0.5 : 0.08,
-                                backgroundColor: isSelected ? '#A78BFA' : HOME_VIOLET,
-                              },
-                            ]} />
-                          </View>
-                          <Text style={[styles.weekBarLabel, isSelected && { color: COLORS.text }]}>{d.day.slice(0, 1)}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  <Text style={styles.statValue}>
+                    {summary.streakDays > 0 ? summary.streakDays : '\u2014'}
+                  </Text>
+                  <Text style={styles.statLabel}>
+                    {summary.streakDays > 0 ? 'day streak' : 'no streak'}
+                  </Text>
                 </View>
               </LinearGradient>
-            </>
-          )}
+            </View>
 
-          {selectedProgressTab === 'Exercises' && (
-            <>
-              <TimeRangeSelector options={TIME_RANGE_OPTIONS} selected={selectedTimeRange} onSelect={handleTimeRangeChange} />
+            <View style={styles.statCell}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.statGradient}
+              >
+                <View style={styles.statEdge}>
+                  <View style={styles.statIconRow}>
+                    <Zap size={14} color="#34D399" strokeWidth={1.5} />
+                  </View>
+                  <Text style={styles.statValue}>
+                    {summary.totalReps >= 1000
+                      ? `${(summary.totalReps / 1000).toFixed(1).replace(/\.0$/, '')}k`
+                      : summary.totalReps}
+                  </Text>
+                  <Text style={styles.statLabel}>total reps</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
+
+          {/* ═══════════════════════════════════════════
+              SECTION: ACTIVITY
+              ═══════════════════════════════════════════ */}
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={[styles.cardGradient, { marginTop: 10 }]}
+          >
+            <View style={styles.cardEdge}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.sectionLabelRow}>
+                  <Activity size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>ACTIVITY</Text>
+                </View>
+              </View>
+
+              <View style={styles.activityInnerRow}>
+                <View style={styles.activityInnerCell}>
+                  <View style={styles.activityIconRow}>
+                    <Trophy size={14} color={COLORS.yellow} strokeWidth={1.5} />
+                  </View>
+                  <Text style={styles.activityCardValue}>{hasData ? formattedVolume : '--'}</Text>
+                  <Text style={styles.activityCardUnit}>KG volume</Text>
+                </View>
+                <View style={styles.activityDivider} />
+                <View style={styles.activityInnerCell}>
+                  <View style={styles.activityIconRow}>
+                    <Timer size={14} color={COLORS.accent} strokeWidth={1.5} />
+                  </View>
+                  <Text style={styles.activityCardValue}>
+                    {hasData ? (workoutHours > 0 ? `${workoutHours}h ${workoutMins}m` : `${workoutMins}m`) : '--'}
+                  </Text>
+                  <Text style={styles.activityCardUnit}>{periodLabel.toLowerCase()}</Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+
+          {/* ═══════════════════════════════════════════
+              SECTION: TRENDS (self-labeled via TrendChart headers)
+              ═══════════════════════════════════════════ */}
+
+          {/* ── FORM SCORE TREND CHART ─────────────── */}
+          <View style={{ marginTop: 20 }}>
+            <TrendChart
+              title="FORM SCORE"
+              icon={Activity}
+              data={analytics.formData}
+              unit="pts"
+              timeRange={selectedTimeRange}
+            />
+          </View>
+
+          {/* ── VOLUME TREND CHART ─────────────────── */}
+          <TrendChart
+            title="VOLUME"
+            icon={TrendingUp}
+            data={analytics.strengthData}
+            unit="KG"
+            formatValue={(v) => v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(v))}
+            timeRange={selectedTimeRange}
+          />
+
+          {/* ── CONSISTENCY TREND CHART ────────────── */}
+          {(() => {
+            const vals = analytics.consistencyData.values;
+            const avgConsistency = vals.length > 0
+              ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)
+              : 0;
+            return (
               <TrendChart
-                title="VOLUME"
-                icon={TrendingUp}
-                data={analytics.strengthData}
-                unit="KG"
-                formatValue={(v) => v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(v))}
+                title="CONSISTENCY"
+                icon={Target}
+                data={analytics.consistencyData}
+                unit="%"
                 timeRange={selectedTimeRange}
-                accentColor={HOME_VIOLET}
-                height={126}
-                compact
+                headerValue={avgConsistency}
               />
-              <LinearGradient colors={[...HOME_CARD_GRADIENT]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-                <View style={styles.cardEdge}>
-                  <View style={styles.compactHeaderRow}>
-                    <View style={styles.sectionLabelRow}>
-                      <Activity size={13} color={HOME_VIOLET} strokeWidth={1.5} />
-                      <Text style={styles.sectionLabel}>ACTIVITY</Text>
-                    </View>
-                  </View>
-                  <View style={styles.activityInnerRow}>
-                    <View style={styles.activityInnerCell}>
-                      <Trophy size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                      <Text style={styles.activityCardValue}>{hasData ? formattedVolume : '--'}</Text>
-                      <Text style={styles.activityCardUnit}>KG volume</Text>
-                    </View>
-                    <View style={styles.activityDivider} />
-                    <View style={styles.activityInnerCell}>
-                      <Dumbbell size={14} color={HOME_GREEN} strokeWidth={1.5} />
-                      <Text style={styles.activityCardValue}>{summary.avgRepsPerWorkout}</Text>
-                      <Text style={styles.activityCardUnit}>avg reps/workout</Text>
-                    </View>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════════
+              PERSONAL BEST CARD
+              ═══════════════════════════════════════════ */}
+          {summary.personalBest && (
+            <LinearGradient
+              colors={['#1A1510', '#111008', '#0E0C07']}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={[styles.cardGradient, { marginBottom: 20 }]}
+            >
+              <View style={styles.pbEdge}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.sectionLabelRow}>
+                    <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
+                    <Text style={styles.sectionLabel}>PERSONAL BEST</Text>
                   </View>
                 </View>
-              </LinearGradient>
-              {summary.personalBest && (
-                <LinearGradient colors={[...HOME_CARD_GRADIENT]} start={CARD_GRADIENT_START} end={CARD_GRADIENT_END} style={styles.cardGradient}>
-                  <View style={styles.cardEdge}>
-                    <View style={styles.pbListRow}>
-                      <View style={styles.pbIconBox}>
-                        <Trophy size={16} color={COLORS.yellow} strokeWidth={1.5} />
-                      </View>
-                      <View style={styles.pbInfo}>
-                        <Text style={styles.pbExerciseName}>{summary.personalBest.exercise}</Text>
-                        <Text style={styles.pbMostTrained}>Personal best</Text>
-                      </View>
-                      <Text style={styles.pbValueSmall}>{summary.personalBest.weight} kg</Text>
-                    </View>
+
+                <View style={styles.pbTopRow}>
+                  <Trophy size={20} color={COLORS.yellow} strokeWidth={1.5} />
+                  <View style={styles.pbInfo}>
+                    <Text style={styles.pbExerciseName}>{summary.personalBest.exercise}</Text>
+                    {summary.mostTrainedExercise && (
+                      <Text style={styles.pbMostTrained}>Most trained: {summary.mostTrainedExercise}</Text>
+                    )}
                   </View>
-                </LinearGradient>
-              )}
-            </>
+                  <View style={styles.pbValueWrap}>
+                    <Text style={styles.pbValue}>{summary.personalBest.weight}</Text>
+                    <Text style={styles.pbUnit}>KG</Text>
+                  </View>
+                </View>
+              </View>
+            </LinearGradient>
           )}
+
+          {/* ═══════════════════════════════════════════
+              WORKOUT DURATION BARS
+              ═══════════════════════════════════════════ */}
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardEdge}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.sectionLabelRow}>
+                  <BarChart3 size={13} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.sectionLabel}>DURATION</Text>
+                </View>
+              </View>
+              <View style={styles.weekTitleRow}>
+                <Text style={styles.weekTitle}>{periodLabel}</Text>
+                {selectedBarIndex !== null && analytics.weeklyBarData[selectedBarIndex].value > 0 && (
+                  <Text style={styles.weekBarTooltip}>
+                    {analytics.weeklyBarData[selectedBarIndex].day} — {analytics.weeklyBarData[selectedBarIndex].value}m
+                  </Text>
+                )}
+              </View>
+              <View style={styles.weekBarsRow}>
+                {analytics.weeklyBarData.map((d, i) => {
+                  const maxVal = Math.max(...analytics.weeklyBarData.map(b => b.value), 1);
+                  const h = Math.max(3, (d.value / maxVal) * 56);
+                  const isSelected = selectedBarIndex === i;
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.weekBarCol}
+                      activeOpacity={0.7}
+                      onPress={() => setSelectedBarIndex(isSelected ? null : i)}
+                    >
+                      <View style={styles.weekBarTrack}>
+                        <View
+                          style={[
+                            styles.weekBar,
+                            {
+                              height: h,
+                              opacity: d.value > 0 ? 0.5 + (d.value / maxVal) * 0.5 : 0.08,
+                              backgroundColor: isSelected ? '#A78BFA' : COLORS.accent,
+                            },
+                          ]}
+                        />
+                      </View>
+                      <Text style={[
+                        styles.weekBarLabel,
+                        isSelected && { color: COLORS.text },
+                      ]}>{d.day.slice(0, 1)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </LinearGradient>
 
         </Animated.View>
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.background,
   },
   loadingWrap: {
     flex: 1,
@@ -463,127 +455,133 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: 160,
   },
 
+  /* ── Header (HomeScreen style) ────────────── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 13,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 55,
+    height: 55,
+  },
+  headerTextWrap: {
+    gap: 1,
   },
   headerSubtitle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textTertiary,
     letterSpacing: 0.3,
-    marginTop: 2,
   },
   headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: -0.35,
+    letterSpacing: -0.4,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  headerIconBtn: {
-    width: 31,
-    height: 31,
-    borderRadius: 15.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 39,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: HOME_CARD_BORDER,
-    backgroundColor: 'rgba(9, 14, 18, 0.32)',
+  profileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     overflow: 'hidden',
-    marginBottom: 12,
   },
-  segment: {
-    flex: 1,
-    height: '100%',
+  profileImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  profileGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentActive: {
-    backgroundColor: 'rgba(255,255,255,0.065)',
+  profilePlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#27272A',
   },
-  segmentText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11.5,
-    color: COLORS.textSecondary,
-    letterSpacing: -0.05,
-  },
-  segmentTextActive: {
-    color: HOME_VIOLET,
-  },
-  segmentDivider: {
-    width: 1,
-    height: 17,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  profileInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 
+  /* ── Stats Row (bento grid) ─────────────── */
   statsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 10,
   },
   statCell: {
     flex: 1,
   },
   statGradient: {
-    borderRadius: 8,
-    shadowColor: HOME_CARD_SHADOW,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 2,
+    borderRadius: 18,
   },
   statEdge: {
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: HOME_CARD_BORDER,
-    paddingHorizontal: 12,
-    paddingVertical: 13,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
   },
   statIconRow: {
-    marginBottom: 8,
+    marginBottom: 10,
   },
   statValue: {
     fontFamily: FONTS.display.bold,
-    fontSize: 22,
+    fontSize: 24,
     color: COLORS.text,
     letterSpacing: -1,
     lineHeight: 28,
   },
   statLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
-    color: COLORS.textSecondary,
+    fontSize: 11,
+    color: COLORS.textTertiary,
     marginTop: 2,
   },
 
+  /* ── Card Header Row (matches HomeScreen) ─── */
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  compactHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.015)',
+    marginHorizontal: -16,
+    marginTop: -16,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopLeftRadius: 17,
+    borderTopRightRadius: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -591,51 +589,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11.75,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.45,
-  },
-  headerMetric: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
-    color: COLORS.textSecondary,
-  },
-  headerLink: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 10.5,
-    color: HOME_VIOLET,
-  },
-  consistencyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 3,
-    paddingTop: 2,
-  },
-  consistencyDay: {
-    alignItems: 'center',
-    gap: 7,
-  },
-  consistencyLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textSecondary,
-  },
-  consistencyDot: {
-    width: 17,
-    height: 17,
-    borderRadius: 8.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  consistencyDotDone: {
-    backgroundColor: HOME_GREEN,
-  },
-  consistencyDotOpen: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-    backgroundColor: 'rgba(255,255,255,0.025)',
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 2,
   },
 
   /* ── Activity Card (Volume + Time) ─────────── */
@@ -670,25 +627,20 @@ const styles = StyleSheet.create({
 
   /* ── Shared Gradient Card ────────────────── */
   cardGradient: {
-    borderRadius: 8,
-    marginBottom: 16,
-    shadowColor: HOME_CARD_SHADOW,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 2,
+    borderRadius: 18,
   },
   cardEdge: {
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: HOME_CARD_BORDER,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     padding: 16,
   },
 
+  /* ── Personal Best Card ────────────────────── */
   pbEdge: {
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: HOME_CARD_BORDER,
+    borderColor: 'rgba(245, 166, 35, 0.12)',
     padding: 16,
   },
   pbTopRow: {
@@ -700,25 +652,9 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  pbListRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 7,
-  },
-  pbIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-  },
   pbExerciseName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 13,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
@@ -729,12 +665,6 @@ const styles = StyleSheet.create({
   },
   pbValueWrap: {
     alignItems: 'flex-end',
-  },
-  pbValueSmall: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12.5,
-    color: COLORS.text,
-    letterSpacing: -0.2,
   },
   pbValue: {
     fontFamily: FONTS.display.bold,
@@ -748,42 +678,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
     letterSpacing: 1,
-  },
-  statsStrip: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderWidth: 1,
-    borderColor: HOME_CARD_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.026)',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  stripStat: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 3,
-  },
-  stripDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  stripLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 8.5,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.45,
-    marginBottom: 3,
-  },
-  stripValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-    lineHeight: 20,
   },
 
   /* ── Week Bars Card ──────────────────────── */
@@ -821,12 +715,12 @@ const styles = StyleSheet.create({
   weekBar: {
     width: '100%',
     borderRadius: 1.5,
-    backgroundColor: HOME_VIOLET,
+    backgroundColor: COLORS.accent,
   },
   weekBarTooltip: {
     fontFamily: FONTS.mono.regular,
     fontSize: 10,
-    color: HOME_VIOLET,
+    color: COLORS.accent,
     letterSpacing: 0.5,
   },
   weekBarLabel: {
