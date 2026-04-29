@@ -80,7 +80,7 @@ export const SocialScreen: React.FC = memo(() => {
             <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
+              colors={['#7C5CFF', '#6746E8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.profileGradient}
@@ -109,7 +109,7 @@ export const SocialScreen: React.FC = memo(() => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
@@ -117,9 +117,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 4,
-    paddingBottom: 15,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   headerLeft: {
     flexDirection: 'row',

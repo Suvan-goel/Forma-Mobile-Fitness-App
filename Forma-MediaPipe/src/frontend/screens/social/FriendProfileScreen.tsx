@@ -121,7 +121,7 @@ export const FriendProfileScreen: React.FC = memo(() => {
                 <View style={[
                   styles.avatarOuter,
                   Platform.OS === 'ios' && {
-                    shadowColor: '#8B5CF6',
+                    shadowColor: '#7C5CFF',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.25,
                     shadowRadius: 12,

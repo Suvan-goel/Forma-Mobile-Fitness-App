@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   googleWrapper: {
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 20,

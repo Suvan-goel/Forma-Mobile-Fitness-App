@@ -279,7 +279,7 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
       <View style={styles.progressTrack}>
         <Animated.View style={[styles.progressFill, { width: progressBarWidth }]}>
           <LinearGradient
-            colors={['#8B5CF6', '#A78BFA']}
+            colors={['#7C5CFF', '#A78BFA']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={StyleSheet.absoluteFill}

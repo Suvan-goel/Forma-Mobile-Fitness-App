@@ -160,7 +160,7 @@ export const UserProfileScreen: React.FC = () => {
                       <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
                     ) : (
                       <LinearGradient
-                        colors={['#9F75FF', '#7C3AED']}
+                        colors={['#9F75FF', '#6746E8']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.avatarGradient}
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
     padding: 2,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.35,
         shadowRadius: 14,

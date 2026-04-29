@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 92, 246, 0.03)',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOpacity: 0.13,
         shadowRadius: 48,
         shadowOffset: { width: 0, height: 0 },
@@ -450,11 +450,11 @@ const styles = StyleSheet.create({
   scanCore: {
     width: 2,
     height: '100%',
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#7C5CFF',
     borderRadius: 1,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOpacity: 0.9,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 0 },
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOpacity: 0.9,
         shadowRadius: 4,
         shadowOffset: { width: 0, height: 0 },

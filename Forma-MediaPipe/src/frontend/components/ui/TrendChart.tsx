@@ -9,13 +9,13 @@ import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G } from 'react-native-svg';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS } from '../../constants/theme';
 
 const SCREEN_W = Dimensions.get('window').width;
 
 interface TrendChartProps {
   title: string;
-  icon: React.ComponentType<{ size: number; color: string; strokeWidth: number }>;
+  icon?: React.ComponentType<{ size: number; color: string; strokeWidth: number }>;
   data: { values: number[]; dates: Date[] };
   unit?: string;
   height?: number;
@@ -24,6 +24,10 @@ interface TrendChartProps {
   /** When provided, shown in the card header by default (period average).
    *  Tapping a data point temporarily shows that point's value instead. */
   headerValue?: number;
+  /** Override the line/area accent (default = COLORS.accent purple). */
+  lineColor?: string;
+  /** Header right-side label (defaults to "Average"). */
+  averageLabel?: string;
 }
 
 // ── Catmull-Rom → Cubic Bezier conversion ───────────────────────
@@ -105,10 +109,13 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   formatValue,
   timeRange,
   headerValue,
+  lineColor,
+  averageLabel,
 }) => {
+  const accent = lineColor ?? COLORS.accent;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
-  const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - SPACING.xl * 2;
+  const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - SPACING.md * 2;
   const padLeft = 32;
   const padRight = 8;
   const padTop = 26;
@@ -229,16 +236,19 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Icon size={14} color={COLORS.accent} strokeWidth={1.5} />
+              {Icon ? <Icon size={14} color={accent} strokeWidth={1.5} /> : null}
               <Text style={styles.headerTitle}>{title}</Text>
             </View>
             <View style={styles.headerRight}>
+              {averageLabel ? (
+                <Text style={styles.averageLabel}>{averageLabel}</Text>
+              ) : null}
               <View style={styles.avgRow}>
-                <Text style={styles.currentValue}>{displayValue}</Text>
+                <Text style={[styles.currentValue, { color: accent }]}>{displayValue}</Text>
                 {unit ? <Text style={styles.unitText}>{unit}</Text> : null}
               </View>
               {selectedDisplayValue != null && (
-                <Text style={styles.selectedPointText}>
+                <Text style={[styles.selectedPointText, { color: accent }]}>
                   {selectedDisplayValue}{unit ? ` ${unit}` : ''} · {selectedDateLabel}
                 </Text>
               )}
@@ -258,8 +268,8 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                   y2={padTop + graphH}
                   gradientUnits="userSpaceOnUse"
                 >
-                  <Stop offset="0" stopColor="#8B5CF6" stopOpacity="0.25" />
-                  <Stop offset="1" stopColor="#8B5CF6" stopOpacity="0" />
+                  <Stop offset="0" stopColor={accent} stopOpacity="0.25" />
+                  <Stop offset="1" stopColor={accent} stopOpacity="0" />
                 </SvgGradient>
                 <ClipPath id="chartClip">
                   <Rect x={0} y={padTop} width={chartWidth} height={graphH} />
@@ -273,7 +283,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                 {/* Line */}
                 <Path
                   d={svgContent.linePath}
-                  stroke={COLORS.accent}
+                  stroke={accent}
                   strokeWidth={2.5}
                   fill="none"
                   strokeLinecap="round"
@@ -293,7 +303,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                           ? 4
                           : 0
                     }
-                    fill={COLORS.accent}
+                    fill={accent}
                   />
                 ))}
 
@@ -303,7 +313,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                     cx={activePoint.x}
                     cy={activePoint.y}
                     r={8}
-                    fill="rgba(139,92,246,0.2)"
+                    fill={accent + '33'}
                   />
                 )}
               </G>
@@ -350,31 +360,31 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 
 const styles = StyleSheet.create({
   cardOuter: {
-    borderRadius: 19,
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: 14,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
       },
-      android: { elevation: 4 },
+      android: { elevation: 3 },
     }),
   },
   cardGradient: {
-    borderRadius: 19,
+    borderRadius: CARD_RADIUS,
   },
   cardGlassEdge: {
-    borderRadius: 19,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: SPACING.xl,
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    padding: SPACING.md,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 12,
   },
@@ -384,15 +394,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerTitle: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.semibold,
     fontSize: 11,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
+    letterSpacing: 1.6,
   },
   headerRight: {
     flexDirection: 'column',
     alignItems: 'flex-end',
     gap: 2,
+  },
+  averageLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10.5,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.4,
   },
   avgRow: {
     flexDirection: 'row',
@@ -406,17 +422,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   currentValue: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 28,
+    fontFamily: FONTS.display.bold,
+    fontSize: 26,
     color: COLORS.text,
-    lineHeight: 34,
-    letterSpacing: -1,
+    lineHeight: 30,
+    letterSpacing: -0.8,
   },
   unitText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textTertiary,
-    letterSpacing: 1,
+    letterSpacing: 0.6,
   },
   emptyChart: {
     alignItems: 'center',

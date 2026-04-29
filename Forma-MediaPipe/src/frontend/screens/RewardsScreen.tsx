@@ -218,7 +218,7 @@ export const RewardsScreen: React.FC = () => {
             <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
+              colors={['#7C5CFF', '#6746E8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.profileGradient}
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   heroValue: {
     fontFamily: FONTS.display.bold,
     fontSize: 80,
-    color: '#8B5CF6',
+    color: '#7C5CFF',
     letterSpacing: -2,
     lineHeight: 88,
     ...Platform.select({
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.2,
         shadowRadius: 15,

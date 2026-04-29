@@ -1,13 +1,23 @@
+/**
+ * RecordLandingScreen — Capture
+ *
+ * Sections (matches design reference):
+ *   1. Header: "Capture" + date + bell icon
+ *   2. Current workout / In-progress card with Start Workout button
+ *   3. Tools card (Choose Template, Exercise Guide, Camera Setup)
+ *   4. Recent templates horizontal list
+ */
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
   Text,
   TouchableOpacity,
-  Platform,
   Modal,
   Image,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -20,19 +30,30 @@ import {
   Pause,
   Play,
   Flag,
-  Zap,
   ChevronRight,
-  Dumbbell,
   ArrowRight,
   BookOpen,
+  Camera,
+  Bell,
+  Clock,
+  Dumbbell,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import {
+  COLORS,
+  SPACING,
+  FONTS,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+} from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 import { CameraSetupGuide } from './CameraSetupGuide';
 
 import type { RecordStackParamList, RootStackParamList } from '../app/RootNavigator';
-import { useUser } from '../../backend/hooks';
+import { useCustomTemplates } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
@@ -46,9 +67,7 @@ const formatStopwatch = (totalSeconds: number) => {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  return `${h.toString().padStart(2, '0')}:${m
-    .toString()
-    .padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
 const getTimerParts = (totalSeconds: number) => {
@@ -64,18 +83,21 @@ const getTimerParts = (totalSeconds: number) => {
   ];
 };
 
-const formatHeaderDate = (): string => {
+const formatDateLine = (): string => {
   const d = new Date();
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
 };
+
+const estimateTemplateDuration = (exercises: number): number => Math.max(20, exercises * 8);
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
-  const { user: profileUser } = useUser();
+  const { templates } = useCustomTemplates();
   const {
     workoutInProgress,
     sets,
@@ -86,12 +108,9 @@ export const RecordLandingScreen: React.FC = () => {
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
-  const cardGap = 0;
-  const bottomPadding = navigationBarHeight + cardGap;
 
-  // ── Entrance animations ──
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(24)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -100,7 +119,6 @@ export const RecordLandingScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  // ── Camera Setup Guide (first-visit gate) ──
   const [showSetupGuide, setShowSetupGuide] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -124,17 +142,10 @@ export const RecordLandingScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [workoutInProgress, workoutPaused, setWorkoutElapsedSeconds]);
 
-  const handleStartWorkout = () => {
-    navigation.navigate('CurrentWorkout');
-  };
-
-  const handleResumeWorkout = () => {
-    navigation.navigate('CurrentWorkout');
-  };
-
-  const handleChooseTemplate = () => {
-    navigation.navigate('WorkoutTemplates');
-  };
+  const handleStartWorkout = () => navigation.navigate('CurrentWorkout');
+  const handleResumeWorkout = () => navigation.navigate('CurrentWorkout');
+  const handleChooseTemplate = () => navigation.navigate('WorkoutTemplates');
+  const handleCameraSetup = () => setShowSetupGuide(true);
 
   const handleDiscardWorkout = () => {
     showAlert(
@@ -147,16 +158,11 @@ export const RecordLandingScreen: React.FC = () => {
     );
   };
 
-  const handlePauseWorkout = () => {
-    setWorkoutPaused((p) => !p);
-  };
+  const handlePauseWorkout = () => setWorkoutPaused((p) => !p);
 
   const handleFinishWorkout = () => {
     if (sets.length === 0) {
-      showAlert(
-        'No sets recorded',
-        'Add at least one set before ending the workout.'
-      );
+      showAlert('No sets recorded', 'Add at least one set before ending the workout.');
       return;
     }
     const duration = formatStopwatch(workoutElapsedSeconds);
@@ -168,17 +174,10 @@ export const RecordLandingScreen: React.FC = () => {
     const category = sets[0]?.exerciseName || 'General';
 
     navigation.navigate('SaveWorkout', {
-      workoutData: {
-        category,
-        duration,
-        totalSets,
-        totalReps,
-        avgFormScore,
-      },
+      workoutData: { category, duration, totalSets, totalReps, avgFormScore },
     });
   };
 
-  // Show camera setup guide on first visit (Modal covers the tab bar)
   if (showSetupGuide === null) return <View style={styles.container} />;
   if (showSetupGuide) {
     return (
@@ -188,678 +187,617 @@ export const RecordLandingScreen: React.FC = () => {
     );
   }
 
+  const recentTemplates = templates.slice(0, 6);
+
   return (
     <View style={styles.container}>
-      {/* ── HEADER (HomeScreen style) ────────────── */}
+      {/* ── HEADER ──────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerName}>CAPTURE</Text>
-            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
-          </View>
+        <View style={{ flex: 1 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Capture</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => rootNavigation.navigate('UserProfile')}
-          activeOpacity={0.7}
-          style={styles.profileBtn}
-        >
-          {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
-          ) : profileUser ? (
-            <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileGradient}
-            >
-              <Text style={styles.profileInitial}>
-                {profileUser.displayName[0].toUpperCase()}
-              </Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.profilePlaceholder} />
-          )}
-        </TouchableOpacity>
+        <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
+          <TouchableOpacity
+            onPress={() => rootNavigation.navigate('Settings')}
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Bell size={18} color={COLORS.textSecondary} strokeWidth={1.6} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* ── CONTENT ────────────────────────────── */}
-      <Animated.View
-        style={[
-          styles.contentArea,
-          { paddingBottom: bottomPadding },
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-          workoutInProgress && styles.contentCentered,
-        ]}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: navigationBarHeight }]}
+        showsVerticalScrollIndicator={false}
       >
-        {workoutInProgress ? (
-          /* ── Active Workout Card ── */
-          <View style={styles.activeCardOuter}>
-            <LinearGradient
-              colors={['#1A1625', '#13101D', '#0D0B14']}
-              start={{ x: 0.2, y: 0 }}
-              end={{ x: 0.8, y: 1 }}
-              style={[styles.cardGradient, { flex: undefined }]}
-            >
-              <View style={styles.activeGlassEdge}>
-                {/* ── Top bar: status + pause ── */}
-                <View style={styles.activeTopBar}>
-                  <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
-                    <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
-                    <Text style={[styles.statusPillText, workoutPaused && styles.statusPillTextPaused]}>
-                      {workoutPaused ? 'PAUSED' : 'ACTIVE'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.pauseBtn, workoutPaused && styles.pauseBtnActive]}
-                    onPress={handlePauseWorkout}
-                    activeOpacity={0.7}
-                  >
-                    {workoutPaused ? (
-                      <Play size={14} color={COLORS.text} strokeWidth={2} />
-                    ) : (
-                      <Pause size={14} color={COLORS.textSecondary} strokeWidth={2} />
-                    )}
-                  </TouchableOpacity>
-                </View>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          <Text style={styles.dateLine}>{formatDateLine()}</Text>
 
-                {/* ── Timer + inline stats ── */}
-                <TouchableOpacity
-                  style={styles.activeCardContent}
-                  onPress={handleResumeWorkout}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.timerDisplay}>
-                    {getTimerParts(workoutElapsedSeconds).map((part, i) => (
-                      <MonoText
-                        key={i}
-                        bold={part !== ':'}
-                        style={part === ':' ? styles.timerColon : styles.timerDigit}
-                      >
-                        {part}
-                      </MonoText>
-                    ))}
+          {workoutInProgress ? (
+            /* ── ACTIVE WORKOUT CARD ── */
+            <View style={styles.activeOuter}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.activeGradient}
+              >
+                <View style={styles.activeEdge}>
+                  <View style={styles.cardLabelRow}>
+                    <Text style={styles.cardLabel}>CURRENT WORKOUT</Text>
+                    <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
+                      <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
+                      <Text style={[styles.statusPillText, workoutPaused && styles.statusPillTextPaused]}>
+                        {workoutPaused ? 'PAUSED' : 'ACTIVE'}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.statsRow}>
-                    <MonoText bold style={styles.statValue}>{sets.length}</MonoText>
-                    <Text style={styles.statLabel}>{sets.length === 1 ? 'set' : 'sets'}</Text>
-                    <View style={styles.statDot} />
-                    <MonoText bold style={styles.statValue}>
-                      {sets.reduce((sum, set) => sum + set.reps, 0)}
-                    </MonoText>
-                    <Text style={styles.statLabel}>reps</Text>
-                  </View>
-                </TouchableOpacity>
 
-                {/* ── Bottom actions ── */}
-                <View style={styles.workoutActions}>
-                  <TouchableOpacity
-                    style={styles.discardBtn}
-                    onPress={handleDiscardWorkout}
-                    activeOpacity={0.7}
-                  >
-                    <Trash2 size={15} color="#EF4444" strokeWidth={1.5} />
-                  </TouchableOpacity>
+                  <View style={styles.activeBody}>
+                    <View style={styles.activeBodyText}>
+                      <Text style={styles.activeWorkoutName}>In Progress</Text>
+                      <View style={styles.timerDisplay}>
+                        {getTimerParts(workoutElapsedSeconds).map((part, i) => (
+                          <MonoText
+                            key={i}
+                            bold={part !== ':'}
+                            style={part === ':' ? styles.timerColon : styles.timerDigit}
+                          >
+                            {part}
+                          </MonoText>
+                        ))}
+                      </View>
+                      <View style={styles.activeMetaRow}>
+                        <View style={styles.metaIconRow}>
+                          <Dumbbell size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>{sets.length} sets</Text>
+                        </View>
+                        <View style={styles.metaIconRow}>
+                          <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>
+                            {sets.reduce((sum, set) => sum + set.reps, 0)} reps
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.pauseBtn, workoutPaused && styles.pauseBtnActive]}
+                      onPress={handlePauseWorkout}
+                      activeOpacity={0.7}
+                    >
+                      {workoutPaused ? (
+                        <Play size={16} color={COLORS.text} strokeWidth={2} />
+                      ) : (
+                        <Pause size={16} color={COLORS.textSecondary} strokeWidth={2} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
 
                   <TouchableOpacity
                     onPress={handleResumeWorkout}
                     activeOpacity={0.85}
-                    style={styles.resumeBtnOuter}
+                    style={styles.startBtnOuter}
                   >
                     <LinearGradient
-                      colors={['rgba(139, 92, 246, 0.5)', 'rgba(124, 58, 237, 0.25)']}
+                      colors={['#7C5CFF', '#6746E8']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={styles.resumeGradient}
+                      style={styles.startBtn}
                     >
-                      <Text style={styles.resumeBtnText}>Open workout</Text>
-                      <ArrowRight size={14} color={COLORS.text} strokeWidth={2} />
+                      <Text style={styles.startBtnText}>Open workout</Text>
+                      <ArrowRight size={14} color="#FFFFFF" strokeWidth={2.5} />
                     </LinearGradient>
                   </TouchableOpacity>
 
+                  <View style={styles.activeFooterRow}>
+                    <TouchableOpacity
+                      style={styles.footerBtn}
+                      onPress={handleDiscardWorkout}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={13} color="#EF4444" strokeWidth={1.6} />
+                      <Text style={[styles.footerBtnText, { color: '#EF4444' }]}>Discard</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.footerBtn}
+                      onPress={handleFinishWorkout}
+                      activeOpacity={0.7}
+                    >
+                      <Flag size={13} color={COLORS.green} strokeWidth={1.6} />
+                      <Text style={[styles.footerBtnText, { color: COLORS.green }]}>Finish</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
+          ) : (
+            /* ── CURRENT WORKOUT (idle) CARD ── */
+            <View style={styles.activeOuter}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.activeGradient}
+              >
+                <View style={styles.activeEdge}>
+                  <Text style={styles.cardLabel}>CURRENT WORKOUT</Text>
+                  <View style={styles.idleBody}>
+                    <View style={styles.idleTextWrap}>
+                      <Text style={styles.idleTitle}>Free Session</Text>
+                      <View style={styles.idleMetaRow}>
+                        <View style={styles.metaIconRow}>
+                          <Dumbbell size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>Free-form</Text>
+                        </View>
+                        <View style={styles.metaIconRow}>
+                          <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>~30 min</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.bodyVisual}>
+                      <LinearGradient
+                        colors={['rgba(124,92,255,0.18)', 'rgba(124,92,255,0.04)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <Dumbbell size={28} color={COLORS.accent} strokeWidth={1.5} />
+                    </View>
+                  </View>
+
                   <TouchableOpacity
-                    style={styles.finishBtn}
-                    onPress={handleFinishWorkout}
-                    activeOpacity={0.7}
+                    onPress={handleStartWorkout}
+                    activeOpacity={0.85}
+                    style={styles.startBtnOuter}
                   >
-                    <Flag size={15} color="#34D399" strokeWidth={1.5} />
+                    <LinearGradient
+                      colors={['#7C5CFF', '#6746E8']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.startBtn}
+                    >
+                      <Play size={14} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
+                      <Text style={styles.startBtnText}>Start Workout</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 </View>
-              </View>
-            </LinearGradient>
-          </View>
-        ) : (
-          <>
-            {/* ── Primary CTA: New Session ── */}
-            <TouchableOpacity
-              onPress={handleStartWorkout}
-              activeOpacity={0.85}
-              style={styles.heroCta}
-            >
-              <LinearGradient
-                colors={['rgba(139, 92, 246, 0.55)', 'rgba(124, 58, 237, 0.25)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.heroGradient}
-              >
-                <View style={styles.heroContent}>
-                  <Zap size={32} color="#FFFFFF" strokeWidth={2} />
-                  <Text style={styles.heroTitle}>New Session</Text>
-                  <Text style={styles.heroDesc}>
-                    Start a free-form workout with{'\n'}real-time AI form analysis
-                  </Text>
-                </View>
-                <View style={styles.heroFooter}>
-                  <Text style={styles.heroAction}>Start workout</Text>
-                  <ChevronRight size={16} color={COLORS.accent} strokeWidth={2} />
-                </View>
               </LinearGradient>
-            </TouchableOpacity>
-
-            {/* ── Secondary: Templates ── */}
-            <TouchableOpacity
-              onPress={handleChooseTemplate}
-              activeOpacity={0.85}
-              style={styles.secondaryCard}
-            >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.secondaryGradient}
-              >
-                <View style={styles.secondaryGlass}>
-                  <View style={styles.secondaryContent}>
-                    <LayoutTemplate size={24} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.secondaryTitle}>Templates</Text>
-                    <Text style={styles.secondaryDesc}>
-                      Pick from your saved routines
-                    </Text>
-                  </View>
-                  <View style={styles.secondaryFooter}>
-                    <Text style={styles.secondaryAction}>Browse templates</Text>
-                    <ChevronRight size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
-                  </View>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* ── Exercise Tutorials ── */}
-            <TouchableOpacity
-              onPress={() => rootNavigation.navigate('Tutorials')}
-              activeOpacity={0.7}
-              style={styles.tutorialsCard}
-            >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.tutorialsGradient}
-              >
-                <View style={styles.tutorialsEdge}>
-                  <View style={styles.tutorialsRow}>
-                    <BookOpen size={16} color={COLORS.accent} strokeWidth={1.5} />
-                    <View style={styles.tutorialsTextWrap}>
-                      <Text style={styles.tutorialsTitle}>Exercise Tutorials</Text>
-                      <Text style={styles.tutorialsSubtitle}>Browse exercise guides</Text>
-                    </View>
-                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-                  </View>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* ── Bottom hint ── */}
-            <View style={styles.hintRow}>
-              <Dumbbell size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-              <Text style={styles.hintText}>
-                AI form analysis activates during exercises
-              </Text>
             </View>
-          </>
-        )}
-      </Animated.View>
+          )}
+
+          {/* ── TOOLS ───────────────────────────────── */}
+          <Text style={styles.sectionLabel}>TOOLS</Text>
+          <View style={styles.toolsCard}>
+            <ToolRow
+              icon={<LayoutTemplate size={18} color={COLORS.accent} strokeWidth={1.6} />}
+              title="Choose Template"
+              subtitle="Browse saved workouts"
+              onPress={handleChooseTemplate}
+              divider
+            />
+            <ToolRow
+              icon={<BookOpen size={18} color={COLORS.accent} strokeWidth={1.6} />}
+              title="Exercise Guide"
+              subtitle="Learn form and technique"
+              onPress={() => rootNavigation.navigate('Tutorials')}
+              divider
+            />
+            <ToolRow
+              icon={<Camera size={18} color={COLORS.accent} strokeWidth={1.6} />}
+              title="Camera Setup"
+              subtitle="Check angles and positioning"
+              onPress={handleCameraSetup}
+            />
+          </View>
+
+          {/* ── RECENT TEMPLATES ────────────────────── */}
+          {recentTemplates.length > 0 && (
+            <>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionLabel}>RECENT TEMPLATES</Text>
+                <TouchableOpacity
+                  onPress={handleChooseTemplate}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.viewAllLink}>View all</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.templatesRow}
+              >
+                {recentTemplates.map((tmpl) => (
+                  <TouchableOpacity
+                    key={tmpl.id}
+                    style={styles.templateCard}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      navigation.navigate('TemplatePreview', {
+                        templateName: tmpl.name,
+                        description: tmpl.description,
+                        exercises: tmpl.exercises.map(e => ({
+                          name: e.name,
+                          category: e.category,
+                          targetSets: e.targetSets,
+                        })),
+                      })
+                    }
+                  >
+                    <LinearGradient
+                      colors={[...CARD_GRADIENT_COLORS]}
+                      start={CARD_GRADIENT_START}
+                      end={CARD_GRADIENT_END}
+                      style={styles.templateGradient}
+                    >
+                      <View style={styles.templateThumb}>
+                        <LinearGradient
+                          colors={['rgba(124,92,255,0.18)', 'rgba(124,92,255,0.04)']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                        <Dumbbell size={22} color={COLORS.accent} strokeWidth={1.6} />
+                      </View>
+                      <View style={styles.templateInfo}>
+                        <Text style={styles.templateName} numberOfLines={1}>{tmpl.name}</Text>
+                        <Text style={styles.templateMeta}>
+                          {tmpl.exercises.length} exercise{tmpl.exercises.length === 1 ? '' : 's'}
+                        </Text>
+                        <Text style={styles.templateMeta}>
+                          ~{estimateTemplateDuration(tmpl.exercises.length)} min
+                        </Text>
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          )}
+        </Animated.View>
+      </ScrollView>
     </View>
   );
 };
 
+// ── Tool Row ───────────────────────────────────
+
+const ToolRow: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  divider?: boolean;
+}> = ({ icon, title, subtitle, onPress, divider }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    style={[styles.toolRow, divider && styles.toolRowDivider]}
+  >
+    <View style={styles.toolIconWrap}>{icon}</View>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.toolTitle}>{title}</Text>
+      <Text style={styles.toolSubtitle}>{subtitle}</Text>
+    </View>
+    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.6} />
+  </TouchableOpacity>
+);
+
+// ── Styles ─────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
 
-  /* ── Header (HomeScreen style) ────────────── */
+  /* Header */
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    paddingBottom: 10,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 13,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 55,
-    height: 55,
-  },
-  headerTextWrap: {
-    gap: 1,
-  },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  headerName: {
+  headerSide: { flex: 1 },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
-  profileBtn: {
+  iconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  profileGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profilePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#27272A',
-  },
-  profileInitial: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
 
-  /* ── Content Area ──────────────────────────── */
-  contentArea: {
-    flex: 1,
+  scroll: { flex: 1 },
+  scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 16,
-    gap: 14,
-  },
-  contentCentered: {
-    justifyContent: 'center',
+    paddingTop: 6,
   },
 
-  /* ── Hero CTA (New Session) ────────────────── */
-  heroCta: {
-    flex: 1,
-    borderRadius: 18,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 20,
-      },
-      android: { elevation: 8 },
-    }),
-  },
-  heroGradient: {
-    flex: 1,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    justifyContent: 'space-between',
-  },
-  heroContent: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 16,
-    gap: 12,
-  },
-  heroTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 26,
-    color: COLORS.text,
-    letterSpacing: -0.5,
-  },
-  heroDesc: {
+  dateLine: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.1,
-    lineHeight: 20,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    marginBottom: 14,
   },
-  heroFooter: {
+
+  /* Card label */
+  cardLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.15)',
   },
-  heroAction: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13,
-    color: COLORS.accent,
-    letterSpacing: 0.3,
+  cardLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.6,
   },
 
-  /* ── Secondary Card (Templates) ────────────── */
-  secondaryCard: {
-    minHeight: 180,
-    borderRadius: 18,
+  /* Active / Idle workout card */
+  activeOuter: {
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
+    marginBottom: 18,
   },
-  secondaryGradient: {
-    flex: 1,
-    borderRadius: 18,
-  },
-  secondaryGlass: {
-    flex: 1,
-    borderRadius: 18,
+  activeGradient: { borderRadius: CARD_RADIUS },
+  activeEdge: {
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    justifyContent: 'space-between',
+    borderColor: 'rgba(255,255,255,0.09)',
+    padding: 16,
   },
-  secondaryContent: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-    gap: 10,
+
+  /* Idle body */
+  idleBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+    marginBottom: 16,
   },
-  secondaryTitle: {
-    fontFamily: FONTS.display.semibold,
+  idleTextWrap: { flex: 1, gap: 8 },
+  idleTitle: {
+    fontFamily: FONTS.display.bold,
     fontSize: 20,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
-  secondaryDesc: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.1,
-  },
-  secondaryFooter: {
-    flexDirection: 'row',
+  idleMetaRow: { flexDirection: 'row', gap: 14 },
+  bodyVisual: {
+    width: 72,
+    height: 84,
+    borderRadius: 12,
+    overflow: 'hidden',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  secondaryAction: {
+  metaIconRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.3,
+    color: COLORS.textTertiary,
   },
 
-  /* ── Exercise Tutorials ─────────────────── */
-  tutorialsCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  tutorialsGradient: {
-    borderRadius: 16,
-  },
-  tutorialsEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  tutorialsRow: {
+  /* Active body */
+  activeBody: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 14,
     gap: 12,
   },
-  tutorialsTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  tutorialsTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+  activeBodyText: { flex: 1, gap: 6 },
+  activeWorkoutName: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
-  tutorialsSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
+  activeMetaRow: { flexDirection: 'row', gap: 14, marginTop: 2 },
 
-  /* ── Hint row ─────────────────────────────── */
-  hintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 8,
-    paddingVertical: 6,
-  },
-  hintText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.2,
-  },
-
-  /* ── Shared Card Primitives ────────────────── */
-  cardGradient: {
-    flex: 1,
-    borderRadius: 19,
-  },
-  cardGlassEdge: {
-    flex: 1,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-
-  /* ── Active Workout Card ─────────────────── */
-  activeCardOuter: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 24,
-      },
-      android: { elevation: 12 },
-    }),
-  },
-  activeGlassEdge: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.12)',
-  },
-  activeTopBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 2,
-  },
+  /* Status pill */
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(52, 211, 153, 0.12)',
   },
-  statusPillPaused: {
-  },
+  statusPillPaused: { backgroundColor: 'rgba(245, 166, 35, 0.12)' },
   statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#34D399',
+    width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.green,
   },
-  statusDotPaused: {
-    backgroundColor: COLORS.yellow,
-  },
+  statusDotPaused: { backgroundColor: COLORS.yellow },
   statusPillText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 10,
-    color: '#34D399',
-    letterSpacing: 1.5,
+    fontSize: 9,
+    color: COLORS.green,
+    letterSpacing: 1.2,
   },
-  statusPillTextPaused: {
-    color: COLORS.yellow,
-  },
-  pauseBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pauseBtnActive: {
-    borderColor: 'rgba(139, 92, 246, 0.25)',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-  },
-  activeCardContent: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-  },
-  timerDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  statusPillTextPaused: { color: COLORS.yellow },
+
+  /* Timer (active) */
+  timerDisplay: { flexDirection: 'row', alignItems: 'center' },
   timerDigit: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 40,
-    color: '#FFFFFF',
-    lineHeight: 48,
-    letterSpacing: 2,
+    fontSize: 28,
+    color: COLORS.text,
+    lineHeight: 32,
+    letterSpacing: 1.5,
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
-    fontSize: 30,
-    color: 'rgba(139, 92, 246, 0.45)',
-    lineHeight: 48,
-    marginHorizontal: 2,
+    fontSize: 22,
+    color: 'rgba(124,92,255,0.5)',
+    lineHeight: 32,
+    marginHorizontal: 1,
+  },
+  pauseBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pauseBtnActive: {
+    borderColor: 'rgba(124,92,255,0.25)',
+    backgroundColor: 'rgba(124,92,255,0.1)',
   },
 
-  /* ── Inline Stats ── */
-  statsRow: {
+  /* Active footer */
+  activeFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  footerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  statValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 15,
-    color: COLORS.text,
-    lineHeight: 18,
-  },
-  statLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.2,
-  },
-  statDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(139, 92, 246, 0.4)',
-    marginHorizontal: 4,
+  footerBtnText: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12,
   },
 
-  /* ── Workout Actions ─────────────────────── */
-  workoutActions: {
+  /* Start button */
+  startBtnOuter: { borderRadius: CARD_RADIUS_SM, overflow: 'hidden' },
+  startBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 18,
-  },
-  discardBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    backgroundColor: 'rgba(239, 68, 68, 0.06)',
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
   },
-  resumeBtnOuter: {
-    flex: 1,
-    height: 46,
-    borderRadius: 23,
+  startBtnText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+
+  /* Section labels */
+  sectionLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.6,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  viewAllLink: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.accent,
+  },
+
+  /* Tools */
+  toolsCard: {
+    borderRadius: CARD_RADIUS,
+    backgroundColor: 'rgba(255,255,255,0.025)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
     overflow: 'hidden',
   },
-  resumeGradient: {
-    flex: 1,
+  toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    gap: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-  resumeBtnText: {
+  toolRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  toolIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(124,92,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 14,
     color: COLORS.text,
-    letterSpacing: 0.3,
+    letterSpacing: -0.1,
   },
-  finishBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  toolSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11.5,
+    color: COLORS.textTertiary,
+    marginTop: 1,
+  },
+
+  /* Templates */
+  templatesRow: {
+    gap: 12,
+    paddingRight: 4,
+  },
+  templateCard: {
+    width: 160,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  templateGradient: {
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.15)',
-    backgroundColor: 'rgba(52, 211, 153, 0.06)',
+    borderColor: 'rgba(255,255,255,0.09)',
+    padding: 12,
+    gap: 10,
+  },
+  templateThumb: {
+    height: 80,
+    borderRadius: 10,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  templateInfo: { gap: 2 },
+  templateName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+    letterSpacing: -0.1,
+  },
+  templateMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
   },
 });

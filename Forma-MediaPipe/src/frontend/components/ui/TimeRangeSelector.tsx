@@ -1,10 +1,11 @@
 /**
- * TimeRangeSelector — horizontal pill bar for selecting analytics time range.
- * Follows the FilterPill pattern from ChooseExerciseScreen.
+ * TimeRangeSelector — segmented control for analytics time range.
+ * Active segment is a purple pill; inactive segments are subtle text.
  */
 
 import React, { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../../constants/theme';
 
 interface TimeRangeOption {
@@ -26,16 +27,27 @@ const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
   { label: 'ALL', value: 'All Time' },
 ];
 
-const Tab = memo(({ label, isActive, onPress }: { label: string; isActive: boolean; onPress: () => void }) => (
-  <TouchableOpacity
-    style={styles.tab}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
-    {isActive && <View style={styles.underline} />}
-  </TouchableOpacity>
-));
+const Tab = memo(({ label, isActive, onPress }: { label: string; isActive: boolean; onPress: () => void }) => {
+  if (isActive) {
+    return (
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.tabActiveOuter}>
+        <LinearGradient
+          colors={['#7C5CFF', '#6746E8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.tabActive}
+        >
+          <Text style={styles.tabTextActive}>{label}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={styles.tab}>
+      <Text style={styles.tabText}>{label}</Text>
+    </TouchableOpacity>
+  );
+});
 
 export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = memo(({ options, selected, onSelect }) => {
   const handleSelect = useCallback((value: string) => {
@@ -62,30 +74,41 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    marginBottom: 10,
-    marginTop: 12,
-    gap: 20,
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 14,
+    marginTop: 8,
   },
   tab: {
+    flex: 1,
+    paddingVertical: 8,
     alignItems: 'center',
-    paddingBottom: 6,
+    justifyContent: 'center',
+  },
+  tabActiveOuter: {
+    flex: 1,
+    borderRadius: 7,
+    overflow: 'hidden',
+  },
+  tabActive: {
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
   tabTextActive: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
     color: '#FFFFFF',
-  },
-  underline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
+    letterSpacing: 0.5,
   },
 });

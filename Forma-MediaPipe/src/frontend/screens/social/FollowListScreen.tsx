@@ -71,7 +71,7 @@ export const FollowListScreen: React.FC = memo(() => {
             <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} />
           ) : (
             <LinearGradient
-              colors={['#9F75FF', '#7C3AED']}
+              colors={['#9F75FF', '#6746E8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.avatarGradient}

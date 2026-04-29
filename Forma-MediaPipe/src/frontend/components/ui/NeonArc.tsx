@@ -97,9 +97,9 @@ export const NeonArc: React.FC<NeonArcProps> = memo(({
       <Svg width={size} height={viewHeight} viewBox={`0 0 ${size} ${viewHeight}`}>
         <Defs>
           <LinearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor="#7C3AED" stopOpacity="0.4" />
-            <Stop offset="50%" stopColor="#8B5CF6" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#A78BFA" stopOpacity="0.7" />
+            <Stop offset="0%" stopColor="#6746E8" stopOpacity="0.4" />
+            <Stop offset="50%" stopColor="#7C5CFF" stopOpacity="1" />
+            <Stop offset="100%" stopColor="#A395FF" stopOpacity="0.7" />
           </LinearGradient>
         </Defs>
 
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   },
   glowLayer: {
     position: 'absolute',
-    shadowColor: '#8B5CF6',
+    shadowColor: '#7C5CFF',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 24,

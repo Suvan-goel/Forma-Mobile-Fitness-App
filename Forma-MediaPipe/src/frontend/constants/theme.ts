@@ -1,83 +1,105 @@
 /**
  * Forma Mobile - Design System Tokens
- * Cyber-Minimalist — OLED black, electric violet, bold grotesk
+ * Graphite glass — neutral dark gradient, purple primary, green form accent
  */
 
 export const COLORS = {
-  // Backgrounds
-  background: '#000000',
-  cardBackground: '#0A0A0A',
-  cardBackgroundLight: '#141414',
+  // Backgrounds (graphite, NOT pure black, NOT purple)
+  background: '#1B2126',
+  cardBackground: '#222A30',
+  cardBackgroundLight: '#2A3136',
 
-  // Primary Actions — Electric Violet (used across the app)
-  primary: '#8B5CF6',
-  primaryDark: '#7C3AED',
+  // Primary Actions — Forma Violet
+  primary: '#7C5CFF',
+  primaryDark: '#6746E8',
 
-  // Accent — Electric Violet
-  accent: '#8B5CF6',
-  accentDark: '#7C3AED',
+  // Accent — Forma Violet
+  accent: '#7C5CFF',
+  accentDark: '#6746E8',
 
   // Secondary Colors
   orange: '#E07856',
   orangeDark: '#D86648',
   yellow: '#F5A623',
+  green: '#34D399',
+  red: '#EF4444',
 
   // Text
   text: '#FFFFFF',
-  textSecondary: '#A1A1AA',
-  textTertiary: '#52525B',
+  textSecondary: '#B8C0C7',
+  textTertiary: '#7A848D',
 
   // UI Elements
-  border: '#1C1C1E',
-  inactive: '#4A5568',
+  border: 'rgba(255, 255, 255, 0.09)',
+  borderStrong: 'rgba(255, 255, 255, 0.14)',
+  inactive: '#4A5563',
 
   // Chart colors
-  chartPrimary: '#8B5CF6',
+  chartPrimary: '#34D399',
   chartSecondary: 'rgba(255,255,255,0.06)',
 
   // Overlays
-  overlayBackground: 'rgba(0,0,0,0.82)',
+  overlayBackground: 'rgba(8,12,16,0.85)',
 
-  // Neon glow — UV blacklight violet
-  glowViolet: 'rgba(139, 92, 246, 0.35)',
-  glowVioletStrong: 'rgba(139, 92, 246, 0.55)',
+  // Glow — soft violet
+  glowViolet: 'rgba(124, 92, 255, 0.32)',
+  glowVioletStrong: 'rgba(124, 92, 255, 0.55)',
 } as const;
 
-/** Standard screen background gradient — deep purple-black */
-export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#1E1A2E', '#151020', '#0C0A14'];
+/** Standard screen background gradient — graphite vertical */
+export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#353B40', '#252B30', '#11181D'];
+export const SCREEN_GRADIENT_START = { x: 0.5, y: 0 } as const;
+export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
-/** Analytics-style gradient for all cards (same border, gradient, and colors across app) */
-export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#1A1A1A', '#111111', '#0E0E0E'];
+/** Glass card surface gradient (subtle graphite) */
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#2A3136', '#222A30', '#192126'];
 export const CARD_GRADIENT_START = { x: 0, y: 0 } as const;
 export const CARD_GRADIENT_END = { x: 1, y: 1 } as const;
 
-/** Card glass edge — thin light border (matches Analytics) */
+/** Stronger card gradient for elevated surfaces */
+export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#2F363B', '#252C32', '#1C232A'];
+
+/** Card radius — moderate rounding for compact pro look */
+export const CARD_RADIUS = 14;
+export const CARD_RADIUS_SM = 10;
+export const CARD_RADIUS_LG = 18;
+
+/** Card glass edge — thin light border */
 export const CARD_GLASS_BORDER = {
   borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.1)',
-  borderRadius: 19,
+  borderColor: 'rgba(255, 255, 255, 0.09)',
+  borderRadius: CARD_RADIUS,
 } as const;
 
-/** Editorial card — analytics-style surface (same border and dark background for flat cards) */
+/** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: '#1A1A1A',
+  backgroundColor: '#222A30',
   borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.1)',
-  borderRadius: 19,
+  borderColor: 'rgba(255, 255, 255, 0.09)',
+  borderRadius: CARD_RADIUS,
 } as const;
 
-/** Violet glow shadow for iOS — apply with spread operator */
+/** Violet glow shadow for iOS */
 export const GLOW_SHADOW = {
-  shadowColor: '#8B5CF6',
+  shadowColor: '#7C5CFF',
   shadowOffset: { width: 0, height: 0 },
-  shadowOpacity: 0.5,
-  shadowRadius: 20,
+  shadowOpacity: 0.45,
+  shadowRadius: 18,
   elevation: 8,
 } as const;
 
+/** Soft elevation for cards */
+export const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.25,
+  shadowRadius: 10,
+  elevation: 4,
+} as const;
+
 export const getScoreColor = (score: number): string => {
-  if (score >= 90) return '#34D399';   // emerald
-  if (score >= 75) return '#8B5CF6';   // violet
+  if (score >= 90) return '#34D399';   // emerald (form accent)
+  if (score >= 75) return '#7C5CFF';   // violet
   if (score >= 50) return '#F5A623';   // yellow
   return '#E07856';                    // orange
 };

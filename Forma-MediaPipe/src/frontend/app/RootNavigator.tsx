@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LogbookScreen } from '../screens/LogbookScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
@@ -147,7 +148,7 @@ const RecordStackNavigator: React.FC = memo(() => {
         name="SaveWorkout"
         component={SaveWorkoutScreen}
         options={{
-          contentStyle: { backgroundColor: COLORS.background },
+          contentStyle: { backgroundColor: 'transparent' },
           // No navigator option to disable bottom safe area; strip is filled by contentStyle background.
         }}
       />
@@ -170,7 +171,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
+    <ScreenBackground style={{ paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
       {/* Header - Hidden for Record tab; no collapse/sticky logic */}
       {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Social' && currentTab !== 'Home' && <AppHeader />}
 
@@ -179,6 +180,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
           tabBar={(props) => <GlassTabBar {...props} onTabChange={onTabChange} />}
           screenOptions={{
             headerShown: false,
+            sceneStyle: { backgroundColor: 'transparent' },
           }}
         >
           <Tab.Screen name="Home" component={HomeScreen} />
@@ -188,7 +190,7 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
           <Tab.Screen name="Social" component={SocialScreen} />
         </Tab.Navigator>
       </View>
-    </View>
+    </ScreenBackground>
   );
 });
 
@@ -246,7 +248,12 @@ const RootStackNavigator: React.FC = () => {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: COLORS.background },
+      }}
+    >
       {user ? (
         <>
           <Stack.Screen name="MainTabs" component={AppTabs} />

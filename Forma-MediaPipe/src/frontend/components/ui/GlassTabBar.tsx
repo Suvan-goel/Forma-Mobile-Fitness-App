@@ -1,29 +1,29 @@
 /**
- * GlassTabBar — Floating glass-morphism pill navigation
+ * GlassTabBar — graphite glass bottom navigation
  *
- * Absolute-positioned at the bottom of the screen. Uses expo-blur
- * on iOS for the frosted glass effect, with a dark fallback on Android.
- * Active tab gets an acid-lime glow circle behind its icon.
+ * - 5 routes: Home, Logbook, Capture (center), Progress (Analytics), Social
+ * - Active tab highlights the icon and shows the label below.
+ * - Center "Capture" route gets a slightly brighter treatment to match the
+ *   design reference (where Capture is the primary action).
  */
 
 import React, { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Home, BookOpen, BarChart2, Video, Users } from 'lucide-react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 
-// Icon + label config for each tab
 const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
-  Home:      { icon: Home,       label: 'Home' },
+  Home:      { icon: Home,       label: 'Today' },
   Logbook:   { icon: BookOpen,   label: 'Logbook' },
-  Analytics: { icon: BarChart2,  label: 'Analytics' },
+  Analytics: { icon: BarChart2,  label: 'Progress' },
   Record:    { icon: Video,      label: 'Capture' },
   Social:    { icon: Users,      label: 'Social' },
 };
 
-/** Single tab item */
 const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
   routeName: string;
   routeKey: string;
@@ -32,6 +32,7 @@ const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
 }) => {
   const config = TAB_CONFIG[routeName] || { icon: Users, label: routeName };
   const Icon = config.icon;
+  const isCapture = routeName === 'Record';
 
   const onPress = useCallback(() => {
     const event = navigation.emit({
@@ -44,32 +45,47 @@ const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
     }
   }, [isFocused, routeKey, routeName, navigation]);
 
+  // Center Capture button — purple pill regardless of state
+  if (isCapture) {
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        style={styles.captureWrap}
+        activeOpacity={0.85}
+      >
+        <LinearGradient
+          colors={['#7C5CFF', '#6746E8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.captureBubble}
+        >
+          <Icon size={22} color="#FFFFFF" strokeWidth={2} />
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <TouchableOpacity
       onPress={onPress}
       style={styles.tabItem}
       activeOpacity={0.7}
     >
-      <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
-        <Icon
-          size={20}
-          color={isFocused ? '#FFFFFF' : COLORS.textSecondary}
-        />
-        {isFocused && (
-          <Text style={styles.activeLabel}>{config.label}</Text>
-        )}
-      </View>
+      <Icon
+        size={20}
+        color={isFocused ? COLORS.accent : COLORS.textTertiary}
+        strokeWidth={isFocused ? 2.2 : 1.8}
+      />
+      <Text style={[styles.label, isFocused && styles.labelActive]}>{config.label}</Text>
     </TouchableOpacity>
   );
 });
 
-/** The full floating tab bar */
 export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
   const insets = useSafeAreaInsets();
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
 
-  // Hide on Social tab and certain Record sub-screens
   const hideTabBar =
     currentTabRoute?.name === 'Social' ||
     (currentTabRoute?.name === 'Record' &&
@@ -83,17 +99,14 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
      focusedRouteName === 'CreateTemplate' ||
      focusedRouteName === 'TemplatePreview'));
 
-  // Notify parent of tab changes
   React.useEffect(() => {
     if (currentTabRoute?.name && onTabChange) {
       onTabChange(currentTabRoute.name);
     }
   }, [state.index, onTabChange, currentTabRoute?.name]);
 
-  const bottomOffset = Math.max(insets.bottom, 12) + 8;
-
   const inner = (
-    <View style={styles.pillContent}>
+    <View style={styles.barContent}>
       {state.routes.map((route: any, index: number) => (
         <GlassTabItem
           key={route.key}
@@ -109,17 +122,17 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
   if (hideTabBar) return null;
 
   return (
-    <View style={[styles.outerWrap, { bottom: bottomOffset }]}>
+    <View style={[styles.outerWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {Platform.OS === 'ios' ? (
         <BlurView
-          intensity={40}
+          intensity={60}
           tint="systemUltraThinMaterialDark"
-          style={styles.pill}
+          style={styles.bar}
         >
           {inner}
         </BlurView>
       ) : (
-        <View style={[styles.pill, styles.pillAndroid]}>
+        <View style={[styles.bar, styles.barAndroid]}>
           {inner}
         </View>
       )}
@@ -130,56 +143,59 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
 const styles = StyleSheet.create({
   outerWrap: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 20,
+    backgroundColor: 'rgba(15, 20, 25, 0.85)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  pill: {
-    borderRadius: 40,
+  bar: {
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  pillAndroid: {
-    backgroundColor: 'rgba(28, 28, 30, 0.92)',
+  barAndroid: {
+    backgroundColor: 'rgba(20, 26, 32, 0.96)',
   },
-  pillContent: {
+  barContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: 15,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
   },
   tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 3,
+  },
+  captureWrap: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrap: {
-    height: 36,
-    minHeight: 36,
-    borderRadius: 999,
-    overflow: 'hidden',
+  captureBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 12,
+    shadowColor: '#7C5CFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  iconWrapActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    paddingHorizontal: 14,
+  label: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.2,
   },
-  activeLabel: {
+  labelActive: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 11,
-    color: COLORS.text,
-    marginLeft: 6,
-    letterSpacing: 0.3,
+    color: COLORS.accent,
   },
 });

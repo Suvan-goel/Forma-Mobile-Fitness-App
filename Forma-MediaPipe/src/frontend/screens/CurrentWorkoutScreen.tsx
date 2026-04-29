@@ -843,7 +843,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
 
   /* ── Header ─────────────────────────────── */
@@ -1170,7 +1170,7 @@ const styles = StyleSheet.create({
   bottomPanel: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 12,
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(15, 20, 25, 0.85)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
     gap: 10,
@@ -1245,7 +1245,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.25,
         shadowRadius: 12,

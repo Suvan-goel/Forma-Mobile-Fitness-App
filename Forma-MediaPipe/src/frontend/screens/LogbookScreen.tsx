@@ -603,7 +603,7 @@ export const LogbookScreen: React.FC = () => {
             <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
+              colors={['#7C5CFF', '#6746E8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.profileGradient}
@@ -728,7 +728,7 @@ export const LogbookScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
   loadingWrap: {
     flex: 1,
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#27272A',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   profileInitial: {
     fontFamily: FONTS.display.bold,
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 12,
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.2,
         shadowRadius: 24,
@@ -1185,7 +1185,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 10,
@@ -1224,7 +1224,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.2,
         shadowRadius: 24,

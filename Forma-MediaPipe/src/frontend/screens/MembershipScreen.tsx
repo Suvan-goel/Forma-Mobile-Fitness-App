@@ -176,7 +176,7 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
           {!isPremium ? (
             <TouchableOpacity activeOpacity={0.8} onPress={handleUpgrade} style={styles.upgradeBtn}>
               <LinearGradient
-                colors={['#8B5CF6', '#7C3AED'] as const}
+                colors={['#7C5CFF', '#6746E8'] as const}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.upgradeBtnGradient}

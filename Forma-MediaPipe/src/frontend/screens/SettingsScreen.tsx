@@ -221,7 +221,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
+              colors={['#7C5CFF', '#6746E8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.profileGradient}
@@ -254,7 +254,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                     <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatar} />
                   ) : profileUser ? (
                     <LinearGradient
-                      colors={['#8B5CF6', '#7C3AED']}
+                      colors={['#7C5CFF', '#6746E8']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.avatarGradient}

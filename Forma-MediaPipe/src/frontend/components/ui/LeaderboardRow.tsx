@@ -23,7 +23,7 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCu
       styles.cardOuter,
       isCurrentUser && styles.cardOuterHighlight,
       isCurrentUser && Platform.OS === 'ios' && {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 8,

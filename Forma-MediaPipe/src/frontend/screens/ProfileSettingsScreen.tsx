@@ -200,7 +200,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                   <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
                 ) : user ? (
                   <LinearGradient
-                    colors={['#8B5CF6', '#7C3AED']}
+                    colors={['#7C5CFF', '#6746E8']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.avatarGradient}

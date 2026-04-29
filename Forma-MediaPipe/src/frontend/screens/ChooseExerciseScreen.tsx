@@ -126,8 +126,8 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
           >
             <Bookmark
               size={16}
-              color={isFavourited ? '#8B5CF6' : COLORS.textTertiary}
-              fill={isFavourited ? '#8B5CF6' : 'transparent'}
+              color={isFavourited ? '#7C5CFF' : COLORS.textTertiary}
+              fill={isFavourited ? '#7C5CFF' : 'transparent'}
               strokeWidth={1.5}
             />
           </TouchableOpacity>
@@ -393,7 +393,7 @@ export const ChooseExerciseScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
 
   /* ── Header ──────────────────────────────── */
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.25,
         shadowRadius: 15,

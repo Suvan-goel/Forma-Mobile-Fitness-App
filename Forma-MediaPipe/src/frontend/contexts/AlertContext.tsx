@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.22,
         shadowRadius: 32,
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7C5CFF',
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.45,
         shadowRadius: 10,
