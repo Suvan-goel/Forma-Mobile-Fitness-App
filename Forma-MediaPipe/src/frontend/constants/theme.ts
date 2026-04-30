@@ -51,13 +51,13 @@ export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#353B
 export const SCREEN_GRADIENT_START = { x: 0.5, y: 0 } as const;
 export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
-/** Glass card surface gradient (subtle graphite) */
-export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#2A3136', '#222A30', '#192126'];
-export const CARD_GRADIENT_START = { x: 0, y: 0 } as const;
-export const CARD_GRADIENT_END = { x: 1, y: 1 } as const;
+/** Glass card surface gradient (premium graphite, low-contrast bottom-to-top sheen) */
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#252D32', '#273035', '#2A3338'];
+export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
+export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
 
 /** Stronger card gradient for elevated surfaces */
-export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#2F363B', '#252C32', '#1C232A'];
+export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#273037', '#2A3339', '#2D363C'];
 
 /** Card radius — moderate rounding for compact pro look */
 export const CARD_RADIUS = 14;
@@ -67,15 +67,15 @@ export const CARD_RADIUS_LG = 18;
 /** Card glass edge — thin light border */
 export const CARD_GLASS_BORDER = {
   borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.09)',
+  borderColor: 'rgba(255, 255, 255, 0.11)',
   borderRadius: CARD_RADIUS,
 } as const;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: '#222A30',
+  backgroundColor: '#20282E',
   borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.09)',
+  borderColor: 'rgba(255, 255, 255, 0.11)',
   borderRadius: CARD_RADIUS,
 } as const;
 
@@ -91,10 +91,10 @@ export const GLOW_SHADOW = {
 /** Soft elevation for cards */
 export const CARD_SHADOW = {
   shadowColor: '#000',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.25,
-  shadowRadius: 10,
-  elevation: 4,
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.32,
+  shadowRadius: 16,
+  elevation: 6,
 } as const;
 
 export const getScoreColor = (score: number): string => {

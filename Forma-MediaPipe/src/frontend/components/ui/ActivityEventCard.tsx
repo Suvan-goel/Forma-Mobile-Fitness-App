@@ -6,7 +6,9 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Activity, Award, TrendingUp, Flame, Heart } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+  CARD_SHADOW
+} from '../../constants/theme';
 import { ActivityEvent, ReactionType, EventReactions } from '../../../backend/services/api/types';
 
 const EMOJI_REACTIONS: { type: ReactionType; emoji: string }[] = [
@@ -170,16 +172,20 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.sm,
     borderRadius: 18,
-    overflow: 'hidden',
-  },
+
+    ...CARD_SHADOW,
+},
   card: {
     borderRadius: 18,
-  },
+
+    ...CARD_SHADOW,
+},
   cardEdge: {
     padding: SPACING.md,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
   },
   header: {
     flexDirection: 'row',

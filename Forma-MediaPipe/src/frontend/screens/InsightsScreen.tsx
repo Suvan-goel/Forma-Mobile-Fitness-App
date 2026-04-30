@@ -2,7 +2,9 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Sparkles } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE ,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
@@ -82,7 +84,7 @@ export const InsightsScreen: React.FC = () => {
             </View>
             <Text style={styles.insightsTitle}>AI-Generated Insights</Text>
           </View>
-          
+
           {insights.map((insight, index) => (
             <View key={index} style={styles.insightItem}>
               <View style={styles.insightBullet} />
@@ -148,7 +150,9 @@ const styles = StyleSheet.create({
     ...CARD_STYLE,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
-  },
+
+    ...CARD_SHADOW,
+},
   insightsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -191,7 +195,9 @@ const styles = StyleSheet.create({
   recommendationsCard: {
     ...CARD_STYLE,
     padding: SPACING.lg,
-  },
+
+    ...CARD_SHADOW,
+},
   recommendationsTitle: {
     fontSize: 18,
     fontFamily: FONTS.ui.bold,

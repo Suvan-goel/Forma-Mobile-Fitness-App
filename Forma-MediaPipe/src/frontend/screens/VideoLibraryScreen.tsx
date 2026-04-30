@@ -24,6 +24,7 @@ import {
   COLORS, FONTS, SPACING,
   SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END,
   getScoreColor,
+  CARD_SHADOW
 } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { LoadingSkeleton, EmptyState } from '../components/ui';
@@ -938,11 +939,15 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     borderRadius: 16,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
   },
   thumbWrap: {
     position: 'relative',

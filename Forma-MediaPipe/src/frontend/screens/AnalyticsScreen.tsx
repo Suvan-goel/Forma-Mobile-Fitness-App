@@ -36,6 +36,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
+  CARD_SHADOW
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useAnalytics, useExercises, useWorkoutPreferences } from '../../backend/hooks';
@@ -653,14 +654,19 @@ const styles = StyleSheet.create({
   /* Generic card */
   cardOuter: {
     borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
     marginBottom: 12,
+
+    ...CARD_SHADOW,
+},
+  cardGradient: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
   },
-  cardGradient: { borderRadius: CARD_RADIUS },
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 13,
   },
 

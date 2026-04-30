@@ -14,7 +14,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Dumbbell, Layers, Plus, Sparkles, X, Zap } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useAlert } from '../contexts/AlertContext';
 import { useWorkoutPreferences, useCustomTemplates } from '../../backend/hooks';
 import type { CustomTemplate } from '../../backend/services/api';
@@ -589,7 +591,6 @@ const styles = StyleSheet.create({
   /* ── Card ─────────────────────────────── */
   cardOuter: {
     borderRadius: 18,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#7C5CFF',
@@ -602,11 +603,15 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     borderRadius: 18,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 16,
     gap: 10,
   },
@@ -725,7 +730,9 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     alignItems: 'center',
     gap: 6,
-  },
+
+    ...CARD_SHADOW,
+},
   emptyCustomText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,

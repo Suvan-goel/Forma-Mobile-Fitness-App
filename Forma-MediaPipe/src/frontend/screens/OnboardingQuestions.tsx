@@ -16,6 +16,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 
 // ── Step Data ───────────────────────────────────────────────
@@ -156,7 +157,9 @@ const cardStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
-  },
+
+    ...CARD_SHADOW,
+},
   cardSelected: {
     borderColor: COLORS.primary,
     borderWidth: 1.5,

@@ -39,6 +39,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   getScoreColor,
+  CARD_SHADOW
 } from '../../constants/theme';
 import { useFriendProfile, useFollowing } from '../../../backend/hooks';
 
@@ -380,7 +381,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginBottom: 12,
     marginTop: 8,
-  },
+
+    ...CARD_SHADOW,
+},
   heroEdge: {
     borderRadius: 22,
     borderWidth: 1,
@@ -588,7 +591,9 @@ const styles = StyleSheet.create({
   /* ── Badges Card ───────────────────────────── */
   badgeCard: {
     borderRadius: 18,
-  },
+
+    ...CARD_SHADOW,
+},
   badgeEdge: {
     borderRadius: 18,
     borderWidth: 1,

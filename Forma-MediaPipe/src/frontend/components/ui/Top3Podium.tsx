@@ -6,7 +6,9 @@ import React, { memo } from 'react';
 import { Image, View, Text, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, SPACING ,
+  CARD_SHADOW
+} from '../../constants/theme';
 import { LeaderboardEntry } from '../../../backend/services/api/types';
 
 interface Top3PodiumProps {
@@ -119,7 +121,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
     overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-  },
+
+    ...CARD_SHADOW,
+},
   cardFirst: {
     backgroundColor: 'rgba(245, 166, 35, 0.08)',
   },

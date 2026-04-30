@@ -20,6 +20,7 @@ import {
   COLORS,
   FONTS,
   SPACING,
+  CARD_SHADOW
 } from '../../constants/theme';
 import { useFriends } from '../../../backend/hooks';
 import { Friend, FriendRequest, SuggestedFriend } from '../../../backend/services/api/types';
@@ -393,9 +394,11 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: 'rgba(39, 48, 55, 0.78)',
     alignItems: 'center',
-  },
+
+    ...CARD_SHADOW,
+},
   suggestedAvatar: {
     width: 42,
     height: 42,

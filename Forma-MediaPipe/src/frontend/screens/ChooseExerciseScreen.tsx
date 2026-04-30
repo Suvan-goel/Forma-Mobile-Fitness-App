@@ -18,7 +18,9 @@ import { addPendingTemplateExercise } from './CreateTemplateScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search, X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useExercises, useFavouriteExercises } from '../../backend/hooks';
 import { LoadingSkeleton } from '../components/ui';
@@ -509,7 +511,6 @@ const styles = StyleSheet.create({
   /* ── Card (analytics style) ───────────────────────────────── */
   cardOuter: {
     borderRadius: 19,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#7C5CFF',
@@ -523,12 +524,16 @@ const styles = StyleSheet.create({
   cardGradient: {
     flex: 1,
     borderRadius: 19,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     flex: 1,
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 8,
   },
   cardHeader: {

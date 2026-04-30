@@ -6,7 +6,9 @@ import React, { memo } from 'react';
 import { Image, View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+  CARD_SHADOW
+} from '../../constants/theme';
 import { LeaderboardEntry } from '../../../backend/services/api/types';
 
 interface LeaderboardRowProps {
@@ -74,11 +76,14 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.screenHorizontal,
     marginBottom: 5,
     borderRadius: 10,
-    overflow: 'hidden',
-  },
+
+    ...CARD_SHADOW,
+},
   card: {
     borderRadius: 10,
-  },
+
+    ...CARD_SHADOW,
+},
   cardEdge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -87,7 +92,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
   },
   cardEdgeHighlight: {
     borderColor: 'rgba(255, 255, 255, 0.12)',

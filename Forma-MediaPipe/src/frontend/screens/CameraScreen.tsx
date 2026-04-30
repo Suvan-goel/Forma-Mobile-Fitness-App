@@ -6,7 +6,9 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { X, Video, VideoOff } from 'lucide-react-native';
 import CogIcon from '../components/icons/CogIcon';
-import { COLORS, FONTS, SPACING, getScoreColor } from '../constants/theme';
+import { COLORS, FONTS, SPACING, getScoreColor ,
+  CARD_SHADOW
+} from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
 import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
@@ -260,16 +262,16 @@ export const CameraScreen: React.FC = () => {
   // Synchronous accumulator for per-rep data — immune to InteractionManager deferral
   const accumulatedFormScoresRef = useRef<number[]>([]);
   const accumulatedRepFeedbackRef = useRef<string[]>([]);
-  
+
   // Sync refs with state
   useEffect(() => {
     exercisePhaseRef.current = exercisePhase;
   }, [exercisePhase]);
-  
+
   useEffect(() => {
     repCountRef.current = repCount;
   }, [repCount]);
-  
+
   useEffect(() => {
     currentExerciseRef.current = currentExercise;
   }, [currentExercise]);
@@ -519,10 +521,10 @@ export const CameraScreen: React.FC = () => {
     } else if (!exerciseDef) {
       // Generic exercise detection - also throttled
       const detection = detectExercise(keypoints);
-      
+
       if (detection.exercise && detection.angle !== null) {
         const exerciseName = detection.exercise;
-        
+
         // Update exercise name if changed
         if (currentExerciseRef.current !== exerciseName) {
           setCurrentExercise(exerciseName);
@@ -1591,11 +1593,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-  },
+
+    ...CARD_SHADOW,
+},
   exerciseTopCard: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
+
+    ...CARD_SHADOW,
+},
   headerRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1835,7 +1841,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     borderRadius: 12,
     padding: SPACING.md,
-  },
+
+    ...CARD_SHADOW,
+},
   torsoDebugTitle: {
     fontSize: 12,
     fontFamily: FONTS.ui.bold,

@@ -18,6 +18,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 import { TRAINERS, type Trainer } from '../constants/trainers';
 import { useWorkoutPreferences } from '../../backend/hooks';
@@ -250,11 +251,15 @@ const styles = StyleSheet.create({
   /* Cards (matches Home) */
   cardGradient: {
     borderRadius: 8,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 2,
   },

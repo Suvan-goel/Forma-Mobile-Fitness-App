@@ -16,7 +16,9 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronUp, ChevronDown, Plus, Minus, X, Dumbbell } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useCustomTemplates } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
@@ -527,7 +529,6 @@ const styles = StyleSheet.create({
   exerciseCardOuter: {
     height: 72,
     borderRadius: 16,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#7C5CFF',
@@ -541,12 +542,16 @@ const styles = StyleSheet.create({
   exerciseCardGradient: {
     flex: 1,
     borderRadius: 16,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   exerciseCardGlassEdge: {
     flex: 1,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     flexDirection: 'row',
     alignItems: 'center',
   },

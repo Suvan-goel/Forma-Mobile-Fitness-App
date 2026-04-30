@@ -30,7 +30,9 @@ import {
   Timer,
   Video,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+  CARD_SHADOW
+} from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
 import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
@@ -1014,7 +1016,6 @@ const styles = StyleSheet.create({
   /* ── Exercise Card ──────────────────────── */
   exerciseCardOuter: {
     borderRadius: 20,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000000',
@@ -1027,11 +1028,15 @@ const styles = StyleSheet.create({
   },
   exerciseCardGradient: {
     borderRadius: 20,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   exerciseCardGlassEdge: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     overflow: 'hidden',
   },
   exerciseCardHeader: {

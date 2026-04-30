@@ -52,6 +52,7 @@ import {
   SCREEN_GRADIENT_COLORS,
   SCREEN_GRADIENT_START,
   SCREEN_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
@@ -803,7 +804,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
-  },
+
+    ...CARD_SHADOW,
+},
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -849,15 +852,17 @@ const styles = StyleSheet.create({
   templateCard: {
     flex: 1,
     borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
   templateGradient: {
     flex: 1,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 7,
     gap: 5,
+    overflow: 'hidden',
   },
   templateThumb: {
     borderRadius: 0,

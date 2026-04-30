@@ -9,7 +9,9 @@ import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G } from 'react-native-svg';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS ,
+  CARD_SHADOW
+} from '../../constants/theme';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -362,7 +364,6 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
     marginBottom: 8,
     ...Platform.select({
       ios: {
@@ -376,11 +377,15 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     borderRadius: CARD_RADIUS,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 13,
     paddingTop: 12,
     paddingBottom: 8,

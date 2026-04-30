@@ -29,6 +29,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useWorkoutPreferences, useUser } from '../../backend/hooks';
@@ -526,7 +527,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginTop: 18,
     marginBottom: 8,
-  },
+
+    ...CARD_SHADOW,
+},
   profileEdge: {
     borderRadius: 22,
     borderWidth: 1,
@@ -600,16 +603,22 @@ const styles = StyleSheet.create({
   /* Card stack — gap between individual cards */
   cardStack: {
     gap: 8,
-  },
+
+    ...CARD_SHADOW,
+},
 
   /* Individual card */
   cardGradient: {
     borderRadius: 8,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 14,
     paddingVertical: 16,
   },

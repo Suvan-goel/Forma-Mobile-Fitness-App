@@ -2,7 +2,9 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text, Platform } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import { COLORS, FONTS, SPACING ,
+  CARD_SHADOW
+} from '../constants/theme';
 
 const BARBELL_WIDTH = 260;
 const BARBELL_HEIGHT = 80;
@@ -519,7 +521,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 20,
     marginTop: 8,
-  },
+
+    ...CARD_SHADOW,
+},
   metricRow: {
     flexDirection: 'row',
     alignItems: 'center',

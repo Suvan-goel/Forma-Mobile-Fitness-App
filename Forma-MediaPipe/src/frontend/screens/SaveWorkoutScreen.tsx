@@ -34,6 +34,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   getScoreColor,
+  CARD_SHADOW
 } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
 import { useSaveWorkout } from '../../backend/hooks';
@@ -423,7 +424,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginTop: 18,
     marginBottom: 12,
-  },
+
+    ...CARD_SHADOW,
+},
   heroEdge: {
     borderRadius: 22,
     borderWidth: 1,
@@ -550,14 +553,20 @@ const styles = StyleSheet.create({
   /* ── Input Cards ─────────────────────────────── */
   inputCardOuter: {
     marginBottom: 10,
-  },
+
+    ...CARD_SHADOW,
+},
   inputCardGradient: {
     borderRadius: 18,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   inputCardEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 16,
     gap: 8,
   },

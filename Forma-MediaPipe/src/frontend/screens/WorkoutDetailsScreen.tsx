@@ -22,6 +22,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   getScoreColor,
+  CARD_SHADOW
 } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
 import { useWorkoutDetails } from '../../backend/hooks';
@@ -463,7 +464,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginTop: 14,
     marginBottom: 4,
-  },
+
+    ...CARD_SHADOW,
+},
   summaryEdge: {
     borderRadius: 16,
     borderWidth: 1,
@@ -580,7 +583,6 @@ const styles = StyleSheet.create({
   /* ── Exercise Cards ──────────────────────────── */
   cardOuter: {
     borderRadius: 18,
-    overflow: 'hidden',
     marginBottom: 8,
     ...Platform.select({
       ios: {
@@ -594,11 +596,15 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     borderRadius: 18,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 16,
   },
   exerciseHeader: {

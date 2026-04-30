@@ -25,6 +25,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 import { useSubscription } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
@@ -241,11 +242,14 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginTop: 18,
     marginBottom: 8,
-  },
+
+    ...CARD_SHADOW,
+},
   planCardEdge: {
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 20,
   },
   planCardEdgePremium: {
@@ -319,11 +323,15 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     borderRadius: 8,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },

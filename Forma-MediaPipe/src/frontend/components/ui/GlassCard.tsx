@@ -14,6 +14,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
+  CARD_SHADOW,
 } from '../../constants/theme';
 
 interface GlassCardProps {
@@ -39,7 +40,7 @@ export const GlassCard: React.FC<GlassCardProps> = memo(({
         end={CARD_GRADIENT_END}
         style={[styles.gradient, { borderRadius: radius }]}
       >
-        <View style={[styles.edge, { borderRadius: radius, borderColor }, innerStyle]}>
+        <View style={[styles.edge, { borderRadius: radius, borderColor, borderTopColor: 'rgba(255, 255, 255, 0.15)' }, innerStyle]}>
           {children}
         </View>
       </LinearGradient>
@@ -49,10 +50,11 @@ export const GlassCard: React.FC<GlassCardProps> = memo(({
 
 const styles = StyleSheet.create({
   outer: {
-    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
   gradient: {
     flex: 1,
+    overflow: 'hidden',
   },
   edge: {
     flex: 1,

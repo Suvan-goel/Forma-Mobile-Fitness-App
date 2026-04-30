@@ -27,7 +27,9 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useRewards, useUser } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { useAlert } from '../contexts/AlertContext';
@@ -483,7 +485,6 @@ const styles = StyleSheet.create({
   /* ── Badge Card ───────────────────────────── */
   cardOuter: {
     borderRadius: 19,
-    overflow: 'hidden',
     marginBottom: 12,
     ...Platform.select({
       ios: {
@@ -497,11 +498,15 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     borderRadius: 19,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,

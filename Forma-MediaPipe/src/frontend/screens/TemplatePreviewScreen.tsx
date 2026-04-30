@@ -21,6 +21,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
@@ -234,7 +235,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginTop: 14,
     marginBottom: 4,
-  },
+
+    ...CARD_SHADOW,
+},
   summaryEdge: {
     borderRadius: 16,
     borderWidth: 1,
@@ -316,7 +319,6 @@ const styles = StyleSheet.create({
   /* ── Exercise Card ───────────── */
   exerciseCardOuter: {
     borderRadius: 18,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#7C5CFF',
@@ -329,11 +331,15 @@ const styles = StyleSheet.create({
   },
   exerciseCardGradient: {
     borderRadius: 18,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   exerciseCardEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 4,
   },
 

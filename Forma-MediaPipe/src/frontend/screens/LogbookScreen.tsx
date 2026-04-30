@@ -29,7 +29,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
+import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
 import { useWorkouts, useDeleteWorkout } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
@@ -925,7 +927,6 @@ const styles = StyleSheet.create({
   cardOuter: {
     height: CARD_INNER_HEIGHT,
     borderRadius: 10,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -939,13 +940,17 @@ const styles = StyleSheet.create({
   cardGradient: {
     flex: 1,
     borderRadius: 10,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     flex: 1,
     flexDirection: 'row',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     padding: 10,
     alignItems: 'center',
   },

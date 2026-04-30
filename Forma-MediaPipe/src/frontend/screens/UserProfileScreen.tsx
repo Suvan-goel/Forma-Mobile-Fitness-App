@@ -40,6 +40,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 import { useUser, useWorkouts, useFriends, useAnalytics, useFollowing } from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
@@ -456,7 +457,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginBottom: 12,
     marginTop: 18,
-  },
+
+    ...CARD_SHADOW,
+},
   heroEdge: {
     borderRadius: 22,
     borderWidth: 1,
@@ -598,7 +601,9 @@ const styles = StyleSheet.create({
   /* ── Rewards Card ────────────────────────────────── */
   rewardsCardWrap: {
     marginTop: 4,
-  },
+
+    ...CARD_SHADOW,
+},
   rewardsGradient: {
     borderRadius: 16,
   },
@@ -632,7 +637,9 @@ const styles = StyleSheet.create({
   /* ── Video Library Card ─────────────────────────── */
   videoCardWrap: {
     marginTop: 10,
-  },
+
+    ...CARD_SHADOW,
+},
   videoGradient: {
     borderRadius: 16,
   },

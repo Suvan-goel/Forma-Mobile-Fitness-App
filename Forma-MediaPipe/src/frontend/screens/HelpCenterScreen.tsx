@@ -26,6 +26,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
 
 interface HelpCenterScreenProps {
@@ -360,11 +361,15 @@ const styles = StyleSheet.create({
   /* Cards (matches Home) */
   cardGradient: {
     borderRadius: 8,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -416,8 +421,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-  },
+    backgroundColor: 'rgba(39, 48, 55, 0.78)',
+
+    ...CARD_SHADOW,
+},
   footerIconWrap: {
     width: 32,
     height: 32,

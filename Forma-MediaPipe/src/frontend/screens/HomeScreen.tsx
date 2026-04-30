@@ -42,11 +42,12 @@ import {
   COLORS,
   SPACING,
   FONTS,
-  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  CARD_SHADOW,
   getScoreColor,
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
@@ -239,7 +240,7 @@ export const HomeScreen: React.FC = () => {
             style={styles.readinessOuter}
           >
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
+              colors={[...CARD_GRADIENT_ELEVATED]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.readinessGradient}
@@ -306,7 +307,7 @@ export const HomeScreen: React.FC = () => {
             style={styles.weeklyOuter}
           >
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
+              colors={[...CARD_GRADIENT_ELEVATED]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.weeklyGradient}
@@ -346,7 +347,7 @@ export const HomeScreen: React.FC = () => {
               style={styles.sessionOuter}
             >
               <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
+                colors={[...CARD_GRADIENT_ELEVATED]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.sessionGradient}
@@ -384,7 +385,7 @@ export const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           ) : (
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
+              colors={[...CARD_GRADIENT_ELEVATED]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={[styles.sessionGradient, styles.sessionOuter]}
@@ -426,7 +427,7 @@ export const HomeScreen: React.FC = () => {
           {homeData.challenges.length > 0 && (
             <View style={styles.challengesOuter}>
               <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
+                colors={[...CARD_GRADIENT_ELEVATED]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.challengesGradient}
@@ -541,9 +542,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -614,16 +615,18 @@ const styles = StyleSheet.create({
   /* Form Readiness card */
   readinessOuter: {
     borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
     marginBottom: 12,
+    ...CARD_SHADOW,
   },
   readinessGradient: {
     borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
   },
   readinessEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.16)',
     padding: 16,
   },
   readinessBody: {
@@ -649,6 +652,11 @@ const styles = StyleSheet.create({
   startBtnOuter: {
     borderRadius: 12,
     overflow: 'hidden',
+    shadowColor: '#7C5CFF',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 4,
   },
   startBtn: {
     flexDirection: 'row',
@@ -679,8 +687,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
   },
   actionBtnText: {
     fontFamily: FONTS.ui.regular,
@@ -691,14 +700,15 @@ const styles = StyleSheet.create({
   /* Weekly Target */
   weeklyOuter: {
     borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
     marginBottom: 12,
+    ...CARD_SHADOW,
   },
-  weeklyGradient: { borderRadius: CARD_RADIUS },
+  weeklyGradient: { borderRadius: CARD_RADIUS, overflow: 'hidden' },
   weeklyEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.16)',
     padding: 16,
     gap: 10,
   },
@@ -729,14 +739,15 @@ const styles = StyleSheet.create({
   /* Last Session */
   sessionOuter: {
     borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
     marginBottom: 12,
+    ...CARD_SHADOW,
   },
-  sessionGradient: { borderRadius: CARD_RADIUS },
+  sessionGradient: { borderRadius: CARD_RADIUS, overflow: 'hidden' },
   sessionEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.16)',
     padding: 14,
   },
   sessionRow: {
@@ -785,13 +796,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(32, 40, 46, 0.78)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: CARD_RADIUS,
     paddingVertical: 14,
     paddingHorizontal: 6,
     marginBottom: 12,
+    ...CARD_SHADOW,
   },
   statCell: {
     flex: 1,
@@ -848,13 +861,14 @@ const styles = StyleSheet.create({
   /* Challenges */
   challengesOuter: {
     borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
-  challengesGradient: { borderRadius: CARD_RADIUS },
+  challengesGradient: { borderRadius: CARD_RADIUS, overflow: 'hidden' },
   challengesEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.16)',
     padding: 14,
   },
   challengeCount: {
