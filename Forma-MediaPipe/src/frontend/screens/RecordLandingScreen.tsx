@@ -18,6 +18,7 @@ import {
   Image,
   Animated,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -94,7 +95,6 @@ const formatDateLine = (): string => {
   return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const estimateTemplateDuration = (exercises: number): number => Math.max(20, exercises * 8);
 const TEMPLATE_IMAGES = [
   require('../assets/exercises/barbell_squat.png'),
   require('../assets/exercises/barbell_curl.png'),
@@ -103,12 +103,45 @@ const TEMPLATE_IMAGES = [
   require('../assets/exercises/cable_lat_pulldowns.png'),
   require('../assets/exercises/leg_extensions.png'),
 ];
+const DEFAULT_TEMPLATES = [
+  {
+    id: 'default-lower-body',
+    name: 'Lower Body Strength',
+    description: 'Squat-focused lower body session.',
+    exercises: [
+      { name: 'Barbell Squat', category: 'Weightlifting', targetSets: 4 },
+      { name: 'Leg Extensions', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Lying Leg Curl', category: 'Weightlifting', targetSets: 3 },
+    ],
+  },
+  {
+    id: 'default-upper-push',
+    name: 'Upper Body Push',
+    description: 'Chest, shoulders, and triceps.',
+    exercises: [
+      { name: 'Push-Up', category: 'Calisthenics', targetSets: 4 },
+      { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Cable Pushdowns', category: 'Weightlifting', targetSets: 3 },
+    ],
+  },
+  {
+    id: 'default-pull',
+    name: 'Pull Strength',
+    description: 'Back and biceps session.',
+    exercises: [
+      { name: 'Cable Row', category: 'Weightlifting', targetSets: 4 },
+      { name: 'Cable Lat Pulldowns', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Barbell Curl', category: 'Weightlifting', targetSets: 3 },
+    ],
+  },
+];
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { templates } = useCustomTemplates();
   const {
     workoutInProgress,
@@ -120,6 +153,13 @@ export const RecordLandingScreen: React.FC = () => {
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
+  const sectionGap = windowHeight < 740 ? 10 : 14;
+  const contentMinHeight = Math.max(430, windowHeight - insets.top - navigationBarHeight - 56);
+  const availableSectionHeight = contentMinHeight - sectionGap * 2;
+  const standardSectionHeight = Math.floor(availableSectionHeight * 0.305);
+  const templateSectionHeight = Math.max(standardSectionHeight + 18, availableSectionHeight - standardSectionHeight * 2);
+  const templateCardHeight = Math.max(118, Math.min(140, templateSectionHeight - 30));
+  const templateThumbHeight = Math.max(66, Math.min(84, templateCardHeight - 50));
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -199,7 +239,8 @@ export const RecordLandingScreen: React.FC = () => {
     );
   }
 
-  const recentTemplates = templates.slice(0, 6);
+  const recentTemplates = templates.length > 0 ? templates.slice(0, 6) : DEFAULT_TEMPLATES;
+  const templatesLabel = templates.length > 0 ? 'RECENT TEMPLATES' : 'FAVOURITE TEMPLATES';
 
   return (
     <LinearGradient
@@ -231,12 +272,23 @@ export const RecordLandingScreen: React.FC = () => {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: navigationBarHeight }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <Text style={styles.dateLine}>{formatDateLine()}</Text>
+        <Animated.View
+          style={[
+            styles.contentStack,
+            {
+              minHeight: contentMinHeight,
+              gap: sectionGap,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={[styles.screenSection, { minHeight: standardSectionHeight }]}>
+            <Text style={styles.dateLine}>{formatDateLine()}</Text>
 
-          {workoutInProgress ? (
-            /* ── ACTIVE WORKOUT CARD ── */
-            <View style={styles.activeOuter}>
+            {workoutInProgress ? (
+              /* ── ACTIVE WORKOUT CARD ── */
+              <View style={styles.activeOuter}>
               <LinearGradient
                 colors={[...CARD_GRADIENT_ELEVATED]}
                 start={CARD_GRADIENT_START}
@@ -331,9 +383,9 @@ export const RecordLandingScreen: React.FC = () => {
                 </View>
               </LinearGradient>
             </View>
-          ) : (
-            /* ── CURRENT WORKOUT (idle) CARD ── */
-            <View style={styles.activeOuter}>
+            ) : (
+              /* ── CURRENT WORKOUT (idle) CARD ── */
+              <View style={styles.activeOuter}>
               <LinearGradient
                 colors={[...CARD_GRADIENT_ELEVATED]}
                 start={CARD_GRADIENT_START}
@@ -357,12 +409,6 @@ export const RecordLandingScreen: React.FC = () => {
                       </View>
                     </View>
                     <View style={styles.bodyVisual}>
-                      <LinearGradient
-                        colors={['rgba(124,92,255,0.18)', 'rgba(124,92,255,0.04)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
                       <Image
                         source={require('../assets/exercises/barbell_squat.png')}
                         style={styles.bodyVisualImage}
@@ -390,97 +436,91 @@ export const RecordLandingScreen: React.FC = () => {
                 </View>
               </LinearGradient>
             </View>
-          )}
-
-          {/* ── TOOLS ───────────────────────────────── */}
-          <Text style={styles.sectionLabel}>TOOLS</Text>
-          <View style={styles.toolsCard}>
-            <ToolRow
-              icon={<LayoutTemplate size={18} color={COLORS.accent} strokeWidth={1.6} />}
-              title="Choose Template"
-              subtitle="Browse saved workouts"
-              onPress={handleChooseTemplate}
-              divider
-            />
-            <ToolRow
-              icon={<BookOpen size={18} color={COLORS.accent} strokeWidth={1.6} />}
-              title="Exercise Guide"
-              subtitle="Learn form and technique"
-              onPress={() => rootNavigation.navigate('Tutorials')}
-              divider
-            />
-            <ToolRow
-              icon={<Camera size={18} color={COLORS.accent} strokeWidth={1.6} />}
-              title="Camera Setup"
-              subtitle="Check angles and positioning"
-              onPress={handleCameraSetup}
-            />
+            )}
           </View>
 
-          {/* ── RECENT TEMPLATES ────────────────────── */}
-          {recentTemplates.length > 0 && (
-            <>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionLabel}>RECENT TEMPLATES</Text>
-                <TouchableOpacity
-                  onPress={handleChooseTemplate}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.viewAllLink}>View all</Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.templatesRow}
+          {/* ── TOOLS ───────────────────────────────── */}
+          <View style={[styles.screenSection, { minHeight: standardSectionHeight }]}>
+            <Text style={styles.sectionLabel}>TOOLS</Text>
+            <View style={styles.toolsCard}>
+              <ToolRow
+                icon={<LayoutTemplate size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                title="Choose Template"
+                subtitle="Browse saved workouts"
+                onPress={handleChooseTemplate}
+                divider
+              />
+              <ToolRow
+                icon={<BookOpen size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                title="Exercise Guide"
+                subtitle="Learn form and technique"
+                onPress={() => rootNavigation.navigate('Tutorials')}
+                divider
+              />
+              <ToolRow
+                icon={<Camera size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                title="Camera Setup"
+                subtitle="Check angles and positioning"
+                onPress={handleCameraSetup}
+              />
+            </View>
+          </View>
+
+          {/* ── RECENT / FAVOURITE TEMPLATES ───────── */}
+          <View style={[styles.screenSection, styles.templatesBlock, { minHeight: templateSectionHeight }]}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionLabel}>{templatesLabel}</Text>
+              <TouchableOpacity
+                onPress={handleChooseTemplate}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                {recentTemplates.map((tmpl, index) => (
-                  <TouchableOpacity
-                    key={tmpl.id}
-                    style={styles.templateCard}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      navigation.navigate('TemplatePreview', {
-                        templateName: tmpl.name,
-                        description: tmpl.description,
-                        exercises: tmpl.exercises.map(e => ({
-                          name: e.name,
-                          category: e.category,
-                          targetSets: e.targetSets,
-                        })),
-                      })
-                    }
+                <Text style={styles.viewAllLink}>View all</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.templatesRow}>
+              {recentTemplates.slice(0, 3).map((tmpl, index) => (
+                <TouchableOpacity
+                  key={tmpl.id}
+                  style={[styles.templateCard, { height: templateCardHeight }]}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    navigation.navigate('TemplatePreview', {
+                      templateName: tmpl.name,
+                      description: tmpl.description,
+                      exercises: tmpl.exercises.map(e => ({
+                        name: e.name,
+                        category: e.category,
+                        targetSets: e.targetSets,
+                      })),
+                    })
+                  }
+                >
+                  <LinearGradient
+                    colors={[...CARD_GRADIENT_COLORS]}
+                    start={CARD_GRADIENT_START}
+                    end={CARD_GRADIENT_END}
+                    style={styles.templateGradient}
                   >
-                    <LinearGradient
-                      colors={[...CARD_GRADIENT_COLORS]}
-                      start={CARD_GRADIENT_START}
-                      end={CARD_GRADIENT_END}
-                      style={styles.templateGradient}
-                    >
-                      <View style={styles.templateThumb}>
-                        <Image
-                          source={TEMPLATE_IMAGES[index % TEMPLATE_IMAGES.length]}
-                          style={styles.templateThumbImage}
-                          resizeMode="cover"
-                        />
-                        <View style={styles.templateThumbShade} />
-                      </View>
-                      <View style={styles.templateInfo}>
-                        <Text style={styles.templateName} numberOfLines={1}>{tmpl.name}</Text>
-                        <Text style={styles.templateMeta}>
-                          {tmpl.exercises.length} exercise{tmpl.exercises.length === 1 ? '' : 's'}
-                        </Text>
-                        <Text style={styles.templateMeta}>
-                          ~{estimateTemplateDuration(tmpl.exercises.length)} min
-                        </Text>
-                      </View>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </>
-          )}
+                    <View style={[styles.templateThumb, { height: templateThumbHeight }]}>
+                      <Image
+                        source={TEMPLATE_IMAGES[index % TEMPLATE_IMAGES.length]}
+                        style={styles.templateThumbImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.templateThumbShade} />
+                    </View>
+                    <View style={styles.templateInfo}>
+                      <Text style={styles.templateMeta}>
+                        {tmpl.exercises.length} exercise{tmpl.exercises.length === 1 ? '' : 's'}
+                      </Text>
+                      <Text style={styles.templateName} numberOfLines={2}>{tmpl.name}</Text>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </Animated.View>
       </ScrollView>
     </LinearGradient>
@@ -543,8 +583,16 @@ const styles = StyleSheet.create({
 
   scroll: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 3,
+    paddingHorizontal: 14,
+    paddingTop: 2,
+    flexGrow: 1,
+  },
+  contentStack: {
+    paddingBottom: 8,
+  },
+  screenSection: {
+    justifyContent: 'center',
+    paddingVertical: 2,
   },
 
   dateLine: {
@@ -571,14 +619,13 @@ const styles = StyleSheet.create({
   activeOuter: {
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
-    marginBottom: 12,
   },
   activeGradient: { borderRadius: CARD_RADIUS },
   activeEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     paddingTop: 11,
     paddingBottom: 12,
   },
@@ -587,27 +634,26 @@ const styles = StyleSheet.create({
   idleBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     marginTop: 8,
     marginBottom: 10,
   },
   idleTextWrap: { flex: 1, gap: 6 },
   idleTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 15.5,
+    fontSize: 16.5,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
   idleMetaRow: { flexDirection: 'row', gap: 10 },
   bodyVisual: {
-    width: 70,
-    height: 86,
-    borderRadius: 9,
-    overflow: 'hidden',
+    width: 72,
+    height: 82,
+    borderRadius: 0,
+    overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'transparent',
   },
   bodyVisualImage: {
     width: '100%',
@@ -615,12 +661,12 @@ const styles = StyleSheet.create({
   },
   bodyVisualShade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.26)',
+    backgroundColor: 'transparent',
   },
   metaIconRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
+    fontSize: 11,
     color: COLORS.textSecondary,
   },
 
@@ -723,7 +769,7 @@ const styles = StyleSheet.create({
   },
   startBtnText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
@@ -734,14 +780,14 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     color: COLORS.textSecondary,
     letterSpacing: 0.9,
-    marginTop: 5,
+    marginTop: 0,
     marginBottom: 8,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 0,
     marginBottom: 8,
   },
   viewAllLink: {
@@ -763,7 +809,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 10.5,
   },
   toolRowDivider: {
     borderBottomWidth: 1,
@@ -792,29 +838,33 @@ const styles = StyleSheet.create({
 
   /* Templates */
   templatesRow: {
-    gap: 8,
-    paddingRight: 4,
+    flexDirection: 'row',
+    gap: 9,
+    alignItems: 'stretch',
+    minHeight: 112,
+  },
+  templatesBlock: {
+    justifyContent: 'center',
   },
   templateCard: {
-    width: 93,
+    flex: 1,
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
   },
   templateGradient: {
+    flex: 1,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
-    padding: 6,
-    gap: 6,
+    padding: 7,
+    gap: 5,
   },
   templateThumb: {
-    height: 58,
-    borderRadius: 7,
-    overflow: 'hidden',
+    borderRadius: 0,
+    overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'transparent',
   },
   templateThumbImage: {
     width: '100%',
@@ -822,18 +872,19 @@ const styles = StyleSheet.create({
   },
   templateThumbShade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    backgroundColor: 'transparent',
   },
-  templateInfo: { gap: 2 },
+  templateInfo: { gap: 1 },
   templateName: {
     fontFamily: FONTS.display.semibold,
     fontSize: 10.5,
     color: COLORS.text,
     letterSpacing: -0.1,
+    lineHeight: 12,
   },
   templateMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 9.25,
+    fontSize: 9,
     color: COLORS.textSecondary,
   },
 });

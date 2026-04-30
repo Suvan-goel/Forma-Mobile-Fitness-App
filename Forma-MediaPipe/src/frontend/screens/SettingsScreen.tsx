@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, Switch, Image, Modal } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, Switch, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -8,16 +8,16 @@ import {
   Bell,
   Lock,
   HelpCircle,
-  Shield,
   Eye,
   Volume2,
   Bone,
   UserRound,
   RefreshCcw,
   Calendar,
-  SlidersHorizontal,
   Crown,
   Video,
+  Camera,
+  MessageSquare,
   Info,
   X,
 } from 'lucide-react-native';
@@ -26,7 +26,6 @@ import {
   COLORS,
   SPACING,
   FONTS,
-  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
@@ -37,10 +36,12 @@ import { useAlert } from '../contexts/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 
-const formatHeaderDate = (): string => {
-  const d = new Date();
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
+const hexToRgba = (hex: string, alpha: number): string => {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
 interface SettingsScreenProps {
@@ -50,8 +51,8 @@ interface SettingsScreenProps {
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
-  const { user: authUser } = useAuth();
-  const { user: profileUser, refetch: refetchUser } = useUser();
+  const { signOut } = useAuth();
+  const { refetch: refetchUser } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
@@ -101,9 +102,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     }, [refetchUser]),
   );
 
-  const displayName = profileUser?.displayName ?? authUser?.user_metadata?.full_name ?? 'Athlete';
-  const userInitial = (displayName[0] ?? 'A').toUpperCase();
-
   const TRAINING_TARGET_OPTIONS: WeeklyTrainingTarget[] = ['1-2', '3-4', '5+'];
   const TRAINING_TARGET_LABELS: Record<WeeklyTrainingTarget, string> = {
     '1-2': '1–2 days / week',
@@ -118,120 +116,91 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     updatePref('weeklyTrainingTarget', TRAINING_TARGET_OPTIONS[nextIdx]);
   };
 
-  /* Reusable single-row card */
-  const RowCard = ({ icon: Icon, iconColor, label, onPress, right }: {
-    icon: any; iconColor: string; label: string;
-    onPress?: () => void; right?: React.ReactNode;
-  }) => (
-    <TouchableOpacity activeOpacity={onPress ? 0.7 : 1} onPress={onPress} disabled={!onPress}>
-      <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
-        start={CARD_GRADIENT_START}
-        end={CARD_GRADIENT_END}
-        style={styles.cardGradient}
-      >
-        <View style={styles.cardEdge}>
-          <View style={styles.row}>
-            <Icon size={14} color={iconColor} strokeWidth={1.5} />
-            <Text style={styles.rowLabel}>{label}</Text>
-            {right ?? <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />}
-          </View>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
+  const handleSignOutPress = () => {
+    showAlert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch (signOutError) {
+            showAlert('Error', 'Failed to sign out. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSendFeedback = () => {
+    showAlert('Send Feedback', 'Feedback sharing is coming soon. For now, please contact support from the Help Center.');
+  };
+
+  /* Icon bubble — rounded square w/ tinted background */
+  const IconBubble = ({ icon: Icon, color }: { icon: any; color: string }) => (
+    <View style={[styles.iconBubble, { backgroundColor: hexToRgba(color, 0.14) }]}>
+      <Icon size={17} color={color} strokeWidth={2} />
+    </View>
   );
 
-  /* Reusable single-row card with sub-label */
-  const RowCardWithSub = ({ icon: Icon, iconColor, label, sub, onPress }: {
-    icon: any; iconColor: string; label: string; sub: string; onPress: () => void;
+  /* Reusable navigation row (chevron) — used inside grouped cards */
+  const NavRow = ({
+    icon: Icon, iconColor, label, sub, onPress,
+  }: {
+    icon: any; iconColor: string; label: string; sub?: string; onPress: () => void;
   }) => (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
-      <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
-        start={CARD_GRADIENT_START}
-        end={CARD_GRADIENT_END}
-        style={styles.cardGradient}
-      >
-        <View style={styles.cardEdge}>
-          <View style={styles.row}>
-            <Icon size={14} color={iconColor} strokeWidth={1.5} />
-            <View style={styles.rowLabelCol}>
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Text style={styles.rowSubLabel}>{sub}</Text>
-            </View>
-            <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-          </View>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-
-  /* Toggle card */
-  const ToggleCard = ({ icon: Icon, iconColor, label, value, onToggle }: {
-    icon: any; iconColor: string; label: string;
-    value: boolean; onToggle: (v: boolean) => void;
-  }) => (
-    <LinearGradient
-      colors={[...CARD_GRADIENT_COLORS]}
-      start={CARD_GRADIENT_START}
-      end={CARD_GRADIENT_END}
-      style={styles.cardGradient}
-    >
-      <View style={styles.cardEdge}>
-        <View style={styles.row}>
-          <Icon size={14} color={iconColor} strokeWidth={1.5} />
-          <Text style={styles.rowLabel}>{label}</Text>
-          <Switch
-            value={value}
-            onValueChange={onToggle}
-            trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-            thumbColor={value ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-          />
-        </View>
+    <TouchableOpacity style={styles.groupRow} onPress={onPress} activeOpacity={0.7}>
+      <IconBubble icon={Icon} color={iconColor} />
+      <View style={styles.rowLabelCol}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {sub && <Text style={styles.rowSubLabel}>{sub}</Text>}
       </View>
-    </LinearGradient>
+      <ChevronRight size={18} color={COLORS.textTertiary} strokeWidth={2} />
+    </TouchableOpacity>
+  );
+
+  /* Toggle row — used inside grouped cards */
+  const ToggleRow = ({
+    icon: Icon, iconColor, label, sub, value, onToggle, infoKey,
+  }: {
+    icon: any; iconColor: string; label: string; sub?: string;
+    value: boolean; onToggle: (v: boolean) => void; infoKey?: string;
+  }) => (
+    <View style={styles.groupRow}>
+      <IconBubble icon={Icon} color={iconColor} />
+      <View style={styles.rowLabelCol}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {sub && <Text style={styles.rowSubLabel}>{sub}</Text>}
+      </View>
+      {infoKey && (
+        <TouchableOpacity onPress={() => setInfoModal(infoKey)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+        </TouchableOpacity>
+      )}
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+        thumbColor={value ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+      />
+    </View>
   );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })} activeOpacity={0.7} style={styles.backBtn}>
-            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerName}>SETTINGS</Text>
-            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
-          </View>
-        </View>
         <TouchableOpacity
-          onPress={() => navigation.navigate('UserProfile')}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
           activeOpacity={0.7}
-          style={styles.profileBtn}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
-          ) : profileUser ? (
-            <LinearGradient
-              colors={['#7C5CFF', '#6746E8']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileGradient}
-            >
-              <Text style={styles.profileInitial}>{userInitial}</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.profilePlaceholder} />
-          )}
+          <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
+        <Text style={styles.headerName}>Settings</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
@@ -240,46 +209,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          {/* Profile Card */}
-          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('UserProfile')}>
-            <LinearGradient
-              colors={SCREEN_GRADIENT_COLORS}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileCard}
-            >
-              <View style={styles.profileEdge}>
-                <View style={styles.profileRow}>
-                  {profileUser?.avatarUrl ? (
-                    <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatar} />
-                  ) : profileUser ? (
-                    <LinearGradient
-                      colors={['#7C5CFF', '#6746E8']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.avatarGradient}
-                    >
-                      <Text style={styles.avatarText}>{userInitial}</Text>
-                    </LinearGradient>
-                  ) : (
-                    <View style={styles.avatarPlaceholder} />
-                  )}
-                  <View style={styles.profileInfo}>
-                    <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
-                    <Text style={styles.profileSub} numberOfLines={1}>View your public profile</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
           {/* Account Section */}
           <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Shield size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>ACCOUNT</Text>
-            </View>
+            <Text style={styles.sectionLabel}>ACCOUNT</Text>
           </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
@@ -288,26 +220,72 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             style={styles.cardGradient}
           >
             <View style={styles.groupEdge}>
-              <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('NotificationSettings')} activeOpacity={0.7}>
-                <Bell size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Notifications</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
+              <NavRow
+                icon={UserRound}
+                iconColor={COLORS.textSecondary}
+                label="Profile"
+                sub="Edit your profile"
+                onPress={() => navigation.navigate('ProfileSettings')}
+              />
               <View style={styles.rowDivider} />
-              <TouchableOpacity style={styles.groupRow} onPress={() => navigation.navigate('PrivacySettings')} activeOpacity={0.7}>
-                <Lock size={14} color="#34D399" strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Privacy</Text>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
+              <NavRow
+                icon={Crown}
+                iconColor={COLORS.textSecondary}
+                label="Membership"
+                sub="Pro plan"
+                onPress={() => navigation.navigate('Membership')}
+              />
+              <View style={styles.rowDivider} />
+              <NavRow
+                icon={Volume2}
+                iconColor={COLORS.textSecondary}
+                label="Trainer Voice"
+                sub="Default · Coach Ava"
+                onPress={() => navigation.navigate('TrainerPicker')}
+              />
+            </View>
+          </LinearGradient>
+
+          {/* Preferences Section */}
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionLabel}>PREFERENCES</Text>
+          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.groupEdge}>
+              <NavRow
+                icon={Camera}
+                iconColor={COLORS.textSecondary}
+                label="Camera Settings"
+                sub="Angles, grid, resolution"
+                onPress={() => navigation.navigate('MainTabs', { screen: 'Record', params: { screen: 'WorkoutSettings' } })}
+              />
+              <View style={styles.rowDivider} />
+              <NavRow
+                icon={Bell}
+                iconColor={COLORS.textSecondary}
+                label="Notifications"
+                sub="Push, email, reminders"
+                onPress={() => navigation.navigate('NotificationSettings')}
+              />
+              <View style={styles.rowDivider} />
+              <NavRow
+                icon={Lock}
+                iconColor={COLORS.textSecondary}
+                label="Privacy"
+                sub="Account & data settings"
+                onPress={() => navigation.navigate('PrivacySettings')}
+              />
             </View>
           </LinearGradient>
 
           {/* Workout Section */}
           <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <SlidersHorizontal size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>WORKOUT</Text>
-            </View>
+            <Text style={styles.sectionLabel}>WORKOUT</Text>
           </View>
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
@@ -316,112 +294,97 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             style={styles.cardGradient}
           >
             <View style={styles.groupEdge}>
-              <View style={styles.groupRow}>
-                <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Visual Feedback</Text>
-                <TouchableOpacity onPress={() => setInfoModal('Visual Feedback')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <Switch
-                  value={prefs.showFeedback}
-                  onValueChange={(v) => updatePref('showFeedback', v)}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={prefs.showFeedback ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
+              <ToggleRow
+                icon={Eye}
+                iconColor={COLORS.textSecondary}
+                label="Visual Feedback"
+                sub="Real-time form correction"
+                value={prefs.showFeedback}
+                onToggle={(v) => updatePref('showFeedback', v)}
+                infoKey="Visual Feedback"
+              />
               <View style={styles.rowDivider} />
-              <View style={styles.groupRow}>
-                <Volume2 size={14} color="#A78BFA" strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Voice Coaching</Text>
-                <TouchableOpacity onPress={() => setInfoModal('Voice Coaching')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <Switch
-                  value={prefs.isTTSEnabled}
-                  onValueChange={(v) => updatePref('isTTSEnabled', v)}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={prefs.isTTSEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
+              <ToggleRow
+                icon={Volume2}
+                iconColor={COLORS.textSecondary}
+                label="Voice Coaching"
+                sub="AI coach speaks corrections"
+                value={prefs.isTTSEnabled}
+                onToggle={(v) => updatePref('isTTSEnabled', v)}
+                infoKey="Voice Coaching"
+              />
               {DEV_FEATURES_ENABLED && (
                 <>
                   <View style={styles.rowDivider} />
-                  <View style={styles.groupRow}>
-                    <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                    <Text style={styles.rowLabel}>Skeleton Overlay</Text>
-                    <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                    </TouchableOpacity>
-                    <Switch
-                      value={prefs.showSkeletonOverlay}
-                      onValueChange={(v) => updatePref('showSkeletonOverlay', v)}
-                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                      thumbColor={prefs.showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                    />
-                  </View>
+                  <ToggleRow
+                    icon={Bone}
+                    iconColor={COLORS.textSecondary}
+                    label="Skeleton Overlay"
+                    sub="Body joints overlay"
+                    value={prefs.showSkeletonOverlay}
+                    onToggle={(v) => updatePref('showSkeletonOverlay', v)}
+                    infoKey="Skeleton Overlay"
+                  />
                 </>
               )}
               <View style={styles.rowDivider} />
-              <View style={styles.groupRow}>
-                <Video size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Auto Screen Recording</Text>
-                <TouchableOpacity onPress={() => setInfoModal('Auto Screen Recording')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <Switch
-                  value={prefs.autoScreenRecording}
-                  onValueChange={(v) => updatePref('autoScreenRecording', v)}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
-                  thumbColor={prefs.autoScreenRecording ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                />
-              </View>
+              <ToggleRow
+                icon={Video}
+                iconColor={COLORS.textSecondary}
+                label="Auto Screen Recording"
+                sub="Capture workouts"
+                value={prefs.autoScreenRecording}
+                onToggle={(v) => updatePref('autoScreenRecording', v)}
+                infoKey="Auto Screen Recording"
+              />
               <View style={styles.rowDivider} />
-              <TouchableOpacity style={styles.groupRow} onPress={handleTrainingTargetPress} activeOpacity={0.7}>
-                <Calendar size={14} color="#34D399" strokeWidth={1.5} />
-                <View style={styles.rowLabelCol}>
-                  <Text style={styles.rowLabel}>Training Frequency</Text>
-                  <Text style={styles.rowSubLabel}>{TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}</Text>
-                </View>
-                <TouchableOpacity onPress={(e) => { e.stopPropagation(); setInfoModal('Training Frequency'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-              </TouchableOpacity>
+              <NavRow
+                icon={Calendar}
+                iconColor={COLORS.textSecondary}
+                label="Training Frequency"
+                sub={TRAINING_TARGET_LABELS[prefs.weeklyTrainingTarget]}
+                onPress={handleTrainingTargetPress}
+              />
             </View>
           </LinearGradient>
 
-          {/* Trainer Section */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <UserRound size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>YOUR TRAINER</Text>
-            </View>
-          </View>
-          <View style={styles.cardStack}>
-            <RowCard icon={UserRound} iconColor="#A78BFA" label="Choose Trainer" onPress={() => navigation.navigate('TrainerPicker')} />
-          </View>
-
-          {/* Your Plan Section */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Crown size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>YOUR PLAN</Text>
-            </View>
-          </View>
-          <View style={styles.cardStack}>
-            <RowCard icon={Crown} iconColor="#F5A623" label="Membership" onPress={() => navigation.navigate('Membership')} />
-          </View>
-
           {/* Support Section */}
           <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <HelpCircle size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>SUPPORT</Text>
+            <Text style={styles.sectionLabel}>SUPPORT</Text>
+          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.groupEdge}>
+              <NavRow
+                icon={HelpCircle}
+                iconColor={COLORS.textSecondary}
+                label="Help Center"
+                sub="Get help and support"
+                onPress={() => navigation.navigate('HelpCenter')}
+              />
+              <View style={styles.rowDivider} />
+              <NavRow
+                icon={MessageSquare}
+                iconColor={COLORS.textSecondary}
+                label="Send Feedback"
+                sub="Help us improve"
+                onPress={handleSendFeedback}
+              />
             </View>
-          </View>
-          <View style={styles.cardStack}>
-            <RowCard icon={HelpCircle} iconColor="#34D399" label="Help Center" onPress={() => navigation.navigate('HelpCenter')} />
-          </View>
+          </LinearGradient>
+
+          {/* Sign Out */}
+          <TouchableOpacity
+            style={styles.signOutBtn}
+            activeOpacity={0.85}
+            onPress={handleSignOutPress}
+          >
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
 
           {/* Back to Onboarding (dev only) */}
           {__DEV__ && (
@@ -475,25 +438,21 @@ const styles = StyleSheet.create({
   /* Header */
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    paddingTop: 6,
+    paddingBottom: 12,
   },
   backBtn: {
-    width: 24,
-    height: 40,
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -6,
+  },
+  headerSpacer: {
+    width: 28,
+    height: 32,
   },
   logoWrap: {
     width: 50,
@@ -515,6 +474,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.text,
     letterSpacing: -0.4,
+    flex: 1,
+    textAlign: 'left',
   },
   headerSubtitle: {
     fontFamily: FONTS.ui.regular,
@@ -556,7 +517,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 160,
+    paddingBottom: 150,
+    paddingTop: 4,
   },
 
   /* Profile Card */
@@ -620,8 +582,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 7,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -630,9 +592,9 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.3,
   },
 
   /* Card stack — gap between individual cards */
@@ -642,7 +604,7 @@ const styles = StyleSheet.create({
 
   /* Individual card */
   cardGradient: {
-    borderRadius: 18,
+    borderRadius: 8,
   },
   cardEdge: {
     borderRadius: 18,
@@ -654,21 +616,31 @@ const styles = StyleSheet.create({
 
   /* Grouped card (multiple rows) */
   groupEdge: {
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
   },
   groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 16,
+    gap: 11,
+    paddingVertical: 10,
   },
   rowDivider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginLeft: 40,
+  },
+
+  /* Icon bubble — rounded square containing the row icon */
+  iconBubble: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* Row inside card */
@@ -678,11 +650,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowLabel: {
-    flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
     color: COLORS.text,
-    letterSpacing: 0.1,
+    letterSpacing: -0.1,
   },
   rowLabelCol: {
     flex: 1,
@@ -690,8 +661,27 @@ const styles = StyleSheet.create({
   },
   rowSubLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 9.75,
     color: COLORS.textTertiary,
+    letterSpacing: 0.1,
+  },
+
+  /* Sign Out button */
+  signOutBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    paddingVertical: 11,
+    borderRadius: 7,
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.28)',
+  },
+  signOutText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11.5,
+    color: COLORS.red,
+    letterSpacing: 0.1,
   },
 
   /* Onboarding */

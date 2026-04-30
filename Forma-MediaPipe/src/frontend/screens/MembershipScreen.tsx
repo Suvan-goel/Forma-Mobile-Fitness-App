@@ -208,30 +208,27 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    paddingTop: 6,
+    paddingBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -6,
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
     letterSpacing: -0.4,
+    flex: 1,
   },
   headerSpacer: {
-    width: 40,
+    width: 28,
   },
   scroll: {
     flex: 1,
@@ -285,8 +282,8 @@ const styles = StyleSheet.create({
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 7,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -295,9 +292,9 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.3,
   },
   columnHeaders: {
     flexDirection: 'row',
@@ -321,10 +318,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   cardGradient: {
-    borderRadius: 18,
+    borderRadius: 8,
   },
   cardEdge: {
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 14,
@@ -333,12 +330,12 @@ const styles = StyleSheet.create({
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
+    paddingVertical: 10,
   },
   featureName: {
     flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
     color: COLORS.text,
     letterSpacing: 0.1,
   },

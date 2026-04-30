@@ -259,37 +259,35 @@ const styles = StyleSheet.create({
   /* Header */
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    paddingTop: 6,
+    paddingBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -6,
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
     letterSpacing: -0.4,
+    flex: 1,
   },
   headerSpacer: {
-    width: 40,
+    width: 28,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 160,
+    paddingBottom: 150,
+    paddingTop: 4,
   },
 
   /* Banner */
@@ -317,8 +315,8 @@ const styles = StyleSheet.create({
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 7,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -327,20 +325,21 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.3,
   },
 
   /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 18,
+    borderRadius: 8,
   },
   cardEdge: {
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
   },
   divider: {
     height: 1,
@@ -352,15 +351,15 @@ const styles = StyleSheet.create({
   visibilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 6,
+    gap: 11,
+    paddingVertical: 10,
   },
   visibilityContent: {
     flex: 1,
   },
   visibilityLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
     color: COLORS.textSecondary,
     letterSpacing: 0.1,
     marginBottom: 3,
@@ -370,7 +369,7 @@ const styles = StyleSheet.create({
   },
   visibilityDesc: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 9.75,
     color: COLORS.textTertiary,
     lineHeight: 17,
   },
@@ -397,22 +396,22 @@ const styles = StyleSheet.create({
   dataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 6,
+    gap: 11,
+    paddingVertical: 10,
   },
   dataContent: {
     flex: 1,
   },
   dataTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
     color: COLORS.text,
     letterSpacing: 0.1,
     marginBottom: 3,
   },
   dataDesc: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 9.75,
     color: COLORS.textTertiary,
     lineHeight: 17,
   },

@@ -19,18 +19,19 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
 import {
   ChevronRight,
-  Clock,
+  ChevronLeft,
   Layers,
   Calendar,
   X,
   Check,
   BookOpen,
-  Video,
+  Search,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts, useDeleteWorkout, useUser } from '../../backend/hooks';
+import { useWorkouts, useDeleteWorkout } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { WorkoutSession } from '../../backend/services/api';
@@ -43,6 +44,19 @@ const MONTH_NAMES = [
 ];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEK_DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const WORKOUT_THUMBS = [
+  require('../assets/exercises/barbell_squat.png'),
+  require('../assets/exercises/barbell_curl.png'),
+  require('../assets/exercises/cable_row.png'),
+  require('../assets/exercises/push_up.png'),
+  require('../assets/exercises/cable_lat_pulldowns.png'),
+  require('../assets/exercises/leg_extensions.png'),
+];
+
+type LogbookListItem =
+  | { type: 'header'; key: string; label: string; count: number }
+  | { type: 'workout'; key: string; session: WorkoutSession; index: number };
 
 /* ── Calendar Modal ───────────────────────── */
 
@@ -174,11 +188,11 @@ interface WorkoutCardProps {
 }
 
 const CARD_INNER_HEIGHT = 110;
-const CARD_GAP = 12;
+const CARD_GAP = 9;
 const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
 const DELETE_AREA_WIDTH = 72;
 
-const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => {
+const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ session, onDelete, index }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { showAlert } = useAlert();
   const translateX = useRef(new Animated.Value(0)).current;
@@ -237,6 +251,12 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => 
     );
   }, [onDelete, session.id, closeSwipe, showAlert]);
 
+  const chips = [
+    session.category,
+    session.name.includes(' ') ? session.name.split(' ')[0] : session.name,
+    `${session.totalReps} reps`,
+  ].filter(Boolean).slice(0, 3) as string[];
+
   return (
     <View style={styles.swipeContainer}>
       {/* Delete button revealed when card slides left */}
@@ -263,29 +283,38 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => 
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
-              {/* Purple accent line on the left */}
-              <View style={styles.cardAccentLine} />
-
               <View style={styles.cardLayout}>
+                <View style={styles.workoutThumb}>
+                  <Image
+                    source={WORKOUT_THUMBS[index % WORKOUT_THUMBS.length]}
+                    style={styles.workoutThumbImage}
+                    resizeMode="cover"
+                  />
+                </View>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardDate}>
-                    {session.date} {session.fullDate.getFullYear()}
-                  </Text>
                   <Text style={styles.cardTitle} numberOfLines={1}>{session.name}</Text>
                   <View style={styles.metaRow}>
                     <View style={styles.metaItem}>
-                      <Layers size={11} color={COLORS.accent} strokeWidth={1.5} />
-                      <Text style={styles.metaText}>{session.totalSets} {session.totalSets === 1 ? 'set' : 'sets'}</Text>
+                      <Text style={styles.metaText}>{session.date}</Text>
                     </View>
                     <View style={styles.metaDot} />
                     <View style={styles.metaItem}>
-                      <Clock size={11} color={COLORS.accent} strokeWidth={1.5} />
                       <Text style={styles.metaText}>{session.duration}</Text>
                     </View>
                   </View>
+                  <Text style={styles.exerciseSummary} numberOfLines={1}>
+                    {session.totalSets} sets · {session.totalReps} reps
+                  </Text>
+                  <View style={styles.chipRow}>
+                    {chips.map((chip) => (
+                      <View key={chip} style={styles.exerciseChip}>
+                        <Text style={styles.exerciseChipText} numberOfLines={1}>{chip}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
                 <View style={styles.cardRight}>
-                  <View style={styles.scoreBadge}>
+                  <View style={[styles.scoreBadge, { borderColor: getScoreColor(session.formScore) }]}>
                     <MonoText style={[styles.scoreValue, { color: getScoreColor(session.formScore) }]}>{session.formScore}</MonoText>
                   </View>
                   <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -300,6 +329,7 @@ const WorkoutCard: React.FC<WorkoutCardProps> = memo(({ session, onDelete }) => 
 }, (prev, next) =>
   prev.session.id === next.session.id &&
   prev.session.formScore === next.session.formScore &&
+  prev.index === next.index &&
   prev.onDelete === next.onDelete,
 );
 
@@ -309,7 +339,6 @@ export const LogbookScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { onScroll } = useScroll();
-  const { user: profileUser } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const hasAnimated = useRef(false);
 
@@ -435,6 +464,47 @@ export const LogbookScreen: React.FC = () => {
   const filteredWorkouts = getFilteredWorkouts();
   const hasActiveFilter = selectedYear || selectedMonth || selectedWeek || selectedDate;
   const activeFilterMode = selectedDate ? 'date' : selectedWeek ? 'week' : selectedMonth ? 'month' : selectedYear ? 'year' : 'all';
+  const calendarBaseDate = selectedDate ?? filteredWorkouts[0]?.fullDate ?? new Date();
+  const calendarWeekStart = new Date(calendarBaseDate);
+  const calendarDay = calendarWeekStart.getDay();
+  calendarWeekStart.setDate(calendarWeekStart.getDate() - calendarDay + (calendarDay === 0 ? -6 : 1));
+  const visibleWeekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(calendarWeekStart);
+    date.setDate(calendarWeekStart.getDate() + index);
+    return date;
+  });
+  const selectedOrToday = selectedDate ?? new Date();
+  const monthTitle = `${MONTH_NAMES[calendarBaseDate.getMonth()]} ${calendarBaseDate.getFullYear()}`;
+  const groupedListItems: LogbookListItem[] = [];
+  const groupedByDay = new Map<string, WorkoutSession[]>();
+  filteredWorkouts.forEach((session) => {
+    const key = session.fullDate.toDateString();
+    const existing = groupedByDay.get(key) ?? [];
+    existing.push(session);
+    groupedByDay.set(key, existing);
+  });
+  Array.from(groupedByDay.entries()).forEach(([key, sessions]) => {
+    const date = sessions[0].fullDate;
+    const label = date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    }).toUpperCase();
+    groupedListItems.push({
+      type: 'header',
+      key: `header-${key}`,
+      label,
+      count: sessions.length,
+    });
+    sessions.forEach((session, index) => {
+      groupedListItems.push({
+        type: 'workout',
+        key: session.id,
+        session,
+        index,
+      });
+    });
+  });
 
   const handleDelete = useCallback(async (id: string) => {
     const success = await deleteWorkout(id);
@@ -445,87 +515,73 @@ export const LogbookScreen: React.FC = () => {
     }
   }, [deleteWorkout, refetch, showAlert]);
 
-  const renderWorkoutCard = useCallback(({ item }: { item: WorkoutSession }) => (
-    <WorkoutCard session={item} onDelete={handleDelete} />
-  ), [handleDelete]);
+  const renderListItem = useCallback(({ item }: { item: LogbookListItem }) => {
+    if (item.type === 'header') {
+      return (
+        <View style={styles.dayGroupHeader}>
+          <Text style={styles.dayGroupTitle}>{item.label}</Text>
+          <Text style={styles.dayGroupCount}>
+            {item.count} workout{item.count === 1 ? '' : 's'}
+          </Text>
+        </View>
+      );
+    }
+    return <WorkoutCard session={item.session} index={item.index} onDelete={handleDelete} />;
+  }, [handleDelete]);
 
-  const keyExtractor = useCallback((item: WorkoutSession) => item.id, []);
+  const keyExtractor = useCallback((item: LogbookListItem) => item.key, []);
 
   /* ── ListHeaderComponent — everything scrolls together ── */
 
   const ListHeader = useCallback(() => (
     <View>
-      {/* ── VIDEO LIBRARY LINK ─────────────────── */}
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => navigation.navigate('VideoLibrary')}
-        style={styles.videoLibraryCard}
-      >
-        <LinearGradient
-          colors={[...CARD_GRADIENT_COLORS]}
-          start={CARD_GRADIENT_START}
-          end={CARD_GRADIENT_END}
-          style={styles.videoLibraryGradient}
-        >
-          <View style={styles.videoLibraryEdge}>
-            <View style={styles.videoLibraryRow}>
-              <Video size={16} color={COLORS.accent} strokeWidth={1.5} />
-              <View style={styles.videoLibraryTextWrap}>
-                <Text style={styles.videoLibraryTitle}>Video Library</Text>
-                <Text style={styles.videoLibrarySubtitle}>Your recorded workouts</Text>
-              </View>
-              <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-            </View>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-
-      {/* ── FILTER TABS ───────────────────────── */}
-      <View style={styles.filterTabRow}>
+      <View style={styles.monthNavRow}>
         <TouchableOpacity
-          style={styles.filterTab}
-          onPress={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedWeek(null); setSelectedDate(null); }}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.filterTabText, activeFilterMode === 'all' && styles.filterTabTextActive]}>All</Text>
-          {activeFilterMode === 'all' && <View style={styles.filterUnderline} />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.filterTab}
-          onPress={() => setOpenDropdown('week')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.filterTabText, activeFilterMode === 'week' && styles.filterTabTextActive]}>Week</Text>
-          {activeFilterMode === 'week' && <View style={styles.filterUnderline} />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.filterTab}
           onPress={() => setOpenDropdown('month')}
           activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={[styles.filterTabText, activeFilterMode === 'month' && styles.filterTabTextActive]}>Month</Text>
-          {activeFilterMode === 'month' && <View style={styles.filterUnderline} />}
+          <ChevronLeft size={16} color={COLORS.textSecondary} strokeWidth={1.7} />
         </TouchableOpacity>
-
         <TouchableOpacity
-          style={styles.filterTab}
-          onPress={() => setOpenDropdown('year')}
+          onPress={() => setOpenDropdown('month')}
           activeOpacity={0.7}
+          style={styles.monthTitleButton}
         >
-          <Text style={[styles.filterTabText, activeFilterMode === 'year' && styles.filterTabTextActive]}>Year</Text>
-          {activeFilterMode === 'year' && <View style={styles.filterUnderline} />}
+          <Text style={styles.monthTitle}>{monthTitle}</Text>
+          <ChevronRight size={12} color={COLORS.textTertiary} strokeWidth={1.7} />
         </TouchableOpacity>
-
         <TouchableOpacity
-          style={styles.filterTab}
           onPress={() => setIsCalendarOpen(true)}
           activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Calendar size={14} color={activeFilterMode === 'date' ? '#FFFFFF' : COLORS.textTertiary} strokeWidth={1.5} />
-          {activeFilterMode === 'date' && <View style={styles.filterUnderline} />}
+          <Calendar size={16} color={COLORS.textSecondary} strokeWidth={1.7} />
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.weekCalendar}>
+        {visibleWeekDays.map((date, index) => {
+          const isSelected =
+            selectedOrToday.getDate() === date.getDate() &&
+            selectedOrToday.getMonth() === date.getMonth() &&
+            selectedOrToday.getFullYear() === date.getFullYear();
+          return (
+            <TouchableOpacity
+              key={date.toISOString()}
+              style={styles.weekDayCell}
+              onPress={() => handleDateSelect(date)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.weekDayLabel}>{WEEK_DAY_LABELS[index]}</Text>
+              <View style={[styles.weekDayNumberWrap, isSelected && styles.weekDayNumberSelected]}>
+                <Text style={[styles.weekDayNumber, isSelected && styles.weekDayNumberTextSelected]}>
+                  {date.getDate()}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* ── ACTIVE FILTER CHIP ────────────────── */}
@@ -546,7 +602,7 @@ export const LogbookScreen: React.FC = () => {
         </View>
       )}
     </View>
-  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, workouts, filteredWorkouts.length, navigation]);
+  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, hasActiveFilter, activeFilterMode, monthTitle, selectedOrToday, visibleWeekDays, handleDateSelect, navigation]);
 
   /* ── Loading ──── */
   if (isLoading) {
@@ -579,43 +635,32 @@ export const LogbookScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* ── LOGBOOK HEADER (HomeScreen style) ─────── */}
+      {/* ── LOGBOOK HEADER ─────── */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerName}>LOGBOOK</Text>
-            <Text style={styles.headerSubtitleText}>{filteredWorkouts.length} {filteredWorkouts.length === 1 ? 'SESSION' : 'SESSIONS'}</Text>
-          </View>
+        <View>
+          <Text style={styles.headerName}>Logbook</Text>
+          <Text style={styles.headerSubtitleText}>
+            {filteredWorkouts.length} session{filteredWorkouts.length === 1 ? '' : 's'}
+          </Text>
         </View>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('UserProfile')}
-          activeOpacity={0.7}
-          style={styles.profileBtn}
-        >
-          {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
-          ) : profileUser ? (
-            <LinearGradient
-              colors={['#7C5CFF', '#6746E8']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileGradient}
-            >
-              <Text style={styles.profileInitial}>
-                {profileUser.displayName[0].toUpperCase()}
-              </Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.profilePlaceholder} />
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('VideoLibrary')}
+            activeOpacity={0.7}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Search size={18} color={COLORS.textSecondary} strokeWidth={1.7} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setOpenDropdown('week')}
+            activeOpacity={0.7}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <SlidersHorizontal size={17} color={COLORS.textSecondary} strokeWidth={1.7} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -704,8 +749,8 @@ export const LogbookScreen: React.FC = () => {
           </View>
         ) : (
           <FlatList
-            data={filteredWorkouts}
-            renderItem={renderWorkoutCard}
+            data={groupedListItems}
+            renderItem={renderListItem}
             keyExtractor={keyExtractor}
             ListHeaderComponent={ListHeader}
             contentContainerStyle={[styles.listContent, { paddingBottom: 200 }]}
@@ -741,143 +786,94 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* ── Header (HomeScreen style) ────────────── */
+  /* ── Header ────────────── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 13,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 55,
-    height: 55,
-  },
-  headerTextWrap: {
-    gap: 1,
+    paddingTop: 5,
+    paddingBottom: 10,
   },
   headerSubtitleText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    letterSpacing: 0,
+    marginTop: 1,
   },
   headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 20,
     color: COLORS.text,
     letterSpacing: -0.4,
   },
-  profileBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  profileImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  profileGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  headerIconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profilePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  profileInitial: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  /* ── Video Library Link ─────────────────── */
-  videoLibraryCard: {
-    marginTop: 14,
-    marginBottom: 4,
-    borderRadius: 16,
-  },
-  videoLibraryGradient: {
-    borderRadius: 16,
-  },
-  videoLibraryEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  videoLibraryRow: {
+
+  /* ── Calendar Strip ─────────────────────── */
+  monthNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 3,
+    marginTop: 4,
+    marginBottom: 10,
   },
-  videoLibraryTextWrap: {
-    flex: 1,
-    gap: 2,
+  monthTitleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  videoLibraryTitle: {
+  monthTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.text,
-    letterSpacing: -0.2,
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+    letterSpacing: -0.1,
   },
-  videoLibrarySubtitle: {
+  weekCalendar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  weekDayCell: {
+    alignItems: 'center',
+    gap: 6,
+    width: 35,
+  },
+  weekDayLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9.5,
+    color: COLORS.textTertiary,
+  },
+  weekDayNumberWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekDayNumberSelected: {
+    backgroundColor: COLORS.accent,
+  },
+  weekDayNumber: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
   },
-
-  /* ── Filter Tabs ─────────────────────────── */
-  filterTabRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    marginBottom: 2,
-    marginTop: 18,
-    gap: 20,
-  },
-  filterTab: {
-    alignItems: 'center',
-    paddingBottom: 6,
-  },
-  filterTabText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  filterTabTextActive: {
+  weekDayNumberTextSelected: {
+    fontFamily: FONTS.ui.bold,
     color: '#FFFFFF',
-  },
-  filterUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
   },
 
   /* ── Active Filter Chip ─────────────────── */
@@ -928,70 +924,66 @@ const styles = StyleSheet.create({
   /* ── Workout Card ────────────────────────── */
   cardOuter: {
     height: CARD_INNER_HEIGHT,
-    borderRadius: 16,
+    borderRadius: 10,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
       },
-      android: { elevation: 4 },
+      android: { elevation: 2 },
     }),
   },
   cardGradient: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 10,
   },
   cardGlassEdge: {
     flex: 1,
     flexDirection: 'row',
-    borderRadius: 16,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    paddingVertical: SPACING.lg,
-    paddingLeft: 0,
-    paddingRight: SPACING.md,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 10,
     alignItems: 'center',
-  },
-  cardAccentLine: {
-    width: 3,
-    height: 36,
-    borderRadius: 1.5,
-    marginLeft: 14,
-    marginRight: 14,
-    backgroundColor: COLORS.accent,
   },
   cardLayout: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
+  },
+  workoutThumb: {
+    width: 58,
+    height: 74,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+  },
+  workoutThumbImage: {
+    width: '100%',
+    height: '100%',
   },
   cardContent: {
     flex: 1,
     gap: 3,
-  },
-  cardDate: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 10,
-    color: '#52525B',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    minWidth: 0,
   },
   cardTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 17,
+    fontSize: 13,
     color: COLORS.text,
-    letterSpacing: -0.3,
-    marginTop: 1,
+    letterSpacing: -0.2,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 5,
+    marginTop: 1,
   },
   metaItem: {
     flexDirection: 'row',
@@ -1006,31 +998,55 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: '#71717A',
-    letterSpacing: 0.3,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
+  },
+  exerciseSummary: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 5,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  exerciseChip: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  exerciseChipText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 8.5,
+    color: COLORS.textSecondary,
   },
   cardRight: {
     alignItems: 'center',
-    gap: 10,
-    marginLeft: SPACING.md,
+    justifyContent: 'center',
+    gap: 7,
+    marginLeft: 2,
   },
   scoreBadge: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    minWidth: 44,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 3,
+    borderColor: COLORS.green,
+    backgroundColor: 'rgba(16,23,28,0.45)',
   },
   scoreValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.text,
-    lineHeight: 19,
+    lineHeight: 17,
     textAlign: 'center',
   },
 
@@ -1039,6 +1055,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
     gap: CARD_GAP,
+  },
+  dayGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+    marginBottom: -2,
+  },
+  dayGroupTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.7,
+  },
+  dayGroupCount: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9.5,
+    color: COLORS.textTertiary,
   },
 
   /* ── Empty State ─────────────────────────── */

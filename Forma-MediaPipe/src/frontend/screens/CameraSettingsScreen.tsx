@@ -620,30 +620,27 @@ const styles = StyleSheet.create({
   /* Header — matches SettingsScreen */
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    paddingTop: 6,
+    paddingBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -6,
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
     letterSpacing: -0.4,
+    flex: 1,
   },
   headerSpacer: {
-    width: 40,
+    width: 28,
   },
 
   /* Scroll */
@@ -659,8 +656,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 7,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -669,36 +666,36 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.3,
   },
 
   /* Individual card */
   cardGradient: {
-    borderRadius: 18,
+    borderRadius: 8,
   },
   cardEdge: {
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
 
   /* Grouped card (multiple rows) */
   groupEdge: {
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
   },
   groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 16,
+    gap: 11,
+    paddingVertical: 10,
   },
   rowDivider: {
     height: 1,
@@ -713,8 +710,8 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
     color: COLORS.text,
     letterSpacing: 0.1,
   },
@@ -727,7 +724,7 @@ const styles = StyleSheet.create({
   },
   rowSubLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 9.75,
     color: COLORS.textTertiary,
   },
 
