@@ -128,6 +128,7 @@ export interface AnalyticsSummary {
   streakDays: number;
   mostTrainedExercise: string | null;
   personalBest: { exercise: string; weight: number } | null;
+  personalBests?: { exercise: string; weight: number; date?: string | null }[];
   formTrendDirection: 'up' | 'down' | 'flat';
   formTrendPercent: number;
 }

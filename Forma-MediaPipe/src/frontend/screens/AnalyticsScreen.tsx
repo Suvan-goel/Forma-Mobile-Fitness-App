@@ -12,7 +12,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Calendar,
@@ -20,11 +20,11 @@ import {
   Info,
   Check,
   Trophy,
-  ChevronRight,
   Activity,
   Dumbbell,
   TrendingUp,
   Clock,
+  ChevronRight,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -38,13 +38,33 @@ import {
   CARD_RADIUS,
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useAnalytics, useWorkoutPreferences } from '../../backend/hooks';
+import { useAnalytics, useExercises, useWorkoutPreferences } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
 import { TimeRangeSelector, TIME_RANGE_OPTIONS } from '../components/ui/TimeRangeSelector';
 import { TrendChart } from '../components/ui/TrendChart';
+import { LeaderboardView } from './social/LeaderboardView';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+type ProgressTab = 'overview' | 'personalBests' | 'leaderboard';
+
+const PB_THUMBS = [
+  require('../assets/exercises/barbell_squat.png'),
+  require('../assets/exercises/barbell_curl.png'),
+  require('../assets/exercises/cable_row.png'),
+];
+const EXERCISE_THUMBS: Record<string, any> = {
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+};
 
 const formatDuration = (totalMinutes: number): string => {
   const hours = Math.floor(totalMinutes / 60);
@@ -69,7 +89,9 @@ export const AnalyticsScreen: React.FC = () => {
   const weeklyTarget = WEEKLY_TARGET_MAP[prefs.weeklyTrainingTarget] ?? 4;
 
   const [selectedTimeRange, setSelectedTimeRange] = useState('1 week');
+  const [activeProgressTab, setActiveProgressTab] = useState<ProgressTab>('overview');
   const { analytics, isLoading, error, refetch } = useAnalytics('1 week', weeklyTarget);
+  const { exercises: allExercises } = useExercises();
 
   const handleTimeRangeChange = useCallback((range: string) => {
     setSelectedTimeRange(range);
@@ -137,6 +159,35 @@ export const AnalyticsScreen: React.FC = () => {
   const completedThisWeek = weekdayCompleted.filter(Boolean).length;
 
   const totalVolume = analytics.strengthData.values.reduce((s, v) => s + v, 0);
+  const personalBestEntries: { exercise: string; weight: number; date?: string | null }[] = summary.personalBests?.length
+    ? summary.personalBests
+    : summary.personalBest
+      ? [summary.personalBest]
+      : [];
+  const personalBestMap = new Map(personalBestEntries.map((best) => [best.exercise, best]));
+  const exerciseNames = Array.from(new Set([
+    ...allExercises.map((exercise) => exercise.name),
+    ...personalBestEntries.map((best) => best.exercise),
+  ])).sort((a, b) => {
+    const aHasBest = personalBestMap.has(a);
+    const bHasBest = personalBestMap.has(b);
+    if (aHasBest !== bHasBest) return aHasBest ? -1 : 1;
+    return a.localeCompare(b);
+  });
+  const personalBestRows = exerciseNames.map((name, index) => {
+    const exercise = allExercises.find((item) => item.name === name);
+    return {
+      name,
+      category: exercise?.muscleGroup ?? exercise?.category ?? 'Exercise',
+      best: personalBestMap.get(name),
+      thumb: EXERCISE_THUMBS[name] ?? PB_THUMBS[index % PB_THUMBS.length],
+    };
+  });
+  const tabs: { key: ProgressTab; label: string }[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'personalBests', label: 'Personal Bests' },
+    { key: 'leaderboard', label: 'Leaderboard' },
+  ];
 
   return (
     <View style={styles.container}>
@@ -163,48 +214,56 @@ export const AnalyticsScreen: React.FC = () => {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-      >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <View style={styles.tabsWrap}>
+        <View style={styles.topTabs}>
+          {tabs.map((tab, index) => {
+            const isActive = activeProgressTab === tab.key;
+            return (
+              <React.Fragment key={tab.key}>
+                {index > 0 && <View style={styles.topTabDivider} />}
+                <TouchableOpacity
+                  style={[styles.topTab, isActive && styles.topTabActive]}
+                  activeOpacity={0.75}
+                  onPress={() => setActiveProgressTab(tab.key)}
+                >
+                  <Text style={[styles.topTabText, isActive && styles.topTabTextActive]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              </React.Fragment>
+            );
+          })}
+        </View>
+      </View>
+
+      {activeProgressTab === 'leaderboard' ? (
+        <Animated.View style={[styles.leaderboardPane, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <LeaderboardView />
+        </Animated.View>
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+        >
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            {activeProgressTab === 'overview' ? (
+              <>
 
           {/* ── FORM SCORE TREND ────────────────────── */}
-          <View style={styles.formScoreCardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.formScoreGradient}
-            >
-              <View style={styles.formScoreEdge}>
-                <View style={styles.formScoreHeader}>
-                  <View style={styles.cardLabelRow}>
-                    <Text style={styles.cardLabel}>FORM SCORE TREND</Text>
-                    <Info size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.avgLabel}>Average</Text>
-                    <Text style={[styles.avgValue, { color: COLORS.green }]}>{hasData ? avgFormScore : '—'}</Text>
-                  </View>
-                </View>
-                <View style={styles.miniChartWrap}>
-                  <TrendChart
-                    title=""
-                    data={analytics.formData}
-                    unit=""
-                    timeRange={selectedTimeRange}
-                    headerValue={avgFormScore}
-                    lineColor={COLORS.green}
-                    height={140}
-                  />
-                </View>
-              </View>
-            </LinearGradient>
-          </View>
+          <TrendChart
+            title="FORM SCORE TREND"
+            icon={Info}
+            data={analytics.formData}
+            unit=""
+            timeRange={selectedTimeRange}
+            headerValue={avgFormScore}
+            lineColor={COLORS.green}
+            averageLabel="Average"
+            height={158}
+          />
 
           {/* ── TIME RANGE SELECTOR ─────────────────── */}
           <TimeRangeSelector
@@ -276,7 +335,7 @@ export const AnalyticsScreen: React.FC = () => {
 
                   <View style={styles.pbRow}>
                     <View style={styles.pbThumb}>
-                      <Trophy size={18} color={COLORS.yellow} strokeWidth={1.5} />
+                      <Image source={PB_THUMBS[0]} style={styles.pbThumbImage} resizeMode="cover" />
                     </View>
                     <View style={styles.pbInfo}>
                       <Text style={styles.pbName}>{summary.personalBest.exercise}</Text>
@@ -290,15 +349,32 @@ export const AnalyticsScreen: React.FC = () => {
                   {summary.mostTrainedExercise && (
                     <View style={[styles.pbRow, styles.pbRowBordered]}>
                       <View style={styles.pbThumb}>
-                        <Dumbbell size={18} color={COLORS.accent} strokeWidth={1.5} />
+                        <Image source={PB_THUMBS[1]} style={styles.pbThumbImage} resizeMode="cover" />
                       </View>
                       <View style={styles.pbInfo}>
                         <Text style={styles.pbName}>Most Trained</Text>
                         <Text style={styles.pbSub}>{summary.mostTrainedExercise}</Text>
                       </View>
-                      <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.6} />
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.pbWeight}>{summary.workoutCount}</Text>
+                        <Text style={styles.pbSub}>workouts</Text>
+                      </View>
                     </View>
                   )}
+
+                  <View style={[styles.pbRow, styles.pbRowBordered]}>
+                    <View style={styles.pbThumb}>
+                      <Image source={PB_THUMBS[2]} style={styles.pbThumbImage} resizeMode="cover" />
+                    </View>
+                    <View style={styles.pbInfo}>
+                      <Text style={styles.pbName}>Training Volume</Text>
+                      <Text style={styles.pbSub}>{selectedTimeRange}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.pbWeight}>{formatVolume(totalVolume)} kg</Text>
+                      <Text style={styles.pbSub}>total</Text>
+                    </View>
+                  </View>
                 </View>
               </LinearGradient>
             </View>
@@ -389,8 +465,66 @@ export const AnalyticsScreen: React.FC = () => {
             averageLabel="Average"
           />
 
+              </>
+            ) : (
+              <View style={styles.personalBestsPane}>
+                <View style={styles.cardOuter}>
+                  <LinearGradient
+                    colors={[...CARD_GRADIENT_COLORS]}
+                    start={CARD_GRADIENT_START}
+                    end={CARD_GRADIENT_END}
+                    style={styles.cardGradient}
+                  >
+                    <View style={styles.cardEdge}>
+                      <View style={styles.cardLabelRow}>
+                        <Text style={styles.cardLabel}>PERSONAL BESTS</Text>
+                        <Text style={styles.consistencyCount}>
+                          {personalBestEntries.length} recorded
+                        </Text>
+                      </View>
+
+                      {personalBestRows.length === 0 ? (
+                        <View style={styles.emptyBestState}>
+                          <Trophy size={22} color={COLORS.accent} strokeWidth={1.6} />
+                          <Text style={styles.emptyBestTitle}>No personal bests yet</Text>
+                          <Text style={styles.emptyBestText}>
+                            Save a workout with weighted sets to start tracking exercise records.
+                          </Text>
+                        </View>
+                      ) : (
+                        personalBestRows.map((row, index) => (
+                          <View
+                            key={row.name}
+                            style={[styles.bestListRow, index > 0 && styles.pbRowBordered]}
+                          >
+                            <View style={styles.bestThumb}>
+                              <Image source={row.thumb} style={styles.pbThumbImage} resizeMode="cover" />
+                            </View>
+                            <View style={styles.pbInfo}>
+                              <Text style={styles.bestName} numberOfLines={1}>{row.name}</Text>
+                              <Text style={styles.pbSub}>
+                                {row.best?.date ? `Recorded ${row.best.date}` : row.category}
+                              </Text>
+                            </View>
+                            <View style={styles.bestValueWrap}>
+                              <Text style={[styles.bestValue, !row.best && styles.bestValueEmpty]}>
+                                {row.best ? `${row.best.weight} kg` : '—'}
+                              </Text>
+                              <Text style={styles.pbSub}>{row.best ? 'Best set' : 'No PB'}</Text>
+                            </View>
+                            <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.7} />
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  </LinearGradient>
+                </View>
+              </View>
+            )}
+
         </Animated.View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -421,20 +555,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 4,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 5 },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.035)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
@@ -456,6 +590,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: 160,
   },
+  tabsWrap: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    marginBottom: 10,
+  },
+  leaderboardPane: {
+    flex: 1,
+  },
+  topTabs: {
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.028)',
+    overflow: 'hidden',
+  },
+  topTab: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topTabActive: {
+    backgroundColor: 'rgba(255,255,255,0.065)',
+  },
+  topTabText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  topTabTextActive: {
+    color: COLORS.accent,
+  },
+  topTabDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
 
   /* Card label */
   cardLabelRow: {
@@ -467,50 +640,14 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 9.5,
     color: COLORS.textSecondary,
-    letterSpacing: 1.6,
+    letterSpacing: 1.1,
   },
   viewAllLink: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.accent,
-  },
-
-  /* Form score card */
-  formScoreCardOuter: {
-    borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  formScoreGradient: { borderRadius: CARD_RADIUS },
-  formScoreEdge: {
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    padding: 16,
-  },
-  formScoreHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  avgLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.4,
-  },
-  avgValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 26,
-    letterSpacing: -0.6,
-    lineHeight: 30,
-  },
-  miniChartWrap: {
-    marginTop: -10,
-    marginHorizontal: -16,
   },
 
   /* Generic card */
@@ -524,13 +661,13 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
-    padding: 16,
+    padding: 13,
   },
 
   /* Consistency */
   consistencyCount: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 10.5,
     color: COLORS.textTertiary,
   },
   weekdaysRow: {
@@ -540,7 +677,7 @@ const styles = StyleSheet.create({
   },
   weekdayCell: {
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
   weekdayLetter: {
     fontFamily: FONTS.display.semibold,
@@ -549,9 +686,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   weekdayCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 21,
+    height: 21,
+    borderRadius: 10.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -559,7 +696,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.green,
   },
   weekdayCircleEmpty: {
-    borderWidth: 1.5,
+    borderWidth: 1.2,
     borderColor: 'rgba(255,255,255,0.18)',
   },
 
@@ -567,40 +704,142 @@ const styles = StyleSheet.create({
   pbRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
+    gap: 9,
+    paddingVertical: 7,
   },
   pbRowBordered: {
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
   },
   pbThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 33,
+    height: 33,
+    borderRadius: 7,
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.07)',
+    overflow: 'hidden',
+  },
+  pbThumbImage: {
+    width: '100%',
+    height: '100%',
   },
   pbInfo: { flex: 1, gap: 2 },
   pbName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.text,
     letterSpacing: -0.1,
   },
   pbSub: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11.5,
+    fontSize: 9.5,
     color: COLORS.textTertiary,
   },
   pbWeight: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontSize: 12,
     color: COLORS.text,
     letterSpacing: -0.2,
+  },
+  personalBestsPane: {
+    paddingTop: 2,
+  },
+  bestListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  bestThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    overflow: 'hidden',
+  },
+  bestName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+    letterSpacing: -0.1,
+  },
+  bestValueWrap: {
+    alignItems: 'flex-end',
+    minWidth: 58,
+  },
+  bestValue: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  bestValueEmpty: {
+    color: COLORS.textTertiary,
+  },
+  emptyBestState: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    gap: 8,
+  },
+  emptyBestTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  emptyBestText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    maxWidth: 240,
+  },
+  leaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingTop: 2,
+  },
+  rankBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.yellow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankText: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 10.5,
+    color: '#1C1510',
+  },
+  leaderAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  leaderInitial: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+  },
+  leaderScore: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.3,
   },
 
   /* Summary grid */

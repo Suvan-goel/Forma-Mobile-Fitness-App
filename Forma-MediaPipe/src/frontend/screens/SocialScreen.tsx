@@ -10,7 +10,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { SocialTabSelector, SocialTab } from '../components/ui/SocialTabSelector';
-import { LeaderboardView } from './social/LeaderboardView';
 import { FriendsView } from './social/FriendsView';
 import { ActivityView } from './social/ActivityView';
 import { useUser } from '../../backend/hooks';
@@ -23,7 +22,7 @@ const formatHeaderDate = (): string => {
 };
 
 export const SocialScreen: React.FC = memo(() => {
-  const [activeTab, setActiveTab] = useState<SocialTab>('leaderboard');
+  const [activeTab, setActiveTab] = useState<SocialTab>('activity');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user: profileUser } = useUser();
@@ -42,12 +41,10 @@ export const SocialScreen: React.FC = memo(() => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'leaderboard':
-        return <LeaderboardView />;
-      case 'friends':
-        return <FriendsView />;
       case 'activity':
         return <ActivityView />;
+      case 'friends':
+        return <FriendsView />;
     }
   };
 

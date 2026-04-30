@@ -43,10 +43,14 @@ import {
   SPACING,
   FONTS,
   CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  SCREEN_GRADIENT_COLORS,
+  SCREEN_GRADIENT_START,
+  SCREEN_GRADIENT_END,
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
@@ -91,6 +95,14 @@ const formatDateLine = (): string => {
 };
 
 const estimateTemplateDuration = (exercises: number): number => Math.max(20, exercises * 8);
+const TEMPLATE_IMAGES = [
+  require('../assets/exercises/barbell_squat.png'),
+  require('../assets/exercises/barbell_curl.png'),
+  require('../assets/exercises/cable_row.png'),
+  require('../assets/exercises/push_up.png'),
+  require('../assets/exercises/cable_lat_pulldowns.png'),
+  require('../assets/exercises/leg_extensions.png'),
+];
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
@@ -190,7 +202,12 @@ export const RecordLandingScreen: React.FC = () => {
   const recentTemplates = templates.slice(0, 6);
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={styles.container}
+    >
       {/* ── HEADER ──────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <View style={{ flex: 1 }} />
@@ -221,7 +238,7 @@ export const RecordLandingScreen: React.FC = () => {
             /* ── ACTIVE WORKOUT CARD ── */
             <View style={styles.activeOuter}>
               <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
+                colors={[...CARD_GRADIENT_ELEVATED]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.activeGradient}
@@ -318,7 +335,7 @@ export const RecordLandingScreen: React.FC = () => {
             /* ── CURRENT WORKOUT (idle) CARD ── */
             <View style={styles.activeOuter}>
               <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
+                colors={[...CARD_GRADIENT_ELEVATED]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.activeGradient}
@@ -346,7 +363,12 @@ export const RecordLandingScreen: React.FC = () => {
                         end={{ x: 1, y: 1 }}
                         style={StyleSheet.absoluteFill}
                       />
-                      <Dumbbell size={28} color={COLORS.accent} strokeWidth={1.5} />
+                      <Image
+                        source={require('../assets/exercises/barbell_squat.png')}
+                        style={styles.bodyVisualImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.bodyVisualShade} />
                     </View>
                   </View>
 
@@ -413,7 +435,7 @@ export const RecordLandingScreen: React.FC = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.templatesRow}
               >
-                {recentTemplates.map((tmpl) => (
+                {recentTemplates.map((tmpl, index) => (
                   <TouchableOpacity
                     key={tmpl.id}
                     style={styles.templateCard}
@@ -437,13 +459,12 @@ export const RecordLandingScreen: React.FC = () => {
                       style={styles.templateGradient}
                     >
                       <View style={styles.templateThumb}>
-                        <LinearGradient
-                          colors={['rgba(124,92,255,0.18)', 'rgba(124,92,255,0.04)']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={StyleSheet.absoluteFill}
+                        <Image
+                          source={TEMPLATE_IMAGES[index % TEMPLATE_IMAGES.length]}
+                          style={styles.templateThumbImage}
+                          resizeMode="cover"
                         />
-                        <Dumbbell size={22} color={COLORS.accent} strokeWidth={1.6} />
+                        <View style={styles.templateThumbShade} />
                       </View>
                       <View style={styles.templateInfo}>
                         <Text style={styles.templateName} numberOfLines={1}>{tmpl.name}</Text>
@@ -462,7 +483,7 @@ export const RecordLandingScreen: React.FC = () => {
           )}
         </Animated.View>
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 };
 
@@ -502,38 +523,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   headerSide: { flex: 1 },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   scroll: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 6,
+    paddingHorizontal: 16,
+    paddingTop: 3,
   },
 
   dateLine: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    marginBottom: 14,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
   },
 
   /* Card label */
@@ -544,56 +562,66 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 8.5,
     color: COLORS.textSecondary,
-    letterSpacing: 1.6,
+    letterSpacing: 0.9,
   },
 
   /* Active / Idle workout card */
   activeOuter: {
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
-    marginBottom: 18,
+    marginBottom: 12,
   },
   activeGradient: { borderRadius: CARD_RADIUS },
   activeEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
-    padding: 16,
+    paddingHorizontal: 12,
+    paddingTop: 11,
+    paddingBottom: 12,
   },
 
   /* Idle body */
   idleBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 12,
-    marginBottom: 16,
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 10,
   },
-  idleTextWrap: { flex: 1, gap: 8 },
+  idleTextWrap: { flex: 1, gap: 6 },
   idleTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 15.5,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
-  idleMetaRow: { flexDirection: 'row', gap: 14 },
+  idleMetaRow: { flexDirection: 'row', gap: 10 },
   bodyVisual: {
-    width: 72,
-    height: 84,
-    borderRadius: 12,
+    width: 70,
+    height: 86,
+    borderRadius: 9,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
+  bodyVisualImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bodyVisualShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.26)',
+  },
   metaIconRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
+    fontSize: 10.5,
+    color: COLORS.textSecondary,
   },
 
   /* Active body */
@@ -690,12 +718,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 13,
+    gap: 7,
+    paddingVertical: 10,
   },
   startBtnText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 12,
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
@@ -703,72 +731,72 @@ const styles = StyleSheet.create({
   /* Section labels */
   sectionLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 8.5,
     color: COLORS.textSecondary,
-    letterSpacing: 1.6,
-    marginTop: 6,
-    marginBottom: 10,
+    letterSpacing: 0.9,
+    marginTop: 5,
+    marginBottom: 8,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 18,
-    marginBottom: 10,
+    marginTop: 12,
+    marginBottom: 8,
   },
   viewAllLink: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 10,
     color: COLORS.accent,
   },
 
   /* Tools */
   toolsCard: {
     borderRadius: CARD_RADIUS,
-    backgroundColor: 'rgba(255,255,255,0.025)',
+    backgroundColor: 'rgba(255,255,255,0.028)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   toolRowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   toolIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 29,
+    height: 29,
+    borderRadius: 7,
     backgroundColor: 'rgba(124,92,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   toolTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.text,
     letterSpacing: -0.1,
   },
   toolSubtitle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11.5,
-    color: COLORS.textTertiary,
+    fontSize: 10,
+    color: COLORS.textSecondary,
     marginTop: 1,
   },
 
   /* Templates */
   templatesRow: {
-    gap: 12,
+    gap: 8,
     paddingRight: 4,
   },
   templateCard: {
-    width: 160,
+    width: 93,
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
   },
@@ -776,28 +804,36 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
-    padding: 12,
-    gap: 10,
+    padding: 6,
+    gap: 6,
   },
   templateThumb: {
-    height: 80,
-    borderRadius: 10,
+    height: 58,
+    borderRadius: 7,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
+  templateThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  templateThumbShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
   templateInfo: { gap: 2 },
   templateName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontSize: 10.5,
     color: COLORS.text,
     letterSpacing: -0.1,
   },
   templateMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
+    fontSize: 9.25,
+    color: COLORS.textSecondary,
   },
 });

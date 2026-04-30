@@ -6,7 +6,7 @@ import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
-export type SocialTab = 'leaderboard' | 'friends' | 'activity';
+export type SocialTab = 'activity' | 'friends';
 
 interface SocialTabSelectorProps {
   activeTab: SocialTab;
@@ -14,9 +14,8 @@ interface SocialTabSelectorProps {
 }
 
 const TABS: { key: SocialTab; label: string }[] = [
-  { key: 'leaderboard', label: 'Leaderboard' },
-  { key: 'friends', label: 'Friends' },
   { key: 'activity', label: 'Activity' },
+  { key: 'friends', label: 'Friends' },
 ];
 
 export const SocialTabSelector: React.FC<SocialTabSelectorProps> = memo(({ activeTab, onTabChange }) => {

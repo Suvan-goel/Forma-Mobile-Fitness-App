@@ -1,5 +1,5 @@
 /**
- * LeaderboardView — Leaderboard tab content within SocialScreen
+ * LeaderboardView — Reusable leaderboard tab content
  */
 
 import React, { memo, useState, useCallback, useMemo, useRef } from 'react';

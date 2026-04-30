@@ -114,7 +114,7 @@ async function computeSupabaseSummary(
     // Personal best (highest weight)
     supabase
       .from('workout_sessions')
-      .select('workout_exercises(name, workout_sets(weight))')
+      .select('date, workout_exercises(name, workout_sets(weight))')
       .gte('date', startDate)
       .lte('date', endDate),
 
@@ -160,10 +160,23 @@ async function computeSupabaseSummary(
 
   // Personal best
   let personalBest: { exercise: string; weight: number } | null = null;
+  const bestByExercise = new Map<string, { exercise: string; weight: number; date?: string | null }>();
   let maxWeight = 0;
   (pbResult.data ?? []).forEach((session: any) => {
     (session.workout_exercises ?? []).forEach((ex: any) => {
       (ex.workout_sets ?? []).forEach((set: any) => {
+        const weight = set.weight ?? 0;
+        const exerciseName = ex.name;
+        if (exerciseName && weight > 0) {
+          const existing = bestByExercise.get(exerciseName);
+          if (!existing || weight > existing.weight) {
+            bestByExercise.set(exerciseName, {
+              exercise: exerciseName,
+              weight,
+              date: session.date ? String(session.date).split('T')[0] : null,
+            });
+          }
+        }
         if ((set.weight ?? 0) > maxWeight) {
           maxWeight = set.weight;
           personalBest = { exercise: ex.name, weight: set.weight };
@@ -212,6 +225,7 @@ async function computeSupabaseSummary(
     streakDays,
     mostTrainedExercise,
     personalBest,
+    personalBests: Array.from(bestByExercise.values()).sort((a, b) => b.weight - a.weight),
     formTrendDirection: trend.direction,
     formTrendPercent: trend.percent,
   };

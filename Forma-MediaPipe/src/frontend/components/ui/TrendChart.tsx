@@ -114,6 +114,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 }) => {
   const accent = lineColor ?? COLORS.accent;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const chartId = title.replace(/[^a-zA-Z0-9]/g, '') || 'Trend';
 
   const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - SPACING.md * 2;
   const padLeft = 32;
@@ -261,7 +262,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
               <Defs>
                 {/* userSpaceOnUse + pixel coords so gradient renders correctly on native (objectBoundingBox can show solid fill) */}
                 <SvgGradient
-                  id="areaGrad"
+                  id={`areaGrad${chartId}`}
                   x1={padLeft}
                   y1={padTop}
                   x2={padLeft}
@@ -271,14 +272,14 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                   <Stop offset="0" stopColor={accent} stopOpacity="0.25" />
                   <Stop offset="1" stopColor={accent} stopOpacity="0" />
                 </SvgGradient>
-                <ClipPath id="chartClip">
+                <ClipPath id={`chartClip${chartId}`}>
                   <Rect x={0} y={padTop} width={chartWidth} height={graphH} />
                 </ClipPath>
               </Defs>
 
-              <G clipPath="url(#chartClip)">
+              <G clipPath={`url(#chartClip${chartId})`}>
                 {/* Area fill — faded purple under the line */}
-                <Path d={svgContent.areaPath} fill="url(#areaGrad)" />
+                <Path d={svgContent.areaPath} fill={`url(#areaGrad${chartId})`} />
 
                 {/* Line */}
                 <Path
@@ -362,7 +363,7 @@ const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
-    marginBottom: 14,
+    marginBottom: 8,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -380,13 +381,15 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.09)',
-    padding: SPACING.md,
+    paddingHorizontal: 13,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 2,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -395,9 +398,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 9.5,
     color: COLORS.textSecondary,
-    letterSpacing: 1.6,
+    letterSpacing: 1.1,
   },
   headerRight: {
     flexDirection: 'column',
@@ -406,7 +409,7 @@ const styles = StyleSheet.create({
   },
   averageLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
+    fontSize: 9.5,
     color: COLORS.textTertiary,
     letterSpacing: 0.4,
   },
@@ -423,9 +426,9 @@ const styles = StyleSheet.create({
   },
   currentValue: {
     fontFamily: FONTS.display.bold,
-    fontSize: 26,
+    fontSize: 24,
     color: COLORS.text,
-    lineHeight: 30,
+    lineHeight: 28,
     letterSpacing: -0.8,
   },
   unitText: {
