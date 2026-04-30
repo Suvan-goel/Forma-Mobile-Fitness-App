@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ChevronLeft, Search, UserPlus, Check, Clock, Heart } from 'lucide-react-native';
+import { ChevronLeft, Search, UserPlus, Check, Clock, Heart, X, Users } from 'lucide-react-native';
 import {
   COLORS,
   FONTS,
@@ -23,8 +23,10 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
-  CARD_RADIUS,
   CARD_SHADOW,
+  SCREEN_GRADIENT_COLORS,
+  SCREEN_GRADIENT_START,
+  SCREEN_GRADIENT_END,
 } from '../../constants/theme';
 import { useUserSearch, useFriends, useFollowing } from '../../../backend/hooks';
 import { UserSearchResult } from '../../../backend/services/api/types';
@@ -113,12 +115,18 @@ export const AddFriendScreen: React.FC = memo(() => {
 
           {item.relationshipStatus === 'none' || item.relationshipStatus === 'pending_received' ? (
             <TouchableOpacity
-              style={styles.addButton}
               onPress={() => handleAdd(item.userId)}
               activeOpacity={0.7}
             >
-              <UserPlus size={14} color={COLORS.text} strokeWidth={2} />
-              <Text style={styles.addButtonText}>Add</Text>
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.primaryDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.addButton}
+              >
+                <UserPlus size={14} color={COLORS.text} strokeWidth={2} />
+                <Text style={styles.addButtonText}>Add</Text>
+              </LinearGradient>
             </TouchableOpacity>
           ) : (
             <StatusIndicator status={item.relationshipStatus} />
@@ -131,7 +139,12 @@ export const AddFriendScreen: React.FC = memo(() => {
   const keyExtractor = useCallback((item: UserSearchResult) => item.userId, []);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={[styles.container, { paddingTop: insets.top }]}
+    >
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -143,24 +156,51 @@ export const AddFriendScreen: React.FC = memo(() => {
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>Add Friends</Text>
-          <Text style={styles.headerSubtitle}>Search by name to connect</Text>
+          <Text style={styles.headerSubtitle}>Find people training on Forma</Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
 
-      <View style={styles.searchContainer}>
-        <Search size={15} color={COLORS.textTertiary} strokeWidth={1.7} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search friends"
-          placeholderTextColor={COLORS.textTertiary}
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
+      <View style={styles.introCard}>
+        <View style={styles.introIcon}>
+          <Users size={18} color={COLORS.accent} strokeWidth={1.7} />
+        </View>
+        <View style={styles.introTextWrap}>
+          <Text style={styles.introTitle}>Grow your training circle</Text>
+          <Text style={styles.introText}>Search by name, follow progress, and send friend requests.</Text>
+        </View>
       </View>
+
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.searchGradient}
+      >
+        <View style={styles.searchContainer}>
+          <Search size={16} color={COLORS.textTertiary} strokeWidth={1.7} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name"
+            placeholderTextColor={COLORS.textTertiary}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {query.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearSearchButton}
+              onPress={() => setQuery('')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <X size={14} color={COLORS.textTertiary} strokeWidth={2} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </LinearGradient>
 
       {error && hasSearchTerm && (
         <Text style={styles.inlineError}>{error}</Text>
@@ -206,26 +246,30 @@ export const AddFriendScreen: React.FC = memo(() => {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </LinearGradient>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 6,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -236,7 +280,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18.5,
+    fontSize: 20,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -245,24 +289,79 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
   },
+  introCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(31, 39, 45, 0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  introIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.18)',
+    marginRight: 11,
+  },
+  introTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  introTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  introText: {
+    marginTop: 3,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
+  },
+  searchGradient: {
+    gap: 9,
+    marginHorizontal: SPACING.screenHorizontal,
+    borderRadius: 8,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
-    marginHorizontal: SPACING.screenHorizontal,
-    height: 43,
+    height: 48,
     paddingHorizontal: 13,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   searchInput: {
     flex: 1,
     fontFamily: FONTS.ui.regular,
-    fontSize: 13.5,
+    fontSize: 14,
     color: COLORS.text,
     padding: 0,
+  },
+  clearSearchButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   inlineError: {
     marginHorizontal: SPACING.screenHorizontal,
@@ -277,20 +376,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   listContent: {
-    paddingTop: 14,
+    paddingTop: 16,
     paddingBottom: 48,
   },
   resultsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 8,
+    marginBottom: 9,
   },
   resultsTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 11.5,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
     color: COLORS.text,
+    letterSpacing: 0,
   },
   resultsCount: {
     fontFamily: FONTS.mono.bold,
@@ -298,31 +398,31 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 7,
     overflow: 'hidden',
     backgroundColor: 'rgba(122, 85, 255, 0.16)',
   },
   userRowOuter: {
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 8,
-    borderRadius: CARD_RADIUS,
+    marginBottom: 10,
+    borderRadius: 8,
     ...CARD_SHADOW,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 62,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: CARD_RADIUS,
+    minHeight: 70,
+    paddingVertical: 10,
+    paddingHorizontal: 13,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.085)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122, 85, 255, 0.12)',
@@ -331,7 +431,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.text,
   },
   userInfo: {
@@ -340,15 +440,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   userName: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13.5,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
     color: COLORS.text,
+    letterSpacing: 0,
   },
   mutualText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
+    fontSize: 11,
     color: COLORS.textTertiary,
-    marginTop: 2,
+    marginTop: 3,
   },
   actionRow: {
     flexDirection: 'row',
@@ -356,9 +457,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   followHeartBtn: {
-    width: 33,
-    height: 33,
-    borderRadius: 17,
+    width: 34,
+    height: 34,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -373,25 +474,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    minWidth: 66,
-    height: 33,
+    minWidth: 68,
+    height: 34,
     justifyContent: 'center',
     paddingHorizontal: 12,
-    borderRadius: 9,
-    backgroundColor: COLORS.primary,
+    borderRadius: 8,
   },
   addButtonText: {
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 12,
     color: COLORS.text,
+    letterSpacing: 0,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    height: 33,
+    height: 34,
     paddingHorizontal: 9,
-    borderRadius: 9,
+    borderRadius: 8,
     borderWidth: 1,
   },
   statusBadgeSuccess: {
@@ -407,30 +508,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   emptyContainer: {
-    paddingTop: 72,
+    marginHorizontal: SPACING.screenHorizontal,
+    marginTop: 34,
+    paddingHorizontal: 20,
+    paddingVertical: 34,
+    borderRadius: 8,
+    backgroundColor: 'rgba(31, 39, 45, 0.42)',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255, 255, 255, 0.075)',
     alignItems: 'center',
     gap: SPACING.sm,
-    paddingHorizontal: SPACING.xl,
   },
   emptyIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(122, 85, 255, 0.16)',
     marginBottom: SPACING.xs,
   },
   emptyText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.text,
+    letterSpacing: 0,
   },
   emptySubtext: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
+    textAlign: 'center',
   },
 });

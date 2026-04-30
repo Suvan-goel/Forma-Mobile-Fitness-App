@@ -491,6 +491,7 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     flex: 1,
     borderRadius: 19,
 

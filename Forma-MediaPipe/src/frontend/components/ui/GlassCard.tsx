@@ -10,6 +10,7 @@ import React, { memo } from 'react';
 import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
+  COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
@@ -55,6 +56,7 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
     overflow: 'hidden',
+    backgroundColor: COLORS.cardBackground,
   },
   edge: {
     flex: 1,

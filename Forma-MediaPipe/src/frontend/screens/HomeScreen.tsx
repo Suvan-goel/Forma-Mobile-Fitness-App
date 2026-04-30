@@ -60,16 +60,26 @@ import type { RootStackParamList } from '../app/RootNavigator';
 const RING_SIZE = 78;
 const RING_STROKE = 7;
 
-const ScoreRing: React.FC<{ score: number; size?: number; stroke?: number; small?: boolean }> = ({
-  score, size = RING_SIZE, stroke = RING_STROKE, small,
-}) => {
+const ScoreRing: React.FC<{
+  score: number;
+  size?: number;
+  stroke?: number;
+  small?: boolean;
+}> = ({ score, size = RING_SIZE, stroke = RING_STROKE, small }) => {
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(100, score));
   const offset = circumference - (clamped / 100) * circumference;
   const color = getScoreColor(score);
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{
+        width: size,
+        height: size,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <Svg width={size} height={size}>
         <Circle
           cx={size / 2}
@@ -93,8 +103,17 @@ const ScoreRing: React.FC<{ score: number; size?: number; stroke?: number; small
         />
       </Svg>
       <View style={StyleSheet.absoluteFillObject as any} pointerEvents="none">
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={[ringValue, { color: COLORS.text, fontSize: small ? 18 : 22 }]}>{score}</Text>
+        <View
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text
+            style={[
+              ringValue,
+              { color: COLORS.text, fontSize: small ? 18 : 22 },
+            ]}
+          >
+            {score}
+          </Text>
           <Text style={ringSub}>/100</Text>
         </View>
       </View>
@@ -102,43 +121,92 @@ const ScoreRing: React.FC<{ score: number; size?: number; stroke?: number; small
   );
 };
 
+const SessionScoreBadge: React.FC<{ score: number }> = ({ score }) => (
+  <View
+    style={[styles.sessionScoreBadge, { borderColor: getScoreColor(score) }]}
+  >
+    <Text style={[styles.sessionScoreValue, { color: getScoreColor(score) }]}>
+      {score}
+    </Text>
+  </View>
+);
+
 export const HomeScreen: React.FC = () => {
   const { onScroll } = useScroll();
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { homeData, isLoading, error, refetch } = useHomeData();
   const { user: profileUser } = useUser();
 
   useEffect(() => {
     if (homeData) {
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 700,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [homeData, fadeAnim, slideAnim]);
 
-  const navigateToTab = useCallback((tab: string) => {
-    if (tab === 'Record') {
-      navigation.navigate('MainTabs', { screen: 'Record', params: { screen: 'RecordLanding' } });
-      return;
-    }
-    navigation.navigate('MainTabs', { screen: tab });
-  }, [navigation]);
+  const navigateToTab = useCallback(
+    (tab: string) => {
+      if (tab === 'Record') {
+        navigation.navigate('MainTabs', {
+          screen: 'Record',
+          params: { screen: 'RecordLanding' },
+        });
+        return;
+      }
+      navigation.navigate('MainTabs', { screen: tab });
+    },
+    [navigation],
+  );
+
+  const navigateToRecordScreen = useCallback(
+    (screen: 'RecordLanding' | 'WorkoutTemplates' | 'CreateTemplate') => {
+      navigation.navigate('MainTabs', {
+        screen: 'Record',
+        params: { screen },
+      });
+    },
+    [navigation],
+  );
 
   if (isLoading || !homeData) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingWrap}>
-          <LoadingSkeleton variant="card" height={60} style={{ marginBottom: SPACING.lg }} />
-          <LoadingSkeleton variant="card" height={180} style={{ marginBottom: SPACING.md }} />
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: SPACING.md }}>
+          <LoadingSkeleton
+            variant="card"
+            height={60}
+            style={{ marginBottom: SPACING.lg }}
+          />
+          <LoadingSkeleton
+            variant="card"
+            height={180}
+            style={{ marginBottom: SPACING.md }}
+          />
+          <View
+            style={{ flexDirection: 'row', gap: 10, marginBottom: SPACING.md }}
+          >
             <LoadingSkeleton variant="card" height={48} style={{ flex: 1 }} />
             <LoadingSkeleton variant="card" height={48} style={{ flex: 1 }} />
           </View>
-          <LoadingSkeleton variant="card" height={110} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton
+            variant="card"
+            height={110}
+            style={{ marginBottom: SPACING.md }}
+          />
           <LoadingSkeleton variant="card" height={120} />
         </View>
       </View>
@@ -160,10 +228,15 @@ export const HomeScreen: React.FC = () => {
   const hasWorkouts = score > 0;
 
   // Status text & guidance for the readiness card
-  const statusText = !hasWorkouts ? 'Ready to start' :
-    score >= 90 ? 'Peak form' :
-    score >= 75 ? 'Good to go' :
-    score >= 50 ? 'Keep working' : 'Focus up';
+  const statusText = !hasWorkouts
+    ? 'Ready to start'
+    : score >= 90
+      ? 'Peak form'
+      : score >= 75
+        ? 'Good to go'
+        : score >= 50
+          ? 'Keep working'
+          : 'Focus up';
   const guidanceText = !hasWorkouts
     ? 'Complete your first workout to see your form readiness.'
     : score >= 90
@@ -174,12 +247,26 @@ export const HomeScreen: React.FC = () => {
           ? 'Slow down on the eccentric and keep your form tight.'
           : 'Focus on technique today — quality reps over heavy weight.';
 
-  const weeklyPct = homeData.weeklyGoal.target > 0
-    ? Math.min(100, Math.round((homeData.weeklyGoal.current / homeData.weeklyGoal.target) * 100))
-    : 0;
-  const weeklyRemaining = Math.max(0, homeData.weeklyGoal.target - homeData.weeklyGoal.current);
+  const weeklyPct =
+    homeData.weeklyGoal.target > 0
+      ? Math.min(
+          100,
+          Math.round(
+            (homeData.weeklyGoal.current / homeData.weeklyGoal.target) * 100,
+          ),
+        )
+      : 0;
+  const weeklyRemaining = Math.max(
+    0,
+    homeData.weeklyGoal.target - homeData.weeklyGoal.current,
+  );
   const nextBadgePct = homeData.nextBadge
-    ? Math.min(100, Math.round((homeData.nextBadge.current / homeData.nextBadge.required) * 100))
+    ? Math.min(
+        100,
+        Math.round(
+          (homeData.nextBadge.current / homeData.nextBadge.required) * 100,
+        ),
+      )
     : 100;
   const nextBadgeRemaining = homeData.nextBadge
     ? Math.max(0, homeData.nextBadge.required - homeData.nextBadge.current)
@@ -201,7 +288,11 @@ export const HomeScreen: React.FC = () => {
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+          <SettingsIcon
+            size={20}
+            color={COLORS.textSecondary}
+            strokeWidth={1.6}
+          />
         </TouchableOpacity>
       </View>
 
@@ -212,8 +303,9 @@ export const HomeScreen: React.FC = () => {
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           {/* ── GREETING ROW with avatar ──────────────── */}
           <TouchableOpacity
             style={styles.greetingRow}
@@ -222,7 +314,10 @@ export const HomeScreen: React.FC = () => {
           >
             <View style={styles.avatarWrap}>
               {profileUser?.avatarUrl ? (
-                <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
+                <Image
+                  source={{ uri: profileUser.avatarUrl }}
+                  style={styles.avatarImage}
+                />
               ) : (
                 <LinearGradient
                   colors={['#7A55FF', '#633FE5']}
@@ -241,7 +336,9 @@ export const HomeScreen: React.FC = () => {
               <Text style={styles.greetingName} numberOfLines={1}>
                 {homeData.displayName}
               </Text>
-              <Text style={styles.greetingSubtitle}>Let's train smarter today.</Text>
+              <Text style={styles.greetingSubtitle}>
+                Let's train smarter today.
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -260,16 +357,28 @@ export const HomeScreen: React.FC = () => {
               <View style={styles.readinessEdge}>
                 <View style={styles.cardLabelRow}>
                   <Text style={styles.cardLabel}>FORM READINESS</Text>
-                  <Info size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  <Info
+                    size={12}
+                    color={COLORS.textTertiary}
+                    strokeWidth={1.5}
+                  />
                 </View>
 
                 <View style={styles.readinessBody}>
                   <ScoreRing score={hasWorkouts ? score : 0} />
                   <View style={styles.readinessTextWrap}>
-                    <Text style={[styles.readinessStatus, { color: scoreColor }]}>{statusText}</Text>
+                    <Text
+                      style={[styles.readinessStatus, { color: scoreColor }]}
+                    >
+                      {statusText}
+                    </Text>
                     <Text style={styles.readinessGuidance}>{guidanceText}</Text>
                   </View>
-                  <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.6} />
+                  <ChevronRight
+                    size={16}
+                    color={COLORS.textTertiary}
+                    strokeWidth={1.6}
+                  />
                 </View>
 
                 {/* Start Workout button inside card */}
@@ -284,7 +393,12 @@ export const HomeScreen: React.FC = () => {
                     end={{ x: 1, y: 0 }}
                     style={styles.startBtn}
                   >
-                    <Play size={14} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
+                    <Play
+                      size={14}
+                      color="#FFFFFF"
+                      strokeWidth={2.5}
+                      fill="#FFFFFF"
+                    />
                     <Text style={styles.startBtnText}>Start Workout</Text>
                   </LinearGradient>
                 </TouchableOpacity>
@@ -297,15 +411,19 @@ export const HomeScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.actionBtn}
               activeOpacity={0.7}
-              onPress={() => navigateToTab('Record')}
+              onPress={() => navigateToRecordScreen('WorkoutTemplates')}
             >
-              <BookOpen size={15} color={COLORS.textSecondary} strokeWidth={1.6} />
+              <BookOpen
+                size={15}
+                color={COLORS.textSecondary}
+                strokeWidth={1.6}
+              />
               <Text style={styles.actionBtnText}>Choose Template</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionBtn}
               activeOpacity={0.7}
-              onPress={() => navigateToTab('Record')}
+              onPress={() => navigateToRecordScreen('CreateTemplate')}
             >
               <Plus size={15} color={COLORS.textSecondary} strokeWidth={2} />
               <Text style={styles.actionBtnText}>Create New</Text>
@@ -329,7 +447,8 @@ export const HomeScreen: React.FC = () => {
                   <View>
                     <Text style={styles.cardLabel}>WEEKLY TARGET</Text>
                     <Text style={styles.weeklyValue}>
-                      {homeData.weeklyGoal.current} of {homeData.weeklyGoal.target} workouts
+                      {homeData.weeklyGoal.current} of{' '}
+                      {homeData.weeklyGoal.target} workouts
                     </Text>
                   </View>
                   <Text style={styles.weeklyPct}>{weeklyPct}%</Text>
@@ -374,7 +493,9 @@ export const HomeScreen: React.FC = () => {
                   <View
                     style={[
                       styles.rewardIcon,
-                      { borderColor: `${homeData.nextBadge?.color ?? COLORS.primary}33` },
+                      {
+                        borderColor: `${homeData.nextBadge?.color ?? COLORS.primary}33`,
+                      },
                     ]}
                   >
                     <Trophy
@@ -393,7 +514,10 @@ export const HomeScreen: React.FC = () => {
                     ]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={[styles.progressFill, { width: `${Math.max(6, nextBadgePct)}%` }]}
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.max(6, nextBadgePct)}%` },
+                    ]}
                   />
                 </View>
 
@@ -417,7 +541,11 @@ export const HomeScreen: React.FC = () => {
           {homeData.lastWorkout ? (
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={() => navigation.navigate('WorkoutDetails', { workoutId: homeData.lastWorkout!.id })}
+              onPress={() =>
+                navigation.navigate('WorkoutDetails', {
+                  workoutId: homeData.lastWorkout!.id,
+                })
+              }
               style={styles.sessionOuter}
             >
               <LinearGradient
@@ -432,24 +560,37 @@ export const HomeScreen: React.FC = () => {
                   </View>
                   <View style={styles.sessionRow}>
                     <View style={styles.sessionThumb}>
-                      <Activity size={21} color={COLORS.accent} strokeWidth={1.7} />
+                      <LinearGradient
+                        colors={[
+                          'rgba(122, 85, 255, 0.22)',
+                          'rgba(122, 85, 255, 0.08)',
+                        ]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <Activity size={21} color="#FFFFFF" strokeWidth={1.5} />
                     </View>
                     <View style={styles.sessionInfo}>
                       <Text style={styles.sessionName} numberOfLines={1}>
                         {homeData.lastWorkout.name}
                       </Text>
                       <Text style={styles.sessionMeta}>
-                        {homeData.lastWorkout.timeAgo} · {homeData.lastWorkout.duration}
+                        {homeData.lastWorkout.timeAgo} ·{' '}
+                        {homeData.lastWorkout.duration}
                       </Text>
                       <Text style={styles.sessionStatsLine}>
-                        {homeData.lastWorkout.totalSets} sets · {homeData.lastWorkout.totalReps} reps
+                        {homeData.lastWorkout.totalSets} sets ·{' '}
+                        {homeData.lastWorkout.totalReps} reps
                       </Text>
                     </View>
-                    <View style={styles.sessionScoreBlock}>
-                      <ScoreRing score={homeData.lastWorkout.formScore} size={48} stroke={5} small />
-                      <Text style={styles.sessionScoreLabel}>form</Text>
-                    </View>
-                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    <SessionScoreBadge score={homeData.lastWorkout.formScore} />
+                    <ChevronRight
+                      size={14}
+                      color={COLORS.textTertiary}
+                      strokeWidth={1.5}
+                      style={{ marginLeft: 2 }}
+                    />
                   </View>
                 </View>
               </LinearGradient>
@@ -465,7 +606,9 @@ export const HomeScreen: React.FC = () => {
                 <View style={styles.cardLabelRow}>
                   <Text style={styles.cardLabel}>LAST SESSION</Text>
                 </View>
-                <Text style={styles.emptyText}>No workouts yet — tap Start to begin.</Text>
+                <Text style={styles.emptyText}>
+                  No workouts yet — tap Start to begin.
+                </Text>
               </View>
             </LinearGradient>
           )}
@@ -479,42 +622,34 @@ export const HomeScreen: React.FC = () => {
               style={styles.statsStrip}
             >
               <View style={styles.statCell}>
-                <View style={[styles.statIconWrap, styles.statIconWarm]}>
-                  <Flame size={14} color={COLORS.yellow} strokeWidth={1.7} />
+                <Flame size={14} color={COLORS.yellow} strokeWidth={1.6} />
+                <View style={styles.statValueRow}>
+                  <Text style={styles.statValue}>{homeData.streakDays}</Text>
+                  <Text style={styles.statUnit}>days</Text>
                 </View>
-                <View style={styles.statCopy}>
-                  <Text style={styles.statLabel}>Streak</Text>
-                  <View style={styles.statValueRow}>
-                    <Text style={styles.statValue}>{homeData.streakDays}</Text>
-                    <Text style={styles.statUnit}>days</Text>
-                  </View>
-                </View>
+                <Text style={styles.statLabel}>STREAK</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statCell}>
-                <View style={[styles.statIconWrap, styles.statIconAccent]}>
-                  <Calendar size={14} color={COLORS.accent} strokeWidth={1.7} />
+                <Calendar size={14} color={COLORS.accent} strokeWidth={1.6} />
+                <View style={styles.statValueRow}>
+                  <Text style={styles.statValue}>
+                    {homeData.weeklyGoal.current}
+                  </Text>
+                  <Text style={styles.statUnit}>workouts</Text>
                 </View>
-                <View style={styles.statCopy}>
-                  <Text style={styles.statLabel}>This Week</Text>
-                  <View style={styles.statValueRow}>
-                    <Text style={styles.statValue}>{homeData.weeklyGoal.current}</Text>
-                    <Text style={styles.statUnit}>workouts</Text>
-                  </View>
-                </View>
+                <Text style={styles.statLabel}>THIS WEEK</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statCell}>
-                <View style={[styles.statIconWrap, styles.statIconGreen]}>
-                  <Trophy size={14} color={COLORS.green} strokeWidth={1.7} />
+                <Trophy size={14} color={COLORS.green} strokeWidth={1.6} />
+                <View style={styles.statValueRow}>
+                  <Text style={styles.statValue}>
+                    {homeData.totalPoints.toLocaleString()}
+                  </Text>
+                  <Text style={styles.statUnit}>pts</Text>
                 </View>
-                <View style={styles.statCopy}>
-                  <Text style={styles.statLabel}>Points</Text>
-                  <View style={styles.statValueRow}>
-                    <Text style={styles.statValue}>{homeData.totalPoints.toLocaleString()}</Text>
-                    <Text style={styles.statUnit}>pts</Text>
-                  </View>
-                </View>
+                <Text style={styles.statLabel}>POINTS</Text>
               </View>
             </LinearGradient>
           </View>
@@ -532,13 +667,18 @@ export const HomeScreen: React.FC = () => {
                   <View style={styles.cardLabelRow}>
                     <Text style={styles.cardLabel}>CHALLENGES</Text>
                     <Text style={styles.challengeCount}>
-                      {homeData.challenges.filter(c => c.completed).length}/{homeData.challenges.length}
+                      {homeData.challenges.filter((c) => c.completed).length}/
+                      {homeData.challenges.length}
                     </Text>
                   </View>
                   {homeData.challenges.map((challenge, idx) => {
-                    const progress = challenge.target > 0
-                      ? Math.min((challenge.current / challenge.target) * 100, 100)
-                      : 0;
+                    const progress =
+                      challenge.target > 0
+                        ? Math.min(
+                            (challenge.current / challenge.target) * 100,
+                            100,
+                          )
+                        : 0;
                     const isComplete = challenge.completed;
                     return (
                       <TouchableOpacity
@@ -547,12 +687,19 @@ export const HomeScreen: React.FC = () => {
                         onPress={() => navigateToTab('Analytics')}
                         style={[
                           styles.challengeItem,
-                          idx < homeData.challenges.length - 1 && styles.challengeItemBorder,
+                          idx < homeData.challenges.length - 1 &&
+                            styles.challengeItemBorder,
                         ]}
                       >
                         <View style={styles.challengeTop}>
-                          <Zap size={12} color={isComplete ? COLORS.green : COLORS.accent} strokeWidth={1.6} />
-                          <Text style={styles.challengeTitle} numberOfLines={1}>{challenge.title}</Text>
+                          <Zap
+                            size={12}
+                            color={isComplete ? COLORS.green : COLORS.accent}
+                            strokeWidth={1.6}
+                          />
+                          <Text style={styles.challengeTitle} numberOfLines={1}>
+                            {challenge.title}
+                          </Text>
                           <Text style={styles.challengeCounter}>
                             {challenge.current}/{challenge.target}
                           </Text>
@@ -564,7 +711,9 @@ export const HomeScreen: React.FC = () => {
                                 styles.progressFillThin,
                                 {
                                   width: `${progress}%`,
-                                  backgroundColor: isComplete ? COLORS.green : COLORS.accent,
+                                  backgroundColor: isComplete
+                                    ? COLORS.green
+                                    : COLORS.accent,
                                 },
                               ]}
                             />
@@ -577,7 +726,6 @@ export const HomeScreen: React.FC = () => {
               </LinearGradient>
             </View>
           )}
-
         </Animated.View>
       </ScrollView>
     </View>
@@ -903,50 +1051,57 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 15,
+    padding: 14,
   },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
+    gap: 12,
     marginTop: 12,
   },
   sessionThumb: {
-    width: 48,
-    height: 48,
+    width: 52,
+    height: 52,
     borderRadius: 12,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.18)',
-    backgroundColor: 'rgba(122, 85, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
-  sessionInfo: { flex: 1, gap: 3, minWidth: 0 },
+  sessionInfo: { flex: 1, gap: 2, minWidth: 0 },
   sessionName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14.5,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
   sessionMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 11.5,
     color: COLORS.textTertiary,
   },
   sessionStatsLine: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
-    color: COLORS.textSecondary,
-  },
-  sessionScoreBlock: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  sessionScoreLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 9,
+    fontSize: 11,
     color: COLORS.textTertiary,
+  },
+  sessionScoreBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 3.5,
+    borderColor: COLORS.green,
+    backgroundColor: 'rgba(16,23,28,0.45)',
+  },
+  sessionScoreValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 15,
+    color: COLORS.text,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   emptyText: {
     fontFamily: FONTS.ui.regular,
@@ -965,45 +1120,20 @@ const styles = StyleSheet.create({
   statsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-around',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     borderRadius: CARD_RADIUS,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    paddingVertical: 13,
+    paddingHorizontal: 6,
     overflow: 'hidden',
   },
   statCell: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    minWidth: 0,
-  },
-  statIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  statIconWarm: {
-    backgroundColor: 'rgba(236, 161, 58, 0.08)',
-    borderColor: 'rgba(236, 161, 58, 0.16)',
-  },
-  statIconAccent: {
-    backgroundColor: 'rgba(122, 85, 255, 0.1)',
-    borderColor: 'rgba(122, 85, 255, 0.18)',
-  },
-  statIconGreen: {
-    backgroundColor: 'rgba(52, 224, 166, 0.08)',
-    borderColor: 'rgba(52, 224, 166, 0.16)',
-  },
-  statCopy: {
-    alignItems: 'flex-start',
-    gap: 3,
+    gap: 5,
     minWidth: 0,
   },
   statValueRow: {
@@ -1013,24 +1143,24 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontSize: 18,
     color: COLORS.text,
     letterSpacing: 0,
   },
   statUnit: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontSize: 10.5,
     color: COLORS.textTertiary,
   },
   statLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 9,
     color: COLORS.textSecondary,
+    letterSpacing: 1.1,
   },
   statDivider: {
     width: 1,
-    height: 34,
-    marginHorizontal: 8,
+    height: 32,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
   },
 

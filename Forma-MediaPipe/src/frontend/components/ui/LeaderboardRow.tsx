@@ -93,6 +93,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 10,
   },
   card: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 0,
   },
   cardFirst: {

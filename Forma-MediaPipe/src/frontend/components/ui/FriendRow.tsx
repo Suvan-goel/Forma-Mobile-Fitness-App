@@ -79,6 +79,7 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.screenHorizontal,
   },
   rowGradient: {
+    backgroundColor: COLORS.cardBackground,
     overflow: 'hidden',
     borderLeftWidth: 1,
     borderRightWidth: 1,

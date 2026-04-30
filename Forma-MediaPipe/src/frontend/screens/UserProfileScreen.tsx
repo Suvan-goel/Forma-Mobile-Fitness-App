@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Check,
   Activity,
+  ChevronRight,
   Crown,
   Flame,
   Lock,
@@ -40,7 +41,13 @@ import {
   CARD_GRADIENT_END,
 } from '../constants/theme';
 import { ScreenBackground, SettingsHeader } from '../components/ui';
-import { useUser, useWorkouts, useAnalytics, useRewards } from '../../backend/hooks';
+import {
+  useUser,
+  useWorkouts,
+  useAnalytics,
+  useRewards,
+  useVideoLibrary,
+} from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 type UserProfileNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -55,15 +62,22 @@ export const UserProfileScreen: React.FC = () => {
   const { workouts } = useWorkouts();
   const { analytics } = useAnalytics('1 week', 4);
   const { rewards, userPoints, userStats } = useRewards();
+  const { recordings, storageInfo } = useVideoLibrary();
 
   const workoutCount = workouts.length;
   const streakDays = analytics?.summary.streakDays ?? 0;
   const formValues = analytics?.formData.values ?? [];
-  const avgFormScore = formValues.length > 0
-    ? Math.round(formValues.reduce((a, b) => a + b, 0) / formValues.length)
-    : 0;
+  const avgFormScore =
+    formValues.length > 0
+      ? Math.round(formValues.reduce((a, b) => a + b, 0) / formValues.length)
+      : 0;
   const displayName = user?.displayName || 'Forma Athlete';
-  const handle = `@${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 18) || 'forma'}`;
+  const handle = `@${
+    displayName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 18) || 'forma'
+  }`;
   const initial = displayName.charAt(0).toUpperCase();
   const earnedBadgeIds = userStats?.earnedBadgeIds ?? [];
   const sortedRewards = useMemo(
@@ -71,20 +85,34 @@ export const UserProfileScreen: React.FC = () => {
     [rewards],
   );
   const earnedRewards = useMemo(
-    () => sortedRewards.filter(reward => earnedBadgeIds.includes(reward.id)),
+    () => sortedRewards.filter((reward) => earnedBadgeIds.includes(reward.id)),
     [earnedBadgeIds, sortedRewards],
   );
-  const nextReward = sortedRewards.find(reward => !earnedBadgeIds.includes(reward.id));
+  const nextReward = sortedRewards.find(
+    (reward) => !earnedBadgeIds.includes(reward.id),
+  );
   const currentReward = earnedRewards[earnedRewards.length - 1];
   const badgeProgress = nextReward
     ? Math.min(userPoints / nextReward.pointsRequired, 1)
     : 1;
   const level = Math.max(1, earnedRewards.length + 1);
-  const nextRewardIconName = nextReward?.iconName ?? currentReward?.iconName ?? 'Trophy';
-  const nextRewardColor = nextReward?.color ?? currentReward?.color ?? COLORS.primary;
+  const nextRewardIconName =
+    nextReward?.iconName ?? currentReward?.iconName ?? 'Trophy';
+  const nextRewardColor =
+    nextReward?.color ?? currentReward?.color ?? COLORS.primary;
+  const latestRecording = recordings[0];
+  const videoCount = storageInfo.count || recordings.length;
+  const videoCountLabel = `${videoCount} ${videoCount === 1 ? 'video' : 'videos'}`;
+  const storageLabel =
+    storageInfo.totalSizeMB > 0
+      ? `${storageInfo.totalSizeMB >= 10 ? Math.round(storageInfo.totalSizeMB) : storageInfo.totalSizeMB.toFixed(1)} MB saved`
+      : 'Ready to record';
+  const videoDetailLabel = latestRecording
+    ? `Latest: ${latestRecording.exerciseName} · Set ${latestRecording.setNumber}`
+    : 'Review saved form recordings';
 
   const achievements = useMemo(() => {
-    const recentBadges = earnedRewards.slice(0, 2).map(reward => ({
+    const recentBadges = earnedRewards.slice(0, 2).map((reward) => ({
       id: reward.id,
       title: reward.title,
       subtitle: reward.description,
@@ -93,18 +121,25 @@ export const UserProfileScreen: React.FC = () => {
     }));
 
     return [
-      ...(streakDays > 0 ? [{
-        id: 'streak',
-        title: 'Form Streak',
-        subtitle: `${streakDays} ${streakDays === 1 ? 'day' : 'days'} in a row`,
-        meta: 'Active now',
-        icon: 'check' as const,
-      }] : []),
+      ...(streakDays > 0
+        ? [
+            {
+              id: 'streak',
+              title: 'Form Streak',
+              subtitle: `${streakDays} ${streakDays === 1 ? 'day' : 'days'} in a row`,
+              meta: 'Active now',
+              icon: 'check' as const,
+            },
+          ]
+        : []),
       ...recentBadges,
       {
         id: 'score',
         title: 'Form Focus',
-        subtitle: avgFormScore > 0 ? `${avgFormScore} average form score` : 'Keep training to unlock',
+        subtitle:
+          avgFormScore > 0
+            ? `${avgFormScore} average form score`
+            : 'Keep training to unlock',
         meta: 'Weekly performance',
         icon: 'target' as const,
       },
@@ -113,8 +148,16 @@ export const UserProfileScreen: React.FC = () => {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 420, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 420,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 420,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
@@ -125,16 +168,25 @@ export const UserProfileScreen: React.FC = () => {
     }
     navigation.navigate('MainTabs', { screen: 'Home' });
   }, [navigation]);
-  const handleEditProfile = useCallback(() => navigation.navigate('ProfileSettings'), [navigation]);
-  const handleRewards = useCallback(() => navigation.navigate('Rewards'), [navigation]);
-  const handleVideoLibrary = useCallback(() => navigation.navigate('VideoLibrary'), [navigation]);
+  const handleEditProfile = useCallback(
+    () => navigation.navigate('ProfileSettings'),
+    [navigation],
+  );
+  const handleRewards = useCallback(
+    () => navigation.navigate('Rewards'),
+    [navigation],
+  );
+  const handleVideoLibrary = useCallback(
+    () => navigation.navigate('VideoLibrary'),
+    [navigation],
+  );
 
   return (
     <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
       <SettingsHeader
         title="PROFILE"
         onBack={handleGoBack}
-        rightSlot={(
+        rightSlot={
           <TouchableOpacity
             onPress={handleEditProfile}
             activeOpacity={0.7}
@@ -144,31 +196,56 @@ export const UserProfileScreen: React.FC = () => {
           >
             <Pencil size={20} color={COLORS.textSecondary} strokeWidth={1.8} />
           </TouchableOpacity>
-        )}
+        }
       />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 96 },
+        ]}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           <View style={styles.profileRow}>
             <View style={styles.avatarRing}>
               {user?.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                <Image
+                  source={{ uri: user.avatarUrl }}
+                  style={styles.avatarImage}
+                />
               ) : (
-                <LinearGradient colors={['#F3F4F6', '#B8BCC5']} style={styles.avatarFallback}>
+                <LinearGradient
+                  colors={['#F3F4F6', '#B8BCC5']}
+                  style={styles.avatarFallback}
+                >
                   <Text style={styles.avatarInitial}>{initial}</Text>
                 </LinearGradient>
               )}
             </View>
 
             <View style={styles.nameBlock}>
-              <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
-              <Text style={styles.handle} numberOfLines={1}>{handle}</Text>
-              <TouchableOpacity activeOpacity={0.75} onPress={() => navigation.navigate('Membership')}>
-                <LinearGradient colors={['#8D67FF', '#5A38D6']} style={styles.proPill}>
-                  <Shield size={12} color="#FFFFFF" fill="rgba(255,255,255,0.2)" />
+              <Text style={styles.displayName} numberOfLines={1}>
+                {displayName}
+              </Text>
+              <Text style={styles.handle} numberOfLines={1}>
+                {handle}
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={() => navigation.navigate('Membership')}
+              >
+                <LinearGradient
+                  colors={['#8D67FF', '#5A38D6']}
+                  style={styles.proPill}
+                >
+                  <Shield
+                    size={12}
+                    color="#FFFFFF"
+                    fill="rgba(255,255,255,0.2)"
+                  />
                   <Text style={styles.proText}>Pro Member</Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -178,14 +255,22 @@ export const UserProfileScreen: React.FC = () => {
           <View style={styles.statStrip}>
             <StatBlock value={workoutCount || 0} label="Total Workouts" />
             <View style={styles.statDivider} />
-            <StatBlock value={streakDays || 0} label="Week Streak" prefix={<Flame size={13} color={COLORS.yellow} fill={COLORS.yellow} />} />
+            <StatBlock
+              value={streakDays || 0}
+              label="Week Streak"
+              prefix={
+                <Flame size={13} color={COLORS.yellow} fill={COLORS.yellow} />
+              }
+            />
             <View style={styles.statDivider} />
             <StatBlock value={avgFormScore || 0} label="Avg Form Score" />
           </View>
 
-          <ProfileActionButton
-            label="Video Library"
-            icon={<Video size={17} color={COLORS.primary} strokeWidth={1.8} />}
+          <VideoLibraryCard
+            countLabel={videoCountLabel}
+            detailLabel={videoDetailLabel}
+            storageLabel={storageLabel}
+            thumbnailUri={latestRecording?.thumbnailPath}
             onPress={handleVideoLibrary}
           />
 
@@ -199,14 +284,23 @@ export const UserProfileScreen: React.FC = () => {
             <View style={styles.levelRow}>
               <LinearGradient
                 colors={[`${nextRewardColor}33`, 'rgba(255,255,255,0.025)']}
-                style={[styles.levelBadge, { borderColor: `${nextRewardColor}44` }]}
+                style={[
+                  styles.levelBadge,
+                  { borderColor: `${nextRewardColor}44` },
+                ]}
               >
-                <RewardIcon iconName={nextRewardIconName} size={27} color={nextRewardColor} />
+                <RewardIcon
+                  iconName={nextRewardIconName}
+                  size={27}
+                  color={nextRewardColor}
+                />
               </LinearGradient>
               <View style={styles.levelCopy}>
                 <Text style={styles.levelTitle}>Level {level}</Text>
                 <Text style={styles.levelSubtitle} numberOfLines={1}>
-                  {nextReward ? `Next badge: ${nextReward.title}` : 'All badges unlocked'}
+                  {nextReward
+                    ? `Next badge: ${nextReward.title}`
+                    : 'All badges unlocked'}
                 </Text>
                 <Text style={styles.levelMeta} numberOfLines={1}>
                   {earnedRewards.length}/{sortedRewards.length} badges earned
@@ -218,7 +312,10 @@ export const UserProfileScreen: React.FC = () => {
                 colors={[nextRewardColor, COLORS.primaryDark]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={[styles.progressFill, { width: `${Math.max(6, badgeProgress * 100)}%` }]}
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.max(6, badgeProgress * 100)}%` },
+                ]}
               />
             </View>
             <View style={styles.rewardProgressRow}>
@@ -233,31 +330,46 @@ export const UserProfileScreen: React.FC = () => {
                   : 'Complete'}
               </Text>
             </View>
-          </ProfileCard>
 
-          <ProfileCard>
-            <View style={styles.sectionHeader}>
+            <View style={styles.combinedCardDivider} />
+
+            <View style={[styles.sectionHeader, styles.badgeSectionHeader]}>
               <Text style={styles.sectionTitle}>Badges</Text>
-              <TouchableOpacity onPress={handleRewards} activeOpacity={0.75}>
-                <Text style={styles.viewAll}>View all</Text>
-              </TouchableOpacity>
+              <Text style={styles.badgeCountText}>
+                {earnedRewards.length}/{sortedRewards.length}
+              </Text>
             </View>
             {earnedRewards.length > 0 ? (
               <View style={styles.badgeList}>
-                {earnedRewards.map(reward => (
+                {earnedRewards.map((reward) => (
                   <View key={reward.id} style={styles.badgeItem}>
-                    <View style={[styles.badgeShell, { borderColor: `${reward.color}55` }]}>
+                    <View
+                      style={[
+                        styles.badgeShell,
+                        { borderColor: `${reward.color}55` },
+                      ]}
+                    >
                       <LinearGradient
-                        colors={[`${reward.color}2E`, 'rgba(255,255,255,0.025)']}
+                        colors={[
+                          `${reward.color}2E`,
+                          'rgba(255,255,255,0.025)',
+                        ]}
                         style={styles.badgeHex}
                       >
-                        <RewardIcon iconName={reward.iconName} size={20} color={reward.color} />
+                        <RewardIcon
+                          iconName={reward.iconName}
+                          size={20}
+                          color={reward.color}
+                        />
                       </LinearGradient>
                     </View>
                     <View style={styles.badgeCopy}>
-                      <Text style={styles.badgeName} numberOfLines={1}>{reward.title}</Text>
+                      <Text style={styles.badgeName} numberOfLines={1}>
+                        {reward.title}
+                      </Text>
                       <Text style={styles.badgeCategory} numberOfLines={1}>
-                        {reward.category} · {reward.pointsRequired.toLocaleString()} pts
+                        {reward.category} ·{' '}
+                        {reward.pointsRequired.toLocaleString()} pts
                       </Text>
                     </View>
                   </View>
@@ -266,14 +378,23 @@ export const UserProfileScreen: React.FC = () => {
             ) : (
               <View style={styles.badgeEmpty}>
                 <View style={styles.badgeShell}>
-                  <LinearGradient colors={['#272D34', '#161A1F']} style={styles.badgeHex}>
-                    <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.7} />
+                  <LinearGradient
+                    colors={['#272D34', '#161A1F']}
+                    style={styles.badgeHex}
+                  >
+                    <Lock
+                      size={20}
+                      color={COLORS.textTertiary}
+                      strokeWidth={1.7}
+                    />
                   </LinearGradient>
                 </View>
                 <View style={styles.badgeCopy}>
                   <Text style={styles.badgeName}>No badges earned yet</Text>
                   <Text style={styles.badgeCategory} numberOfLines={1}>
-                    {nextReward ? `${nextReward.title} is up next` : 'Complete workouts to unlock rewards'}
+                    {nextReward
+                      ? `${nextReward.title} is up next`
+                      : 'Complete workouts to unlock rewards'}
                   </Text>
                 </View>
               </View>
@@ -284,18 +405,37 @@ export const UserProfileScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Recent Achievements</Text>
             <View style={styles.achievementList}>
               {achievements.map((item, index) => (
-                <View key={item.id} style={[styles.achievementRow, index === achievements.length - 1 && styles.achievementRowLast]}>
+                <View
+                  key={item.id}
+                  style={[
+                    styles.achievementRow,
+                    index === achievements.length - 1 &&
+                      styles.achievementRowLast,
+                  ]}
+                >
                   <LinearGradient
-                    colors={item.icon === 'check' ? ['#62E5A9', '#269A67'] : ['#8D67FF', '#4A2BB4']}
+                    colors={
+                      item.icon === 'check'
+                        ? ['#62E5A9', '#269A67']
+                        : ['#8D67FF', '#4A2BB4']
+                    }
                     style={styles.achievementIcon}
                   >
-                    {item.icon === 'check' ? <Check size={20} color="#FFFFFF" strokeWidth={2.5} /> : null}
-                    {item.icon === 'badge' ? <Sparkles size={19} color="#FFFFFF" strokeWidth={2.1} /> : null}
-                    {item.icon === 'target' ? <Target size={19} color="#FFFFFF" strokeWidth={2.1} /> : null}
+                    {item.icon === 'check' ? (
+                      <Check size={20} color="#FFFFFF" strokeWidth={2.5} />
+                    ) : null}
+                    {item.icon === 'badge' ? (
+                      <Sparkles size={19} color="#FFFFFF" strokeWidth={2.1} />
+                    ) : null}
+                    {item.icon === 'target' ? (
+                      <Target size={19} color="#FFFFFF" strokeWidth={2.1} />
+                    ) : null}
                   </LinearGradient>
                   <View style={styles.achievementText}>
                     <Text style={styles.achievementTitle}>{item.title}</Text>
-                    <Text style={styles.achievementSubtitle}>{item.subtitle}</Text>
+                    <Text style={styles.achievementSubtitle}>
+                      {item.subtitle}
+                    </Text>
                     <Text style={styles.achievementMeta}>{item.meta}</Text>
                   </View>
                   <View style={styles.statusDot}>
@@ -311,13 +451,23 @@ export const UserProfileScreen: React.FC = () => {
   );
 };
 
-const StatBlock = ({ value, label, prefix }: { value: number; label: string; prefix?: React.ReactNode }) => (
+const StatBlock = ({
+  value,
+  label,
+  prefix,
+}: {
+  value: number;
+  label: string;
+  prefix?: React.ReactNode;
+}) => (
   <View style={styles.statBlock}>
     <View style={styles.statValueRow}>
       {prefix}
       <Text style={styles.statValue}>{value}</Text>
     </View>
-    <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
+    <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>
+      {label}
+    </Text>
   </View>
 );
 
@@ -332,27 +482,85 @@ const ProfileCard = ({ children }: { children: React.ReactNode }) => (
   </LinearGradient>
 );
 
-const ProfileActionButton = ({
-  label,
-  icon,
+const VideoLibraryCard = ({
+  countLabel,
+  detailLabel,
+  storageLabel,
+  thumbnailUri,
   onPress,
 }: {
-  label: string;
-  icon: React.ReactNode;
+  countLabel: string;
+  detailLabel: string;
+  storageLabel: string;
+  thumbnailUri?: string;
   onPress: () => void;
 }) => (
-  <TouchableOpacity style={styles.actionButton} activeOpacity={0.8} onPress={onPress}>
+  <TouchableOpacity
+    style={styles.videoLibraryCard}
+    activeOpacity={0.82}
+    onPress={onPress}
+  >
     <LinearGradient
       colors={[...CARD_GRADIENT_COLORS]}
       start={CARD_GRADIENT_START}
       end={CARD_GRADIENT_END}
-      style={styles.actionButtonGradient}
+      style={styles.videoLibraryGradient}
     >
-      <View style={styles.actionButtonInner}>
-        <View style={styles.actionButtonIcon}>{icon}</View>
-        <Text style={styles.actionButtonText} numberOfLines={1} adjustsFontSizeToFit>
-          {label}
-        </Text>
+      <View style={styles.videoLibraryInner}>
+        <View style={styles.videoPreviewShell}>
+          {thumbnailUri ? (
+            <Image
+              source={{ uri: thumbnailUri }}
+              style={styles.videoPreviewImage}
+            />
+          ) : (
+            <LinearGradient
+              colors={['rgba(122,85,255,0.24)', 'rgba(255,255,255,0.035)']}
+              style={styles.videoPreviewFallback}
+            >
+              <Video size={24} color={COLORS.primary} strokeWidth={1.7} />
+            </LinearGradient>
+          )}
+          <View style={styles.playBadge}>
+            <Video size={12} color={COLORS.text} strokeWidth={2} />
+          </View>
+        </View>
+
+        <View style={styles.videoLibraryCopy}>
+          <View style={styles.videoLibraryTitleRow}>
+            <Text style={styles.videoLibraryTitle} numberOfLines={1}>
+              Video Library
+            </Text>
+            <ChevronRight
+              size={18}
+              color={COLORS.textTertiary}
+              strokeWidth={1.8}
+            />
+          </View>
+          <Text style={styles.videoLibrarySubtitle} numberOfLines={1}>
+            {detailLabel}
+          </Text>
+          <View style={styles.videoMetaRow}>
+            <View style={styles.videoMetaPill}>
+              <Text
+                style={styles.videoMetaText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {countLabel}
+              </Text>
+            </View>
+            <View style={styles.videoMetaPill}>
+              <Text
+                style={styles.videoMetaText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {storageLabel}
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
     </LinearGradient>
   </TouchableOpacity>
@@ -503,41 +711,99 @@ const styles = StyleSheet.create({
     height: 42,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  actionGrid: {
-    flexDirection: 'row',
-    gap: 10,
+  videoLibraryCard: {
     marginBottom: 14,
   },
-  actionButton: {
-    marginBottom: 14,
+  videoLibraryGradient: {
+    borderRadius: 14,
   },
-  actionButtonGradient: {
-    borderRadius: 12,
-  },
-  actionButtonInner: {
-    minHeight: 50,
-    borderRadius: 12,
+  videoLibraryInner: {
+    minHeight: 112,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.055)',
+    borderColor: 'rgba(255,255,255,0.07)',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
+    gap: 14,
+    padding: 12,
   },
-  actionButtonIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  videoPreviewShell: {
+    width: 88,
+    height: 88,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.075)',
+  },
+  videoPreviewImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  videoPreviewFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playBadge: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122,85,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  videoLibraryCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  videoLibraryTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  videoLibraryTitle: {
+    flex: 1,
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  videoLibrarySubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
+  },
+  videoMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  videoMetaPill: {
+    minHeight: 26,
+    maxWidth: '52%',
+    borderRadius: 8,
+    paddingHorizontal: 9,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
   },
-  actionButtonText: {
-    flexShrink: 1,
+  videoMetaText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.text,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    maxWidth: '100%',
   },
   card: {
     borderRadius: 12,
@@ -627,6 +893,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  combinedCardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: 15,
+    marginBottom: 13,
+  },
+  badgeSectionHeader: {
+    marginBottom: 10,
+  },
+  badgeCountText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.textTertiary,
   },
   badgeList: {
     gap: 10,

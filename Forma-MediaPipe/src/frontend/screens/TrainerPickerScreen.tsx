@@ -224,6 +224,7 @@ const styles = StyleSheet.create({
 
   /* Cards (matches Home) */
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
 
     ...CARD_SHADOW,

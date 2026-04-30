@@ -387,6 +387,7 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
   },

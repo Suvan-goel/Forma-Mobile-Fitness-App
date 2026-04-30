@@ -308,10 +308,13 @@ export const FriendProfileScreen: React.FC = memo(() => {
               {estimatedXp.toLocaleString()} / {LEVEL_TARGET.toLocaleString()}{' '}
               XP
             </Text>
-          </ProfileCard>
 
-          <ProfileCard>
-            <Text style={styles.sectionTitle}>Badges</Text>
+            <View style={styles.combinedCardDivider} />
+
+            <View style={styles.badgeSectionHeader}>
+              <Text style={styles.sectionTitle}>Badges</Text>
+              <Text style={styles.badgeCountText}>{profile.earnedBadgeIds.length} earned</Text>
+            </View>
             <View style={styles.badgeRow}>
               {(profile.earnedBadgeIds.length > 0
                 ? profile.earnedBadgeIds
@@ -649,6 +652,22 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.regular,
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  combinedCardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: 15,
+    marginBottom: 13,
+  },
+  badgeSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  badgeCountText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.textTertiary,
   },
   badgeRow: {
     flexDirection: 'row',

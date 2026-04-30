@@ -160,6 +160,7 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 22,
 
     ...CARD_SHADOW,

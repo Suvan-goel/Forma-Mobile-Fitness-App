@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
 
     ...CARD_SHADOW,

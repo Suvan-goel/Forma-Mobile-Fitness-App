@@ -236,6 +236,7 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
   card: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
     overflow: 'hidden',
   },

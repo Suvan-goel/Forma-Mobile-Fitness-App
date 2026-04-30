@@ -102,6 +102,7 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
 },
   card: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 18,
 
     ...CARD_SHADOW,

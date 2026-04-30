@@ -464,6 +464,7 @@ const styles = StyleSheet.create({
 
   /* Individual card */
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
     ...CARD_SHADOW,
     overflow: 'hidden',
