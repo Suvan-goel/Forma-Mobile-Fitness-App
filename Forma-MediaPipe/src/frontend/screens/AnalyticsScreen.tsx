@@ -220,7 +220,7 @@ export const AnalyticsScreen: React.FC = () => {
                 >
                   {isActive ? (
                     <LinearGradient
-                      colors={['rgba(255,255,255,0.105)', 'rgba(255,255,255,0.045)']}
+                      colors={['rgba(255,255,255,0.06)', 'rgba(255, 255, 255, 0.04)']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 0, y: 1 }}
                       style={styles.topTabActive}
@@ -604,9 +604,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    borderTopColor: 'rgba(255,255,255,0.14)',
-    backgroundColor: 'rgba(30, 39, 44, 0.78)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(24, 26, 28, 0.78)',
     padding: 3,
     overflow: 'hidden',
     ...Platform.select({
@@ -632,8 +632,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    borderTopColor: 'rgba(255,255,255,0.13)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
   topTabText: {
     fontFamily: FONTS.display.semibold,
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
   topTabDivider: {
     width: 1,
     height: 17,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     marginHorizontal: 2,
   },
 
@@ -685,8 +685,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     padding: 13,
   },
 
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
   },
   weekdayCircleEmpty: {
     borderWidth: 1.2,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
 
   /* Personal Bests */
@@ -735,17 +735,17 @@ const styles = StyleSheet.create({
   },
   pbRowBordered: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   pbThumb: {
     width: 33,
     height: 33,
     borderRadius: 7,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     overflow: 'hidden',
   },
   pbThumbImage: {
@@ -783,11 +783,11 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 9,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     overflow: 'hidden',
   },
   bestName: {
@@ -850,11 +850,11 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   leaderInitial: {
     fontFamily: FONTS.display.bold,
@@ -895,13 +895,13 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 32,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   consistencyHint: {
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
   },
   consistencyHintText: {

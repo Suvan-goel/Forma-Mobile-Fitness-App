@@ -24,13 +24,13 @@ const StatusIndicator = memo(({ status }: { status: UserSearchResult['relationsh
     case 'friends':
       return (
         <View style={[styles.statusBadge, { backgroundColor: 'rgba(52, 211, 153, 0.08)', borderColor: 'rgba(52, 211, 153, 0.15)' }]}>
-          <Check size={14} color="#34D399" />
-          <Text style={[styles.statusText, { color: '#34D399' }]}>Friends</Text>
+          <Check size={14} color="#34E0A6" />
+          <Text style={[styles.statusText, { color: '#34E0A6' }]}>Friends</Text>
         </View>
       );
     case 'pending_sent':
       return (
-        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.04)', borderColor: 'rgba(255, 255, 255, 0.08)' }]}>
+        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderColor: 'rgba(255, 255, 255, 0.055)' }]}>
           <Clock size={14} color={COLORS.textTertiary} />
           <Text style={[styles.statusText, { color: COLORS.textTertiary }]}>Pending</Text>
         </View>
@@ -220,9 +220,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: 12,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     gap: SPACING.sm,
   },
   searchInput: {
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   avatar: {
     width: 44,
@@ -294,9 +294,9 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   addButton: {
     flexDirection: 'row',
@@ -334,11 +334,11 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     marginBottom: SPACING.xs,
   },
   emptyText: {

@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: -6 },
         shadowOpacity: 0.25,
         shadowRadius: 20,
@@ -382,9 +382,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   statChipText: {
     fontSize: 12,
@@ -487,14 +487,14 @@ const styles = StyleSheet.create({
   repListEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
     overflow: 'hidden',
   },
   repRow: {
     paddingHorizontal: SPACING.md,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
   },
   repRowLast: {
     borderBottomWidth: 0,
@@ -556,7 +556,7 @@ const styles = StyleSheet.create({
     right: 0,
   },
   repFeedbackGood: {
-    color: '#34D399',
+    color: '#34E0A6',
   },
 
   /* ── Summary ──────────────────────────────── */
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
   summaryEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
     padding: SPACING.md,
   },
   summaryText: {
@@ -590,8 +590,8 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.022)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,

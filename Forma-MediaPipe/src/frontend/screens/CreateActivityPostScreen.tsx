@@ -190,7 +190,7 @@ export const CreateActivityPostScreen: React.FC = () => {
     switch (icon) {
       case 'streak': return <Flame size={14} color="#E07856" strokeWidth={1.5} />;
       case 'reps': return <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />;
-      case 'score': return <Target size={14} color="#34D399" strokeWidth={1.5} />;
+      case 'score': return <Target size={14} color="#34E0A6" strokeWidth={1.5} />;
       default: return <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />;
     }
   }, []);
@@ -327,7 +327,7 @@ export const CreateActivityPostScreen: React.FC = () => {
             />
             <PickerButton
               label="Stat"
-              icon={<TrendingUp size={15} color="#34D399" strokeWidth={1.5} />}
+              icon={<TrendingUp size={15} color="#34E0A6" strokeWidth={1.5} />}
               active={activePicker === 'stat'}
               onPress={() => togglePicker('stat')}
             />
@@ -482,13 +482,13 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   attachmentScoreBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   pickerBtnActive: {
@@ -645,8 +645,8 @@ const styles = StyleSheet.create({
   pickerList: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.022)',
     overflow: 'hidden',
     marginBottom: SPACING.md,
   },
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
   },
   pickerItemSelected: {
     backgroundColor: 'rgba(139, 92, 246, 0.06)',
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   pickerScoreBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,

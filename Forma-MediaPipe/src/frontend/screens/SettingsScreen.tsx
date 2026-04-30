@@ -183,7 +183,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+        trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
         thumbColor={value ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
       />
     </View>
@@ -628,8 +628,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 16,
   },
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
   groupEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     paddingHorizontal: 12,
     paddingVertical: 2,
   },
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     marginLeft: 40,
   },
 

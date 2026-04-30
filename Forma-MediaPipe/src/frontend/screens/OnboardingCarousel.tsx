@@ -130,7 +130,7 @@ const MovementVector: React.FC = () => (
     <SvgText x={234} y={32} fill={COLORS.primary} fontSize={9} textAnchor="middle" fontFamily="Courier New" opacity={0.85}>FORM  96/100</SvgText>
 
     {/* Baseline rule */}
-    <Line x1={10} y1={202} x2={278} y2={202} stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+    <Line x1={10} y1={202} x2={278} y2={202} stroke="rgba(255, 255, 255, 0.055)" strokeWidth={1} />
   </Svg>
 );
 
@@ -198,10 +198,10 @@ const ProgressVector: React.FC = () => {
   return (
     <Svg width={290} height={220} viewBox="0 0 290 220">
       {/* Horizontal grid lines */}
-      <Line x1={16} y1={baseline}       x2={278} y2={baseline}       stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-      <Line x1={16} y1={baseline - 50}  x2={278} y2={baseline - 50}  stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
-      <Line x1={16} y1={baseline - 100} x2={278} y2={baseline - 100} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
-      <Line x1={16} y1={baseline - 150} x2={278} y2={baseline - 150} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
+      <Line x1={16} y1={baseline}       x2={278} y2={baseline}       stroke="rgba(255, 255, 255, 0.055)" strokeWidth={1} />
+      <Line x1={16} y1={baseline - 50}  x2={278} y2={baseline - 50}  stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} />
+      <Line x1={16} y1={baseline - 100} x2={278} y2={baseline - 100} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} />
+      <Line x1={16} y1={baseline - 150} x2={278} y2={baseline - 150} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} />
 
       {/* Grid labels */}
       <SvgText x={11} y={baseline - 46}  fill="rgba(255,255,255,0.2)" fontSize={7.5} textAnchor="end" fontFamily="Courier New">50</SvgText>

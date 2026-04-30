@@ -87,7 +87,7 @@ const FAQ_SECTIONS: FAQSection[] = [
   {
     title: 'Scoring System',
     icon: BarChart2,
-    iconColor: '#34D399',
+    iconColor: '#34E0A6',
     items: [
       {
         question: 'How is my rep score calculated?',
@@ -368,14 +368,14 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
   itemDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* FAQ Items */
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
     backgroundColor: 'rgba(39, 48, 55, 0.78)',
 
     ...CARD_SHADOW,

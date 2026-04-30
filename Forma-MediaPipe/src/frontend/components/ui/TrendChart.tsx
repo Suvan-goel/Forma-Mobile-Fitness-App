@@ -402,9 +402,9 @@ const styles = StyleSheet.create({
   cardGlassEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.10)',
-    borderTopColor: 'rgba(255, 255, 255, 0.18)',
-    backgroundColor: 'rgba(12, 20, 24, 0.30)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(10, 12, 14, 0.24)',
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 7,

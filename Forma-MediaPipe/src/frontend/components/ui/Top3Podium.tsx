@@ -17,7 +17,7 @@ interface Top3PodiumProps {
 
 const PODIUM_COLORS = ['#F5A623', '#A1A1AA', '#CD7F32']; // Gold, Silver, Bronze
 const PODIUM_GRADIENTS: [string, string][] = [
-  ['rgba(255, 255, 255, 0.075)', 'rgba(255, 255, 255, 0.025)'],
+  ['rgba(255, 255, 255, 0.06)', 'rgba(255, 255, 255, 0.024)'],
   ['rgba(255, 255, 255, 0.060)', 'rgba(255, 255, 255, 0.020)'],
   ['rgba(255, 255, 255, 0.060)', 'rgba(255, 255, 255, 0.020)'],
 ];
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
 
     ...CARD_SHADOW,
 },
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatarFirst: {
     width: 72,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     color: '#11181D',
   },
   rankBadgeTextDark: {
-    color: '#2A3136',
+    color: '#1E2225',
   },
   name: {
     fontFamily: FONTS.ui.bold,

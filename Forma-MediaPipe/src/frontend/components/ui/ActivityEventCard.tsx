@@ -39,7 +39,7 @@ function getRelativeTime(date: Date): string {
 const EVENT_CONFIG: Record<string, { icon: any; color: string }> = {
   workout_completed: { icon: Activity, color: COLORS.primary },
   badge_earned: { icon: Award, color: '#F5A623' },
-  personal_record: { icon: TrendingUp, color: '#34D399' },
+  personal_record: { icon: TrendingUp, color: '#34E0A6' },
   streak_milestone: { icon: Flame, color: '#E07856' },
 };
 
@@ -241,8 +241,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   header: {
     flexDirection: 'row',
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   scoreBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     backgroundColor: 'rgba(8, 12, 16, 0.16)',
     padding: 8,
   },
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
-    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+    backgroundColor: 'rgba(255, 255, 255, 0.024)',
   },
   mediaImage: {
     width: 88,
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   exerciseList: {
     marginTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
   },
   exerciseRow: {
     flexDirection: 'row',
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 5,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
   exerciseName: {
     fontFamily: FONTS.ui.bold,
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   emojiPillActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   emoji: {
     fontSize: 13,

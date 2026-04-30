@@ -104,7 +104,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                 <Switch
                   value={prefs.restTimerEnabled}
                   onValueChange={handleRestTimerToggle}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
                   thumbColor={prefs.restTimerEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                   disabled={isLoading}
                 />
@@ -197,8 +197,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 12,
     paddingVertical: 2,
   },

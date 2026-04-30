@@ -58,7 +58,7 @@ const RequestItem = memo(({
       onPress={() => onAccept(request.friendshipId)}
       activeOpacity={0.7}
     >
-      <Check size={16} color="#34D399" />
+      <Check size={16} color="#34E0A6" />
     </TouchableOpacity>
     <TouchableOpacity
       style={styles.declineButton}
@@ -329,9 +329,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 38,
     borderRadius: 9,
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   searchInput: {
     flex: 1,
@@ -347,8 +347,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingVertical: 13,
     ...CARD_SHADOW,
   },
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   section: {
     paddingTop: 8,
@@ -485,19 +485,19 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   suggestedList: {
     marginHorizontal: SPACING.screenHorizontal,
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(31, 39, 45, 0.72)',
   },
   suggestedRow: {
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
   suggestedAvatar: {
     width: 32,
@@ -561,11 +561,11 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     marginBottom: SPACING.md,
   },
   emptyTitle: {

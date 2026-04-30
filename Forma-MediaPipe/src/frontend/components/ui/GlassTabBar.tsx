@@ -112,12 +112,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 100,
-    backgroundColor: '#10171C',
+    backgroundColor: '#070A0D',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.075)',
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
   bar: {
-    backgroundColor: '#10171C',
+    backgroundColor: '#070A0D',
   },
   barContent: {
     flexDirection: 'row',

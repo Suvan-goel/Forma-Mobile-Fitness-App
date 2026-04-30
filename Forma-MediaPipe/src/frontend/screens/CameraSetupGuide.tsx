@@ -65,7 +65,7 @@ const PhoneSetupVector: React.FC = () => (
     </G>
 
     {/* Angle reference — vertical dashed guide + arc */}
-    <Line x1={130} y1={225} x2={130} y2={200} stroke="rgba(255,255,255,0.10)" strokeWidth={0.8} strokeDasharray="3,3" />
+    <Line x1={130} y1={225} x2={130} y2={200} stroke="rgba(255, 255, 255, 0.055)" strokeWidth={0.8} strokeDasharray="3,3" />
     <Path d="M 130 213 Q 126 207, 123 202" stroke="rgba(139,92,246,0.20)" strokeWidth={0.8} fill="none" />
   </Svg>
 );
@@ -161,42 +161,42 @@ const HeaderHintVector: React.FC = () => (
   <Svg width={280} height={240} viewBox="0 0 280 240">
     {/* Phone frame (top portion) */}
     <Rect x={18} y={8} width={244} height={224} rx={24}
-      stroke="rgba(255,255,255,0.06)" strokeWidth={1.2} fill="rgba(255,255,255,0.015)" />
+      stroke="rgba(255, 255, 255, 0.04)" strokeWidth={1.2} fill="rgba(255,255,255,0.015)" />
 
     {/* Status bar hints */}
-    <Rect x={38} y={22} width={24} height={5} rx={2.5} fill="rgba(255,255,255,0.07)" />
-    <Rect x={218} y={22} width={14} height={5} rx={2} stroke="rgba(255,255,255,0.06)" strokeWidth={0.7} fill="none" />
+    <Rect x={38} y={22} width={24} height={5} rx={2.5} fill="rgba(255, 255, 255, 0.055)" />
+    <Rect x={218} y={22} width={14} height={5} rx={2} stroke="rgba(255, 255, 255, 0.04)" strokeWidth={0.7} fill="none" />
 
     {/* Header bar fill */}
-    <Rect x={18} y={36} width={244} height={38} fill="rgba(255,255,255,0.02)" />
+    <Rect x={18} y={36} width={244} height={38} fill="rgba(255, 255, 255, 0.022)" />
 
     {/* Header separator */}
-    <Line x1={28} y1={74} x2={252} y2={74} stroke="rgba(255,255,255,0.06)" strokeWidth={0.5} />
+    <Line x1={28} y1={74} x2={252} y2={74} stroke="rgba(255, 255, 255, 0.04)" strokeWidth={0.5} />
 
     {/* ? icon placeholder (dimmed circle — the real one is an overlay) */}
     <Circle cx={HINT_ICON_CX} cy={HINT_ICON_CY} r={15}
-      stroke="rgba(255,255,255,0.06)" strokeWidth={0.8} fill="none" />
+      stroke="rgba(255, 255, 255, 0.04)" strokeWidth={0.8} fill="none" />
 
     {/* Exercise title placeholder */}
-    <Rect x={108} y={49} width={64} height={11} rx={4} fill="rgba(255,255,255,0.06)" />
+    <Rect x={108} y={49} width={64} height={11} rx={4} fill="rgba(255, 255, 255, 0.04)" />
 
     {/* Right-side icon placeholder */}
-    <Circle cx={234} cy={52} r={1.5} fill="rgba(255,255,255,0.06)" />
-    <Circle cx={234} cy={58} r={1.5} fill="rgba(255,255,255,0.06)" />
+    <Circle cx={234} cy={52} r={1.5} fill="rgba(255, 255, 255, 0.04)" />
+    <Circle cx={234} cy={58} r={1.5} fill="rgba(255, 255, 255, 0.04)" />
 
     {/* Camera content area — faint viewfinder brackets */}
-    <Path d="M 55 95 L 38 95 L 38 115" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
-    <Path d="M 225 95 L 242 95 L 242 115" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
-    <Path d="M 55 195 L 38 195 L 38 175" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
-    <Path d="M 225 195 L 242 195 L 242 175" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 55 95 L 38 95 L 38 115" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 225 95 L 242 95 L 242 115" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 55 195 L 38 195 L 38 175" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 225 195 L 242 195 L 242 175" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
 
     {/* Center crosshair */}
-    <Line x1={131} y1={145} x2={149} y2={145} stroke="rgba(255,255,255,0.03)" strokeWidth={0.8} />
-    <Line x1={140} y1={136} x2={140} y2={154} stroke="rgba(255,255,255,0.03)" strokeWidth={0.8} />
+    <Line x1={131} y1={145} x2={149} y2={145} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={0.8} />
+    <Line x1={140} y1={136} x2={140} y2={154} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={0.8} />
 
     {/* Bottom controls hint */}
-    <Line x1={28} y1={210} x2={252} y2={210} stroke="rgba(255,255,255,0.03)" strokeWidth={0.5} />
-    <Circle cx={140} cy={224} r={8} stroke="rgba(255,255,255,0.05)" strokeWidth={1} fill="none" />
+    <Line x1={28} y1={210} x2={252} y2={210} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={0.5} />
+    <Circle cx={140} cy={224} r={8} stroke="rgba(255, 255, 255, 0.055)" strokeWidth={1} fill="none" />
   </Svg>
 );
 

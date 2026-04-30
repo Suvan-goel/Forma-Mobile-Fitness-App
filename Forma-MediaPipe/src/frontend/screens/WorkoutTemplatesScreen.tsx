@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -610,8 +610,8 @@ const styles = StyleSheet.create({
   cardGlassEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     padding: 16,
     gap: 10,
   },
@@ -688,9 +688,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   chipText: {
     fontFamily: FONTS.ui.regular,
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
   emptyCustomCard: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
     borderStyle: 'dashed',
     paddingVertical: 20,
     alignItems: 'center',

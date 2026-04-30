@@ -56,8 +56,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.028)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(255, 255, 255, 0.022)',
     overflow: 'hidden',
   },
   tab: {
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabActive: {
-    backgroundColor: 'rgba(255,255,255,0.065)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   tabText: {
     fontFamily: FONTS.display.semibold,
@@ -80,6 +80,6 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 });

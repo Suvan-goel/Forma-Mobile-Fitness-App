@@ -112,7 +112,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           {/* Privacy Banner */}
           <View style={styles.banner}>
-            <ShieldCheck size={16} color="#34D399" strokeWidth={1.5} />
+            <ShieldCheck size={16} color="#34E0A6" strokeWidth={1.5} />
             <Text style={styles.bannerText}>
               Your privacy is important. Pose detection runs entirely on-device — no video ever leaves your phone.
             </Text>
@@ -184,7 +184,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
               </View>
               <View style={styles.divider} />
               <View style={styles.dataRow}>
-                <Smartphone size={14} color="#34D399" strokeWidth={1.5} />
+                <Smartphone size={14} color="#34E0A6" strokeWidth={1.5} />
                 <View style={styles.dataContent}>
                   <Text style={styles.dataTitle}>Pose Detection</Text>
                   <Text style={styles.dataDesc}>Pose landmarks are processed entirely on your device. No video or camera frames are ever uploaded.</Text>
@@ -341,14 +341,14 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 12,
     paddingVertical: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     marginVertical: 8,
   },
 
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },

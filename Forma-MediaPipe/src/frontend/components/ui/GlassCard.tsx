@@ -30,7 +30,7 @@ export const GlassCard: React.FC<GlassCardProps> = memo(({
   style,
   innerStyle,
   radius = CARD_RADIUS,
-  borderColor = 'rgba(255, 255, 255, 0.09)',
+  borderColor = 'rgba(255, 255, 255, 0.06)',
 }) => {
   return (
     <View style={[styles.outer, { borderRadius: radius }, style]}>
@@ -40,7 +40,7 @@ export const GlassCard: React.FC<GlassCardProps> = memo(({
         end={CARD_GRADIENT_END}
         style={[styles.gradient, { borderRadius: radius }]}
       >
-        <View style={[styles.edge, { borderRadius: radius, borderColor, borderTopColor: 'rgba(255, 255, 255, 0.15)' }, innerStyle]}>
+        <View style={[styles.edge, { borderRadius: radius, borderColor, borderTopColor: 'rgba(255, 255, 255, 0.06)' }, innerStyle]}>
           {children}
         </View>
       </LinearGradient>

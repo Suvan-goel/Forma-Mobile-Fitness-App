@@ -100,7 +100,7 @@ const phaseStyles = StyleSheet.create({
   },
   dotUpcoming: {
     width: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
 });
 
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 92, 246, 0.03)',
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOpacity: 0.13,
         shadowRadius: 48,
         shadowOffset: { width: 0, height: 0 },
@@ -452,11 +452,11 @@ const styles = StyleSheet.create({
   scanCore: {
     width: 2,
     height: '100%',
-    backgroundColor: '#7C5CFF',
+    backgroundColor: '#7A55FF',
     borderRadius: 1,
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOpacity: 0.9,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 0 },
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     borderRadius: 16,
     paddingVertical: 4,
     paddingHorizontal: 20,
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOpacity: 0.9,
         shadowRadius: 4,
         shadowOffset: { width: 0, height: 0 },
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
   },
   metricSeparator: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* ── CTA button ──────────────────────────── */

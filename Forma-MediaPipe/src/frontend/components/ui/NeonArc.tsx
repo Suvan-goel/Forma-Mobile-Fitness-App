@@ -97,8 +97,8 @@ export const NeonArc: React.FC<NeonArcProps> = memo(({
       <Svg width={size} height={viewHeight} viewBox={`0 0 ${size} ${viewHeight}`}>
         <Defs>
           <LinearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor="#6746E8" stopOpacity="0.4" />
-            <Stop offset="50%" stopColor="#7C5CFF" stopOpacity="1" />
+            <Stop offset="0%" stopColor="#633FE5" stopOpacity="0.4" />
+            <Stop offset="50%" stopColor="#7A55FF" stopOpacity="1" />
             <Stop offset="100%" stopColor="#A395FF" stopOpacity="0.7" />
           </LinearGradient>
         </Defs>
@@ -148,13 +148,13 @@ export const NeonArc: React.FC<NeonArcProps> = memo(({
           <View style={styles.trendRow}>
             <Text style={[
               styles.trendArrow,
-              { color: trendDirection === 'up' ? '#34D399' : trendDirection === 'down' ? '#E07856' : COLORS.textTertiary },
+              { color: trendDirection === 'up' ? '#34E0A6' : trendDirection === 'down' ? '#E07856' : COLORS.textTertiary },
             ]}>
               {trendDirection === 'up' ? '\u25B2' : trendDirection === 'down' ? '\u25BC' : '\u2500'}
             </Text>
             <Text style={[
               styles.trendText,
-              { color: trendDirection === 'up' ? '#34D399' : trendDirection === 'down' ? '#E07856' : COLORS.textTertiary },
+              { color: trendDirection === 'up' ? '#34E0A6' : trendDirection === 'down' ? '#E07856' : COLORS.textTertiary },
             ]}>
               {trendPercent}%
             </Text>
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   },
   glowLayer: {
     position: 'absolute',
-    shadowColor: '#7C5CFF',
+    shadowColor: '#7A55FF',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 24,

@@ -851,7 +851,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={['#7C5CFF', '#6746E8']}
+              colors={['#7A55FF', '#633FE5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.controlFinishGradient}
@@ -904,9 +904,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   statusPill: {
     flexDirection: 'row',
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#34D399',
+    backgroundColor: '#34E0A6',
   },
   statusDotPaused: {
     backgroundColor: COLORS.accent,
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontFamily: FONTS.mono.bold,
     fontSize: 10,
-    color: '#34D399',
+    color: '#34E0A6',
     letterSpacing: 1.5,
   },
   statusTextPaused: {
@@ -969,8 +969,8 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     backgroundColor: 'rgba(32, 40, 46, 0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   restTimerProgress: {
     flex: 1,
@@ -978,7 +978,7 @@ const styles = StyleSheet.create({
   restTimerTrack: {
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     overflow: 'hidden',
   },
   restTimerFill: {
@@ -1068,8 +1068,8 @@ const styles = StyleSheet.create({
   summaryCardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
@@ -1113,8 +1113,8 @@ const styles = StyleSheet.create({
   exerciseCardGlassEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     overflow: 'hidden',
   },
   exerciseCardHeader: {
@@ -1155,7 +1155,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1163,7 +1163,7 @@ const styles = StyleSheet.create({
   /* ── Set Rows ───────────────────────────── */
   setsList: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   setRow: {
     flexDirection: 'row',
@@ -1172,13 +1172,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 4,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
   setIndexBadge: {
     width: 26,
     height: 26,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1201,7 +1201,7 @@ const styles = StyleSheet.create({
   setMetricDivider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   setMetricLabel: {
     fontFamily: FONTS.ui.regular,
@@ -1227,7 +1227,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1240,7 +1240,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 9,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
   },
   addSetRowText: {
     fontFamily: FONTS.display.semibold,
@@ -1255,7 +1255,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     backgroundColor: 'rgba(15, 20, 25, 0.85)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
     gap: 8,
   },
   addExerciseGradient: {
@@ -1307,8 +1307,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   controlPauseButtonActive: {
     borderColor: 'rgba(139, 92, 246, 0.2)',
@@ -1330,7 +1330,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.25,
         shadowRadius: 12,

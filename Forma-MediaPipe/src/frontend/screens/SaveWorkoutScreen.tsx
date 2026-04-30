@@ -394,13 +394,13 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   durationChipText: {
     fontFamily: FONTS.mono.regular,
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   statEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     padding: 16,
   },
   statIconRow: {
@@ -565,8 +565,8 @@ const styles = StyleSheet.create({
   inputCardEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     padding: 16,
     gap: 8,
   },
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   ctaGradient: {
     borderRadius: 16,

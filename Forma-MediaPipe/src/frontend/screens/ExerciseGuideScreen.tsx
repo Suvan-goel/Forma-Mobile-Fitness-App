@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   viewTypeLabel: {
     fontFamily: FONTS.mono.bold,
@@ -388,9 +388,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SPACING.sm,
     marginTop: SPACING.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    backgroundColor: 'rgba(255, 255, 255, 0.022)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   exerciseImage: {
     width: '100%',
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: SPACING.sm,
     marginTop: SPACING.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    backgroundColor: 'rgba(255, 255, 255, 0.022)',
   },
   imagePlaceholderText: {
     fontFamily: FONTS.mono.regular,

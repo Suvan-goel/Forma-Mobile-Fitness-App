@@ -350,7 +350,7 @@ export const RecordLandingScreen: React.FC = () => {
                     style={styles.startBtnOuter}
                   >
                     <LinearGradient
-                      colors={['#7C5CFF', '#6746E8']}
+                      colors={['#7A55FF', '#633FE5']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.startBtn}
@@ -422,7 +422,7 @@ export const RecordLandingScreen: React.FC = () => {
                     style={styles.startBtnOuter}
                   >
                     <LinearGradient
-                      colors={['#7C5CFF', '#6746E8']}
+                      colors={['#7A55FF', '#633FE5']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.startBtn}
@@ -631,8 +631,8 @@ const styles = StyleSheet.create({
   activeEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 13,
     paddingTop: 11,
     paddingBottom: 12,
@@ -736,8 +736,8 @@ const styles = StyleSheet.create({
   },
   pauseBtn: {
     width: 40, height: 40, borderRadius: 20,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center', justifyContent: 'center',
   },
   pauseBtnActive: {
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   footerBtn: {
     flexDirection: 'row',
@@ -812,8 +812,8 @@ const styles = StyleSheet.create({
   toolsCard: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     overflow: 'hidden',
   },
   toolRow: {
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
   },
   toolRowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
   toolIconWrap: {
     width: 29,
@@ -868,8 +868,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 7,
     paddingTop: 7,
     paddingBottom: 10,

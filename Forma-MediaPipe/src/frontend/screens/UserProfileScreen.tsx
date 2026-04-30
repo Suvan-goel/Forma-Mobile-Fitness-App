@@ -161,7 +161,7 @@ export const UserProfileScreen: React.FC = () => {
                       <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
                     ) : (
                       <LinearGradient
-                        colors={['#9F75FF', '#6746E8']}
+                        colors={['#9F75FF', '#633FE5']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.avatarGradient}
@@ -259,11 +259,11 @@ export const UserProfileScreen: React.FC = () => {
                         { backgroundColor: formTrendDirection === 'up' ? 'rgba(52, 211, 153, 0.12)' : 'rgba(248, 113, 113, 0.12)' },
                       ]}>
                         {formTrendDirection === 'up'
-                          ? <TrendingUp size={9} color="#34D399" strokeWidth={2} />
+                          ? <TrendingUp size={9} color="#34E0A6" strokeWidth={2} />
                           : <TrendingDown size={9} color="#F87171" strokeWidth={2} />}
                         <Text style={[
                           styles.trendBadgeText,
-                          { color: formTrendDirection === 'up' ? '#34D399' : '#F87171' },
+                          { color: formTrendDirection === 'up' ? '#34E0A6' : '#F87171' },
                         ]}>
                           {formTrendPercent}%
                         </Text>
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     padding: 2,
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.35,
         shadowRadius: 14,
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
   perfEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     padding: 14,
     flex: 1,
   },

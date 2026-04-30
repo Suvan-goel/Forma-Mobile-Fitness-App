@@ -220,7 +220,7 @@ export const RewardsScreen: React.FC = () => {
             <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
           ) : profileUser ? (
             <LinearGradient
-              colors={['#7C5CFF', '#6746E8']}
+              colors={['#7A55FF', '#633FE5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.profileGradient}
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   heroValue: {
     fontFamily: FONTS.display.bold,
     fontSize: 80,
-    color: '#7C5CFF',
+    color: '#7A55FF',
     letterSpacing: -2,
     lineHeight: 88,
     ...Platform.select({
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* ── Section Title ─────────────────────────── */
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.2,
         shadowRadius: 15,
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,

@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
@@ -855,9 +855,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   subFilterPillActive: {
     backgroundColor: 'rgba(139, 92, 246, 0.15)',
@@ -880,9 +880,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     marginBottom: 10,
   },
   selectWorkoutBtnText: {
@@ -946,8 +946,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   thumbWrap: {
     position: 'relative',
@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
     height: THUMB_HEIGHT,
     borderTopLeftRadius: 15,
     borderTopRightRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   thumbnailPlaceholder: {
     alignItems: 'center',
@@ -967,7 +967,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1043,7 +1043,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     marginHorizontal: 2,
   },
 
@@ -1116,7 +1116,7 @@ const styles = StyleSheet.create({
   playerClose: {
     position: 'absolute',
     right: 16,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,

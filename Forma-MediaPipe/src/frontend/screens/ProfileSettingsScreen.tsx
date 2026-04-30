@@ -201,7 +201,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                   <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
                 ) : user ? (
                   <LinearGradient
-                    colors={['#7C5CFF', '#6746E8']}
+                    colors={['#7A55FF', '#633FE5']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.avatarGradient}
@@ -385,7 +385,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                 <>
                   <View style={styles.divider} />
                   <View style={styles.infoRow}>
-                    <Calendar size={14} color="#34D399" strokeWidth={1.5} />
+                    <Calendar size={14} color="#34E0A6" strokeWidth={1.5} />
                     <View style={styles.infoContent}>
                       <Text style={styles.infoLabel}>Member Since</Text>
                       <Text style={styles.infoValue}>{joinDate}</Text>
@@ -539,8 +539,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     padding: 12,
   },
 
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     marginVertical: 8,
   },
 

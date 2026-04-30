@@ -169,7 +169,7 @@ export const TemplatePreviewScreen: React.FC = () => {
       <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 4 }]}>
         <TouchableOpacity onPress={handleStartWorkout} activeOpacity={0.85}>
           <LinearGradient
-            colors={['#7C5CFF', '#6746E8']}
+            colors={['#7A55FF', '#633FE5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.startButton}
@@ -199,13 +199,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* ── Section Header ──────────── */
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 10,
@@ -338,8 +338,8 @@ const styles = StyleSheet.create({
   exerciseCardEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     padding: 4,
   },
 
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
     gap: 12,
   },
   exerciseRowLast: {
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   startButton: {
     flexDirection: 'row',

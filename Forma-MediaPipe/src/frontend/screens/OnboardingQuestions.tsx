@@ -95,7 +95,7 @@ const dotStyles = StyleSheet.create({
   },
   dotInactive: {
     width: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
 });
 
@@ -155,7 +155,7 @@ const cardStyles = StyleSheet.create({
     paddingHorizontal: 22,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     overflow: 'hidden',
 
     ...CARD_SHADOW,
@@ -282,7 +282,7 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
       <View style={styles.progressTrack}>
         <Animated.View style={[styles.progressFill, { width: progressBarWidth }]}>
           <LinearGradient
-            colors={['#7C5CFF', '#A78BFA']}
+            colors={['#7A55FF', '#A78BFA']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={StyleSheet.absoluteFill}
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     width: '100%',
   },
   progressFill: {
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.bold,
     fontSize: 220,
     lineHeight: 220,
-    color: 'rgba(255,255,255,0.025)',
+    color: 'rgba(255, 255, 255, 0.024)',
     letterSpacing: -12,
   },
   // ── Header zone ──

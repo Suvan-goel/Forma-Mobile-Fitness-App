@@ -122,7 +122,7 @@ export const FriendProfileScreen: React.FC = memo(() => {
                 <View style={[
                   styles.avatarOuter,
                   Platform.OS === 'ios' && {
-                    shadowColor: '#7C5CFF',
+                    shadowColor: '#7A55FF',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.25,
                     shadowRadius: 12,
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   statEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     padding: 16,
   },
   statIconRow: {
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   },
   followCtaActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   followCtaTextAccent: {
     fontFamily: FONTS.display.semibold,
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   workoutEdge: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     padding: 14,
   },
   workoutTopRow: {

@@ -61,7 +61,7 @@ export const FriendComparisonScreen: React.FC = memo(() => {
           <View style={[
             styles.vsAvatarOuter,
             Platform.OS === 'ios' && {
-              shadowColor: '#7C5CFF',
+              shadowColor: '#7A55FF',
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.25,
               shadowRadius: 12,

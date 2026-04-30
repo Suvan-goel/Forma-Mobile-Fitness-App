@@ -74,7 +74,7 @@ const ScoreRing: React.FC<{ score: number; size?: number; stroke?: number; small
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255,255,255,0.08)"
+          stroke="rgba(255, 255, 255, 0.055)"
           strokeWidth={stroke}
           fill="transparent"
         />
@@ -213,7 +213,7 @@ export const HomeScreen: React.FC = () => {
                 <Image source={{ uri: profileUser.avatarUrl }} style={styles.avatarImage} />
               ) : (
                 <LinearGradient
-                  colors={['#7C5CFF', '#6746E8']}
+                  colors={['#7A55FF', '#633FE5']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.avatarFallback}
@@ -267,7 +267,7 @@ export const HomeScreen: React.FC = () => {
                   style={styles.startBtnOuter}
                 >
                   <LinearGradient
-                    colors={['#7C5CFF', '#6746E8']}
+                    colors={['#7A55FF', '#633FE5']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.startBtn}
@@ -324,7 +324,7 @@ export const HomeScreen: React.FC = () => {
                 </View>
                 <View style={styles.progressTrack}>
                   <LinearGradient
-                    colors={['#7C5CFF', '#6746E8']}
+                    colors={['#7A55FF', '#633FE5']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={[styles.progressFill, { width: `${weeklyPct}%` }]}
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   avatarImage: {
     width: '100%',
@@ -628,8 +628,8 @@ const styles = StyleSheet.create({
   readinessEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 16,
   },
   readinessBody: {
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
   startBtnOuter: {
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#7C5CFF',
+    shadowColor: '#7A55FF',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.28,
     shadowRadius: 12,
@@ -690,9 +690,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.10)',
-    borderTopColor: 'rgba(255, 255, 255, 0.14)',
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   actionBtnText: {
     fontFamily: FONTS.ui.regular,
@@ -710,8 +710,8 @@ const styles = StyleSheet.create({
   weeklyEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 16,
     gap: 10,
   },
@@ -749,8 +749,8 @@ const styles = StyleSheet.create({
   sessionEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
   },
   sessionRow: {
@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   sessionInfo: { flex: 1, gap: 2 },
   sessionName: {
@@ -805,8 +805,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: CARD_RADIUS,
     paddingVertical: 14,
     paddingHorizontal: 6,
@@ -839,13 +839,13 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 32,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* Progress bar */
   progressTrack: {
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
   },
   progressTrackThin: {
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -873,8 +873,8 @@ const styles = StyleSheet.create({
   challengesEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
   },
   challengeCount: {
@@ -887,7 +887,7 @@ const styles = StyleSheet.create({
   },
   challengeItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
   challengeTop: {
     flexDirection: 'row',

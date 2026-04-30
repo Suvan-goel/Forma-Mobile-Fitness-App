@@ -353,7 +353,7 @@ export const CameraSettingsScreen: React.FC = () => {
                   value={showFeedback}
                   onValueChange={setShowFeedback}
                   disabled={debugMode}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
                   thumbColor={showFeedback ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
@@ -368,7 +368,7 @@ export const CameraSettingsScreen: React.FC = () => {
                   value={isTTSEnabled}
                   onValueChange={handleTTSChange}
                   disabled={debugMode}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
                   thumbColor={isTTSEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
@@ -431,7 +431,7 @@ export const CameraSettingsScreen: React.FC = () => {
                       value={showSkeletonOverlay}
                       onValueChange={setShowSkeletonOverlay}
                       disabled={debugMode}
-                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
                       thumbColor={showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                     />
                   </View>
@@ -447,7 +447,7 @@ export const CameraSettingsScreen: React.FC = () => {
                 <Switch
                   value={autoScreenRecording}
                   onValueChange={setAutoScreenRecording}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
                   thumbColor={autoScreenRecording ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
@@ -469,7 +469,7 @@ export const CameraSettingsScreen: React.FC = () => {
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <Timer size={14} color="#34D399" strokeWidth={1.5} />
+                <Timer size={14} color="#34E0A6" strokeWidth={1.5} />
                 <Text style={styles.rowLabel}>Rest Timer</Text>
                 <TouchableOpacity onPress={() => setInfoModal('Rest Timer')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
@@ -477,7 +477,7 @@ export const CameraSettingsScreen: React.FC = () => {
                 <Switch
                   value={restTimerEnabled}
                   onValueChange={handleRestTimerToggle}
-                  trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
                   thumbColor={restTimerEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
@@ -521,7 +521,7 @@ export const CameraSettingsScreen: React.FC = () => {
                     <Switch
                       value={debugMode}
                       onValueChange={handleDebugChange}
-                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(224, 120, 86, 0.4)' }}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(224, 120, 86, 0.4)' }}
                       thumbColor={debugMode ? COLORS.orange : 'rgba(255, 255, 255, 0.3)'}
                     />
                   </View>
@@ -535,7 +535,7 @@ export const CameraSettingsScreen: React.FC = () => {
                     <Switch
                       value={poseModel === 'pose_landmarker_heavy'}
                       onValueChange={(val) => setPoseModel(val ? 'pose_landmarker_heavy' : 'pose_landmarker_full')}
-                      trackColor={{ false: 'rgba(255, 255, 255, 0.08)', true: 'rgba(96, 165, 250, 0.4)' }}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(96, 165, 250, 0.4)' }}
                       thumbColor={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : 'rgba(255, 255, 255, 0.3)'}
                     />
                   </View>
@@ -683,8 +683,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
   groupEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     paddingHorizontal: 12,
     paddingVertical: 2,
   },
@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* Row inside card */

@@ -1113,14 +1113,14 @@ export const CameraScreen: React.FC = () => {
           return (
             <View style={[styles.varianceContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={[styles.torsoDebugTitle, { color: isStatic ? '#34D399' : '#FBBF24' }]}>
+                <Text style={[styles.torsoDebugTitle, { color: isStatic ? '#34E0A6' : '#FBBF24' }]}>
                   {isStatic ? 'STATIC' : 'MOVING'} ({frameCount}f)
                 </Text>
                 {keys.map((key) => {
                   const { mean, stdev } = angles[key];
                   return (
                     <Text key={key} style={styles.torsoDebugText}>
-                      {key}: {mean.toFixed(1)}° <Text style={{ color: stdev < 1.5 ? '#34D399' : stdev < 3 ? '#FBBF24' : '#F87171' }}>(σ {stdev.toFixed(2)}°)</Text>
+                      {key}: {mean.toFixed(1)}° <Text style={{ color: stdev < 1.5 ? '#34E0A6' : stdev < 3 ? '#FBBF24' : '#F87171' }}>(σ {stdev.toFixed(2)}°)</Text>
                     </Text>
                   );
                 })}
@@ -1138,7 +1138,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Barbell Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Barbell Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   L: {d.leftArmState ?? '–'} | R: {d.rightArmState ?? '–'}
                 </Text>
@@ -1188,7 +1188,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Push-Up{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Push-Up{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side}
                 </Text>
@@ -1220,7 +1220,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Barbell Squat{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Barbell Squat{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side}
                 </Text>
@@ -1251,7 +1251,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Cable Pushdown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Cable Pushdown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1282,7 +1282,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Cable Row{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Cable Row{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1313,7 +1313,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Lat Pulldown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Lat Pulldown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'} | {d.activeSide ?? '–'} arm
                 </Text>
@@ -1341,7 +1341,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Lateral Raise{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Lateral Raise{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1373,7 +1373,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Leg Extension{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Leg Extension{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1404,7 +1404,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Lying Leg Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Lying Leg Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1432,7 +1432,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Machine Ab Crunch{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Machine Ab Crunch{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1672,11 +1672,11 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 3,
-    borderColor: '#7C5CFF',
+    borderColor: '#7A55FF',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(124, 92, 255, 0.08)',
-    shadowColor: '#7C5CFF',
+    shadowColor: '#7A55FF',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 14,
@@ -1772,7 +1772,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 26, 32, 0.7)',
     borderRadius: 50,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   metricLabel: {
     fontSize: 11,
@@ -1809,7 +1809,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 26, 32, 0.85)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     alignSelf: 'flex-start',
@@ -1821,7 +1821,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   feedbackFeedTextGood: {
-    color: '#34D399',
+    color: '#34E0A6',
   },
   varianceContainer: {
     position: 'absolute',

@@ -137,7 +137,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                   >
                     <Video
                       size={14}
-                      color={recording ? COLORS.accent : 'rgba(255,255,255,0.15)'}
+                      color={recording ? COLORS.accent : 'rgba(255, 255, 255, 0.06)'}
                       strokeWidth={1.5}
                     />
                   </TouchableOpacity>
@@ -467,8 +467,8 @@ const styles = StyleSheet.create({
   summaryEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 11,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* ── Section Headers ─────────────────────────── */
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 10,
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
   notesEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     flexDirection: 'row',
     overflow: 'hidden',
   },
@@ -591,8 +591,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     padding: 13,
   },
   exerciseHeader: {
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
     marginBottom: SPACING.xs,
   },
   setsHeaderText: {
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
   },
   setRowLast: {
     borderBottomWidth: 0,
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 22,
     borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
     backgroundColor: 'rgba(139, 92, 246, 0.04)',
     borderRadius: 8,
     marginBottom: 4,
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
   playerClose: {
     position: 'absolute' as const,
     right: 16,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,

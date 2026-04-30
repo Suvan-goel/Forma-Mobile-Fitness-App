@@ -18,7 +18,7 @@ interface LeaderboardRowProps {
 
 export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCurrentUser }) => {
   const TrendIcon = entry.trend === 'up' ? TrendingUp : entry.trend === 'down' ? TrendingDown : Minus;
-  const trendColor = entry.trend === 'up' ? '#34D399' : entry.trend === 'down' ? '#E07856' : COLORS.textTertiary;
+  const trendColor = entry.trend === 'up' ? '#34E0A6' : entry.trend === 'down' ? '#E07856' : COLORS.textTertiary;
   const trendLabel = entry.trend === 'up' ? 'Up' : entry.trend === 'down' ? 'Down' : 'Flat';
 
   return (
@@ -92,11 +92,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   cardEdgeHighlight: {
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   rank: {
     fontFamily: FONTS.mono.bold,
@@ -111,13 +111,13 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarHighlight: {
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },

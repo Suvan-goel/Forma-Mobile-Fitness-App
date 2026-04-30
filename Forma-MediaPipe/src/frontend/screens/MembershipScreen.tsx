@@ -157,13 +157,13 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
                       <Text style={styles.featureName}>{feature.name}</Text>
                       <View style={styles.featureCheck}>
                         {feature.freeIncluded ? (
-                          <Check size={14} color="#34D399" strokeWidth={2} />
+                          <Check size={14} color="#34E0A6" strokeWidth={2} />
                         ) : (
                           <Lock size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
                         )}
                       </View>
                       <View style={styles.featureCheck}>
-                        <Check size={14} color="#34D399" strokeWidth={2} />
+                        <Check size={14} color="#34E0A6" strokeWidth={2} />
                       </View>
                     </View>
                     {!isLast && <View style={styles.divider} />}
@@ -177,7 +177,7 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
           {!isPremium ? (
             <TouchableOpacity activeOpacity={0.8} onPress={handleUpgrade} style={styles.upgradeBtn}>
               <LinearGradient
-                colors={['#7C5CFF', '#6746E8'] as const}
+                colors={['#7A55FF', '#633FE5'] as const}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.upgradeBtnGradient}
@@ -188,7 +188,7 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
             </TouchableOpacity>
           ) : (
             <View style={styles.currentPlanBadge}>
-              <Check size={14} color="#34D399" strokeWidth={2} />
+              <Check size={14} color="#34E0A6" strokeWidth={2} />
               <Text style={styles.currentPlanText}>You're on the Premium plan</Text>
             </View>
           )}
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     padding: 20,
   },
   planCardEdgePremium: {
@@ -330,8 +330,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   upgradeBtn: {
     marginTop: 28,
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   currentPlanText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 14,
-    color: '#34D399',
+    color: '#34E0A6',
   },
   footerNote: {
     fontFamily: FONTS.ui.regular,

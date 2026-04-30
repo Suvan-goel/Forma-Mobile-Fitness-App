@@ -280,12 +280,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   googleWrapper: {
     ...Platform.select({
       ios: {
-        shadowColor: '#7C5CFF',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 20,

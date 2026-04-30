@@ -32,7 +32,7 @@ const Tab = memo(({ label, isActive, onPress }: { label: string; isActive: boole
     return (
       <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.tabActiveOuter}>
         <LinearGradient
-          colors={['#7C5CFF', '#6746E8']}
+          colors={['#7A55FF', '#633FE5']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.tabActive}
@@ -75,9 +75,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     borderRadius: 10,
     padding: 3,
     marginBottom: 12,

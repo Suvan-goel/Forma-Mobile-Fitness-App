@@ -99,8 +99,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatar: {
     width: 42,

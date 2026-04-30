@@ -161,9 +161,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     padding: 3,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   timeSegment: {
     flex: 1,
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   timeSegmentActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   timeSegmentText: {
     fontFamily: FONTS.ui.bold,
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: '#0E151A',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
     gap: SPACING.md,
   },
   stickyRankBadge: {
