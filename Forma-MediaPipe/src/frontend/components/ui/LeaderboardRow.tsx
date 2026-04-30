@@ -3,7 +3,7 @@
  */
 
 import React, { memo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { Image, View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
@@ -17,38 +17,31 @@ interface LeaderboardRowProps {
 export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCurrentUser }) => {
   const TrendIcon = entry.trend === 'up' ? TrendingUp : entry.trend === 'down' ? TrendingDown : Minus;
   const trendColor = entry.trend === 'up' ? '#34D399' : entry.trend === 'down' ? '#E07856' : COLORS.textTertiary;
+  const trendLabel = entry.trend === 'up' ? 'Up' : entry.trend === 'down' ? 'Down' : 'Flat';
 
   return (
-    <View style={[
-      styles.cardOuter,
-      isCurrentUser && styles.cardOuterHighlight,
-      isCurrentUser && Platform.OS === 'ios' && {
-        shadowColor: '#7C5CFF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-      },
-    ]}>
+    <View style={styles.cardOuter}>
       <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
+        colors={isCurrentUser ? ['#7254F4', '#5A3ED4', '#4B32B8'] : [...CARD_GRADIENT_COLORS]}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
         style={styles.card}
       >
         <View style={[styles.cardEdge, isCurrentUser && styles.cardEdgeHighlight]}>
-          {/* Rank badge */}
           <Text style={[styles.rank, isCurrentUser && styles.rankHighlight]}>
             {entry.rank}
           </Text>
 
-          {/* Avatar */}
           <View style={[styles.avatar, isCurrentUser && styles.avatarHighlight]}>
-            <Text style={styles.avatarText}>
-              {entry.displayName.charAt(0).toUpperCase()}
-            </Text>
+            {entry.avatarUrl ? (
+              <Image source={{ uri: entry.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {entry.displayName.charAt(0).toUpperCase()}
+              </Text>
+            )}
           </View>
 
-          {/* Name + trend */}
           <View style={styles.nameContainer}>
             <Text style={[styles.name, isCurrentUser && styles.nameHighlight]} numberOfLines={1}>
               {isCurrentUser ? 'You' : entry.displayName}
@@ -56,17 +49,20 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCu
             <View style={styles.trendRow}>
               <TrendIcon size={12} color={trendColor} />
               <Text style={[styles.trendLabel, { color: trendColor }]}>
-                {entry.trend === 'up' ? 'Rising' : entry.trend === 'down' ? 'Falling' : 'Steady'}
+                {trendLabel}
               </Text>
             </View>
           </View>
 
-          {/* Score */}
           <View style={styles.scoreContainer}>
-            <Text style={[styles.score, { color: getScoreColor(entry.score) }]}>
-              {entry.score.toFixed(1)}
+            <Text style={[styles.score, isCurrentUser ? styles.scoreHighlight : { color: getScoreColor(entry.score) }]}>
+              {entry.score.toLocaleString(undefined, { maximumFractionDigits: 1 })}
             </Text>
           </View>
+
+          <Text style={[styles.trendColumn, isCurrentUser && styles.trendColumnHighlight]}>
+            {entry.trend === 'up' ? '↗' : entry.trend === 'down' ? '↘' : '–'}
+          </Text>
         </View>
       </LinearGradient>
     </View>
@@ -76,60 +72,65 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCu
 const styles = StyleSheet.create({
   cardOuter: {
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 6,
-    borderRadius: 18,
+    marginBottom: 5,
+    borderRadius: 10,
     overflow: 'hidden',
   },
-  cardOuterHighlight: {},
   card: {
-    borderRadius: 18,
+    borderRadius: 10,
   },
   cardEdge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: SPACING.md,
-    borderRadius: 18,
+    minHeight: 42,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   cardEdgeHighlight: {
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   rank: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textSecondary,
+    width: 26,
   },
   rankHighlight: {
-    color: COLORS.primary,
+    color: COLORS.text,
   },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: SPACING.sm,
+    overflow: 'hidden',
   },
   avatarHighlight: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontSize: 12,
     color: COLORS.text,
   },
   nameContainer: {
     flex: 1,
-    marginLeft: SPACING.md,
+    marginLeft: 10,
   },
   name: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12,
     color: COLORS.text,
   },
   nameHighlight: {
@@ -144,15 +145,28 @@ const styles = StyleSheet.create({
   },
   trendLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 10,
   },
   scoreContainer: {
     marginLeft: SPACING.sm,
-    minWidth: 48,
+    width: 72,
     alignItems: 'flex-end',
   },
   score: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 16,
+    fontSize: 13,
+  },
+  scoreHighlight: {
+    color: COLORS.text,
+  },
+  trendColumn: {
+    width: 34,
+    textAlign: 'right',
+    fontFamily: FONTS.mono.bold,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+  },
+  trendColumnHighlight: {
+    color: COLORS.text,
   },
 });

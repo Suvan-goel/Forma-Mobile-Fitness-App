@@ -2,7 +2,7 @@
  * LeaderboardView — Reusable leaderboard tab content
  */
 
-import React, { memo, useState, useCallback, useMemo, useRef } from 'react';
+import React, { memo, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,124 +11,56 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Modal,
-  Pressable,
 } from 'react-native';
-import { COLORS, FONTS, SPACING, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useLeaderboard } from '../../../backend/hooks';
-import { LeaderboardEntry, LeaderboardMetric, TimeWindow } from '../../../backend/services/api/types';
+import { LeaderboardEntry, TimeWindow } from '../../../backend/services/api/types';
 import { Top3Podium } from '../../components/ui/Top3Podium';
 import { LeaderboardRow } from '../../components/ui/LeaderboardRow';
 
-const METRICS: { key: LeaderboardMetric; label: string }[] = [
-  { key: 'form_score', label: 'Form Score' },
-  { key: 'weekly_volume', label: 'Volume' },
-  { key: 'streak', label: 'Streak' },
-];
-
 const TIME_WINDOWS: { key: TimeWindow; label: string }[] = [
-  { key: '1_week', label: '1W' },
-  { key: '1_month', label: '1M' },
-  { key: 'all_time', label: 'All' },
+  { key: '1_week', label: 'This Week' },
+  { key: 'all_time', label: 'All Time' },
 ];
 
 const FilterBar = memo(({
-  metric, onMetric, time, onTime,
+  time, onTime,
 }: {
-  metric: LeaderboardMetric; onMetric: (m: LeaderboardMetric) => void;
   time: TimeWindow; onTime: (t: TimeWindow) => void;
 }) => {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [triggerLayout, setTriggerLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const triggerRef = useRef<View>(null);
-
-  const currentMetricLabel = METRICS.find(m => m.key === metric)?.label ?? '';
-  const currentTimeIdx = TIME_WINDOWS.findIndex(t2 => t2.key === time);
-  const currentTimeLabel = TIME_WINDOWS[currentTimeIdx].label;
-
-  const cycleTime = useCallback(() => {
-    const nextIdx = (currentTimeIdx + 1) % TIME_WINDOWS.length;
-    onTime(TIME_WINDOWS[nextIdx].key);
-  }, [currentTimeIdx, onTime]);
-
-  const openDropdown = useCallback(() => {
-    triggerRef.current?.measureInWindow((x, y, width, height) => {
-      setTriggerLayout({ x, y, width, height });
-      setDropdownOpen(true);
-    });
-  }, []);
-
-  const selectMetric = useCallback((m: LeaderboardMetric) => {
-    onMetric(m);
-    setDropdownOpen(false);
-  }, [onMetric]);
-
   return (
     <View style={styles.filterBar}>
-      {/* Metric dropdown trigger */}
-      <View ref={triggerRef} collapsable={false}>
-        <TouchableOpacity
-          style={styles.metricTrigger}
-          onPress={openDropdown}
-          activeOpacity={0.7}
-        >
-          <View style={styles.underlineWrap}>
-            <Text style={styles.metricTriggerText}>{currentMetricLabel}</Text>
-            <View style={styles.filterUnderline} />
-          </View>
-          <Text style={styles.metricChevron}>▾</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Time — single cycling chip */}
-      <TouchableOpacity
-        style={styles.timeChip}
-        onPress={cycleTime}
-        activeOpacity={0.7}
-      >
-        <View style={styles.underlineWrap}>
-          <Text style={styles.timeChipText}>{currentTimeLabel}</Text>
-          <View style={styles.filterUnderline} />
-        </View>
-      </TouchableOpacity>
-
-      {/* Dropdown menu */}
-      <Modal
-        visible={dropdownOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDropdownOpen(false)}
-      >
-        <Pressable style={styles.dropdownBackdrop} onPress={() => setDropdownOpen(false)}>
-          <View
-            style={[
-              styles.dropdownMenu,
-              { top: triggerLayout.y + triggerLayout.height + 4, left: triggerLayout.x },
-            ]}
+      {TIME_WINDOWS.map(item => {
+        const active = item.key === time;
+        return (
+          <TouchableOpacity
+            key={item.key}
+            style={[styles.timeSegment, active && styles.timeSegmentActive]}
+            onPress={() => onTime(item.key)}
+            activeOpacity={0.75}
           >
-            {METRICS.map(m => (
-              <TouchableOpacity
-                key={m.key}
-                style={[styles.dropdownItem, metric === m.key && styles.dropdownItemActive]}
-                onPress={() => selectMetric(m.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.dropdownItemText, metric === m.key && styles.dropdownItemTextActive]}>
-                  {m.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
+            <Text style={[styles.timeSegmentText, active && styles.timeSegmentTextActive]}>
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 });
 
+const TableHeader = memo(() => (
+  <View style={styles.tableHeader}>
+    <Text style={[styles.tableHeaderText, styles.rankColumn]}>Rank</Text>
+    <Text style={[styles.tableHeaderText, styles.athleteColumn]}>Athlete</Text>
+    <Text style={[styles.tableHeaderText, styles.scoreColumn]}>Form Score</Text>
+    <Text style={[styles.tableHeaderText, styles.streakColumn]}>Trend</Text>
+  </View>
+));
+
 export const LeaderboardView: React.FC = memo(() => {
-  const [metric, setMetric] = useState<LeaderboardMetric>('form_score');
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('1_week');
-  const { entries, currentUser, totalParticipants, isLoading, error, refetch } = useLeaderboard(metric, timeWindow);
+  const { entries, currentUser, totalParticipants, isLoading, error, refetch } = useLeaderboard('form_score', timeWindow);
 
   const top3 = useMemo(() => entries.slice(0, 3), [entries]);
   const rest = useMemo(() => entries.slice(3), [entries]);
@@ -147,7 +79,7 @@ export const LeaderboardView: React.FC = memo(() => {
 
   const ListHeader = useMemo(() => (
     <View>
-      <FilterBar metric={metric} onMetric={setMetric} time={timeWindow} onTime={setTimeWindow} />
+      <FilterBar time={timeWindow} onTime={setTimeWindow} />
 
       {isLoading && entries.length === 0 ? (
         <View style={styles.loadingContainer}>
@@ -168,6 +100,7 @@ export const LeaderboardView: React.FC = memo(() => {
       ) : (
         <>
           <Top3Podium entries={top3} />
+          <TableHeader />
           <View style={styles.listHeaderRow}>
             <Text style={styles.listHeaderText}>
               {totalParticipants} participants
@@ -176,7 +109,7 @@ export const LeaderboardView: React.FC = memo(() => {
         </>
       )}
     </View>
-  ), [metric, timeWindow, isLoading, error, entries.length, top3, totalParticipants, refetch]);
+  ), [timeWindow, isLoading, error, entries.length, top3, totalParticipants, refetch]);
 
   return (
     <View style={styles.container}>
@@ -203,8 +136,8 @@ export const LeaderboardView: React.FC = memo(() => {
             <Text style={styles.stickyRank}>#{currentUser.rank}</Text>
           </View>
           <Text style={styles.stickyName}>You</Text>
-          <Text style={[styles.stickyScore, { color: getScoreColor(currentUser.score) }]}>
-            {currentUser.score.toFixed(1)}
+          <Text style={styles.stickyScore}>
+            {currentUser.score.toLocaleString(undefined, { maximumFractionDigits: 1 })}
           </Text>
         </View>
       )}
@@ -217,117 +150,78 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: 118,
   },
 
-  /* ── Combined Filter Bar ── */
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.xs,
-    gap: SPACING.sm,
-    justifyContent: 'space-between',
+    marginHorizontal: SPACING.screenHorizontal,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+    padding: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  timeSegment: {
+    flex: 1,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  timeSegmentActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  timeSegmentText: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  timeSegmentTextActive: {
+    color: COLORS.primary,
   },
 
-  /* Metric dropdown trigger */
-  metricTrigger: {
+  tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    marginHorizontal: SPACING.screenHorizontal,
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
-  metricTriggerText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  metricChevron: {
-    fontSize: 18,
-    color: COLORS.textTertiary,
-  },
-
-  /* Dropdown menu */
-  dropdownBackdrop: {
-    flex: 1,
-  },
-  dropdownMenu: {
-    position: 'absolute',
-    minWidth: 160,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  dropdownItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  dropdownItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-  },
-  dropdownItemText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    letterSpacing: -0.2,
-  },
-  dropdownItemTextActive: {
-    color: COLORS.text,
-  },
-
-  /* Text + underline wrapper */
-  underlineWrap: {
-    alignItems: 'center',
-    paddingBottom: 4,
-  },
-  filterUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
-  },
-
-  /* Time — single cycling chip */
-  timeChip: {
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  timeChipText: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-
-  /* ── List Header ── */
-  listHeaderRow: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.sm,
-  },
-  listHeaderText: {
+  tableHeaderText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+  },
+  rankColumn: {
+    width: 38,
+  },
+  athleteColumn: {
+    flex: 1,
+  },
+  scoreColumn: {
+    width: 88,
+    textAlign: 'right',
+  },
+  streakColumn: {
+    width: 48,
+    textAlign: 'right',
   },
 
-  /* ── States ── */
+  listHeaderRow: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: SPACING.sm,
+  },
+  listHeaderText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+  },
+
   loadingContainer: {
     paddingTop: 80,
     alignItems: 'center',
@@ -348,9 +242,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 28,
     borderRadius: 20,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(124, 92, 255, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderColor: 'rgba(124, 92, 255, 0.28)',
   },
   retryText: {
     fontFamily: FONTS.ui.bold,
@@ -375,7 +269,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
   },
 
-  /* ── Sticky Banner ── */
   stickyBanner: {
     position: 'absolute',
     bottom: 0,
@@ -386,16 +279,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingBottom: 28,
     paddingHorizontal: SPACING.screenHorizontal,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: '#0E151A',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.15)',
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
     gap: SPACING.md,
   },
   stickyRankBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(124, 92, 255, 0.14)',
   },
   stickyRank: {
     fontFamily: FONTS.mono.bold,
@@ -411,5 +304,6 @@ const styles = StyleSheet.create({
   stickyScore: {
     fontFamily: FONTS.mono.bold,
     fontSize: 16,
+    color: COLORS.green,
   },
 });
