@@ -8,10 +8,8 @@
 import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G } from 'react-native-svg';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS ,
-  CARD_SHADOW
-} from '../../constants/theme';
+import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G, Line } from 'react-native-svg';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS } from '../../constants/theme';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -114,15 +112,15 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   lineColor,
   averageLabel,
 }) => {
-  const accent = lineColor ?? COLORS.accent;
+  const accent = lineColor ?? COLORS.green;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const chartId = title.replace(/[^a-zA-Z0-9]/g, '') || 'Trend';
 
-  const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - SPACING.md * 2;
-  const padLeft = 32;
+  const chartWidth = SCREEN_W - SPACING.screenHorizontal * 2 - 24;
+  const padLeft = 31;
   const padRight = 8;
-  const padTop = 26;
-  const padBottom = 32;
+  const padTop = 22;
+  const padBottom = 31;
   const graphW = chartWidth - padLeft - padRight;
   const graphH = height - padTop - padBottom;
 
@@ -132,12 +130,15 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
     const vals = data.values;
     const minVal = Math.min(...vals);
     const maxVal = Math.max(...vals);
+    const isPercentChart = unit === '%' || title.toUpperCase().includes('FORM');
     const rawRange = maxVal - minVal || 1;
-    // Pad the data range by 10% so min/max values don't sit at the very
-    // edge of the chart — gives the bezier curves room to stay smooth.
-    const rangePad = rawRange * 0.1;
-    const displayMin = minVal - rangePad;
-    const displayRange = rawRange + rangePad * 2;
+    const rangePad = isPercentChart ? 0 : rawRange * 0.14;
+    const displayMin = isPercentChart ? 0 : Math.max(0, minVal - rangePad);
+    const displayMax = isPercentChart ? 100 : maxVal + rangePad;
+    const displayRange = displayMax - displayMin || 1;
+    const gridValues = isPercentChart
+      ? [100, 75, 50, 25, 0]
+      : [displayMax, displayMin + displayRange * 0.75, displayMin + displayRange * 0.5, displayMin + displayRange * 0.25, displayMin];
 
     // Single data point — render a dot with a horizontal baseline
     if (vals.length === 1) {
@@ -147,7 +148,13 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
         linePath: `M${padLeft},${centerY} L${padLeft + graphW},${centerY}`,
         areaPath: `M${padLeft},${centerY} L${padLeft + graphW},${centerY} L${padLeft + graphW},${padTop + graphH} L${padLeft},${padTop + graphH} Z`,
         points: [{ x: centerX, y: centerY }],
-        yLabels: [{ value: vals[0], y: centerY }],
+        yLabels: gridValues.map((value) => ({
+          value,
+          y: padTop + graphH - ((value - displayMin) / displayRange) * graphH,
+        })),
+        gridLines: gridValues.map((value) => ({
+          y: padTop + graphH - ((value - displayMin) / displayRange) * graphH,
+        })),
         xLabels: [{ label: formatDateLabel(data.dates[0], timeRange), x: centerX }],
         lastPt: { x: centerX, y: centerY },
       };
@@ -169,11 +176,8 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 
     // Y-axis labels — position using the same padded mapping as data points
     const valToY = (v: number) => padTop + graphH - ((v - displayMin) / displayRange) * graphH;
-    const yLabels = [
-      { value: maxVal, y: valToY(maxVal) },
-      { value: Math.round((maxVal + minVal) / 2), y: valToY((maxVal + minVal) / 2) },
-      { value: minVal, y: valToY(minVal) },
-    ];
+    const yLabels = gridValues.map((value) => ({ value, y: valToY(value) }));
+    const gridLines = gridValues.map((value) => ({ y: valToY(value) }));
 
     // X-axis labels
     const xIndices = pickXLabels(data.dates, 5);
@@ -182,8 +186,8 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
       x: points[idx].x,
     }));
 
-    return { linePath, areaPath, points, yLabels, xLabels, lastPt };
-  }, [data.values, data.dates, graphW, graphH, padLeft, padTop, timeRange]);
+    return { linePath, areaPath, points, yLabels, gridLines, xLabels, lastPt };
+  }, [data.values, data.dates, graphW, graphH, padLeft, padTop, timeRange, title, unit]);
 
   const activeIndex =
     data.values.length > 0
@@ -279,11 +283,21 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                 </ClipPath>
               </Defs>
 
+              {svgContent.gridLines.map((line, i) => (
+                <Line
+                  key={`grid-${i}`}
+                  x1={padLeft}
+                  x2={padLeft + graphW}
+                  y1={line.y}
+                  y2={line.y}
+                  stroke="rgba(255,255,255,0.055)"
+                  strokeWidth={1}
+                />
+              ))}
+
               <G clipPath={`url(#chartClip${chartId})`}>
-                {/* Area fill — faded purple under the line */}
                 <Path d={svgContent.areaPath} fill={`url(#areaGrad${chartId})`} />
 
-                {/* Line */}
                 <Path
                   d={svgContent.linePath}
                   stroke={accent}
@@ -293,24 +307,29 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                   strokeLinejoin="round"
                 />
 
-                {/* Data point dots */}
                 {svgContent.points.map((pt, i) => (
-                  <Circle
-                    key={i}
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={
-                      activeIndex === i
-                        ? 6
-                        : activeIndex == null && i === svgContent.points.length - 1
-                          ? 4
-                          : 0
-                    }
-                    fill={accent}
-                  />
+                  <G key={i}>
+                    <Circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={activeIndex === i ? 6.5 : 4.2}
+                      fill={accent + (activeIndex === i ? '35' : '1F')}
+                    />
+                    <Circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={activeIndex === i ? 4.1 : 3}
+                      fill="#FFFFFF"
+                    />
+                    <Circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={activeIndex === i ? 2.7 : 2}
+                      fill={accent}
+                    />
+                  </G>
                 ))}
 
-                {/* Last point glow */}
                 {activePoint && (
                   <Circle
                     cx={activePoint.x}
@@ -326,9 +345,9 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                 <SvgText
                   key={`y-${i}`}
                   x={2}
-                  y={yl.y}
+                  y={yl.y + 3}
                   fill={COLORS.textTertiary}
-                  fontSize={9}
+                  fontSize={8.5}
                   fontFamily={FONTS.mono.regular}
                 >
                   {Math.round(yl.value)}
@@ -368,27 +387,27 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.28,
+        shadowRadius: 18,
       },
-      android: { elevation: 3 },
+      android: { elevation: 6 },
     }),
   },
   cardGradient: {
     borderRadius: CARD_RADIUS,
 
-    ...CARD_SHADOW,
     overflow: 'hidden',
 },
   cardGlassEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.11)',
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 13,
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(12, 20, 24, 0.30)',
+    paddingHorizontal: 12,
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 7,
   },
   header: {
     flexDirection: 'row',

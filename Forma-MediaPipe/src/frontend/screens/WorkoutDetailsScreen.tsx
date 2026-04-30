@@ -17,10 +17,11 @@ import {
   COLORS,
   SPACING,
   FONTS,
-  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
   getScoreColor,
   CARD_SHADOW
 } from '../constants/theme';
@@ -286,9 +287,9 @@ export const WorkoutDetailsScreen: React.FC = () => {
               WORKOUT SUMMARY — Compact inline card
               ═══════════════════════════════════════════ */}
           <LinearGradient
-            colors={SCREEN_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_ELEVATED]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.summaryCard}
           >
             <View style={styles.summaryEdge}>
@@ -427,29 +428,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    paddingBottom: 12,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 18,
-    fontFamily: FONTS.display.bold,
+    fontSize: 15,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.2,
     textAlign: 'center',
     marginHorizontal: SPACING.sm,
   },
   placeholder: {
-    width: 40,
+    width: 36,
   },
   scrollView: {
     flex: 1,
@@ -461,19 +458,20 @@ const styles = StyleSheet.create({
 
   /* ── Summary Card ────────────────────────────── */
   summaryCard: {
-    borderRadius: 16,
-    marginTop: 14,
-    marginBottom: 4,
-
+    borderRadius: CARD_RADIUS,
+    marginTop: 6,
+    marginBottom: 2,
     ...CARD_SHADOW,
-},
+    overflow: 'hidden',
+  },
   summaryEdge: {
-    borderRadius: 16,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 11,
   },
   summaryTitleRow: {
     flexDirection: 'row',
@@ -482,9 +480,9 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 9,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
+    letterSpacing: 1.6,
   },
   summaryStatsRow: {
     flexDirection: 'row',
@@ -497,11 +495,11 @@ const styles = StyleSheet.create({
   },
   summaryScoreValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 18,
+    fontSize: 17,
   },
   summaryStatValue: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -523,8 +521,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 22,
+    marginBottom: 10,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -533,7 +531,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontSize: 10.5,
     color: COLORS.text,
     letterSpacing: 2,
   },
@@ -582,41 +580,31 @@ const styles = StyleSheet.create({
 
   /* ── Exercise Cards ──────────────────────────── */
   cardOuter: {
-    borderRadius: 18,
-    marginBottom: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#7C5CFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
-      },
-      android: { elevation: 3 },
-    }),
+    borderRadius: CARD_RADIUS,
+    marginBottom: 10,
+    ...CARD_SHADOW,
   },
   cardGradient: {
-    borderRadius: 18,
-
-    ...CARD_SHADOW,
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
-},
+  },
   cardEdge: {
-    borderRadius: 18,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.11)',
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
-    padding: 16,
+    padding: 13,
   },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.md,
-    gap: SPACING.md,
+    marginBottom: 14,
+    gap: 10,
   },
   exerciseName: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14.5,
     fontFamily: FONTS.display.semibold,
     color: COLORS.text,
     letterSpacing: -0.3,
@@ -635,7 +623,7 @@ const styles = StyleSheet.create({
   },
   setsHeader: {
     flexDirection: 'row',
-    paddingBottom: SPACING.sm,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: SPACING.xs,
@@ -667,7 +655,7 @@ const styles = StyleSheet.create({
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
@@ -675,8 +663,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   setNumWrapper: {
-    width: 32,
-    height: 24,
+    width: 30,
+    height: 22,
     borderRadius: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',

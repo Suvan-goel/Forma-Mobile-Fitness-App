@@ -114,11 +114,13 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
 
           {showMediaSummary && (
             <View style={styles.mediaBlock}>
-              <Image
-                source={EVENT_IMAGES[event.eventType] ?? EVENT_IMAGES.workout_completed}
-                style={styles.mediaImage}
-                resizeMode="cover"
-              />
+              <View style={styles.mediaImageFrame}>
+                <Image
+                  source={EVENT_IMAGES[event.eventType] ?? EVENT_IMAGES.workout_completed}
+                  style={styles.mediaImage}
+                  resizeMode="contain"
+                />
+              </View>
 
               <View style={styles.mediaSummary}>
                 {event.eventType === 'workout_completed' ? (
@@ -282,20 +284,31 @@ const styles = StyleSheet.create({
   },
   mediaBlock: {
     flexDirection: 'row',
-    overflow: 'hidden',
+    alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.07)',
     backgroundColor: 'rgba(8, 12, 16, 0.16)',
+    padding: 8,
+  },
+  mediaImageFrame: {
+    width: 104,
+    height: 84,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
   },
   mediaImage: {
-    width: 132,
-    height: 108,
+    width: 88,
+    height: 76,
   },
   mediaSummary: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 6,
     justifyContent: 'center',
   },
   workoutName: {

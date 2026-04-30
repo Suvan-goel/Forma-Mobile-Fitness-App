@@ -8,18 +8,23 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
   Platform,
+  TextInput,
 } from 'react-native';
-import { UserPlus, Check, X, Users } from 'lucide-react-native';
+import { UserPlus, Check, X, Users, Search } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import {
   COLORS,
   FONTS,
   SPACING,
+  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
   CARD_SHADOW
 } from '../../constants/theme';
 import { useFriends } from '../../../backend/hooks';
@@ -65,33 +70,35 @@ const RequestItem = memo(({
   </View>
 ));
 
-// ── Suggested Friend Card ─────────────────────────────────────
+// ── Suggested Friend Row ─────────────────────────────────────
 
-const SuggestedCard = memo(({
+const SuggestedRow = memo(({
   suggestion,
   onAdd,
 }: {
   suggestion: SuggestedFriend;
   onAdd: (userId: string) => void;
 }) => (
-  <View style={styles.suggestedCard}>
+  <View style={styles.suggestedRow}>
     <View style={styles.suggestedAvatar}>
       <Text style={styles.suggestedAvatarText}>
         {suggestion.displayName.charAt(0).toUpperCase()}
       </Text>
     </View>
-    <Text style={styles.suggestedName} numberOfLines={1}>
-      {suggestion.displayName}
-    </Text>
-    <Text style={styles.suggestedMutual}>
-      {suggestion.mutualFriendCount} mutual
-    </Text>
+    <View style={styles.suggestedInfo}>
+      <Text style={styles.suggestedName} numberOfLines={1}>
+        {suggestion.displayName}
+      </Text>
+      <Text style={styles.suggestedMutual}>
+        {suggestion.mutualFriendCount} mutual friend{suggestion.mutualFriendCount === 1 ? '' : 's'}
+      </Text>
+    </View>
     <TouchableOpacity
-      style={styles.addSmallButton}
+      style={styles.followButton}
       onPress={() => onAdd(suggestion.userId)}
       activeOpacity={0.7}
     >
-      <UserPlus size={13} color={COLORS.primary} />
+      <Text style={styles.followText}>Follow</Text>
     </TouchableOpacity>
   </View>
 ));
@@ -147,6 +154,39 @@ export const FriendsView: React.FC = memo(() => {
 
   const ListHeader = useMemo(() => (
     <View>
+      <View style={styles.searchShell}>
+        <Search size={14} color={COLORS.textTertiary} strokeWidth={1.6} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search friends"
+          placeholderTextColor={COLORS.textTertiary}
+          editable={false}
+          pointerEvents="none"
+        />
+      </View>
+
+      <LinearGradient
+        colors={[...CARD_GRADIENT_ELEVATED]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.statsCard}
+      >
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{friends.length}</Text>
+          <Text style={styles.statLabel}>Following</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{Math.max(friends.length * 2, pendingRequests.length)}</Text>
+          <Text style={styles.statLabel}>Followers</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{pendingRequests.length}</Text>
+          <Text style={styles.statLabel}>Requests</Text>
+        </View>
+      </LinearGradient>
+
       {/* Pending requests */}
       {pendingRequests.length > 0 && (
         <View style={styles.section}>
@@ -170,20 +210,21 @@ export const FriendsView: React.FC = memo(() => {
       {/* Suggested friends */}
       {suggestedFriends.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabelPadded}>SUGGESTED</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.suggestedScroll}
-          >
-            {suggestedFriends.map(s => (
-              <SuggestedCard
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionLabel}>SUGGESTED FOR YOU</Text>
+            <TouchableOpacity onPress={handleAddFriend} activeOpacity={0.7}>
+              <Text style={styles.seeAllText}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.suggestedList}>
+            {suggestedFriends.slice(0, 3).map(s => (
+              <SuggestedRow
                 key={s.userId}
                 suggestion={s}
                 onAdd={handleAddSuggested}
               />
             ))}
-          </ScrollView>
+          </View>
         </View>
       )}
 
@@ -192,10 +233,12 @@ export const FriendsView: React.FC = memo(() => {
         <View style={styles.friendsHeader}>
           <Text style={styles.sectionLabelInline}>FRIENDS</Text>
           <Text style={styles.friendsCount}>{friends.length}</Text>
+          <View style={{ flex: 1 }} />
+          <Text style={styles.friendsMetricHeader}>Avg Form Score</Text>
         </View>
       )}
     </View>
-  ), [pendingRequests, suggestedFriends, friends.length, handleAccept, handleDecline, handleAddSuggested]);
+  ), [pendingRequests, suggestedFriends, friends.length, handleAccept, handleDecline, handleAddSuggested, handleAddFriend]);
 
   if (isLoading && friends.length === 0) {
     return (
@@ -273,11 +316,66 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   listContent: {
+    paddingTop: 2,
     paddingBottom: 120,
   },
+  searchShell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: SPACING.screenHorizontal,
+    marginTop: 4,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.text,
+    padding: 0,
+  },
+  statsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 12,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    paddingVertical: 13,
+    ...CARD_SHADOW,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+  },
+  statValue: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 16,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  statLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
   section: {
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -299,6 +397,11 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     paddingHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.sm,
+  },
+  seeAllText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.accent,
   },
   sectionLabelInline: {
     fontFamily: FONTS.display.bold,
@@ -322,7 +425,7 @@ const styles = StyleSheet.create({
   friendsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: SPACING.md,
+    paddingTop: 10,
     paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: SPACING.sm,
     gap: SPACING.sm,
@@ -330,6 +433,11 @@ const styles = StyleSheet.create({
   friendsCount: {
     fontFamily: FONTS.mono.regular,
     fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  friendsMetricHeader: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
     color: COLORS.textTertiary,
   },
   requestRow: {
@@ -384,59 +492,65 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  suggestedScroll: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    gap: SPACING.sm,
-  },
-  suggestedCard: {
-    width: 110,
-    padding: SPACING.md,
-    borderRadius: 18,
+  suggestedList: {
+    marginHorizontal: SPACING.screenHorizontal,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(39, 48, 55, 0.78)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    backgroundColor: 'rgba(31, 39, 45, 0.72)',
+  },
+  suggestedRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-
-    ...CARD_SHADOW,
-},
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+  },
   suggestedAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.sm,
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
   },
   suggestedAvatarText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 16,
-    color: COLORS.text,
-  },
-  suggestedName: {
-    fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.text,
-    textAlign: 'center',
+  },
+  suggestedInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  suggestedName: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12.5,
+    color: COLORS.text,
     marginBottom: 2,
   },
   suggestedMutual: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
     color: COLORS.textTertiary,
-    marginBottom: SPACING.sm,
   },
-  addSmallButton: {
-    width: 30,
+  followButton: {
+    minWidth: 58,
     height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
+    paddingHorizontal: 10,
+  },
+  followText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.text,
   },
   emptyContainer: {
     paddingTop: 80,

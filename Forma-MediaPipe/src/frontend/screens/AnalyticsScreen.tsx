@@ -12,7 +12,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Settings as SettingsIcon,
@@ -214,13 +214,26 @@ export const AnalyticsScreen: React.FC = () => {
               <React.Fragment key={tab.key}>
                 {index > 0 && <View style={styles.topTabDivider} />}
                 <TouchableOpacity
-                  style={[styles.topTab, isActive && styles.topTabActive]}
+                  style={styles.topTab}
                   activeOpacity={0.75}
                   onPress={() => setActiveProgressTab(tab.key)}
                 >
-                  <Text style={[styles.topTabText, isActive && styles.topTabTextActive]}>
-                    {tab.label}
-                  </Text>
+                  {isActive ? (
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.105)', 'rgba(255,255,255,0.045)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.topTabActive}
+                    >
+                      <Text style={[styles.topTabText, styles.topTabTextActive]}>
+                        {tab.label}
+                      </Text>
+                    </LinearGradient>
+                  ) : (
+                    <Text style={styles.topTabText}>
+                      {tab.label}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </React.Fragment>
             );
@@ -586,14 +599,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topTabs: {
-    height: 36,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.028)',
+    borderColor: 'rgba(255,255,255,0.09)',
+    borderTopColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(30, 39, 44, 0.78)',
+    padding: 3,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.24,
+        shadowRadius: 14,
+      },
+      android: { elevation: 5 },
+    }),
   },
   topTab: {
     flex: 1,
@@ -602,20 +626,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   topTabActive: {
-    backgroundColor: 'rgba(255,255,255,0.065)',
+    width: '100%',
+    height: '100%',
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(255,255,255,0.13)',
   },
   topTabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 10.5,
     color: COLORS.textSecondary,
+    letterSpacing: 0.2,
   },
   topTabTextActive: {
     color: COLORS.accent,
   },
   topTabDivider: {
     width: 1,
-    height: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    height: 17,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    marginHorizontal: 2,
   },
 
   /* Card label */

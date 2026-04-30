@@ -20,56 +20,66 @@ const TABS: { key: SocialTab; label: string }[] = [
 
 export const SocialTabSelector: React.FC<SocialTabSelectorProps> = memo(({ activeTab, onTabChange }) => {
   return (
-    <View style={styles.container}>
-      {TABS.map((tab) => {
-        const isActive = activeTab === tab.key;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            onPress={() => onTabChange(tab.key)}
-            style={styles.tab}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
-            {isActive && <View style={styles.underline} />}
-          </TouchableOpacity>
-        );
-      })}
+    <View style={styles.wrap}>
+      <View style={styles.container}>
+        {TABS.map((tab, index) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <React.Fragment key={tab.key}>
+              {index > 0 && <View style={styles.divider} />}
+              <TouchableOpacity
+                onPress={() => onTabChange(tab.key)}
+                style={[styles.tab, isActive && styles.tabActive]}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            </React.Fragment>
+          );
+        })}
+      </View>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
+  wrap: {
     paddingHorizontal: SPACING.screenHorizontal,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  container: {
+    height: 36,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    marginBottom: 12,
-    marginTop: 12,
-    gap: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.028)',
+    overflow: 'hidden',
   },
   tab: {
+    flex: 1,
+    height: '100%',
     alignItems: 'center',
-    paddingBottom: 6,
+    justifyContent: 'center',
+  },
+  tabActive: {
+    backgroundColor: 'rgba(255,255,255,0.065)',
   },
   tabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    fontSize: 11,
+    color: COLORS.textSecondary,
   },
   tabTextActive: {
-    color: '#FFFFFF',
+    color: COLORS.accent,
   },
-  underline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
+  divider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
 });

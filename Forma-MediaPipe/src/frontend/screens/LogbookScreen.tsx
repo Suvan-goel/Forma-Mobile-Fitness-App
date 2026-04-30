@@ -155,21 +155,27 @@ const CalendarModal = ({
                     key={index}
                     style={[
                       styles.calendarDay,
-                      day && isSameDay(day, selectedDate) && styles.calendarDaySelected,
                       !day && styles.calendarDayEmpty,
-                      day && isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayToday,
                     ]}
                     onPress={() => day && onSelectDate(day)}
                     disabled={!day}
                   >
                     {day && (
-                      <Text style={[
-                        styles.calendarDayText,
-                        isSameDay(day, selectedDate) && styles.calendarDayTextSelected,
-                        isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayTextToday,
-                      ]}>
-                        {day.getDate()}
-                      </Text>
+                      <View
+                        style={[
+                          styles.calendarDayCircle,
+                          isSameDay(day, selectedDate) && styles.calendarDaySelected,
+                          isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayToday,
+                        ]}
+                      >
+                        <Text style={[
+                          styles.calendarDayText,
+                          isSameDay(day, selectedDate) && styles.calendarDayTextSelected,
+                          isToday(day) && !isSameDay(day, selectedDate) && styles.calendarDayTextToday,
+                        ]}>
+                          {day.getDate()}
+                        </Text>
+                      </View>
                     )}
                   </TouchableOpacity>
                 ))}
@@ -1179,14 +1185,13 @@ const styles = StyleSheet.create({
   },
   calendarDaysHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     marginBottom: SPACING.sm,
   },
   calendarDayHeader: {
     fontSize: 10,
     fontFamily: FONTS.ui.regular,
     color: '#3F3F46',
-    width: 40,
+    flex: 1,
     textAlign: 'center',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -1194,15 +1199,19 @@ const styles = StyleSheet.create({
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
   },
   calendarDay: {
-    width: 40,
+    width: `${100 / 7}%`,
     height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDayCircle: {
+    width: 34,
+    height: 34,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 3,
   },
   calendarDayEmpty: {
     opacity: 0,
