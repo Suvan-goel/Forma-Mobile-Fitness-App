@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     borderRadius: CARD_RADIUS,
     paddingVertical: 14,
     paddingHorizontal: 6,

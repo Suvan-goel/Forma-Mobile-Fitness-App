@@ -970,7 +970,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(32, 40, 46, 0.72)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   restTimerProgress: {
     flex: 1,
@@ -1069,7 +1069,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
@@ -1114,7 +1114,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
   },
   exerciseCardHeader: {

@@ -243,7 +243,7 @@ export const ExerciseGuideScreen: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
 
   /* ── Header ── */
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
 
   /* ── Record tab: visual stage ── */
   visualStage: {
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: SPACING.lg,

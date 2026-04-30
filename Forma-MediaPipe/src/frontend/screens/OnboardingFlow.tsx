@@ -100,7 +100,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComp
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   stepContainer: {
     flex: 1,

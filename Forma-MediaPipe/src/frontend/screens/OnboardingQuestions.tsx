@@ -335,7 +335,7 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   progressTrack: {
     height: 3,

@@ -108,7 +108,7 @@ export const InsightsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   loadingContainer: {
     flex: 1,

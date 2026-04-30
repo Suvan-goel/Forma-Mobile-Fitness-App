@@ -133,7 +133,7 @@ const RecordStackNavigator: React.FC = memo(() => {
     <RecordStack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: COLORS.background },
+        contentStyle: { backgroundColor: 'transparent' },
       }}
     >
       <RecordStack.Screen name="RecordLanding" component={RecordLandingScreen} />
@@ -236,7 +236,7 @@ const RootStackNavigator: React.FC = () => {
 
   if (isLoading || hasOnboarded === null) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={COLORS.primary} size="large" />
       </View>
     );
@@ -251,7 +251,7 @@ const RootStackNavigator: React.FC = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: COLORS.background },
+        contentStyle: { backgroundColor: 'transparent' },
       }}
     >
       {user ? (

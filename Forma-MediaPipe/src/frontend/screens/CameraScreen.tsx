@@ -1524,7 +1524,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'column',
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   headerLeftGroup: {
     flexDirection: 'row',

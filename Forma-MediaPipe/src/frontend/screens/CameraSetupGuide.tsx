@@ -498,7 +498,7 @@ const Q_SIZE = 32;
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
 
   /* ── Art section (top 60%) ── */

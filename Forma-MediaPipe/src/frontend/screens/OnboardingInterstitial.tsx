@@ -323,7 +323,7 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
 
   /* ── Center area (loading + success share this space) ─── */

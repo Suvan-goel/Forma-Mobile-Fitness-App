@@ -51,8 +51,8 @@ export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#2023
 export const SCREEN_GRADIENT_START = { x: 0.5, y: 0 } as const;
 export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
-/** Glass card surface gradient (premium graphite, low-contrast bottom-to-top sheen) */
-export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#15191C', '#181C1F', '#1B2023'];
+/** Glass card surface gradient — matches the homepage card treatment */
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#171B1E', '#1C2023', '#202428'];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
 

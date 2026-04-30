@@ -237,7 +237,7 @@ export const OnboardingAuth: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   content: {
     flex: 1,

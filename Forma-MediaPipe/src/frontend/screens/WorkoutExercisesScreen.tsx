@@ -157,7 +157,7 @@ export const WorkoutExercisesScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   topBar: {
     paddingHorizontal: SPACING.screenHorizontal,
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: SPACING.screenHorizontal,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     shadowColor: '#000',

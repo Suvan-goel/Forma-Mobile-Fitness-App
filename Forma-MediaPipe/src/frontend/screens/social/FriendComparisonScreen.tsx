@@ -153,7 +153,7 @@ export const FriendComparisonScreen: React.FC = memo(() => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   centerContainer: {
     flex: 1,
