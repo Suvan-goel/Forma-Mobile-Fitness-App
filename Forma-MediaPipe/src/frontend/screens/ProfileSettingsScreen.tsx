@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera, Mail, Calendar, LogOut, User, AlignLeft, Shield } from 'lucide-react-native';
+import { ChevronLeft, Camera, Mail, Calendar, LogOut, User, AlignLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   COLORS,
@@ -21,8 +21,11 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
-  CARD_SHADOW
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  CARD_SHADOW,
 } from '../constants/theme';
+import { ScreenBackground } from '../components/ui';
 import { useUser, useUpdateUser } from '../../backend/hooks';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -141,6 +144,10 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
   };
 
   const userInitial = (user?.displayName?.[0] ?? user?.email?.[0] ?? 'A').toUpperCase();
+  const profileHandle = `@${(displayName || user?.displayName || 'forma')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+    .slice(0, 18) || 'forma'}`;
   const joinDate = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : '';
@@ -164,14 +171,14 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
 
   if (userLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
         <ActivityIndicator color={COLORS.primary} size="large" />
-      </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -182,7 +189,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
         >
           <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle}>EDIT PROFILE</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -193,40 +200,68 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
         keyboardShouldPersistTaps="handled"
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          {/* Avatar */}
-          <View style={styles.avatarSection}>
-            <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.7} disabled={isUpdating}>
-              <View style={styles.avatarWrapper}>
-                {user?.avatarUrl ? (
-                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-                ) : user ? (
-                  <LinearGradient
-                    colors={['#7A55FF', '#633FE5']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.avatarGradient}
-                  >
-                    <Text style={styles.avatarText}>{userInitial}</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={styles.avatarPlaceholder} />
-                )}
-                <View style={styles.cameraBadge}>
-                  <Camera size={13} color="#FFFFFF" strokeWidth={2} />
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroInner}>
+              <TouchableOpacity
+                onPress={handlePickAvatar}
+                activeOpacity={0.8}
+                disabled={isUpdating}
+                style={styles.avatarTouch}
+              >
+                <View style={styles.avatarRing}>
+                  {user?.avatarUrl ? (
+                    <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                  ) : user ? (
+                    <LinearGradient
+                      colors={['#F3F4F6', '#B8BCC5']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.avatarGradient}
+                    >
+                      <Text style={styles.avatarText}>{userInitial}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={styles.avatarPlaceholder} />
+                  )}
+                  <View style={styles.cameraBadge}>
+                    {isUpdating ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Camera size={13} color="#FFFFFF" strokeWidth={2.2} />
+                    )}
+                  </View>
                 </View>
+              </TouchableOpacity>
+
+              <View style={styles.heroCopy}>
+                <Text style={styles.displayName} numberOfLines={1}>
+                  {displayName || user?.displayName || 'Forma Athlete'}
+                </Text>
+                <Text style={styles.handle} numberOfLines={1}>
+                  {profileHandle}
+                </Text>
+                <TouchableOpacity
+                  style={styles.changePhotoPill}
+                  onPress={handlePickAvatar}
+                  activeOpacity={0.75}
+                  disabled={isUpdating}
+                >
+                  <Camera size={13} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={styles.changePhotoText}>Change photo</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-            <Text style={styles.tapToChange}>Tap to change photo</Text>
-            {isUpdating && (
-              <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.sm }} />
-            )}
-          </View>
+            </View>
+          </LinearGradient>
 
           {/* Display Name */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <User size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>DISPLAY NAME</Text>
+              <Text style={styles.sectionLabel}>PUBLIC PROFILE</Text>
             </View>
           </View>
           <LinearGradient
@@ -235,58 +270,63 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
-            <View style={styles.cardEdge}>
-              <TextInput
-                style={styles.textInput}
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder="Enter your display name"
-                placeholderTextColor={COLORS.textTertiary}
-                autoCapitalize="words"
-                returnKeyType="done"
-                onSubmitEditing={handleSaveDisplayName}
-              />
-              {hasDisplayNameChanged && (
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={handleSaveDisplayName}
-                  activeOpacity={0.7}
-                  disabled={isUpdating}
-                >
-                  <Text style={styles.saveBtnText}>{isUpdating ? 'Saving...' : 'Save'}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </LinearGradient>
+            <View style={styles.groupEdge}>
+              <View style={styles.fieldRow}>
+                <View style={styles.iconBubble}>
+                  <User size={16} color={COLORS.textSecondary} strokeWidth={1.8} />
+                </View>
+                <View style={styles.fieldContent}>
+                  <Text style={styles.fieldLabel}>Display name</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    placeholder="Enter your display name"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoCapitalize="words"
+                    returnKeyType="done"
+                    onSubmitEditing={handleSaveDisplayName}
+                  />
+                </View>
+                {hasDisplayNameChanged && (
+                  <TouchableOpacity
+                    style={[styles.compactSaveBtn, (!displayName.trim() || isUpdating) && styles.saveBtnDisabled]}
+                    onPress={handleSaveDisplayName}
+                    activeOpacity={0.75}
+                    disabled={!displayName.trim() || isUpdating}
+                  >
+                    <Text style={styles.compactSaveText}>{isUpdating ? 'Saving' : 'Save'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
-          {/* Bio */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <AlignLeft size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>BIO</Text>
-            </View>
-          </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
-              <TextInput
-                style={styles.bioInput}
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell people a little about yourself..."
-                placeholderTextColor={COLORS.textTertiary}
-                multiline
-                numberOfLines={3}
-                maxLength={160}
-                returnKeyType="default"
-                textAlignVertical="top"
-              />
-              <View style={styles.bioFooter}>
-                <Text style={styles.bioCharCount}>{bio.length}/160</Text>
+              <View style={styles.rowDivider} />
+
+              <View style={styles.bioBlock}>
+                <View style={styles.bioHeader}>
+                  <View style={styles.bioLabelRow}>
+                    <View style={styles.iconBubble}>
+                      <AlignLeft size={16} color={COLORS.textSecondary} strokeWidth={1.8} />
+                    </View>
+                    <View>
+                      <Text style={styles.fieldLabel}>Bio</Text>
+                      <Text style={styles.fieldHint}>Shown on your public profile</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.bioCharCount}>{bio.length}/160</Text>
+                </View>
+                <TextInput
+                  style={styles.bioInput}
+                  value={bio}
+                  onChangeText={setBio}
+                  placeholder="Tell people a little about your training..."
+                  placeholderTextColor={COLORS.textTertiary}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={160}
+                  returnKeyType="default"
+                  textAlignVertical="top"
+                />
                 {hasBioChanged && (
                   <TouchableOpacity
                     style={styles.saveBtn}
@@ -304,8 +344,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           {/* Name */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <User size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>NAME</Text>
+              <Text style={styles.sectionLabel}>PERSONAL DETAILS</Text>
             </View>
           </View>
           <LinearGradient
@@ -314,11 +353,13 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
-            <View style={styles.cardEdge}>
-              <View style={styles.infoRow}>
-                <User size={14} color="#A78BFA" strokeWidth={1.5} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>First name</Text>
+            <View style={styles.groupEdge}>
+              <View style={styles.fieldRow}>
+                <View style={styles.iconBubble}>
+                  <User size={16} color={COLORS.textSecondary} strokeWidth={1.8} />
+                </View>
+                <View style={styles.fieldContent}>
+                  <Text style={styles.fieldLabel}>First name</Text>
                   <TextInput
                     style={styles.nameInput}
                     value={firstName}
@@ -330,11 +371,13 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
                   />
                 </View>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <User size={14} color="#A78BFA" strokeWidth={1.5} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Last name</Text>
+              <View style={styles.rowDivider} />
+              <View style={styles.fieldRow}>
+                <View style={styles.iconBubble}>
+                  <User size={16} color={COLORS.textSecondary} strokeWidth={1.8} />
+                </View>
+                <View style={styles.fieldContent}>
+                  <Text style={styles.fieldLabel}>Last name</Text>
                   <TextInput
                     style={styles.nameInput}
                     value={lastName}
@@ -349,12 +392,12 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
               </View>
               {hasNameChanged && (
                 <TouchableOpacity
-                  style={styles.saveBtn}
+                  style={styles.groupSaveBtn}
                   onPress={handleSaveName}
                   activeOpacity={0.7}
                   disabled={isUpdating}
                 >
-                  <Text style={styles.saveBtnText}>{isUpdating ? 'Saving...' : 'Save'}</Text>
+                  <Text style={styles.groupSaveText}>{isUpdating ? 'Saving...' : 'Save personal details'}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -363,7 +406,6 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           {/* Account Details */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Shield size={13} color={COLORS.accent} strokeWidth={1.5} />
               <Text style={styles.sectionLabel}>ACCOUNT</Text>
             </View>
           </View>
@@ -373,19 +415,23 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
-            <View style={styles.cardEdge}>
+            <View style={styles.groupEdge}>
               <View style={styles.infoRow}>
-                <Mail size={14} color="#A78BFA" strokeWidth={1.5} />
+                <View style={styles.iconBubble}>
+                  <Mail size={16} color={COLORS.textSecondary} strokeWidth={1.8} />
+                </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Email</Text>
-                  <Text style={styles.infoValue}>{user?.email ?? ''}</Text>
+                  <Text style={styles.infoValue} numberOfLines={1}>{user?.email ?? ''}</Text>
                 </View>
               </View>
               {joinDate ? (
                 <>
-                  <View style={styles.divider} />
+                  <View style={styles.rowDivider} />
                   <View style={styles.infoRow}>
-                    <Calendar size={14} color="#34E0A6" strokeWidth={1.5} />
+                    <View style={[styles.iconBubble, styles.greenIconBubble]}>
+                      <Calendar size={16} color={COLORS.green} strokeWidth={1.8} />
+                    </View>
                     <View style={styles.infoContent}>
                       <Text style={styles.infoLabel}>Member Since</Text>
                       <Text style={styles.infoValue}>{joinDate}</Text>
@@ -409,11 +455,11 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
           </TouchableOpacity>
 
           {error ? (
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText} selectable>{error}</Text>
           ) : null}
         </Animated.View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
 
@@ -428,7 +474,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 6,
+    paddingTop: 4,
     paddingBottom: 12,
   },
   backBtn: {
@@ -440,9 +486,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 22,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 3,
     flex: 1,
   },
   headerSpacer: {
@@ -457,42 +503,61 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
 
-  /* Avatar */
-  avatarSection: {
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 8,
+  /* Profile hero */
+  heroCard: {
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+    marginBottom: 4,
   },
-  avatarWrapper: {
+  heroInner: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+  },
+  avatarTouch: {
+    borderRadius: 46,
+  },
+  avatarRing: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    padding: 1,
+    backgroundColor: 'rgba(255,255,255,0.58)',
     position: 'relative',
   },
   avatarImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: '100%',
+    height: '100%',
+    borderRadius: 41,
   },
   avatarGradient: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: '100%',
+    height: '100%',
+    borderRadius: 41,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: '100%',
+    height: '100%',
+    borderRadius: 41,
     backgroundColor: '#27272A',
   },
   avatarText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 36,
-    color: '#FFFFFF',
+    fontSize: 32,
+    color: '#101418',
   },
   cameraBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
+    bottom: -1,
+    right: -1,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -502,11 +567,38 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: COLORS.background,
   },
-  tapToChange: {
+  heroCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  displayName: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 23,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  handle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    marginTop: SPACING.sm,
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+  },
+  changePhotoPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: CARD_RADIUS_SM,
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.24)',
+  },
+  changePhotoText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.primary,
   },
 
   /* Section Headers (matches Home) */
@@ -514,8 +606,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 16,
-    marginBottom: 7,
+    marginTop: 18,
+    marginBottom: 8,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -523,125 +615,198 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 9.5,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
     color: COLORS.textSecondary,
-    letterSpacing: 1.3,
+    letterSpacing: 1.6,
   },
 
   /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 8,
-
+    borderRadius: CARD_RADIUS,
     ...CARD_SHADOW,
     overflow: 'hidden',
-},
-  cardEdge: {
-    borderRadius: 8,
+  },
+  groupEdge: {
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 64,
+    paddingVertical: 10,
+  },
+  fieldContent: {
+    flex: 1,
+    gap: 3,
+  },
+  fieldLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+  },
+  fieldHint: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    marginTop: 2,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    marginLeft: 42,
+  },
+  iconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: CARD_RADIUS_SM,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+  },
+  greenIconBubble: {
+    backgroundColor: 'rgba(52, 224, 166, 0.12)',
   },
 
   /* Inputs */
   textInput: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.text,
-    paddingVertical: SPACING.sm,
+    paddingVertical: 1,
   },
   nameInput: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.text,
-    paddingVertical: 2,
-    marginTop: 2,
+    paddingVertical: 1,
+  },
+  bioBlock: {
+    paddingVertical: 13,
+    gap: 11,
+  },
+  bioHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  bioLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
   bioInput: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.text,
-    lineHeight: 22,
-    minHeight: 72,
-    paddingVertical: SPACING.sm,
-  },
-  bioFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: SPACING.xs,
+    lineHeight: 21,
+    minHeight: 86,
+    padding: 12,
+    borderRadius: CARD_RADIUS_SM,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   bioCharCount: {
     fontFamily: FONTS.mono.regular,
     fontSize: 10,
     color: COLORS.textTertiary,
   },
+  compactSaveBtn: {
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: CARD_RADIUS_SM,
+    backgroundColor: 'rgba(122, 85, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.30)',
+  },
+  compactSaveText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.primary,
+  },
   saveBtn: {
     alignSelf: 'flex-end',
-    marginTop: SPACING.sm,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: CARD_RADIUS_SM,
+    backgroundColor: COLORS.primary,
   },
   saveBtnText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 13,
-    color: '#A78BFA',
-    letterSpacing: 0.3,
+    color: COLORS.text,
+  },
+  saveBtnDisabled: {
+    opacity: 0.45,
+  },
+  groupSaveBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 10,
+    paddingVertical: 12,
+    borderRadius: CARD_RADIUS_SM,
+    backgroundColor: 'rgba(122, 85, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.30)',
+  },
+  groupSaveText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.primary,
   },
 
   /* Info Rows */
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
+    gap: 12,
+    minHeight: 58,
     paddingVertical: 10,
   },
   infoContent: {
     flex: 1,
+    gap: 3,
   },
   infoLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
   },
   infoValue: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12.5,
-    color: COLORS.text,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    marginVertical: 8,
+    color: COLORS.textTertiary,
   },
 
   /* Logout */
   logoutBtn: {
-    marginTop: 32,
-    borderRadius: 16,
+    marginTop: 16,
+    borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.12)',
-    backgroundColor: 'rgba(239, 68, 68, 0.04)',
+    borderColor: 'rgba(239, 68, 68, 0.28)',
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
   },
   logoutInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 16,
+    paddingVertical: 13,
   },
   logoutText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: '#EF4444',
-    letterSpacing: 0.3,
+    fontSize: 13,
+    color: COLORS.red,
   },
 
   /* Error */

@@ -298,11 +298,14 @@ const styles = StyleSheet.create({
   mediaBlock: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
     borderRadius: 13,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.045)',
     backgroundColor: 'rgba(7, 10, 13, 0.18)',
-    padding: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   mediaImageFrame: {
     width: 94,
@@ -317,10 +320,9 @@ const styles = StyleSheet.create({
     height: 70,
   },
   mediaSummary: {
-    flex: 1,
-    paddingLeft: 12,
-    paddingRight: 4,
-    paddingVertical: 4,
+    flexShrink: 1,
+    width: 210,
+    maxWidth: '58%',
     justifyContent: 'center',
   },
   workoutName: {

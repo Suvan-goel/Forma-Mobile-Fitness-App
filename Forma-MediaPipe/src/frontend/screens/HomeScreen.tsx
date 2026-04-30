@@ -561,9 +561,9 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   avatarWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.055)',
@@ -579,13 +579,14 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontFamily: FONTS.display.bold,
-    fontSize: 23,
+    fontSize: 26,
     color: '#FFFFFF',
   },
-  greetingTextWrap: { flex: 1, gap: 1 },
+  greetingTextWrap: { flex: 1, gap: 0 },
   greetingHello: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
+    lineHeight: 15,
     color: COLORS.textTertiary,
   },
   greetingName: {
@@ -598,7 +599,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textTertiary,
-    marginTop: 2,
+    marginTop: 0,
   },
 
   /* Card label */

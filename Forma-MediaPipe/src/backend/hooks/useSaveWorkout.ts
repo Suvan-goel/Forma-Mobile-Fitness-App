@@ -38,6 +38,7 @@ interface SaveWorkoutParams {
   category?: string;
   notes?: string;
   exercises: WorkoutExerciseInput[];
+  shareToFeed?: boolean;
   /** CurrentWorkoutContext sessionId — used to link video recordings to the saved workout */
   workoutSessionId?: string;
 }
@@ -93,8 +94,8 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
         });
       }
 
-      // Emit activity event — fire and forget
-      if (sessionId) {
+      // Emit activity event — fire and forget when the user opts in
+      if (sessionId && params.shareToFeed !== false) {
         const avgFormScore = payload.exercises.length > 0
           ? Math.round(payload.exercises.reduce((sum, ex) =>
               sum + ex.sets.reduce((s, set) => s + set.formScore, 0) / Math.max(ex.sets.length, 1), 0) / payload.exercises.length)

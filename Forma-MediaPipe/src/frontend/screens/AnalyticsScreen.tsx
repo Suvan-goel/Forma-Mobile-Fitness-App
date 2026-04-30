@@ -503,7 +503,7 @@ export const AnalyticsScreen: React.FC = () => {
                             style={[styles.bestListRow, index > 0 && styles.pbRowBordered]}
                           >
                             <View style={styles.bestThumb}>
-                              <Image source={row.thumb} style={styles.pbThumbImage} resizeMode="cover" />
+                              <Image source={row.thumb} style={styles.pbThumbImage} resizeMode="contain" />
                             </View>
                             <View style={styles.pbInfo}>
                               <Text style={styles.bestName} numberOfLines={1}>{row.name}</Text>
@@ -740,12 +740,11 @@ const styles = StyleSheet.create({
   pbThumb: {
     width: 33,
     height: 33,
-    borderRadius: 7,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 0,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderWidth: 0,
     overflow: 'hidden',
   },
   pbThumbImage: {
@@ -782,12 +781,11 @@ const styles = StyleSheet.create({
   bestThumb: {
     width: 42,
     height: 42,
-    borderRadius: 9,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 0,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderWidth: 0,
     overflow: 'hidden',
   },
   bestName: {

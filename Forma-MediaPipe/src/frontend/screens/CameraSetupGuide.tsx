@@ -19,7 +19,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_SLIDES = 3;
 
 // Front-view holographic model asset
-const frontImg = require('../../../assets/front-view.png');
+const frontImg = require('../../../assets/front-view-v2.png');
 
 // ── SVG: Tilted Phone on Floor Grid (Slide 0) ──────────────────
 

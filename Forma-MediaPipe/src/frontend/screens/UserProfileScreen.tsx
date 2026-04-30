@@ -22,7 +22,7 @@ import {
   ChevronLeft,
   Flame,
   Medal,
-  Settings,
+  Pencil,
   Shield,
   Sparkles,
   Target,
@@ -37,6 +37,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
 } from '../constants/theme';
+import { ScreenBackground } from '../components/ui';
 import { useUser, useWorkouts, useAnalytics, useRewards } from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
 
@@ -106,19 +107,31 @@ export const UserProfileScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const handleGoBack = useCallback(() => navigation.navigate('MainTabs', { screen: 'Home' }), [navigation]);
-  const handleSettings = useCallback(() => navigation.navigate('Settings'), [navigation]);
+  const handleGoBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('MainTabs', { screen: 'Home' });
+  }, [navigation]);
+  const handleEditProfile = useCallback(() => navigation.navigate('ProfileSettings'), [navigation]);
   const handleRewards = useCallback(() => navigation.navigate('Rewards'), [navigation]);
   const handleVideoLibrary = useCallback(() => navigation.navigate('VideoLibrary'), [navigation]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} activeOpacity={0.7} style={styles.headerIcon}>
           <ChevronLeft size={26} color={COLORS.textSecondary} strokeWidth={1.7} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleSettings} activeOpacity={0.7} style={styles.headerIcon}>
-          <Settings size={22} color={COLORS.textSecondary} strokeWidth={1.7} />
+        <TouchableOpacity
+          onPress={handleEditProfile}
+          activeOpacity={0.7}
+          style={styles.headerIcon}
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile"
+        >
+          <Pencil size={20} color={COLORS.textSecondary} strokeWidth={1.8} />
         </TouchableOpacity>
       </View>
 
@@ -245,7 +258,7 @@ export const UserProfileScreen: React.FC = () => {
           </ProfileCard>
         </Animated.View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
 

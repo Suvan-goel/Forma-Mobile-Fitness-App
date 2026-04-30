@@ -228,8 +228,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 icon={UserRound}
                 iconColor={COLORS.textSecondary}
                 label="Profile"
-                sub="Edit your profile"
-                onPress={() => navigation.navigate('ProfileSettings')}
+                sub="View your public profile"
+                onPress={() => navigation.navigate('UserProfile')}
               />
               <View style={styles.rowDivider} />
               <NavRow

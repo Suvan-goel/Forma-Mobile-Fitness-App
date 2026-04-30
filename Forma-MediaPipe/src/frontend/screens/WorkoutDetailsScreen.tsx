@@ -33,6 +33,7 @@ import { MonoText } from '../components/typography/MonoText';
 import { useWorkoutDetails } from '../../backend/hooks';
 import { useVideoLibrary } from '../../backend/hooks';
 import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { WorkoutExercise } from '../../backend/services/api';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
 import { useAlert } from '../contexts/AlertContext';
@@ -275,7 +276,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
   // Loading state
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
@@ -292,14 +293,14 @@ export const WorkoutDetailsScreen: React.FC = () => {
           <LoadingSkeleton variant="card" height={200} style={{ marginBottom: SPACING.md }} />
           <LoadingSkeleton variant="card" height={200} />
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
@@ -310,13 +311,13 @@ export const WorkoutDetailsScreen: React.FC = () => {
         <View style={styles.errorContainer}>
           <ErrorState message={error} onRetry={refetch} />
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
   if (!workout) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
@@ -324,7 +325,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
           <Text style={styles.headerTitle}>Workout Not Found</Text>
           <View style={styles.placeholder} />
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
@@ -346,7 +347,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
   ];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
@@ -491,7 +492,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
           </View>
         </Modal>
       )}
-    </View>
+    </ScreenBackground>
   );
 };
 

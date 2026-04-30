@@ -56,6 +56,33 @@ const WORKOUT_THUMBS = [
   require('../assets/exercises/cable_lat_pulldowns.png'),
   require('../assets/exercises/leg_extensions.png'),
 ];
+const EXERCISE_THUMBS: Record<string, any> = {
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Back Squat': require('../assets/exercises/barbell_squat.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Barbell Curls': require('../assets/exercises/barbell_curl.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Push Up': require('../assets/exercises/push_up.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Lat Pulldown': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Leg Press': require('../assets/exercises/leg_extensions.png'),
+  'Walking Lunge': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Romanian Deadlift': require('../assets/exercises/lying_leg_curl.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+};
+
+const getWorkoutThumb = (session: WorkoutSession, fallbackIndex: number) => {
+  const firstExerciseName = session.firstExerciseName?.trim();
+  if (firstExerciseName && EXERCISE_THUMBS[firstExerciseName]) {
+    return EXERCISE_THUMBS[firstExerciseName];
+  }
+  return WORKOUT_THUMBS[fallbackIndex % WORKOUT_THUMBS.length];
+};
 
 type LogbookListItem =
   | { type: 'header'; key: string; label: string; count: number }
@@ -289,9 +316,9 @@ const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ sess
               <View style={styles.cardLayout}>
                 <View style={styles.workoutThumb}>
                   <Image
-                    source={WORKOUT_THUMBS[index % WORKOUT_THUMBS.length]}
+                    source={getWorkoutThumb(session, index)}
                     style={styles.workoutThumbImage}
-                    resizeMode="cover"
+                    resizeMode="contain"
                   />
                 </View>
                 <View style={styles.cardContent}>
@@ -950,11 +977,10 @@ const styles = StyleSheet.create({
   workoutThumb: {
     width: 104,
     height: 86,
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 0,
+    overflow: 'visible',
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
   workoutThumbImage: {
     width: '100%',

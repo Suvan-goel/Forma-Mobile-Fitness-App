@@ -78,6 +78,7 @@ export interface WorkoutSession {
   totalReps: number;
   formScore: number;
   category?: string;
+  firstExerciseName?: string;
   userId?: string;
 }
 

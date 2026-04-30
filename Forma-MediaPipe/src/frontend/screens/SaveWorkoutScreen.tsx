@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,31 +10,28 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  Switch,
+  Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
-import {
-  ChevronLeft,
-  X,
-  Target,
-  Clock,
-  Dumbbell,
-  FileText,
-  ChevronRight,
-  Layers,
-} from 'lucide-react-native';
+import { Check, ChevronDown, ChevronLeft, Trophy } from 'lucide-react-native';
 import {
   COLORS,
   SPACING,
   FONTS,
   SCREEN_GRADIENT_COLORS,
+  SCREEN_GRADIENT_START,
+  SCREEN_GRADIENT_END,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
-  getScoreColor,
-  CARD_SHADOW
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  CARD_SHADOW,
 } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
 import { useSaveWorkout } from '../../backend/hooks';
@@ -44,30 +41,97 @@ import { cleanupTempRecording } from '../../backend/services/screenRecording';
 
 type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
 type SaveWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'SaveWorkout'>;
+type WorkoutPrivacy = 'private' | 'friends' | 'public';
+
+const PRIVACY_OPTIONS: { value: WorkoutPrivacy; label: string; helper: string }[] = [
+  { value: 'private', label: 'Only me', helper: 'Save privately without posting to the feed.' },
+  { value: 'friends', label: 'Friends', helper: 'Share the workout with friends in your feed.' },
+  { value: 'public', label: 'Everyone', helper: 'Use your public profile visibility for this workout.' },
+];
+
+const NOTES_MAX_LENGTH = 200;
+
+const formatWorkoutName = (category?: string) => {
+  const date = new Date();
+  const formattedDate = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `${category || 'Workout'} - ${formattedDate}`;
+};
+
+const formatWeight = (weight: number) => {
+  if (Number.isInteger(weight)) return String(weight);
+  return weight.toFixed(1);
+};
 
 export const SaveWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<SaveWorkoutNavigationProp>();
   const { showAlert } = useAlert();
   const route = useRoute<SaveWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { workoutData } = route.params;
   const { clearSets, setWorkoutInProgress, exercises, workoutElapsedSeconds, sessionId } = useCurrentWorkout();
 
-  const [workoutName, setWorkoutName] = useState('');
   const [workoutDescription, setWorkoutDescription] = useState('');
+  const [privacy, setPrivacy] = useState<WorkoutPrivacy>('private');
+  const [shareToFeed, setShareToFeed] = useState(true);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const { isSaving, error: saveError, saveWorkout } = useSaveWorkout();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 550, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 550, useNativeDriver: true }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const scoreColor = getScoreColor(workoutData.avgFormScore);
+  const selectedPrivacy = PRIVACY_OPTIONS.find((option) => option.value === privacy) ?? PRIVACY_OPTIONS[0];
+
+  const bestSet = useMemo(() => {
+    let currentBest: {
+      exerciseName: string;
+      reps: number;
+      weight: number;
+      weightUnit: 'kg' | 'lbs';
+      formScore: number;
+    } | null = null;
+
+    for (const exercise of exercises) {
+      for (const set of exercise.sets) {
+        const candidate = {
+          exerciseName: exercise.name,
+          reps: set.reps,
+          weight: set.weight ?? 0,
+          weightUnit: set.weightUnit ?? 'kg',
+          formScore: set.formScore,
+        };
+
+        if (!currentBest) {
+          currentBest = candidate;
+          continue;
+        }
+
+        const candidateScore = candidate.weight * 1000 + candidate.reps * 10 + candidate.formScore;
+        const bestScore = currentBest.weight * 1000 + currentBest.reps * 10 + currentBest.formScore;
+        if (candidateScore > bestScore) currentBest = candidate;
+      }
+    }
+
+    return currentBest;
+  }, [exercises]);
+
+  const bestSetMetric = bestSet
+    ? bestSet.weight > 0
+      ? `${formatWeight(bestSet.weight)} ${bestSet.weightUnit} x ${bestSet.reps}`
+      : `${bestSet.reps} reps`
+    : `${workoutData.totalReps} reps`;
+
+  const bestSetLabel = bestSet?.exerciseName ?? workoutData.category ?? 'Workout';
+  const highlightTitle = bestSet && bestSet.weight > 0 ? 'New Personal Best' : 'Session Highlight';
+  const shouldShareWorkout = shareToFeed && privacy !== 'private';
+  const canSave = workoutData.totalSets > 0 && !isSaving;
 
   const handleSave = async () => {
     if (workoutData.totalSets === 0) {
@@ -77,14 +141,15 @@ export const SaveWorkoutScreen: React.FC = () => {
       );
       return;
     }
-    if (!workoutName.trim() || isSaving) return;
+    if (isSaving) return;
 
     const success = await saveWorkout({
-      name: workoutName,
+      name: formatWorkoutName(workoutData.category),
       durationSeconds: workoutElapsedSeconds,
       category: workoutData.category,
       notes: workoutDescription.trim() || undefined,
       exercises,
+      shareToFeed: shouldShareWorkout,
       workoutSessionId: sessionId,
     });
 
@@ -135,7 +200,6 @@ export const SaveWorkoutScreen: React.FC = () => {
           text: 'Yes',
           style: 'destructive',
           onPress: () => {
-            // Clean up all temp recording files
             for (const ex of exercises) {
               for (const s of ex.sets) {
                 if (s.tempRecordingUrl) {
@@ -155,228 +219,233 @@ export const SaveWorkoutScreen: React.FC = () => {
     );
   };
 
-  const canSave = workoutName.trim().length > 0 && !isSaving;
+  const handleShareToggle = (value: boolean) => {
+    setShareToFeed(value);
+    if (value && privacy === 'private') {
+      setPrivacy('friends');
+    }
+  };
+
+  const handlePrivacySelect = (value: WorkoutPrivacy) => {
+    setPrivacy(value);
+    setPrivacyModalVisible(false);
+  };
 
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={['top', 'left', 'right']}
+    <LinearGradient
+      colors={SCREEN_GRADIENT_COLORS}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={styles.background}
     >
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-      {/* ── HEADER ──────────────────────────────── */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={handleGoBack}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Save Workout</Text>
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={handleDiscardWorkout}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={handleGoBack}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <ChevronLeft size={23} color={COLORS.textSecondary} strokeWidth={1.7} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Save Workout</Text>
+            <View style={styles.headerSpacer} />
+          </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: 96 + Math.max(insets.bottom, SPACING.sm) },
-        ]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
-          {/* ═══════════════════════════════════════════
-              HERO: WORKOUT SCORE CARD
-              ═══════════════════════════════════════════ */}
-          <LinearGradient
-            colors={SCREEN_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingHorizontal: width < 360 ? 20 : 32 },
+              { paddingBottom: Math.max(insets.bottom, SPACING.lg) + 24 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.heroEdge}>
-              <View style={styles.heroTopRow}>
-                <View style={styles.heroLabelRow}>
-                  <Target size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.heroLabel}>WORKOUT COMPLETE</Text>
+            <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+              <View style={styles.completeBlock}>
+                <View style={styles.checkRing}>
+                  <Check size={39} color="#54D878" strokeWidth={2.15} />
                 </View>
-                <View style={styles.durationChip}>
-                  <Clock size={11} color={COLORS.textSecondary} strokeWidth={1.5} />
-                  <Text style={styles.durationChipText}>{workoutData.duration}</Text>
-                </View>
+                <Text style={styles.completeTitle}>Workout Complete!</Text>
+                <Text style={styles.completeSubtitle}>Great work today.</Text>
               </View>
 
-              <View style={styles.heroScoreRow}>
-                <Text style={[styles.heroScore, { color: scoreColor }]}>
-                  {workoutData.avgFormScore}
-                </Text>
-                <Text style={styles.heroScoreUnit}>/100</Text>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>SUMMARY</Text>
               </View>
 
-              <Text style={styles.heroSubtext}>Average form score</Text>
-            </View>
-          </LinearGradient>
+              <View style={styles.summaryGrid}>
+                <SummaryTile label="Duration" value={workoutData.duration} />
+                <SummaryTile label="Total Sets" value={String(workoutData.totalSets)} />
+                <SummaryTile label="Total Reps" value={String(workoutData.totalReps)} />
+                <SummaryTile label="Avg Form Score" value={String(workoutData.avgFormScore)} accent />
+              </View>
 
-          {/* ═══════════════════════════════════════════
-              STATS ROW: REPS + SETS
-              ═══════════════════════════════════════════ */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCell}>
               <LinearGradient
                 colors={[...CARD_GRADIENT_COLORS]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
-                style={styles.statGradient}
+                style={styles.prCard}
               >
-                <View style={styles.statEdge}>
-                  <View style={styles.statIconRow}>
-                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
+                <View style={styles.prContent}>
+                  <View style={styles.prTextGroup}>
+                    <Text style={styles.prTitle}>{highlightTitle}</Text>
+                    <View style={styles.prBottomRow}>
+                      <Text style={styles.prExercise} numberOfLines={1}>{bestSetLabel}</Text>
+                      <Text style={styles.prMetric}>{bestSetMetric}</Text>
                     </View>
                   </View>
-                  <Text style={styles.statValue}>{workoutData.totalReps}</Text>
-                  <Text style={styles.statLabel}>total reps</Text>
+                  <Trophy size={24} color="#F2B340" fill="rgba(242, 179, 64, 0.28)" strokeWidth={1.8} />
                 </View>
               </LinearGradient>
-            </View>
 
-            <View style={styles.statCell}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>NOTES (OPTIONAL)</Text>
+              </View>
+
               <LinearGradient
                 colors={[...CARD_GRADIENT_COLORS]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
-                style={styles.statGradient}
+                style={styles.notesCard}
               >
-                <View style={styles.statEdge}>
-                  <View style={styles.statIconRow}>
-                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                      <Layers size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                    </View>
-                  </View>
-                  <Text style={styles.statValue}>{workoutData.totalSets}</Text>
-                  <Text style={styles.statLabel}>sets</Text>
-                </View>
-              </LinearGradient>
-            </View>
-          </View>
-
-          {/* ═══════════════════════════════════════════
-              DETAILS — Name & Notes inputs
-              ═══════════════════════════════════════════ */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <FileText size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>DETAILS</Text>
-            </View>
-          </View>
-
-          <View style={styles.inputCardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.inputCardGradient}
-            >
-              <View style={styles.inputCardEdge}>
-                <Text style={styles.inputLabel}>WORKOUT NAME *</Text>
                 <TextInput
-                  style={styles.input}
-                  placeholder="Enter workout name"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={workoutName}
-                  onChangeText={setWorkoutName}
-                  autoFocus
-                />
-              </View>
-            </LinearGradient>
-          </View>
-
-          <View style={styles.inputCardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.inputCardGradient}
-            >
-              <View style={styles.inputCardEdge}>
-                <Text style={styles.inputLabel}>NOTES</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Add notes about your workout..."
-                  placeholderTextColor={COLORS.textTertiary}
+                  style={styles.notesInput}
+                  placeholder="Felt strong on squats. Keep improving depth on lunges."
+                  placeholderTextColor="rgba(173, 178, 182, 0.58)"
                   value={workoutDescription}
                   onChangeText={setWorkoutDescription}
+                  maxLength={NOTES_MAX_LENGTH}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
+                <Text style={styles.charCount}>{workoutDescription.length}/{NOTES_MAX_LENGTH}</Text>
+              </LinearGradient>
+
+              <TouchableOpacity
+                style={styles.settingRow}
+                onPress={() => setPrivacyModalVisible(true)}
+                activeOpacity={0.82}
+                accessibilityRole="button"
+                accessibilityLabel="Choose workout privacy"
+              >
+                <Text style={styles.settingTitle}>Privacy</Text>
+                <View style={styles.settingValueRow}>
+                  <Text style={styles.settingValue}>{selectedPrivacy.label}</Text>
+                  <ChevronDown size={18} color={COLORS.textSecondary} strokeWidth={1.8} />
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.shareRow}>
+                <View style={styles.shareTextGroup}>
+                  <Text style={styles.settingTitle}>Share to Feed</Text>
+                  <Text style={styles.settingDescription}>Share this workout</Text>
+                </View>
+                <Switch
+                  value={shareToFeed}
+                  onValueChange={handleShareToggle}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.10)', true: 'rgba(122, 85, 255, 0.80)' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="rgba(255, 255, 255, 0.10)"
+                />
               </View>
-            </LinearGradient>
-          </View>
 
-        </Animated.View>
-      </ScrollView>
+              <TouchableOpacity
+                onPress={handleSave}
+                disabled={!canSave}
+                activeOpacity={0.86}
+                accessibilityRole="button"
+                accessibilityLabel="Save workout"
+              >
+                <LinearGradient
+                  colors={canSave ? ['#7B58FF', '#5A31CF'] : ['rgba(122, 85, 255, 0.30)', 'rgba(90, 49, 207, 0.25)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.saveButton}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save Workout</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
 
-      {/* ── SAVE CTA (Quick-Start style) ───────── */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, SPACING.sm) + SPACING.md }]}>
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={!canSave}
-          activeOpacity={0.85}
+              <TouchableOpacity
+                onPress={handleDiscardWorkout}
+                style={styles.discardButton}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Discard workout"
+              >
+                <Text style={styles.discardText}>Discard</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        <Modal
+          visible={privacyModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPrivacyModalVisible(false)}
         >
-          <LinearGradient
-            colors={canSave
-              ? ['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']
-              : ['rgba(139, 92, 246, 0.20)', 'rgba(124, 58, 237, 0.10)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.ctaGradient}
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setPrivacyModalVisible(false)}
           >
-            <View style={styles.ctaInner}>
-              {isSaving ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <View style={styles.ctaTextWrap}>
-                    <Text style={[styles.ctaTitle, !canSave && styles.ctaTitleDisabled]}>
-                      Save Workout
-                    </Text>
-                    <Text style={[styles.ctaSub, !canSave && styles.ctaSubDisabled]}>
-                      {canSave ? 'Tap to save to your logbook' : 'Enter a name to continue'}
-                    </Text>
-                  </View>
-                  <ChevronRight
-                    size={18}
-                    color={canSave ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)'}
-                    strokeWidth={1.5}
-                  />
-                </>
-              )}
+            <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
+              <Text style={styles.modalTitle}>Privacy</Text>
+              {PRIVACY_OPTIONS.map((option) => {
+                const isSelected = option.value === privacy;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.privacyOption, isSelected && styles.privacyOptionSelected]}
+                    onPress={() => handlePrivacySelect(option.value)}
+                    activeOpacity={0.82}
+                  >
+                    <View style={styles.privacyOptionText}>
+                      <Text style={styles.privacyOptionLabel}>{option.label}</Text>
+                      <Text style={styles.privacyOptionHelper}>{option.helper}</Text>
+                    </View>
+                    {isSelected && <Check size={18} color={COLORS.green} strokeWidth={2} />}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </TouchableOpacity>
+        </Modal>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
-// ── Styles ─────────────────────────────────────────
+const SummaryTile: React.FC<{ label: string; value: string; accent?: boolean }> = ({ label, value, accent }) => (
+  <LinearGradient
+    colors={[...CARD_GRADIENT_COLORS]}
+    start={CARD_GRADIENT_START}
+    end={CARD_GRADIENT_END}
+    style={styles.summaryTile}
+  >
+    <Text style={styles.summaryLabel}>{label}</Text>
+    <Text style={[styles.summaryValue, accent && styles.summaryValueAccent]}>{value}</Text>
+  </LinearGradient>
+);
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -384,23 +453,16 @@ const styles = StyleSheet.create({
   keyboardAvoid: {
     flex: 1,
   },
-
-  /* ── Header ──────────────────────────────────── */
   header: {
+    height: 54,
+    paddingHorizontal: 24,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'space-between',
   },
   headerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -408,223 +470,275 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
-    letterSpacing: -0.4,
   },
-
-  /* ── Scroll ──────────────────────────────────── */
+  headerSpacer: {
+    width: 36,
+    height: 36,
+  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.screenHorizontal,
   },
-
-  /* ── Hero Form Score ─────────────────────────── */
-  heroCard: {
-    borderRadius: 22,
-    marginTop: 18,
-    marginBottom: 12,
-
-    ...CARD_SHADOW,
-},
-  heroEdge: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 20,
+  content: {
+    gap: 12,
   },
-  heroTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  completeBlock: {
     alignItems: 'center',
-    marginBottom: 16,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
-  heroLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  heroLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
-  },
-  durationChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  durationChipText: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: -0.3,
-  },
-  heroScoreRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  heroScore: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 56,
-    letterSpacing: -2,
-    lineHeight: 60,
-  },
-  heroScoreUnit: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 16,
-    color: COLORS.textTertiary,
-  },
-  heroSubtext: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    marginTop: 4,
-  },
-
-  /* ── Stats Row ───────────────────────────────── */
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  statCell: {
-    flex: 1,
-  },
-  statGradient: {
-    borderRadius: 18,
-  },
-  statEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    padding: 16,
-  },
-  statIconRow: {
-    marginBottom: 12,
-  },
-  statIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+  checkRing: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 4,
+    borderColor: '#54D878',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 9,
+    backgroundColor: 'rgba(84, 216, 120, 0.045)',
   },
-  statValue: {
+  completeTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 30,
+    fontSize: 25,
+    lineHeight: 30,
     color: COLORS.text,
-    letterSpacing: -1,
-    lineHeight: 34,
   },
-  statLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+  completeSubtitle: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 14,
     color: COLORS.textTertiary,
     marginTop: 2,
   },
-
-  /* ── Section Headers ─────────────────────────── */
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  sectionHeader: {
+    marginTop: 2,
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
     fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+    color: COLORS.textSecondary,
   },
-
-  /* ── Input Cards ─────────────────────────────── */
-  inputCardOuter: {
-    marginBottom: 10,
-
-    ...CARD_SHADOW,
-},
-  inputCardGradient: {
-    borderRadius: 18,
-
-    ...CARD_SHADOW,
-    overflow: 'hidden',
-},
-  inputCardEdge: {
-    borderRadius: 18,
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  summaryTile: {
+    width: '48%',
+    minHeight: 76,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 16,
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
+    ...CARD_SHADOW,
   },
-  inputLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 10,
+  summaryLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
     color: COLORS.textTertiary,
-    letterSpacing: 2,
   },
-  input: {
-    backgroundColor: 'transparent',
-    padding: 0,
-    fontSize: 16,
-    fontFamily: FONTS.ui.regular,
+  summaryValue: {
+    fontFamily: FONTS.display.medium,
+    fontSize: 24,
+    lineHeight: 28,
     color: COLORS.text,
+    fontVariant: ['tabular-nums'],
   },
-  textArea: {
-    minHeight: 80,
-    paddingTop: SPACING.xs,
+  summaryValueAccent: {
+    color: '#43DA75',
   },
-
-  /* ── Save CTA (Quick-Start style) ──────────── */
-  bottomBar: {
-    paddingTop: SPACING.md,
-    paddingHorizontal: SPACING.screenHorizontal,
-    backgroundColor: 'transparent',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+  prCard: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    overflow: 'hidden',
+    marginTop: 1,
+    ...CARD_SHADOW,
   },
-  ctaGradient: {
-    borderRadius: 16,
-  },
-  ctaInner: {
+  prContent: {
+    minHeight: 74,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    gap: 14,
+    gap: 12,
   },
-  ctaTextWrap: {
+  prTextGroup: {
     flex: 1,
-    gap: 2,
+    gap: 10,
   },
-  ctaTitle: {
+  prTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 15,
+    color: '#F2B340',
+  },
+  prBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  prExercise: {
+    flex: 1,
+    fontFamily: FONTS.display.bold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  prMetric: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  notesCard: {
+    minHeight: 101,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    ...CARD_SHADOW,
+  },
+  notesInput: {
+    minHeight: 62,
+    padding: 0,
+    fontFamily: FONTS.ui.bold,
+    fontSize: 14,
+    lineHeight: 21,
+    color: COLORS.text,
+  },
+  charCount: {
+    alignSelf: 'flex-end',
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+  },
+  settingRow: {
+    minHeight: 54,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    backgroundColor: COLORS.cardBackground,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...CARD_SHADOW,
+  },
+  settingTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  settingValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  settingValue: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  shareRow: {
+    minHeight: 66,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    backgroundColor: COLORS.cardBackground,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    ...CARD_SHADOW,
+  },
+  shareTextGroup: {
+    flex: 1,
+    gap: 4,
+  },
+  settingDescription: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+  },
+  saveButton: {
+    height: 56,
+    borderRadius: CARD_RADIUS_SM,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  saveButtonText: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
+    color: COLORS.text,
+  },
+  discardButton: {
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  discardText: {
     fontFamily: FONTS.display.bold,
     fontSize: 16,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    color: COLORS.textTertiary,
   },
-  ctaTitleDisabled: {
-    color: 'rgba(255, 255, 255, 0.35)',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
-  ctaSub: {
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    backgroundColor: COLORS.cardBackground,
+    padding: 14,
+    gap: 8,
+    ...CARD_SHADOW,
+  },
+  modalTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 18,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  privacyOption: {
+    borderRadius: CARD_RADIUS_SM,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  privacyOptionSelected: {
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+  },
+  privacyOptionText: {
+    flex: 1,
+    gap: 3,
+  },
+  privacyOptionLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  privacyOptionHelper: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.55)',
-  },
-  ctaSubDisabled: {
-    color: 'rgba(255, 255, 255, 0.2)',
+    lineHeight: 17,
+    color: COLORS.textTertiary,
   },
 });
