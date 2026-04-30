@@ -30,7 +30,7 @@ import {
   Timer,
   Video,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, getScoreColor ,
   CARD_SHADOW
 } from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
@@ -149,8 +149,8 @@ const WorkoutTimerDisplay = React.memo(({
 
 /* ── Main Screen ──────────────────────────── */
 
-const TIMER_FONT_SIZE_MAX = 26;
-const TIMER_FONT_SIZE_MIN = 22;
+const TIMER_FONT_SIZE_MAX = 15;
+const TIMER_FONT_SIZE_MIN = 13;
 
 export const CurrentWorkoutScreen: React.FC = () => {
   const navigation = useNavigation<CurrentWorkoutNavigationProp>();
@@ -479,6 +479,12 @@ export const CurrentWorkoutScreen: React.FC = () => {
   }, [showAlert, clearSets, setWorkoutElapsedSeconds, setWorkoutInProgress, navigation]);
 
   /* ── Computed ──── */
+  const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+  const totalReps = exercises.reduce(
+    (sum, exercise) => sum + exercise.sets.reduce((setSum, set) => setSum + set.reps, 0),
+    0
+  );
+  const workoutTitle = exercises.length > 0 ? 'Free Session' : 'Current Workout';
 
 
   /* ── Render ──── */
@@ -492,6 +498,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Current Workout</Text>
+          <View style={styles.headerTimerPill}>
           <WorkoutTimerDisplay
             startTimeRef={startTimeRef}
             isPausedRef={isPausedRef}
@@ -500,6 +508,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             timerFontSize={timerFontSize}
             timerLineHeight={timerLineHeight}
           />
+          </View>
         </View>
 
         <TouchableOpacity
@@ -572,6 +581,23 @@ export const CurrentWorkoutScreen: React.FC = () => {
           ) : (
             /* ── EXERCISE CARDS ──── */
             <>
+            <View style={styles.summaryCardOuter}>
+              <LinearGradient
+                colors={CARD_GRADIENT_ELEVATED as any}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.summaryCardGradient}
+              >
+                <View style={styles.summaryCardEdge}>
+                  <Text style={styles.summaryEyebrow}>WORKOUT</Text>
+                  <Text style={styles.summaryTitle}>{workoutTitle}</Text>
+                  <Text style={styles.summaryMeta}>
+                    {exercises.length} exercise{exercises.length === 1 ? '' : 's'} · {totalSets} set{totalSets === 1 ? '' : 's'} · {totalReps} reps
+                  </Text>
+                </View>
+              </LinearGradient>
+            </View>
+
             <View style={styles.exercisesSectionRow}>
               <View style={styles.exercisesSectionLabelRow}>
                 <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
@@ -781,13 +807,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
         {/* Add Exercise — Gradient CTA */}
         <TouchableOpacity onPress={handleAddExercise} activeOpacity={0.85}>
           <LinearGradient
-            colors={['rgba(139, 92, 246, 0.45)', 'rgba(124, 58, 237, 0.2)']}
+            colors={['rgba(124, 92, 255, 0.08)', 'rgba(124, 92, 255, 0.03)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.addExerciseGradient}
           >
             <View style={styles.addExerciseIconWrap}>
-              <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+              <Plus size={14} color={COLORS.accent} strokeWidth={2.5} />
             </View>
             <Text style={styles.addExerciseText}>Add Exercise</Text>
             <ChevronRight size={16} color="rgba(255,255,255,0.5)" strokeWidth={1.5} />
@@ -825,7 +851,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={['rgba(139, 92, 246, 0.5)', 'rgba(124, 58, 237, 0.25)']}
+              colors={['#7C5CFF', '#6746E8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.controlFinishGradient}
@@ -854,17 +880,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 10,
+    paddingBottom: 6,
   },
   headerIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerCenter: {
     alignItems: 'center',
+    gap: 5,
+  },
+  headerTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  headerTimerPill: {
+    minWidth: 76,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   statusPill: {
     flexDirection: 'row',
@@ -896,8 +938,8 @@ const styles = StyleSheet.create({
   statusRow: {
     alignItems: 'center',
     paddingTop: 0,
-    paddingBottom: 6,
-    marginTop: -5,
+    paddingBottom: 8,
+    marginTop: -1,
   },
   timerDisplay: {
     flexDirection: 'row',
@@ -905,13 +947,13 @@ const styles = StyleSheet.create({
   },
   timerDigit: {
     fontFamily: FONTS.mono.bold,
-    color: 'rgba(255, 255, 255, 0.85)',
-    letterSpacing: 2.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.4,
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
-    color: 'rgba(139, 92, 246, 0.45)',
-    marginHorizontal: 2,
+    color: COLORS.textTertiary,
+    marginHorizontal: 1,
   },
 
 
@@ -921,13 +963,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 12,
+    marginBottom: 10,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+    paddingVertical: 9,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: 'rgba(32, 40, 46, 0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
   },
   restTimerProgress: {
     flex: 1,
@@ -981,7 +1024,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
-    gap: 14,
+    gap: 8,
   },
   scrollContentEmpty: {
     flexGrow: 1,
@@ -993,8 +1036,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
-    marginTop: 10,
+    marginBottom: 0,
+    marginTop: 4,
   },
   exercisesSectionLabelRow: {
     flexDirection: 'row',
@@ -1003,7 +1046,7 @@ const styles = StyleSheet.create({
   },
   exercisesSectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontSize: 10.5,
     color: COLORS.text,
     letterSpacing: 2,
   },
@@ -1013,9 +1056,46 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
+  /* ── Workout Summary ───────────────────── */
+  summaryCardOuter: {
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+  },
+  summaryCardGradient: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  summaryCardEdge: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  summaryEyebrow: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 8,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.4,
+    marginBottom: 5,
+  },
+  summaryTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  summaryMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+
   /* ── Exercise Card ──────────────────────── */
   exerciseCardOuter: {
-    borderRadius: 20,
+    borderRadius: CARD_RADIUS,
     ...Platform.select({
       ios: {
         shadowColor: '#000000',
@@ -1027,13 +1107,11 @@ const styles = StyleSheet.create({
     }),
   },
   exerciseCardGradient: {
-    borderRadius: 20,
-
-    ...CARD_SHADOW,
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
-},
+  },
   exerciseCardGlassEdge: {
-    borderRadius: 20,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.11)',
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
@@ -1042,14 +1120,14 @@ const styles = StyleSheet.create({
   exerciseCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    gap: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    gap: 10,
   },
   exerciseAccentLine: {
-    width: 3,
-    height: 32,
-    borderRadius: 1.5,
+    width: 2,
+    height: 30,
+    borderRadius: 1,
     backgroundColor: COLORS.accent,
   },
   exerciseCardHeaderLeft: {
@@ -1058,7 +1136,7 @@ const styles = StyleSheet.create({
   },
   exerciseCardName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
@@ -1074,9 +1152,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   exerciseDeleteBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1091,7 +1169,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 16,
+    paddingVertical: 10,
     gap: 4,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
@@ -1160,7 +1238,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 11,
+    paddingVertical: 9,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
@@ -1174,33 +1252,35 @@ const styles = StyleSheet.create({
   /* ── Bottom Panel ─────────────────────── */
   bottomPanel: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 12,
+    paddingTop: 10,
     backgroundColor: 'rgba(15, 20, 25, 0.85)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
-    gap: 10,
+    gap: 8,
   },
   addExerciseGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    paddingVertical: 14,
+    borderRadius: 10,
+    paddingVertical: 10,
     paddingHorizontal: 18,
     gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 92, 255, 0.65)',
   },
   addExerciseIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   addExerciseText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 15,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.accent,
+    letterSpacing: 0,
     flex: 1,
   },
   controlsRow: {
@@ -1209,9 +1289,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   controlDiscardButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 42,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.2)',
     backgroundColor: 'rgba(239, 68, 68, 0.06)',
@@ -1224,8 +1304,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 46,
-    borderRadius: 23,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
@@ -1245,8 +1325,8 @@ const styles = StyleSheet.create({
   },
   controlFinishButton: {
     flex: 1.3,
-    height: 46,
-    borderRadius: 23,
+    height: 40,
+    borderRadius: 10,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -1264,7 +1344,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: 23,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.35)',
   },

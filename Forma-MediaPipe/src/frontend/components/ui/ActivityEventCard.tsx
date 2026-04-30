@@ -3,9 +3,9 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Activity, Award, TrendingUp, Flame, Heart } from 'lucide-react-native';
+import { Activity, Award, TrendingUp, Flame, Heart, MessageCircle, MoreHorizontal } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
   CARD_SHADOW
 } from '../../constants/theme';
@@ -43,6 +43,15 @@ const EVENT_CONFIG: Record<string, { icon: any; color: string }> = {
   streak_milestone: { icon: Flame, color: '#E07856' },
 };
 
+const EVENT_IMAGES: Record<string, ImageSourcePropType> = {
+  workout_completed: require('../../assets/exercises/barbell_squat_double.png'),
+  personal_record: require('../../assets/exercises/barbell_curl_double.png'),
+  badge_earned: require('../../assets/exercises/push_up_double.png'),
+  streak_milestone: require('../../assets/exercises/cable_row_double.png'),
+};
+
+const EXERCISE_LINES = ['Back Squat', 'Romanian Deadlift', 'Walking Lunge'];
+
 export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event, reactions, onToggleReaction }) => {
   const config = EVENT_CONFIG[event.eventType] || EVENT_CONFIG.workout_completed;
   const Icon = config.icon;
@@ -64,6 +73,10 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
   }, [event.eventType, event.payload]);
 
   const formScore = event.eventType === 'workout_completed' ? event.payload.form_score as number : null;
+  const workoutName = (event.payload.workout_name as string | undefined) ?? 'Lower Body Strength';
+  const caption = event.payload.caption as string | undefined;
+  const showMediaSummary = event.eventType === 'workout_completed' || event.eventType === 'personal_record';
+  const recordValue = event.payload.stat_value ?? event.payload.weight ?? event.payload.reps;
 
   return (
     <View style={styles.cardOuter}>
@@ -97,21 +110,57 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
           </View>
 
           {/* Description */}
-          <Text style={styles.description}>{description}</Text>
+          <Text style={styles.description}>{caption || description}</Text>
 
-          {/* Meta info */}
-          {event.eventType === 'workout_completed' && !!event.payload.duration && (
-            <View style={styles.metaRow}>
-              <View style={styles.metaPill}>
-                <Text style={styles.metaText}>
-                  {event.payload.duration as string}
-                </Text>
+          {showMediaSummary && (
+            <View style={styles.mediaBlock}>
+              <Image
+                source={EVENT_IMAGES[event.eventType] ?? EVENT_IMAGES.workout_completed}
+                style={styles.mediaImage}
+                resizeMode="cover"
+              />
+
+              <View style={styles.mediaSummary}>
+                {event.eventType === 'workout_completed' ? (
+                  <>
+                    <Text style={styles.workoutName} numberOfLines={1}>{workoutName}</Text>
+                    <Text style={styles.summaryMeta}>
+                      {event.payload.duration as string | undefined ?? '45 min'} · {event.payload.exercise_count as number | undefined ?? 4} exercises
+                    </Text>
+                    <View style={styles.formScoreWrap}>
+                      <Text style={styles.formScoreLabel}>Form Score</Text>
+                      <Text style={[styles.formScoreValue, { color: getScoreColor(formScore ?? 0) }]}>
+                        {formScore}
+                      </Text>
+                      <Text style={styles.formScoreUnit}>/100</Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.workoutName} numberOfLines={1}>
+                      {event.payload.exercise as string | undefined ?? event.payload.stat_label as string | undefined ?? 'Personal Best'}
+                    </Text>
+                    <Text style={styles.summaryMeta}>Personal record</Text>
+                    <View style={styles.formScoreWrap}>
+                      <Text style={[styles.formScoreValue, { color: COLORS.green }]}>
+                        {recordValue != null ? String(recordValue) : 'PR'}
+                      </Text>
+                      {!!event.payload.weight && <Text style={styles.formScoreUnit}>lb</Text>}
+                    </View>
+                  </>
+                )}
               </View>
-              <View style={styles.metaPill}>
-                <Text style={styles.metaText}>
-                  {event.payload.exercise_count as number} exercises
-                </Text>
-              </View>
+            </View>
+          )}
+
+          {event.eventType === 'workout_completed' && (
+            <View style={styles.exerciseList}>
+              {EXERCISE_LINES.map((line, index) => (
+                <View key={line} style={styles.exerciseRow}>
+                  <Text style={styles.exerciseName}>{line}</Text>
+                  <Text style={styles.exerciseSets}>{index === 2 ? '+2' : `${4 - index} sets`}</Text>
+                </View>
+              ))}
             </View>
           )}
 
@@ -138,6 +187,11 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
               )}
             </TouchableOpacity>
 
+            <View style={styles.commentMeta}>
+              <MessageCircle size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+              <Text style={styles.likeCount}>{reactions?.counts.clap ?? 0}</Text>
+            </View>
+
             {EMOJI_REACTIONS.map(({ type, emoji }) => {
               const count = reactions?.counts[type] ?? 0;
               const isActive = reactions?.userReaction === type;
@@ -160,6 +214,9 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
                 </TouchableOpacity>
               );
             })}
+
+            <View style={{ flex: 1 }} />
+            <MoreHorizontal size={18} color={COLORS.textTertiary} strokeWidth={1.6} />
           </View>
         </View>
       </LinearGradient>
@@ -170,18 +227,16 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
 const styles = StyleSheet.create({
   cardOuter: {
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: SPACING.sm,
+    marginBottom: 12,
     borderRadius: 18,
-
     ...CARD_SHADOW,
-},
+  },
   card: {
     borderRadius: 18,
-
-    ...CARD_SHADOW,
-},
+    overflow: 'hidden',
+  },
   cardEdge: {
-    padding: SPACING.md,
+    padding: 12,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.11)',
@@ -190,7 +245,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: 8,
   },
   headerText: {
     flex: 1,
@@ -223,21 +278,84 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     lineHeight: 19,
+    marginBottom: 8,
   },
-  metaRow: {
+  mediaBlock: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
+    overflow: 'hidden',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: 'rgba(8, 12, 16, 0.16)',
   },
-  metaPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  mediaImage: {
+    width: 132,
+    height: 108,
   },
-  metaText: {
+  mediaSummary: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  workoutName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
+    color: COLORS.text,
+    letterSpacing: -0.1,
+  },
+  summaryMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10.5,
+    color: COLORS.textSecondary,
+    marginTop: 3,
+  },
+  formScoreWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: 10,
+  },
+  formScoreLabel: {
+    position: 'absolute',
+    top: -9,
+    left: 0,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 8.5,
+    color: COLORS.textSecondary,
+  },
+  formScoreValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 27,
+    lineHeight: 31,
+  },
+  formScoreUnit: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+    marginLeft: 2,
+  },
+  exerciseList: {
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  exerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  exerciseName: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  exerciseSets: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
     color: COLORS.textTertiary,
   },
 
@@ -246,10 +364,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    marginTop: 8,
   },
   likeButton: {
     flexDirection: 'row',
@@ -266,6 +381,12 @@ const styles = StyleSheet.create({
   },
   likeCountActive: {
     color: '#EF4444',
+  },
+  commentMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
   },
   emojiPill: {
     flexDirection: 'row',
