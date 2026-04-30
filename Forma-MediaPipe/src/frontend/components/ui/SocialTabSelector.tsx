@@ -3,7 +3,8 @@
  */
 
 import React, { memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
 export type SocialTab = 'activity' | 'friends';
@@ -29,12 +30,25 @@ export const SocialTabSelector: React.FC<SocialTabSelectorProps> = memo(({ activ
               {index > 0 && <View style={styles.divider} />}
               <TouchableOpacity
                 onPress={() => onTabChange(tab.key)}
-                style={[styles.tab, isActive && styles.tabActive]}
-                activeOpacity={0.7}
+                style={styles.tab}
+                activeOpacity={0.75}
               >
-                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                  {tab.label}
-                </Text>
+                {isActive ? (
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.04)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.tabActive}
+                  >
+                    <Text style={[styles.tabText, styles.tabTextActive]}>
+                      {tab.label}
+                    </Text>
+                  </LinearGradient>
+                ) : (
+                  <Text style={styles.tabText}>
+                    {tab.label}
+                  </Text>
+                )}
               </TouchableOpacity>
             </React.Fragment>
           );
@@ -48,17 +62,27 @@ const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: SPACING.screenHorizontal,
     marginBottom: 10,
-    marginTop: 4,
   },
   container: {
-    height: 36,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    backgroundColor: 'rgba(255, 255, 255, 0.022)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(24, 26, 28, 0.78)',
+    padding: 3,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.24,
+        shadowRadius: 14,
+      },
+      android: { elevation: 5 },
+    }),
   },
   tab: {
     flex: 1,
@@ -67,19 +91,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabActive: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    width: '100%',
+    height: '100%',
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
   tabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 10.5,
     color: COLORS.textSecondary,
+    letterSpacing: 0.2,
   },
   tabTextActive: {
     color: COLORS.accent,
   },
   divider: {
     width: 1,
-    height: 16,
+    height: 17,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    marginHorizontal: 2,
   },
 });

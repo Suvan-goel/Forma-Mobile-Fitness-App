@@ -40,6 +40,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
 const CAMERA_BORDER_RADIUS = 20;
 const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
+const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
@@ -698,7 +699,7 @@ export const CameraScreen: React.FC = () => {
           (navigation as any).navigate('CurrentWorkout', {
             showWeightFor: { exerciseId, hasRecording: wasRecording },
           });
-        }, 450);
+        }, CAMERA_RELEASE_BEFORE_NAVIGATE_MS);
       } else {
         // Original flow: navigate to SaveWorkout
         const minutes = Math.floor(durationRef.current / 60);
@@ -853,7 +854,7 @@ export const CameraScreen: React.FC = () => {
             setCameraMounted(false);
             setTimeout(() => {
               (navigation as any).navigate('CurrentWorkout');
-            }, 450);
+            }, CAMERA_RELEASE_BEFORE_NAVIGATE_MS);
           },
         },
       ]
@@ -964,6 +965,10 @@ export const CameraScreen: React.FC = () => {
     const mid = (titleRight + settingsLeft) / 2;
     return mid - speakerWidth / 2;
   }, [headerMeasurements]);
+
+  if (isClosing) {
+    return <View style={styles.container} />;
+  }
 
   const showCamera = cameraMounted && !isClosing;
 
@@ -1524,7 +1529,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'column',
-    backgroundColor: 'transparent',
+    backgroundColor: '#000000',
   },
   headerLeftGroup: {
     flexDirection: 'row',

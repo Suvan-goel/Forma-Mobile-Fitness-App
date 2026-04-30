@@ -7,11 +7,10 @@ import {
   ScrollView,
   Platform,
   useWindowDimensions,
-  Animated,
   AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { startWorkoutActivity, updateWorkoutActivity, endWorkoutActivity } from 'expo-live-activity';
+import { startWorkoutActivity, endWorkoutActivity } from 'expo-live-activity';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,21 +19,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Dumbbell,
-  Play,
   Trash2,
   ChevronDown,
   ChevronUp,
-  FileText,
   X,
   Flag,
   Timer,
   Video,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, getScoreColor ,
+  SCREEN_GRADIENT_COLORS, SCREEN_GRADIENT_START, SCREEN_GRADIENT_END,
   CARD_SHADOW
 } from '../constants/theme';
 import CogIcon from '../components/icons/CogIcon';
-import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
@@ -176,7 +173,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     workoutElapsedSeconds: contextElapsed,
     setWorkoutElapsedSeconds,
     workoutPaused,
-    setWorkoutPaused,
     pendingRecording,
     setPendingRecording,
   } = useCurrentWorkout();
@@ -214,34 +210,12 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const { restTimerEnabled, restTimerDurationSeconds } = useCameraSettings();
   isPausedRef.current = workoutPaused;
 
-  /* ── Entrance animation ──── */
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, slideAnim]);
-
   /* ── Timer logic (interval lives inside WorkoutTimerDisplay) ──── */
 
   useEffect(() => {
     setWorkoutInProgress(true);
     startWorkoutActivity(elapsedSecondsRef.current);
   }, [setWorkoutInProgress]);
-
-  const handlePausePress = useCallback(() => {
-    setWorkoutPaused((p) => {
-      const next = !p;
-      if (!next) {
-        startTimeRef.current = Date.now() - elapsedSecondsRef.current * 1000;
-      }
-      updateWorkoutActivity(next, elapsedSecondsRef.current);
-      return next;
-    });
-  }, [setWorkoutPaused]);
 
   /* ── Rest timer logic ──── */
 
@@ -490,7 +464,12 @@ export const CurrentWorkoutScreen: React.FC = () => {
   /* ── Render ──── */
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={styles.container}
+    >
       {/* ── HEADER ──────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={styles.headerIconButton} onPress={handleGoBack} activeOpacity={0.7}>
@@ -520,17 +499,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], flex: 1 }}>
-        {/* ── STATUS PILL ──────────────────────── */}
-        <View style={styles.statusRow}>
-          <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
-            <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
-            <Text style={[styles.statusText, workoutPaused && styles.statusTextPaused]}>
-              {workoutPaused ? 'PAUSED' : 'ACTIVE'}
-            </Text>
-          </View>
-        </View>
-
+      <View style={{ flex: 1 }}>
         {/* ── REST TIMER BAR ──────────────────── */}
         {restSecondsLeft !== null && (
           <View style={styles.restTimerBar}>
@@ -649,52 +618,50 @@ export const CurrentWorkoutScreen: React.FC = () => {
                       {/* Expanded Sets */}
                       {isExpanded && (
                         <View style={styles.setsList}>
-                          {exercise.sets.map((set, setIndex) => (
-                            <View key={setIndex} style={styles.setRow}>
-                              <View style={styles.setIndexBadge}>
-                                <MonoText bold style={styles.setIndexText}>{setIndex + 1}</MonoText>
-                              </View>
-                              <View style={styles.setMetrics}>
-                                <View style={styles.setMetricItem}>
-                                  <Text style={styles.setMetricLabel}>REPS</Text>
-                                  <MonoText bold style={styles.setMetricValue}>{set.reps}</MonoText>
-                                </View>
-                                <View style={styles.setMetricDivider} />
+                          {exercise.sets.map((set, setIndex) => {
+                            const isCurrentSet = setIndex === exercise.sets.length - 1;
+                            return (
+                              <TouchableOpacity
+                                key={setIndex}
+                                style={[styles.setRow, isCurrentSet && styles.setRowCurrent]}
+                                activeOpacity={0.76}
+                                onPress={() =>
+                                  handleEditWeight(
+                                    exercise.id,
+                                    exercise.name,
+                                    setIndex,
+                                    set.weight,
+                                    set.weightUnit
+                                  )
+                                }
+                                onLongPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
+                              >
+                                <MonoText bold style={[styles.setIndexText, isCurrentSet && styles.setIndexTextCurrent]}>
+                                  {setIndex + 1}
+                                </MonoText>
+                                <Text style={[styles.setValueText, !set.weight && styles.setValueTextEmpty]}>
+                                  {set.weight && set.weight > 0 ? `${set.weight} ${set.weightUnit || 'kg'}` : 'No weight'}
+                                </Text>
+                                <Text style={styles.setRepsText}>x {set.reps}</Text>
+                                {isCurrentSet ? <Text style={styles.currentSetText}>Current</Text> : null}
                                 <TouchableOpacity
-                                  style={styles.setMetricItem}
+                                  style={[styles.setScoreRing, { borderColor: getScoreColor(set.formScore) }]}
                                   onPress={() =>
-                                    handleEditWeight(
-                                      exercise.id,
-                                      exercise.name,
-                                      setIndex,
-                                      set.weight,
-                                      set.weightUnit
-                                    )
+                                    setNotesModalSet({
+                                      set,
+                                      setIndex: setIndex + 1,
+                                      exerciseName: exercise.name,
+                                    })
                                   }
                                   activeOpacity={0.7}
                                 >
-                                  <Text style={styles.setMetricLabel}>WEIGHT</Text>
-                                  <MonoText
-                                    bold
-                                    style={[styles.setMetricValue, !set.weight && styles.setMetricValueEmpty]}
-                                  >
-                                    {set.weight && set.weight > 0
-                                      ? `${set.weight}${set.weightUnit || 'kg'}`
-                                      : '—'}
-                                  </MonoText>
-                                </TouchableOpacity>
-                                <View style={styles.setMetricDivider} />
-                                <View style={styles.setMetricItem}>
-                                  <Text style={styles.setMetricLabel}>FORM</Text>
-                                  <MonoText bold style={[styles.setMetricValue, { color: getScoreColor(set.formScore) }]}>
+                                  <MonoText bold style={[styles.setScoreText, { color: getScoreColor(set.formScore) }]}>
                                     {set.formScore}
                                   </MonoText>
-                                </View>
-                              </View>
-                              <View style={styles.setActions}>
-                                {set.tempRecordingUrl && (
+                                </TouchableOpacity>
+                                {set.tempRecordingUrl ? (
                                   <TouchableOpacity
-                                    style={styles.setActionIcon}
+                                    style={styles.setCompactIcon}
                                     onPress={() =>
                                       setRecordingOptionsModal({
                                         exerciseId: exercise.id,
@@ -705,40 +672,19 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                       })
                                     }
                                     activeOpacity={0.7}
-                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                   >
                                     <Video
-                                      size={13}
+                                      size={12}
                                       color={set.saveRecordingToLibrary !== false ? COLORS.accent : COLORS.textTertiary}
                                       strokeWidth={1.5}
                                     />
                                   </TouchableOpacity>
+                                ) : (
+                                  <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
                                 )}
-                                <TouchableOpacity
-                                  style={styles.setActionIcon}
-                                  onPress={() =>
-                                    setNotesModalSet({
-                                      set,
-                                      setIndex: setIndex + 1,
-                                      exerciseName: exercise.name,
-                                    })
-                                  }
-                                  activeOpacity={0.7}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                >
-                                  <FileText size={13} color={COLORS.accent} strokeWidth={1.5} />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.setActionIcon}
-                                  onPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
-                                  activeOpacity={0.7}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                >
-                                  <X size={13} color={COLORS.textTertiary} strokeWidth={2} />
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          ))}
+                              </TouchableOpacity>
+                            );
+                          })}
                         </View>
                       )}
 
@@ -759,7 +705,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             </>
           )}
         </ScrollView>
-      </Animated.View>
+      </View>
 
       {/* ── Modals ──── */}
       {notesModalSet && (
@@ -831,21 +777,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.controlPauseButton, workoutPaused && styles.controlPauseButtonActive]}
-            onPress={handlePausePress}
-            activeOpacity={0.7}
-          >
-            {workoutPaused ? (
-              <Play size={15} color={COLORS.text} strokeWidth={1.5} />
-            ) : (
-              <PauseIcon size={15} color={COLORS.textSecondary} />
-            )}
-            <Text style={[styles.controlPauseLabel, workoutPaused && styles.controlPauseLabelActive]}>
-              {workoutPaused ? 'Resume' : 'Pause'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={styles.controlFinishButton}
             onPress={handleEndWorkout}
             activeOpacity={0.7}
@@ -862,7 +793,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 };
 
@@ -871,7 +802,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.background,
   },
 
   /* ── Header ─────────────────────────────── */
@@ -907,39 +838,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.055)',
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusPillPaused: {
-  },
-  statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#34E0A6',
-  },
-  statusDotPaused: {
-    backgroundColor: COLORS.accent,
-  },
-  statusText: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 10,
-    color: '#34E0A6',
-    letterSpacing: 1.5,
-  },
-  statusTextPaused: {
-    color: COLORS.accent,
-  },
-
-  /* ── Status Row ──────────────────────────── */
-  statusRow: {
-    alignItems: 'center',
-    paddingTop: 0,
-    paddingBottom: 8,
-    marginTop: -1,
   },
   timerDisplay: {
     flexDirection: 'row',
@@ -1168,66 +1066,70 @@ const styles = StyleSheet.create({
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 4,
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
-  setIndexBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  setRowCurrent: {
+    marginHorizontal: 5,
+    marginVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.86)',
+    borderBottomWidth: 1,
+    borderRadius: 8,
+    backgroundColor: 'rgba(122, 85, 255, 0.07)',
   },
   setIndexText: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 11,
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    width: 24,
+    textAlign: 'center',
+  },
+  setIndexTextCurrent: {
+    color: COLORS.text,
+  },
+  setValueText: {
+    flex: 1,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  setValueTextEmpty: {
+    color: COLORS.textTertiary,
+  },
+  setRepsText: {
+    width: 44,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  currentSetText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
     color: COLORS.accent,
+    marginRight: 2,
+  },
+  setScoreRing: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10, 12, 14, 0.28)',
+  },
+  setScoreText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 11,
     lineHeight: 14,
   },
-  setMetrics: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  setMetricItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  setMetricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-  },
-  setMetricLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 9,
-    color: COLORS.textTertiary,
-    letterSpacing: 1.5,
-  },
-  setMetricValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 16,
-    color: COLORS.text,
-    lineHeight: 20,
-  },
-  setMetricValueEmpty: {
-    color: '#3F3F46',
-  },
-  setActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  setActionIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+  setCompactIcon: {
+    width: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1286,47 +1188,22 @@ const styles = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   controlDiscardButton: {
-    width: 42,
-    height: 40,
-    borderRadius: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.2)',
     backgroundColor: 'rgba(239, 68, 68, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  controlPauseButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-  },
-  controlPauseButtonActive: {
-    borderColor: 'rgba(139, 92, 246, 0.2)',
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
-  },
-  controlPauseLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.2,
-  },
-  controlPauseLabelActive: {
-    color: COLORS.text,
-  },
   controlFinishButton: {
-    flex: 1.3,
-    height: 40,
-    borderRadius: 10,
+    flex: 1,
+    height: 52,
+    borderRadius: 13,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -1344,13 +1221,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: 10,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   controlFinishLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.2,
   },

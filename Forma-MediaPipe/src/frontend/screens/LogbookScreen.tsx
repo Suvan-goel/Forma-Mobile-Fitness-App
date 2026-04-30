@@ -196,7 +196,7 @@ interface WorkoutCardProps {
   onDelete: (id: string) => void;
 }
 
-const CARD_INNER_HEIGHT = 110;
+const CARD_INNER_HEIGHT = 122;
 const CARD_GAP = 9;
 const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
 const DELETE_AREA_WIDTH = 72;
@@ -260,12 +260,6 @@ const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ sess
     );
   }, [onDelete, session.id, closeSwipe, showAlert]);
 
-  const chips = [
-    session.category,
-    session.name.includes(' ') ? session.name.split(' ')[0] : session.name,
-    `${session.totalReps} reps`,
-  ].filter(Boolean).slice(0, 3) as string[];
-
   return (
     <View style={styles.swipeContainer}>
       {/* Delete button revealed when card slides left */}
@@ -314,13 +308,6 @@ const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ sess
                   <Text style={styles.exerciseSummary} numberOfLines={1}>
                     {session.totalSets} sets · {session.totalReps} reps
                   </Text>
-                  <View style={styles.chipRow}>
-                    {chips.map((chip) => (
-                      <View key={chip} style={styles.exerciseChip}>
-                        <Text style={styles.exerciseChipText} numberOfLines={1}>{chip}</Text>
-                      </View>
-                    ))}
-                  </View>
                 </View>
                 <View style={styles.cardRight}>
                   <View style={[styles.scoreBadge, { borderColor: getScoreColor(session.formScore) }]}>
@@ -610,6 +597,7 @@ export const LogbookScreen: React.FC = () => {
           </View>
         </View>
       )}
+      <View style={styles.dateSelectorDivider} />
     </View>
   ), [selectedYear, selectedMonth, selectedWeek, selectedDate, hasActiveFilter, activeFilterMode, monthTitle, selectedOrToday, visibleWeekDays, handleDateSelect, navigation]);
 
@@ -839,7 +827,7 @@ const styles = StyleSheet.create({
   weekCalendar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
+    marginBottom: 13,
   },
   weekDayCell: {
     alignItems: 'center',
@@ -894,6 +882,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+  dateSelectorDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    marginTop: 14,
+    marginBottom: 13,
+  },
 
   /* ── Swipe-to-Delete ─────────────────────── */
   swipeContainer: {
@@ -919,7 +913,7 @@ const styles = StyleSheet.create({
   /* ── Workout Card ────────────────────────── */
   cardOuter: {
     height: CARD_INNER_HEIGHT,
-    borderRadius: 10,
+    borderRadius: 13,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -932,7 +926,7 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 13,
 
     ...CARD_SHADOW,
     overflow: 'hidden',
@@ -940,27 +934,27 @@ const styles = StyleSheet.create({
   cardGlassEdge: {
     flex: 1,
     flexDirection: 'row',
-    borderRadius: 10,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 10,
+    padding: 11,
     alignItems: 'center',
   },
   cardLayout: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   workoutThumb: {
-    width: 58,
-    height: 74,
-    borderRadius: 8,
+    width: 104,
+    height: 86,
+    borderRadius: 10,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.055)',
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   workoutThumbImage: {
     width: '100%',
@@ -968,20 +962,21 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    gap: 3,
+    gap: 5,
     minWidth: 0,
+    alignSelf: 'center',
+    paddingVertical: 4,
   },
   cardTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 1,
+    gap: 7,
   },
   metaItem: {
     flexDirection: 'row',
@@ -996,32 +991,13 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 9.5,
+    fontSize: 11,
     color: COLORS.textSecondary,
     letterSpacing: 0,
   },
   exerciseSummary: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 9.5,
-    color: COLORS.textSecondary,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 5,
-    marginTop: 4,
-    flexWrap: 'wrap',
-  },
-  exerciseChip: {
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  exerciseChipText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 8.5,
+    fontSize: 10.5,
     color: COLORS.textSecondary,
   },
   cardRight: {
@@ -1033,18 +1009,18 @@ const styles = StyleSheet.create({
   scoreBadge: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 3,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 3.5,
     borderColor: COLORS.green,
     backgroundColor: 'rgba(16,23,28,0.45)',
   },
   scoreValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.text,
-    lineHeight: 17,
+    lineHeight: 18,
     textAlign: 'center',
   },
 
@@ -1058,18 +1034,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
-    marginBottom: -2,
+    marginTop: 0,
+    marginBottom: -1,
   },
   dayGroupTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 9.5,
+    fontSize: 10.5,
     color: COLORS.textSecondary,
-    letterSpacing: 0.7,
+    letterSpacing: 0.9,
   },
   dayGroupCount: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 9.5,
+    fontSize: 10.5,
     color: COLORS.textTertiary,
   },
 

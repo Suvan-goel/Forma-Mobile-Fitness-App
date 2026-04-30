@@ -56,7 +56,7 @@ const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
   );
 });
 
-export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
+export const GlassTabBar = memo(({ state, navigation }: any) => {
   const insets = useSafeAreaInsets();
   const currentTabRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
@@ -73,12 +73,6 @@ export const GlassTabBar = memo(({ state, navigation, onTabChange }: any) => {
      focusedRouteName === 'ExerciseGuide' ||
      focusedRouteName === 'CreateTemplate' ||
      focusedRouteName === 'TemplatePreview'));
-
-  React.useEffect(() => {
-    if (currentTabRoute?.name && onTabChange) {
-      onTabChange(currentTabRoute.name);
-    }
-  }, [state.index, onTabChange, currentTabRoute?.name]);
 
   const inner = (
     <View style={styles.barContent}>

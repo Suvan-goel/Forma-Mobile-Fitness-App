@@ -251,7 +251,7 @@ export const RecordLandingScreen: React.FC = () => {
       style={styles.container}
     >
       {/* ── HEADER ──────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
+      <View style={[styles.header, { paddingTop: 4 }]}>
         <Text style={styles.headerTitle}>CAPTURE</Text>
         <View style={styles.headerSide}>
           <TouchableOpacity

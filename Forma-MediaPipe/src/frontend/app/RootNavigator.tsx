@@ -47,7 +47,6 @@ import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutCon
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider } from '../contexts/ScrollContext';
 import { AlertProvider } from '../contexts/AlertContext';
-import { AppHeader } from '../components/ui/AppHeader';
 import { AuthProvider, useAuth } from '../../backend/contexts/AuthContext';
 import { COLORS } from '../constants/theme';
 
@@ -133,7 +132,8 @@ const RecordStackNavigator: React.FC = memo(() => {
     <RecordStack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: 'transparent' },
+        contentStyle: { backgroundColor: COLORS.background },
+        animation: 'slide_from_right',
       }}
     >
       <RecordStack.Screen name="RecordLanding" component={RecordLandingScreen} />
@@ -142,7 +142,13 @@ const RecordStackNavigator: React.FC = memo(() => {
       <RecordStack.Screen name="WorkoutTemplates" component={WorkoutTemplatesScreen} />
       <RecordStack.Screen name="CreateTemplate" component={CreateTemplateScreen} />
       <RecordStack.Screen name="TemplatePreview" component={TemplatePreviewScreen} />
-      <RecordStack.Screen name="Camera" component={CameraScreen} />
+      <RecordStack.Screen
+        name="Camera"
+        component={CameraScreen}
+        options={{
+          animation: 'slide_from_bottom',
+        }}
+      />
       <RecordStack.Screen name="ExerciseGuide" component={ExerciseGuideScreen} />
       <RecordStack.Screen
         name="SaveWorkout"
@@ -166,18 +172,15 @@ const RecordTabWithProvider: React.FC = memo(() => (
   </CurrentWorkoutProvider>
 ));
 
-// Inner component — header is non-collapsible and scrolls with page content
-const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: string) => void }> = memo(({ currentTab, onTabChange }) => {
+// Inner component — renders the tab navigator within the shared screen background
+const AppTabsContent: React.FC = memo(() => {
   const insets = useSafeAreaInsets();
 
   return (
-    <ScreenBackground style={{ paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
-      {/* Header - Hidden for Record tab; no collapse/sticky logic */}
-      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Social' && currentTab !== 'Home' && <AppHeader />}
-
+    <ScreenBackground style={{ paddingTop: insets.top }}>
       <View style={{ flex: 1 }}>
         <Tab.Navigator
-          tabBar={(props) => <GlassTabBar {...props} onTabChange={onTabChange} />}
+          tabBar={(props) => <GlassTabBar {...props} />}
           screenOptions={{
             headerShown: false,
             sceneStyle: { backgroundColor: 'transparent' },
@@ -194,21 +197,12 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
   );
 });
 
-// Bottom Tab Navigator with static header
-const AppTabs: React.FC = memo(() => {
-  const [currentTab, setCurrentTab] = useState('Home');
-  
-  // Memoize tab change handler
-  const handleTabChange = useCallback((tabName: string) => {
-    setCurrentTab(tabName);
-  }, []);
-  
-  return (
-    <ScrollProvider>
-      <AppTabsContent currentTab={currentTab} onTabChange={handleTabChange} />
-    </ScrollProvider>
-  );
-});
+// Bottom Tab Navigator
+const AppTabs: React.FC = memo(() => (
+  <ScrollProvider>
+    <AppTabsContent />
+  </ScrollProvider>
+));
 
 // Dev-only: wrapper so OnboardingFlow can be pushed onto the stack while logged in
 const OnboardingDevScreen: React.FC<{ navigation: any }> = ({ navigation }) => (
@@ -251,7 +245,7 @@ const RootStackNavigator: React.FC = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: 'transparent' },
+        contentStyle: { backgroundColor: COLORS.background },
       }}
     >
       {user ? (
