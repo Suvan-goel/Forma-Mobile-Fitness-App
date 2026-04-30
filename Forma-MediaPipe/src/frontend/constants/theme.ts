@@ -88,13 +88,13 @@ export const GLOW_SHADOW = {
   elevation: 8,
 } as const;
 
-/** Soft elevation for cards */
+/** Card surfaces avoid legacy shadows because clipped Android elevation can render as a black inset while content mounts. */
 export const CARD_SHADOW = {
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 8 },
-  shadowOpacity: 0.32,
-  shadowRadius: 16,
-  elevation: 6,
+  shadowColor: 'transparent',
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0,
+  shadowRadius: 0,
+  elevation: 0,
 } as const;
 
 export const getScoreColor = (score: number): string => {

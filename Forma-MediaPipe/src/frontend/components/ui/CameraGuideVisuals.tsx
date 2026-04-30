@@ -27,25 +27,27 @@ export const VIS_H = 220;
 const FLOOR_Y = 200;
 
 // Image sources (loaded once at module level)
-const sideSceneImg = require('../../../../assets/side-view-phone-v1.png');
-const frontSceneImg = require('../../../../assets/front-view-phone-v1.png');
+const sideImg = require('../../../../assets/side-view.png');
 const frontImg = require('../../../../assets/front-view.png');
 
-// Side view scene: generated person + recording phone in one transparent asset.
+// Side view: image rect + joint reticle targets (SVG coords)
+// Source image faces LEFT; we flip it to face RIGHT toward the phone.
+// Image aspect ratio ~1:2.94 → at h=205: w=70
 const SIDE = {
-  img: { x: 52, y: 5, w: 70, h: 195 },
-  shoulder: { x: 73, y: 47 },
-  hip:      { x: 70, y: 105 },
-  ankle:    { x: 69, y: 178 },
-  phoneLens: { x: 232, y: 158 },
+  img: { x: 75, y: 5, w: 70, h: 195 },
+  shoulder: { x: 112, y: 46 },
+  hip:      { x: 110, y: 100 },
+  ankle:    { x: 108, y: 174 },
+  phoneLens: { x: 236, y: 148 },
 };
 
-// Front view scene: generated person + recording phone in one transparent asset.
+// Front view: image rect + shoulder targets (SVG coords)
+// Image aspect ratio ~1:2.50 → at h=205: w=82
 const FRONT = {
   img: { x: 99, y: 5, w: 82, h: 195 },
   lShoulder: { x: 115, y: 46 },
   rShoulder: { x: 165, y: 46 },
-  phoneLens: { x: 140, y: 166 },
+  phoneLens: { x: 140, y: 207 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,7 +214,11 @@ const SideViewVisual: React.FC = () => (
         stroke="#404040" strokeWidth={0.4} />
     </Svg>
 
-    <HolographicScene source={sideSceneImg} />
+    <HolographicFigure
+      source={sideImg}
+      x={SIDE.img.x} y={SIDE.img.y} w={SIDE.img.w} h={SIDE.img.h}
+      flip
+    />
 
     <Svg width={VIS_W} height={VIS_H} viewBox={`0 0 ${VIS_W} ${VIS_H}`}
       style={StyleSheet.absoluteFill}>
@@ -234,6 +240,43 @@ const SideViewVisual: React.FC = () => (
       <Reticle cx={SIDE.shoulder.x} cy={SIDE.shoulder.y} r={9} />
       <Reticle cx={SIDE.hip.x} cy={SIDE.hip.y} r={8} />
       <Reticle cx={SIDE.ankle.x} cy={SIDE.ankle.y} r={7} />
+
+      <G>
+        <Ellipse cx={226} cy={192} rx={21} ry={7}
+          fill={COLORS.primary} opacity={0.06} />
+        <Path
+          d="M 217 198 L 226 139 L 246 144 L 232 204 Z"
+          stroke={COLORS.primary}
+          strokeWidth={1.7}
+          fill="rgba(139, 92, 246, 0.035)"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M 221 190 L 229 149 L 240 151 L 231 193 Z"
+          stroke={COLORS.primary}
+          strokeWidth={0.7}
+          fill="rgba(139, 92, 246, 0.025)"
+          opacity={0.7}
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M 232 204 L 246 144 L 252 153 L 238 205 Z"
+          fill="rgba(0, 0, 0, 0.32)"
+          stroke={COLORS.primary}
+          strokeWidth={0.6}
+          opacity={0.55}
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M 226 139 L 246 144 L 252 153 L 232 149 Z"
+          fill={COLORS.primary}
+          opacity={0.08}
+        />
+        <Circle cx={SIDE.phoneLens.x} cy={SIDE.phoneLens.y} r={1.7}
+          fill={COLORS.primary} opacity={0.85} />
+        <Circle cx={SIDE.phoneLens.x} cy={SIDE.phoneLens.y} r={4.5}
+          fill={COLORS.primary} opacity={0.18} />
+      </G>
 
       <Circle cx={SIDE.phoneLens.x} cy={SIDE.phoneLens.y} r={3}
         fill={COLORS.primary} opacity={0.4} />
@@ -272,7 +315,10 @@ const FrontViewVisual: React.FC = () => (
         stroke={COLORS.primary} strokeWidth={0.4} opacity={0.15} />
     </Svg>
 
-    <HolographicScene source={frontSceneImg} />
+    <HolographicFigure
+      source={frontImg}
+      x={FRONT.img.x} y={FRONT.img.y} w={FRONT.img.w} h={FRONT.img.h}
+    />
 
     <Svg width={VIS_W} height={VIS_H} viewBox={`0 0 ${VIS_W} ${VIS_H}`}
       style={StyleSheet.absoluteFill}>
@@ -290,11 +336,11 @@ const FrontViewVisual: React.FC = () => (
         stroke={COLORS.primary} strokeWidth={0.5}
         strokeDasharray="4,6" fill="none" opacity={0.14} />
 
-      <LaserSight x1={136} y1={FRONT.phoneLens.y} x2={FRONT.lShoulder.x} y2={FRONT.lShoulder.y} dashed />
-      <LaserSight x1={144} y1={FRONT.phoneLens.y} x2={FRONT.rShoulder.x} y2={FRONT.rShoulder.y} dashed />
+      <LaserSight x1={136} y1={204} x2={FRONT.lShoulder.x} y2={FRONT.lShoulder.y} dashed />
+      <LaserSight x1={144} y1={204} x2={FRONT.rShoulder.x} y2={FRONT.rShoulder.y} dashed />
 
       <Path
-        d={`M 136 ${FRONT.phoneLens.y} L ${FRONT.lShoulder.x} ${FRONT.lShoulder.y} L ${FRONT.rShoulder.x} ${FRONT.rShoulder.y} L 144 ${FRONT.phoneLens.y} Z`}
+        d={`M 136 204 L ${FRONT.lShoulder.x} ${FRONT.lShoulder.y} L ${FRONT.rShoulder.x} ${FRONT.rShoulder.y} L 144 204 Z`}
         fill={COLORS.primary} opacity={0.02} />
 
       <Reticle cx={FRONT.lShoulder.x} cy={FRONT.lShoulder.y} r={9} />
@@ -304,10 +350,14 @@ const FrontViewVisual: React.FC = () => (
         stroke={COLORS.primary} strokeWidth={0.5}
         strokeDasharray="2,6" opacity={0.12} />
 
-      <Circle cx={FRONT.phoneLens.x} cy={FRONT.phoneLens.y} r={2}
-        fill={COLORS.primary} opacity={0.5} />
-      <Circle cx={FRONT.phoneLens.x} cy={FRONT.phoneLens.y} r={5}
-        fill={COLORS.primary} opacity={0.12} />
+      <G>
+        <Ellipse cx={140} cy={212} rx={24} ry={8}
+          fill={COLORS.primary} opacity={0.08} />
+        <Rect x={122} y={204} width={36} height={16} rx={3}
+          stroke={COLORS.primary} strokeWidth={1.5} fill="rgba(139, 92, 246, 0.04)" />
+        <Circle cx={140} cy={207} r={1.5} fill={COLORS.primary} opacity={0.7} />
+        <Circle cx={140} cy={207} r={3.5} fill={COLORS.primary} opacity={0.15} />
+      </G>
     </Svg>
   </View>
 );

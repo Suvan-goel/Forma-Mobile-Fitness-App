@@ -36,6 +36,10 @@ const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
       canPreventDefault: true,
     });
     if (!isFocused && !event.defaultPrevented) {
+      if (routeName === 'Record') {
+        navigation.navigate('Record', { screen: 'RecordLanding' });
+        return;
+      }
       navigation.navigate(routeName);
     }
   }, [isFocused, routeKey, routeName, navigation]);

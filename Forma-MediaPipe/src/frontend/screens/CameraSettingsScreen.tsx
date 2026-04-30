@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Switch,
-  Platform,
   ScrollView,
   Modal,
   Animated,
@@ -14,7 +13,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  ChevronLeft,
   ChevronRight,
   Eye,
   Volume2,
@@ -31,11 +29,19 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
-  CARD_SHADOW
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  CARD_SHADOW,
 } from '../constants/theme';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
-import { useAlert } from '../contexts/AlertContext';
 import { MonoText } from '../components/typography/MonoText';
 import { TRAINERS } from '../constants/trainers';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
@@ -199,7 +205,6 @@ const wheelStyles = StyleSheet.create({
 export const CameraSettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const {
@@ -305,22 +310,15 @@ export const CameraSettingsScreen: React.FC = () => {
   }, [pendingMinutes, pendingSeconds, setRestTimerDurationSeconds]);
 
   const formattedDuration = `${currentMinutes}:${snappedSeconds.toString().padStart(2, '0')}`;
+  const IconBubble = ({ icon: Icon, color = COLORS.textSecondary }: { icon: any; color?: string }) => (
+    <View style={styles.iconBubble}>
+      <Icon size={17} color={color} strokeWidth={1.8} />
+    </View>
+  );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader title="CAMERA SETTINGS" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
@@ -344,8 +342,11 @@ export const CameraSettingsScreen: React.FC = () => {
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
-                <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Form Messages</Text>
+                <IconBubble icon={Eye} />
+                <View style={styles.rowLabelCol}>
+                  <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Form Messages</Text>
+                  <Text style={styles.rowSubLabel}>Live technique cues on screen</Text>
+                </View>
                 <TouchableOpacity onPress={() => setInfoModal('Form Messages')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </TouchableOpacity>
@@ -359,8 +360,11 @@ export const CameraSettingsScreen: React.FC = () => {
               </View>
               <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
-                <Volume2 size={14} color="#A78BFA" strokeWidth={1.5} />
-                <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Voice Coaching</Text>
+                <IconBubble icon={Volume2} />
+                <View style={styles.rowLabelCol}>
+                  <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Voice Coaching</Text>
+                  <Text style={styles.rowSubLabel}>Spoken feedback during sets</Text>
+                </View>
                 <TouchableOpacity onPress={() => setInfoModal('Voice Coaching')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </TouchableOpacity>
@@ -394,7 +398,7 @@ export const CameraSettingsScreen: React.FC = () => {
             >
               <View style={styles.cardEdge}>
                 <View style={styles.row}>
-                  <UserRound size={14} color="#A78BFA" strokeWidth={1.5} />
+                  <IconBubble icon={UserRound} />
                   <View style={styles.rowLabelCol}>
                     <Text style={styles.rowLabel}>Choose Trainer</Text>
                     <Text style={styles.rowSubLabel}>{currentTrainerName}</Text>
@@ -422,8 +426,11 @@ export const CameraSettingsScreen: React.FC = () => {
               {DEV_FEATURES_ENABLED && (
                 <>
                   <View style={styles.groupRow}>
-                    <Bone size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                    <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
+                    <IconBubble icon={Bone} />
+                    <View style={styles.rowLabelCol}>
+                      <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
+                      <Text style={styles.rowSubLabel}>Show pose landmarks on camera</Text>
+                    </View>
                     <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                     </TouchableOpacity>
@@ -439,8 +446,11 @@ export const CameraSettingsScreen: React.FC = () => {
                 </>
               )}
               <View style={styles.groupRow}>
-                <Video size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Auto Screen Recording</Text>
+                <IconBubble icon={Video} />
+                <View style={styles.rowLabelCol}>
+                  <Text style={styles.rowLabel}>Auto Screen Recording</Text>
+                  <Text style={styles.rowSubLabel}>Capture workout sessions</Text>
+                </View>
                 <TouchableOpacity onPress={() => setInfoModal('Auto Screen Recording')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </TouchableOpacity>
@@ -469,8 +479,11 @@ export const CameraSettingsScreen: React.FC = () => {
           >
             <View style={styles.groupEdge}>
               <View style={styles.groupRow}>
-                <Timer size={14} color="#34E0A6" strokeWidth={1.5} />
-                <Text style={styles.rowLabel}>Rest Timer</Text>
+                <IconBubble icon={Timer} color={COLORS.green} />
+                <View style={styles.rowLabelCol}>
+                  <Text style={styles.rowLabel}>Rest Timer</Text>
+                  <Text style={styles.rowSubLabel}>Countdown between sets</Text>
+                </View>
                 <TouchableOpacity onPress={() => setInfoModal('Rest Timer')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                 </TouchableOpacity>
@@ -485,7 +498,7 @@ export const CameraSettingsScreen: React.FC = () => {
                 <>
                   <View style={styles.rowDivider} />
                   <View style={styles.groupRow}>
-                    <View style={{ width: 14 }} />
+                    <View style={styles.iconSpacer} />
                     <MonoText bold style={styles.restTimerValueText}>{formattedDuration}</MonoText>
                     <TouchableOpacity style={styles.changeButton} onPress={openTimerModal} activeOpacity={0.7}>
                       <Text style={styles.changeButtonText}>Change</Text>
@@ -513,8 +526,11 @@ export const CameraSettingsScreen: React.FC = () => {
               >
                 <View style={styles.groupEdge}>
                   <View style={styles.groupRow}>
-                    <Bug size={14} color={debugMode ? COLORS.orange : COLORS.textTertiary} strokeWidth={1.5} />
-                    <Text style={[styles.rowLabel, debugMode && { color: COLORS.orange }]}>Debug Mode</Text>
+                    <IconBubble icon={Bug} color={debugMode ? COLORS.orange : COLORS.textSecondary} />
+                    <View style={styles.rowLabelCol}>
+                      <Text style={[styles.rowLabel, debugMode && { color: COLORS.orange }]}>Debug Mode</Text>
+                      <Text style={styles.rowSubLabel}>Developer pose diagnostics</Text>
+                    </View>
                     <TouchableOpacity onPress={() => setInfoModal('Debug Mode')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                     </TouchableOpacity>
@@ -527,8 +543,11 @@ export const CameraSettingsScreen: React.FC = () => {
                   </View>
                   <View style={styles.rowDivider} />
                   <View style={styles.groupRow}>
-                    <SlidersHorizontal size={14} color={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : COLORS.textTertiary} strokeWidth={1.5} />
-                    <Text style={[styles.rowLabel, poseModel === 'pose_landmarker_heavy' && { color: '#60A5FA' }]}>Heavy Model</Text>
+                    <IconBubble icon={SlidersHorizontal} color={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : COLORS.textSecondary} />
+                    <View style={styles.rowLabelCol}>
+                      <Text style={[styles.rowLabel, poseModel === 'pose_landmarker_heavy' && { color: '#60A5FA' }]}>Heavy Model</Text>
+                      <Text style={styles.rowSubLabel}>Higher accuracy, more memory</Text>
+                    </View>
                     <TouchableOpacity onPress={() => setInfoModal('Heavy Model')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
                     </TouchableOpacity>
@@ -609,7 +628,7 @@ export const CameraSettingsScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </ScreenBackground>
   );
 };
 
@@ -617,32 +636,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
-  },
-
-  /* Header — matches SettingsScreen */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 6,
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 28,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-    flex: 1,
-  },
-  headerSpacer: {
-    width: 28,
   },
 
   /* Scroll */
@@ -658,8 +651,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 16,
-    marginBottom: 7,
+    marginTop: 18,
+    marginBottom: 8,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -667,45 +660,60 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 9.5,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
     color: COLORS.textSecondary,
-    letterSpacing: 1.3,
+    letterSpacing: 1.6,
   },
 
   /* Individual card */
   cardGradient: {
-    borderRadius: 8,
-
+    borderRadius: CARD_RADIUS,
     ...CARD_SHADOW,
     overflow: 'hidden',
-},
+  },
   cardEdge: {
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
 
   /* Grouped card (multiple rows) */
   groupEdge: {
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    paddingHorizontal: 12,
-    paddingVertical: 2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
   },
   groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
-    paddingVertical: 10,
+    gap: 12,
+    minHeight: 58,
+    paddingVertical: 12,
   },
   rowDivider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    marginLeft: 44,
+  },
+  iconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: CARD_RADIUS_SM,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+  },
+  iconSpacer: {
+    width: 30,
   },
 
   /* Row inside card */
@@ -715,11 +723,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowLabel: {
-    flex: 1,
     fontFamily: FONTS.display.semibold,
-    fontSize: 12.5,
+    fontSize: 13.5,
     color: COLORS.text,
-    letterSpacing: 0.1,
+    letterSpacing: -0.2,
   },
   rowLabelDisabled: {
     color: COLORS.textTertiary,
@@ -730,29 +737,30 @@ const styles = StyleSheet.create({
   },
   rowSubLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 9.75,
+    fontSize: 11,
     color: COLORS.textTertiary,
+    lineHeight: 15,
   },
 
   /* Rest Timer Value */
   restTimerValueText: {
     flex: 1,
-    fontSize: 22,
+    fontSize: 24,
     color: COLORS.accent,
   },
   changeButton: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
+    paddingVertical: 8,
+    borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.35)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    backgroundColor: 'rgba(122, 85, 255, 0.1)',
   },
   changeButtonText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
     color: COLORS.accent,
-    letterSpacing: 0.3,
+    letterSpacing: 0.1,
   },
 
   /* Wheel Picker */
@@ -791,23 +799,15 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: 260,
-    backgroundColor: '#111113',
-    borderRadius: 22,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: COLORS.borderStrong,
     paddingTop: 24,
     paddingBottom: 20,
     paddingHorizontal: 24,
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.5,
-        shadowRadius: 24,
-      },
-      android: { elevation: 12 },
-    }),
+    ...CARD_SHADOW,
   },
   modalTitle: {
     fontFamily: FONTS.ui.bold,
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 40,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS_SM,
     backgroundColor: COLORS.accent,
   },
   modalDoneText: {
@@ -839,13 +839,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   infoModalContent: {
-    backgroundColor: '#1A1625',
-    borderRadius: 20,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: COLORS.borderStrong,
     padding: 22,
     width: '100%',
     maxWidth: 340,
+    ...CARD_SHADOW,
   },
   infoModalHeader: {
     flexDirection: 'row',

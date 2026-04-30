@@ -184,7 +184,7 @@ export const RecordLandingScreen: React.FC = () => {
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { templates } = useCustomTemplates();
   const {
     workoutInProgress,
@@ -202,7 +202,8 @@ export const RecordLandingScreen: React.FC = () => {
   const standardSectionHeight = Math.floor(availableSectionHeight * 0.305);
   const templateSectionHeight = Math.max(standardSectionHeight + 18, availableSectionHeight - standardSectionHeight * 2);
   const templateCardHeight = Math.max(132, Math.min(156, templateSectionHeight - 18));
-  const templateThumbHeight = Math.max(82, Math.min(104, templateCardHeight - 54));
+  const templateCardWidth = (windowWidth - SPACING.screenHorizontal * 2 - 9 * 2) / 3;
+  const templateThumbHeight = Math.max(78, Math.min(100, templateCardHeight - 62));
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -282,8 +283,7 @@ export const RecordLandingScreen: React.FC = () => {
     );
   }
 
-  const recentTemplates: CaptureTemplate[] = templates.length > 0
-    ? templates.slice(0, 6).map(template => ({
+  const savedTemplates: CaptureTemplate[] = templates.slice(0, 3).map(template => ({
       id: template.id,
       name: template.name,
       description: template.description || 'Your saved workout template.',
@@ -292,8 +292,12 @@ export const RecordLandingScreen: React.FC = () => {
         category: exercise.category,
         targetSets: exercise.targetSets,
       })),
-    }))
-    : DEFAULT_TEMPLATES;
+    }));
+  const savedTemplateNames = new Set(savedTemplates.map(template => template.name.trim().toLowerCase()));
+  const recentTemplates: CaptureTemplate[] = [
+    ...savedTemplates,
+    ...DEFAULT_TEMPLATES.filter(template => !savedTemplateNames.has(template.name.trim().toLowerCase())),
+  ].slice(0, 3);
   const templatesLabel = templates.length > 0 ? 'RECENT TEMPLATES' : 'FAVOURITE TEMPLATES';
 
   return (
@@ -304,7 +308,7 @@ export const RecordLandingScreen: React.FC = () => {
       style={styles.container}
     >
       {/* ── HEADER ──────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: 4 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <Text style={styles.headerTitle}>CAPTURE</Text>
         <View style={styles.headerSide}>
           <TouchableOpacity
@@ -529,7 +533,7 @@ export const RecordLandingScreen: React.FC = () => {
               {recentTemplates.slice(0, 3).map((tmpl) => (
                 <TouchableOpacity
                   key={tmpl.id}
-                  style={[styles.templateCard, { height: templateCardHeight }]}
+                  style={[styles.templateCard, { width: templateCardWidth, height: templateCardHeight }]}
                   activeOpacity={0.85}
                   onPress={() =>
                     navigation.navigate('TemplatePreview', {
@@ -909,7 +913,6 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   templateCard: {
-    flex: 1,
     borderRadius: CARD_RADIUS,
     ...CARD_SHADOW,
   },
@@ -921,7 +924,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 0,
     paddingTop: 0,
-    paddingBottom: 14,
+    paddingBottom: 20,
     gap: 6,
     overflow: 'hidden',
   },
@@ -946,7 +949,8 @@ const styles = StyleSheet.create({
     gap: 2,
     flexShrink: 0,
     paddingHorizontal: 12,
-    paddingBottom: 4,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   templateName: {
     fontFamily: FONTS.display.semibold,

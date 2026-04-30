@@ -17,17 +17,19 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Award,
   Check,
-  ChevronLeft,
+  Activity,
+  Crown,
   Flame,
-  Medal,
+  Lock,
   Pencil,
   Shield,
   Sparkles,
+  Star,
   Target,
   Trophy,
   Video,
+  Zap,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -37,14 +39,11 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
 } from '../constants/theme';
-import { ScreenBackground } from '../components/ui';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
 import { useUser, useWorkouts, useAnalytics, useRewards } from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 type UserProfileNavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-const XP_PER_LEVEL = 220;
-const LEVEL_TARGET = 3000;
 
 export const UserProfileScreen: React.FC = () => {
   const navigation = useNavigation<UserProfileNavigationProp>();
@@ -66,11 +65,23 @@ export const UserProfileScreen: React.FC = () => {
   const displayName = user?.displayName || 'Forma Athlete';
   const handle = `@${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 18) || 'forma'}`;
   const initial = displayName.charAt(0).toUpperCase();
-  const level = Math.max(1, Math.floor(userPoints / XP_PER_LEVEL) + 1);
-  const levelProgress = Math.min(userPoints / LEVEL_TARGET, 1);
   const earnedBadgeIds = userStats?.earnedBadgeIds ?? [];
-  const earnedRewards = rewards.filter(reward => earnedBadgeIds.includes(reward.id));
-  const hiddenBadgeCount = Math.max(0, earnedBadgeIds.length - 4);
+  const sortedRewards = useMemo(
+    () => [...rewards].sort((a, b) => a.pointsRequired - b.pointsRequired),
+    [rewards],
+  );
+  const earnedRewards = useMemo(
+    () => sortedRewards.filter(reward => earnedBadgeIds.includes(reward.id)),
+    [earnedBadgeIds, sortedRewards],
+  );
+  const nextReward = sortedRewards.find(reward => !earnedBadgeIds.includes(reward.id));
+  const currentReward = earnedRewards[earnedRewards.length - 1];
+  const badgeProgress = nextReward
+    ? Math.min(userPoints / nextReward.pointsRequired, 1)
+    : 1;
+  const level = Math.max(1, earnedRewards.length + 1);
+  const nextRewardIconName = nextReward?.iconName ?? currentReward?.iconName ?? 'Trophy';
+  const nextRewardColor = nextReward?.color ?? currentReward?.color ?? COLORS.primary;
 
   const achievements = useMemo(() => {
     const recentBadges = earnedRewards.slice(0, 2).map(reward => ({
@@ -120,20 +131,21 @@ export const UserProfileScreen: React.FC = () => {
 
   return (
     <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} activeOpacity={0.7} style={styles.headerIcon}>
-          <ChevronLeft size={26} color={COLORS.textSecondary} strokeWidth={1.7} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleEditProfile}
-          activeOpacity={0.7}
-          style={styles.headerIcon}
-          accessibilityRole="button"
-          accessibilityLabel="Edit profile"
-        >
-          <Pencil size={20} color={COLORS.textSecondary} strokeWidth={1.8} />
-        </TouchableOpacity>
-      </View>
+      <SettingsHeader
+        title="PROFILE"
+        onBack={handleGoBack}
+        rightSlot={(
+          <TouchableOpacity
+            onPress={handleEditProfile}
+            activeOpacity={0.7}
+            style={styles.headerAction}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+          >
+            <Pencil size={20} color={COLORS.textSecondary} strokeWidth={1.8} />
+          </TouchableOpacity>
+        )}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -171,18 +183,11 @@ export const UserProfileScreen: React.FC = () => {
             <StatBlock value={avgFormScore || 0} label="Avg Form Score" />
           </View>
 
-          <View style={styles.actionGrid}>
-            <ProfileActionButton
-              label="Rewards"
-              icon={<Trophy size={17} color={COLORS.yellow} strokeWidth={1.8} />}
-              onPress={handleRewards}
-            />
-            <ProfileActionButton
-              label="Video Library"
-              icon={<Video size={17} color={COLORS.primary} strokeWidth={1.8} />}
-              onPress={handleVideoLibrary}
-            />
-          </View>
+          <ProfileActionButton
+            label="Video Library"
+            icon={<Video size={17} color={COLORS.primary} strokeWidth={1.8} />}
+            onPress={handleVideoLibrary}
+          />
 
           <ProfileCard>
             <View style={styles.sectionHeader}>
@@ -192,43 +197,87 @@ export const UserProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
             <View style={styles.levelRow}>
-              <LinearGradient colors={['#8F6BFF', '#442087']} style={styles.levelBadge}>
-                <Shield size={48} color="rgba(255,255,255,0.62)" strokeWidth={1.5} />
-                <Text style={styles.levelNumber}>{level}</Text>
+              <LinearGradient
+                colors={[`${nextRewardColor}33`, 'rgba(255,255,255,0.025)']}
+                style={[styles.levelBadge, { borderColor: `${nextRewardColor}44` }]}
+              >
+                <RewardIcon iconName={nextRewardIconName} size={27} color={nextRewardColor} />
               </LinearGradient>
               <View style={styles.levelCopy}>
                 <Text style={styles.levelTitle}>Level {level}</Text>
-                <Text style={styles.levelSubtitle}>Strong Performer</Text>
+                <Text style={styles.levelSubtitle} numberOfLines={1}>
+                  {nextReward ? `Next badge: ${nextReward.title}` : 'All badges unlocked'}
+                </Text>
+                <Text style={styles.levelMeta} numberOfLines={1}>
+                  {earnedRewards.length}/{sortedRewards.length} badges earned
+                </Text>
               </View>
             </View>
             <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.max(8, levelProgress * 100)}%` }]} />
+              <LinearGradient
+                colors={[nextRewardColor, COLORS.primaryDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.progressFill, { width: `${Math.max(6, badgeProgress * 100)}%` }]}
+              />
             </View>
-            <Text style={styles.xpText}>{userPoints.toLocaleString()} / {LEVEL_TARGET.toLocaleString()} XP</Text>
+            <View style={styles.rewardProgressRow}>
+              <Text style={styles.xpText}>
+                {nextReward
+                  ? `${userPoints.toLocaleString()} / ${nextReward.pointsRequired.toLocaleString()} pts`
+                  : `${userPoints.toLocaleString()} pts`}
+              </Text>
+              <Text style={styles.xpText}>
+                {nextReward
+                  ? `${Math.max(0, nextReward.pointsRequired - userPoints).toLocaleString()} to go`
+                  : 'Complete'}
+              </Text>
+            </View>
           </ProfileCard>
 
           <ProfileCard>
-            <Text style={styles.sectionTitle}>Badges</Text>
-            <View style={styles.badgeRow}>
-              {(earnedRewards.length > 0 ? earnedRewards : rewards.slice(0, 4)).slice(0, 4).map((reward, index) => (
-                <View key={reward.id || index} style={styles.badgeShell}>
-                  <LinearGradient
-                    colors={earnedBadgeIds.includes(reward.id) ? ['#3C4651', '#1A222C'] : ['#272D34', '#161A1F']}
-                    style={styles.badgeHex}
-                  >
-                    {index % 4 === 0 ? <Trophy size={20} color={COLORS.yellow} /> : null}
-                    {index % 4 === 1 ? <Medal size={20} color={COLORS.yellow} /> : null}
-                    {index % 4 === 2 ? <Award size={20} color={COLORS.yellow} /> : null}
-                    {index % 4 === 3 ? <Target size={20} color={COLORS.yellow} /> : null}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Badges</Text>
+              <TouchableOpacity onPress={handleRewards} activeOpacity={0.75}>
+                <Text style={styles.viewAll}>View all</Text>
+              </TouchableOpacity>
+            </View>
+            {earnedRewards.length > 0 ? (
+              <View style={styles.badgeList}>
+                {earnedRewards.map(reward => (
+                  <View key={reward.id} style={styles.badgeItem}>
+                    <View style={[styles.badgeShell, { borderColor: `${reward.color}55` }]}>
+                      <LinearGradient
+                        colors={[`${reward.color}2E`, 'rgba(255,255,255,0.025)']}
+                        style={styles.badgeHex}
+                      >
+                        <RewardIcon iconName={reward.iconName} size={20} color={reward.color} />
+                      </LinearGradient>
+                    </View>
+                    <View style={styles.badgeCopy}>
+                      <Text style={styles.badgeName} numberOfLines={1}>{reward.title}</Text>
+                      <Text style={styles.badgeCategory} numberOfLines={1}>
+                        {reward.category} · {reward.pointsRequired.toLocaleString()} pts
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.badgeEmpty}>
+                <View style={styles.badgeShell}>
+                  <LinearGradient colors={['#272D34', '#161A1F']} style={styles.badgeHex}>
+                    <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.7} />
                   </LinearGradient>
                 </View>
-              ))}
-              {hiddenBadgeCount > 0 && (
-                <View style={styles.moreBadge}>
-                  <Text style={styles.moreBadgeText}>+{hiddenBadgeCount}</Text>
+                <View style={styles.badgeCopy}>
+                  <Text style={styles.badgeName}>No badges earned yet</Text>
+                  <Text style={styles.badgeCategory} numberOfLines={1}>
+                    {nextReward ? `${nextReward.title} is up next` : 'Complete workouts to unlock rewards'}
+                  </Text>
                 </View>
-              )}
-            </View>
+              </View>
+            )}
           </ProfileCard>
 
           <ProfileCard>
@@ -309,21 +358,46 @@ const ProfileActionButton = ({
   </TouchableOpacity>
 );
 
+const RewardIcon = ({
+  iconName,
+  size,
+  color,
+}: {
+  iconName: string;
+  size: number;
+  color: string;
+}) => {
+  switch (iconName) {
+    case 'Zap':
+      return <Zap size={size} color={color} strokeWidth={1.5} />;
+    case 'Target':
+      return <Target size={size} color={color} strokeWidth={1.5} />;
+    case 'Activity':
+      return <Activity size={size} color={color} strokeWidth={1.5} />;
+    case 'Shield':
+      return <Shield size={size} color={color} strokeWidth={1.5} />;
+    case 'Star':
+      return <Star size={size} color={color} strokeWidth={1.5} />;
+    case 'Flame':
+      return <Flame size={size} color={color} strokeWidth={1.5} />;
+    case 'Crown':
+      return <Crown size={size} color={color} strokeWidth={1.5} />;
+    case 'Lock':
+      return <Lock size={size} color={color} strokeWidth={1.5} />;
+    case 'Trophy':
+    default:
+      return <Trophy size={size} color={color} strokeWidth={1.5} />;
+  }
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
   },
-  header: {
-    height: 50,
-    paddingHorizontal: SPACING.screenHorizontal,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerIcon: {
-    width: 38,
-    height: 38,
+  headerAction: {
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -435,7 +509,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   actionButton: {
-    flex: 1,
+    marginBottom: 14,
   },
   actionButtonGradient: {
     borderRadius: 12,
@@ -526,6 +600,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
   },
+  levelMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
   progressTrack: {
     height: 6,
     borderRadius: 3,
@@ -543,11 +622,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
   },
-  badgeRow: {
+  rewardProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  badgeList: {
+    gap: 10,
+  },
+  badgeItem: {
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 14,
+    paddingVertical: 5,
+  },
+  badgeEmpty: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
   },
   badgeShell: {
     width: 44,
@@ -563,19 +659,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  moreBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+  badgeCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
-  moreBadgeText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
+  badgeName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13.5,
+    color: COLORS.text,
+  },
+  badgeCategory: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11.5,
     color: COLORS.textSecondary,
   },
   achievementList: {

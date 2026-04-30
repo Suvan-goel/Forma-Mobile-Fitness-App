@@ -25,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronRight,
   Settings as SettingsIcon,
@@ -103,6 +104,7 @@ const ScoreRing: React.FC<{ score: number; size?: number; stroke?: number; small
 
 export const HomeScreen: React.FC = () => {
   const { onScroll } = useScroll();
+  const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -119,6 +121,10 @@ export const HomeScreen: React.FC = () => {
   }, [homeData, fadeAnim, slideAnim]);
 
   const navigateToTab = useCallback((tab: string) => {
+    if (tab === 'Record') {
+      navigation.navigate('MainTabs', { screen: 'Record', params: { screen: 'RecordLanding' } });
+      return;
+    }
     navigation.navigate('MainTabs', { screen: tab });
   }, [navigation]);
 
@@ -172,6 +178,12 @@ export const HomeScreen: React.FC = () => {
     ? Math.min(100, Math.round((homeData.weeklyGoal.current / homeData.weeklyGoal.target) * 100))
     : 0;
   const weeklyRemaining = Math.max(0, homeData.weeklyGoal.target - homeData.weeklyGoal.current);
+  const nextBadgePct = homeData.nextBadge
+    ? Math.min(100, Math.round((homeData.nextBadge.current / homeData.nextBadge.required) * 100))
+    : 100;
+  const nextBadgeRemaining = homeData.nextBadge
+    ? Math.max(0, homeData.nextBadge.required - homeData.nextBadge.current)
+    : 0;
 
   // Compute week day index 0=Sun..6=Sat. Use Mon..Sun layout for "days left this week".
   const today = new Date();
@@ -181,7 +193,7 @@ export const HomeScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── HEADER: FORMA wordmark + settings ─────────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <Text style={styles.brand}>FORMA</Text>
         <TouchableOpacity
           style={styles.iconBtn}
@@ -339,6 +351,68 @@ export const HomeScreen: React.FC = () => {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* ── NEXT BADGE ─────────────────────────── */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('Rewards')}
+            style={styles.rewardsOuter}
+          >
+            <LinearGradient
+              colors={[...CARD_GRADIENT_ELEVATED]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.rewardsGradient}
+            >
+              <View style={styles.rewardsEdge}>
+                <View style={styles.rewardsHeader}>
+                  <View style={styles.rewardTitleBlock}>
+                    <Text style={styles.cardLabel}>NEXT BADGE</Text>
+                    <Text style={styles.rewardTitle} numberOfLines={1}>
+                      {homeData.nextBadge?.name ?? 'All badges unlocked'}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.rewardIcon,
+                      { borderColor: `${homeData.nextBadge?.color ?? COLORS.primary}33` },
+                    ]}
+                  >
+                    <Trophy
+                      size={18}
+                      color={homeData.nextBadge?.color ?? COLORS.primary}
+                      strokeWidth={1.7}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.progressTrack}>
+                  <LinearGradient
+                    colors={[
+                      homeData.nextBadge?.color ?? COLORS.primary,
+                      COLORS.primaryDark,
+                    ]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.progressFill, { width: `${Math.max(6, nextBadgePct)}%` }]}
+                  />
+                </View>
+
+                <View style={styles.rewardMetaRow}>
+                  <Text style={styles.rewardMeta}>
+                    {homeData.nextBadge
+                      ? `${nextBadgeRemaining.toLocaleString()} pts remaining`
+                      : 'Current rewards track complete'}
+                  </Text>
+                  <Text style={styles.rewardMetaStrong}>
+                    {homeData.nextBadge
+                      ? `${homeData.nextBadge.current.toLocaleString()} / ${homeData.nextBadge.required.toLocaleString()}`
+                      : `${homeData.totalPoints.toLocaleString()} pts`}
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
           {/* ── LAST SESSION ─────────────────────────── */}
           {homeData.lastWorkout ? (
             <TouchableOpacity
@@ -358,13 +432,7 @@ export const HomeScreen: React.FC = () => {
                   </View>
                   <View style={styles.sessionRow}>
                     <View style={styles.sessionThumb}>
-                      <LinearGradient
-                        colors={['rgba(124, 92, 255, 0.25)', 'rgba(103, 70, 232, 0.1)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                      <Activity size={22} color="#FFFFFF" strokeWidth={1.5} />
+                      <Activity size={21} color={COLORS.accent} strokeWidth={1.7} />
                     </View>
                     <View style={styles.sessionInfo}>
                       <Text style={styles.sessionName} numberOfLines={1}>
@@ -377,8 +445,11 @@ export const HomeScreen: React.FC = () => {
                         {homeData.lastWorkout.totalSets} sets · {homeData.lastWorkout.totalReps} reps
                       </Text>
                     </View>
-                    <ScoreRing score={homeData.lastWorkout.formScore} size={52} stroke={5} small />
-                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} style={{ marginLeft: 4 }} />
+                    <View style={styles.sessionScoreBlock}>
+                      <ScoreRing score={homeData.lastWorkout.formScore} size={48} stroke={5} small />
+                      <Text style={styles.sessionScoreLabel}>form</Text>
+                    </View>
+                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
                   </View>
                 </View>
               </LinearGradient>
@@ -408,24 +479,42 @@ export const HomeScreen: React.FC = () => {
               style={styles.statsStrip}
             >
               <View style={styles.statCell}>
-                <Flame size={14} color={COLORS.yellow} strokeWidth={1.6} />
-                <Text style={styles.statValue}>{homeData.streakDays}</Text>
-                <Text style={styles.statUnit}>days</Text>
-                <Text style={styles.statLabel}>STREAK</Text>
+                <View style={[styles.statIconWrap, styles.statIconWarm]}>
+                  <Flame size={14} color={COLORS.yellow} strokeWidth={1.7} />
+                </View>
+                <View style={styles.statCopy}>
+                  <Text style={styles.statLabel}>Streak</Text>
+                  <View style={styles.statValueRow}>
+                    <Text style={styles.statValue}>{homeData.streakDays}</Text>
+                    <Text style={styles.statUnit}>days</Text>
+                  </View>
+                </View>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statCell}>
-                <Calendar size={14} color={COLORS.accent} strokeWidth={1.6} />
-                <Text style={styles.statValue}>{homeData.weeklyGoal.current}</Text>
-                <Text style={styles.statUnit}>workouts</Text>
-                <Text style={styles.statLabel}>THIS WEEK</Text>
+                <View style={[styles.statIconWrap, styles.statIconAccent]}>
+                  <Calendar size={14} color={COLORS.accent} strokeWidth={1.7} />
+                </View>
+                <View style={styles.statCopy}>
+                  <Text style={styles.statLabel}>This Week</Text>
+                  <View style={styles.statValueRow}>
+                    <Text style={styles.statValue}>{homeData.weeklyGoal.current}</Text>
+                    <Text style={styles.statUnit}>workouts</Text>
+                  </View>
+                </View>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statCell}>
-                <Trophy size={14} color={COLORS.green} strokeWidth={1.6} />
-                <Text style={styles.statValue}>{homeData.totalPoints.toLocaleString()}</Text>
-                <Text style={styles.statUnit}>pts</Text>
-                <Text style={styles.statLabel}>POINTS</Text>
+                <View style={[styles.statIconWrap, styles.statIconGreen]}>
+                  <Trophy size={14} color={COLORS.green} strokeWidth={1.7} />
+                </View>
+                <View style={styles.statCopy}>
+                  <Text style={styles.statLabel}>Points</Text>
+                  <View style={styles.statValueRow}>
+                    <Text style={styles.statValue}>{homeData.totalPoints.toLocaleString()}</Text>
+                    <Text style={styles.statUnit}>pts</Text>
+                  </View>
+                </View>
               </View>
             </LinearGradient>
           </View>
@@ -740,6 +829,68 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
 
+  /* Next Badge */
+  rewardsOuter: {
+    borderRadius: CARD_RADIUS,
+    marginBottom: 12,
+    ...CARD_SHADOW,
+  },
+  rewardsGradient: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  rewardsEdge: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    padding: 16,
+    gap: 10,
+  },
+  rewardsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  rewardTitleBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  rewardTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  rewardIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  rewardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  rewardMeta: {
+    flex: 1,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11.5,
+    color: COLORS.textTertiary,
+  },
+  rewardMetaStrong: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 11.5,
+    color: COLORS.textSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+
   /* Last Session */
   sessionOuter: {
     borderRadius: CARD_RADIUS,
@@ -752,39 +903,49 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 14,
+    padding: 15,
   },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 11,
     marginTop: 12,
   },
   sessionThumb: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(122, 85, 255, 0.18)',
+    backgroundColor: 'rgba(122, 85, 255, 0.1)',
   },
-  sessionInfo: { flex: 1, gap: 2 },
+  sessionInfo: { flex: 1, gap: 3, minWidth: 0 },
   sessionName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontSize: 14.5,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   sessionMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11.5,
+    fontSize: 11,
     color: COLORS.textTertiary,
   },
   sessionStatsLine: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 10.5,
+    color: COLORS.textSecondary,
+  },
+  sessionScoreBlock: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  sessionScoreLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9,
     color: COLORS.textTertiary,
   },
   emptyText: {
@@ -804,43 +965,73 @@ const styles = StyleSheet.create({
   statsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     borderRadius: CARD_RADIUS,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     overflow: 'hidden',
   },
   statCell: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  statIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  statIconWarm: {
+    backgroundColor: 'rgba(236, 161, 58, 0.08)',
+    borderColor: 'rgba(236, 161, 58, 0.16)',
+  },
+  statIconAccent: {
+    backgroundColor: 'rgba(122, 85, 255, 0.1)',
+    borderColor: 'rgba(122, 85, 255, 0.18)',
+  },
+  statIconGreen: {
+    backgroundColor: 'rgba(52, 224, 166, 0.08)',
+    borderColor: 'rgba(52, 224, 166, 0.16)',
+  },
+  statCopy: {
+    alignItems: 'flex-start',
+    gap: 3,
+    minWidth: 0,
+  },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
     gap: 4,
   },
   statValue: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 17,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: 0,
   },
   statUnit: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.textTertiary,
-    marginTop: -2,
   },
   statLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 9.5,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
     color: COLORS.textSecondary,
-    letterSpacing: 1.4,
-    marginTop: 2,
   },
   statDivider: {
     width: 1,
-    height: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    height: 34,
+    marginHorizontal: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
   },
 
   /* Progress bar */

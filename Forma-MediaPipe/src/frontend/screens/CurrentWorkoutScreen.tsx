@@ -472,13 +472,12 @@ export const CurrentWorkoutScreen: React.FC = () => {
       style={styles.container}
     >
       {/* ── HEADER ──────────────────────────── */}
-      <View style={[styles.header, { paddingTop: 8 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={styles.headerIconButton} onPress={handleGoBack} activeOpacity={0.7}>
           <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Current Workout</Text>
           <View style={styles.headerTimerPill}>
           <WorkoutTimerDisplay
             startTimeRef={startTimeRef}
@@ -808,13 +807,7 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     alignItems: 'center',
-    gap: 5,
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: -0.2,
+    justifyContent: 'center',
   },
   headerTimerPill: {
     minWidth: 76,

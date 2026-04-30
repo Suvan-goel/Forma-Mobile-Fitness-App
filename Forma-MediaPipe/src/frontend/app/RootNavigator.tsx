@@ -2,7 +2,6 @@ import React, { memo, useCallback, useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
@@ -53,7 +52,7 @@ import { COLORS } from '../constants/theme';
 // Define the Root Stack Param List
 export type RootStackParamList = {
   Welcome: undefined;
-  MainTabs: { screen?: string } | undefined;
+  MainTabs: { screen?: string; params?: Record<string, unknown> } | undefined;
   Settings: undefined;
   ProfileSettings: undefined;
   NotificationSettings: undefined;
@@ -174,10 +173,8 @@ const RecordTabWithProvider: React.FC = memo(() => (
 
 // Inner component — renders the tab navigator within the shared screen background
 const AppTabsContent: React.FC = memo(() => {
-  const insets = useSafeAreaInsets();
-
   return (
-    <ScreenBackground style={{ paddingTop: insets.top }}>
+    <ScreenBackground>
       <View style={{ flex: 1 }}>
         <Tab.Navigator
           tabBar={(props) => <GlassTabBar {...props} />}
@@ -265,7 +262,10 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="PrivacySettings"
             component={PrivacySettingsScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="HelpCenter"
@@ -338,7 +338,10 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="FriendComparison"
             component={FriendComparisonScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="AddFriend"
@@ -353,7 +356,10 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="Rewards"
             component={RewardsScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="UserProfile"

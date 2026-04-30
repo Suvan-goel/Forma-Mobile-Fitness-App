@@ -12,10 +12,20 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ChevronLeft, Search, UserPlus, Check, Clock, Heart } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW,
+} from '../../constants/theme';
 import { useUserSearch, useFriends, useFollowing } from '../../../backend/hooks';
 import { UserSearchResult } from '../../../backend/services/api/types';
 
@@ -23,15 +33,15 @@ const StatusIndicator = memo(({ status }: { status: UserSearchResult['relationsh
   switch (status) {
     case 'friends':
       return (
-        <View style={[styles.statusBadge, { backgroundColor: 'rgba(52, 211, 153, 0.08)', borderColor: 'rgba(52, 211, 153, 0.15)' }]}>
-          <Check size={14} color="#34E0A6" />
-          <Text style={[styles.statusText, { color: '#34E0A6' }]}>Friends</Text>
+        <View style={[styles.statusBadge, styles.statusBadgeSuccess]}>
+          <Check size={13} color={COLORS.green} strokeWidth={2} />
+          <Text style={[styles.statusText, { color: COLORS.green }]}>Friends</Text>
         </View>
       );
     case 'pending_sent':
       return (
-        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderColor: 'rgba(255, 255, 255, 0.055)' }]}>
-          <Clock size={14} color={COLORS.textTertiary} />
+        <View style={[styles.statusBadge, styles.statusBadgeMuted]}>
+          <Clock size={13} color={COLORS.textTertiary} strokeWidth={1.8} />
           <Text style={[styles.statusText, { color: COLORS.textTertiary }]}>Pending</Text>
         </View>
       );
@@ -47,6 +57,7 @@ export const AddFriendScreen: React.FC = memo(() => {
   const { results, isLoading, error } = useUserSearch(query);
   const { sendRequest } = useFriends();
   const { followUser, unfollowUser, isFollowingUser } = useFollowing();
+  const hasSearchTerm = query.trim().length >= 2;
 
   const handleAdd = useCallback(async (userId: string) => {
     await sendRequest(userId);
@@ -61,28 +72,33 @@ export const AddFriendScreen: React.FC = memo(() => {
   }, [isFollowingUser, unfollowUser, followUser]);
 
   const renderItem = useCallback(({ item }: { item: UserSearchResult }) => (
-    <View style={styles.userRow}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
-          {item.displayName.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-
-      <View style={styles.userInfo}>
-        <Text style={styles.userName} numberOfLines={1}>
-          {item.displayName}
-        </Text>
-        {item.mutualFriendCount > 0 && (
-          <Text style={styles.mutualText}>
-            {item.mutualFriendCount} mutual friend{item.mutualFriendCount > 1 ? 's' : ''}
+    <TouchableOpacity style={styles.userRowOuter} activeOpacity={0.78}>
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.userRow}
+      >
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>
+            {item.displayName.charAt(0).toUpperCase()}
           </Text>
-        )}
-      </View>
+        </View>
 
-      {item.relationshipStatus === 'none' || item.relationshipStatus === 'pending_received' ? (
+        <View style={styles.userInfo}>
+          <Text style={styles.userName} numberOfLines={1}>
+            {item.displayName}
+          </Text>
+          <Text style={styles.mutualText}>
+            {item.mutualFriendCount > 0
+              ? `${item.mutualFriendCount} mutual friend${item.mutualFriendCount > 1 ? 's' : ''}`
+              : 'Forma member'}
+          </Text>
+        </View>
+
         <View style={styles.actionRow}>
           <TouchableOpacity
-            style={styles.followHeartBtn}
+            style={[styles.followHeartBtn, isFollowingUser(item.userId) && styles.followHeartBtnActive]}
             onPress={() => handleToggleFollow(item.userId)}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -94,41 +110,28 @@ export const AddFriendScreen: React.FC = memo(() => {
               strokeWidth={1.8}
             />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => handleAdd(item.userId)}
-            activeOpacity={0.7}
-          >
-            <UserPlus size={15} color={COLORS.text} />
-            <Text style={styles.addButtonText}>Add</Text>
-          </TouchableOpacity>
+
+          {item.relationshipStatus === 'none' || item.relationshipStatus === 'pending_received' ? (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => handleAdd(item.userId)}
+              activeOpacity={0.7}
+            >
+              <UserPlus size={14} color={COLORS.text} strokeWidth={2} />
+              <Text style={styles.addButtonText}>Add</Text>
+            </TouchableOpacity>
+          ) : (
+            <StatusIndicator status={item.relationshipStatus} />
+          )}
         </View>
-      ) : (
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.followHeartBtn}
-            onPress={() => handleToggleFollow(item.userId)}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Heart
-              size={18}
-              color={isFollowingUser(item.userId) ? '#F472B6' : COLORS.textTertiary}
-              fill={isFollowingUser(item.userId) ? '#F472B6' : 'none'}
-              strokeWidth={1.8}
-            />
-          </TouchableOpacity>
-          <StatusIndicator status={item.relationshipStatus} />
-        </View>
-      )}
-    </View>
+      </LinearGradient>
+    </TouchableOpacity>
   ), [handleAdd, handleToggleFollow, isFollowingUser]);
 
   const keyExtractor = useCallback((item: UserSearchResult) => item.userId, []);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -138,16 +141,18 @@ export const AddFriendScreen: React.FC = memo(() => {
         >
           <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Friends</Text>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>Add Friends</Text>
+          <Text style={styles.headerSubtitle}>Search by name to connect</Text>
+        </View>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Search bar */}
       <View style={styles.searchContainer}>
-        <Search size={16} color={COLORS.textTertiary} />
+        <Search size={15} color={COLORS.textTertiary} strokeWidth={1.7} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by name..."
+          placeholder="Search friends"
           placeholderTextColor={COLORS.textTertiary}
           value={query}
           onChangeText={setQuery}
@@ -157,8 +162,11 @@ export const AddFriendScreen: React.FC = memo(() => {
         />
       </View>
 
-      {/* Results */}
-      {isLoading && query.length >= 2 ? (
+      {error && hasSearchTerm && (
+        <Text style={styles.inlineError}>{error}</Text>
+      )}
+
+      {isLoading && hasSearchTerm ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator color={COLORS.primary} />
         </View>
@@ -167,17 +175,29 @@ export const AddFriendScreen: React.FC = memo(() => {
           data={results}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
+          ListHeaderComponent={
+            results.length > 0 ? (
+              <View style={styles.resultsHeader}>
+                <Text style={styles.resultsTitle}>Results</Text>
+                <Text style={styles.resultsCount}>{results.length}</Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
-            query.length >= 2 ? (
+            hasSearchTerm ? (
               <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconContainer}>
+                  <Search size={22} color={COLORS.textTertiary} strokeWidth={1.6} />
+                </View>
                 <Text style={styles.emptyText}>No users found</Text>
+                <Text style={styles.emptySubtext}>Try a different name</Text>
               </View>
             ) : (
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconContainer}>
-                  <Search size={24} color={COLORS.textTertiary} />
+                  <UserPlus size={24} color={COLORS.textTertiary} strokeWidth={1.6} />
                 </View>
-                <Text style={styles.emptyText}>Search for friends by name</Text>
+                <Text style={styles.emptyText}>Find people on Forma</Text>
                 <Text style={styles.emptySubtext}>Type at least 2 characters</Text>
               </View>
             )
@@ -200,7 +220,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingVertical: SPACING.md,
+    paddingTop: 6,
+    paddingBottom: 14,
   },
   backButton: {
     width: 36,
@@ -208,29 +229,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTextWrap: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+  },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 18.5,
     color: COLORS.text,
+    letterSpacing: 0,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 9,
     marginHorizontal: SPACING.screenHorizontal,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    height: 43,
+    paddingHorizontal: 13,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.055)',
-    gap: SPACING.sm,
   },
   searchInput: {
     flex: 1,
     fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontSize: 13.5,
     color: COLORS.text,
     padding: 0,
+  },
+  inlineError: {
+    marginHorizontal: SPACING.screenHorizontal,
+    marginTop: 10,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.orange,
   },
   centerContainer: {
     flex: 1,
@@ -238,59 +277,87 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   listContent: {
-    paddingTop: SPACING.md,
-    paddingBottom: 40,
+    paddingTop: 14,
+    paddingBottom: 48,
+  },
+  resultsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 8,
+  },
+  resultsTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 11.5,
+    color: COLORS.text,
+  },
+  resultsCount: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 10,
+    color: COLORS.primary,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(122, 85, 255, 0.16)',
+  },
+  userRowOuter: {
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 8,
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.md,
-    marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 6,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    minHeight: 62,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.085)',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(122, 85, 255, 0.18)',
   },
   avatarText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 17,
+    fontSize: 14,
     color: COLORS.text,
   },
   userInfo: {
     flex: 1,
-    marginLeft: SPACING.md,
+    marginLeft: 11,
+    minWidth: 0,
   },
   userName: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 15,
+    fontSize: 13.5,
     color: COLORS.text,
   },
   mutualText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 10.5,
     color: COLORS.textTertiary,
     marginTop: 2,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   followHeartBtn: {
-    width: 34,
-    height: 34,
+    width: 33,
+    height: 33,
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
@@ -298,42 +365,57 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.055)',
   },
+  followHeartBtnActive: {
+    backgroundColor: 'rgba(244, 114, 182, 0.08)',
+    borderColor: 'rgba(244, 114, 182, 0.18)',
+  },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    minWidth: 66,
+    height: 33,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 9,
     backgroundColor: COLORS.primary,
   },
   addButtonText: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.text,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 20,
+    height: 33,
+    paddingHorizontal: 9,
+    borderRadius: 9,
     borderWidth: 1,
+  },
+  statusBadgeSuccess: {
+    backgroundColor: 'rgba(52, 224, 166, 0.08)',
+    borderColor: 'rgba(52, 224, 166, 0.18)',
+  },
+  statusBadgeMuted: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   statusText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 11,
   },
   emptyContainer: {
-    paddingTop: 60,
+    paddingTop: 72,
     alignItems: 'center',
     gap: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
   },
   emptyIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -342,9 +424,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   emptyText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
   },
   emptySubtext: {
     fontFamily: FONTS.ui.regular,

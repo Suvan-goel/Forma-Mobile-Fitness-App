@@ -24,6 +24,7 @@ import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useExercises, useFavouriteExercises } from '../../backend/hooks';
 import { LoadingSkeleton } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { Exercise } from '../../backend/services/api';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { ExerciseRegistry } from '../../utils/exercises';
@@ -274,7 +275,7 @@ export const ChooseExerciseScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <ScreenBackground>
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
             <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
@@ -297,12 +298,12 @@ export const ChooseExerciseScreen: React.FC = () => {
             <LoadingSkeleton variant="card" height={200} width={cardWidth} />
           </View>
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenBackground>
       {/* ── Header ─────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
@@ -386,7 +387,7 @@ export const ChooseExerciseScreen: React.FC = () => {
           </View>
         }
       />
-    </View>
+    </ScreenBackground>
   );
 };
 

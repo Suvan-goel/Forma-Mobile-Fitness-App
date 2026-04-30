@@ -7,6 +7,7 @@ import { View, Text, Animated, StyleSheet, TouchableOpacity } from 'react-native
 import { Settings as SettingsIcon, UserPlus } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { SocialTabSelector, SocialTab } from '../components/ui/SocialTabSelector';
 import { FriendsView } from './social/FriendsView';
@@ -15,6 +16,7 @@ import type { RootStackParamList } from '../app/RootNavigator';
 
 export const SocialScreen: React.FC = memo(() => {
   const [activeTab, setActiveTab] = useState<SocialTab>('activity');
+  const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -50,9 +52,9 @@ export const SocialScreen: React.FC = memo(() => {
   return (
     <View style={styles.container}>
       {/* ── HEADER (matches Rewards style) ── */}
-      <View style={styles.header}>
-        <Text style={[styles.headerName, activeTab === 'friends' && styles.headerNameFocused]}>
-          {activeTab === 'friends' ? 'Friends' : 'SOCIAL'}
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
+        <Text style={styles.headerName}>
+          {activeTab === 'friends' ? 'FRIENDS' : 'SOCIAL'}
         </Text>
         <TouchableOpacity
           onPress={handleHeaderAction}
@@ -99,10 +101,6 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     flex: 1,
     textAlign: 'left',
-  },
-  headerNameFocused: {
-    fontSize: 21,
-    letterSpacing: 0,
   },
   iconBtn: {
     width: 36,

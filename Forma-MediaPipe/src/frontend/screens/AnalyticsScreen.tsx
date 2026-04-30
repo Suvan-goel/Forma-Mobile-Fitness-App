@@ -27,6 +27,7 @@ import {
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   COLORS,
   SPACING,
@@ -46,6 +47,7 @@ import { LeaderboardView } from './social/LeaderboardView';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const PROGRESS_CHART_GREEN = '#5FCE7A';
 type ProgressTab = 'overview' | 'personalBests' | 'leaderboard';
 
 const PB_THUMBS = [
@@ -80,6 +82,7 @@ const formatVolume = (kg: number): string => {
 
 export const AnalyticsScreen: React.FC = () => {
   const { onScroll } = useScroll();
+  const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -110,7 +113,7 @@ export const AnalyticsScreen: React.FC = () => {
   if (isLoading || !analytics) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
           <Text style={styles.headerTitle}>Progress</Text>
         </View>
         <View style={styles.loadingWrap}>
@@ -126,7 +129,7 @@ export const AnalyticsScreen: React.FC = () => {
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
           <Text style={styles.headerTitle}>Progress</Text>
         </View>
         <View style={styles.errorWrap}>
@@ -192,7 +195,7 @@ export const AnalyticsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── HEADER ──────────────────────────────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <Text style={styles.headerTitle}>PROGRESS</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -265,9 +268,9 @@ export const AnalyticsScreen: React.FC = () => {
             unit=""
             timeRange={selectedTimeRange}
             headerValue={avgFormScore}
-            lineColor={COLORS.green}
+            lineColor={PROGRESS_CHART_GREEN}
             averageLabel="Average"
-            height={158}
+            height={210}
           />
 
           {/* ── TIME RANGE SELECTOR ─────────────────── */}
@@ -456,6 +459,7 @@ export const AnalyticsScreen: React.FC = () => {
             unit="kg"
             formatValue={(v) => v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(v))}
             timeRange={selectedTimeRange}
+            lineColor={PROGRESS_CHART_GREEN}
             averageLabel="Average"
           />
 
@@ -467,6 +471,7 @@ export const AnalyticsScreen: React.FC = () => {
             unit="%"
             timeRange={selectedTimeRange}
             headerValue={avgConsistency}
+            lineColor={PROGRESS_CHART_GREEN}
             averageLabel="Average"
           />
 

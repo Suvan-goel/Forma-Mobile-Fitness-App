@@ -103,6 +103,12 @@ const CalendarModal = ({
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  useEffect(() => {
+    if (visible) {
+      setCurrentMonth(selectedDate ?? new Date());
+    }
+  }, [selectedDate, visible]);
+
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -134,22 +140,28 @@ const CalendarModal = ({
   };
 
   const days = getDaysInMonth(currentMonth);
+  const selectedLabel = selectedDate
+    ? selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'No date selected';
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.calendarOuter} onStartShouldSetResponder={() => true}>
           <LinearGradient
-            colors={SCREEN_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.calendarGradient}
           >
             <View style={styles.calendarEdge}>
               <View style={styles.calendarHeaderRow}>
-                <View style={styles.calendarLabelRow}>
-                  <Calendar size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.calendarLabel}>SELECT DATE</Text>
+                <View style={styles.calendarTitleGroup}>
+                  <View style={styles.calendarLabelRow}>
+                    <Calendar size={14} color={COLORS.accent} strokeWidth={1.7} />
+                    <Text style={styles.calendarLabel}>Select Date</Text>
+                  </View>
+                  <Text style={styles.calendarSelectedLabel}>{selectedLabel}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={onClose}
@@ -159,18 +171,27 @@ const CalendarModal = ({
                   <X size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
                 </TouchableOpacity>
               </View>
-              <View style={styles.calendarDivider} />
+
               <View style={styles.calendarNavRow}>
-                <TouchableOpacity onPress={() => navigateMonth('prev')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                  <Text style={styles.calendarNavButton}>{'\u2039'}</Text>
+                <TouchableOpacity
+                  style={styles.calendarNavIconButton}
+                  onPress={() => navigateMonth('prev')}
+                  activeOpacity={0.72}
+                >
+                  <ChevronLeft size={18} color={COLORS.textSecondary} strokeWidth={1.8} />
                 </TouchableOpacity>
                 <Text style={styles.calendarTitle}>
                   {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                 </Text>
-                <TouchableOpacity onPress={() => navigateMonth('next')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                  <Text style={styles.calendarNavButton}>{'\u203A'}</Text>
+                <TouchableOpacity
+                  style={styles.calendarNavIconButton}
+                  onPress={() => navigateMonth('next')}
+                  activeOpacity={0.72}
+                >
+                  <ChevronRight size={18} color={COLORS.textSecondary} strokeWidth={1.8} />
                 </TouchableOpacity>
               </View>
+
               <View style={styles.calendarDaysHeader}>
                 {DAY_NAMES.map((day) => (
                   <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
@@ -206,6 +227,23 @@ const CalendarModal = ({
                     )}
                   </TouchableOpacity>
                 ))}
+              </View>
+
+              <View style={styles.calendarFooterRow}>
+                <TouchableOpacity
+                  style={styles.calendarTodayButton}
+                  onPress={() => onSelectDate(new Date())}
+                  activeOpacity={0.78}
+                >
+                  <Text style={styles.calendarTodayText}>Today</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.calendarDoneButton}
+                  onPress={onClose}
+                  activeOpacity={0.78}
+                >
+                  <Text style={styles.calendarDoneText}>Done</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </LinearGradient>
@@ -660,7 +698,7 @@ export const LogbookScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── LOGBOOK HEADER ─────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 5 }]}>
         <Text style={styles.headerName}>LOGBOOK</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -1111,37 +1149,38 @@ const styles = StyleSheet.create({
   /* ── Calendar Modal ──────────────────────── */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(4, 8, 12, 0.86)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   calendarOuter: {
-    width: '88%',
+    width: '100%',
     maxWidth: 380,
   },
   calendarGradient: {
-    borderRadius: 22,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#7A55FF',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 24,
-      },
-      android: { elevation: 12 },
-    }),
+    borderRadius: 8,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
   calendarEdge: {
-    borderRadius: 22,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 20,
+    borderColor: 'rgba(255, 255, 255, 0.075)',
+    borderTopColor: 'rgba(255, 255, 255, 0.11)',
+    paddingHorizontal: 15,
+    paddingTop: 15,
+    paddingBottom: 14,
   },
   calendarHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
+  },
+  calendarTitleGroup: {
+    flex: 1,
+    gap: 3,
   },
   calendarLabelRow: {
     flexDirection: 'row',
@@ -1150,68 +1189,78 @@ const styles = StyleSheet.create({
   },
   calendarLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
+    fontSize: 16,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  calendarSelectedLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
   },
   calendarCloseBtn: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  calendarDivider: {
-    height: 1,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-    marginBottom: 16,
   },
   calendarNavRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
+    minHeight: 42,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.045)',
   },
-  calendarNavButton: {
-    fontSize: 26,
-    fontFamily: FONTS.display.medium,
-    color: COLORS.accent,
-    paddingHorizontal: 12,
+  calendarNavIconButton: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarTitle: {
     fontSize: 15,
     fontFamily: FONTS.display.semibold,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    color: COLORS.text,
+    letterSpacing: 0,
   },
   calendarDaysHeader: {
     flexDirection: 'row',
-    marginBottom: SPACING.sm,
+    marginBottom: 7,
+    paddingHorizontal: 1,
   },
   calendarDayHeader: {
-    fontSize: 10,
-    fontFamily: FONTS.ui.regular,
-    color: '#3F3F46',
+    fontSize: 10.5,
+    fontFamily: FONTS.display.semibold,
+    color: COLORS.textTertiary,
     flex: 1,
     textAlign: 'center',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: 0,
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    paddingTop: 2,
   },
   calendarDay: {
     width: `${100 / 7}%`,
-    height: 40,
+    height: 43,
     alignItems: 'center',
     justifyContent: 'center',
   },
   calendarDayCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1220,30 +1269,75 @@ const styles = StyleSheet.create({
   },
   calendarDaySelected: {
     backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
     ...Platform.select({
       ios: {
         shadowColor: '#7A55FF',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.32,
         shadowRadius: 10,
       },
+      android: { elevation: 4 },
     }),
   },
   calendarDayToday: {
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(122, 85, 255, 0.42)',
+    backgroundColor: 'rgba(122, 85, 255, 0.08)',
   },
   calendarDayText: {
     fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: '#A1A1AA',
+    fontFamily: FONTS.display.semibold,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
   },
   calendarDayTextSelected: {
-    color: '#FFFFFF',
-    fontFamily: FONTS.ui.bold,
+    color: COLORS.text,
+    fontFamily: FONTS.display.bold,
   },
   calendarDayTextToday: {
     color: COLORS.accent,
+  },
+  calendarFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  calendarTodayButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  calendarTodayText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
+  },
+  calendarDoneButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.accent,
+  },
+  calendarDoneText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+    letterSpacing: 0,
   },
 
   /* ── Selection Modal ────────────────────── */

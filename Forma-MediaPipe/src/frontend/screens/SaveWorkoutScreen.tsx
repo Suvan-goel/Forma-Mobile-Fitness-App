@@ -12,7 +12,6 @@ import {
   Platform,
   Switch,
   Modal,
-  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
@@ -67,7 +66,6 @@ export const SaveWorkoutScreen: React.FC = () => {
   const { showAlert } = useAlert();
   const route = useRoute<SaveWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { workoutData } = route.params;
   const { clearSets, setWorkoutInProgress, exercises, workoutElapsedSeconds, sessionId } = useCurrentWorkout();
 
@@ -262,7 +260,6 @@ export const SaveWorkoutScreen: React.FC = () => {
             style={styles.scroll}
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingHorizontal: width < 360 ? 20 : 32 },
               { paddingBottom: Math.max(insets.bottom, SPACING.lg) + 24 },
             ]}
             showsVerticalScrollIndicator={false}
@@ -479,6 +476,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   content: {
     gap: 12,

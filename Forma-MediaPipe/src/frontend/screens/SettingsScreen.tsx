@@ -1,9 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, Switch, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ChevronLeft,
   ChevronRight,
   Bell,
   Lock,
@@ -33,7 +32,8 @@ import {
   CARD_RADIUS_SM,
   CARD_SHADOW,
 } from '../constants/theme';
-import { ScreenBackground } from '../components/ui';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
+import { DEFAULT_TRAINER_ID, TRAINERS } from '../constants/trainers';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useWorkoutPreferences, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
@@ -61,6 +61,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const slideAnim = useRef(new Animated.Value(20)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
   const [infoModal, setInfoModal] = useState<string | null>(null);
+  const selectedTrainer = useMemo(
+    () =>
+      TRAINERS.find((trainer) => trainer.id === prefs.selectedTrainerId) ??
+      TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID),
+    [prefs.selectedTrainerId],
+  );
 
   const SETTING_INFO: Record<string, { title: string; description: string }> = {
     'Visual Feedback': {
@@ -193,19 +199,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
 
   return (
     <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
-          activeOpacity={0.7}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerName}>SETTINGS</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <SettingsHeader title="SETTINGS" onBack={() => navigation.navigate('MainTabs', { screen: 'Home' })} />
 
       <ScrollView
         style={styles.scroll}
@@ -244,7 +238,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 icon={Volume2}
                 iconColor={COLORS.textSecondary}
                 label="Trainer Voice"
-                sub="Default · Coach Ava"
+                sub={selectedTrainer ? `${selectedTrainer.name} · ${selectedTrainer.specialty}` : 'Default trainer'}
                 onPress={() => navigation.navigate('TrainerPicker')}
               />
             </View>
@@ -439,32 +433,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 28,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-  },
-  headerSpacer: {
-    width: 28,
-  },
-  headerName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: 4,
-    flex: 1,
-    textAlign: 'left',
-  },
   scroll: {
     flex: 1,
   },

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera, Mail, Calendar, LogOut, User, AlignLeft } from 'lucide-react-native';
+import { Camera, Mail, Calendar, LogOut, User, AlignLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   COLORS,
@@ -25,7 +25,7 @@ import {
   CARD_RADIUS_SM,
   CARD_SHADOW,
 } from '../constants/theme';
-import { ScreenBackground } from '../components/ui';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
 import { useUser, useUpdateUser } from '../../backend/hooks';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -171,27 +171,18 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
 
   if (userLoading) {
     return (
-      <ScreenBackground style={[styles.container, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator color={COLORS.primary} size="large" />
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+        <SettingsHeader title="EDIT PROFILE" onBack={() => navigation.goBack()} />
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator color={COLORS.primary} size="large" />
+        </View>
       </ScreenBackground>
     );
   }
 
   return (
     <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>EDIT PROFILE</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <SettingsHeader title="EDIT PROFILE" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
@@ -468,32 +459,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 28,
-    height: 32,
+  loadingCenter: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -6,
   },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: 3,
-    flex: 1,
-  },
-  headerSpacer: {
-    width: 28,
-  },
+
   scroll: {
     flex: 1,
   },

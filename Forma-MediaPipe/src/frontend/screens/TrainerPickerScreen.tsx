@@ -8,7 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, CircleUserRound, UserRound, Volume2, VolumeX } from 'lucide-react-native';
+import { CircleUserRound, UserRound, Volume2, VolumeX } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -18,8 +18,10 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
   CARD_SHADOW
 } from '../constants/theme';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
 import { TRAINERS, type Trainer } from '../constants/trainers';
 import { useWorkoutPreferences } from '../../backend/hooks';
 import { setActiveVoiceId, setActiveVoiceSettings, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
@@ -98,30 +100,24 @@ export const TrainerPickerScreen: React.FC = () => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Your Trainer</Text>
-        <TouchableOpacity
-          style={styles.speakerBtn}
-          onPress={() => setGreetingEnabled((v) => !v)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          {greetingEnabled
-            ? <Volume2 size={20} color={COLORS.accent} strokeWidth={1.5} />
-            : <VolumeX size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
-          }
-        </TouchableOpacity>
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader
+        title="TRAINER VOICE"
+        onBack={() => navigation.goBack()}
+        rightSlot={(
+          <TouchableOpacity
+            style={styles.speakerBtn}
+            onPress={() => setGreetingEnabled((v) => !v)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {greetingEnabled
+              ? <Volume2 size={20} color={COLORS.accent} strokeWidth={1.5} />
+              : <VolumeX size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
+            }
+          </TouchableOpacity>
+        )}
+      />
 
       <Animated.ScrollView
         style={[styles.scroll, { opacity: fadeAnim }]}
@@ -174,7 +170,7 @@ export const TrainerPickerScreen: React.FC = () => {
           </LinearGradient>
         </Animated.View>
       </Animated.ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
 
@@ -184,28 +180,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 6,
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 28,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-    flex: 1,
-  },
   speakerBtn: {
     width: 28,
     height: 32,
@@ -250,13 +224,13 @@ const styles = StyleSheet.create({
 
   /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS,
 
     ...CARD_SHADOW,
     overflow: 'hidden',
 },
   cardEdge: {
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',

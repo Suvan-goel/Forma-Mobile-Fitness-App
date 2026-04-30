@@ -10,7 +10,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ChevronLeft,
   Crown,
   Check,
   Lock,
@@ -25,8 +24,10 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
   CARD_SHADOW
 } from '../constants/theme';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
 import { useSubscription } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 
@@ -67,20 +68,8 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Membership</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader title="MEMBERSHIP" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
@@ -198,7 +187,7 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
           </Text>
         </Animated.View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
 
@@ -206,30 +195,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 6,
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 28,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-    flex: 1,
-  },
-  headerSpacer: {
-    width: 28,
   },
   scroll: {
     flex: 1,
@@ -239,14 +204,14 @@ const styles = StyleSheet.create({
     paddingBottom: 160,
   },
   planCard: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS,
     marginTop: 18,
     marginBottom: 8,
 
     ...CARD_SHADOW,
 },
   planCardEdge: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
@@ -322,13 +287,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   cardGradient: {
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS,
 
     ...CARD_SHADOW,
     overflow: 'hidden',
 },
   cardEdge: {
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',

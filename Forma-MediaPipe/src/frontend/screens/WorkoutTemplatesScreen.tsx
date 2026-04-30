@@ -162,6 +162,7 @@ const estimateDuration = (exerciseCount: number): string => `~${Math.max(30, exe
 
 const mapCustomTemplate = (template: CustomTemplate): WorkoutTemplate => {
   const totalSets = template.exercises.reduce((sum, ex) => sum + ex.targetSets, 0);
+  const firstExerciseName = template.exercises[0]?.name ?? '';
 
   return {
     id: template.id,
@@ -171,6 +172,7 @@ const mapCustomTemplate = (template: CustomTemplate): WorkoutTemplate => {
     estimatedDuration: estimateDuration(template.exercises.length),
     lastUsed: `${totalSets} sets`,
     volumeLabel: 'Planned',
+    templateImage: getExerciseImage(firstExerciseName),
     exercises: template.exercises.map(ex => ({
       name: ex.name,
       category: ex.category,
@@ -579,6 +581,7 @@ const styles = StyleSheet.create({
   cardCopy: {
     flex: 1,
     minHeight: 132,
+    justifyContent: 'flex-start',
   },
   cardTitleRow: {
     minHeight: 28,
@@ -615,7 +618,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   cardFooterRow: {
-    marginTop: 'auto',
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
