@@ -193,6 +193,7 @@ export interface LeaderboardEntry {
   displayName: string;
   avatarUrl?: string;
   score: number;
+  streakDays?: number;
   trend?: 'up' | 'down' | 'stable';
 }
 

@@ -4,7 +4,7 @@
 
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet, TouchableOpacity } from 'react-native';
-import { Settings as SettingsIcon } from 'lucide-react-native';
+import { Settings as SettingsIcon, UserPlus } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
@@ -30,6 +30,14 @@ export const SocialScreen: React.FC = memo(() => {
     setActiveTab(tab);
   }, []);
 
+  const handleHeaderAction = useCallback(() => {
+    if (activeTab === 'friends') {
+      navigation.navigate('AddFriend');
+      return;
+    }
+    navigation.navigate('Settings');
+  }, [activeTab, navigation]);
+
   const renderContent = () => {
     switch (activeTab) {
       case 'activity':
@@ -43,14 +51,20 @@ export const SocialScreen: React.FC = memo(() => {
     <View style={styles.container}>
       {/* ── HEADER (matches Rewards style) ── */}
       <View style={styles.header}>
-        <Text style={styles.headerName}>SOCIAL</Text>
+        <Text style={[styles.headerName, activeTab === 'friends' && styles.headerNameFocused]}>
+          {activeTab === 'friends' ? 'Friends' : 'SOCIAL'}
+        </Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('Settings')}
+          onPress={handleHeaderAction}
           activeOpacity={0.7}
           style={styles.iconBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+          {activeTab === 'friends' ? (
+            <UserPlus size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+          ) : (
+            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -85,6 +99,10 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     flex: 1,
     textAlign: 'left',
+  },
+  headerNameFocused: {
+    fontSize: 21,
+    letterSpacing: 0,
   },
   iconBtn: {
     width: 36,

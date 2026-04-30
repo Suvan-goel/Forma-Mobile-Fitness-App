@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
@@ -9,6 +10,9 @@ import {
   AlignLeft,
   Dumbbell,
   Video,
+  Calendar,
+  Clock,
+  Layers,
 } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -43,6 +47,68 @@ try {
 type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetails'>;
 type WorkoutDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetails'>;
 
+const SUMMARY_RING_SIZE = 82;
+const SUMMARY_RING_STROKE = 7;
+
+const getScoreStatus = (score: number): string => {
+  if (score >= 90) return 'Excellent form';
+  if (score >= 75) return 'Solid session';
+  if (score >= 50) return 'Needs attention';
+  return 'Technique focus';
+};
+
+const getScoreHint = (score: number): string => {
+  if (score >= 90) return 'Clean reps and strong consistency across your sets.';
+  if (score >= 75) return 'Good work overall. Keep prioritizing control and range.';
+  if (score >= 50) return 'There is progress here, with room to tighten execution.';
+  return 'Review the set feedback and keep the next session technique-led.';
+};
+
+const getScoreTint = (score: number): string => {
+  if (score >= 90) return 'rgba(52, 224, 166, 0.10)';
+  if (score >= 75) return 'rgba(122, 85, 255, 0.12)';
+  if (score >= 50) return 'rgba(236, 161, 58, 0.12)';
+  return 'rgba(217, 111, 80, 0.12)';
+};
+
+const ScoreRing: React.FC<{ score: number; color: string }> = ({ score, color }) => {
+  const radius = (SUMMARY_RING_SIZE - SUMMARY_RING_STROKE) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, score));
+  const offset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <View style={styles.scoreRing}>
+      <Svg width={SUMMARY_RING_SIZE} height={SUMMARY_RING_SIZE}>
+        <Circle
+          cx={SUMMARY_RING_SIZE / 2}
+          cy={SUMMARY_RING_SIZE / 2}
+          r={radius}
+          stroke="rgba(255, 255, 255, 0.055)"
+          strokeWidth={SUMMARY_RING_STROKE}
+          fill="transparent"
+        />
+        <Circle
+          cx={SUMMARY_RING_SIZE / 2}
+          cy={SUMMARY_RING_SIZE / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={SUMMARY_RING_STROKE}
+          strokeLinecap="round"
+          fill="transparent"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={offset}
+          transform={`rotate(-90 ${SUMMARY_RING_SIZE / 2} ${SUMMARY_RING_SIZE / 2})`}
+        />
+      </Svg>
+      <View style={styles.scoreRingValueWrap} pointerEvents="none">
+        <MonoText style={[styles.scoreRingValue, { color }]}>{score}</MonoText>
+        <Text style={styles.scoreRingUnit}>FORM</Text>
+      </View>
+    </View>
+  );
+};
+
 interface ExerciseCardProps {
   exercise: WorkoutExercise;
   recordings: VideoRecord[];
@@ -60,8 +126,11 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
   const getRecordingForSet = (setNumber: number): VideoRecord | undefined =>
     recordings.find((r) => r.exerciseName === exercise.name && r.setNumber === setNumber);
 
+  const totalReps = exercise.sets.reduce((sum, s) => sum + s.reps, 0);
   const avgScore = Math.round(
-    exercise.sets.reduce((sum, s) => sum + s.formScore, 0) / exercise.sets.length
+    exercise.sets.length > 0
+      ? exercise.sets.reduce((sum, s) => sum + s.formScore, 0) / exercise.sets.length
+      : 0
   );
   const avgScoreColor = getScoreColor(avgScore);
 
@@ -76,8 +145,13 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
         <View style={styles.cardEdge}>
           {/* Exercise header row */}
           <View style={styles.exerciseHeader}>
-            <Text style={styles.exerciseName} numberOfLines={1}>{exercise.name}</Text>
-            <View style={styles.avgScoreBadge}>
+            <View style={styles.exerciseTitleBlock}>
+              <Text style={styles.exerciseName} numberOfLines={1}>{exercise.name}</Text>
+              <Text style={styles.exerciseMeta}>
+                {exercise.sets.length} set{exercise.sets.length === 1 ? '' : 's'} · {totalReps} reps
+              </Text>
+            </View>
+            <View style={[styles.avgScoreBadge, { backgroundColor: getScoreTint(avgScore) }]}>
               <Target size={10} color={avgScoreColor} strokeWidth={1.5} />
               <MonoText style={[styles.avgScoreText, { color: avgScoreColor }]}>{avgScore}</MonoText>
             </View>
@@ -112,7 +186,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                     {set.weight > 0 ? `${set.weight} lbs` : '—'}
                   </Text>
                   <View style={[styles.scoreCellRow, styles.colScore]}>
-                    <MonoText style={[styles.scoreText, { color: scoreColor }]}>
+                    <MonoText style={[styles.scoreText, { color: scoreColor, backgroundColor: getScoreTint(set.formScore) }]}>
                       {set.formScore}
                     </MonoText>
                     {set.notes && (
@@ -125,7 +199,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                     )}
                   </View>
                   <TouchableOpacity
-                    style={styles.colVideo}
+                    style={[styles.videoButton, !recording && styles.videoButtonDisabled]}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     onPress={() => {
                       if (recording) {
@@ -136,8 +210,8 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                     }}
                   >
                     <Video
-                      size={14}
-                      color={recording ? COLORS.accent : 'rgba(255, 255, 255, 0.06)'}
+                      size={13}
+                      color={recording ? COLORS.accent : 'rgba(255, 255, 255, 0.12)'}
                       strokeWidth={1.5}
                     />
                   </TouchableOpacity>
@@ -264,6 +338,12 @@ export const WorkoutDetailsScreen: React.FC = () => {
     ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length)
     : 0;
   const formScoreColor = getScoreColor(avgFormScore);
+  const summaryStats = [
+    { label: 'Duration', value: workout.duration, icon: Clock, color: COLORS.green },
+    { label: 'Exercises', value: `${workout.exercises.length}`, icon: Dumbbell, color: COLORS.accent },
+    { label: 'Sets', value: `${totalSets}`, icon: Layers, color: COLORS.yellow },
+    { label: 'Reps', value: `${totalReps}`, icon: Target, color: COLORS.textSecondary },
+  ];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -278,13 +358,16 @@ export const WorkoutDetailsScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 140 + Math.max(insets.bottom, SPACING.lg) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
           {/* ═══════════════════════════════════════════
-              WORKOUT SUMMARY — Compact inline card
+              WORKOUT SUMMARY - readiness-style card
               ═══════════════════════════════════════════ */}
           <LinearGradient
             colors={[...CARD_GRADIENT_ELEVATED]}
@@ -293,32 +376,39 @@ export const WorkoutDetailsScreen: React.FC = () => {
             style={styles.summaryCard}
           >
             <View style={styles.summaryEdge}>
-              {/* Title row */}
-              <View style={styles.summaryTitleRow}>
-                <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
-                <Text style={styles.summaryTitle}>WORKOUT SUMMARY</Text>
+              <View style={styles.summaryHeaderRow}>
+                <View style={styles.summaryTitleRow}>
+                  <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
+                  <Text style={styles.summaryTitle}>WORKOUT SUMMARY</Text>
+                </View>
+                <View style={styles.summaryDatePill}>
+                  <Calendar size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  <Text style={styles.summaryDatePillText}>{workout.date}</Text>
+                </View>
               </View>
-              {/* Inline stats row */}
-              <View style={styles.summaryStatsRow}>
-                <View style={styles.summaryStat}>
-                  <MonoText style={[styles.summaryScoreValue, { color: formScoreColor }]}>{avgFormScore}</MonoText>
-                  <Text style={styles.summaryStatLabel}>form</Text>
+
+              <View style={styles.summaryMain}>
+                <ScoreRing score={avgFormScore} color={formScoreColor} />
+                <View style={styles.summaryCopy}>
+                  <Text style={[styles.summaryStatus, { color: formScoreColor }]}>
+                    {getScoreStatus(avgFormScore)}
+                  </Text>
+                  <Text style={styles.summaryHint}>
+                    {getScoreHint(avgFormScore)}
+                  </Text>
                 </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryStat}>
-                  <Text style={styles.summaryStatValue}>{workout.date}</Text>
-                  <Text style={styles.summaryStatLabel}>date</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryStat}>
-                  <Text style={styles.summaryStatValue}>{workout.duration}</Text>
-                  <Text style={styles.summaryStatLabel}>duration</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryStat}>
-                  <Text style={styles.summaryStatValue}>{totalSets}×{totalReps}</Text>
-                  <Text style={styles.summaryStatLabel}>sets×reps</Text>
-                </View>
+              </View>
+
+              <View style={styles.summaryStatsGrid}>
+                {summaryStats.map(({ label, value, icon: Icon, color }) => (
+                  <View key={label} style={styles.summaryStatTile}>
+                    <Icon size={13} color={color} strokeWidth={1.5} />
+                    <View style={styles.summaryStatTextWrap}>
+                      <Text style={styles.summaryStatLabel}>{label}</Text>
+                      <Text style={styles.summaryStatValue} numberOfLines={1}>{value}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
             </View>
           </LinearGradient>
@@ -453,14 +543,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 160,
   },
 
   /* ── Summary Card ────────────────────────────── */
   summaryCard: {
     borderRadius: CARD_RADIUS,
-    marginTop: 6,
-    marginBottom: 2,
+    marginTop: 8,
+    marginBottom: 4,
     ...CARD_SHADOW,
     overflow: 'hidden',
   },
@@ -469,9 +558,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    gap: 11,
+    padding: 16,
+    gap: 16,
+  },
+  summaryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   summaryTitleRow: {
     flexDirection: 'row',
@@ -484,24 +578,90 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     letterSpacing: 1.6,
   },
-  summaryStatsRow: {
+  summaryDatePill: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
-  summaryStat: {
-    flex: 1,
+  summaryDatePillText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  summaryMain: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 16,
   },
-  summaryScoreValue: {
+  scoreRing: {
+    width: SUMMARY_RING_SIZE,
+    height: SUMMARY_RING_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreRingValueWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreRingValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 17,
+    fontSize: 21,
+    lineHeight: 25,
+  },
+  scoreRingUnit: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 8,
+    color: COLORS.textTertiary,
+    letterSpacing: 1,
+  },
+  summaryCopy: {
+    flex: 1,
+    gap: 5,
+  },
+  summaryStatus: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  summaryHint: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
+  },
+  summaryStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  summaryStatTile: {
+    width: '48%',
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.032)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  summaryStatTextWrap: {
+    flex: 1,
+    gap: 1,
   },
   summaryStatValue: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontSize: 13.5,
     color: COLORS.text,
-    letterSpacing: -0.2,
   },
   summaryStatLabel: {
     fontFamily: FONTS.ui.regular,
@@ -509,11 +669,6 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 1,
-  },
-  summaryDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* ── Section Headers ─────────────────────────── */
@@ -581,7 +736,7 @@ const styles = StyleSheet.create({
   /* ── Exercise Cards ──────────────────────────── */
   cardOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: 10,
+    marginBottom: 12,
     ...CARD_SHADOW,
   },
   cardGradient: {
@@ -593,29 +748,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 13,
+    padding: 14,
   },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
-    gap: 10,
+    marginBottom: 15,
+    gap: 12,
+  },
+  exerciseTitleBlock: {
+    flex: 1,
+    gap: 3,
   },
   exerciseName: {
-    flex: 1,
-    fontSize: 14.5,
+    fontSize: 16,
     fontFamily: FONTS.display.semibold,
     color: COLORS.text,
-    letterSpacing: -0.3,
+  },
+  exerciseMeta: {
+    fontSize: 11.5,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
   },
   avgScoreBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   avgScoreText: {
     fontSize: 13,
@@ -623,13 +787,15 @@ const styles = StyleSheet.create({
   },
   setsHeader: {
     flexDirection: 'row',
-    paddingBottom: 8,
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    paddingBottom: 9,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
     marginBottom: SPACING.xs,
   },
   setsHeaderText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
     textTransform: 'uppercase',
@@ -637,7 +803,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   colSet: {
-    width: 32,
+    width: 36,
     textAlign: 'center',
   },
   colReps: {
@@ -655,28 +821,29 @@ const styles = StyleSheet.create({
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.035)',
   },
   setRowLast: {
     borderBottomWidth: 0,
   },
   setNumWrapper: {
-    width: 30,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 32,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   setNumText: {
     fontSize: 12,
-    fontFamily: FONTS.mono.regular,
+    fontFamily: FONTS.mono.bold,
     color: COLORS.textSecondary,
   },
   setCell: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
     textAlign: 'center',
@@ -688,7 +855,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   scoreText: {
-    fontSize: 14,
+    minWidth: 36,
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    fontSize: 13.5,
     fontFamily: FONTS.mono.bold,
     textAlign: 'center',
   },
@@ -710,9 +882,20 @@ const styles = StyleSheet.create({
 
   /* ── Video column ──────────────────────────── */
   colVideo: {
-    width: 28,
+    width: 30,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+  },
+  videoButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
+  },
+  videoButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
   },
 
   /* ── Video Player Modal ────────────────────── */

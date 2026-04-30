@@ -330,7 +330,10 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="FriendProfile"
             component={FriendProfileScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="FriendComparison"
@@ -355,7 +358,10 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="UserProfile"
             component={UserProfileScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="Tutorials"

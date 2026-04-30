@@ -11,10 +11,9 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Platform,
   TextInput,
 } from 'react-native';
-import { UserPlus, Check, X, Users, Search } from 'lucide-react-native';
+import { UserPlus, Users, Search, Check, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -31,16 +30,16 @@ import { useFriends } from '../../../backend/hooks';
 import { Friend, FriendRequest, SuggestedFriend } from '../../../backend/services/api/types';
 import { FriendRow } from '../../components/ui/FriendRow';
 
-// ── Pending Requests Banner ───────────────────────────────────
+// ── Friend Request Row ───────────────────────────────────────
 
-const RequestItem = memo(({
+const RequestRow = memo(({
   request,
   onAccept,
   onDecline,
 }: {
   request: FriendRequest;
-  onAccept: (id: string) => void;
-  onDecline: (id: string) => void;
+  onAccept: (friendshipId: string) => void;
+  onDecline: (friendshipId: string) => void;
 }) => (
   <View style={styles.requestRow}>
     <View style={styles.requestAvatar}>
@@ -52,20 +51,21 @@ const RequestItem = memo(({
       <Text style={styles.requestName} numberOfLines={1}>
         {request.fromDisplayName}
       </Text>
+      <Text style={styles.requestSubtitle}>Wants to connect</Text>
     </View>
     <TouchableOpacity
-      style={styles.acceptButton}
+      style={[styles.requestAction, styles.requestAccept]}
       onPress={() => onAccept(request.friendshipId)}
       activeOpacity={0.7}
     >
-      <Check size={16} color="#34E0A6" />
+      <Check size={15} color={COLORS.green} strokeWidth={2} />
     </TouchableOpacity>
     <TouchableOpacity
-      style={styles.declineButton}
+      style={[styles.requestAction, styles.requestDecline]}
       onPress={() => onDecline(request.friendshipId)}
       activeOpacity={0.7}
     >
-      <X size={16} color={COLORS.textTertiary} />
+      <X size={15} color={COLORS.textTertiary} strokeWidth={2} />
     </TouchableOpacity>
   </View>
 ));
@@ -118,37 +118,42 @@ export const FriendsView: React.FC = memo(() => {
     respondToRequest,
   } = useFriends();
 
-  const handleCompare = useCallback((userId: string) => {
-    navigation.navigate('FriendComparison', { friendId: userId });
-  }, [navigation]);
-
   const handleFriendPress = useCallback((userId: string) => {
     navigation.navigate('FriendProfile', { userId });
   }, [navigation]);
-
-  const handleAccept = useCallback((friendshipId: string) => {
-    respondToRequest(friendshipId, true);
-  }, [respondToRequest]);
-
-  const handleDecline = useCallback((friendshipId: string) => {
-    respondToRequest(friendshipId, false);
-  }, [respondToRequest]);
 
   const handleAddSuggested = useCallback((userId: string) => {
     sendRequest(userId);
   }, [sendRequest]);
 
+  const handleAcceptRequest = useCallback((friendshipId: string) => {
+    respondToRequest(friendshipId, true);
+  }, [respondToRequest]);
+
+  const handleDeclineRequest = useCallback((friendshipId: string) => {
+    respondToRequest(friendshipId, false);
+  }, [respondToRequest]);
+
   const handleAddFriend = useCallback(() => {
     navigation.navigate('AddFriend');
   }, [navigation]);
 
-  const renderFriend = useCallback(({ item }: { item: Friend }) => (
+  const renderFriend = useCallback(({ item, index }: { item: Friend; index: number }) => (
     <FriendRow
       friend={item}
-      onCompare={handleCompare}
       onPress={handleFriendPress}
+      position={
+        friends.length === 1
+          ? 'single'
+          : index === 0
+            ? 'first'
+            : index === friends.length - 1
+              ? 'last'
+              : 'middle'
+      }
+      isCurrentUser={item.displayName.toLowerCase() === 'you'}
     />
-  ), [handleCompare, handleFriendPress]);
+  ), [friends.length, handleFriendPress]);
 
   const keyExtractor = useCallback((item: Friend) => item.friendshipId, []);
 
@@ -187,23 +192,24 @@ export const FriendsView: React.FC = memo(() => {
         </View>
       </LinearGradient>
 
-      {/* Pending requests */}
       {pendingRequests.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionLabel}>REQUESTS</Text>
-            <View style={styles.countBadge}>
-              <Text style={styles.countText}>{pendingRequests.length}</Text>
+            <Text style={styles.sectionLabel}>Requests</Text>
+            <View style={styles.requestCountBadge}>
+              <Text style={styles.requestCountText}>{pendingRequests.length}</Text>
             </View>
           </View>
-          {pendingRequests.map(request => (
-            <RequestItem
-              key={request.friendshipId}
-              request={request}
-              onAccept={handleAccept}
-              onDecline={handleDecline}
-            />
-          ))}
+          <View style={styles.requestsList}>
+            {pendingRequests.map(request => (
+              <RequestRow
+                key={request.friendshipId}
+                request={request}
+                onAccept={handleAcceptRequest}
+                onDecline={handleDeclineRequest}
+              />
+            ))}
+          </View>
         </View>
       )}
 
@@ -211,7 +217,7 @@ export const FriendsView: React.FC = memo(() => {
       {suggestedFriends.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionLabel}>SUGGESTED FOR YOU</Text>
+            <Text style={styles.sectionLabel}>Suggested for you</Text>
             <TouchableOpacity onPress={handleAddFriend} activeOpacity={0.7}>
               <Text style={styles.seeAllText}>See all</Text>
             </TouchableOpacity>
@@ -231,14 +237,22 @@ export const FriendsView: React.FC = memo(() => {
       {/* Friends header */}
       {friends.length > 0 && (
         <View style={styles.friendsHeader}>
-          <Text style={styles.sectionLabelInline}>FRIENDS</Text>
-          <Text style={styles.friendsCount}>{friends.length}</Text>
+          <Text style={styles.sectionLabelInline}>Your Friends</Text>
           <View style={{ flex: 1 }} />
+          <Text style={styles.friendsMetricHeader}>This Week</Text>
           <Text style={styles.friendsMetricHeader}>Avg Form Score</Text>
         </View>
       )}
     </View>
-  ), [pendingRequests, suggestedFriends, friends.length, handleAccept, handleDecline, handleAddSuggested, handleAddFriend]);
+  ), [
+    pendingRequests,
+    suggestedFriends,
+    friends.length,
+    handleAcceptRequest,
+    handleDeclineRequest,
+    handleAddSuggested,
+    handleAddFriend,
+  ]);
 
   if (isLoading && friends.length === 0) {
     return (
@@ -292,15 +306,6 @@ export const FriendsView: React.FC = memo(() => {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* FAB */}
-      {friends.length > 0 && (
-        <View style={styles.fabWrapper} pointerEvents="box-none">
-          <TouchableOpacity style={styles.fab} onPress={handleAddFriend} activeOpacity={0.8}>
-            <UserPlus size={16} color={COLORS.primary} />
-            <Text style={styles.fabText}>Add Friend</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 });
@@ -316,20 +321,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   listContent: {
-    paddingTop: 2,
-    paddingBottom: 120,
+    paddingTop: 0,
+    paddingBottom: 96,
   },
   searchShell: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginHorizontal: SPACING.screenHorizontal,
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: 2,
+    marginBottom: 9,
     paddingHorizontal: 12,
-    height: 38,
+    height: 39,
     borderRadius: 9,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.055)',
   },
@@ -344,12 +349,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 12,
+    marginBottom: 14,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingVertical: 13,
+    paddingVertical: 12,
     ...CARD_SHADOW,
   },
   statItem: {
@@ -359,9 +364,9 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontSize: 17,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   statLabel: {
     fontFamily: FONTS.ui.regular,
@@ -374,29 +379,37 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   section: {
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
     paddingHorizontal: SPACING.screenHorizontal,
-    marginBottom: SPACING.sm,
+    marginBottom: 8,
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 2,
+    fontSize: 11.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
   },
-  sectionLabelPadded: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 2,
-    paddingHorizontal: SPACING.screenHorizontal,
-    marginBottom: SPACING.sm,
+  requestCountBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 7,
+    backgroundColor: 'rgba(122, 85, 255, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.28)',
+  },
+  requestCountText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 10,
+    color: COLORS.primary,
   },
   seeAllText: {
     fontFamily: FONTS.ui.regular,
@@ -405,91 +418,86 @@ const styles = StyleSheet.create({
   },
   sectionLabelInline: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 2,
-  },
-  countBadge: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
-  },
-  countText: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 11,
-    color: COLORS.primary,
+    fontSize: 11.5,
+    color: COLORS.text,
+    letterSpacing: 0,
   },
   friendsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 10,
+    paddingTop: 8,
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  friendsCount: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
+    paddingBottom: 8,
+    gap: 14,
   },
   friendsMetricHeader: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
     color: COLORS.textTertiary,
   },
+  requestsList: {
+    marginHorizontal: SPACING.screenHorizontal,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.085)',
+    backgroundColor: 'rgba(24, 30, 35, 0.62)',
+  },
   requestRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.screenHorizontal,
+    minHeight: 54,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
   requestAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
+    borderColor: 'rgba(122, 85, 255, 0.18)',
   },
   requestAvatarText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontSize: 12,
     color: COLORS.text,
   },
   requestInfo: {
     flex: 1,
-    marginLeft: SPACING.md,
+    marginLeft: 10,
   },
   requestName: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 14,
+    fontSize: 12.5,
     color: COLORS.text,
   },
-  acceptButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(52, 211, 153, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.2)',
+  requestSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+    marginTop: 2,
   },
-  declineButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  requestAction: {
+    width: 31,
+    height: 31,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: SPACING.xs,
+    marginLeft: 7,
     borderWidth: 1,
+  },
+  requestAccept: {
+    backgroundColor: 'rgba(52, 224, 166, 0.08)',
+    borderColor: 'rgba(52, 224, 166, 0.2)',
+  },
+  requestDecline: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   suggestedList: {
@@ -498,13 +506,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(31, 39, 45, 0.72)',
+    borderTopColor: 'rgba(255, 255, 255, 0.085)',
+    backgroundColor: 'rgba(24, 30, 35, 0.72)',
   },
   suggestedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
@@ -539,8 +548,8 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
   followButton: {
-    minWidth: 58,
-    height: 30,
+    minWidth: 62,
+    height: 31,
     borderRadius: 8,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
@@ -549,7 +558,7 @@ const styles = StyleSheet.create({
   },
   followText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontSize: 11.5,
     color: COLORS.text,
   },
   emptyContainer: {
@@ -617,38 +626,5 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.bold,
     fontSize: 13,
     color: COLORS.primary,
-  },
-  fabWrapper: {
-    position: 'absolute',
-    bottom: 100,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  fab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 22,
-    backgroundColor: 'rgba(139, 92, 246, 0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  fabText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.primary,
-    letterSpacing: 0.3,
   },
 });

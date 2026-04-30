@@ -6,9 +6,7 @@ import React, { memo } from 'react';
 import { Image, View, Text, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING ,
-  CARD_SHADOW
-} from '../../constants/theme';
+import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { LeaderboardEntry } from '../../../backend/services/api/types';
 
 interface Top3PodiumProps {
@@ -16,12 +14,12 @@ interface Top3PodiumProps {
 }
 
 const PODIUM_COLORS = ['#F5A623', '#A1A1AA', '#CD7F32']; // Gold, Silver, Bronze
-const PODIUM_GRADIENTS: [string, string][] = [
-  ['rgba(255, 255, 255, 0.06)', 'rgba(255, 255, 255, 0.024)'],
-  ['rgba(255, 255, 255, 0.060)', 'rgba(255, 255, 255, 0.020)'],
-  ['rgba(255, 255, 255, 0.060)', 'rgba(255, 255, 255, 0.020)'],
+const PODIUM_GRADIENTS: [string, string, string][] = [
+  ['rgba(244, 164, 38, 0.16)', 'rgba(255, 255, 255, 0.055)', 'rgba(255, 255, 255, 0.018)'],
+  ['rgba(255, 255, 255, 0.070)', 'rgba(255, 255, 255, 0.038)', 'rgba(255, 255, 255, 0.016)'],
+  ['rgba(205, 127, 50, 0.13)', 'rgba(255, 255, 255, 0.044)', 'rgba(255, 255, 255, 0.016)'],
 ];
-const PODIUM_HEIGHTS = [214, 176, 176];
+const PODIUM_HEIGHTS = [150, 124, 124];
 
 const PodiumItem = memo(({ entry, index }: { entry: LeaderboardEntry; index: number }) => {
   const isFirst = index === 0;
@@ -31,38 +29,39 @@ const PodiumItem = memo(({ entry, index }: { entry: LeaderboardEntry; index: num
 
   return (
     <View style={[styles.podiumItem, isFirst && styles.podiumItemFirst]}>
+      <View style={[
+        styles.avatarDock,
+        { bottom: podiumHeight + 10 },
+        isFirst && Platform.OS === 'ios' && {
+          shadowColor: podiumColor,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.42,
+          shadowRadius: 14,
+        },
+      ]}>
+        <View style={[styles.avatar, isFirst && styles.avatarFirst, { borderColor: podiumColor }]}>
+          {entry.avatarUrl ? (
+            <Image source={{ uri: entry.avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={[styles.avatarText, isFirst && styles.avatarTextFirst]}>
+              {entry.displayName.charAt(0).toUpperCase()}
+            </Text>
+          )}
+        </View>
+        {isFirst && (
+          <View style={styles.crownContainer}>
+            <Crown size={14} color="#F5A623" fill="#F5A623" />
+          </View>
+        )}
+      </View>
+
       <LinearGradient
         colors={gradient}
         start={{ x: 0.2, y: 0 }}
         end={{ x: 0.8, y: 1 }}
         style={[styles.card, { height: podiumHeight }, isFirst && styles.cardFirst]}
       >
-        <View style={[styles.cardEdge, { borderColor: `${podiumColor}35` }, isFirst && styles.cardEdgeFirst]}>
-          <View style={[
-            styles.avatarOuter,
-            isFirst && Platform.OS === 'ios' && {
-              shadowColor: podiumColor,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.42,
-              shadowRadius: 14,
-            },
-          ]}>
-            <View style={[styles.avatar, isFirst && styles.avatarFirst, { borderColor: podiumColor }]}>
-              {entry.avatarUrl ? (
-                <Image source={{ uri: entry.avatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <Text style={[styles.avatarText, isFirst && styles.avatarTextFirst]}>
-                  {entry.displayName.charAt(0).toUpperCase()}
-                </Text>
-              )}
-            </View>
-            {isFirst && (
-              <View style={styles.crownContainer}>
-                <Crown size={14} color="#F5A623" fill="#F5A623" />
-              </View>
-            )}
-          </View>
-
+        <View style={[styles.cardEdge, { borderColor: `${podiumColor}45` }, isFirst && styles.cardEdgeFirst]}>
           <View style={[styles.rankBadge, { backgroundColor: podiumColor }]}>
             <Text style={[styles.rankBadgeText, index === 1 && styles.rankBadgeTextDark]}>
               {entry.rank}
@@ -103,8 +102,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 14,
-    paddingBottom: 0,
+    paddingTop: 96,
+    paddingBottom: 6,
     gap: 5,
   },
   podiumItem: {
@@ -115,38 +114,42 @@ const styles = StyleSheet.create({
     flex: 1.06,
   },
   card: {
-    borderTopLeftRadius: 13,
-    borderTopRightRadius: 13,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-
-    ...CARD_SHADOW,
-},
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 7,
+    borderBottomRightRadius: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+  },
   cardFirst: {
-    backgroundColor: 'rgba(245, 166, 35, 0.08)',
+    backgroundColor: 'rgba(245, 166, 35, 0.075)',
   },
   cardEdge: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 20,
+    justifyContent: 'flex-end',
+    paddingTop: 16,
+    paddingBottom: 11,
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 13,
-    borderTopRightRadius: 13,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 7,
+    borderBottomRightRadius: 7,
   },
   cardEdgeFirst: {
     paddingTop: 18,
+    paddingBottom: 13,
   },
-  avatarOuter: {
-    marginBottom: 8,
+  avatarDock: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 2,
+    alignItems: 'center',
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -154,9 +157,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatarFirst: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
     borderWidth: 2,
   },
   avatarImage: {
@@ -165,15 +168,15 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 19,
     color: COLORS.text,
   },
   avatarTextFirst: {
-    fontSize: 24,
+    fontSize: 23,
   },
   crownContainer: {
     position: 'absolute',
-    top: -11,
+    top: -10,
     alignSelf: 'center',
   },
   rankBadge: {
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
   },
   rankBadgeText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontSize: 15,
     color: '#11181D',
   },
   rankBadgeTextDark: {
@@ -194,24 +197,24 @@ const styles = StyleSheet.create({
   },
   name: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.text,
     textAlign: 'center',
     marginBottom: 5,
   },
   nameFirst: {
-    fontSize: 13,
+    fontSize: 12,
   },
   score: {
-    fontFamily: FONTS.mono.bold,
+    fontFamily: FONTS.ui.bold,
     fontSize: 18,
     color: COLORS.text,
     textAlign: 'center',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   pointsLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.textSecondary,
   },
 });

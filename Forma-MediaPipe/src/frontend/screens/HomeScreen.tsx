@@ -556,14 +556,14 @@ const styles = StyleSheet.create({
   greetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 16,
     paddingTop: 6,
     paddingBottom: 18,
   },
   avatarWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.055)',
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 23,
     color: '#FFFFFF',
   },
   greetingTextWrap: { flex: 1, gap: 1 },

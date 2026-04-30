@@ -89,7 +89,9 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
         <View style={styles.cardEdge}>
           {/* Header row */}
           <View style={styles.header}>
-            <Icon size={16} color={config.color} strokeWidth={1.5} />
+            <View style={[styles.eventIconWrap, { backgroundColor: `${config.color}12` }]}>
+              <Icon size={15} color={config.color} strokeWidth={1.7} />
+            </View>
 
             <View style={styles.headerText}>
               <Text style={styles.name} numberOfLines={1}>
@@ -101,7 +103,7 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
             </View>
 
             {formScore != null && (
-              <View style={[styles.scoreBadge, { borderColor: `${getScoreColor(formScore)}25` }]}>
+              <View style={[styles.scoreBadge, { borderColor: `${getScoreColor(formScore)}24` }]}>
                 <Text style={[styles.scoreText, { color: getScoreColor(formScore) }]}>
                   {formScore}
                 </Text>
@@ -110,7 +112,7 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
           </View>
 
           {/* Description */}
-          <Text style={styles.description}>{caption || description}</Text>
+          <Text style={styles.description} numberOfLines={2}>{caption || description}</Text>
 
           {showMediaSummary && (
             <View style={styles.mediaBlock}>
@@ -229,46 +231,57 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
 const styles = StyleSheet.create({
   cardOuter: {
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 12,
-    borderRadius: 18,
+    marginBottom: 10,
+    borderRadius: 16,
     ...CARD_SHADOW,
   },
   card: {
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   cardEdge: {
-    padding: 12,
-    borderRadius: 18,
+    padding: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.085)',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  eventIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   headerText: {
     flex: 1,
-    marginLeft: SPACING.sm,
+    marginLeft: 10,
   },
   name: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 14,
+    fontSize: 14.5,
     color: COLORS.text,
   },
   timestamp: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 11.5,
     color: COLORS.textTertiary,
-    marginTop: 1,
+    marginTop: 2,
   },
   scoreBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    minWidth: 46,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 12,
     borderWidth: 1,
   },
   scoreText: {
@@ -277,49 +290,48 @@ const styles = StyleSheet.create({
   },
   description: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontSize: 13.5,
     color: COLORS.textSecondary,
-    lineHeight: 19,
-    marginBottom: 8,
+    lineHeight: 18,
+    marginBottom: 10,
   },
   mediaBlock: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    backgroundColor: 'rgba(8, 12, 16, 0.16)',
-    padding: 8,
+    borderColor: 'rgba(255, 255, 255, 0.045)',
+    backgroundColor: 'rgba(7, 10, 13, 0.18)',
+    padding: 9,
   },
   mediaImageFrame: {
-    width: 104,
-    height: 84,
-    borderRadius: 10,
+    width: 94,
+    height: 76,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
-    backgroundColor: 'rgba(255, 255, 255, 0.024)',
+    backgroundColor: 'transparent',
   },
   mediaImage: {
-    width: 88,
-    height: 76,
+    width: 82,
+    height: 70,
   },
   mediaSummary: {
     flex: 1,
     paddingLeft: 12,
-    paddingRight: 6,
-    paddingVertical: 6,
+    paddingRight: 4,
+    paddingVertical: 4,
     justifyContent: 'center',
   },
   workoutName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12.5,
+    fontSize: 13,
     color: COLORS.text,
-    letterSpacing: -0.1,
+    letterSpacing: 0,
   },
   summaryMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
+    fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 3,
   },
@@ -349,26 +361,25 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   exerciseList: {
-    marginTop: 8,
+    marginTop: 10,
+    paddingTop: 2,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
+    paddingVertical: 6,
   },
   exerciseName: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 11,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11.5,
     color: COLORS.textSecondary,
   },
   exerciseSets: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: COLORS.textTertiary,
   },
 
@@ -376,15 +387,18 @@ const styles = StyleSheet.create({
   reactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    marginTop: 8,
+    gap: 4,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   likeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 5,
     borderRadius: 8,
   },
   likeCount: {
@@ -399,14 +413,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
   },
   emojiPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
     borderRadius: 10,
   },
   emojiPillActive: {

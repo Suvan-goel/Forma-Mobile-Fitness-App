@@ -54,13 +54,13 @@ const TableHeader = memo(() => (
     <Text style={[styles.tableHeaderText, styles.rankColumn]}>Rank</Text>
     <Text style={[styles.tableHeaderText, styles.athleteColumn]}>Athlete</Text>
     <Text style={[styles.tableHeaderText, styles.scoreColumn]}>Form Score</Text>
-    <Text style={[styles.tableHeaderText, styles.streakColumn]}>Trend</Text>
+    <Text style={[styles.tableHeaderText, styles.streakColumn]}>Streak</Text>
   </View>
 ));
 
 export const LeaderboardView: React.FC = memo(() => {
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('1_week');
-  const { entries, currentUser, totalParticipants, isLoading, error, refetch } = useLeaderboard('form_score', timeWindow);
+  const { entries, currentUser, isLoading, error, refetch } = useLeaderboard('form_score', timeWindow);
 
   const top3 = useMemo(() => entries.slice(0, 3), [entries]);
   const rest = useMemo(() => entries.slice(3), [entries]);
@@ -68,12 +68,14 @@ export const LeaderboardView: React.FC = memo(() => {
   const currentUserId = currentUser?.userId;
   const showStickyBanner = currentUser && currentUser.rank > 10;
 
-  const renderItem = useCallback(({ item }: { item: LeaderboardEntry }) => (
+  const renderItem = useCallback(({ item, index }: { item: LeaderboardEntry; index: number }) => (
     <LeaderboardRow
       entry={item}
       isCurrentUser={item.userId === currentUserId}
+      isFirstRow={index === 0}
+      isLastRow={index === rest.length - 1}
     />
-  ), [currentUserId]);
+  ), [currentUserId, rest.length]);
 
   const keyExtractor = useCallback((item: LeaderboardEntry) => item.userId, []);
 
@@ -101,15 +103,10 @@ export const LeaderboardView: React.FC = memo(() => {
         <>
           <Top3Podium entries={top3} />
           <TableHeader />
-          <View style={styles.listHeaderRow}>
-            <Text style={styles.listHeaderText}>
-              {totalParticipants} participants
-            </Text>
-          </View>
         </>
       )}
     </View>
-  ), [timeWindow, isLoading, error, entries.length, top3, totalParticipants, refetch]);
+  ), [timeWindow, isLoading, error, entries.length, top3, refetch]);
 
   return (
     <View style={styles.container}>
@@ -150,20 +147,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 118,
+    paddingBottom: 106,
   },
 
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: SPACING.screenHorizontal,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.md,
+    alignSelf: 'center',
+    width: '78%',
+    maxWidth: 320,
+    minWidth: 260,
+    marginTop: 2,
+    marginBottom: 0,
     padding: 3,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   timeSegment: {
     flex: 1,
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   timeSegmentActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(122, 85, 255, 0.16)',
   },
   timeSegmentText: {
     fontFamily: FONTS.ui.bold,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.screenHorizontal,
     paddingHorizontal: 12,
     paddingTop: 2,
-    paddingBottom: 8,
+    paddingBottom: 7,
   },
   tableHeaderText: {
     fontFamily: FONTS.ui.regular,
@@ -198,28 +198,18 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
   rankColumn: {
-    width: 38,
+    width: 56,
   },
   athleteColumn: {
     flex: 1,
   },
   scoreColumn: {
-    width: 88,
+    width: 84,
     textAlign: 'right',
   },
   streakColumn: {
     width: 48,
-    textAlign: 'right',
-  },
-
-  listHeaderRow: {
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: SPACING.sm,
-  },
-  listHeaderText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
+    textAlign: 'center',
   },
 
   loadingContainer: {

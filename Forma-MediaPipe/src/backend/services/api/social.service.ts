@@ -152,6 +152,7 @@ export const socialService = {
       displayName: row.display_name,
       avatarUrl: row.avatar_url ?? undefined,
       score: Number(row.score),
+      streakDays: row.streak_days != null ? Number(row.streak_days) : undefined,
     }));
 
     const currentUser = entries.find(e => e.userId === user.id) ?? null;
@@ -174,6 +175,7 @@ export const socialService = {
             displayName: userRow.display_name,
             avatarUrl: userRow.avatar_url ?? undefined,
             score: Number(userRow.score),
+            streakDays: userRow.streak_days != null ? Number(userRow.streak_days) : undefined,
           };
         }
       }

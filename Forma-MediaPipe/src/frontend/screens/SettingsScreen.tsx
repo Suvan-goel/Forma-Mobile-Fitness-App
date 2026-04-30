@@ -20,7 +20,6 @@ import {
   MessageSquare,
   Info,
   X,
-  Settings as SettingsIcon,
 } from 'lucide-react-native';
 import type { WeeklyTrainingTarget } from '../../backend/hooks/useWorkoutPreferences';
 import {
@@ -30,8 +29,11 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
-  CARD_SHADOW
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  CARD_SHADOW,
 } from '../constants/theme';
+import { ScreenBackground } from '../components/ui';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useWorkoutPreferences, useUser } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
@@ -190,7 +192,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -202,14 +204,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={styles.headerName}>SETTINGS</Text>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Settings')}
-          activeOpacity={0.7}
-          style={styles.headerIconBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
-        </TouchableOpacity>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
@@ -434,7 +429,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </ScreenBackground>
   );
 };
 
@@ -448,9 +443,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 6,
+    paddingTop: 4,
     paddingBottom: 12,
   },
   backBtn: {
@@ -460,26 +454,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: -6,
   },
-  headerIconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoWrap: {
-    width: 50,
-    height: 55,
-    borderRadius: 13,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 55,
-    height: 55,
-  },
-  headerTextWrap: {
-    gap: 1,
+  headerSpacer: {
+    width: 28,
   },
   headerName: {
     fontFamily: FONTS.display.bold,
@@ -488,41 +464,6 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     flex: 1,
     textAlign: 'left',
-  },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  profileBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  profileGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profilePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#27272A',
-  },
-  profileInitial: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
-    color: '#FFFFFF',
   },
   scroll: {
     flex: 1,
@@ -533,71 +474,13 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
 
-  /* Profile Card */
-  profileCard: {
-    borderRadius: 22,
-    marginTop: 18,
-    marginBottom: 8,
-
-    ...CARD_SHADOW,
-},
-  profileEdge: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 18,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  avatarGradient: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#27272A',
-  },
-  avatarText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: '#FFFFFF',
-  },
-  profileInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  profileName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-  },
-  profileSub: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-  },
-
   /* Section Headers */
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 16,
-    marginBottom: 7,
+    marginTop: 18,
+    marginBottom: 8,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -605,75 +488,55 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 9.5,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
     color: COLORS.textSecondary,
-    letterSpacing: 1.3,
+    letterSpacing: 1.6,
   },
-
-  /* Card stack — gap between individual cards */
-  cardStack: {
-    gap: 8,
-
-    ...CARD_SHADOW,
-},
 
   /* Individual card */
   cardGradient: {
-    borderRadius: 8,
-
+    borderRadius: CARD_RADIUS,
     ...CARD_SHADOW,
     overflow: 'hidden',
-},
-  cardEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingHorizontal: 14,
-    paddingVertical: 16,
   },
 
   /* Grouped card (multiple rows) */
   groupEdge: {
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    paddingHorizontal: 12,
-    paddingVertical: 2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
   },
   groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
-    paddingVertical: 10,
+    gap: 12,
+    minHeight: 58,
+    paddingVertical: 12,
   },
   rowDivider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    marginLeft: 40,
+    marginLeft: 44,
   },
 
   /* Icon bubble — rounded square containing the row icon */
   iconBubble: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    width: 30,
+    height: 30,
+    borderRadius: CARD_RADIUS_SM,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  /* Row inside card */
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
   rowLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12.5,
+    fontSize: 13.5,
     color: COLORS.text,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
   },
   rowLabelCol: {
     flex: 1,
@@ -681,25 +544,25 @@ const styles = StyleSheet.create({
   },
   rowSubLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 9.75,
+    fontSize: 11,
     color: COLORS.textTertiary,
-    letterSpacing: 0.1,
+    lineHeight: 15,
   },
 
   /* Sign Out button */
   signOutBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 14,
-    paddingVertical: 11,
-    borderRadius: 7,
+    marginTop: 16,
+    paddingVertical: 13,
+    borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(239, 68, 68, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.28)',
   },
   signOutText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11.5,
+    fontSize: 13,
     color: COLORS.red,
     letterSpacing: 0.1,
   },
@@ -738,13 +601,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   modalContent: {
-    backgroundColor: '#1A1625',
-    borderRadius: 20,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: COLORS.borderStrong,
     padding: 22,
     width: '100%',
     maxWidth: 340,
+    ...CARD_SHADOW,
   },
   modalHeader: {
     flexDirection: 'row',

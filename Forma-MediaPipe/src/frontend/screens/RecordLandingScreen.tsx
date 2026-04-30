@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   Modal,
   Image,
+  ImageSourcePropType,
   Animated,
   ScrollView,
   useWindowDimensions,
@@ -96,19 +97,58 @@ const formatDateLine = (): string => {
   return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const TEMPLATE_IMAGES = [
-  require('../assets/exercises/barbell_squat.png'),
-  require('../assets/exercises/barbell_curl.png'),
-  require('../assets/exercises/cable_row.png'),
-  require('../assets/exercises/push_up.png'),
-  require('../assets/exercises/cable_lat_pulldowns.png'),
-  require('../assets/exercises/leg_extensions.png'),
-];
-const DEFAULT_TEMPLATES = [
+type CaptureTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  templateImage?: ImageSourcePropType;
+  exercises: {
+    name: string;
+    category: string;
+    targetSets: number;
+  }[];
+};
+
+const TEMPLATE_IMAGES_BY_NAME: Record<string, ImageSourcePropType> = {
+  'lower body strength': require('../assets/generated/templates/lower-body-strength.png'),
+  'upper body push': require('../assets/generated/templates/push-day.png'),
+  'push day': require('../assets/generated/templates/push-day.png'),
+  'pull strength': require('../assets/generated/templates/pull-day.png'),
+  'pull day': require('../assets/generated/templates/pull-day.png'),
+  'full body': require('../assets/generated/templates/full-body.png'),
+};
+
+const EXERCISE_IMAGES_BY_NAME: Record<string, ImageSourcePropType> = {
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Back Squat': require('../assets/exercises/barbell_squat.png'),
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+};
+
+const DEFAULT_TEMPLATE_IMAGE = require('../assets/generated/templates/full-body.png');
+
+const getTemplateImage = (template: CaptureTemplate): ImageSourcePropType => {
+  const namedTemplate = TEMPLATE_IMAGES_BY_NAME[template.name.trim().toLowerCase()];
+  if (template.templateImage || namedTemplate) {
+    return template.templateImage ?? namedTemplate;
+  }
+
+  return EXERCISE_IMAGES_BY_NAME[template.exercises[0]?.name] ?? DEFAULT_TEMPLATE_IMAGE;
+};
+
+const DEFAULT_TEMPLATES: CaptureTemplate[] = [
   {
     id: 'default-lower-body',
     name: 'Lower Body Strength',
     description: 'Squat-focused lower body session.',
+    templateImage: require('../assets/generated/templates/lower-body-strength.png'),
     exercises: [
       { name: 'Barbell Squat', category: 'Weightlifting', targetSets: 4 },
       { name: 'Leg Extensions', category: 'Weightlifting', targetSets: 3 },
@@ -119,6 +159,7 @@ const DEFAULT_TEMPLATES = [
     id: 'default-upper-push',
     name: 'Upper Body Push',
     description: 'Chest, shoulders, and triceps.',
+    templateImage: require('../assets/generated/templates/push-day.png'),
     exercises: [
       { name: 'Push-Up', category: 'Calisthenics', targetSets: 4 },
       { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting', targetSets: 3 },
@@ -129,6 +170,7 @@ const DEFAULT_TEMPLATES = [
     id: 'default-pull',
     name: 'Pull Strength',
     description: 'Back and biceps session.',
+    templateImage: require('../assets/generated/templates/pull-day.png'),
     exercises: [
       { name: 'Cable Row', category: 'Weightlifting', targetSets: 4 },
       { name: 'Cable Lat Pulldowns', category: 'Weightlifting', targetSets: 3 },
@@ -160,7 +202,7 @@ export const RecordLandingScreen: React.FC = () => {
   const standardSectionHeight = Math.floor(availableSectionHeight * 0.305);
   const templateSectionHeight = Math.max(standardSectionHeight + 18, availableSectionHeight - standardSectionHeight * 2);
   const templateCardHeight = Math.max(132, Math.min(156, templateSectionHeight - 18));
-  const templateThumbHeight = Math.max(74, Math.min(92, templateCardHeight - 58));
+  const templateThumbHeight = Math.max(82, Math.min(104, templateCardHeight - 54));
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -240,7 +282,18 @@ export const RecordLandingScreen: React.FC = () => {
     );
   }
 
-  const recentTemplates = templates.length > 0 ? templates.slice(0, 6) : DEFAULT_TEMPLATES;
+  const recentTemplates: CaptureTemplate[] = templates.length > 0
+    ? templates.slice(0, 6).map(template => ({
+      id: template.id,
+      name: template.name,
+      description: template.description || 'Your saved workout template.',
+      exercises: template.exercises.map(exercise => ({
+        name: exercise.name,
+        category: exercise.category,
+        targetSets: exercise.targetSets,
+      })),
+    }))
+    : DEFAULT_TEMPLATES;
   const templatesLabel = templates.length > 0 ? 'RECENT TEMPLATES' : 'FAVOURITE TEMPLATES';
 
   return (
@@ -473,7 +526,7 @@ export const RecordLandingScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
             <View style={styles.templatesRow}>
-              {recentTemplates.slice(0, 3).map((tmpl, index) => (
+              {recentTemplates.slice(0, 3).map((tmpl) => (
                 <TouchableOpacity
                   key={tmpl.id}
                   style={[styles.templateCard, { height: templateCardHeight }]}
@@ -498,7 +551,7 @@ export const RecordLandingScreen: React.FC = () => {
                   >
                     <View style={[styles.templateThumb, { height: templateThumbHeight }]}>
                       <Image
-                        source={TEMPLATE_IMAGES[index % TEMPLATE_IMAGES.length]}
+                        source={getTemplateImage(tmpl)}
                         style={styles.templateThumbImage}
                         resizeMode="cover"
                       />
@@ -866,15 +919,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingHorizontal: 7,
-    paddingTop: 7,
-    paddingBottom: 10,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 14,
     gap: 6,
     overflow: 'hidden',
   },
   templateThumb: {
-    borderRadius: 0,
-    overflow: 'visible',
+    width: '100%',
+    borderTopLeftRadius: CARD_RADIUS,
+    borderTopRightRadius: CARD_RADIUS,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
@@ -890,6 +945,8 @@ const styles = StyleSheet.create({
   templateInfo: {
     gap: 2,
     flexShrink: 0,
+    paddingHorizontal: 12,
+    paddingBottom: 4,
   },
   templateName: {
     fontFamily: FONTS.display.semibold,
