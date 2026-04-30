@@ -47,9 +47,9 @@ const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
       activeOpacity={0.7}
     >
       <Icon
-        size={20}
+        size={18}
         color={isFocused ? COLORS.accent : COLORS.textTertiary}
-        strokeWidth={isFocused ? 2.2 : 1.8}
+        strokeWidth={isFocused ? 2.25 : 1.65}
       />
       <Text style={[styles.label, isFocused && styles.labelActive]}>{config.label}</Text>
     </TouchableOpacity>
@@ -62,8 +62,7 @@ export const GlassTabBar = memo(({ state, navigation }: any) => {
   const focusedRouteName = getFocusedRouteNameFromRoute(currentTabRoute) ?? currentTabRoute?.name;
 
   const hideTabBar =
-    currentTabRoute?.name === 'Social' ||
-    (currentTabRoute?.name === 'Record' &&
+    currentTabRoute?.name === 'Record' &&
     (focusedRouteName === 'ChooseExercise' ||
      focusedRouteName === 'WorkoutTemplates' ||
      focusedRouteName === 'Camera' ||
@@ -72,7 +71,7 @@ export const GlassTabBar = memo(({ state, navigation }: any) => {
      focusedRouteName === 'WorkoutSettings' ||
      focusedRouteName === 'ExerciseGuide' ||
      focusedRouteName === 'CreateTemplate' ||
-     focusedRouteName === 'TemplatePreview'));
+     focusedRouteName === 'TemplatePreview');
 
   const inner = (
     <View style={styles.barContent}>
@@ -106,33 +105,33 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 100,
-    backgroundColor: '#070A0D',
+    backgroundColor: '#151A1E',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(255,255,255,0.075)',
   },
   bar: {
-    backgroundColor: '#070A0D',
+    backgroundColor: '#151A1E',
   },
   barContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    minHeight: 70,
-    paddingTop: 8,
-    paddingBottom: 9,
+    minHeight: 66,
+    paddingTop: 9,
+    paddingBottom: 7,
     paddingHorizontal: 4,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    minHeight: 52,
+    gap: 4,
+    minHeight: 48,
     paddingVertical: 4,
   },
   label: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 9.5,
     color: COLORS.textTertiary,
     letterSpacing: 0,
   },

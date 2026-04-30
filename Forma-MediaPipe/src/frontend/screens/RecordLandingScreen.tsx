@@ -294,19 +294,9 @@ export const RecordLandingScreen: React.FC = () => {
                 style={styles.activeGradient}
               >
                 <View style={styles.activeEdge}>
-                  <View style={styles.cardLabelRow}>
-                    <Text style={styles.cardLabel}>CURRENT WORKOUT</Text>
-                    <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
-                      <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
-                      <Text style={[styles.statusPillText, workoutPaused && styles.statusPillTextPaused]}>
-                        {workoutPaused ? 'PAUSED' : 'ACTIVE'}
-                      </Text>
-                    </View>
-                  </View>
-
                   <View style={styles.activeBody}>
                     <View style={styles.activeBodyText}>
-                      <Text style={styles.activeWorkoutName}>In Progress</Text>
+                      <Text style={styles.activeWorkoutName}>CURRENT WORKOUT</Text>
                       <View style={styles.timerDisplay}>
                         {getTimerParts(workoutElapsedSeconds).map((part, i) => (
                           <MonoText
@@ -366,15 +356,15 @@ export const RecordLandingScreen: React.FC = () => {
                       onPress={handleDiscardWorkout}
                       activeOpacity={0.7}
                     >
-                      <Trash2 size={13} color="#EF4444" strokeWidth={1.6} />
-                      <Text style={[styles.footerBtnText, { color: '#EF4444' }]}>Discard</Text>
+                      <Trash2 size={13} color={COLORS.red} strokeWidth={1.7} />
+                      <Text style={[styles.footerBtnText, { color: COLORS.red }]}>Discard</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.footerBtn}
                       onPress={handleFinishWorkout}
                       activeOpacity={0.7}
                     >
-                      <Flag size={13} color={COLORS.green} strokeWidth={1.6} />
+                      <Flag size={13} color={COLORS.green} strokeWidth={1.7} />
                       <Text style={[styles.footerBtnText, { color: COLORS.green }]}>Finish</Text>
                     </TouchableOpacity>
                   </View>
@@ -382,7 +372,7 @@ export const RecordLandingScreen: React.FC = () => {
               </LinearGradient>
             </View>
             ) : (
-              /* ── CURRENT WORKOUT (idle) CARD ── */
+              /* ── QUICK START (idle) CARD ── */
               <View style={styles.activeOuter}>
               <LinearGradient
                 colors={[...CARD_GRADIENT_ELEVATED]}
@@ -390,47 +380,46 @@ export const RecordLandingScreen: React.FC = () => {
                 end={CARD_GRADIENT_END}
                 style={styles.activeGradient}
               >
-                <View style={styles.activeEdge}>
-                  <Text style={styles.cardLabel}>CURRENT WORKOUT</Text>
-                  <View style={styles.idleBody}>
+                <View style={[styles.activeEdge, styles.idleEdge]}>
+                  <View style={styles.idleCardContent}>
                     <View style={styles.idleTextWrap}>
-                      <Text style={styles.idleTitle}>Free Session</Text>
+                      <Text style={styles.cardLabel}>READY TO TRAIN</Text>
+                      <Text style={styles.idleTitle}>Start a Session</Text>
                       <View style={styles.idleMetaRow}>
                         <View style={styles.metaIconRow}>
                           <Dumbbell size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
-                          <Text style={styles.metaText}>Free-form</Text>
+                          <Text style={styles.metaText}>Any workout</Text>
                         </View>
                         <View style={styles.metaIconRow}>
                           <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
                           <Text style={styles.metaText}>~30 min</Text>
                         </View>
                       </View>
+
+                      <TouchableOpacity
+                        onPress={handleStartWorkout}
+                        activeOpacity={0.85}
+                        style={styles.idleStartBtnOuter}
+                      >
+                        <LinearGradient
+                          colors={['#7A55FF', '#633FE5']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.idleStartBtn}
+                        >
+                          <Play size={14} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
+                          <Text style={styles.startBtnText}>Start Workout</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
                     </View>
                     <View style={styles.bodyVisual}>
                       <Image
-                        source={require('../assets/exercises/barbell_squat.png')}
+                        source={require('../assets/generated/workout-card-figure.png')}
                         style={styles.bodyVisualImage}
-                        resizeMode="cover"
+                        resizeMode="contain"
                       />
-                      <View style={styles.bodyVisualShade} />
                     </View>
                   </View>
-
-                  <TouchableOpacity
-                    onPress={handleStartWorkout}
-                    activeOpacity={0.85}
-                    style={styles.startBtnOuter}
-                  >
-                    <LinearGradient
-                      colors={['#7A55FF', '#633FE5']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.startBtn}
-                    >
-                      <Play size={14} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
-                      <Text style={styles.startBtnText}>Start Workout</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
                 </View>
               </LinearGradient>
             </View>
@@ -607,11 +596,6 @@ const styles = StyleSheet.create({
   },
 
   /* Card label */
-  cardLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   cardLabel: {
     fontFamily: FONTS.display.semibold,
     fontSize: 8.5,
@@ -633,31 +617,45 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingHorizontal: 13,
-    paddingTop: 11,
-    paddingBottom: 12,
+    paddingHorizontal: 15,
+    paddingTop: 14,
+    paddingBottom: 14,
   },
 
   /* Idle body */
-  idleBody: {
+  idleEdge: {
+    paddingRight: 7,
+    overflow: 'hidden',
+  },
+  idleCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 8,
-    marginBottom: 10,
+    minHeight: 146,
   },
-  idleTextWrap: { flex: 1, gap: 6 },
+  idleTextWrap: {
+    flex: 1,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    gap: 9,
+    paddingRight: 10,
+  },
   idleTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16.5,
+    fontSize: 19,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.35,
+    marginTop: 2,
   },
-  idleMetaRow: { flexDirection: 'row', gap: 10 },
+  idleMetaRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
   bodyVisual: {
-    width: 72,
-    height: 82,
-    borderRadius: 0,
+    width: 108,
+    height: 150,
+    marginRight: -2,
     overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'center',
@@ -666,10 +664,6 @@ const styles = StyleSheet.create({
   bodyVisualImage: {
     width: '100%',
     height: '100%',
-  },
-  bodyVisualShade: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
   },
   metaIconRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: {
@@ -682,98 +676,100 @@ const styles = StyleSheet.create({
   activeBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 14,
     gap: 12,
+    marginTop: 14,
+    marginBottom: 16,
   },
-  activeBodyText: { flex: 1, gap: 6 },
+  activeBodyText: { flex: 1, gap: 7 },
   activeWorkoutName: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: 0,
   },
-  activeMetaRow: { flexDirection: 'row', gap: 14, marginTop: 2 },
-
-  /* Status pill */
-  statusPill: {
+  activeMetaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    gap: 14,
+    marginTop: 1,
   },
-  statusPillPaused: { backgroundColor: 'rgba(245, 166, 35, 0.12)' },
-  statusDot: {
-    width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.green,
-  },
-  statusDotPaused: { backgroundColor: COLORS.yellow },
-  statusPillText: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 9,
-    color: COLORS.green,
-    letterSpacing: 1.2,
-  },
-  statusPillTextPaused: { color: COLORS.yellow },
 
   /* Timer (active) */
   timerDisplay: { flexDirection: 'row', alignItems: 'center' },
   timerDigit: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 28,
+    fontSize: 29,
     color: COLORS.text,
-    lineHeight: 32,
-    letterSpacing: 1.5,
+    lineHeight: 33,
+    letterSpacing: 1.1,
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
     fontSize: 22,
-    color: 'rgba(124,92,255,0.5)',
-    lineHeight: 32,
+    color: 'rgba(122, 85, 255, 0.62)',
+    lineHeight: 33,
     marginHorizontal: 1,
   },
   pauseBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.055)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    width: 42, height: 42, borderRadius: 21,
+    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     alignItems: 'center', justifyContent: 'center',
   },
   pauseBtnActive: {
-    borderColor: 'rgba(124,92,255,0.25)',
-    backgroundColor: 'rgba(124,92,255,0.1)',
+    borderColor: 'rgba(122, 85, 255, 0.32)',
+    backgroundColor: 'rgba(122, 85, 255, 0.14)',
   },
 
   /* Active footer */
   activeFooterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+    borderTopColor: 'rgba(255, 255, 255, 0.045)',
   },
   footerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    minHeight: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   footerBtnText: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 12,
+    fontSize: 11,
   },
 
   /* Start button */
   startBtnOuter: { borderRadius: CARD_RADIUS_SM, overflow: 'hidden' },
+  idleStartBtnOuter: {
+    width: '100%',
+    maxWidth: 218,
+    borderRadius: CARD_RADIUS_SM,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
   startBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    paddingVertical: 10,
+    minHeight: 44,
+    paddingVertical: 11,
+  },
+  idleStartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   startBtnText: {
     fontFamily: FONTS.display.semibold,

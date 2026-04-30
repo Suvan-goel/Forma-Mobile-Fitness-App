@@ -4,7 +4,7 @@
 
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet, TouchableOpacity } from 'react-native';
-import { ChevronLeft, Settings as SettingsIcon } from 'lucide-react-native';
+import { Settings as SettingsIcon } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
@@ -43,14 +43,6 @@ export const SocialScreen: React.FC = memo(() => {
     <View style={styles.container}>
       {/* ── HEADER (matches Rewards style) ── */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
-          activeOpacity={0.7}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
         <Text style={styles.headerName}>SOCIAL</Text>
         <TouchableOpacity
           onPress={() => navigation.navigate('Settings')}
@@ -85,13 +77,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 4,
     paddingBottom: 12,
-  },
-  backBtn: {
-    width: 28,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
   },
   headerName: {
     fontFamily: FONTS.display.bold,
