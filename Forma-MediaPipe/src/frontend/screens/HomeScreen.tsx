@@ -400,27 +400,34 @@ export const HomeScreen: React.FC = () => {
           )}
 
           {/* ── STATS STRIP ──────────────────────────── */}
-          <View style={styles.statsStrip}>
-            <View style={styles.statCell}>
-              <Flame size={14} color={COLORS.yellow} strokeWidth={1.6} />
-              <Text style={styles.statValue}>{homeData.streakDays}</Text>
-              <Text style={styles.statUnit}>days</Text>
-              <Text style={styles.statLabel}>STREAK</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Calendar size={14} color={COLORS.accent} strokeWidth={1.6} />
-              <Text style={styles.statValue}>{homeData.weeklyGoal.current}</Text>
-              <Text style={styles.statUnit}>workouts</Text>
-              <Text style={styles.statLabel}>THIS WEEK</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Trophy size={14} color={COLORS.green} strokeWidth={1.6} />
-              <Text style={styles.statValue}>{homeData.totalPoints.toLocaleString()}</Text>
-              <Text style={styles.statUnit}>pts</Text>
-              <Text style={styles.statLabel}>POINTS</Text>
-            </View>
+          <View style={styles.statsStripOuter}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_ELEVATED]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.statsStrip}
+            >
+              <View style={styles.statCell}>
+                <Flame size={14} color={COLORS.yellow} strokeWidth={1.6} />
+                <Text style={styles.statValue}>{homeData.streakDays}</Text>
+                <Text style={styles.statUnit}>days</Text>
+                <Text style={styles.statLabel}>STREAK</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statCell}>
+                <Calendar size={14} color={COLORS.accent} strokeWidth={1.6} />
+                <Text style={styles.statValue}>{homeData.weeklyGoal.current}</Text>
+                <Text style={styles.statUnit}>workouts</Text>
+                <Text style={styles.statLabel}>THIS WEEK</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statCell}>
+                <Trophy size={14} color={COLORS.green} strokeWidth={1.6} />
+                <Text style={styles.statValue}>{homeData.totalPoints.toLocaleString()}</Text>
+                <Text style={styles.statUnit}>pts</Text>
+                <Text style={styles.statLabel}>POINTS</Text>
+              </View>
+            </LinearGradient>
           </View>
 
           {/* ── CHALLENGES (preserved) ───────────────── */}
@@ -792,19 +799,22 @@ const styles = StyleSheet.create({
   },
 
   /* Stats Strip */
+  statsStripOuter: {
+    borderRadius: CARD_RADIUS,
+    marginBottom: 12,
+    ...CARD_SHADOW,
+  },
   statsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(32, 40, 46, 0.78)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: CARD_RADIUS,
     paddingVertical: 14,
     paddingHorizontal: 6,
-    marginBottom: 12,
-    ...CARD_SHADOW,
+    overflow: 'hidden',
   },
   statCell: {
     flex: 1,

@@ -443,27 +443,34 @@ export const RecordLandingScreen: React.FC = () => {
           {/* ── TOOLS ───────────────────────────────── */}
           <View style={[styles.screenSection, { minHeight: standardSectionHeight }]}>
             <Text style={styles.sectionLabel}>TOOLS</Text>
-            <View style={styles.toolsCard}>
-              <ToolRow
-                icon={<LayoutTemplate size={18} color={COLORS.accent} strokeWidth={1.6} />}
-                title="Choose Template"
-                subtitle="Browse saved workouts"
-                onPress={handleChooseTemplate}
-                divider
-              />
-              <ToolRow
-                icon={<BookOpen size={18} color={COLORS.accent} strokeWidth={1.6} />}
-                title="Exercise Guide"
-                subtitle="Learn form and technique"
-                onPress={() => rootNavigation.navigate('Tutorials')}
-                divider
-              />
-              <ToolRow
-                icon={<Camera size={18} color={COLORS.accent} strokeWidth={1.6} />}
-                title="Camera Setup"
-                subtitle="Check angles and positioning"
-                onPress={handleCameraSetup}
-              />
+            <View style={styles.toolsCardOuter}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_ELEVATED]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.toolsCard}
+              >
+                <ToolRow
+                  icon={<LayoutTemplate size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  title="Choose Template"
+                  subtitle="Browse saved workouts"
+                  onPress={handleChooseTemplate}
+                  divider
+                />
+                <ToolRow
+                  icon={<BookOpen size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  title="Exercise Guide"
+                  subtitle="Learn form and technique"
+                  onPress={() => rootNavigation.navigate('Tutorials')}
+                  divider
+                />
+                <ToolRow
+                  icon={<Camera size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  title="Camera Setup"
+                  subtitle="Check angles and positioning"
+                  onPress={handleCameraSetup}
+                />
+              </LinearGradient>
             </View>
           </View>
 
@@ -798,15 +805,17 @@ const styles = StyleSheet.create({
   },
 
   /* Tools */
+  toolsCardOuter: {
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+  },
   toolsCard: {
     borderRadius: CARD_RADIUS,
-    backgroundColor: 'rgba(255,255,255,0.028)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     overflow: 'hidden',
-
-    ...CARD_SHADOW,
-},
+  },
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
