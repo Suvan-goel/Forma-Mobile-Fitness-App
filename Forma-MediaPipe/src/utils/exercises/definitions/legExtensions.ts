@@ -93,6 +93,8 @@ function computeReachRatio(
 
 /** FSM thresholds (reach ratio) -- knee reach ratio */
 const THRESHOLDS = {
+  /** Ratio above which the extension clock starts before the FSM commits */
+  EXTEND_CLOCK_START: 0.56,
   /** Ratio above which we transition REST -> EXTENDING */
   EXTENDING_ENTER: 0.60,
   /** Ratio above which we consider near-full extension (EXTENDING -> EXTENDED) */
@@ -112,7 +114,7 @@ const FORM_THRESHOLDS = {
   /** Min ratio above which starting flexion is insufficient */
   FLEXION_FAIL: 0.65,
   /** Torso deviation from vertical above which there is excessive lean */
-  TORSO_LEAN_WARN: 75,
+  TORSO_LEAN_WARN: 30,
   /** Hip angle change that indicates lifting hips off the seat */
   HIP_LIFT_WARN: 7,
   /** Concentric (extend) too fast threshold (seconds) */
@@ -128,7 +130,7 @@ const FORM_THRESHOLDS = {
  * |----------------------|-----|-----------------|-------|---------------------------------------|
  * | ROM extension        | 45  | 0 (shortfall)   | 800   | ideal ratio (0.97) - maxRatio         |
  * | ROM flexion          | 20  | 0.10            | 400   | minRatio - ideal start ratio (0.58)   |
- * | Torso lean           | 25  | 70              | 0.04  | max torso deviation from vertical     |
+ * | Torso lean           | 25  | 25              | 0.04  | max torso deviation from vertical     |
  * | Hip lift             | 30  | 5               | 0.15  | max hip angle delta from baseline     |
  * | Tempo extend         | 8   | 0.15s           | 60    | concentric time deficit               |
  * | Tempo return         | 10  | 0.5s            | 40    | eccentric time deficit                |
@@ -138,7 +140,7 @@ const FORM_THRESHOLDS = {
 const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 45, deadzone: 0, scale: 800 } as PenaltyConfig,
   FLEXION_ROM:   { cap: 20, deadzone: 0.10, scale: 400 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 70, scale: 0.04 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 25, deadzone: 25, scale: 0.04 } as PenaltyConfig,
   HIP_LIFT:      { cap: 30, deadzone: 5, scale: 0.15 } as PenaltyConfig,
   TEMPO_EXTEND:  { cap: 8, deadzone: 0.15, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
@@ -156,6 +158,8 @@ interface LegExtensionFSM {
   phase: LegExtensionPhase;
   /** Timestamp when extension began (REST -> EXTENDING) */
   tRepStart: number | null;
+  /** Timestamp when the user first moved out of the bent start position */
+  tExtendStart: number | null;
   /** Timestamp when full extension was reached */
   tExtended: number | null;
   /** Timestamp when rep completed (RETURNING -> REST) */
@@ -176,6 +180,7 @@ interface RepWindow {
   /** Timestamps */
   tStart: number;
   tExtended: number | null;
+  tReturnStart: number | null;
   tEnd: number;
   /** Frame count */
   frameCount: number;
@@ -201,6 +206,8 @@ interface LegExtensionState {
   warmedUp: boolean;
   /** Current smoothed values for debug */
   smoothedRatio: number | null;
+  /** Median-only ratio used for responsive FSM transitions */
+  fastRatio: number | null;
   smoothedHip: number | null;
   smoothedTorso: number | null;
   /** Feedback */
@@ -208,6 +215,8 @@ interface LegExtensionState {
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
+  /** Minimum smoothed ratio observed in REST before the current rep starts */
+  restMinRatio: number;
 }
 
 interface LegExtensionDebugInfo {
@@ -215,6 +224,7 @@ interface LegExtensionDebugInfo {
   side: 'left' | 'right';
   warmedUp: boolean;
   ratio: number | null;
+  fastRatio: number | null;
   hipAngle: number | null;
   torsoDev: number | null;
   // Rep window
@@ -232,20 +242,22 @@ function initFSM(): LegExtensionFSM {
   return {
     phase: 'REST',
     tRepStart: null,
+    tExtendStart: null,
     tExtended: null,
     tRepEnd: null,
   };
 }
 
-function initRepWindow(tStart: number): RepWindow {
+function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   return {
-    minRatio: Infinity,
-    maxRatio: -Infinity,
+    minRatio: initialRatio ?? Infinity,
+    maxRatio: initialRatio ?? -Infinity,
     hipAngleBaseline: null,
     maxHipDelta: 0,
     maxTorsoDev: 0,
     tStart,
     tExtended: null,
+    tReturnStart: null,
     tEnd: tStart,
     frameCount: 0,
   };
@@ -271,11 +283,13 @@ function initializeLegExtensionState(): LegExtensionState {
     }),
     warmedUp: false,
     smoothedRatio: null,
+    fastRatio: null,
     smoothedHip: null,
     smoothedTorso: null,
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
+    restMinRatio: Infinity,
   };
 }
 
@@ -380,9 +394,15 @@ function updateFSM(
     case 'REST':
       // Waiting for extension to begin. When ratio exceeds threshold,
       // transition to EXTENDING.
+      if (ratio > THRESHOLDS.EXTEND_CLOCK_START) {
+        fsm.tExtendStart ??= t;
+      } else {
+        fsm.tExtendStart = null;
+      }
+
       if (ratio > THRESHOLDS.EXTENDING_ENTER) {
         fsm.phase = 'EXTENDING';
-        fsm.tRepStart = t;
+        fsm.tRepStart = fsm.tExtendStart ?? t;
         fsm.tExtended = null;
         fsm.tRepEnd = null;
       }
@@ -397,6 +417,7 @@ function updateFSM(
         // Went back to bent without extending -- reset
         fsm.phase = 'REST';
         fsm.tRepStart = null;
+        fsm.tExtendStart = null;
       }
       break;
 
@@ -451,7 +472,7 @@ function computeLegExtensionScore(repWindow: RepWindow): number {
   // 5. Tempo
   if (repWindow.tExtended !== null) {
     const tExtend = repWindow.tExtended - repWindow.tStart;  // concentric (extend)
-    const tReturn = repWindow.tEnd - repWindow.tExtended;     // eccentric (return)
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended); // eccentric (return)
 
     // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
     if (tExtend > 0 && tExtend < PENALTY_CONFIGS.TEMPO_EXTEND.deadzone) {
@@ -497,7 +518,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   // 5. Tempo
   if (repWindow.tExtended !== null) {
     const tExtend = repWindow.tExtended - repWindow.tStart;
-    const tReturn = repWindow.tEnd - repWindow.tExtended;
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended);
 
     if (tExtend > 0 && tExtend < FORM_THRESHOLDS.TEMPO_EXTEND_MIN) {
       messages.push('Slow down the extension \u2014 control the lift.');
@@ -545,6 +566,7 @@ function updateLegExtensionState(
       ...currentState,
       visibleSide,
       smoothedRatio: null,
+      fastRatio: null,
       smoothedHip: null,
       smoothedTorso: null,
     };
@@ -552,6 +574,7 @@ function updateLegExtensionState(
 
   // Smooth values
   const smoothedRatio = currentState.ratioTracker.push(rawRatio);
+  const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedHip = rawHip !== null
     ? currentState.hipTracker.push(rawHip)
     : currentState.hipTracker.value;
@@ -563,22 +586,31 @@ function updateLegExtensionState(
     ...currentState,
     visibleSide,
     smoothedRatio,
+    fastRatio: isNaN(fastRatio) ? null : fastRatio,
     smoothedHip: isNaN(smoothedHip) ? null : smoothedHip,
     smoothedTorso: isNaN(smoothedTorso) ? null : smoothedTorso,
   };
 
-  if (isNaN(smoothedRatio)) {
+  if (isNaN(fastRatio)) {
     return newState;
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothedRatio, t);
+  const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
+
+  if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
+    newState.restMinRatio = Math.min(newState.restMinRatio, smoothedRatio);
+  }
 
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
-    newState.repWindow = initRepWindow(t);
+    newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio);
+    if (currentState.restMinRatio !== Infinity) {
+      newState.repWindow.minRatio = currentState.restMinRatio;
+    }
+    newState.restMinRatio = Infinity;
   }
 
   if (newState.repWindow && inRep) {
@@ -622,10 +654,25 @@ function updateLegExtensionState(
     if (newState.fsm.phase === 'EXTENDED' && window.tExtended === null) {
       window.tExtended = t;
     }
+
+    if (
+      currentState.fsm.phase === 'EXTENDED' &&
+      window.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL &&
+      fastRatio < FORM_THRESHOLDS.EXTENSION_FAIL &&
+      window.tReturnStart === null
+    ) {
+      window.tReturnStart = t;
+    }
   }
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    newState.repWindow.tEnd = t;
+    if (!isNaN(smoothedRatio)) {
+      newState.repWindow.minRatio = Math.min(newState.repWindow.minRatio, smoothedRatio);
+      newState.repWindow.maxRatio = Math.max(newState.repWindow.maxRatio, smoothedRatio);
+    }
+
     newState.repCount++;
 
     const score = computeLegExtensionScore(newState.repWindow);
@@ -672,6 +719,7 @@ function getDebugInfo(state: LegExtensionState): LegExtensionDebugInfo {
     side: state.visibleSide,
     warmedUp: state.warmedUp,
     ratio: fmt(state.smoothedRatio),
+    fastRatio: fmt(state.fastRatio),
     hipAngle: fmt(state.smoothedHip),
     torsoDev: fmt(state.smoothedTorso),
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,

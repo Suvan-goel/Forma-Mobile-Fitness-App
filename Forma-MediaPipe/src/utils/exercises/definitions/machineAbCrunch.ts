@@ -38,6 +38,8 @@ import type {
 
 /** FSM thresholds (degrees — hip angle: shoulder-hip-knee) */
 const THRESHOLDS = {
+  /** Hip angle below which the crunch clock starts before the FSM commits */
+  CRUNCH_CLOCK_START: 128,
   /** Hip angle below which we transition REST -> CRUNCHING */
   CRUNCHING_ENTER: 112,
   /** Hip angle below which we consider bottom position (CRUNCHING -> BOTTOM) */
@@ -63,7 +65,7 @@ const FORM_THRESHOLDS = {
   /** Eccentric (return) too fast threshold (seconds) */
   TEMPO_RETURN_MIN: 0.4,
   /** Neck forward deviation threshold (degrees) — neck shouldn't jut forward */
-  NECK_FORWARD_WARN: 90,
+  NECK_FORWARD_WARN: 45,
 } as const;
 
 /**
@@ -75,7 +77,7 @@ const FORM_THRESHOLDS = {
  * | ROM extension    | 50  | 0 (from ideal)   | 0.12  | max hip angle shortfall from 122       |
  * | Tempo crunch     | 40  | 0.27s            | 3000  | concentric time deficit                |
  * | Tempo return     | 15  | 0.5s             | 40    | eccentric time deficit                 |
- * | Neck forward     | 5   | 90°              | 0.01  | neck forward angle deviation           |
+ * | Neck forward     | 5   | 40°              | 0.01  | neck forward angle deviation           |
  *
  * Max total penalty: 140 -> worst possible rep = 0.
  */
@@ -84,7 +86,7 @@ const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 50, deadzone: 0, scale: 0.12 } as PenaltyConfig,
   TEMPO_CRUNCH:  { cap: 40, deadzone: 0.27, scale: 3000 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 15, deadzone: 0.5, scale: 40 } as PenaltyConfig,
-  NECK_FORWARD:  { cap: 5, deadzone: 90, scale: 0.01 } as PenaltyConfig,
+  NECK_FORWARD:  { cap: 5, deadzone: 40, scale: 0.01 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -98,6 +100,7 @@ type AbCrunchPhase = 'REST' | 'CRUNCHING' | 'BOTTOM' | 'RETURNING';
 interface RepWindow {
   tStart: number;
   tBottom: number | null;
+  tReturnStart: number | null;
   tEnd: number;
   /** Min hip angle during rep (lower = deeper crunch) */
   minHipAngle: number;
@@ -118,6 +121,7 @@ interface AbCrunchState {
   phase: AbCrunchPhase;
   repCount: number;
   tRepStart: number | null;
+  tCrunchStart: number | null;
   repWindow: RepWindow | null;
   lastRepResult: RepResult | null;
   /** Smoothed angle trackers */
@@ -130,6 +134,7 @@ interface AbCrunchState {
   restMaxHipAngle: number;
   /** Current smoothed values (for debug) */
   smoothedHipAngle: number;
+  fastHipAngle: number;
   smoothedNeckAngle: number;
   /** Visual feedback */
   feedback: string | null;
@@ -140,6 +145,7 @@ interface AbCrunchDebugInfo {
   phase: AbCrunchPhase;
   warmedUp: boolean;
   hipAngle: number | null;
+  fastHipAngle: number | null;
   neckAngle: number | null;
   minHipAngle: number | null;
   maxHipAngle: number | null;
@@ -155,6 +161,7 @@ function initializeState(): AbCrunchState {
     phase: 'REST',
     repCount: 0,
     tRepStart: null,
+    tCrunchStart: null,
     repWindow: null,
     lastRepResult: null,
     hipAngleTracker: new SmoothedAngleTracker(),
@@ -171,6 +178,7 @@ function initializeState(): AbCrunchState {
     warmedUp: false,
     restMaxHipAngle: -Infinity,
     smoothedHipAngle: 170,
+    fastHipAngle: 170,
     smoothedNeckAngle: 0,
     feedback: null,
     lastFeedbackTime: 0,
@@ -181,6 +189,7 @@ function initRepWindow(tStart: number): RepWindow {
   return {
     tStart,
     tBottom: null,
+    tReturnStart: null,
     tEnd: tStart,
     minHipAngle: Infinity,
     maxHipAngle: -Infinity,
@@ -363,7 +372,7 @@ function computeAbCrunchScore(repWindow: RepWindow): number {
   // 4. Tempo
   if (repWindow.tBottom !== null) {
     const tCrunch = repWindow.tBottom - repWindow.tStart;
-    const tReturn = repWindow.tEnd - repWindow.tBottom;
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tBottom);
 
     if (tCrunch > 0 && tCrunch < PENALTY_CONFIGS.TEMPO_CRUNCH.deadzone) {
       const deficit = PENALTY_CONFIGS.TEMPO_CRUNCH.deadzone - tCrunch;
@@ -403,7 +412,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   // 4. Tempo
   if (repWindow.tBottom !== null) {
     const tCrunch = repWindow.tBottom - repWindow.tStart;
-    const tReturn = repWindow.tEnd - repWindow.tBottom;
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tBottom);
 
     if (tCrunch > 0 && tCrunch < FORM_THRESHOLDS.TEMPO_CRUNCH_MIN) {
       messages.push('Slow down the crunch \u2014 control the movement.');
@@ -441,30 +450,38 @@ function updateAbCrunchState(
 
   // -- Smooth angles --
   const smoothedHipAngle = state.hipAngleTracker.push(rawHipAngle);
+  const fastHipAngle = state.hipAngleTracker.medianValue;
   const smoothedNeckAngle = rawNeckAngle !== null
     ? state.neckAngleTracker.push(rawNeckAngle)
     : state.neckAngleTracker.value;
 
   state.smoothedHipAngle = smoothedHipAngle;
+  state.fastHipAngle = isNaN(fastHipAngle) ? smoothedHipAngle : fastHipAngle;
   state.smoothedNeckAngle = smoothedNeckAngle;
 
   // -- Track max hip angle during REST (pre-crunch extension) --
   if (state.phase === 'REST') {
     state.restMaxHipAngle = Math.max(state.restMaxHipAngle, smoothedHipAngle);
+    if (state.fastHipAngle < THRESHOLDS.CRUNCH_CLOCK_START) {
+      state.tCrunchStart ??= t;
+    } else {
+      state.tCrunchStart = null;
+    }
   }
 
   // -- FSM update --
-  const fsmResult = updateFSM(state.phase, smoothedHipAngle, t, state.tRepStart);
+  const fsmResult = updateFSM(state.phase, state.fastHipAngle, t, state.tRepStart);
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
   // -- Track rep start --
   if (prevPhase === 'REST' && state.phase === 'CRUNCHING') {
-    state.tRepStart = t;
-    state.repWindow = initRepWindow(t);
+    state.tRepStart = state.tCrunchStart ?? t;
+    state.repWindow = initRepWindow(state.tRepStart);
     // Seed maxHipAngle from the pre-crunch position observed during REST
     state.repWindow.maxHipAngle = state.restMaxHipAngle;
     state.restMaxHipAngle = -Infinity;
+    state.tCrunchStart = null;
   }
 
   // -- Accumulate rep window while in a rep --
@@ -485,10 +502,23 @@ function updateAbCrunchState(
     if (state.phase === 'BOTTOM' && w.tBottom === null) {
       w.tBottom = t;
     }
+
+    if (
+      prevPhase === 'BOTTOM' &&
+      w.minHipAngle < Infinity &&
+      state.fastHipAngle > w.minHipAngle + 6 &&
+      w.tReturnStart === null
+    ) {
+      w.tReturnStart = t;
+    }
   }
 
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
+    state.repWindow.tEnd = t;
+    state.repWindow.minHipAngle = Math.min(state.repWindow.minHipAngle, smoothedHipAngle);
+    state.repWindow.maxHipAngle = Math.max(state.repWindow.maxHipAngle, smoothedHipAngle);
+
     state.repCount++;
 
     const score = computeAbCrunchScore(state.repWindow);
@@ -516,6 +546,7 @@ function updateAbCrunchState(
   if (prevPhase === 'CRUNCHING' && state.phase === 'REST' && !fsmResult.repCompleted) {
     state.repWindow = null;
     state.tRepStart = null;
+    state.tCrunchStart = null;
   }
 
   // -- Clear feedback after 2 seconds --
@@ -539,6 +570,7 @@ function getDebugInfo(state: AbCrunchState): AbCrunchDebugInfo {
     phase: state.phase,
     warmedUp: state.warmedUp,
     hipAngle: fmt(state.smoothedHipAngle),
+    fastHipAngle: fmt(state.fastHipAngle),
     neckAngle: fmt(state.smoothedNeckAngle),
     minHipAngle: w ? (w.minHipAngle < Infinity ? fmt(w.minHipAngle) : null) : null,
     maxHipAngle: w ? (w.maxHipAngle > -Infinity ? fmt(w.maxHipAngle) : null) : null,
