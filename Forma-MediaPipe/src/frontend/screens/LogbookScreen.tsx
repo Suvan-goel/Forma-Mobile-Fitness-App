@@ -27,6 +27,7 @@ import {
   BookOpen,
   Search,
   SlidersHorizontal,
+  Settings as SettingsIcon,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
 import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
@@ -639,28 +640,15 @@ export const LogbookScreen: React.FC = () => {
     <View style={styles.container}>
       {/* ── LOGBOOK HEADER ─────── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerName}>Logbook</Text>
-          <Text style={styles.headerSubtitleText}>
-            {filteredWorkouts.length} session{filteredWorkouts.length === 1 ? '' : 's'}
-          </Text>
-        </View>
+        <Text style={styles.headerName}>LOGBOOK</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
-            onPress={() => navigation.navigate('VideoLibrary')}
+            onPress={() => navigation.navigate('Settings')}
             activeOpacity={0.7}
             style={styles.headerIconBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Search size={18} color={COLORS.textSecondary} strokeWidth={1.7} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setOpenDropdown('week')}
-            activeOpacity={0.7}
-            style={styles.headerIconBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <SlidersHorizontal size={17} color={COLORS.textSecondary} strokeWidth={1.7} />
+            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
           </TouchableOpacity>
         </View>
       </View>
@@ -806,9 +794,9 @@ const styles = StyleSheet.create({
   },
   headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 20,
+    fontSize: 22,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 4,
   },
   headerActions: {
     flexDirection: 'row',
@@ -816,9 +804,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerIconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },

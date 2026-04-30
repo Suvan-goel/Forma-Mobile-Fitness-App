@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Info,
   X,
+  Settings as SettingsIcon,
 } from 'lucide-react-native';
 import type { WeeklyTrainingTarget } from '../../backend/hooks/useWorkoutPreferences';
 import {
@@ -200,8 +201,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         >
           <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerName}>Settings</Text>
-        <View style={styles.headerSpacer} />
+        <Text style={styles.headerName}>SETTINGS</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Settings')}
+          activeOpacity={0.7}
+          style={styles.headerIconBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -440,6 +448,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 6,
     paddingBottom: 12,
@@ -451,9 +460,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: -6,
   },
-  headerSpacer: {
-    width: 28,
-    height: 32,
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoWrap: {
     width: 50,
@@ -472,9 +483,9 @@ const styles = StyleSheet.create({
   },
   headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 22,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 4,
     flex: 1,
     textAlign: 'left',
   },

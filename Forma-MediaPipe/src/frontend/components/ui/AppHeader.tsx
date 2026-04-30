@@ -1,20 +1,13 @@
 import React, { memo, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Search, Bell, Menu } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Settings as SettingsIcon } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, FONTS } from '../../constants/theme';
-import { useUser } from '../../../backend/hooks';
-import { useAuth } from '../../../backend/contexts/AuthContext';
 
 export const HEADER_HEIGHT = 80; // Approximate height of the header
 
 export const AppHeader: React.FC = memo(() => {
   const navigation = useNavigation<any>();
-  const { user: profileUser } = useUser();
-  const { user: authUser } = useAuth();
-  const displayName = profileUser?.displayName
-    ?? authUser?.user_metadata?.full_name
-    ?? 'Athlete';
 
   const handleSettingsPress = useCallback(() => {
     navigation.navigate('Settings');
@@ -22,30 +15,10 @@ export const AppHeader: React.FC = memo(() => {
 
   return (
     <View style={styles.header}>
-      <View style={styles.profileSection}>
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('../../assets/forma_icon_turquoise.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.welcomeText}>Welcome back,</Text>
-          <Text style={styles.userName}>{displayName}</Text>
-        </View>
-      </View>
-      <View style={styles.headerIcons}>
-        <TouchableOpacity style={styles.iconButton}>
-          <Search size={22} color={COLORS.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton}>
-          <Bell size={22} color={COLORS.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton} onPress={handleSettingsPress}>
-          <Menu size={22} color={COLORS.text} strokeWidth={1.5} />
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.title}>FORMA</Text>
+      <TouchableOpacity style={styles.iconButton} onPress={handleSettingsPress}>
+        <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+      </TouchableOpacity>
     </View>
   );
 });
@@ -56,50 +29,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 0,
-    paddingBottom: SPACING.sm,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
-  profileSection: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    overflow: 'hidden',
-  },
-  logoImage: {
-    width: 64,
-    height: 64,
-  },
-  textContainer: {
-    flex: 1,
-  },
-  welcomeText: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textSecondary,
-  },
-  userName: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
+  title: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 22,
     color: COLORS.text,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 12,
-    flexShrink: 0,
+    letterSpacing: 4,
   },
   iconButton: {
-    padding: 8,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
-
-
 

@@ -15,7 +15,6 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Calendar,
   Settings as SettingsIcon,
   Info,
   Check,
@@ -194,23 +193,15 @@ export const AnalyticsScreen: React.FC = () => {
     <View style={styles.container}>
       {/* ── HEADER ──────────────────────────────── */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Progress</Text>
+        <Text style={styles.headerTitle}>PROGRESS</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPress={() => navigation.navigate('MainTabs', { screen: 'Logbook' })}
-          >
-            <Calendar size={18} color={COLORS.textSecondary} strokeWidth={1.6} />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             onPress={() => navigation.navigate('Settings')}
           >
-            <SettingsIcon size={18} color={COLORS.textSecondary} strokeWidth={1.6} />
+            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
           </TouchableOpacity>
         </View>
       </View>
@@ -560,18 +551,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontSize: 22,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: 4,
   },
   headerActions: { flexDirection: 'row', gap: 5 },
   iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.035)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },

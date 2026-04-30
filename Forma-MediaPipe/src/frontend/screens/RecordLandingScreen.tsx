@@ -35,7 +35,7 @@ import {
   ArrowRight,
   BookOpen,
   Camera,
-  Bell,
+  Settings as SettingsIcon,
   Clock,
   Dumbbell,
 } from 'lucide-react-native';
@@ -159,8 +159,8 @@ export const RecordLandingScreen: React.FC = () => {
   const availableSectionHeight = contentMinHeight - sectionGap * 2;
   const standardSectionHeight = Math.floor(availableSectionHeight * 0.305);
   const templateSectionHeight = Math.max(standardSectionHeight + 18, availableSectionHeight - standardSectionHeight * 2);
-  const templateCardHeight = Math.max(118, Math.min(140, templateSectionHeight - 30));
-  const templateThumbHeight = Math.max(66, Math.min(84, templateCardHeight - 50));
+  const templateCardHeight = Math.max(132, Math.min(156, templateSectionHeight - 18));
+  const templateThumbHeight = Math.max(74, Math.min(92, templateCardHeight - 58));
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -252,18 +252,15 @@ export const RecordLandingScreen: React.FC = () => {
     >
       {/* ── HEADER ──────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <View style={{ flex: 1 }} />
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Capture</Text>
-        </View>
-        <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
+        <Text style={styles.headerTitle}>CAPTURE</Text>
+        <View style={styles.headerSide}>
           <TouchableOpacity
             onPress={() => rootNavigation.navigate('Settings')}
             style={styles.iconBtn}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Bell size={18} color={COLORS.textSecondary} strokeWidth={1.6} />
+            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
           </TouchableOpacity>
         </View>
       </View>
@@ -570,21 +567,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: 8,
   },
-  headerSide: { flex: 1 },
-  headerCenter: { flex: 1, alignItems: 'center' },
+  headerSide: { alignItems: 'flex-end' },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 15,
+    fontSize: 22,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: 4,
   },
   iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -626,13 +622,17 @@ const styles = StyleSheet.create({
   /* Active / Idle workout card */
   activeOuter: {
     borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+  },
+  activeGradient: {
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
   },
-  activeGradient: { borderRadius: CARD_RADIUS },
   activeEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.11)',
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 13,
     paddingTop: 11,
     paddingBottom: 12,
@@ -853,10 +853,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 9,
     alignItems: 'stretch',
-    minHeight: 112,
+    minHeight: 132,
   },
   templatesBlock: {
     justifyContent: 'center',
+    paddingBottom: 6,
   },
   templateCard: {
     flex: 1,
@@ -869,8 +870,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.11)',
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
-    padding: 7,
-    gap: 5,
+    paddingHorizontal: 7,
+    paddingTop: 7,
+    paddingBottom: 10,
+    gap: 6,
     overflow: 'hidden',
   },
   templateThumb: {
@@ -888,7 +891,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
   },
-  templateInfo: { gap: 1 },
+  templateInfo: {
+    gap: 2,
+    flexShrink: 0,
+  },
   templateName: {
     fontFamily: FONTS.display.semibold,
     fontSize: 10.5,
