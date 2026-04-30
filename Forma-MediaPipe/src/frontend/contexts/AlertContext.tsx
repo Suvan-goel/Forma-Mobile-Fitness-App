@@ -164,13 +164,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 24,
     paddingTop: 28,
     paddingBottom: 20,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.22,
         shadowRadius: 32,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     marginTop: 22,
     marginBottom: 16,
   },
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonCancel: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.45,
         shadowRadius: 10,

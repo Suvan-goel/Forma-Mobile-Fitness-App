@@ -38,8 +38,7 @@ const SIDE = {
   shoulder: { x: 112, y: 46 },
   hip:      { x: 110, y: 100 },
   ankle:    { x: 108, y: 174 },
-  phoneLens: { x: 215, y: 157 },   // visual lens pos after phone rotation
-  phoneOrigin: '222, 178',
+  phoneLens: { x: 236, y: 148 },
 };
 
 // Front view: image rect + shoulder targets (SVG coords)
@@ -151,6 +150,26 @@ const HolographicFigure: React.FC<{
   </View>
 );
 
+const HolographicScene: React.FC<{ source: any }> = ({ source }) => (
+  <View
+    style={[
+      StyleSheet.absoluteFill,
+      Platform.OS === 'ios' && {
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.35,
+        shadowRadius: 18,
+      },
+    ]}
+  >
+    <Image
+      source={source}
+      style={{ width: VIS_W, height: VIS_H, opacity: 0.88 }}
+      resizeMode="contain"
+    />
+  </View>
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SIDE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
@@ -222,16 +241,41 @@ const SideViewVisual: React.FC = () => (
       <Reticle cx={SIDE.hip.x} cy={SIDE.hip.y} r={8} />
       <Reticle cx={SIDE.ankle.x} cy={SIDE.ankle.y} r={7} />
 
-      <G rotation={-15} origin={SIDE.phoneOrigin}>
-        <Ellipse cx={222} cy={172} rx={22} ry={34}
+      <G>
+        <Ellipse cx={226} cy={192} rx={21} ry={7}
           fill={COLORS.primary} opacity={0.06} />
-        <Rect x={210} y={140} width={24} height={60} rx={4}
-          stroke={COLORS.primary} strokeWidth={1.5} fill="rgba(139, 92, 246, 0.04)" />
-        <Rect x={213} y={146} width={18} height={46} rx={2}
-          stroke={COLORS.primary} strokeWidth={0.6} fill="rgba(139, 92, 246, 0.02)" opacity={0.6} />
-        <Circle cx={222} cy={143} r={1.5} fill={COLORS.primary} opacity={0.8} />
-        <Circle cx={222} cy={143} r={4} fill={COLORS.primary} opacity={0.2} />
-        <Circle cx={222} cy={143} r={7} fill={COLORS.primary} opacity={0.06} />
+        <Path
+          d="M 217 198 L 226 139 L 246 144 L 232 204 Z"
+          stroke={COLORS.primary}
+          strokeWidth={1.7}
+          fill="rgba(139, 92, 246, 0.035)"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M 221 190 L 229 149 L 240 151 L 231 193 Z"
+          stroke={COLORS.primary}
+          strokeWidth={0.7}
+          fill="rgba(139, 92, 246, 0.025)"
+          opacity={0.7}
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M 232 204 L 246 144 L 252 153 L 238 205 Z"
+          fill="rgba(0, 0, 0, 0.32)"
+          stroke={COLORS.primary}
+          strokeWidth={0.6}
+          opacity={0.55}
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M 226 139 L 246 144 L 252 153 L 232 149 Z"
+          fill={COLORS.primary}
+          opacity={0.08}
+        />
+        <Circle cx={SIDE.phoneLens.x} cy={SIDE.phoneLens.y} r={1.7}
+          fill={COLORS.primary} opacity={0.85} />
+        <Circle cx={SIDE.phoneLens.x} cy={SIDE.phoneLens.y} r={4.5}
+          fill={COLORS.primary} opacity={0.18} />
       </G>
 
       <Circle cx={SIDE.phoneLens.x} cy={SIDE.phoneLens.y} r={3}

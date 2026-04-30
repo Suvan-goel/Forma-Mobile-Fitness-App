@@ -18,10 +18,13 @@ import { addPendingTemplateExercise } from './CreateTemplateScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search, X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useExercises, useFavouriteExercises } from '../../backend/hooks';
 import { LoadingSkeleton } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { Exercise } from '../../backend/services/api';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { ExerciseRegistry } from '../../utils/exercises';
@@ -126,8 +129,8 @@ const ExerciseCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
           >
             <Bookmark
               size={16}
-              color={isFavourited ? '#8B5CF6' : COLORS.textTertiary}
-              fill={isFavourited ? '#8B5CF6' : 'transparent'}
+              color={isFavourited ? '#7A55FF' : COLORS.textTertiary}
+              fill={isFavourited ? '#7A55FF' : 'transparent'}
               strokeWidth={1.5}
             />
           </TouchableOpacity>
@@ -272,7 +275,7 @@ export const ChooseExerciseScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <ScreenBackground>
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
             <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
@@ -295,12 +298,12 @@ export const ChooseExerciseScreen: React.FC = () => {
             <LoadingSkeleton variant="card" height={200} width={cardWidth} />
           </View>
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenBackground>
       {/* ── Header ─────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
@@ -384,7 +387,7 @@ export const ChooseExerciseScreen: React.FC = () => {
           </View>
         }
       />
-    </View>
+    </ScreenBackground>
   );
 };
 
@@ -393,7 +396,7 @@ export const ChooseExerciseScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
 
   /* ── Header ──────────────────────────────── */
@@ -509,10 +512,9 @@ const styles = StyleSheet.create({
   /* ── Card (analytics style) ───────────────────────────────── */
   cardOuter: {
     borderRadius: 19,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.25,
         shadowRadius: 15,
@@ -521,14 +523,19 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     flex: 1,
     borderRadius: 19,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     flex: 1,
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 8,
   },
   cardHeader: {

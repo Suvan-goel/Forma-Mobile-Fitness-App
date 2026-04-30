@@ -112,6 +112,13 @@ export const generateMockSummary = (timeRange: string): AnalyticsSummary => {
     streakDays: Math.min(Math.round(2 * m), 30),
     mostTrainedExercise: 'Barbell Curl',
     personalBest: { exercise: 'Barbell Curl', weight: 40 },
+    personalBests: [
+      { exercise: 'Barbell Curl', weight: 40, date: 'Apr 28' },
+      { exercise: 'Barbell Squat', weight: 90, date: 'Apr 24' },
+      { exercise: 'Cable Row', weight: 55, date: 'Apr 22' },
+      { exercise: 'Leg Extensions', weight: 70, date: 'Apr 18' },
+      { exercise: 'Cable Lat Pulldowns', weight: 62.5, date: 'Apr 15' },
+    ],
     formTrendDirection: 'up',
     formTrendPercent: 5.2,
   };

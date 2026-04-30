@@ -1,59 +1,89 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Animated,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  ScrollView,
-  Animated,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  CheckCircle,
   ChevronLeft,
-  Database,
-  Smartphone,
   Cloud,
-  Trash2,
+  Database,
   Eye,
-  ShieldCheck,
-  Users,
   Globe,
   Lock,
+  ShieldCheck,
+  Smartphone,
+  Trash2,
+  Users,
 } from 'lucide-react-native';
 import {
-  COLORS,
-  SPACING,
-  FONTS,
   CARD_GRADIENT_COLORS,
-  CARD_GRADIENT_START,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_END,
+  CARD_GRADIENT_START,
+  COLORS,
+  FONTS,
+  SPACING,
 } from '../constants/theme';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
 import { useAlert } from '../contexts/AlertContext';
-import { usePrivacyLevel, PrivacyLevel } from '../../backend/hooks';
+import { PrivacyLevel, usePrivacyLevel } from '../../backend/hooks';
 
 interface PrivacySettingsScreenProps {
   navigation: any;
 }
 
-const VISIBILITY_OPTIONS: { level: PrivacyLevel; icon: any; label: string; description: string }[] = [
+const VISIBILITY_OPTIONS: {
+  level: PrivacyLevel;
+  icon: typeof Globe;
+  label: string;
+  description: string;
+}[] = [
   {
     level: 'public',
     icon: Globe,
     label: 'Public',
-    description: 'Anyone on Forma can see your stats and leaderboard position',
+    description: 'Anyone on Forma can see your public stats and leaderboard position.',
   },
   {
     level: 'friends',
     icon: Users,
     label: 'Friends Only',
-    description: 'Only friends see your activity and where you rank',
+    description: 'Only friends can see your activity, profile stats, and ranking context.',
   },
   {
     level: 'private',
     icon: Lock,
     label: 'Private',
-    description: 'Hidden from all social features and leaderboards',
+    description: 'Hide your profile from social discovery, activity feeds, and leaderboards.',
+  },
+];
+
+const DATA_ITEMS = [
+  {
+    icon: Eye,
+    color: COLORS.primary,
+    title: 'Workout Data',
+    description: 'Reps, sets, form scores, duration, and workout history are stored to track progress.',
+  },
+  {
+    icon: Smartphone,
+    color: COLORS.green,
+    title: 'Pose Detection',
+    description: 'Pose landmarks are processed on your device. Camera frames are not uploaded.',
+  },
+  {
+    icon: Database,
+    color: '#60A5FA',
+    title: 'Profile Information',
+    description: 'Name, email, avatar, and preferences personalize the app experience.',
   },
 ];
 
@@ -61,21 +91,19 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-  const { level: privacyLevel, isSaving: isSavingPrivacy, updateLevel } = usePrivacyLevel();
+  const slideAnim = useRef(new Animated.Value(18)).current;
+  const {
+    level: privacyLevel,
+    isLoading: isLoadingPrivacy,
+    isSaving: isSavingPrivacy,
+    error: privacyError,
+    updateLevel,
+  } = usePrivacyLevel();
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 700,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 420, useNativeDriver: true }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
@@ -87,371 +115,408 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
     );
   };
 
+  const selectedOption = VISIBILITY_OPTIONS.find(option => option.level === privacyLevel) ?? VISIBILITY_OPTIONS[1];
+  const SelectedIcon = selectedOption.icon;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Privacy</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader
+        title="PRIVACY"
+        onBack={() => navigation.goBack()}
+        rightSlot={isSavingPrivacy ? (
+          <ActivityIndicator color={COLORS.primary} size="small" />
+        ) : (
+          <ShieldCheck size={22} color={COLORS.textSecondary} strokeWidth={1.7} />
+        )}
+      />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          {/* Privacy Banner */}
-          <View style={styles.banner}>
-            <ShieldCheck size={16} color="#34D399" strokeWidth={1.5} />
-            <Text style={styles.bannerText}>
-              Your privacy is important. Pose detection runs entirely on-device — no video ever leaves your phone.
-            </Text>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_ELEVATED]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroInner}>
+              <View style={styles.heroIcon}>
+                <SelectedIcon size={24} color={COLORS.primary} strokeWidth={1.8} />
+              </View>
+              <View style={styles.heroCopy}>
+                <Text style={styles.heroEyebrow}>Current Visibility</Text>
+                <Text style={styles.heroTitle}>{selectedOption.label}</Text>
+                <Text style={styles.heroDescription}>
+                  Pose detection stays on-device. Your camera frames are never uploaded.
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <SectionTitle icon={<Users size={14} color={COLORS.primary} strokeWidth={1.7} />} title="Social Visibility" />
+          <View style={styles.optionStack}>
+            {VISIBILITY_OPTIONS.map(option => {
+              const Icon = option.icon;
+              const isSelected = privacyLevel === option.level;
+              return (
+                <TouchableOpacity
+                  key={option.level}
+                  activeOpacity={0.78}
+                  disabled={isLoadingPrivacy || isSavingPrivacy}
+                  onPress={() => updateLevel(option.level)}
+                >
+                  <LinearGradient
+                    colors={isSelected ? ['rgba(122,85,255,0.24)', 'rgba(122,85,255,0.08)'] : [...CARD_GRADIENT_COLORS]}
+                    start={CARD_GRADIENT_START}
+                    end={CARD_GRADIENT_END}
+                    style={styles.optionCard}
+                  >
+                    <View style={[styles.optionInner, isSelected && styles.optionInnerSelected]}>
+                      <View style={[styles.optionIcon, isSelected && styles.optionIconSelected]}>
+                        <Icon size={18} color={isSelected ? COLORS.primary : COLORS.textSecondary} strokeWidth={1.7} />
+                      </View>
+                      <View style={styles.optionCopy}>
+                        <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+                          {option.label}
+                        </Text>
+                        <Text style={styles.optionDescription}>{option.description}</Text>
+                      </View>
+                      <View style={[styles.radio, isSelected && styles.radioSelected]}>
+                        {isSelected && <CheckCircle size={15} color="#FFFFFF" strokeWidth={2.7} />}
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
-          {/* Social Visibility */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Users size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>SOCIAL VISIBILITY</Text>
-            </View>
-          </View>
+          {privacyError ? (
+            <Text style={styles.errorText} selectable>{privacyError}</Text>
+          ) : null}
+
+          <SectionTitle icon={<Database size={14} color={COLORS.primary} strokeWidth={1.7} />} title="Data We Use" />
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
+            style={styles.infoCard}
           >
-            <View style={styles.cardEdge}>
-              {VISIBILITY_OPTIONS.map((opt, index) => {
-                const OptionIcon = opt.icon;
-                const isSelected = privacyLevel === opt.level;
-                const isLast = index === VISIBILITY_OPTIONS.length - 1;
+            <View style={styles.infoInner}>
+              {DATA_ITEMS.map((item, index) => {
+                const Icon = item.icon;
                 return (
-                  <View key={opt.level}>
-                    <TouchableOpacity
-                      style={styles.visibilityRow}
-                      onPress={() => !isSavingPrivacy && updateLevel(opt.level)}
-                      activeOpacity={0.6}
-                    >
-                      <OptionIcon size={15} color={isSelected ? '#A78BFA' : COLORS.textTertiary} strokeWidth={1.5} />
-                      <View style={styles.visibilityContent}>
-                        <Text style={[styles.visibilityLabel, isSelected && styles.visibilityLabelActive]}>
-                          {opt.label}
-                        </Text>
-                        <Text style={styles.visibilityDesc}>{opt.description}</Text>
+                  <View key={item.title}>
+                    <View style={styles.infoRow}>
+                      <View style={[styles.infoIcon, { backgroundColor: `${item.color}18`, borderColor: `${item.color}2E` }]}>
+                        <Icon size={16} color={item.color} strokeWidth={1.7} />
                       </View>
-                      <View style={[styles.radio, isSelected && styles.radioActive]}>
-                        {isSelected && <View style={styles.radioInner} />}
+                      <View style={styles.infoCopy}>
+                        <Text style={styles.infoTitle}>{item.title}</Text>
+                        <Text style={styles.infoDescription}>{item.description}</Text>
                       </View>
-                    </TouchableOpacity>
-                    {!isLast && <View style={styles.divider} />}
+                    </View>
+                    {index < DATA_ITEMS.length - 1 && <View style={styles.divider} />}
                   </View>
                 );
               })}
             </View>
           </LinearGradient>
 
-          {/* Data We Collect */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Database size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>DATA WE COLLECT</Text>
-            </View>
-          </View>
+          <SectionTitle icon={<Cloud size={14} color={COLORS.primary} strokeWidth={1.7} />} title="Storage" />
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
+            style={styles.infoCard}
           >
-            <View style={styles.cardEdge}>
-              <View style={styles.dataRow}>
-                <Eye size={14} color="#A78BFA" strokeWidth={1.5} />
-                <View style={styles.dataContent}>
-                  <Text style={styles.dataTitle}>Workout Data</Text>
-                  <Text style={styles.dataDesc}>Reps, sets, form scores, and workout duration to track your progress.</Text>
-                </View>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.dataRow}>
-                <Smartphone size={14} color="#34D399" strokeWidth={1.5} />
-                <View style={styles.dataContent}>
-                  <Text style={styles.dataTitle}>Pose Detection</Text>
-                  <Text style={styles.dataDesc}>Pose landmarks are processed entirely on your device. No video or camera frames are ever uploaded.</Text>
-                </View>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.dataRow}>
-                <Database size={14} color="#60A5FA" strokeWidth={1.5} />
-                <View style={styles.dataContent}>
-                  <Text style={styles.dataTitle}>Profile Information</Text>
-                  <Text style={styles.dataDesc}>Your name, email, and avatar to personalize your experience.</Text>
-                </View>
-              </View>
-            </View>
-          </LinearGradient>
-
-          {/* Data Storage */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Cloud size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>DATA STORAGE</Text>
-            </View>
-          </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
+            <View style={styles.storageInner}>
               <Text style={styles.storageText}>
-                Your workout data is stored securely in our cloud database. Pose detection runs entirely on your device — no video or camera frames ever leave your phone.
+                Workout data is stored securely in the cloud so your progress and badges remain available across sessions.
               </Text>
               <View style={styles.divider} />
               <Text style={styles.storageText}>
-                Preferences and settings are stored locally on your device and are not synced to the cloud.
+                Device preferences are stored locally. Pose analysis runs on your phone and camera frames do not leave your device.
               </Text>
             </View>
           </LinearGradient>
 
-          {/* Danger Zone */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Trash2 size={13} color="#EF4444" strokeWidth={1.5} />
-              <Text style={[styles.sectionLabel, { color: 'rgba(239, 68, 68, 0.6)' }]}>DANGER ZONE</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            activeOpacity={0.7}
-            onPress={handleDeleteAccount}
-          >
-            <View style={styles.deleteInner}>
-              <Trash2 size={16} color="#EF4444" strokeWidth={1.5} />
-              <View style={styles.deleteContent}>
-                <Text style={styles.deleteText}>Delete Account</Text>
-                <Text style={styles.deleteDesc}>Permanently remove your account and all data</Text>
+          <SectionTitle icon={<Trash2 size={14} color={COLORS.red} strokeWidth={1.7} />} title="Account" danger />
+          <TouchableOpacity activeOpacity={0.78} onPress={handleDeleteAccount}>
+            <View style={styles.deleteCard}>
+              <View style={styles.deleteIcon}>
+                <Trash2 size={18} color={COLORS.red} strokeWidth={1.8} />
               </View>
+              <View style={styles.deleteCopy}>
+                <Text style={styles.deleteTitle}>Delete Account</Text>
+                <Text style={styles.deleteDescription}>Request permanent removal of your account and stored data.</Text>
+              </View>
+              <ChevronLeft size={16} color="rgba(240,82,82,0.45)" strokeWidth={1.7} style={styles.deleteChevron} />
             </View>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
+
+const SectionTitle = ({
+  icon,
+  title,
+  danger,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  danger?: boolean;
+}) => (
+  <View style={styles.sectionHeader}>
+    {icon}
+    <Text style={[styles.sectionTitle, danger && styles.sectionTitleDanger]}>{title}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-  },
-
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-  },
-  headerSpacer: {
-    width: 40,
+    backgroundColor: 'transparent',
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 160,
+    paddingTop: 8,
   },
-
-  /* Banner */
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: SPACING.md,
-    borderRadius: 16,
-    backgroundColor: 'rgba(52, 211, 153, 0.04)',
+  heroCard: {
+    borderRadius: 14,
+    marginBottom: 18,
+  },
+  heroInner: {
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.10)',
-    marginTop: 18,
-    marginBottom: 8,
-  },
-  bannerText: {
-    flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 19,
-  },
-
-  /* Section Headers (matches Home) */
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
-  },
-
-  /* Cards (matches Home) */
-  cardGradient: {
-    borderRadius: 18,
-  },
-  cardEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginVertical: 8,
-  },
-
-  /* Visibility */
-  visibilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 6,
-  },
-  visibilityContent: {
-    flex: 1,
-  },
-  visibilityLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.1,
-    marginBottom: 3,
-  },
-  visibilityLabelActive: {
-    color: COLORS.text,
-  },
-  visibilityDesc: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    lineHeight: 17,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioActive: {
-    borderColor: '#A78BFA',
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#A78BFA',
-  },
-
-  /* Data Items */
-  dataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 6,
-  },
-  dataContent: {
-    flex: 1,
-  },
-  dataTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: 0.1,
-    marginBottom: 3,
-  },
-  dataDesc: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    lineHeight: 17,
-  },
-
-  /* Storage */
-  storageText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 21,
-  },
-
-  /* Delete */
-  deleteBtn: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.12)',
-    backgroundColor: 'rgba(239, 68, 68, 0.03)',
-  },
-  deleteInner: {
+    borderColor: 'rgba(255,255,255,0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    padding: 16,
   },
-  deleteContent: {
+  heroIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122,85,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122,85,255,0.20)',
+  },
+  heroCopy: {
     flex: 1,
+    gap: 2,
   },
-  deleteText: {
+  heroEyebrow: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: '#EF4444',
-    letterSpacing: 0.3,
-    marginBottom: 2,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
-  deleteDesc: {
+  heroTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 22,
+    color: COLORS.text,
+  },
+  heroDescription: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: 'rgba(239, 68, 68, 0.5)',
+    lineHeight: 17,
+    color: COLORS.textSecondary,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  sectionTitleDanger: {
+    color: COLORS.red,
+  },
+  optionStack: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  optionCard: {
+    borderRadius: 12,
+  },
+  optionInner: {
+    minHeight: 84,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+  },
+  optionInnerSelected: {
+    borderColor: 'rgba(122,85,255,0.34)',
+  },
+  optionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+  },
+  optionIconSelected: {
+    backgroundColor: 'rgba(122,85,255,0.15)',
+    borderColor: 'rgba(122,85,255,0.26)',
+  },
+  optionCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  optionTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+  },
+  optionTitleSelected: {
+    color: COLORS.text,
+  },
+  optionDescription: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textTertiary,
+  },
+  radio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  radioSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+  },
+  errorText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.red,
+    marginBottom: 12,
+  },
+  infoCard: {
+    borderRadius: 12,
+    marginBottom: 18,
+  },
+  infoInner: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  infoIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  infoTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  infoDescription: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textTertiary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+  },
+  storageInner: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+    padding: 14,
+    gap: 12,
+  },
+  storageText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+  },
+  deleteCard: {
+    minHeight: 74,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(240,82,82,0.16)',
+    backgroundColor: 'rgba(240,82,82,0.045)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+  },
+  deleteIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(240,82,82,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(240,82,82,0.20)',
+  },
+  deleteCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  deleteTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.red,
+  },
+  deleteDescription: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(240,82,82,0.62)',
+  },
+  deleteChevron: {
+    transform: [{ rotate: '180deg' }],
   },
 });

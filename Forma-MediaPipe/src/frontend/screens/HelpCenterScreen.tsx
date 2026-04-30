@@ -10,7 +10,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ChevronLeft,
   ChevronDown,
   Camera,
   Dumbbell,
@@ -18,6 +17,7 @@ import {
   Volume2,
   Mail,
   Star,
+  Sparkles,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -26,7 +26,10 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW
 } from '../constants/theme';
+import { ScreenBackground, SettingsHeader } from '../components/ui';
 
 interface HelpCenterScreenProps {
   navigation: any;
@@ -86,7 +89,7 @@ const FAQ_SECTIONS: FAQSection[] = [
   {
     title: 'Scoring System',
     icon: BarChart2,
-    iconColor: '#34D399',
+    iconColor: '#34E0A6',
     items: [
       {
         question: 'How is my rep score calculated?',
@@ -142,7 +145,12 @@ const FAQ_SECTIONS: FAQSection[] = [
   },
 ];
 
-const AccordionItem: React.FC<{ item: FAQItem; isFirst: boolean; isLast: boolean }> = ({ item, isFirst }) => {
+const AccordionItem: React.FC<{
+  item: FAQItem;
+  isFirst: boolean;
+  isLast: boolean;
+  accentColor: string;
+}> = ({ item, isFirst, isLast, accentColor }) => {
   const [expanded, setExpanded] = useState(false);
   const animValue = useRef(new Animated.Value(0)).current;
   const rotateValue = useRef(new Animated.Value(0)).current;
@@ -178,17 +186,21 @@ const AccordionItem: React.FC<{ item: FAQItem; isFirst: boolean; isLast: boolean
     <View>
       {!isFirst && <View style={styles.itemDivider} />}
       <TouchableOpacity
-        style={styles.faqQuestion}
+        style={[styles.faqQuestion, isLast && !expanded && styles.faqQuestionLast]}
         onPress={toggle}
         activeOpacity={0.7}
       >
         <Text style={styles.faqQuestionText}>{item.question}</Text>
-        <Animated.View style={[styles.chevronWrap, { transform: [{ rotate }] }]}>
-          <ChevronDown size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+        <Animated.View style={[
+          styles.chevronWrap,
+          expanded && { backgroundColor: `${accentColor}1F` },
+          { transform: [{ rotate }] },
+        ]}>
+          <ChevronDown size={15} color={expanded ? accentColor : COLORS.textTertiary} strokeWidth={1.8} />
         </Animated.View>
       </TouchableOpacity>
       <Animated.View style={{ maxHeight, overflow: 'hidden' }}>
-        <Text style={styles.faqAnswerText}>{item.answer}</Text>
+        <Text style={[styles.faqAnswerText, isLast && styles.faqAnswerTextLast]}>{item.answer}</Text>
       </Animated.View>
     </View>
   );
@@ -215,20 +227,8 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
   }, [fadeAnim, slideAnim]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help Center</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader title="HELP CENTER" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
@@ -236,21 +236,31 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <Text style={styles.subtitle}>
-            Find answers to common questions about Forma
-          </Text>
+          <LinearGradient
+            colors={['rgba(122, 85, 255, 0.18)', 'rgba(26, 31, 35, 0.92)', 'rgba(17, 22, 26, 0.92)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroEdge}>
+              <View style={styles.heroIconWrap}>
+                <Sparkles size={18} color={COLORS.primary} strokeWidth={1.8} />
+              </View>
+              <View style={styles.heroCopy}>
+                <Text style={styles.heroEyebrow}>SUPPORT</Text>
+                <Text style={styles.heroTitle}>Get unstuck quickly</Text>
+                <Text style={styles.heroText}>
+                  Setup, scoring, rewards, and coaching guidance in one place.
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
 
           {/* FAQ Sections */}
           {FAQ_SECTIONS.map((section) => {
             const SectionIcon = section.icon;
             return (
-              <View key={section.title}>
-                <View style={styles.sectionRow}>
-                  <View style={styles.sectionLabelRow}>
-                    <SectionIcon size={13} color={section.iconColor} strokeWidth={1.5} />
-                    <Text style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
-                  </View>
-                </View>
+              <View key={section.title} style={styles.sectionBlock}>
                 <LinearGradient
                   colors={[...CARD_GRADIENT_COLORS]}
                   start={CARD_GRADIENT_START}
@@ -258,12 +268,22 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
                   style={styles.cardGradient}
                 >
                   <View style={styles.cardEdge}>
+                    <View style={styles.sectionHeader}>
+                      <View style={[styles.sectionIconWrap, { backgroundColor: `${section.iconColor}18` }]}>
+                        <SectionIcon size={17} color={section.iconColor} strokeWidth={1.8} />
+                      </View>
+                      <View style={styles.sectionTitleWrap}>
+                        <Text style={styles.sectionTitle}>{section.title}</Text>
+                        <Text style={styles.sectionMeta}>{section.items.length} common questions</Text>
+                      </View>
+                    </View>
                     {section.items.map((item, index) => (
                       <AccordionItem
                         key={item.question}
                         item={item}
                         isFirst={index === 0}
                         isLast={index === section.items.length - 1}
+                        accentColor={section.iconColor}
                       />
                     ))}
                   </View>
@@ -273,106 +293,142 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
           })}
 
           {/* Footer */}
-          <View style={styles.footerCard}>
-            <View style={styles.footerIconWrap}>
-              <Mail size={14} color="#A78BFA" strokeWidth={1.5} />
+          <LinearGradient
+            colors={['rgba(39, 48, 55, 0.96)', 'rgba(20, 25, 30, 0.96)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.footerCard}
+          >
+            <View style={styles.footerEdge}>
+              <View style={styles.footerIconWrap}>
+                <Mail size={16} color={COLORS.primary} strokeWidth={1.8} />
+              </View>
+              <View style={styles.footerContent}>
+                <Text style={styles.footerTitle}>Still need help?</Text>
+                <Text style={styles.footerEmail}>support@forma.app</Text>
+              </View>
             </View>
-            <View style={styles.footerContent}>
-              <Text style={styles.footerTitle}>Still need help?</Text>
-              <Text style={styles.footerEmail}>Contact us at support@forma.app</Text>
-            </View>
-          </View>
+          </LinearGradient>
         </Animated.View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
 
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-  },
-  headerSpacer: {
-    width: 40,
-  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 160,
+    paddingBottom: 150,
+    paddingTop: 2,
   },
 
-  /* Subtitle */
-  subtitle: {
+  /* Hero */
+  heroCard: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  heroEdge: {
+    flexDirection: 'row',
+    gap: 14,
+    padding: 16,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.075)',
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  heroIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.26)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: {
+    flex: 1,
+  },
+  heroEyebrow: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 10,
+    color: COLORS.primary,
+    letterSpacing: 0,
+    marginBottom: 4,
+  },
+  heroTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 21,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  heroText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
+    lineHeight: 19,
     color: COLORS.textSecondary,
-    lineHeight: 20,
-    marginTop: 18,
-    marginBottom: 8,
   },
 
-  /* Section Headers (matches Home) */
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+  /* Sections */
+  sectionBlock: {
+    marginTop: 14,
   },
 
   /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 18,
-  },
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: CARD_RADIUS,
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
-    borderRadius: 18,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
-    paddingVertical: 4,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingTop: 14,
+    paddingBottom: 13,
+  },
+  sectionIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitleWrap: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  sectionMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
   },
   itemDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* FAQ Items */
@@ -380,51 +436,65 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    gap: 14,
+    paddingVertical: 13,
+    gap: 11,
+  },
+  faqQuestionLast: {
+    paddingBottom: 15,
   },
   faqQuestionText: {
     flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontFamily: FONTS.ui.bold,
+    fontSize: 13,
     color: COLORS.text,
-    letterSpacing: 0.1,
-    lineHeight: 21,
+    letterSpacing: 0,
+    lineHeight: 20,
   },
   chevronWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   faqAnswerText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.textSecondary,
-    lineHeight: 21,
-    paddingBottom: 10,
+    lineHeight: 20,
+    paddingRight: 32,
+    paddingBottom: 14,
+  },
+  faqAnswerTextLast: {
+    paddingBottom: 16,
   },
 
   /* Footer */
   footerCard: {
+    marginTop: 18,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+},
+  footerEdge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 32,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.11)',
   },
   footerIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -432,15 +502,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   footerTitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontFamily: FONTS.ui.bold,
+    fontSize: 13,
     color: COLORS.text,
-    letterSpacing: 0.1,
+    letterSpacing: 0,
     marginBottom: 2,
   },
   footerEmail: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
   },
 });

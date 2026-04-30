@@ -13,3 +13,6 @@ export { TimeRangeSelector, TIME_RANGE_OPTIONS } from './TimeRangeSelector';
 export { TrendChart } from './TrendChart';
 export { SetupGuideButton } from './SetupGuideButton';
 export { ArchetypeVisual, VIEW_TYPE_LABEL } from './CameraGuideVisuals';
+export { ScreenBackground } from './ScreenBackground';
+export { GlassCard } from './GlassCard';
+export { SettingsHeader } from './SettingsHeader';

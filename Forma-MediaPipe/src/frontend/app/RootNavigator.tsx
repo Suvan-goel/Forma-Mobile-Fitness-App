@@ -2,9 +2,9 @@ import React, { memo, useCallback, useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GlassTabBar } from '../components/ui/GlassTabBar';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LogbookScreen } from '../screens/LogbookScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
@@ -46,14 +46,13 @@ import { CurrentWorkoutProvider, LoggedSet } from '../contexts/CurrentWorkoutCon
 import { CameraSettingsProvider } from '../contexts/CameraSettingsContext';
 import { ScrollProvider } from '../contexts/ScrollContext';
 import { AlertProvider } from '../contexts/AlertContext';
-import { AppHeader } from '../components/ui/AppHeader';
 import { AuthProvider, useAuth } from '../../backend/contexts/AuthContext';
 import { COLORS } from '../constants/theme';
 
 // Define the Root Stack Param List
 export type RootStackParamList = {
   Welcome: undefined;
-  MainTabs: { screen?: string } | undefined;
+  MainTabs: { screen?: string; params?: Record<string, unknown> } | undefined;
   Settings: undefined;
   ProfileSettings: undefined;
   NotificationSettings: undefined;
@@ -133,6 +132,7 @@ const RecordStackNavigator: React.FC = memo(() => {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: COLORS.background },
+        animation: 'slide_from_right',
       }}
     >
       <RecordStack.Screen name="RecordLanding" component={RecordLandingScreen} />
@@ -141,13 +141,19 @@ const RecordStackNavigator: React.FC = memo(() => {
       <RecordStack.Screen name="WorkoutTemplates" component={WorkoutTemplatesScreen} />
       <RecordStack.Screen name="CreateTemplate" component={CreateTemplateScreen} />
       <RecordStack.Screen name="TemplatePreview" component={TemplatePreviewScreen} />
-      <RecordStack.Screen name="Camera" component={CameraScreen} />
+      <RecordStack.Screen
+        name="Camera"
+        component={CameraScreen}
+        options={{
+          animation: 'slide_from_bottom',
+        }}
+      />
       <RecordStack.Screen name="ExerciseGuide" component={ExerciseGuideScreen} />
       <RecordStack.Screen
         name="SaveWorkout"
         component={SaveWorkoutScreen}
         options={{
-          contentStyle: { backgroundColor: COLORS.background },
+          contentStyle: { backgroundColor: 'transparent' },
           // No navigator option to disable bottom safe area; strip is filled by contentStyle background.
         }}
       />
@@ -165,20 +171,16 @@ const RecordTabWithProvider: React.FC = memo(() => (
   </CurrentWorkoutProvider>
 ));
 
-// Inner component — header is non-collapsible and scrolls with page content
-const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: string) => void }> = memo(({ currentTab, onTabChange }) => {
-  const insets = useSafeAreaInsets();
-
+// Inner component — renders the tab navigator within the shared screen background
+const AppTabsContent: React.FC = memo(() => {
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: currentTab === 'Record' ? 0 : insets.top }}>
-      {/* Header - Hidden for Record tab; no collapse/sticky logic */}
-      {currentTab !== 'Record' && currentTab !== 'Analytics' && currentTab !== 'Logbook' && currentTab !== 'Social' && currentTab !== 'Home' && <AppHeader />}
-
+    <ScreenBackground>
       <View style={{ flex: 1 }}>
         <Tab.Navigator
-          tabBar={(props) => <GlassTabBar {...props} onTabChange={onTabChange} />}
+          tabBar={(props) => <GlassTabBar {...props} />}
           screenOptions={{
             headerShown: false,
+            sceneStyle: { backgroundColor: 'transparent' },
           }}
         >
           <Tab.Screen name="Home" component={HomeScreen} />
@@ -188,25 +190,16 @@ const AppTabsContent: React.FC<{ currentTab: string; onTabChange: (tabName: stri
           <Tab.Screen name="Social" component={SocialScreen} />
         </Tab.Navigator>
       </View>
-    </View>
+    </ScreenBackground>
   );
 });
 
-// Bottom Tab Navigator with static header
-const AppTabs: React.FC = memo(() => {
-  const [currentTab, setCurrentTab] = useState('Home');
-  
-  // Memoize tab change handler
-  const handleTabChange = useCallback((tabName: string) => {
-    setCurrentTab(tabName);
-  }, []);
-  
-  return (
-    <ScrollProvider>
-      <AppTabsContent currentTab={currentTab} onTabChange={handleTabChange} />
-    </ScrollProvider>
-  );
-});
+// Bottom Tab Navigator
+const AppTabs: React.FC = memo(() => (
+  <ScrollProvider>
+    <AppTabsContent />
+  </ScrollProvider>
+));
 
 // Dev-only: wrapper so OnboardingFlow can be pushed onto the stack while logged in
 const OnboardingDevScreen: React.FC<{ navigation: any }> = ({ navigation }) => (
@@ -234,7 +227,7 @@ const RootStackNavigator: React.FC = () => {
 
   if (isLoading || hasOnboarded === null) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={COLORS.primary} size="large" />
       </View>
     );
@@ -246,7 +239,12 @@ const RootStackNavigator: React.FC = () => {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: COLORS.background },
+      }}
+    >
       {user ? (
         <>
           <Stack.Screen name="MainTabs" component={AppTabs} />
@@ -264,7 +262,10 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="PrivacySettings"
             component={PrivacySettingsScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="HelpCenter"
@@ -329,12 +330,18 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="FriendProfile"
             component={FriendProfileScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="FriendComparison"
             component={FriendComparisonScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="AddFriend"
@@ -349,12 +356,18 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="Rewards"
             component={RewardsScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="UserProfile"
             component={UserProfileScreen}
-            options={{ animation: 'slide_from_right' }}
+            options={{
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
           />
           <Stack.Screen
             name="Tutorials"

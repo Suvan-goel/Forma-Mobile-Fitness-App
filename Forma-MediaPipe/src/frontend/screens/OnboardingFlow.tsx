@@ -9,13 +9,13 @@
  * RootStackNavigator.
  */
 import React, { useState, useCallback, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { StyleSheet, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OnboardingCarousel } from './OnboardingCarousel';
 import { OnboardingQuestions } from './OnboardingQuestions';
 import { OnboardingInterstitial } from './OnboardingInterstitial';
 import { OnboardingAuth } from './OnboardingAuth';
-import { COLORS } from '../constants/theme';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
 
 const FREQUENCY_TO_TARGET: Record<string, string> = {
@@ -86,21 +86,21 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComp
   }, [transitionTo]);
 
   return (
-    <View style={styles.root}>
+    <ScreenBackground style={styles.root}>
       <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
         {step === 'carousel' && <OnboardingCarousel onComplete={handleCarouselComplete} />}
         {step === 'questions' && <OnboardingQuestions onComplete={handleQuestionsComplete} />}
         {step === 'interstitial' && <OnboardingInterstitial onComplete={handleInterstitialComplete} />}
         {step === 'auth' && <OnboardingAuth />}
       </Animated.View>
-    </View>
+    </ScreenBackground>
   );
 };
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   stepContainer: {
     flex: 1,

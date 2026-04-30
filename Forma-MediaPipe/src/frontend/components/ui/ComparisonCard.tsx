@@ -5,7 +5,9 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
+  CARD_SHADOW
+} from '../../constants/theme';
 
 interface ComparisonCardProps {
   label: string;
@@ -44,8 +46,8 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = memo(({
     };
   }, [yourValue, friendValue]);
 
-  const youColor = youWins ? '#34D399' : isDraw ? COLORS.textSecondary : COLORS.textTertiary;
-  const friendColor = friendWins ? '#34D399' : isDraw ? COLORS.textSecondary : COLORS.textTertiary;
+  const youColor = youWins ? '#34E0A6' : isDraw ? COLORS.textSecondary : COLORS.textTertiary;
+  const friendColor = friendWins ? '#34E0A6' : isDraw ? COLORS.textSecondary : COLORS.textTertiary;
 
   return (
     <View style={styles.cardOuter}>
@@ -96,16 +98,21 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.screenHorizontal,
     marginBottom: SPACING.sm,
     borderRadius: 18,
-    overflow: 'hidden',
-  },
+
+    ...CARD_SHADOW,
+},
   card: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 18,
-  },
+
+    ...CARD_SHADOW,
+},
   cardEdge: {
     padding: SPACING.md,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   label: {
     fontFamily: FONTS.display.semibold,
@@ -134,12 +141,12 @@ const styles = StyleSheet.create({
   barLeft: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   barRight: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   barGap: {
     width: 4,

@@ -4,14 +4,25 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Platform,
   ActivityIndicator,
   Animated,
+  ScrollView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW,
+} from '../constants/theme';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { useAuth } from '../../backend/contexts/AuthContext';
 
 // ── Blueprint Vector ────────────────────────────────────────
@@ -117,18 +128,36 @@ export const OnboardingAuth: React.FC = () => {
   const isBusy = isSigningIn !== null;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <View style={styles.content}>
+    <ScreenBackground style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Hero Section */}
         <View style={styles.heroSection}>
           <Animated.View
             style={{
               opacity: vectorFade,
               transform: [{ translateY: vectorSlide }],
-              marginBottom: 32,
             }}
           >
-            <BlueprintVector />
+            <LinearGradient
+              colors={[...CARD_GRADIENT_ELEVATED]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.blueprintCard}
+            >
+              <View style={styles.blueprintCardEdge}>
+                <View style={styles.blueprintIconWrap}>
+                  <BlueprintVector />
+                </View>
+                <View style={styles.blueprintStatusRow}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.blueprintStatus}>Profile ready</Text>
+                </View>
+              </View>
+            </LinearGradient>
           </Animated.View>
 
           <Animated.Text
@@ -140,7 +169,7 @@ export const OnboardingAuth: React.FC = () => {
               },
             ]}
           >
-            Your Custom AI{'\n'}Blueprint is Ready.
+            Your AI coach is ready.
           </Animated.Text>
 
           <Animated.Text
@@ -152,7 +181,7 @@ export const OnboardingAuth: React.FC = () => {
               },
             ]}
           >
-            Create your profile to access your{'\n'}personalized Logbook.
+            Create your profile to save form scores, workouts, and training progress.
           </Animated.Text>
         </View>
 
@@ -187,7 +216,6 @@ export const OnboardingAuth: React.FC = () => {
           <Animated.View
             style={[
               styles.buttonOuter,
-              styles.googleWrapper,
               {
                 opacity: googleButtonFade,
                 transform: [{ translateY: googleSlide }],
@@ -199,13 +227,18 @@ export const OnboardingAuth: React.FC = () => {
               activeOpacity={0.85}
               disabled={isBusy}
             >
-              <View style={styles.googleButtonInner}>
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.primaryDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.googleButtonInner}
+              >
                 {isSigningIn === 'google' ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.buttonText}>Continue with Google</Text>
                 )}
-              </View>
+              </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
 
@@ -227,8 +260,8 @@ export const OnboardingAuth: React.FC = () => {
             By continuing, you agree to our Terms of Service
           </Animated.Text>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </ScreenBackground>
   );
 };
 
@@ -237,81 +270,124 @@ export const OnboardingAuth: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+  },
+  scrollView: {
+    flex: 1,
   },
   content: {
-    flex: 1,
-    paddingHorizontal: SPACING.screenHorizontal + 8,
+    flexGrow: 1,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingVertical: 28,
     justifyContent: 'center',
+    gap: 28,
   },
   heroSection: {
     alignItems: 'center',
-    marginBottom: 56,
+    gap: 18,
+  },
+  blueprintCard: {
+    width: 176,
+    height: 176,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  blueprintCardEdge: {
+    flex: 1,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  blueprintIconWrap: {
+    width: 98,
+    height: 98,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.20)',
+  },
+  blueprintStatusRow: {
+    minHeight: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(52, 224, 166, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 224, 166, 0.20)',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.green,
+  },
+  blueprintStatus: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.green,
+    letterSpacing: 0,
   },
   header: {
     fontFamily: FONTS.display.bold,
-    fontSize: 30,
+    fontSize: 34,
     color: COLORS.text,
     textAlign: 'center',
-    letterSpacing: -0.5,
-    lineHeight: 38,
-    marginBottom: 16,
+    letterSpacing: 0,
+    lineHeight: 39,
   },
   subtext: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 16,
+    fontSize: 15,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
+    maxWidth: 310,
   },
   buttonSection: {
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   buttonOuter: {
     width: '100%',
-    borderRadius: 28,
+    borderRadius: 12,
     overflow: 'hidden',
+    ...CARD_SHADOW,
   },
   appleButtonInner: {
-    height: 56,
-    borderRadius: 28,
+    height: 54,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  googleWrapper: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-      },
-      android: { elevation: 10 },
-    }),
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   googleButtonInner: {
-    height: 56,
-    borderRadius: 28,
+    height: 54,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    borderColor: 'rgba(255,255,255,0.10)',
   },
   buttonText: {
     fontFamily: FONTS.display.bold,
     fontSize: 15,
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 0,
   },
   errorText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
-    color: '#EF4444',
+    color: COLORS.red,
     textAlign: 'center',
     marginTop: 4,
   },
@@ -320,6 +396,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textTertiary,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 4,
+    lineHeight: 17,
   },
 });

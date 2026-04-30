@@ -3,12 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   FlatList,
   TouchableOpacity,
   Animated,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
   Path,
@@ -19,9 +20,16 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW,
+} from '../constants/theme';
 
 // ── Slide Data ──────────────────────────────────────────────
 interface SlideData {
@@ -130,7 +138,7 @@ const MovementVector: React.FC = () => (
     <SvgText x={234} y={32} fill={COLORS.primary} fontSize={9} textAnchor="middle" fontFamily="Courier New" opacity={0.85}>FORM  96/100</SvgText>
 
     {/* Baseline rule */}
-    <Line x1={10} y1={202} x2={278} y2={202} stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+    <Line x1={10} y1={202} x2={278} y2={202} stroke="rgba(255, 255, 255, 0.055)" strokeWidth={1} />
   </Svg>
 );
 
@@ -198,10 +206,10 @@ const ProgressVector: React.FC = () => {
   return (
     <Svg width={290} height={220} viewBox="0 0 290 220">
       {/* Horizontal grid lines */}
-      <Line x1={16} y1={baseline}       x2={278} y2={baseline}       stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-      <Line x1={16} y1={baseline - 50}  x2={278} y2={baseline - 50}  stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
-      <Line x1={16} y1={baseline - 100} x2={278} y2={baseline - 100} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
-      <Line x1={16} y1={baseline - 150} x2={278} y2={baseline - 150} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
+      <Line x1={16} y1={baseline}       x2={278} y2={baseline}       stroke="rgba(255, 255, 255, 0.055)" strokeWidth={1} />
+      <Line x1={16} y1={baseline - 50}  x2={278} y2={baseline - 50}  stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} />
+      <Line x1={16} y1={baseline - 100} x2={278} y2={baseline - 100} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} />
+      <Line x1={16} y1={baseline - 150} x2={278} y2={baseline - 150} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} />
 
       {/* Grid labels */}
       <SvgText x={11} y={baseline - 46}  fill="rgba(255,255,255,0.2)" fontSize={7.5} textAnchor="end" fontFamily="Courier New">50</SvgText>
@@ -279,24 +287,40 @@ const VECTORS = [MovementVector, PrecisionVector, ProgressVector];
 
 // ── Slide Component ─────────────────────────────────────────
 
-const CarouselSlide: React.FC<{ item: SlideData; index: number }> = ({ item, index }) => {
+const CarouselSlide: React.FC<{ item: SlideData; index: number; width: number }> = ({ item, index, width }) => {
   const Vector = VECTORS[index];
 
   return (
-    <View style={[slideStyles.container, { width: SCREEN_WIDTH }]}>
-      {/* Art section — grows to fill remaining space above text */}
-      <View style={slideStyles.artSection}>
-        <Vector />
-      </View>
+    <View style={[slideStyles.container, { width }]}>
+      <View style={slideStyles.content}>
+        <LinearGradient
+          colors={[...CARD_GRADIENT_ELEVATED]}
+          start={CARD_GRADIENT_START}
+          end={CARD_GRADIENT_END}
+          style={slideStyles.artCard}
+        >
+          <View style={slideStyles.artCardEdge}>
+            <View style={slideStyles.visualHeader}>
+              <Text style={slideStyles.visualLabel}>FORMA AI</Text>
+              <View style={slideStyles.livePill}>
+                <View style={slideStyles.liveDot} />
+                <Text style={slideStyles.liveText}>Live</Text>
+              </View>
+            </View>
+            <View style={slideStyles.artSection}>
+              <Vector />
+            </View>
+          </View>
+        </LinearGradient>
 
-      {/* Text section — natural height, anchors to bottom */}
-      <View style={slideStyles.textSection}>
-        <View style={slideStyles.superHeaderRow}>
-          <View style={slideStyles.accentDash} />
-          <Text style={slideStyles.superHeader}>{item.superHeader}</Text>
+        <View style={slideStyles.textSection}>
+          <View style={slideStyles.superHeaderRow}>
+            <View style={slideStyles.accentDash} />
+            <Text style={slideStyles.superHeader}>{item.superHeader}</Text>
+          </View>
+          <Text style={slideStyles.header}>{item.header}</Text>
+          <Text style={slideStyles.subtext}>{item.subtext}</Text>
         </View>
-        <Text style={slideStyles.header}>{item.header}</Text>
-        <Text style={slideStyles.subtext}>{item.subtext}</Text>
       </View>
     </View>
   );
@@ -305,13 +329,66 @@ const CarouselSlide: React.FC<{ item: SlideData; index: number }> = ({ item, ind
 const slideStyles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'flex-start',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+    gap: 22,
+  },
+  artCard: {
+    minHeight: 316,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  artCardEdge: {
+    flex: 1,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    padding: 16,
+  },
+  visualHeader: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  visualLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 1.8,
+  },
+  livePill: {
+    minHeight: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    backgroundColor: 'rgba(52, 224, 166, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 224, 166, 0.20)',
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.green,
+  },
+  liveText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.green,
+    letterSpacing: 0,
   },
   artSection: {
-    flex: 55,
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 20,
+    justifyContent: 'center',
   },
   superHeaderRow: {
     flexDirection: 'row',
@@ -328,29 +405,27 @@ const slideStyles = StyleSheet.create({
   },
   superHeader: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.textSecondary,
-    letterSpacing: 0.8,
+    letterSpacing: 0,
   },
   header: {
     fontFamily: FONTS.display.bold,
-    fontSize: 55,
+    fontSize: 42,
     color: COLORS.text,
-    letterSpacing: -2,
-    lineHeight: 66,
-    marginBottom: 14,
+    letterSpacing: 0,
+    lineHeight: 48,
+    marginBottom: 11,
   },
   textSection: {
-    flex: 45,
-    justifyContent: 'center',
-    paddingHorizontal: 36,
-    paddingBottom: 16,
+    paddingHorizontal: 4,
   },
   subtext: {
     fontFamily: FONTS.ui.regular,
     fontSize: 15,
     color: COLORS.textSecondary,
-    lineHeight: 23,
+    lineHeight: 22,
+    letterSpacing: 0,
   },
 });
 
@@ -362,6 +437,7 @@ interface OnboardingCarouselProps {
 
 export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComplete }) => {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = useState(0);
@@ -411,18 +487,18 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
 
   const renderItem = useCallback(
     ({ item, index }: { item: SlideData; index: number }) => (
-      <CarouselSlide item={item} index={index} />
+      <CarouselSlide item={item} index={index} width={screenWidth} />
     ),
-    [],
+    [screenWidth],
   );
 
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
-      length: SCREEN_WIDTH,
-      offset: SCREEN_WIDTH * index,
+      length: screenWidth,
+      offset: screenWidth * index,
       index,
     }),
-    [],
+    [screenWidth],
   );
 
   const glowOpacity = buttonGlow.interpolate({
@@ -465,9 +541,9 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
         <View style={styles.paginationRow}>
           {SLIDES.map((_, i) => {
             const inputRange = [
-              (i - 1) * SCREEN_WIDTH,
-              i * SCREEN_WIDTH,
-              (i + 1) * SCREEN_WIDTH,
+              (i - 1) * screenWidth,
+              i * screenWidth,
+              (i + 1) * screenWidth,
             ];
             const dotWidth = scrollX.interpolate({
               inputRange,
@@ -525,15 +601,15 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   carouselContainer: {
     flex: 1,
   },
   bottomControls: {
-    paddingHorizontal: SPACING.screenHorizontal + 8,
+    paddingHorizontal: SPACING.screenHorizontal,
     paddingBottom: 16,
-    gap: 24,
+    gap: 20,
   },
   paginationRow: {
     flexDirection: 'row',
@@ -546,22 +622,22 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   ctaWrapper: {
-    borderRadius: 28,
+    borderRadius: 12,
     overflow: 'visible',
   },
   ctaButton: {
-    height: 56,
-    borderRadius: 28,
+    height: 54,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: COLORS.primary,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   ctaText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontSize: 16,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
 });

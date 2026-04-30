@@ -37,6 +37,10 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW,
+  SCREEN_GRADIENT_COLORS,
+  SCREEN_GRADIENT_START,
+  SCREEN_GRADIENT_END,
   getScoreColor,
 } from '../constants/theme';
 import { useWorkouts, useRewards, useAnalytics, useCreateActivityPost } from '../../backend/hooks';
@@ -190,13 +194,18 @@ export const CreateActivityPostScreen: React.FC = () => {
     switch (icon) {
       case 'streak': return <Flame size={14} color="#E07856" strokeWidth={1.5} />;
       case 'reps': return <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />;
-      case 'score': return <Target size={14} color="#34D399" strokeWidth={1.5} />;
+      case 'score': return <Target size={14} color="#34E0A6" strokeWidth={1.5} />;
       default: return <Activity size={14} color={COLORS.accent} strokeWidth={1.5} />;
     }
   }, []);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={[styles.container, { paddingTop: insets.top }]}
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -211,18 +220,28 @@ export const CreateActivityPostScreen: React.FC = () => {
           >
             <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>New Post</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>New Post</Text>
+            <Text style={styles.headerSubtitle}>Share a workout update</Text>
+          </View>
           <TouchableOpacity
-            style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
+            style={styles.postBtnShell}
             onPress={handlePost}
             disabled={!canPost || isPosting}
             activeOpacity={0.8}
           >
-            {isPosting ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={[styles.postBtnText, !canPost && styles.postBtnTextDisabled]}>Post</Text>
-            )}
+            <LinearGradient
+              colors={canPost ? [COLORS.primary, COLORS.primaryDark] : ['rgba(122, 85, 255, 0.22)', 'rgba(122, 85, 255, 0.12)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.postBtn}
+            >
+              {isPosting ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={[styles.postBtnText, !canPost && styles.postBtnTextDisabled]}>Post</Text>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
@@ -233,16 +252,29 @@ export const CreateActivityPostScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         >
           {/* ── Caption input ── */}
-          <TextInput
-            style={styles.captionInput}
-            placeholder="What's on your mind?"
-            placeholderTextColor={COLORS.textTertiary}
-            value={caption}
-            onChangeText={setCaption}
-            multiline
-            textAlignVertical="top"
-            autoFocus
-          />
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.composerCard}
+          >
+            <View style={styles.composerEdge}>
+              <View style={styles.composerHeader}>
+                <Text style={styles.composerLabel}>Caption</Text>
+                <Text style={styles.composerMeta}>{caption.trim().length} chars</Text>
+              </View>
+              <TextInput
+                style={styles.captionInput}
+                placeholder="Share how the session went..."
+                placeholderTextColor={COLORS.textTertiary}
+                value={caption}
+                onChangeText={setCaption}
+                multiline
+                textAlignVertical="top"
+                autoFocus
+              />
+            </View>
+          </LinearGradient>
 
           {/* ── Selected attachment preview ── */}
           {attachment && (
@@ -308,7 +340,8 @@ export const CreateActivityPostScreen: React.FC = () => {
 
           {/* ── Attach section label ── */}
           <View style={styles.sectionLabelRow}>
-            <Text style={styles.sectionLabel}>ATTACH</Text>
+            <Text style={styles.sectionLabel}>Add to post</Text>
+            <Text style={styles.sectionHint}>Optional</Text>
           </View>
 
           {/* ── Picker buttons ── */}
@@ -327,7 +360,7 @@ export const CreateActivityPostScreen: React.FC = () => {
             />
             <PickerButton
               label="Stat"
-              icon={<TrendingUp size={15} color="#34D399" strokeWidth={1.5} />}
+              icon={<TrendingUp size={15} color="#34E0A6" strokeWidth={1.5} />}
               active={activePicker === 'stat'}
               onPress={() => togglePicker('stat')}
             />
@@ -434,7 +467,7 @@ export const CreateActivityPostScreen: React.FC = () => {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </LinearGradient>
   );
 };
 
@@ -479,70 +512,123 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    paddingTop: 8,
+    paddingBottom: 14,
   },
   headerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 1,
+    paddingHorizontal: 8,
+  },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 20,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 0,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
+  },
+  postBtnShell: {
+    minWidth: 68,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   postBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-  },
-  postBtnDisabled: {
-    backgroundColor: 'rgba(139, 92, 246, 0.20)',
+    minHeight: 38,
+    minWidth: 68,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
   postBtnText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 14,
     color: '#FFFFFF',
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   postBtnTextDisabled: {
-    color: 'rgba(255, 255, 255, 0.35)',
+    color: 'rgba(255, 255, 255, 0.42)',
   },
 
   /* ── Content ── */
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 4,
+  },
+  composerCard: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginTop: 2,
+    marginBottom: 14,
+    ...CARD_SHADOW,
+  },
+  composerEdge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 10,
+  },
+  composerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  composerLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  composerMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
   },
   captionInput: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONTS.ui.regular,
     color: COLORS.text,
-    minHeight: 100,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.md,
+    minHeight: 128,
+    lineHeight: 21,
+    paddingTop: 0,
+    paddingBottom: 4,
   },
 
   /* ── Attachment preview ── */
   attachmentPreview: {
-    marginBottom: SPACING.md,
-    borderRadius: 16,
+    marginBottom: 14,
+    borderRadius: 8,
     overflow: 'hidden',
+    ...CARD_SHADOW,
   },
   attachmentGradient: {
-    borderRadius: 16,
+    borderRadius: 8,
   },
   attachmentEdge: {
-    borderRadius: 16,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
   },
   attachmentRow: {
@@ -552,7 +638,7 @@ const styles = StyleSheet.create({
   attachmentIconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 11,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -565,7 +651,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.semibold,
     fontSize: 14,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   attachmentSub: {
     fontFamily: FONTS.ui.regular,
@@ -574,10 +660,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   attachmentScoreBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
   },
   attachmentScoreText: {
@@ -590,31 +676,38 @@ const styles = StyleSheet.create({
     right: 8,
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   /* ── Section label ── */
   sectionLabelRow: {
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingTop: 2,
+    paddingBottom: 9,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  sectionHint: {
+    fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
-    letterSpacing: 2,
+    letterSpacing: 0,
   },
 
   /* ── Picker buttons row ── */
   pickerButtons: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
+    gap: 8,
+    marginBottom: 12,
   },
   pickerBtn: {
     flex: 1,
@@ -622,15 +715,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: 14,
+    minHeight: 46,
+    paddingVertical: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    backgroundColor: 'rgba(31, 39, 45, 0.72)',
   },
   pickerBtnActive: {
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderColor: 'rgba(122, 85, 255, 0.46)',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
   },
   pickerBtnText: {
     fontFamily: FONTS.display.semibold,
@@ -643,12 +737,13 @@ const styles = StyleSheet.create({
 
   /* ── Picker list ── */
   pickerList: {
-    borderRadius: 16,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    backgroundColor: 'rgba(31, 39, 45, 0.72)',
     overflow: 'hidden',
-    marginBottom: SPACING.md,
+    marginBottom: 16,
+    ...CARD_SHADOW,
   },
   pickerLoading: {
     paddingVertical: SPACING.xl,
@@ -663,18 +758,19 @@ const styles = StyleSheet.create({
   pickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    minHeight: 58,
+    paddingVertical: 11,
     paddingHorizontal: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.045)',
   },
   pickerItemSelected: {
-    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
   },
   pickerItemIcon: {
     width: 32,
     height: 32,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -687,7 +783,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.semibold,
     fontSize: 13,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   pickerItemSub: {
     fontFamily: FONTS.ui.regular,
@@ -696,10 +792,10 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   pickerScoreBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 7,
     borderWidth: 1,
     marginRight: SPACING.sm,
   },
@@ -710,7 +806,7 @@ const styles = StyleSheet.create({
   pickerCheck: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: 7,
     backgroundColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',

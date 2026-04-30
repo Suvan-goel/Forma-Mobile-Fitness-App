@@ -78,6 +78,7 @@ export interface WorkoutSession {
   totalReps: number;
   formScore: number;
   category?: string;
+  firstExerciseName?: string;
   userId?: string;
 }
 
@@ -128,6 +129,7 @@ export interface AnalyticsSummary {
   streakDays: number;
   mostTrainedExercise: string | null;
   personalBest: { exercise: string; weight: number } | null;
+  personalBests?: { exercise: string; weight: number; date?: string | null }[];
   formTrendDirection: 'up' | 'down' | 'flat';
   formTrendPercent: number;
 }
@@ -192,6 +194,7 @@ export interface LeaderboardEntry {
   displayName: string;
   avatarUrl?: string;
   score: number;
+  streakDays?: number;
   trend?: 'up' | 'down' | 'stable';
 }
 

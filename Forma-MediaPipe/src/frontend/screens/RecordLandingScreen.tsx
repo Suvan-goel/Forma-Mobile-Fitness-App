@@ -1,13 +1,25 @@
+/**
+ * RecordLandingScreen — Capture
+ *
+ * Sections (matches design reference):
+ *   1. Header: "Capture" + date + bell icon
+ *   2. Current workout / In-progress card with Start Workout button
+ *   3. Tools card (Choose Template, Exercise Guide, Camera Setup)
+ *   4. Recent templates horizontal list
+ */
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
   Text,
   TouchableOpacity,
-  Platform,
   Modal,
   Image,
+  ImageSourcePropType,
   Animated,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -20,19 +32,35 @@ import {
   Pause,
   Play,
   Flag,
-  Zap,
   ChevronRight,
-  Dumbbell,
   ArrowRight,
   BookOpen,
+  Camera,
+  Settings as SettingsIcon,
+  Clock,
+  Dumbbell,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import {
+  COLORS,
+  SPACING,
+  FONTS,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  SCREEN_GRADIENT_COLORS,
+  SCREEN_GRADIENT_START,
+  SCREEN_GRADIENT_END,
+  CARD_SHADOW
+} from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 import { CameraSetupGuide } from './CameraSetupGuide';
 
 import type { RecordStackParamList, RootStackParamList } from '../app/RootNavigator';
-import { useUser } from '../../backend/hooks';
+import { useCustomTemplates } from '../../backend/hooks';
 import { useAlert } from '../contexts/AlertContext';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
@@ -46,9 +74,7 @@ const formatStopwatch = (totalSeconds: number) => {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  return `${h.toString().padStart(2, '0')}:${m
-    .toString()
-    .padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
 const getTimerParts = (totalSeconds: number) => {
@@ -64,18 +90,102 @@ const getTimerParts = (totalSeconds: number) => {
   ];
 };
 
-const formatHeaderDate = (): string => {
+const formatDateLine = (): string => {
   const d = new Date();
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
 };
+
+type CaptureTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  templateImage?: ImageSourcePropType;
+  exercises: {
+    name: string;
+    category: string;
+    targetSets: number;
+  }[];
+};
+
+const TEMPLATE_IMAGES_BY_NAME: Record<string, ImageSourcePropType> = {
+  'lower body strength': require('../assets/generated/templates/lower-body-strength.png'),
+  'upper body push': require('../assets/generated/templates/push-day.png'),
+  'push day': require('../assets/generated/templates/push-day.png'),
+  'pull strength': require('../assets/generated/templates/pull-day.png'),
+  'pull day': require('../assets/generated/templates/pull-day.png'),
+  'full body': require('../assets/generated/templates/full-body.png'),
+};
+
+const EXERCISE_IMAGES_BY_NAME: Record<string, ImageSourcePropType> = {
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Back Squat': require('../assets/exercises/barbell_squat.png'),
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+};
+
+const DEFAULT_TEMPLATE_IMAGE = require('../assets/generated/templates/full-body.png');
+
+const getTemplateImage = (template: CaptureTemplate): ImageSourcePropType => {
+  const namedTemplate = TEMPLATE_IMAGES_BY_NAME[template.name.trim().toLowerCase()];
+  if (template.templateImage || namedTemplate) {
+    return template.templateImage ?? namedTemplate;
+  }
+
+  return EXERCISE_IMAGES_BY_NAME[template.exercises[0]?.name] ?? DEFAULT_TEMPLATE_IMAGE;
+};
+
+const DEFAULT_TEMPLATES: CaptureTemplate[] = [
+  {
+    id: 'default-lower-body',
+    name: 'Lower Body Strength',
+    description: 'Squat-focused lower body session.',
+    templateImage: require('../assets/generated/templates/lower-body-strength.png'),
+    exercises: [
+      { name: 'Barbell Squat', category: 'Weightlifting', targetSets: 4 },
+      { name: 'Leg Extensions', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Lying Leg Curl', category: 'Weightlifting', targetSets: 3 },
+    ],
+  },
+  {
+    id: 'default-upper-push',
+    name: 'Upper Body Push',
+    description: 'Chest, shoulders, and triceps.',
+    templateImage: require('../assets/generated/templates/push-day.png'),
+    exercises: [
+      { name: 'Push-Up', category: 'Calisthenics', targetSets: 4 },
+      { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Cable Pushdowns', category: 'Weightlifting', targetSets: 3 },
+    ],
+  },
+  {
+    id: 'default-pull',
+    name: 'Pull Strength',
+    description: 'Back and biceps session.',
+    templateImage: require('../assets/generated/templates/pull-day.png'),
+    exercises: [
+      { name: 'Cable Row', category: 'Weightlifting', targetSets: 4 },
+      { name: 'Cable Lat Pulldowns', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Barbell Curl', category: 'Weightlifting', targetSets: 3 },
+    ],
+  },
+];
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
-  const { user: profileUser } = useUser();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { templates } = useCustomTemplates();
   const {
     workoutInProgress,
     sets,
@@ -86,12 +196,17 @@ export const RecordLandingScreen: React.FC = () => {
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
-  const cardGap = 0;
-  const bottomPadding = navigationBarHeight + cardGap;
+  const sectionGap = windowHeight < 740 ? 10 : 14;
+  const contentMinHeight = Math.max(430, windowHeight - insets.top - navigationBarHeight - 56);
+  const availableSectionHeight = contentMinHeight - sectionGap * 2;
+  const standardSectionHeight = Math.floor(availableSectionHeight * 0.305);
+  const templateSectionHeight = Math.max(standardSectionHeight + 18, availableSectionHeight - standardSectionHeight * 2);
+  const templateCardHeight = Math.max(132, Math.min(156, templateSectionHeight - 18));
+  const templateCardWidth = (windowWidth - SPACING.screenHorizontal * 2 - 9 * 2) / 3;
+  const templateThumbHeight = Math.max(78, Math.min(100, templateCardHeight - 62));
 
-  // ── Entrance animations ──
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(24)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -100,7 +215,6 @@ export const RecordLandingScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  // ── Camera Setup Guide (first-visit gate) ──
   const [showSetupGuide, setShowSetupGuide] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -124,17 +238,10 @@ export const RecordLandingScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [workoutInProgress, workoutPaused, setWorkoutElapsedSeconds]);
 
-  const handleStartWorkout = () => {
-    navigation.navigate('CurrentWorkout');
-  };
-
-  const handleResumeWorkout = () => {
-    navigation.navigate('CurrentWorkout');
-  };
-
-  const handleChooseTemplate = () => {
-    navigation.navigate('WorkoutTemplates');
-  };
+  const handleStartWorkout = () => navigation.navigate('CurrentWorkout');
+  const handleResumeWorkout = () => navigation.navigate('CurrentWorkout');
+  const handleChooseTemplate = () => navigation.navigate('WorkoutTemplates');
+  const handleCameraSetup = () => setShowSetupGuide(true);
 
   const handleDiscardWorkout = () => {
     showAlert(
@@ -147,16 +254,11 @@ export const RecordLandingScreen: React.FC = () => {
     );
   };
 
-  const handlePauseWorkout = () => {
-    setWorkoutPaused((p) => !p);
-  };
+  const handlePauseWorkout = () => setWorkoutPaused((p) => !p);
 
   const handleFinishWorkout = () => {
     if (sets.length === 0) {
-      showAlert(
-        'No sets recorded',
-        'Add at least one set before ending the workout.'
-      );
+      showAlert('No sets recorded', 'Add at least one set before ending the workout.');
       return;
     }
     const duration = formatStopwatch(workoutElapsedSeconds);
@@ -168,17 +270,10 @@ export const RecordLandingScreen: React.FC = () => {
     const category = sets[0]?.exerciseName || 'General';
 
     navigation.navigate('SaveWorkout', {
-      workoutData: {
-        category,
-        duration,
-        totalSets,
-        totalReps,
-        avgFormScore,
-      },
+      workoutData: { category, duration, totalSets, totalReps, avgFormScore },
     });
   };
 
-  // Show camera setup guide on first visit (Modal covers the tab bar)
   if (showSetupGuide === null) return <View style={styles.container} />;
   if (showSetupGuide) {
     return (
@@ -188,678 +283,685 @@ export const RecordLandingScreen: React.FC = () => {
     );
   }
 
+  const savedTemplates: CaptureTemplate[] = templates.slice(0, 3).map(template => ({
+      id: template.id,
+      name: template.name,
+      description: template.description || 'Your saved workout template.',
+      exercises: template.exercises.map(exercise => ({
+        name: exercise.name,
+        category: exercise.category,
+        targetSets: exercise.targetSets,
+      })),
+    }));
+  const savedTemplateNames = new Set(savedTemplates.map(template => template.name.trim().toLowerCase()));
+  const recentTemplates: CaptureTemplate[] = [
+    ...savedTemplates,
+    ...DEFAULT_TEMPLATES.filter(template => !savedTemplateNames.has(template.name.trim().toLowerCase())),
+  ].slice(0, 3);
+  const templatesLabel = templates.length > 0 ? 'RECENT TEMPLATES' : 'FAVOURITE TEMPLATES';
+
   return (
-    <View style={styles.container}>
-      {/* ── HEADER (HomeScreen style) ────────────── */}
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={styles.container}
+    >
+      {/* ── HEADER ──────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerName}>CAPTURE</Text>
-            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
-          </View>
+        <Text style={styles.headerTitle}>CAPTURE</Text>
+        <View style={styles.headerSide}>
+          <TouchableOpacity
+            onPress={() => rootNavigation.navigate('Settings')}
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          onPress={() => rootNavigation.navigate('UserProfile')}
-          activeOpacity={0.7}
-          style={styles.profileBtn}
-        >
-          {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
-          ) : profileUser ? (
-            <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileGradient}
-            >
-              <Text style={styles.profileInitial}>
-                {profileUser.displayName[0].toUpperCase()}
-              </Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.profilePlaceholder} />
-          )}
-        </TouchableOpacity>
       </View>
 
-      {/* ── CONTENT ────────────────────────────── */}
-      <Animated.View
-        style={[
-          styles.contentArea,
-          { paddingBottom: bottomPadding },
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-          workoutInProgress && styles.contentCentered,
-        ]}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: navigationBarHeight }]}
+        showsVerticalScrollIndicator={false}
       >
-        {workoutInProgress ? (
-          /* ── Active Workout Card ── */
-          <View style={styles.activeCardOuter}>
-            <LinearGradient
-              colors={['#1A1625', '#13101D', '#0D0B14']}
-              start={{ x: 0.2, y: 0 }}
-              end={{ x: 0.8, y: 1 }}
-              style={[styles.cardGradient, { flex: undefined }]}
-            >
-              <View style={styles.activeGlassEdge}>
-                {/* ── Top bar: status + pause ── */}
-                <View style={styles.activeTopBar}>
-                  <View style={[styles.statusPill, workoutPaused && styles.statusPillPaused]}>
-                    <View style={[styles.statusDot, workoutPaused && styles.statusDotPaused]} />
-                    <Text style={[styles.statusPillText, workoutPaused && styles.statusPillTextPaused]}>
-                      {workoutPaused ? 'PAUSED' : 'ACTIVE'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.pauseBtn, workoutPaused && styles.pauseBtnActive]}
-                    onPress={handlePauseWorkout}
-                    activeOpacity={0.7}
-                  >
-                    {workoutPaused ? (
-                      <Play size={14} color={COLORS.text} strokeWidth={2} />
-                    ) : (
-                      <Pause size={14} color={COLORS.textSecondary} strokeWidth={2} />
-                    )}
-                  </TouchableOpacity>
-                </View>
+        <Animated.View
+          style={[
+            styles.contentStack,
+            {
+              minHeight: contentMinHeight,
+              gap: sectionGap,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={[styles.screenSection, { minHeight: standardSectionHeight }]}>
+            <Text style={styles.dateLine}>{formatDateLine()}</Text>
 
-                {/* ── Timer + inline stats ── */}
-                <TouchableOpacity
-                  style={styles.activeCardContent}
-                  onPress={handleResumeWorkout}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.timerDisplay}>
-                    {getTimerParts(workoutElapsedSeconds).map((part, i) => (
-                      <MonoText
-                        key={i}
-                        bold={part !== ':'}
-                        style={part === ':' ? styles.timerColon : styles.timerDigit}
-                      >
-                        {part}
-                      </MonoText>
-                    ))}
+            {workoutInProgress ? (
+              /* ── ACTIVE WORKOUT CARD ── */
+              <View style={styles.activeOuter}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_ELEVATED]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.activeGradient}
+              >
+                <View style={styles.activeEdge}>
+                  <View style={styles.activeBody}>
+                    <View style={styles.activeBodyText}>
+                      <Text style={styles.activeWorkoutName}>CURRENT WORKOUT</Text>
+                      <View style={styles.timerDisplay}>
+                        {getTimerParts(workoutElapsedSeconds).map((part, i) => (
+                          <MonoText
+                            key={i}
+                            bold={part !== ':'}
+                            style={part === ':' ? styles.timerColon : styles.timerDigit}
+                          >
+                            {part}
+                          </MonoText>
+                        ))}
+                      </View>
+                      <View style={styles.activeMetaRow}>
+                        <View style={styles.metaIconRow}>
+                          <Dumbbell size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>{sets.length} sets</Text>
+                        </View>
+                        <View style={styles.metaIconRow}>
+                          <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>
+                            {sets.reduce((sum, set) => sum + set.reps, 0)} reps
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.pauseBtn, workoutPaused && styles.pauseBtnActive]}
+                      onPress={handlePauseWorkout}
+                      activeOpacity={0.7}
+                    >
+                      {workoutPaused ? (
+                        <Play size={16} color={COLORS.text} strokeWidth={2} />
+                      ) : (
+                        <Pause size={16} color={COLORS.textSecondary} strokeWidth={2} />
+                      )}
+                    </TouchableOpacity>
                   </View>
-                  <View style={styles.statsRow}>
-                    <MonoText bold style={styles.statValue}>{sets.length}</MonoText>
-                    <Text style={styles.statLabel}>{sets.length === 1 ? 'set' : 'sets'}</Text>
-                    <View style={styles.statDot} />
-                    <MonoText bold style={styles.statValue}>
-                      {sets.reduce((sum, set) => sum + set.reps, 0)}
-                    </MonoText>
-                    <Text style={styles.statLabel}>reps</Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* ── Bottom actions ── */}
-                <View style={styles.workoutActions}>
-                  <TouchableOpacity
-                    style={styles.discardBtn}
-                    onPress={handleDiscardWorkout}
-                    activeOpacity={0.7}
-                  >
-                    <Trash2 size={15} color="#EF4444" strokeWidth={1.5} />
-                  </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={handleResumeWorkout}
                     activeOpacity={0.85}
-                    style={styles.resumeBtnOuter}
+                    style={styles.startBtnOuter}
                   >
                     <LinearGradient
-                      colors={['rgba(139, 92, 246, 0.5)', 'rgba(124, 58, 237, 0.25)']}
+                      colors={['#7A55FF', '#633FE5']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={styles.resumeGradient}
+                      style={styles.startBtn}
                     >
-                      <Text style={styles.resumeBtnText}>Open workout</Text>
-                      <ArrowRight size={14} color={COLORS.text} strokeWidth={2} />
+                      <Text style={styles.startBtnText}>Open workout</Text>
+                      <ArrowRight size={14} color="#FFFFFF" strokeWidth={2.5} />
                     </LinearGradient>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.finishBtn}
-                    onPress={handleFinishWorkout}
-                    activeOpacity={0.7}
-                  >
-                    <Flag size={15} color="#34D399" strokeWidth={1.5} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </LinearGradient>
-          </View>
-        ) : (
-          <>
-            {/* ── Primary CTA: New Session ── */}
-            <TouchableOpacity
-              onPress={handleStartWorkout}
-              activeOpacity={0.85}
-              style={styles.heroCta}
-            >
-              <LinearGradient
-                colors={['rgba(139, 92, 246, 0.55)', 'rgba(124, 58, 237, 0.25)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.heroGradient}
-              >
-                <View style={styles.heroContent}>
-                  <Zap size={32} color="#FFFFFF" strokeWidth={2} />
-                  <Text style={styles.heroTitle}>New Session</Text>
-                  <Text style={styles.heroDesc}>
-                    Start a free-form workout with{'\n'}real-time AI form analysis
-                  </Text>
-                </View>
-                <View style={styles.heroFooter}>
-                  <Text style={styles.heroAction}>Start workout</Text>
-                  <ChevronRight size={16} color={COLORS.accent} strokeWidth={2} />
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* ── Secondary: Templates ── */}
-            <TouchableOpacity
-              onPress={handleChooseTemplate}
-              activeOpacity={0.85}
-              style={styles.secondaryCard}
-            >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.secondaryGradient}
-              >
-                <View style={styles.secondaryGlass}>
-                  <View style={styles.secondaryContent}>
-                    <LayoutTemplate size={24} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.secondaryTitle}>Templates</Text>
-                    <Text style={styles.secondaryDesc}>
-                      Pick from your saved routines
-                    </Text>
-                  </View>
-                  <View style={styles.secondaryFooter}>
-                    <Text style={styles.secondaryAction}>Browse templates</Text>
-                    <ChevronRight size={14} color={COLORS.textSecondary} strokeWidth={1.5} />
+                  <View style={styles.activeFooterRow}>
+                    <TouchableOpacity
+                      style={styles.footerBtn}
+                      onPress={handleDiscardWorkout}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={13} color={COLORS.red} strokeWidth={1.7} />
+                      <Text style={[styles.footerBtnText, { color: COLORS.red }]}>Discard</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.footerBtn}
+                      onPress={handleFinishWorkout}
+                      activeOpacity={0.7}
+                    >
+                      <Flag size={13} color={COLORS.green} strokeWidth={1.7} />
+                      <Text style={[styles.footerBtnText, { color: COLORS.green }]}>Finish</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </LinearGradient>
-            </TouchableOpacity>
-
-            {/* ── Exercise Tutorials ── */}
-            <TouchableOpacity
-              onPress={() => rootNavigation.navigate('Tutorials')}
-              activeOpacity={0.7}
-              style={styles.tutorialsCard}
-            >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.tutorialsGradient}
-              >
-                <View style={styles.tutorialsEdge}>
-                  <View style={styles.tutorialsRow}>
-                    <BookOpen size={16} color={COLORS.accent} strokeWidth={1.5} />
-                    <View style={styles.tutorialsTextWrap}>
-                      <Text style={styles.tutorialsTitle}>Exercise Tutorials</Text>
-                      <Text style={styles.tutorialsSubtitle}>Browse exercise guides</Text>
-                    </View>
-                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-                  </View>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* ── Bottom hint ── */}
-            <View style={styles.hintRow}>
-              <Dumbbell size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-              <Text style={styles.hintText}>
-                AI form analysis activates during exercises
-              </Text>
             </View>
-          </>
-        )}
-      </Animated.View>
-    </View>
+            ) : (
+              /* ── QUICK START (idle) CARD ── */
+              <View style={styles.activeOuter}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_ELEVATED]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.activeGradient}
+              >
+                <View style={[styles.activeEdge, styles.idleEdge]}>
+                  <View style={styles.idleCardContent}>
+                    <View style={styles.idleTextWrap}>
+                      <Text style={styles.cardLabel}>READY TO TRAIN</Text>
+                      <Text style={styles.idleTitle}>Start a Session</Text>
+                      <View style={styles.idleMetaRow}>
+                        <View style={styles.metaIconRow}>
+                          <Dumbbell size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>Any workout</Text>
+                        </View>
+                        <View style={styles.metaIconRow}>
+                          <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
+                          <Text style={styles.metaText}>~30 min</Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={handleStartWorkout}
+                        activeOpacity={0.85}
+                        style={styles.idleStartBtnOuter}
+                      >
+                        <LinearGradient
+                          colors={['#7A55FF', '#633FE5']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.idleStartBtn}
+                        >
+                          <Play size={14} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
+                          <Text style={styles.startBtnText}>Start Workout</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.bodyVisual}>
+                      <Image
+                        source={require('../assets/generated/workout-card-figure.png')}
+                        style={styles.bodyVisualImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
+            )}
+          </View>
+
+          {/* ── TOOLS ───────────────────────────────── */}
+          <View style={[styles.screenSection, { minHeight: standardSectionHeight }]}>
+            <Text style={styles.sectionLabel}>TOOLS</Text>
+            <View style={styles.toolsCardOuter}>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_ELEVATED]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.toolsCard}
+              >
+                <ToolRow
+                  icon={<LayoutTemplate size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  title="Choose Template"
+                  subtitle="Browse saved workouts"
+                  onPress={handleChooseTemplate}
+                  divider
+                />
+                <ToolRow
+                  icon={<BookOpen size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  title="Exercise Guide"
+                  subtitle="Learn form and technique"
+                  onPress={() => rootNavigation.navigate('Tutorials')}
+                  divider
+                />
+                <ToolRow
+                  icon={<Camera size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  title="Camera Setup"
+                  subtitle="Check angles and positioning"
+                  onPress={handleCameraSetup}
+                />
+              </LinearGradient>
+            </View>
+          </View>
+
+          {/* ── RECENT / FAVOURITE TEMPLATES ───────── */}
+          <View style={[styles.screenSection, styles.templatesBlock, { minHeight: templateSectionHeight }]}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionLabel}>{templatesLabel}</Text>
+              <TouchableOpacity
+                onPress={handleChooseTemplate}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.viewAllLink}>View all</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.templatesRow}>
+              {recentTemplates.slice(0, 3).map((tmpl) => (
+                <TouchableOpacity
+                  key={tmpl.id}
+                  style={[styles.templateCard, { width: templateCardWidth, height: templateCardHeight }]}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    navigation.navigate('TemplatePreview', {
+                      templateName: tmpl.name,
+                      description: tmpl.description,
+                      exercises: tmpl.exercises.map(e => ({
+                        name: e.name,
+                        category: e.category,
+                        targetSets: e.targetSets,
+                      })),
+                    })
+                  }
+                >
+                  <LinearGradient
+                    colors={[...CARD_GRADIENT_COLORS]}
+                    start={CARD_GRADIENT_START}
+                    end={CARD_GRADIENT_END}
+                    style={styles.templateGradient}
+                  >
+                    <View style={[styles.templateThumb, { height: templateThumbHeight }]}>
+                      <Image
+                        source={getTemplateImage(tmpl)}
+                        style={styles.templateThumbImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.templateThumbShade} />
+                    </View>
+                    <View style={styles.templateInfo}>
+                      <Text style={styles.templateMeta}>
+                        {tmpl.exercises.length} exercise{tmpl.exercises.length === 1 ? '' : 's'}
+                      </Text>
+                      <Text style={styles.templateName} numberOfLines={2}>{tmpl.name}</Text>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </Animated.View>
+      </ScrollView>
+    </LinearGradient>
   );
 };
+
+// ── Tool Row ───────────────────────────────────
+
+const ToolRow: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  divider?: boolean;
+}> = ({ icon, title, subtitle, onPress, divider }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    style={[styles.toolRow, divider && styles.toolRowDivider]}
+  >
+    <View style={styles.toolIconWrap}>{icon}</View>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.toolTitle}>{title}</Text>
+      <Text style={styles.toolSubtitle}>{subtitle}</Text>
+    </View>
+    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.6} />
+  </TouchableOpacity>
+);
+
+// ── Styles ─────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
 
-  /* ── Header (HomeScreen style) ────────────── */
+  /* Header */
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    paddingBottom: 8,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  headerSide: { alignItems: 'flex-end' },
+  headerTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 22,
+    color: COLORS.text,
+    letterSpacing: 4,
   },
-  logoWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 13,
-    overflow: 'hidden',
+  iconBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoImage: {
-    width: 55,
-    height: 55,
+
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: 14,
+    paddingTop: 2,
+    flexGrow: 1,
   },
-  headerTextWrap: {
-    gap: 1,
+  contentStack: {
+    paddingBottom: 8,
   },
-  headerSubtitle: {
+  screenSection: {
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
+
+  dateLine: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
   },
-  headerName: {
+
+  /* Card label */
+  cardLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 8.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.9,
+  },
+
+  /* Active / Idle workout card */
+  activeOuter: {
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+  },
+  activeGradient: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  activeEdge: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 15,
+    paddingTop: 14,
+    paddingBottom: 14,
+  },
+
+  /* Idle body */
+  idleEdge: {
+    paddingRight: 7,
+    overflow: 'hidden',
+  },
+  idleCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 146,
+  },
+  idleTextWrap: {
+    flex: 1,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    gap: 9,
+    paddingRight: 10,
+  },
+  idleTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 19,
+    color: COLORS.text,
+    letterSpacing: -0.35,
+    marginTop: 2,
+  },
+  idleMetaRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  bodyVisual: {
+    width: 108,
+    height: 150,
+    marginRight: -2,
+    overflow: 'visible',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  bodyVisualImage: {
+    width: '100%',
+    height: '100%',
+  },
+  metaIconRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+
+  /* Active body */
+  activeBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  activeBodyText: { flex: 1, gap: 7 },
+  activeWorkoutName: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 0,
   },
-  profileBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  profileGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profilePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#27272A',
-  },
-  profileInitial: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-
-  /* ── Content Area ──────────────────────────── */
-  contentArea: {
-    flex: 1,
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 16,
+  activeMetaRow: {
+    flexDirection: 'row',
     gap: 14,
-  },
-  contentCentered: {
-    justifyContent: 'center',
+    marginTop: 1,
   },
 
-  /* ── Hero CTA (New Session) ────────────────── */
-  heroCta: {
-    flex: 1,
-    borderRadius: 18,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 20,
-      },
-      android: { elevation: 8 },
-    }),
-  },
-  heroGradient: {
-    flex: 1,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    justifyContent: 'space-between',
-  },
-  heroContent: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 16,
-    gap: 12,
-  },
-  heroTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 26,
-    color: COLORS.text,
-    letterSpacing: -0.5,
-  },
-  heroDesc: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.1,
-    lineHeight: 20,
-  },
-  heroFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.15)',
-  },
-  heroAction: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13,
-    color: COLORS.accent,
-    letterSpacing: 0.3,
-  },
-
-  /* ── Secondary Card (Templates) ────────────── */
-  secondaryCard: {
-    minHeight: 180,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  secondaryGradient: {
-    flex: 1,
-    borderRadius: 18,
-  },
-  secondaryGlass: {
-    flex: 1,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    justifyContent: 'space-between',
-  },
-  secondaryContent: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-    gap: 10,
-  },
-  secondaryTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 20,
-    color: COLORS.text,
-    letterSpacing: -0.3,
-  },
-  secondaryDesc: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.1,
-  },
-  secondaryFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  secondaryAction: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.3,
-  },
-
-  /* ── Exercise Tutorials ─────────────────── */
-  tutorialsCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  tutorialsGradient: {
-    borderRadius: 16,
-  },
-  tutorialsEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  tutorialsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  tutorialsTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  tutorialsTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  tutorialsSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
-
-  /* ── Hint row ─────────────────────────────── */
-  hintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 8,
-    paddingVertical: 6,
-  },
-  hintText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.2,
-  },
-
-  /* ── Shared Card Primitives ────────────────── */
-  cardGradient: {
-    flex: 1,
-    borderRadius: 19,
-  },
-  cardGlassEdge: {
-    flex: 1,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-
-  /* ── Active Workout Card ─────────────────── */
-  activeCardOuter: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 24,
-      },
-      android: { elevation: 12 },
-    }),
-  },
-  activeGlassEdge: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.12)',
-  },
-  activeTopBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 2,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusPillPaused: {
-  },
-  statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#34D399',
-  },
-  statusDotPaused: {
-    backgroundColor: COLORS.yellow,
-  },
-  statusPillText: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 10,
-    color: '#34D399',
-    letterSpacing: 1.5,
-  },
-  statusPillTextPaused: {
-    color: COLORS.yellow,
-  },
-  pauseBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pauseBtnActive: {
-    borderColor: 'rgba(139, 92, 246, 0.25)',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-  },
-  activeCardContent: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-  },
-  timerDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  /* Timer (active) */
+  timerDisplay: { flexDirection: 'row', alignItems: 'center' },
   timerDigit: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 40,
-    color: '#FFFFFF',
-    lineHeight: 48,
-    letterSpacing: 2,
+    fontSize: 29,
+    color: COLORS.text,
+    lineHeight: 33,
+    letterSpacing: 1.1,
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
-    fontSize: 30,
-    color: 'rgba(139, 92, 246, 0.45)',
-    lineHeight: 48,
-    marginHorizontal: 2,
+    fontSize: 22,
+    color: 'rgba(122, 85, 255, 0.62)',
+    lineHeight: 33,
+    marginHorizontal: 1,
+  },
+  pauseBtn: {
+    width: 42, height: 42, borderRadius: 21,
+    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pauseBtnActive: {
+    borderColor: 'rgba(122, 85, 255, 0.32)',
+    backgroundColor: 'rgba(122, 85, 255, 0.14)',
   },
 
-  /* ── Inline Stats ── */
-  statsRow: {
+  /* Active footer */
+  activeFooterRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.045)',
+  },
+  footerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    marginTop: 10,
+    minHeight: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
-  statValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 15,
-    color: COLORS.text,
-    lineHeight: 18,
+  footerBtnText: {
+    fontFamily: FONTS.ui.bold,
+    fontSize: 11,
   },
-  statLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
+
+  /* Start button */
+  startBtnOuter: { borderRadius: CARD_RADIUS_SM, overflow: 'hidden' },
+  idleStartBtnOuter: {
+    width: '100%',
+    maxWidth: 218,
+    borderRadius: CARD_RADIUS_SM,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  startBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    minHeight: 44,
+    paddingVertical: 11,
+  },
+  idleStartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  startBtnText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
+    color: '#FFFFFF',
     letterSpacing: 0.2,
   },
-  statDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(139, 92, 246, 0.4)',
-    marginHorizontal: 4,
+
+  /* Section labels */
+  sectionLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 8.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.9,
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  viewAllLink: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.accent,
   },
 
-  /* ── Workout Actions ─────────────────────── */
-  workoutActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 18,
+  /* Tools */
+  toolsCardOuter: {
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
   },
-  discardBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  toolsCard: {
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    backgroundColor: 'rgba(239, 68, 68, 0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resumeBtnOuter: {
-    flex: 1,
-    height: 46,
-    borderRadius: 23,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
   },
-  resumeGradient: {
-    flex: 1,
+  toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10.5,
   },
-  resumeBtnText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.text,
-    letterSpacing: 0.3,
+  toolRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
-  finishBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.15)',
-    backgroundColor: 'rgba(52, 211, 153, 0.06)',
+  toolIconWrap: {
+    width: 29,
+    height: 29,
+    borderRadius: 7,
+    backgroundColor: 'rgba(124,92,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  toolTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: -0.1,
+  },
+  toolSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+
+  /* Templates */
+  templatesRow: {
+    flexDirection: 'row',
+    gap: 9,
+    alignItems: 'stretch',
+    minHeight: 132,
+  },
+  templatesBlock: {
+    justifyContent: 'center',
+    paddingBottom: 6,
+  },
+  templateCard: {
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+  },
+  templateGradient: {
+    flex: 1,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 20,
+    gap: 6,
+    overflow: 'hidden',
+  },
+  templateThumb: {
+    width: '100%',
+    borderTopLeftRadius: CARD_RADIUS,
+    borderTopRightRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  templateThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  templateThumbShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  templateInfo: {
+    gap: 2,
+    flexShrink: 0,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  templateName: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10.5,
+    color: COLORS.text,
+    letterSpacing: -0.1,
+    lineHeight: 12,
+  },
+  templateMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9,
+    color: COLORS.textSecondary,
   },
 });

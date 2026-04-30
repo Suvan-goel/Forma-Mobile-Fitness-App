@@ -2,7 +2,7 @@
  * ActivityView — Activity feed tab content within SocialScreen
  */
 
-import React, { memo, useState, useCallback, useMemo, useEffect } from 'react';
+import React, { memo, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,37 +17,11 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Inbox, Plus } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useActivityFeed, useReactions } from '../../../backend/hooks';
-import { ActivityEvent, ActivityFilter } from '../../../backend/services/api/types';
+import { ActivityEvent } from '../../../backend/services/api/types';
 import { ActivityEventCard } from '../../components/ui/ActivityEventCard';
 
-const FILTERS: { key: ActivityFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'workouts', label: 'Workouts' },
-  { key: 'badges', label: 'Badges' },
-  { key: 'records', label: 'PRs' },
-];
-
-const FilterRow = memo(({ active, onSelect }: { active: ActivityFilter; onSelect: (f: ActivityFilter) => void }) => (
-  <View style={styles.filterRow}>
-    {FILTERS.map(f => (
-      <TouchableOpacity
-        key={f.key}
-        style={styles.tab}
-        onPress={() => onSelect(f.key)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.tabText, active === f.key && styles.tabTextActive]}>
-          {f.label}
-        </Text>
-        {active === f.key && <View style={styles.underline} />}
-      </TouchableOpacity>
-    ))}
-  </View>
-));
-
 export const ActivityView: React.FC = memo(() => {
-  const [filter, setFilter] = useState<ActivityFilter>('all');
-  const { events, isLoading, isLoadingMore, error, hasMore, loadMore, refetch } = useActivityFeed(filter);
+  const { events, isLoading, isLoadingMore, error, hasMore, loadMore, refetch } = useActivityFeed('all');
   const navigation = useNavigation<any>();
 
   const eventIds = useMemo(() => events.map(e => e.id), [events]);
@@ -62,10 +36,6 @@ export const ActivityView: React.FC = memo(() => {
   ), [reactions, toggleReaction]);
 
   const keyExtractor = useCallback((item: ActivityEvent) => item.id, []);
-
-  const ListHeader = useMemo(() => (
-    <FilterRow active={filter} onSelect={setFilter} />
-  ), [filter]);
 
   const ListFooter = useMemo(() => {
     if (isLoadingMore) {
@@ -136,7 +106,6 @@ export const ActivityView: React.FC = memo(() => {
         data={events}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -177,73 +146,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   listContent: {
+    paddingTop: 2,
     paddingBottom: 120,
   },
 
   /* ── FAB ── */
   fabWrapper: {
     position: 'absolute',
-    bottom: 100,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    bottom: 102,
+    right: SPACING.screenHorizontal,
+    alignItems: 'flex-end',
   },
   fab: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 22,
-    backgroundColor: 'rgba(139, 92, 246, 0.25)',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(122, 85, 255, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
+    borderColor: 'rgba(122, 85, 255, 0.38)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.22,
+        shadowRadius: 14,
       },
       android: { elevation: 6 },
     }),
   },
   fabText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 12.5,
     color: COLORS.primary,
-    letterSpacing: 0.3,
-  },
-
-  /* ── Filter tabs ── */
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: SPACING.screenHorizontal,
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    marginVertical: 12,
-    gap: 20,
-  },
-  tab: {
-    alignItems: 'center',
-    paddingBottom: 6,
-  },
-  tabText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
-  underline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
+    letterSpacing: 0.1,
   },
 
   /* ── States ── */
@@ -256,11 +194,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     marginBottom: SPACING.md,
   },
   emptyTitle: {
