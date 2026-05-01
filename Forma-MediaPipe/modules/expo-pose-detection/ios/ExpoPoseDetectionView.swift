@@ -31,6 +31,8 @@ class ExpoPoseDetectionView: ExpoView {
   private var showSkeleton: Bool = false
   private var modelName: String = "pose_landmarker_heavy"
   private var isSessionRunning = false
+  private let lifecycleLock = NSLock()
+  private var disposed = false
 
   private static let allowedModels: Set<String> = [
     "pose_landmarker_full",
@@ -39,6 +41,7 @@ class ExpoPoseDetectionView: ExpoView {
 
   // MARK: - Frame throttling
   private var lastProcessedFrameTimeMs: Double = 0
+  private var lastPoseTimestampMs: Int = 0
 
   // MARK: - Video resolution tracking
   private var videoWidth: CGFloat = 720
@@ -68,7 +71,7 @@ class ExpoPoseDetectionView: ExpoView {
   override func willMove(toSuperview newSuperview: UIView?) {
     super.willMove(toSuperview: newSuperview)
     if newSuperview == nil {
-      stopSession()
+      dispose()
       if ExpoPoseDetectionModule.activeView === self {
         ExpoPoseDetectionModule.activeView = nil
       }
@@ -77,7 +80,7 @@ class ExpoPoseDetectionView: ExpoView {
 
   override func didMoveToSuperview() {
     super.didMoveToSuperview()
-    if superview != nil {
+    if superview != nil, !isDisposed() {
       startSession()
     }
   }
@@ -85,31 +88,37 @@ class ExpoPoseDetectionView: ExpoView {
   // MARK: - Configuration methods (called from Module props)
 
   func configureFrameLimit(_ limit: Int) {
+    guard !isDisposed() else { return }
     frameLimit = max(1, min(60, limit))
   }
 
   func configureShowSkeleton(_ show: Bool) {
+    guard !isDisposed() else { return }
     showSkeleton = show
     DispatchQueue.main.async { [weak self] in
-      self?.overlayView?.isHidden = !show
+      guard let self = self, !self.isDisposed() else { return }
+      self.overlayView?.isHidden = !show
       if !show {
-        self?.overlayView?.clear()
+        self.overlayView?.clear()
       }
     }
   }
 
   func configureModelName(_ name: String) {
+    guard !isDisposed() else { return }
     let validName = Self.allowedModels.contains(name) ? name : "pose_landmarker_heavy"
-    guard validName != modelName else { return }
-    modelName = validName
-    sessionQueue.async { [weak self] in
-      self?.reinitializePoseLandmarker()
+    processingQueue.async { [weak self] in
+      guard let self = self, !self.isDisposed() else { return }
+      guard validName != self.modelName else { return }
+      self.modelName = validName
+      self.reinitializePoseLandmarker()
     }
   }
 
   func switchCamera() {
     sessionQueue.async { [weak self] in
-      self?.toggleCamera()
+      guard let self = self, !self.isDisposed() else { return }
+      self.toggleCamera()
     }
   }
 
@@ -133,12 +142,18 @@ class ExpoPoseDetectionView: ExpoView {
 
   private func setupCamera() {
     sessionQueue.async { [weak self] in
-      self?.configureSession()
-      self?.initializePoseLandmarker()
+      guard let self = self, !self.isDisposed() else { return }
+      self.configureSession()
+    }
+    processingQueue.async { [weak self] in
+      guard let self = self, !self.isDisposed() else { return }
+      self.initializePoseLandmarker()
     }
   }
 
   private func configureSession() {
+    guard !isDisposed() else { return }
+
     captureSession.beginConfiguration()
     captureSession.sessionPreset = .hd1280x720
 
@@ -195,7 +210,7 @@ class ExpoPoseDetectionView: ExpoView {
 
     // Setup preview layer on main thread
     DispatchQueue.main.async { [weak self] in
-      guard let self = self, let preview = self.previewView else { return }
+      guard let self = self, !self.isDisposed(), let preview = self.previewView else { return }
       let layer = AVCaptureVideoPreviewLayer(session: self.captureSession)
       layer.videoGravity = .resizeAspectFill
       layer.frame = preview.bounds
@@ -205,6 +220,8 @@ class ExpoPoseDetectionView: ExpoView {
   }
 
   private func initializePoseLandmarker() {
+    guard !isDisposed() else { return }
+
     let service = PoseLandmarkerService(
       modelName: modelName,
       minPoseDetectionConfidence: 0.35,
@@ -227,9 +244,12 @@ class ExpoPoseDetectionView: ExpoView {
   }
 
   private func reinitializePoseLandmarker() {
+    guard !isDisposed() else { return }
+
     poseLandmarkerService?.clearPoseLandmarker()
     poseLandmarkerService = nil
     lastProcessedFrameTimeMs = 0
+    lastPoseTimestampMs = 0
     initializePoseLandmarker()
   }
 
@@ -237,7 +257,7 @@ class ExpoPoseDetectionView: ExpoView {
 
   private func startSession() {
     sessionQueue.async { [weak self] in
-      guard let self = self, !self.isSessionRunning else { return }
+      guard let self = self, !self.isDisposed(), !self.isSessionRunning else { return }
       self.captureSession.startRunning()
       self.isSessionRunning = true
     }
@@ -251,9 +271,66 @@ class ExpoPoseDetectionView: ExpoView {
     }
   }
 
+  private func dispose() {
+    guard markDisposed() else { return }
+
+    sessionQueue.async { [weak self] in
+      guard let self = self else { return }
+
+      self.videoOutput?.setSampleBufferDelegate(nil, queue: nil)
+      if self.captureSession.isRunning {
+        self.captureSession.stopRunning()
+      }
+      self.isSessionRunning = false
+
+      self.captureSession.beginConfiguration()
+      for output in self.captureSession.outputs {
+        self.captureSession.removeOutput(output)
+      }
+      for input in self.captureSession.inputs {
+        self.captureSession.removeInput(input)
+      }
+      self.captureSession.commitConfiguration()
+      self.videoOutput = nil
+    }
+
+    processingQueue.async { [weak self] in
+      guard let self = self else { return }
+      self.poseLandmarkerService?.clearPoseLandmarker()
+      self.poseLandmarkerService = nil
+      self.lastProcessedFrameTimeMs = 0
+      self.lastPoseTimestampMs = 0
+    }
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.previewLayer?.removeFromSuperlayer()
+      self.previewLayer = nil
+      self.overlayView?.clear()
+    }
+  }
+
+  private func isDisposed() -> Bool {
+    lifecycleLock.lock()
+    defer { lifecycleLock.unlock() }
+    return disposed
+  }
+
+  private func markDisposed() -> Bool {
+    lifecycleLock.lock()
+    defer { lifecycleLock.unlock() }
+    if disposed {
+      return false
+    }
+    disposed = true
+    return true
+  }
+
   // MARK: - Camera switching
 
   private func toggleCamera() {
+    guard !isDisposed() else { return }
+
     captureSession.beginConfiguration()
 
     // Remove existing input
@@ -309,13 +386,16 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
+    guard !isDisposed() else { return }
+
     // Frame throttling
-    let now = Date().timeIntervalSince1970 * 1000
+    let now = ProcessInfo.processInfo.systemUptime * 1000
     let minIntervalMs = 1000.0 / Double(frameLimit)
     if now - lastProcessedFrameTimeMs < minIntervalMs {
       return
     }
     lastProcessedFrameTimeMs = now
+    let timestamp = nextPoseTimestampMs(now)
 
     // Track video resolution from the sample buffer
     if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
@@ -326,12 +406,18 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 
     // Send to pose detection
-    let timestamp = Int(now)
     poseLandmarkerService?.detectAsync(
       sampleBuffer: sampleBuffer,
       orientation: .up,
       timeStamps: timestamp
     )
+  }
+
+  private func nextPoseTimestampMs(_ now: Double) -> Int {
+    let current = Int(now)
+    let next = max(current, lastPoseTimestampMs + 1)
+    lastPoseTimestampMs = next
+    return next
   }
 }
 
@@ -343,10 +429,11 @@ extension ExpoPoseDetectionView: PoseLandmarkerServiceDelegate {
     didFinishDetection result: PoseLandmarkerResult?,
     error: Error?
   ) {
-    guard let result = result else { return }
+    guard !isDisposed(), let result = result else { return }
+    let imageSize = CGSize(width: videoWidth, height: videoHeight)
 
     DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
+      guard let self = self, !self.isDisposed() else { return }
 
       // Build landmark data in the same format as @thinksys
       guard let landmarks = result.landmarks.first else { return }
@@ -380,8 +467,8 @@ extension ExpoPoseDetectionView: PoseLandmarkerServiceDelegate {
         "landmarks": landmarksArray,
         "worldLandmarks": worldLandmarksArray,
         "additionalData": [
-          "height": self.videoHeight,
-          "width": self.videoWidth
+          "height": imageSize.height,
+          "width": imageSize.width
         ]
       ]
 
@@ -390,7 +477,6 @@ extension ExpoPoseDetectionView: PoseLandmarkerServiceDelegate {
 
       // Update skeleton overlay
       if self.showSkeleton, let overlayView = self.overlayView {
-        let imageSize = CGSize(width: self.videoWidth, height: self.videoHeight)
         let poseOverlays = overlayView.poseOverlays(
           fromLandmarks: result.landmarks,
           inferredOnImageOfSize: imageSize,

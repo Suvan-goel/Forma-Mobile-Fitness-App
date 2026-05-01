@@ -12,6 +12,8 @@ export interface LoggedSet {
   repFeedback?: string[];
   /** Per-rep form scores (parallel to repFeedback, one per rep) */
   repFormScores?: number[];
+  /** Manual sets track volume without camera analysis, form feedback, or recordings. */
+  isManual?: boolean;
   /** Temp recording file URL — persisted to video library only at workout save time. */
   tempRecordingUrl?: string;
   /** Whether to save this set's recording to the video library (default true when recording exists). */

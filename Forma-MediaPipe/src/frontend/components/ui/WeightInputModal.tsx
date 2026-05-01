@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -42,8 +42,25 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
   const [unit, setUnit] = useState<'kg' | 'lbs'>(initialUnit);
   const [saveToLibrary, setSaveToLibrary] = useState(true);
   const [saveToCameraRoll, setSaveToCameraRoll] = useState(false);
+  const [isModalReady, setIsModalReady] = useState(false);
+  const weightInputRef = useRef<TextInput>(null);
+  const revealFrameRef = useRef<number | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!visible) {
+      setIsModalReady(false);
+      if (revealFrameRef.current !== null) {
+        cancelAnimationFrame(revealFrameRef.current);
+        revealFrameRef.current = null;
+      }
+      if (focusTimerRef.current) {
+        clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = null;
+      }
+      return;
+    }
+
     if (visible) {
       setWeight(initialWeight ? String(initialWeight) : '');
       setUnit(initialUnit);
@@ -51,6 +68,26 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
       setSaveToCameraRoll(false);
     }
   }, [visible, initialWeight, initialUnit]);
+
+  useEffect(() => {
+    return () => {
+      if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
+  }, []);
+
+  const handleModalShow = useCallback(() => {
+    if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+
+    revealFrameRef.current = requestAnimationFrame(() => {
+      revealFrameRef.current = null;
+      setIsModalReady(true);
+      focusTimerRef.current = setTimeout(() => {
+        weightInputRef.current?.focus();
+      }, Platform.OS === 'ios' ? 80 : 120);
+    });
+  }, []);
 
   const handleSubmit = () => {
     const weightNum = parseFloat(weight);
@@ -78,10 +115,11 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
       visible={visible}
       transparent
       animationType="fade"
+      onShow={handleModalShow}
       onRequestClose={onClose}
     >
       <TouchableOpacity
-        style={styles.backdrop}
+        style={[styles.backdrop, !isModalReady && styles.backdropHidden]}
         activeOpacity={1}
         onPress={() => {
           Keyboard.dismiss();
@@ -128,6 +166,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                 </View>
                 <View style={styles.weightInputWrap}>
                   <TextInput
+                    ref={weightInputRef}
                     style={styles.weightInput}
                     value={weight}
                     onChangeText={setWeight}
@@ -136,7 +175,6 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                     onSubmitEditing={handleSubmit}
                     placeholder="0"
                     placeholderTextColor="rgba(139, 92, 246, 0.25)"
-                    autoFocus
                     selectTextOnFocus
                   />
                   <Text style={styles.weightUnitHint}>{unit}</Text>
@@ -280,6 +318,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
+  },
+  backdropHidden: {
+    opacity: 0,
   },
   cardOuter: {
     width: '100%',

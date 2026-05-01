@@ -22,6 +22,7 @@ import {
 import {
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  CARD_VERTICAL_GAP,
   COLORS,
   FONTS,
   SPACING,
@@ -669,6 +670,7 @@ const styles = StyleSheet.create({
   videoRow: {
     height: 94,
     borderRadius: CARD_RADIUS,
+    marginBottom: CARD_VERTICAL_GAP,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.055)',
     backgroundColor: 'rgba(255,255,255,0.035)',

@@ -39,6 +39,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_VERTICAL_GAP,
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
@@ -232,35 +233,11 @@ export const UserProfileScreen: React.FC = () => {
               <Text style={styles.handle} numberOfLines={1}>
                 {handle}
               </Text>
-              <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={() => navigation.navigate('Membership')}
-              >
-                <LinearGradient
-                  colors={['#8D67FF', '#5A38D6']}
-                  style={styles.proPill}
-                >
-                  <Shield
-                    size={12}
-                    color="#FFFFFF"
-                    fill="rgba(255,255,255,0.2)"
-                  />
-                  <Text style={styles.proText}>Pro Member</Text>
-                </LinearGradient>
-              </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.statStrip}>
             <StatBlock value={workoutCount || 0} label="Total Workouts" />
-            <View style={styles.statDivider} />
-            <StatBlock
-              value={streakDays || 0}
-              label="Week Streak"
-              prefix={
-                <Flame size={13} color={COLORS.yellow} fill={COLORS.yellow} />
-              }
-            />
             <View style={styles.statDivider} />
             <StatBlock value={avgFormScore || 0} label="Avg Form Score" />
           </View>
@@ -329,75 +306,6 @@ export const UserProfileScreen: React.FC = () => {
                   : 'Complete'}
               </Text>
             </View>
-
-            <View style={styles.combinedCardDivider} />
-
-            <View style={[styles.sectionHeader, styles.badgeSectionHeader]}>
-              <Text style={styles.sectionTitle}>Badges</Text>
-              <Text style={styles.badgeCountText}>
-                {earnedRewards.length}/{sortedRewards.length}
-              </Text>
-            </View>
-            {earnedRewards.length > 0 ? (
-              <View style={styles.badgeList}>
-                {earnedRewards.map((reward) => (
-                  <View key={reward.id} style={styles.badgeItem}>
-                    <View
-                      style={[
-                        styles.badgeShell,
-                        { borderColor: `${reward.color}55` },
-                      ]}
-                    >
-                      <LinearGradient
-                        colors={[
-                          `${reward.color}2E`,
-                          'rgba(255,255,255,0.025)',
-                        ]}
-                        style={styles.badgeHex}
-                      >
-                        <RewardIcon
-                          iconName={reward.iconName}
-                          size={20}
-                          color={reward.color}
-                        />
-                      </LinearGradient>
-                    </View>
-                    <View style={styles.badgeCopy}>
-                      <Text style={styles.badgeName} numberOfLines={1}>
-                        {reward.title}
-                      </Text>
-                      <Text style={styles.badgeCategory} numberOfLines={1}>
-                        {reward.category} ·{' '}
-                        {reward.pointsRequired.toLocaleString()} pts
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.badgeEmpty}>
-                <View style={styles.badgeShell}>
-                  <LinearGradient
-                    colors={['#272D34', '#161A1F']}
-                    style={styles.badgeHex}
-                  >
-                    <Lock
-                      size={20}
-                      color={COLORS.textTertiary}
-                      strokeWidth={1.7}
-                    />
-                  </LinearGradient>
-                </View>
-                <View style={styles.badgeCopy}>
-                  <Text style={styles.badgeName}>No badges earned yet</Text>
-                  <Text style={styles.badgeCategory} numberOfLines={1}>
-                    {nextReward
-                      ? `${nextReward.title} is up next`
-                      : 'Complete workouts to unlock rewards'}
-                  </Text>
-                </View>
-              </View>
-            )}
           </ProfileCard>
 
           <ProfileCard>
@@ -657,21 +565,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
   },
-  proPill: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 12,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    marginTop: 3,
-  },
-  proText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    color: COLORS.text,
-  },
   statStrip: {
     minHeight: 76,
     borderRadius: 12,
@@ -681,7 +574,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    marginBottom: 14,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   statBlock: {
     flex: 1,
@@ -711,7 +604,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   videoLibraryCard: {
-    marginBottom: 14,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   videoLibraryGradient: {
     borderRadius: 14,
@@ -806,7 +699,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 12,
-    marginBottom: 14,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   cardInner: {
     borderRadius: 12,
@@ -892,66 +785,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-  },
-  combinedCardDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginTop: 15,
-    marginBottom: 13,
-  },
-  badgeSectionHeader: {
-    marginBottom: 10,
-  },
-  badgeCountText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-  },
-  badgeList: {
-    gap: 10,
-  },
-  badgeItem: {
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 5,
-  },
-  badgeEmpty: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 4,
-  },
-  badgeShell: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.22)',
-    padding: 3,
-  },
-  badgeHex: {
-    flex: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  badgeName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13.5,
-    color: COLORS.text,
-  },
-  badgeCategory: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11.5,
-    color: COLORS.textSecondary,
   },
   achievementList: {
     marginTop: 10,

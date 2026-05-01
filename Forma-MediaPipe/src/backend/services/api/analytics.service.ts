@@ -157,6 +157,7 @@ async function computeSupabaseSummary(
   });
   const sortedExercises = Object.entries(exerciseFreq).sort((a, b) => b[1] - a[1]);
   const mostTrainedExercise = sortedExercises.length > 0 ? sortedExercises[0][0] : null;
+  const mostTrainedExerciseCount = sortedExercises.length > 0 ? sortedExercises[0][1] : 0;
 
   // Personal best
   let personalBest: { exercise: string; weight: number } | null = null;
@@ -224,6 +225,7 @@ async function computeSupabaseSummary(
     totalDurationMinutes,
     streakDays,
     mostTrainedExercise,
+    mostTrainedExerciseCount,
     personalBest,
     personalBests: Array.from(bestByExercise.values()).sort((a, b) => b.weight - a.weight),
     formTrendDirection: trend.direction,

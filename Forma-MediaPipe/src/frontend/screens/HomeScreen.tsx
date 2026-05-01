@@ -4,11 +4,11 @@
  * Sections (matches design reference):
  *   1. FORMA wordmark + Settings
  *   2. Greeting row with profile avatar
- *   3. Form Readiness card with circular score ring + Start Workout
+ *   3. Form Snapshot section with circular score ring + Start Workout
  *   4. Quick actions: Choose Template / Create New
  *   5. Weekly Target card with progress bar
- *   6. Last Session card
- *   7. Stats strip
+ *   6. Next Badge card
+ *   7. Challenges
  */
 
 import React, { useRef, useEffect, useCallback } from 'react';
@@ -29,13 +29,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronRight,
   Settings as SettingsIcon,
-  Flame,
   Play,
-  Activity,
-  Calendar,
   BookOpen,
   Plus,
-  Info,
   Trophy,
   Zap,
 } from 'lucide-react-native';
@@ -48,6 +44,7 @@ import {
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW,
   getScoreColor,
 } from '../constants/theme';
@@ -121,16 +118,6 @@ const ScoreRing: React.FC<{
     </View>
   );
 };
-
-const SessionScoreBadge: React.FC<{ score: number }> = ({ score }) => (
-  <View
-    style={[styles.sessionScoreBadge, { borderColor: getScoreColor(score) }]}
-  >
-    <Text style={[styles.sessionScoreValue, { color: getScoreColor(score) }]}>
-      {score}
-    </Text>
-  </View>
-);
 
 export const HomeScreen: React.FC = () => {
   const { onScroll } = useScroll();
@@ -343,68 +330,56 @@ export const HomeScreen: React.FC = () => {
             </View>
           </TouchableOpacity>
 
-          {/* ── FORM READINESS CARD ──────────────────── */}
+          {/* ── FORM SNAPSHOT ────────────────────────── */}
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => navigateToTab('Analytics')}
             style={styles.readinessOuter}
           >
-            <LinearGradient
-              colors={[...CARD_GRADIENT_ELEVATED]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.readinessGradient}
-            >
-              <View style={styles.readinessEdge}>
-                <View style={styles.cardLabelRow}>
-                  <Text style={styles.cardLabel}>FORM READINESS</Text>
-                  <Info
-                    size={12}
-                    color={COLORS.textTertiary}
-                    strokeWidth={1.5}
-                  />
-                </View>
-
-                <View style={styles.readinessBody}>
-                  <ScoreRing score={hasWorkouts ? score : 0} />
-                  <View style={styles.readinessTextWrap}>
-                    <Text
-                      style={[styles.readinessStatus, { color: scoreColor }]}
-                    >
-                      {statusText}
-                    </Text>
-                    <Text style={styles.readinessGuidance}>{guidanceText}</Text>
-                  </View>
-                  <ChevronRight
-                    size={16}
-                    color={COLORS.textTertiary}
-                    strokeWidth={1.6}
-                  />
-                </View>
-
-                {/* Start Workout button inside card */}
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => navigateToTab('Record')}
-                  style={styles.startBtnOuter}
-                >
-                  <LinearGradient
-                    colors={['#7A55FF', '#633FE5']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.startBtn}
-                  >
-                    <Play
-                      size={14}
-                      color="#FFFFFF"
-                      strokeWidth={2.5}
-                      fill="#FFFFFF"
-                    />
-                    <Text style={styles.startBtnText}>Start Workout</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+            <View style={styles.readinessEdge}>
+              <View style={styles.cardLabelRow}>
+                <Text style={[styles.cardLabel, styles.snapshotLabel]}>FORM SNAPSHOT</Text>
               </View>
-            </LinearGradient>
+
+              <View style={styles.readinessBody}>
+                <ScoreRing score={hasWorkouts ? score : 0} />
+                <View style={styles.readinessTextWrap}>
+                  <Text
+                    style={[styles.readinessStatus, { color: scoreColor }]}
+                  >
+                    {statusText}
+                  </Text>
+                  <Text style={styles.readinessGuidance}>{guidanceText}</Text>
+                </View>
+                <ChevronRight
+                  size={16}
+                  color={COLORS.textTertiary}
+                  strokeWidth={1.6}
+                />
+              </View>
+
+              {/* Start Workout button inside section */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => navigateToTab('Record')}
+                style={styles.startBtnOuter}
+              >
+                <LinearGradient
+                  colors={['#7A55FF', '#633FE5']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.startBtn}
+                >
+                  <Play
+                    size={14}
+                    color="#FFFFFF"
+                    strokeWidth={2.5}
+                    fill="#FFFFFF"
+                  />
+                  <Text style={styles.startBtnText}>Start Workout</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
 
           {/* ── QUICK ACTIONS ────────────────────────── */}
@@ -537,123 +512,6 @@ export const HomeScreen: React.FC = () => {
               </View>
             </LinearGradient>
           </TouchableOpacity>
-
-          {/* ── LAST SESSION ─────────────────────────── */}
-          {homeData.lastWorkout ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() =>
-                navigation.navigate('WorkoutDetails', {
-                  workoutId: homeData.lastWorkout!.id,
-                })
-              }
-              style={styles.sessionOuter}
-            >
-              <LinearGradient
-                colors={[...CARD_GRADIENT_ELEVATED]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.sessionGradient}
-              >
-                <View style={styles.sessionEdge}>
-                  <View style={styles.cardLabelRow}>
-                    <Text style={styles.cardLabel}>LAST SESSION</Text>
-                  </View>
-                  <View style={styles.sessionRow}>
-                    <View style={styles.sessionThumb}>
-                      <LinearGradient
-                        colors={[
-                          'rgba(122, 85, 255, 0.22)',
-                          'rgba(122, 85, 255, 0.08)',
-                        ]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                      <Activity size={21} color="#FFFFFF" strokeWidth={1.5} />
-                    </View>
-                    <View style={styles.sessionInfo}>
-                      <Text style={styles.sessionName} numberOfLines={1}>
-                        {homeData.lastWorkout.name}
-                      </Text>
-                      <Text style={styles.sessionMeta}>
-                        {homeData.lastWorkout.timeAgo} ·{' '}
-                        {homeData.lastWorkout.duration}
-                      </Text>
-                      <Text style={styles.sessionStatsLine}>
-                        {homeData.lastWorkout.totalSets} sets ·{' '}
-                        {homeData.lastWorkout.totalReps} reps
-                      </Text>
-                    </View>
-                    <SessionScoreBadge score={homeData.lastWorkout.formScore} />
-                    <ChevronRight
-                      size={14}
-                      color={COLORS.textTertiary}
-                      strokeWidth={1.5}
-                      style={{ marginLeft: 2 }}
-                    />
-                  </View>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          ) : (
-            <LinearGradient
-              colors={[...CARD_GRADIENT_ELEVATED]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={[styles.sessionGradient, styles.sessionOuter]}
-            >
-              <View style={styles.sessionEdge}>
-                <View style={styles.cardLabelRow}>
-                  <Text style={styles.cardLabel}>LAST SESSION</Text>
-                </View>
-                <Text style={styles.emptyText}>
-                  No workouts yet — tap Start to begin.
-                </Text>
-              </View>
-            </LinearGradient>
-          )}
-
-          {/* ── STATS STRIP ──────────────────────────── */}
-          <View style={styles.statsStripOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_ELEVATED]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.statsStrip}
-            >
-              <View style={styles.statCell}>
-                <Flame size={14} color={COLORS.yellow} strokeWidth={1.6} />
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statValue}>{homeData.streakDays}</Text>
-                  <Text style={styles.statUnit}>days</Text>
-                </View>
-                <Text style={styles.statLabel}>STREAK</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Calendar size={14} color={COLORS.accent} strokeWidth={1.6} />
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statValue}>
-                    {homeData.weeklyGoal.current}
-                  </Text>
-                  <Text style={styles.statUnit}>workouts</Text>
-                </View>
-                <Text style={styles.statLabel}>THIS WEEK</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Trophy size={14} color={COLORS.green} strokeWidth={1.6} />
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statValue}>
-                    {homeData.totalPoints.toLocaleString()}
-                  </Text>
-                  <Text style={styles.statUnit}>pts</Text>
-                </View>
-                <Text style={styles.statLabel}>POINTS</Text>
-              </View>
-            </LinearGradient>
-          </View>
 
           {/* ── CHALLENGES (preserved) ───────────────── */}
           {homeData.challenges.length > 0 && (
@@ -795,8 +653,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    paddingTop: 6,
-    paddingBottom: 18,
+    paddingTop: 16,
+    paddingBottom: 28,
   },
   avatarWrap: {
     width: 68,
@@ -853,32 +711,26 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     letterSpacing: 1.6,
   },
-
-  /* Form Readiness card */
-  readinessOuter: {
-    borderRadius: CARD_RADIUS,
-    marginBottom: 12,
-    ...CARD_SHADOW,
+  snapshotLabel: {
+    fontSize: 13,
+    letterSpacing: 2.1,
   },
-  readinessGradient: {
-    borderRadius: CARD_RADIUS,
-    overflow: 'hidden',
+
+  /* Form Snapshot */
+  readinessOuter: {
+    marginBottom: CARD_VERTICAL_GAP,
   },
   readinessEdge: {
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 16,
   },
   readinessBody: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginTop: 12,
-    marginBottom: 14,
+    marginTop: 20,
+    marginBottom: 22,
   },
-  readinessTextWrap: { flex: 1, gap: 4 },
+  readinessTextWrap: { flex: 1, gap: 7 },
   readinessStatus: {
     fontFamily: FONTS.display.semibold,
     fontSize: 16,
@@ -918,7 +770,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   actionBtn: {
     flex: 1,
@@ -942,7 +794,7 @@ const styles = StyleSheet.create({
   /* Weekly Target */
   weeklyOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   weeklyGradient: { borderRadius: CARD_RADIUS, overflow: 'hidden' },
@@ -981,7 +833,7 @@ const styles = StyleSheet.create({
   /* Next Badge */
   rewardsOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   rewardsGradient: {
@@ -1038,131 +890,6 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: COLORS.textSecondary,
     fontVariant: ['tabular-nums'],
-  },
-
-  /* Last Session */
-  sessionOuter: {
-    borderRadius: CARD_RADIUS,
-    marginBottom: 12,
-    ...CARD_SHADOW,
-  },
-  sessionGradient: { borderRadius: CARD_RADIUS, overflow: 'hidden' },
-  sessionEdge: {
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 14,
-  },
-  sessionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 12,
-  },
-  sessionThumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  sessionInfo: { flex: 1, gap: 2, minWidth: 0 },
-  sessionName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: 0,
-  },
-  sessionMeta: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11.5,
-    color: COLORS.textTertiary,
-  },
-  sessionStatsLine: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
-  sessionScoreBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 3.5,
-    borderColor: COLORS.green,
-    backgroundColor: 'rgba(16,23,28,0.45)',
-  },
-  sessionScoreValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 15,
-    color: COLORS.text,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  emptyText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
-
-  /* Stats Strip */
-  statsStripOuter: {
-    borderRadius: CARD_RADIUS,
-    marginBottom: 12,
-    ...CARD_SHADOW,
-  },
-  statsStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    borderRadius: CARD_RADIUS,
-    paddingVertical: 13,
-    paddingHorizontal: 6,
-    overflow: 'hidden',
-  },
-  statCell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    minWidth: 0,
-  },
-  statValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  statValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: 0,
-  },
-  statUnit: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
-    color: COLORS.textTertiary,
-  },
-  statLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 9,
-    color: COLORS.textSecondary,
-    letterSpacing: 1.1,
-  },
-  statDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
   },
 
   /* Progress bar */

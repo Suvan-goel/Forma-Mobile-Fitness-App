@@ -9,7 +9,7 @@ import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G, Line } from 'react-native-svg';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_SHADOW } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_VERTICAL_GAP, CARD_SHADOW } from '../../constants/theme';
 
 interface TrendChartProps {
   title: string;
@@ -383,7 +383,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   cardGradient: {

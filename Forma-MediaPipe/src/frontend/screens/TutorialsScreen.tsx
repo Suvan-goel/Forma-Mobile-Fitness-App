@@ -30,6 +30,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW
 } from '../constants/theme';
 import { useExercises } from '../../backend/hooks/useExercises';
@@ -476,7 +477,7 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     gap: 12,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
   },
 
   /* Card */

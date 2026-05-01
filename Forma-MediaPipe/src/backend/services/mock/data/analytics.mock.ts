@@ -111,6 +111,7 @@ export const generateMockSummary = (timeRange: string): AnalyticsSummary => {
     totalDurationMinutes: Math.round(45 * m),
     streakDays: Math.min(Math.round(2 * m), 30),
     mostTrainedExercise: 'Barbell Curl',
+    mostTrainedExerciseCount: workoutCount,
     personalBest: { exercise: 'Barbell Curl', weight: 40 },
     personalBests: [
       { exercise: 'Barbell Curl', weight: 40, date: 'Apr 28' },

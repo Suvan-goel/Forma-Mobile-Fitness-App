@@ -26,6 +26,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
+  CARD_VERTICAL_GAP,
   getScoreColor,
   CARD_SHADOW
 } from '../constants/theme';
@@ -551,7 +552,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     borderRadius: CARD_RADIUS,
     marginTop: 8,
-    marginBottom: 4,
+    marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
     overflow: 'hidden',
   },
@@ -738,7 +739,7 @@ const styles = StyleSheet.create({
   /* ── Exercise Cards ──────────────────────────── */
   cardOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   cardGradient: {

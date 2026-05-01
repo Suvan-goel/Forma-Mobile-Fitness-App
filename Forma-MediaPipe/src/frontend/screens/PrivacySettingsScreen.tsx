@@ -28,6 +28,7 @@ import {
   CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_END,
   CARD_GRADIENT_START,
+  CARD_VERTICAL_GAP,
   COLORS,
   FONTS,
   SPACING,
@@ -352,8 +353,8 @@ const styles = StyleSheet.create({
     color: COLORS.red,
   },
   optionStack: {
-    gap: 10,
-    marginBottom: 12,
+    gap: CARD_VERTICAL_GAP,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   optionCard: {
     borderRadius: 12,
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     borderRadius: 12,
-    marginBottom: 18,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   infoInner: {
     borderRadius: 12,

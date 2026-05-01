@@ -29,6 +29,7 @@ interface WorkoutExerciseInput {
     tempRecordingUrl?: string;
     saveRecordingToLibrary?: boolean;
     saveToCameraRoll?: boolean;
+    isManual?: boolean;
   }[];
 }
 
@@ -57,6 +58,15 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
     setIsSaving(true);
     setError(null);
     try {
+      const recordedFormScores = params.exercises.flatMap((ex) =>
+        ex.sets
+          .filter((set) => !set.isManual && set.formScore > 0)
+          .map((set) => set.formScore)
+      );
+      const recordedAvgFormScore = recordedFormScores.length > 0
+        ? Math.round(recordedFormScores.reduce((sum, score) => sum + score, 0) / recordedFormScores.length)
+        : 0;
+
       const payload: CreateWorkoutPayload = {
         name: params.name.trim(),
         date: new Date(),
@@ -66,15 +76,21 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
         exercises: params.exercises.map((ex, i) => ({
           name: ex.name,
           orderIndex: i,
-          sets: ex.sets.map((s, j) => ({
-            setNumber: j + 1,
-            reps: s.reps,
-            weight: s.weight ?? 0,
-            formScore: s.formScore,
-            notes: s.repFeedback && s.repFeedback.length > 0
-              ? generateSetSummary(s.repFeedback, s.formScore, ex.name)
-              : undefined,
-          })),
+          sets: ex.sets.map((s, j) => {
+            const formScore = s.isManual ? recordedAvgFormScore : s.formScore;
+            return {
+              setNumber: j + 1,
+              reps: s.reps,
+              weight: s.weight ?? 0,
+              formScore,
+              notes: s.isManual
+                ? 'Manual set - no form feedback or recording.'
+                : s.repFeedback && s.repFeedback.length > 0
+                  ? generateSetSummary(s.repFeedback, s.formScore, ex.name)
+                  : undefined,
+              isManual: s.isManual,
+            };
+          }),
         })),
       };
 
@@ -96,15 +112,11 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
 
       // Emit activity event — fire and forget when the user opts in
       if (sessionId && params.shareToFeed !== false) {
-        const avgFormScore = payload.exercises.length > 0
-          ? Math.round(payload.exercises.reduce((sum, ex) =>
-              sum + ex.sets.reduce((s, set) => s + set.formScore, 0) / Math.max(ex.sets.length, 1), 0) / payload.exercises.length)
-          : 0;
         socialService.createActivityEvent({
           eventType: 'workout_completed',
           payload: {
             session_id: sessionId,
-            form_score: avgFormScore,
+            form_score: recordedAvgFormScore,
             duration: `${Math.round(payload.durationSeconds / 60)} min`,
             exercise_count: payload.exercises.length,
           },

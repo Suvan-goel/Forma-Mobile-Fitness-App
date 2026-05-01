@@ -30,6 +30,7 @@ import {
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW,
 } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
@@ -137,6 +138,7 @@ export const SaveWorkoutScreen: React.FC = () => {
 
   const bestSetLabel = bestSet?.exerciseName ?? workoutData.category ?? 'Workout';
   const highlightTitle = bestSet && bestSet.weight > 0 ? 'New Personal Best' : 'Session Highlight';
+  const avgFormScoreLabel = workoutData.avgFormScore > 0 ? String(workoutData.avgFormScore) : '-';
   const shouldShareWorkout = shareToFeed && privacy !== 'private';
   const isFinalizingRecordings = recordingFinalizationCount > 0 || !!pendingRecording;
   const canSave = workoutData.totalSets > 0 && workoutName.trim().length > 0 && !isSaving && !isFinalizingRecordings;
@@ -292,7 +294,7 @@ export const SaveWorkoutScreen: React.FC = () => {
                 <SummaryTile label="Duration" value={workoutData.duration} />
                 <SummaryTile label="Total Sets" value={String(workoutData.totalSets)} />
                 <SummaryTile label="Total Reps" value={String(workoutData.totalReps)} />
-                <SummaryTile label="Avg Form Score" value={String(workoutData.avgFormScore)} accent />
+                <SummaryTile label="Avg Form Score" value={avgFormScoreLabel} accent />
               </View>
 
               <LinearGradient
@@ -513,7 +515,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
   },
   content: {
-    gap: 12,
+    gap: CARD_VERTICAL_GAP,
   },
   completeBlock: {
     alignItems: 'center',

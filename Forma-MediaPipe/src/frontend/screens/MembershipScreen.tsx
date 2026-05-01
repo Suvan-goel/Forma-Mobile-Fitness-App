@@ -25,6 +25,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
   planCard: {
     borderRadius: CARD_RADIUS,
     marginTop: 18,
-    marginBottom: 8,
+    marginBottom: CARD_VERTICAL_GAP,
 
     ...CARD_SHADOW,
 },

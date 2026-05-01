@@ -106,6 +106,7 @@ export interface CreateWorkoutPayload {
       weight: number;
       formScore: number;
       notes?: string;
+      isManual?: boolean;
     }[];
   }[];
 }
@@ -128,6 +129,7 @@ export interface AnalyticsSummary {
   totalDurationMinutes: number;
   streakDays: number;
   mostTrainedExercise: string | null;
+  mostTrainedExerciseCount?: number;
   personalBest: { exercise: string; weight: number } | null;
   personalBests?: { exercise: string; weight: number; date?: string | null }[];
   formTrendDirection: 'up' | 'down' | 'flat';

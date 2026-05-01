@@ -63,6 +63,7 @@ export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#171B
 export const CARD_RADIUS = 14;
 export const CARD_RADIUS_SM = 10;
 export const CARD_RADIUS_LG = 18;
+export const CARD_VERTICAL_GAP = 18;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {

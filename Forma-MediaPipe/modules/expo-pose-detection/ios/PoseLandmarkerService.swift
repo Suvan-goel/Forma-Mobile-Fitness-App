@@ -14,6 +14,8 @@ class PoseLandmarkerService: NSObject {
   weak var delegate: PoseLandmarkerServiceDelegate?
 
   private var poseLandmarker: PoseLandmarker?
+  private let lifecycleLock = NSLock()
+  private var closed = false
   private let minPoseDetectionConfidence: Float
   private let minPosePresenceConfidence: Float
   private let minTrackingConfidence: Float
@@ -67,18 +69,35 @@ class PoseLandmarkerService: NSObject {
     orientation: UIImage.Orientation,
     timeStamps: Int
   ) {
+    guard !isClosed(), let poseLandmarker = poseLandmarker else {
+      return
+    }
     guard let image = try? MPImage(sampleBuffer: sampleBuffer, orientation: orientation) else {
       return
     }
     do {
-      try poseLandmarker?.detectAsync(image: image, timestampInMilliseconds: timeStamps)
+      try poseLandmarker.detectAsync(image: image, timestampInMilliseconds: timeStamps)
     } catch {
       print("[PoseLandmarkerService] Detection error: \(error)")
     }
   }
 
   func clearPoseLandmarker() {
+    markClosed()
+    delegate = nil
     poseLandmarker = nil
+  }
+
+  private func isClosed() -> Bool {
+    lifecycleLock.lock()
+    defer { lifecycleLock.unlock() }
+    return closed
+  }
+
+  private func markClosed() {
+    lifecycleLock.lock()
+    closed = true
+    lifecycleLock.unlock()
   }
 }
 
@@ -91,6 +110,7 @@ extension PoseLandmarkerService: PoseLandmarkerLiveStreamDelegate {
     timestampInMilliseconds: Int,
     error: (any Error)?
   ) {
+    guard !isClosed() else { return }
     delegate?.poseLandmarkerService(self, didFinishDetection: result, error: error)
   }
 }

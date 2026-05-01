@@ -48,6 +48,7 @@ export function calculateWorkoutPoints(payload: CreateWorkoutPayload): number {
 
   for (const exercise of payload.exercises) {
     for (const set of exercise.sets) {
+      if (set.isManual) continue;
       if (set.formScore > 0) {
         formScoreSum += set.formScore;
         setsWithScore++;

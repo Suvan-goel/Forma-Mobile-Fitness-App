@@ -3,6 +3,7 @@ package expo.modules.posedetection
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.os.SystemClock
 import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.google.mediapipe.framework.image.BitmapImageBuilder
@@ -27,12 +28,17 @@ class PoseLandmarkerHelper(
 
   private var poseLandmarker: PoseLandmarker? = null
   private var hasLoggedMissingLandmarker = false
+  @Volatile
+  private var isClosed = false
+  private var lastFrameTimestampMs: Long = Long.MIN_VALUE
 
   init {
     setupPoseLandmarker()
   }
 
   private fun setupPoseLandmarker() {
+    if (isClosed) return
+
     Log.d(TAG, "Setting up PoseLandmarker with model asset: $modelAsset")
     try {
       context.assets.open(modelAsset).use { stream ->
@@ -90,6 +96,11 @@ class PoseLandmarkerHelper(
   }
 
   fun detectLiveStream(imageProxy: ImageProxy, isFrontCamera: Boolean) {
+    if (isClosed) {
+      imageProxy.close()
+      return
+    }
+
     // Capture values before close (prevents accessing invalid ImageProxy)
     val rotationDegrees = imageProxy.imageInfo.rotationDegrees
     val imageWidth = imageProxy.width
@@ -112,12 +123,26 @@ class PoseLandmarkerHelper(
       }
     }
 
-    val rotatedBitmap = Bitmap.createBitmap(
-      bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true
-    )
+    val rotatedBitmap = try {
+      Bitmap.createBitmap(
+        bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true
+      )
+    } catch (e: Exception) {
+      bitmapBuffer.recycle()
+      Log.e(TAG, "Failed to rotate camera frame for pose detection", e)
+      return
+    }
+    if (rotatedBitmap !== bitmapBuffer) {
+      bitmapBuffer.recycle()
+    }
+
+    if (isClosed) {
+      rotatedBitmap.recycle()
+      return
+    }
 
     val mpImage = BitmapImageBuilder(rotatedBitmap).build()
-    val frameTime = System.currentTimeMillis()
+    val frameTime = nextFrameTimestampMs()
 
     detectAsync(mpImage, frameTime)
   }
@@ -175,6 +200,7 @@ class PoseLandmarkerHelper(
 
   private fun detectAsync(mpImage: com.google.mediapipe.framework.image.MPImage, frameTime: Long) {
     try {
+      if (isClosed) return
       val landmarker = poseLandmarker
       if (landmarker == null) {
         if (!hasLoggedMissingLandmarker) {
@@ -190,16 +216,31 @@ class PoseLandmarkerHelper(
   }
 
   private fun returnLivestreamResult(result: PoseLandmarkerResult, input: com.google.mediapipe.framework.image.MPImage) {
-    val finishTimeMs = System.currentTimeMillis()
+    if (isClosed) return
     listener?.invoke(result, input.height, input.width)
   }
 
   private fun returnLivestreamError(error: RuntimeException) {
+    if (isClosed) return
     Log.e(TAG, "Pose detection error: ${error.message}")
   }
 
   fun clearPoseLandmarker() {
-    poseLandmarker?.close()
-    poseLandmarker = null
+    if (isClosed && poseLandmarker == null) return
+    isClosed = true
+    try {
+      poseLandmarker?.close()
+    } catch (e: Exception) {
+      Log.w(TAG, "Error while closing PoseLandmarker", e)
+    } finally {
+      poseLandmarker = null
+    }
+  }
+
+  private fun nextFrameTimestampMs(): Long {
+    val now = SystemClock.uptimeMillis()
+    val next = if (now <= lastFrameTimestampMs) lastFrameTimestampMs + 1 else now
+    lastFrameTimestampMs = next
+    return next
   }
 }

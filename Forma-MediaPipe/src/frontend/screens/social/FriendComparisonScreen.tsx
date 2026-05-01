@@ -24,6 +24,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
+  CARD_VERTICAL_GAP,
   getScoreColor,
 } from '../../constants/theme';
 import { ScreenBackground } from '../../components/ui/ScreenBackground';
@@ -418,7 +419,7 @@ const styles = StyleSheet.create({
   heroCard: {
     borderRadius: CARD_RADIUS,
     marginTop: 4,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   heroEdge: {
     borderRadius: CARD_RADIUS,
@@ -501,7 +502,7 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 20,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   summaryTile: {
     flex: 1,
@@ -538,7 +539,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   metricList: {
-    gap: 10,
+    gap: CARD_VERTICAL_GAP,
   },
   metricCard: {
     borderRadius: CARD_RADIUS,

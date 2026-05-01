@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Heart, MoreHorizontal, Plus } from 'lucide-react-native';
 import {
   CARD_SHADOW,
+  CARD_VERTICAL_GAP,
   COLORS,
   FONTS,
   SCREEN_GRADIENT_COLORS,
@@ -772,7 +773,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
   },
   list: {
-    gap: 12,
+    gap: CARD_VERTICAL_GAP,
   },
   card: {
     minHeight: 154,

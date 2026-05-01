@@ -4,7 +4,7 @@
  * Sections (matches design reference):
  *   1. Header: "Capture" + date + bell icon
  *   2. Current workout / In-progress card with Start Workout button
- *   3. Tools card (Choose Template, Exercise Guide, Camera Setup)
+ *   3. Tools card (Exercise Guide, Camera Setup)
  *   4. Recent templates horizontal list
  */
 
@@ -27,7 +27,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  LayoutTemplate,
   Trash2,
   Pause,
   Play,
@@ -310,9 +309,10 @@ export const RecordLandingScreen: React.FC = () => {
     const duration = formatStopwatch(workoutElapsedSeconds);
     const totalSets = sets.length;
     const totalReps = sets.reduce((sum, set) => sum + set.reps, 0);
-    const avgFormScore = Math.round(
-      sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length,
-    );
+    const scoredSets = sets.filter((set) => !set.isManual && set.formScore > 0);
+    const avgFormScore = scoredSets.length > 0
+      ? Math.round(scoredSets.reduce((sum, set) => sum + set.formScore, 0) / scoredSets.length)
+      : 0;
     const category = sets[0]?.exerciseName || 'General';
 
     navigation.navigate('SaveWorkout', {
@@ -623,23 +623,10 @@ export const RecordLandingScreen: React.FC = () => {
               >
                 <ToolRow
                   icon={
-                    <LayoutTemplate
-                      size={18}
-                      color={COLORS.accent}
-                      strokeWidth={1.6}
-                    />
-                  }
-                  title="Choose Template"
-                  subtitle="Browse saved workouts"
-                  onPress={handleChooseTemplate}
-                  divider
-                />
-                <ToolRow
-                  icon={
                     <BookOpen
-                      size={18}
+                      size={22}
                       color={COLORS.accent}
-                      strokeWidth={1.6}
+                      strokeWidth={1.7}
                     />
                   }
                   title="Exercise Guide"
@@ -649,7 +636,7 @@ export const RecordLandingScreen: React.FC = () => {
                 />
                 <ToolRow
                   icon={
-                    <Camera size={18} color={COLORS.accent} strokeWidth={1.6} />
+                    <Camera size={22} color={COLORS.accent} strokeWidth={1.7} />
                   }
                   title="Camera Setup"
                   subtitle="Check angles and positioning"
@@ -752,7 +739,7 @@ const ToolRow: React.FC<{
       <Text style={styles.toolTitle}>{title}</Text>
       <Text style={styles.toolSubtitle}>{subtitle}</Text>
     </View>
-    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.6} />
+    <ChevronRight size={17} color={COLORS.textTertiary} strokeWidth={1.7} />
   </TouchableOpacity>
 );
 
@@ -843,9 +830,9 @@ const styles = StyleSheet.create({
   /* Card label */
   cardLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 8.5,
+    fontSize: 11,
     color: COLORS.textSecondary,
-    letterSpacing: 0.9,
+    letterSpacing: 1,
   },
 
   /* Active / Idle workout card */
@@ -1030,9 +1017,9 @@ const styles = StyleSheet.create({
   /* Section labels */
   sectionLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 8.5,
+    fontSize: 11,
     color: COLORS.textSecondary,
-    letterSpacing: 0.9,
+    letterSpacing: 1,
     marginTop: 0,
     marginBottom: 8,
   },
@@ -1064,33 +1051,32 @@ const styles = StyleSheet.create({
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10.5,
+    gap: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 17,
   },
   toolRowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
   toolIconWrap: {
-    width: 29,
-    height: 29,
-    borderRadius: 7,
+    width: 42,
+    height: 42,
+    borderRadius: 10,
     backgroundColor: 'rgba(124,92,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   toolTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontSize: 15,
     color: COLORS.text,
-    letterSpacing: -0.1,
   },
   toolSubtitle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontSize: 12.5,
     color: COLORS.textSecondary,
-    marginTop: 1,
+    marginTop: 3,
   },
 
   /* Templates */
@@ -1127,11 +1113,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 4,
     backgroundColor: 'transparent',
   },
   templateCollageGrid: {
-    width: '100%',
-    height: '100%',
+    flex: 1,
+    alignSelf: 'stretch',
     gap: 2,
   },
   templateCollageGridRow: {

@@ -3,12 +3,11 @@
  *
  * Sections (matches design reference):
  *   1. Header: "Progress" + calendar/settings
- *   2. Form Score Trend chart (green) + Average
- *   3. Time range selector (1W / 1M / 3M / 1Y / ALL)
- *   4. Consistency card (weekday checks)
- *   5. Recent Personal Bests
- *   6. Summary metrics (workouts / streak / avg form / total reps / training time / volume / most trained)
- *   7. Volume + Duration trends (compact charts)
+ *   2. Consistency card (weekday checks)
+ *   3. Recent Personal Bests
+ *   4. Time range selector (1W / 1M / 3M / 1Y / ALL)
+ *   5. Form Score Trend chart (green) + Average
+ *   6. Volume + Duration trends (compact charts)
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
@@ -20,9 +19,7 @@ import {
   Check,
   Trophy,
   Activity,
-  Dumbbell,
   TrendingUp,
-  Clock,
   ChevronRight,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -36,6 +33,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
@@ -53,11 +51,6 @@ const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const PROGRESS_CHART_GREEN = '#5FCE7A';
 type ProgressTab = 'overview' | 'personalBests' | 'leaderboard';
 
-const PB_THUMBS = [
-  require('../assets/exercises/barbell_squat.png'),
-  require('../assets/exercises/barbell_curl.png'),
-  require('../assets/exercises/cable_row.png'),
-];
 const EXERCISE_THUMBS: Record<string, any> = {
   'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
   'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
@@ -71,11 +64,21 @@ const EXERCISE_THUMBS: Record<string, any> = {
   'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
 };
 
-const formatDuration = (totalMinutes: number): string => {
-  const hours = Math.floor(totalMinutes / 60);
-  const mins = totalMinutes % 60;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
+const DEFAULT_EXERCISE_THUMB = EXERCISE_THUMBS['Barbell Curl'];
+
+const getExerciseThumb = (exerciseName?: string | null) => (
+  exerciseName ? EXERCISE_THUMBS[exerciseName] ?? DEFAULT_EXERCISE_THUMB : DEFAULT_EXERCISE_THUMB
+);
+
+const getDateTime = (date?: string | null) => {
+  if (!date) return 0;
+  const time = new Date(date).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const formatWeight = (weight: number): string => {
+  const rounded = Math.round(weight * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)} kg`;
 };
 
 const formatVolume = (kg: number): string => {
@@ -170,6 +173,11 @@ export const AnalyticsScreen: React.FC = () => {
     : summary.personalBest
       ? [summary.personalBest]
       : [];
+  const recentPersonalBest = [...personalBestEntries].sort((a, b) => {
+    const dateDelta = getDateTime(b.date) - getDateTime(a.date);
+    return dateDelta !== 0 ? dateDelta : b.weight - a.weight;
+  })[0] ?? summary.personalBest;
+  const mostTrainedExerciseCount = summary.mostTrainedExerciseCount ?? 0;
   const personalBestMap = new Map(personalBestEntries.map((best) => [best.exercise, best]));
   const exerciseNames = Array.from(new Set([
     ...allExercises.map((exercise) => exercise.name),
@@ -180,13 +188,13 @@ export const AnalyticsScreen: React.FC = () => {
     if (aHasBest !== bHasBest) return aHasBest ? -1 : 1;
     return a.localeCompare(b);
   });
-  const personalBestRows = exerciseNames.map((name, index) => {
+  const personalBestRows = exerciseNames.map((name) => {
     const exercise = allExercises.find((item) => item.name === name);
     return {
       name,
       category: exercise?.muscleGroup ?? exercise?.category ?? 'Exercise',
       best: personalBestMap.get(name),
-      thumb: EXERCISE_THUMBS[name] ?? PB_THUMBS[index % PB_THUMBS.length],
+      thumb: getExerciseThumb(name),
     };
   });
   const tabs: { key: ProgressTab; label: string }[] = [
@@ -263,26 +271,6 @@ export const AnalyticsScreen: React.FC = () => {
             {activeProgressTab === 'overview' ? (
               <>
 
-          {/* ── FORM SCORE TREND ────────────────────── */}
-          <TrendChart
-            title="FORM SCORE TREND"
-            icon={Info}
-            data={analytics.formData}
-            unit=""
-            timeRange={selectedTimeRange}
-            headerValue={avgFormScore}
-            lineColor={PROGRESS_CHART_GREEN}
-            averageLabel="Average"
-            height={210}
-          />
-
-          {/* ── TIME RANGE SELECTOR ─────────────────── */}
-          <TimeRangeSelector
-            options={TIME_RANGE_OPTIONS}
-            selected={selectedTimeRange}
-            onSelect={handleTimeRangeChange}
-          />
-
           {/* ── CONSISTENCY ─────────────────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
@@ -325,7 +313,7 @@ export const AnalyticsScreen: React.FC = () => {
           </View>
 
           {/* ── PERSONAL BESTS ──────────────────────── */}
-          {summary.personalBest && (
+          {(recentPersonalBest || summary.mostTrainedExercise || totalVolume > 0) && (
             <View style={styles.cardOuter}>
               <LinearGradient
                 colors={[...CARD_GRADIENT_COLORS]}
@@ -338,36 +326,38 @@ export const AnalyticsScreen: React.FC = () => {
                     <Text style={styles.cardLabel}>RECENT PERSONAL BESTS</Text>
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      onPress={() => navigation.navigate('MainTabs', { screen: 'Logbook' })}
+                      onPress={() => setActiveProgressTab('personalBests')}
                     >
                       <Text style={styles.viewAllLink}>View all</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.pbRow}>
-                    <View style={styles.pbThumb}>
-                      <Image source={PB_THUMBS[0]} style={styles.pbThumbImage} resizeMode="cover" />
+                  {recentPersonalBest && (
+                    <View style={styles.pbRow}>
+                      <View style={styles.pbThumb}>
+                        <Image source={getExerciseThumb(recentPersonalBest.exercise)} style={styles.pbThumbImage} resizeMode="contain" />
+                      </View>
+                      <View style={styles.pbInfo}>
+                        <Text style={styles.pbName}>{recentPersonalBest.exercise}</Text>
+                        <Text style={styles.pbSub}>Best set</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.pbWeight}>{formatWeight(recentPersonalBest.weight)}</Text>
+                      </View>
                     </View>
-                    <View style={styles.pbInfo}>
-                      <Text style={styles.pbName}>{summary.personalBest.exercise}</Text>
-                      <Text style={styles.pbSub}>1RM</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.pbWeight}>{summary.personalBest.weight} kg</Text>
-                    </View>
-                  </View>
+                  )}
 
                   {summary.mostTrainedExercise && (
-                    <View style={[styles.pbRow, styles.pbRowBordered]}>
+                    <View style={[styles.pbRow, recentPersonalBest && styles.pbRowBordered]}>
                       <View style={styles.pbThumb}>
-                        <Image source={PB_THUMBS[1]} style={styles.pbThumbImage} resizeMode="cover" />
+                        <Image source={getExerciseThumb(summary.mostTrainedExercise)} style={styles.pbThumbImage} resizeMode="contain" />
                       </View>
                       <View style={styles.pbInfo}>
                         <Text style={styles.pbName}>Most Trained</Text>
                         <Text style={styles.pbSub}>{summary.mostTrainedExercise}</Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.pbWeight}>{summary.workoutCount}</Text>
+                        <Text style={styles.pbWeight}>{mostTrainedExerciseCount}</Text>
                         <Text style={styles.pbSub}>workouts</Text>
                       </View>
                     </View>
@@ -375,7 +365,9 @@ export const AnalyticsScreen: React.FC = () => {
 
                   <View style={[styles.pbRow, styles.pbRowBordered]}>
                     <View style={styles.pbThumb}>
-                      <Image source={PB_THUMBS[2]} style={styles.pbThumbImage} resizeMode="cover" />
+                      <View style={styles.volumeThumb}>
+                        <TrendingUp size={17} color={COLORS.accent} strokeWidth={1.8} />
+                      </View>
                     </View>
                     <View style={styles.pbInfo}>
                       <Text style={styles.pbName}>Training Volume</Text>
@@ -391,68 +383,25 @@ export const AnalyticsScreen: React.FC = () => {
             </View>
           )}
 
-          {/* ── SUMMARY METRICS ─────────────────────── */}
-          <View style={styles.cardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.cardGradient}
-            >
-              <View style={styles.cardEdge}>
-                <View style={styles.cardLabelRow}>
-                  <Text style={styles.cardLabel}>SUMMARY</Text>
-                </View>
-                <View style={styles.summaryGrid}>
-                  <SummaryCell
-                    icon={<Activity size={14} color={COLORS.accent} strokeWidth={1.6} />}
-                    value={String(summary.workoutCount)}
-                    label="Workouts"
-                  />
-                  <View style={styles.summaryDivider} />
-                  <SummaryCell
-                    icon={<Trophy size={14} color={COLORS.yellow} strokeWidth={1.6} />}
-                    value={summary.streakDays > 0 ? `${summary.streakDays}` : '—'}
-                    label="Day streak"
-                  />
-                  <View style={styles.summaryDivider} />
-                  <SummaryCell
-                    icon={<TrendingUp size={14} color={COLORS.green} strokeWidth={1.6} />}
-                    value={hasData ? String(avgFormScore) : '—'}
-                    label="Avg form"
-                  />
-                </View>
-                <View style={styles.summaryGrid}>
-                  <SummaryCell
-                    icon={<Dumbbell size={14} color={COLORS.accent} strokeWidth={1.6} />}
-                    value={summary.totalReps >= 1000
-                      ? `${(summary.totalReps / 1000).toFixed(1).replace(/\.0$/, '')}k`
-                      : String(summary.totalReps)}
-                    label="Total reps"
-                  />
-                  <View style={styles.summaryDivider} />
-                  <SummaryCell
-                    icon={<Clock size={14} color={COLORS.textSecondary} strokeWidth={1.6} />}
-                    value={formatDuration(summary.totalDurationMinutes)}
-                    label="Time"
-                  />
-                  <View style={styles.summaryDivider} />
-                  <SummaryCell
-                    icon={<TrendingUp size={14} color={COLORS.accent} strokeWidth={1.6} />}
-                    value={`${formatVolume(totalVolume)}`}
-                    label="Volume kg"
-                  />
-                </View>
-                {avgConsistency > 0 && (
-                  <View style={styles.consistencyHint}>
-                    <Text style={styles.consistencyHintText}>
-                      Consistency · {avgConsistency}%
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </LinearGradient>
-          </View>
+          {/* ── TIME RANGE SELECTOR ─────────────────── */}
+          <TimeRangeSelector
+            options={TIME_RANGE_OPTIONS}
+            selected={selectedTimeRange}
+            onSelect={handleTimeRangeChange}
+          />
+
+          {/* ── FORM SCORE TREND ────────────────────── */}
+          <TrendChart
+            title="FORM SCORE TREND"
+            icon={Info}
+            data={analytics.formData}
+            unit=""
+            timeRange={selectedTimeRange}
+            headerValue={avgFormScore}
+            lineColor={PROGRESS_CHART_GREEN}
+            averageLabel="Average"
+            height={210}
+          />
 
           {/* ── VOLUME TREND ─────────────────────────── */}
           <TrendChart
@@ -521,7 +470,7 @@ export const AnalyticsScreen: React.FC = () => {
                             </View>
                             <View style={styles.bestValueWrap}>
                               <Text style={[styles.bestValue, !row.best && styles.bestValueEmpty]}>
-                                {row.best ? `${row.best.weight} kg` : '—'}
+                                {row.best ? formatWeight(row.best.weight) : '—'}
                               </Text>
                               <Text style={styles.pbSub}>{row.best ? 'Best set' : 'No PB'}</Text>
                             </View>
@@ -541,18 +490,6 @@ export const AnalyticsScreen: React.FC = () => {
     </View>
   );
 };
-
-// ── Summary Cell ────────────────────────────────────
-
-const SummaryCell: React.FC<{ icon: React.ReactNode; value: string; label: string }> = ({
-  icon, value, label,
-}) => (
-  <View style={styles.summaryCell}>
-    {icon}
-    <Text style={styles.summaryValue}>{value}</Text>
-    <Text style={styles.summaryLabel}>{label}</Text>
-  </View>
-);
 
 // ── Styles ─────────────────────────────────────────
 
@@ -682,7 +619,7 @@ const styles = StyleSheet.create({
   /* Generic card */
   cardOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
 
     ...CARD_SHADOW,
 },
@@ -759,6 +696,14 @@ const styles = StyleSheet.create({
   pbThumbImage: {
     width: '100%',
     height: '100%',
+  },
+  volumeThumb: {
+    width: 31,
+    height: 31,
+    borderRadius: 9,
+    backgroundColor: 'rgba(124,92,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pbInfo: { flex: 1, gap: 2 },
   pbName: {
@@ -875,46 +820,4 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  /* Summary grid */
-  summaryGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  summaryCell: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  summaryValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
-    color: COLORS.text,
-    letterSpacing: -0.3,
-  },
-  summaryLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10.5,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.2,
-    textAlign: 'center',
-  },
-  summaryDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-  },
-  consistencyHint: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-  },
-  consistencyHintText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    color: COLORS.accent,
-    letterSpacing: 0.3,
-  },
 });

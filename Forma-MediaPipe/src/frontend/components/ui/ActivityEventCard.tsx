@@ -6,7 +6,7 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Activity, Award, TrendingUp, Flame, Heart, MessageCircle, MoreHorizontal } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_VERTICAL_GAP, getScoreColor ,
   CARD_SHADOW
 } from '../../constants/theme';
 import { ActivityEvent, ReactionType, EventReactions } from '../../../backend/services/api/types';
@@ -231,7 +231,7 @@ export const ActivityEventCard: React.FC<ActivityEventCardProps> = memo(({ event
 const styles = StyleSheet.create({
   cardOuter: {
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 10,
+    marginBottom: CARD_VERTICAL_GAP,
     borderRadius: 16,
     ...CARD_SHADOW,
   },

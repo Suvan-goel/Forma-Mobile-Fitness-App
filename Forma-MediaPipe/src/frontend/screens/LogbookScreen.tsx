@@ -28,7 +28,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
-import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_RADIUS_SM, CARD_VERTICAL_GAP, getScoreColor ,
   CARD_SHADOW
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
@@ -86,6 +86,38 @@ const getWorkoutThumb = (session: WorkoutSession, fallbackIndex: number) => {
 type LogbookListItem =
   | { type: 'header'; key: string; label: string; count: number }
   | { type: 'workout'; key: string; session: WorkoutSession; index: number };
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const getMonthStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const getWeekStart = (date: Date) => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const day = start.getDay();
+  start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
+  return start;
+};
+
+const weekIntersectsMonth = (weekStart: Date, monthDate: Date) => {
+  const weekEnd = addDays(weekStart, 6);
+  const monthStart = getMonthStart(monthDate);
+  const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+  return weekStart.getTime() <= monthEnd.getTime() && weekEnd.getTime() >= monthStart.getTime();
+};
+
+const getMonthDateFromLabel = (label: string | null) => {
+  if (!label) return null;
+  const [monthName, yearText] = label.split(' ');
+  const monthIndex = MONTH_NAMES.indexOf(monthName);
+  const year = Number(yearText);
+  if (monthIndex < 0 || Number.isNaN(year)) return null;
+  return new Date(year, monthIndex, 1);
+};
 
 /* ── Calendar Modal ───────────────────────── */
 
@@ -261,7 +293,7 @@ interface WorkoutCardProps {
 }
 
 const CARD_INNER_HEIGHT = 122;
-const CARD_GAP = 9;
+const CARD_GAP = CARD_VERTICAL_GAP;
 const DELETE_AREA_WIDTH = 72;
 
 const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ session, onDelete, index }) => {
@@ -405,6 +437,8 @@ export const LogbookScreen: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [calendarMonthDate, setCalendarMonthDate] = useState(() => getMonthStart(new Date()));
+  const [calendarWeekStart, setCalendarWeekStart] = useState(() => getWeekStart(new Date()));
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'year' | 'month' | 'week' | null>(null);
 
@@ -451,15 +485,25 @@ export const LogbookScreen: React.FC = () => {
     return `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
   };
 
+  const setCalendarView = useCallback((date: Date) => {
+    setCalendarMonthDate(getMonthStart(date));
+    setCalendarWeekStart(getWeekStart(date));
+  }, []);
+
+  const getDateForWeekLabel = (label: string | null) => {
+    if (!label) return null;
+    const match = workouts.find((session) => {
+      const start = getWeekStart(session.fullDate);
+      return formatWeekLabel(start, addDays(start, 6)) === label;
+    });
+    return match?.fullDate ?? null;
+  };
+
   const getUniqueWeeks = () => {
     const weekMap = new Map<string, number>();
     workouts.forEach((s) => {
-      const d = s.fullDate;
-      const start = new Date(d);
-      const day = start.getDay();
-      start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
+      const start = getWeekStart(s.fullDate);
+      const end = addDays(start, 6);
       const label = formatWeekLabel(start, end);
       if (!weekMap.has(label)) weekMap.set(label, start.getTime());
     });
@@ -487,13 +531,8 @@ export const LogbookScreen: React.FC = () => {
           return false;
       }
       if (selectedWeek) {
-        const d = s.fullDate;
-        const start = new Date(d);
-        const day = start.getDay();
-        start.setDate(start.getDate() - day + (day === 0 ? -6 : 1));
-        const end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        if (formatWeekLabel(start, end) !== selectedWeek) return false;
+        const start = getWeekStart(s.fullDate);
+        if (formatWeekLabel(start, addDays(start, 6)) !== selectedWeek) return false;
       }
       return true;
     });
@@ -502,12 +541,22 @@ export const LogbookScreen: React.FC = () => {
   const handleFilterChange = (type: 'year' | 'month' | 'week', value: string | null) => {
     const v = value === 'All' ? null : value;
     if (type === 'year') { setSelectedYear(v); setSelectedMonth(null); setSelectedWeek(null); }
-    else if (type === 'month') { setSelectedMonth(v); setSelectedWeek(null); }
-    else { setSelectedWeek(v); }
+    else if (type === 'month') {
+      setSelectedMonth(v);
+      setSelectedWeek(null);
+      const monthDate = getMonthDateFromLabel(v);
+      if (monthDate) setCalendarView(monthDate);
+    }
+    else {
+      setSelectedWeek(v);
+      const weekDate = getDateForWeekLabel(v);
+      if (weekDate) setCalendarView(weekDate);
+    }
     setSelectedDate(null);
   };
 
   const handleDateSelect = (date: Date) => {
+    setCalendarView(date);
     setSelectedDate(date);
     setSelectedYear(null);
     setSelectedMonth(null);
@@ -523,17 +572,32 @@ export const LogbookScreen: React.FC = () => {
   const filteredWorkouts = getFilteredWorkouts();
   const hasActiveFilter = selectedYear || selectedMonth || selectedWeek || selectedDate;
   const activeFilterMode = selectedDate ? 'date' : selectedWeek ? 'week' : selectedMonth ? 'month' : selectedYear ? 'year' : 'all';
-  const calendarBaseDate = selectedDate ?? filteredWorkouts[0]?.fullDate ?? new Date();
-  const calendarWeekStart = new Date(calendarBaseDate);
-  const calendarDay = calendarWeekStart.getDay();
-  calendarWeekStart.setDate(calendarWeekStart.getDate() - calendarDay + (calendarDay === 0 ? -6 : 1));
+  const selectedDateTime = selectedDate?.getTime() ?? null;
+  const latestWorkoutTime = workouts[0]?.fullDate?.getTime() ?? null;
+
+  useEffect(() => {
+    const selectedWeekDate = getDateForWeekLabel(selectedWeek);
+    const selectedMonthDate = getMonthDateFromLabel(selectedMonth);
+    setCalendarView(selectedDate ?? selectedWeekDate ?? selectedMonthDate ?? workouts[0]?.fullDate ?? new Date());
+  }, [selectedDateTime, selectedMonth, selectedWeek, latestWorkoutTime, workouts.length, setCalendarView]);
+
   const visibleWeekDays = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(calendarWeekStart);
     date.setDate(calendarWeekStart.getDate() + index);
     return date;
   });
   const selectedOrToday = selectedDate ?? new Date();
-  const monthTitle = `${MONTH_NAMES[calendarBaseDate.getMonth()]} ${calendarBaseDate.getFullYear()}`;
+  const monthTitle = `${MONTH_NAMES[calendarMonthDate.getMonth()]} ${calendarMonthDate.getFullYear()}`;
+  const previousWeekStart = addDays(calendarWeekStart, -7);
+  const nextWeekStart = addDays(calendarWeekStart, 7);
+  const canNavigatePreviousWeek = weekIntersectsMonth(previousWeekStart, calendarMonthDate);
+  const canNavigateNextWeek = weekIntersectsMonth(nextWeekStart, calendarMonthDate);
+  const handleWeekNavigate = useCallback((direction: 'prev' | 'next') => {
+    setCalendarWeekStart((currentStart) => {
+      const candidate = addDays(currentStart, direction === 'prev' ? -7 : 7);
+      return weekIntersectsMonth(candidate, calendarMonthDate) ? candidate : currentStart;
+    });
+  }, [calendarMonthDate]);
   const groupedListItems: LogbookListItem[] = [];
   const groupedByDay = new Map<string, WorkoutSession[]>();
   filteredWorkouts.forEach((session) => {
@@ -595,13 +659,36 @@ export const LogbookScreen: React.FC = () => {
   const ListHeader = useCallback(() => (
     <View>
       <View style={styles.monthNavRow}>
-        <TouchableOpacity
-          onPress={() => setOpenDropdown('month')}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={16} color={COLORS.textSecondary} strokeWidth={1.7} />
-        </TouchableOpacity>
+        <View style={styles.weekNavControls}>
+          <TouchableOpacity
+            onPress={() => handleWeekNavigate('prev')}
+            activeOpacity={0.7}
+            disabled={!canNavigatePreviousWeek}
+            accessibilityRole="button"
+            accessibilityLabel="Previous week"
+            style={[
+              styles.weekNavButton,
+              !canNavigatePreviousWeek && styles.weekNavButtonDisabled,
+            ]}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 4 }}
+          >
+            <ChevronLeft size={16} color={COLORS.textSecondary} strokeWidth={1.7} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleWeekNavigate('next')}
+            activeOpacity={0.7}
+            disabled={!canNavigateNextWeek}
+            accessibilityRole="button"
+            accessibilityLabel="Next week"
+            style={[
+              styles.weekNavButton,
+              !canNavigateNextWeek && styles.weekNavButtonDisabled,
+            ]}
+            hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}
+          >
+            <ChevronRight size={16} color={COLORS.textSecondary} strokeWidth={1.7} />
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
           onPress={() => setOpenDropdown('month')}
           activeOpacity={0.7}
@@ -610,13 +697,15 @@ export const LogbookScreen: React.FC = () => {
           <Text style={styles.monthTitle}>{monthTitle}</Text>
           <ChevronRight size={12} color={COLORS.textTertiary} strokeWidth={1.7} />
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setIsCalendarOpen(true)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Calendar size={16} color={COLORS.textSecondary} strokeWidth={1.7} />
-        </TouchableOpacity>
+        <View style={styles.monthRightActions}>
+          <TouchableOpacity
+            onPress={() => setIsCalendarOpen(true)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Calendar size={16} color={COLORS.textSecondary} strokeWidth={1.7} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.weekCalendar}>
@@ -662,7 +751,21 @@ export const LogbookScreen: React.FC = () => {
       )}
       <View style={styles.dateSelectorDivider} />
     </View>
-  ), [selectedYear, selectedMonth, selectedWeek, selectedDate, hasActiveFilter, activeFilterMode, monthTitle, selectedOrToday, visibleWeekDays, handleDateSelect, navigation]);
+  ), [
+    selectedYear,
+    selectedMonth,
+    selectedWeek,
+    selectedDate,
+    hasActiveFilter,
+    activeFilterMode,
+    monthTitle,
+    selectedOrToday,
+    visibleWeekDays,
+    handleDateSelect,
+    handleWeekNavigate,
+    canNavigatePreviousWeek,
+    canNavigateNextWeek,
+  ]);
 
   /* ── Loading ──── */
   if (isLoading) {
@@ -724,15 +827,17 @@ export const LogbookScreen: React.FC = () => {
           <TouchableOpacity style={styles.selectionOverlay} activeOpacity={1} onPress={() => setOpenDropdown(null)}>
             <View style={styles.selectionContainer} onStartShouldSetResponder={() => true}>
               <LinearGradient
-                colors={SCREEN_GRADIENT_COLORS}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
                 style={styles.selectionGradient}
               >
                 <View style={styles.selectionEdge}>
                   <View style={styles.selectionHeader}>
                     <View style={styles.selectionLabelRow}>
-                      <Layers size={13} color={COLORS.accent} strokeWidth={1.5} />
+                      <View style={styles.selectionIconPlate}>
+                        <Layers size={13} color={COLORS.accent} strokeWidth={1.7} />
+                      </View>
                       <Text style={styles.selectionTitle}>
                         {openDropdown === 'year' ? 'SELECT YEAR' : openDropdown === 'month' ? 'SELECT MONTH' : 'SELECT WEEK'}
                       </Text>
@@ -746,23 +851,41 @@ export const LogbookScreen: React.FC = () => {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.selectionDivider} />
-                  <ScrollView showsVerticalScrollIndicator={false} style={styles.selectionScroll}>
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={styles.selectionScroll}
+                    contentContainerStyle={styles.selectionScrollContent}
+                  >
                     {(openDropdown === 'year' ? getUniqueYears() : openDropdown === 'month' ? getUniqueMonths() : getUniqueWeeks()).map((option) => {
                       const currentValue = openDropdown === 'year' ? selectedYear : openDropdown === 'month' ? selectedMonth : selectedWeek;
                       const isSelected = currentValue === option || (option === 'All' && !currentValue);
                       return (
                         <TouchableOpacity
                           key={option}
-                          style={[styles.selectionItem, isSelected && styles.selectionItemActive]}
+                          style={styles.selectionItemTouch}
                           onPress={() => { if (openDropdown) handleFilterChange(openDropdown, option); setOpenDropdown(null); }}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.selectionItemText, isSelected && styles.selectionItemTextActive]}>
-                            {option}
-                          </Text>
-                          {isSelected && (
-                            <View style={styles.selectionCheckWrap}>
-                              <Check size={14} color={COLORS.accent} strokeWidth={2.5} />
+                          {isSelected ? (
+                            <LinearGradient
+                              colors={['rgba(122, 85, 255, 0.22)', 'rgba(122, 85, 255, 0.09)']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={[styles.selectionItem, styles.selectionItemActive]}
+                            >
+                              <Text style={[styles.selectionItemText, styles.selectionItemTextActive]}>
+                                {option}
+                              </Text>
+                              <View style={styles.selectionCheckWrap}>
+                                <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
+                              </View>
+                            </LinearGradient>
+                          ) : (
+                            <View style={styles.selectionItem}>
+                              <Text style={styles.selectionItemText}>
+                                {option}
+                              </Text>
+                              <View style={styles.selectionCheckPlaceholder} />
                             </View>
                           )}
                         </TouchableOpacity>
@@ -876,10 +999,29 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 10,
   },
+  weekNavControls: {
+    width: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  weekNavButton: {
+    width: 24,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekNavButtonDisabled: {
+    opacity: 0.32,
+  },
   monthTitleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  monthRightActions: {
+    width: 58,
+    alignItems: 'flex-end',
   },
   monthTitle: {
     fontFamily: FONTS.display.semibold,
@@ -890,7 +1032,7 @@ const styles = StyleSheet.create({
   weekCalendar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 13,
+    marginBottom: 8,
   },
   weekDayCell: {
     alignItems: 'center',
@@ -948,7 +1090,7 @@ const styles = StyleSheet.create({
   dateSelectorDivider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    marginTop: 14,
+    marginTop: 8,
     marginBottom: 13,
   },
 
@@ -1342,91 +1484,127 @@ const styles = StyleSheet.create({
   /* ── Selection Modal ────────────────────── */
   selectionOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: COLORS.overlayBackground,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
   },
   selectionContainer: {
-    width: '88%',
+    width: '100%',
     maxWidth: 380,
   },
   selectionGradient: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    backgroundColor: COLORS.cardBackground,
     ...Platform.select({
       ios: {
-        shadowColor: '#7A55FF',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.34,
+        shadowRadius: 28,
       },
-      android: { elevation: 12 },
+      android: { elevation: 10 },
     }),
   },
   selectionEdge: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 20,
+    borderColor: 'rgba(255, 255, 255, 0.075)',
+    borderTopColor: 'rgba(255, 255, 255, 0.11)',
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
   selectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   selectionLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 9,
+    minWidth: 0,
+    flex: 1,
+  },
+  selectionIconPlate: {
+    width: 27,
+    height: 27,
+    borderRadius: 8,
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   selectionTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 1.8,
   },
   selectionCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    width: 34,
+    height: 34,
+    borderRadius: CARD_RADIUS_SM,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   selectionDivider: {
     height: 1,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-    marginBottom: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 8,
   },
   selectionScroll: {
-    maxHeight: 340,
+    maxHeight: 320,
+  },
+  selectionScrollContent: {
+    gap: 4,
+    paddingVertical: 2,
+  },
+  selectionItemTouch: {
+    borderRadius: CARD_RADIUS_SM,
   },
   selectionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderRadius: 12,
-    marginVertical: 2,
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: CARD_RADIUS_SM,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   selectionItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    borderColor: 'rgba(122, 85, 255, 0.32)',
   },
   selectionItemText: {
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
+    letterSpacing: 0,
   },
   selectionItemTextActive: {
     color: '#FFFFFF',
     fontFamily: FONTS.display.semibold,
   },
+  selectionCheckPlaceholder: {
+    width: 24,
+    height: 24,
+  },
   selectionCheckWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },

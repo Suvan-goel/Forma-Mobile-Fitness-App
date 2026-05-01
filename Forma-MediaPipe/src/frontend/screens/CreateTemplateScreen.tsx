@@ -36,6 +36,7 @@ import {
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW,
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
@@ -641,7 +642,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    gap: 12,
+    gap: CARD_VERTICAL_GAP,
   },
   formCard: {
     borderRadius: CARD_RADIUS,

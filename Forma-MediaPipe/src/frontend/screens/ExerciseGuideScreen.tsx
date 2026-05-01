@@ -25,6 +25,7 @@ import {
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW,
 } from '../constants/theme';
 import { ArchetypeVisual, VIEW_TYPE_LABEL } from '../components/ui/CameraGuideVisuals';
@@ -425,7 +426,7 @@ const styles = StyleSheet.create({
   /* ── Tab content shared ── */
   tabContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    gap: 12,
+    gap: CARD_VERTICAL_GAP,
   },
   guideCard: {
     borderRadius: CARD_RADIUS,

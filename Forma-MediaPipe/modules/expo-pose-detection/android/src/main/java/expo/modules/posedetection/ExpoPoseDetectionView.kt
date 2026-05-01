@@ -17,6 +17,7 @@ import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 class ExpoPoseDetectionView(
   context: Context,
@@ -41,10 +42,14 @@ class ExpoPoseDetectionView(
   // Configuration
   private var frameLimit: Int = 30
   private var showSkeleton: Boolean = false
+  @Volatile
   private var currentModelName: String = "pose_landmarker_heavy"
+  @Volatile
+  private var isDisposed = false
 
   // Camera
   private var cameraProvider: ProcessCameraProvider? = null
+  @Volatile
   private var cameraFacing = CameraSelector.LENS_FACING_FRONT
   private val backgroundExecutor = Executors.newSingleThreadExecutor()
   private val previewView: PreviewView
@@ -86,7 +91,8 @@ class ExpoPoseDetectionView(
     addView(container)
 
     // Initialize pose helper on background thread
-    backgroundExecutor.execute {
+    runOnBackground {
+      if (isDisposed) return@runOnBackground
       poseLandmarkerHelper = PoseLandmarkerHelper(
         context = context,
         modelAsset = "${currentModelName}.task",
@@ -101,40 +107,51 @@ class ExpoPoseDetectionView(
   // MARK: - Configuration
 
   fun configureFrameLimit(limit: Int) {
+    if (isDisposed) return
     frameLimit = limit.coerceIn(1, 60)
   }
 
   fun configureShowSkeleton(show: Boolean) {
+    if (isDisposed) return
     showSkeleton = show
     post {
+      if (isDisposed) return@post
       overlayView.visibility = if (show) VISIBLE else GONE
       if (!show) overlayView.clear()
     }
   }
 
   fun configureModelName(name: String) {
+    if (isDisposed) return
     val validName = if (ALLOWED_MODELS.contains(name)) name else "pose_landmarker_heavy"
     if (validName == currentModelName) return
     currentModelName = validName
-    backgroundExecutor.execute {
+    val modelAsset = "${validName}.task"
+    runOnBackground {
+      if (isDisposed) return@runOnBackground
       poseLandmarkerHelper?.clearPoseLandmarker()
       lastProcessedFrameTimeMs = 0
+      if (isDisposed) return@runOnBackground
       poseLandmarkerHelper = PoseLandmarkerHelper(
         context = context,
-        modelAsset = "${currentModelName}.task",
+        modelAsset = modelAsset,
         listener = ::handlePoseResult
       )
     }
   }
 
   fun switchCamera() {
-    cameraFacing = if (cameraFacing == CameraSelector.LENS_FACING_FRONT)
-      CameraSelector.LENS_FACING_BACK
-    else
-      CameraSelector.LENS_FACING_FRONT
     // Must run on main thread — switchCamera() is called from the JS thread
     // via Expo Module Function, but CameraX requires the main thread.
-    post { bindCameraUseCases() }
+    if (isDisposed) return
+    post {
+      if (isDisposed) return@post
+      cameraFacing = if (cameraFacing == CameraSelector.LENS_FACING_FRONT)
+        CameraSelector.LENS_FACING_BACK
+      else
+        CameraSelector.LENS_FACING_FRONT
+      bindCameraUseCases()
+    }
   }
 
   // MARK: - Camera Setup
@@ -142,12 +159,24 @@ class ExpoPoseDetectionView(
   private fun setupCamera() {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
     cameraProviderFuture.addListener({
-      cameraProvider = cameraProviderFuture.get()
+      if (isDisposed) {
+        try {
+          cameraProviderFuture.get().unbindAll()
+        } catch (_: Exception) {}
+        return@addListener
+      }
+      cameraProvider = try {
+        cameraProviderFuture.get()
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to get camera provider", e)
+        return@addListener
+      }
       bindCameraUseCases()
     }, ContextCompat.getMainExecutor(context))
   }
 
   private fun bindCameraUseCases() {
+    if (isDisposed) return
     val rawActivity = appContext.currentActivity
     if (rawActivity == null) {
       Log.w(TAG, "bindCameraUseCases: currentActivity is null, deferring")
@@ -175,7 +204,11 @@ class ExpoPoseDetectionView(
       .build()
       .also {
         it.setAnalyzer(backgroundExecutor) { imageProxy ->
-          detectPose(imageProxy)
+          if (isDisposed) {
+            imageProxy.close()
+          } else {
+            detectPose(imageProxy)
+          }
         }
       }
 
@@ -196,6 +229,11 @@ class ExpoPoseDetectionView(
   // MARK: - Pose Detection
 
   private fun detectPose(imageProxy: ImageProxy) {
+    if (isDisposed) {
+      imageProxy.close()
+      return
+    }
+
     // Frame throttling (built in — no patch needed)
     val minIntervalMs = 1000L / frameLimit.coerceIn(1, 60)
     val now = System.currentTimeMillis()
@@ -212,10 +250,17 @@ class ExpoPoseDetectionView(
       return
     }
 
-    helper.detectLiveStream(
-      imageProxy = imageProxy,
-      isFrontCamera = cameraFacing == CameraSelector.LENS_FACING_FRONT
-    )
+    try {
+      helper.detectLiveStream(
+        imageProxy = imageProxy,
+        isFrontCamera = cameraFacing == CameraSelector.LENS_FACING_FRONT
+      )
+    } catch (e: Exception) {
+      Log.e(TAG, "Pose detection failed for camera frame", e)
+      try {
+        imageProxy.close()
+      } catch (_: Exception) {}
+    }
   }
 
   // MARK: - Pose Result Handler
@@ -225,6 +270,8 @@ class ExpoPoseDetectionView(
     inputImageHeight: Int,
     inputImageWidth: Int
   ) {
+    if (isDisposed) return
+
     // Build landmark data on background thread (off main thread — patch #6 built in)
     val landmarks = result.landmarks()
     if (landmarks.isEmpty()) return
@@ -268,6 +315,7 @@ class ExpoPoseDetectionView(
 
     // Emit to JS and update overlay on main thread
     post {
+      if (isDisposed || !isAttachedToWindow) return@post
       onLandmark(payload)
 
       if (showSkeleton) {
@@ -283,14 +331,32 @@ class ExpoPoseDetectionView(
   // MARK: - Lifecycle
 
   override fun onDetachedFromWindow() {
+    if (isDisposed) {
+      super.onDetachedFromWindow()
+      return
+    }
+    isDisposed = true
+    if (activeInstance === this) {
+      activeInstance = null
+    }
+
     super.onDetachedFromWindow()
     try {
       cameraProvider?.unbindAll()
     } catch (_: Exception) {}
-    backgroundExecutor.shutdown()
-    poseLandmarkerHelper?.clearPoseLandmarker()
-    if (activeInstance === this) {
-      activeInstance = null
+    runOnBackground {
+      poseLandmarkerHelper?.clearPoseLandmarker()
+      poseLandmarkerHelper = null
+      backgroundExecutor.shutdown()
+    }
+  }
+
+  private fun runOnBackground(action: () -> Unit) {
+    if (backgroundExecutor.isShutdown || backgroundExecutor.isTerminated) return
+    try {
+      backgroundExecutor.execute(action)
+    } catch (e: RejectedExecutionException) {
+      Log.w(TAG, "Background executor rejected work during teardown", e)
     }
   }
 }

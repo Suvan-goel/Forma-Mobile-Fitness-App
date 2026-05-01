@@ -18,7 +18,7 @@ import { addPendingTemplateExercise } from './CreateTemplateScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search, X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END ,
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_VERTICAL_GAP ,
   CARD_SHADOW
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     gap: 12,
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
   },
 
   /* ── Card (analytics style) ───────────────────────────────── */

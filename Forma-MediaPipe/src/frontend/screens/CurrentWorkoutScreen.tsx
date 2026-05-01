@@ -5,6 +5,9 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   useWindowDimensions,
   AppState,
@@ -25,8 +28,10 @@ import {
   FileText,
   Pause,
   Play,
+  Check,
+  X,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, getScoreColor ,
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_VERTICAL_GAP, getScoreColor,
   SCREEN_GRADIENT_COLORS, SCREEN_GRADIENT_START, SCREEN_GRADIENT_END,
   CARD_SHADOW
 } from '../constants/theme';
@@ -143,6 +148,176 @@ const WorkoutTimerDisplay = React.memo(({
   );
 });
 
+type ManualSetValues = {
+  reps: number;
+  weight?: number;
+  unit: 'kg' | 'lbs';
+};
+
+type ManualSetModalProps = {
+  visible: boolean;
+  exerciseName: string;
+  setNumber: number;
+  initialUnit: 'kg' | 'lbs';
+  onClose: () => void;
+  onSubmit: (values: ManualSetValues) => void;
+};
+
+const cleanDecimalInput = (value: string) => {
+  const cleaned = value.replace(/[^0-9.]/g, '');
+  const [whole, ...decimals] = cleaned.split('.');
+  return decimals.length > 0 ? `${whole}.${decimals.join('')}` : whole;
+};
+
+const ManualSetModal = React.memo(({
+  visible,
+  exerciseName,
+  setNumber,
+  initialUnit,
+  onClose,
+  onSubmit,
+}: ManualSetModalProps) => {
+  const [repsInput, setRepsInput] = useState('');
+  const [weightInput, setWeightInput] = useState('');
+  const [unit, setUnit] = useState<'kg' | 'lbs'>(initialUnit);
+
+  useEffect(() => {
+    if (!visible) return;
+    setRepsInput('');
+    setWeightInput('');
+    setUnit(initialUnit);
+  }, [visible, initialUnit]);
+
+  const reps = Number.parseInt(repsInput, 10);
+  const weight = weightInput.trim().length > 0 ? Number.parseFloat(weightInput) : 0;
+  const canSubmit = Number.isFinite(reps) && reps > 0 && Number.isFinite(weight) && weight >= 0;
+
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+    onSubmit({
+      reps,
+      weight: weight > 0 ? weight : undefined,
+      unit,
+    });
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={styles.manualModalBackdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableOpacity style={styles.manualModalBackdropPressable} activeOpacity={1} onPress={onClose}>
+          <TouchableOpacity style={styles.manualModalCardOuter} activeOpacity={1} onPress={() => {}}>
+            <LinearGradient
+              colors={SCREEN_GRADIENT_COLORS as any}
+              start={SCREEN_GRADIENT_START}
+              end={SCREEN_GRADIENT_END}
+              style={styles.manualModalGradient}
+            >
+              <View style={styles.manualModalEdge}>
+                <View style={styles.manualModalHeader}>
+                  <View>
+                    <Text style={styles.manualModalTitle}>Manual Set</Text>
+                    <Text style={styles.manualModalSubtitle} numberOfLines={1}>
+                      {exerciseName} · Set {setNumber}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.manualModalClose}
+                    onPress={onClose}
+                    activeOpacity={0.72}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close manual set"
+                  >
+                    <X size={18} color={COLORS.textSecondary} strokeWidth={2} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.manualInfoRow}>
+                  <FileText size={13} color={COLORS.accent} strokeWidth={1.7} />
+                  <Text style={styles.manualInfoText}>
+                    Tracks reps and weight only. No form feedback or recording will be attached.
+                  </Text>
+                </View>
+
+                <View style={styles.manualInputsRow}>
+                  <View style={styles.manualInputGroup}>
+                    <Text style={styles.manualInputLabel}>REPS</Text>
+                    <TextInput
+                      style={styles.manualInput}
+                      value={repsInput}
+                      onChangeText={(value) => setRepsInput(value.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      returnKeyType="next"
+                      placeholder="0"
+                      placeholderTextColor="rgba(255, 255, 255, 0.22)"
+                      autoFocus
+                      selectTextOnFocus
+                    />
+                  </View>
+                  <View style={styles.manualInputGroup}>
+                    <Text style={styles.manualInputLabel}>WEIGHT</Text>
+                    <View style={styles.manualWeightInputWrap}>
+                      <TextInput
+                        style={[styles.manualInput, styles.manualWeightInput]}
+                        value={weightInput}
+                        onChangeText={(value) => setWeightInput(cleanDecimalInput(value))}
+                        keyboardType="decimal-pad"
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit}
+                        placeholder="0"
+                        placeholderTextColor="rgba(255, 255, 255, 0.22)"
+                        selectTextOnFocus
+                      />
+                      <Text style={styles.manualWeightUnit}>{unit}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.manualUnitRow}>
+                  <TouchableOpacity
+                    style={[styles.manualUnitButton, unit === 'kg' && styles.manualUnitButtonActive]}
+                    onPress={() => setUnit('kg')}
+                    activeOpacity={0.72}
+                  >
+                    <Text style={[styles.manualUnitText, unit === 'kg' && styles.manualUnitTextActive]}>kg</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.manualUnitButton, unit === 'lbs' && styles.manualUnitButtonActive]}
+                    onPress={() => setUnit('lbs')}
+                    activeOpacity={0.72}
+                  >
+                    <Text style={[styles.manualUnitText, unit === 'lbs' && styles.manualUnitTextActive]}>lbs</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.manualSubmitButton, !canSubmit && styles.manualSubmitButtonDisabled]}
+                  onPress={handleSubmit}
+                  disabled={!canSubmit}
+                  activeOpacity={0.82}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add manual set"
+                >
+                  <Check size={16} color={COLORS.text} strokeWidth={2.4} />
+                  <Text style={styles.manualSubmitText}>Add Manual Set</Text>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+});
+
 /* ── Main Screen ──────────────────────────── */
 
 const TIMER_FONT_SIZE_MAX = 15;
@@ -163,6 +338,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
   const {
     exercises,
     addSet,
+    addSetToExercise,
     clearSets,
     updateSetWeight,
     updateSetRecordingFlags,
@@ -194,6 +370,12 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setIndex: number;
     saveToLibrary: boolean;
     saveToCameraRoll: boolean;
+  } | null>(null);
+  const [manualSetModal, setManualSetModal] = useState<{
+    exerciseId: string;
+    exerciseName: string;
+    setNumber: number;
+    initialUnit: 'kg' | 'lbs';
   } | null>(null);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const [restTimerPaused, setRestTimerPaused] = useState(false);
@@ -332,6 +514,33 @@ export const CurrentWorkoutScreen: React.FC = () => {
     });
   }, [navigation]);
 
+  const handleOpenManualSet = useCallback((exercise: { id: string; name: string; sets: LoggedSet[] }) => {
+    const mostRecentUnit = [...exercise.sets].reverse().find((set) => set.weightUnit)?.weightUnit ?? 'kg';
+    setManualSetModal({
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      setNumber: exercise.sets.length + 1,
+      initialUnit: mostRecentUnit,
+    });
+  }, []);
+
+  const handleManualSetSubmit = useCallback((values: ManualSetValues) => {
+    if (!manualSetModal) return;
+    addSetToExercise(manualSetModal.exerciseId, {
+      exerciseName: manualSetModal.exerciseName,
+      reps: values.reps,
+      weight: values.weight,
+      weightUnit: values.unit,
+      formScore: 0,
+      repFeedback: [],
+      repFormScores: [],
+      isManual: true,
+    });
+    setExpandedExerciseIds((prev) => new Set(prev).add(manualSetModal.exerciseId));
+    setManualSetModal(null);
+    startRestTimer();
+  }, [addSetToExercise, manualSetModal, startRestTimer]);
+
   const handleEndWorkout = useCallback(() => {
     const currentExercises = exercisesRef.current;
     const currentSets = currentExercises.flatMap((ex) => ex.sets);
@@ -341,9 +550,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
     }
     const totalSets = currentSets.length;
     const totalReps = currentSets.reduce((sum, set) => sum + set.reps, 0);
-    const avgFormScore = Math.round(
-      currentSets.reduce((sum, set) => sum + set.formScore, 0) / currentSets.length
-    );
+    const scoredSets = currentSets.filter((set) => !set.isManual && set.formScore > 0);
+    const avgFormScore = scoredSets.length > 0
+      ? Math.round(scoredSets.reduce((sum, set) => sum + set.formScore, 0) / scoredSets.length)
+      : 0;
     const category = currentExercises[0]?.name || 'General';
     const duration = formatStopwatch(elapsedSecondsRef.current);
     endWorkoutActivity();
@@ -575,6 +785,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                         <View style={styles.setsList}>
                           {exercise.sets.map((set, setIndex) => {
                             const isCurrentSet = setIndex === exercise.sets.length - 1;
+                            const isManualSet = set.isManual === true;
                             return (
                               <TouchableOpacity
                                 key={setIndex}
@@ -598,8 +809,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                   {set.weight && set.weight > 0 ? `${set.weight} ${set.weightUnit || 'kg'}` : 'No weight'}
                                 </Text>
                                 <Text style={styles.setRepsText}>x {set.reps}</Text>
-                                {isCurrentSet ? <Text style={styles.currentSetText}>Current</Text> : null}
-                                {!isCurrentSet && (
+                                {isCurrentSet && !isManualSet ? <Text style={styles.currentSetText}>Current</Text> : null}
+                                {isManualSet ? (
+                                  <View style={styles.manualSetBadge}>
+                                    <FileText size={10} color={COLORS.accent} strokeWidth={1.8} />
+                                    <Text style={styles.manualSetBadgeText}>Manual</Text>
+                                  </View>
+                                ) : !isCurrentSet && (
                                   <View
                                     style={[styles.setScoreRing, { borderColor: getScoreColor(set.formScore) }]}
                                   >
@@ -608,21 +824,23 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                     </MonoText>
                                   </View>
                                 )}
-                                <TouchableOpacity
-                                  style={styles.setNotesButton}
-                                  onPress={() =>
-                                    setNotesModalSet({
-                                      set,
-                                      setIndex: setIndex + 1,
-                                      exerciseName: exercise.name,
-                                    })
-                                  }
-                                  activeOpacity={0.72}
-                                  accessibilityRole="button"
-                                  accessibilityLabel={`Open notes for ${exercise.name} set ${setIndex + 1}`}
-                                >
-                                  <FileText size={13} color={COLORS.accent} strokeWidth={1.8} />
-                                </TouchableOpacity>
+                                {!isManualSet && (
+                                  <TouchableOpacity
+                                    style={styles.setNotesButton}
+                                    onPress={() =>
+                                      setNotesModalSet({
+                                        set,
+                                        setIndex: setIndex + 1,
+                                        exerciseName: exercise.name,
+                                      })
+                                    }
+                                    activeOpacity={0.72}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Open notes for ${exercise.name} set ${setIndex + 1}`}
+                                  >
+                                    <FileText size={13} color={COLORS.accent} strokeWidth={1.8} />
+                                  </TouchableOpacity>
+                                )}
                                 {set.tempRecordingUrl ? (
                                   <TouchableOpacity
                                     style={styles.setCompactIcon}
@@ -687,14 +905,28 @@ export const CurrentWorkoutScreen: React.FC = () => {
                       )}
 
                       {/* Add Set Row */}
-                      <TouchableOpacity
-                        style={styles.addSetRow}
-                        onPress={() => handleAddSet(exercise)}
-                        activeOpacity={0.7}
-                      >
-                        <Plus size={13} color={COLORS.accent} strokeWidth={2.5} />
-                        <Text style={styles.addSetRowText}>Add set</Text>
-                      </TouchableOpacity>
+                      <View style={styles.addSetRow}>
+                        <TouchableOpacity
+                          style={[styles.addSetAction, styles.addSetActionPrimary]}
+                          onPress={() => handleAddSet(exercise)}
+                          activeOpacity={0.74}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Record set for ${exercise.name}`}
+                        >
+                          <Video size={13} color={COLORS.accent} strokeWidth={1.8} />
+                          <Text style={styles.addSetActionText}>Record set</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.addSetAction}
+                          onPress={() => handleOpenManualSet(exercise)}
+                          activeOpacity={0.74}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Manually add set for ${exercise.name}`}
+                        >
+                          <Plus size={13} color={COLORS.accent} strokeWidth={2.5} />
+                          <Text style={styles.addSetActionText}>Manual</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </LinearGradient>
                 </View>
@@ -726,6 +958,16 @@ export const CurrentWorkoutScreen: React.FC = () => {
           setNumber={weightModalData.setIndex + 1}
           hasRecording={!!weightModalData.showRecordingOptions}
           onSaveRecording={handleSaveRecordingPrefs}
+        />
+      )}
+      {manualSetModal && (
+        <ManualSetModal
+          visible={!!manualSetModal}
+          exerciseName={manualSetModal.exerciseName}
+          setNumber={manualSetModal.setNumber}
+          initialUnit={manualSetModal.initialUnit}
+          onClose={() => setManualSetModal(null)}
+          onSubmit={handleManualSetSubmit}
         />
       )}
       {recordingOptionsModal && (
@@ -797,7 +1039,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 11,
+    paddingBottom: 0,
   },
   headerIconButton: {
     width: 40,
@@ -875,8 +1117,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 0,
-    gap: 10,
+    paddingTop: CARD_VERTICAL_GAP,
+    gap: CARD_VERTICAL_GAP,
   },
   scrollContentEmpty: {
     flexGrow: 1,
@@ -1069,6 +1311,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(122, 85, 255, 0.24)',
   },
+  manualSetBadge: {
+    minWidth: 62,
+    height: 28,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.24)',
+  },
+  manualSetBadgeText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 0.2,
+  },
 
   /* ── Rest Timer Card ────────────────────── */
   restTimerCard: {
@@ -1143,16 +1404,190 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.055)',
   },
-  addSetRowText: {
+  addSetAction: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  addSetActionPrimary: {
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
+    borderColor: 'rgba(122, 85, 255, 0.24)',
+  },
+  addSetActionText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 12,
     color: COLORS.accent,
-    letterSpacing: 0.3,
+    letterSpacing: 0.1,
+  },
+
+  /* ── Manual Set Modal ───────────────────── */
+  manualModalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+  },
+  manualModalBackdropPressable: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.screenHorizontal,
+  },
+  manualModalCardOuter: {
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+  },
+  manualModalGradient: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  manualModalEdge: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.11)',
+    padding: 18,
+    gap: 16,
+  },
+  manualModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  manualModalTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 18,
+    lineHeight: 23,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  manualModalSubtitle: {
+    marginTop: 3,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  manualModalClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+  },
+  manualInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(122, 85, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.16)',
+  },
+  manualInfoText: {
+    flex: 1,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textSecondary,
+  },
+  manualInputsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  manualInputGroup: {
+    flex: 1,
+    gap: 7,
+  },
+  manualInputLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.8,
+  },
+  manualInput: {
+    minHeight: 58,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontFamily: FONTS.mono.bold,
+    fontSize: 22,
+    color: COLORS.text,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  manualWeightInputWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  manualWeightInput: {
+    paddingRight: 48,
+  },
+  manualWeightUnit: {
+    position: 'absolute',
+    right: 14,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+  },
+  manualUnitRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  manualUnitButton: {
+    flex: 1,
+    height: 38,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  manualUnitButtonActive: {
+    backgroundColor: 'rgba(122, 85, 255, 0.16)',
+    borderColor: 'rgba(122, 85, 255, 0.34)',
+  },
+  manualUnitText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  manualUnitTextActive: {
+    color: COLORS.accent,
+  },
+  manualSubmitButton: {
+    minHeight: 48,
+    borderRadius: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.accent,
+  },
+  manualSubmitButtonDisabled: {
+    opacity: 0.45,
+  },
+  manualSubmitText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: -0.1,
   },
 
   /* ── Bottom Panel ─────────────────────── */

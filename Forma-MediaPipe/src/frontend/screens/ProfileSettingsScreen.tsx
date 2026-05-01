@@ -23,6 +23,7 @@ import {
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW,
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
@@ -481,7 +482,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     ...CARD_SHADOW,
     overflow: 'hidden',
-    marginBottom: 4,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   heroInner: {
     borderRadius: CARD_RADIUS,

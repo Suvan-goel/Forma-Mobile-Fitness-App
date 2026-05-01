@@ -20,7 +20,6 @@ import {
   Award,
   Check,
   ChevronLeft,
-  Flame,
   GitCompare,
   Medal,
   Shield,
@@ -37,6 +36,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_VERTICAL_GAP,
 } from '../../constants/theme';
 import { useFollowing } from '../../../backend/hooks/useFollowing';
 import { useFriendProfile } from '../../../backend/hooks/useFriendProfile';
@@ -260,14 +260,6 @@ export const FriendProfileScreen: React.FC = memo(() => {
             <StatBlock
               value={profile.totalWorkouts || 0}
               label="Total Workouts"
-            />
-            <View style={styles.statDivider} />
-            <StatBlock
-              value={profile.streakDays || 0}
-              label="Week Streak"
-              prefix={
-                <Flame size={13} color={COLORS.yellow} fill={COLORS.yellow} />
-              }
             />
             <View style={styles.statDivider} />
             <StatBlock
@@ -531,7 +523,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   compareCtaOuter: {
-    marginBottom: 14,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   compareCta: {
     flexDirection: 'row',
@@ -555,7 +547,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    marginBottom: 14,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   statBlock: {
     flex: 1,
@@ -586,7 +578,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 12,
-    marginBottom: 14,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   cardInner: {
     borderRadius: 12,

@@ -27,6 +27,7 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
@@ -381,7 +382,7 @@ const styles = StyleSheet.create({
 
   /* Sections */
   sectionBlock: {
-    marginTop: 14,
+    marginTop: CARD_VERTICAL_GAP,
   },
 
   /* Cards (matches Home) */

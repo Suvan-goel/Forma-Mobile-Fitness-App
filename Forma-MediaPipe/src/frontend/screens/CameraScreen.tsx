@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, PermissionsAndroid, NativeModules } from 'react-native';
 import { PoseDetectionView, switchCamera } from 'expo-pose-detection';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -37,6 +38,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
 const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
+const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
 
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
@@ -166,6 +168,27 @@ export const CameraScreen: React.FC = () => {
     () => TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ?? TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID)!,
     [selectedTrainerId]
   );
+
+  useEffect(() => {
+    if (!isRecording) return;
+
+    let shouldReleaseAfterActivation = false;
+
+    activateKeepAwakeAsync(SET_RECORDING_KEEP_AWAKE_TAG).then(() => {
+      if (shouldReleaseAfterActivation) {
+        deactivateKeepAwake(SET_RECORDING_KEEP_AWAKE_TAG).catch(() => {});
+      }
+    }).catch((error) => {
+      if (__DEV__) console.warn('[CameraScreen] Failed to keep screen awake while recording:', error);
+    });
+
+    return () => {
+      shouldReleaseAfterActivation = true;
+      deactivateKeepAwake(SET_RECORDING_KEEP_AWAKE_TAG).catch((error) => {
+        if (__DEV__) console.warn('[CameraScreen] Failed to release keep-awake lock:', error);
+      });
+    };
+  }, [isRecording]);
 
   // Unified exercise state ref — populated via ExerciseRegistry on mount and recording start
   const exerciseStateRef = useRef<ExerciseState | null>(null);

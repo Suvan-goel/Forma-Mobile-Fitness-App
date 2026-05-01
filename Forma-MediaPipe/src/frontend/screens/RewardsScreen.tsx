@@ -31,6 +31,7 @@ import {
   CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_END,
   CARD_GRADIENT_START,
+  CARD_VERTICAL_GAP,
   COLORS,
   FONTS,
   SPACING,
@@ -246,14 +247,6 @@ export const RewardsScreen: React.FC = () => {
               </View>
             </View>
 
-            <View style={styles.statStrip}>
-              <SummaryStat value={`+${userStats?.formScore ?? 0}`} label="Form" />
-              <View style={styles.statDivider} />
-              <SummaryStat value={`+${userStats?.consistencyScore ?? 0}`} label="Consistency" />
-              <View style={styles.statDivider} />
-              <SummaryStat value={`${earnedBadges.length}/${sortedRewards.length}`} label="Badges" />
-            </View>
-
             <View style={styles.nextRewardBlock}>
               <View style={styles.nextRewardHeader}>
                 <Text style={styles.nextRewardLabel}>Next Reward</Text>
@@ -312,13 +305,6 @@ export const RewardsScreen: React.FC = () => {
   );
 };
 
-const SummaryStat = ({ value, label }: { value: string; label: string }) => (
-  <View style={styles.summaryStat}>
-    <Text style={styles.summaryValue}>{value}</Text>
-    <Text style={styles.summaryLabel}>{label}</Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -343,7 +329,7 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     borderRadius: 14,
-    marginBottom: 18,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   heroCardInner: {
     borderRadius: 14,
@@ -379,38 +365,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(122,85,255,0.12)',
     borderWidth: 1,
     borderColor: 'rgba(122,85,255,0.20)',
-  },
-  statStrip: {
-    minHeight: 64,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.055)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  summaryStat: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 4,
-  },
-  summaryValue: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 17,
-    color: COLORS.text,
-    fontVariant: ['tabular-nums'],
-  },
-  summaryLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  statDivider: {
-    width: 1,
-    height: 34,
-    backgroundColor: 'rgba(255,255,255,0.07)',
   },
   nextRewardBlock: {
     gap: 8,
@@ -450,7 +404,7 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
   section: {
-    marginBottom: 12,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   sectionTitle: {
     fontFamily: FONTS.display.bold,
@@ -461,7 +415,7 @@ const styles = StyleSheet.create({
   },
   badgeCard: {
     borderRadius: 12,
-    marginBottom: 10,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   badgeCardInner: {
     minHeight: 94,
