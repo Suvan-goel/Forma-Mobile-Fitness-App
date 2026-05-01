@@ -27,8 +27,9 @@ import {
   CARD_RADIUS,
   CARD_SHADOW
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
-import { useSubscription } from '../../backend/hooks';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { useSubscription } from '../../backend/hooks/useSubscription';
 import { useAlert } from '../contexts/AlertContext';
 
 interface MembershipScreenProps {

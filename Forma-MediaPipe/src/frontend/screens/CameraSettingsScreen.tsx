@@ -40,7 +40,8 @@ import {
   CARD_RADIUS_SM,
   CARD_SHADOW,
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { MonoText } from '../components/typography/MonoText';
 import { TRAINERS } from '../constants/trainers';

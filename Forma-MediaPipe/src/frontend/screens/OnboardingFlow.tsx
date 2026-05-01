@@ -32,7 +32,7 @@ interface OnboardingFlowProps {
   onOnboardingComplete: () => void;
 }
 
-export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComplete }) => {
+export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onOnboardingComplete: _onOnboardingComplete }) => {
   const [step, setStep] = useState<OnboardingStep>('carousel');
   const fadeAnim = useRef(new Animated.Value(1)).current;
 

@@ -33,7 +33,7 @@ import {
   CARD_SHADOW,
 } from '../constants/theme';
 import { RecordStackParamList } from '../app/RootNavigator';
-import { useSaveWorkout } from '../../backend/hooks';
+import { useSaveWorkout } from '../../backend/hooks/useSaveWorkout';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useAlert } from '../contexts/AlertContext';
 import { cleanupTempRecording } from '../../backend/services/screenRecording';
@@ -67,8 +67,17 @@ export const SaveWorkoutScreen: React.FC = () => {
   const route = useRoute<SaveWorkoutRouteProp>();
   const insets = useSafeAreaInsets();
   const { workoutData } = route.params;
-  const { clearSets, setWorkoutInProgress, exercises, workoutElapsedSeconds, sessionId } = useCurrentWorkout();
+  const {
+    clearSets,
+    setWorkoutInProgress,
+    exercises,
+    workoutElapsedSeconds,
+    sessionId,
+    pendingRecording,
+    recordingFinalizationCount,
+  } = useCurrentWorkout();
 
+  const [workoutName, setWorkoutName] = useState(() => formatWorkoutName(workoutData.category));
   const [workoutDescription, setWorkoutDescription] = useState('');
   const [privacy, setPrivacy] = useState<WorkoutPrivacy>('private');
   const [shareToFeed, setShareToFeed] = useState(true);
@@ -129,7 +138,8 @@ export const SaveWorkoutScreen: React.FC = () => {
   const bestSetLabel = bestSet?.exerciseName ?? workoutData.category ?? 'Workout';
   const highlightTitle = bestSet && bestSet.weight > 0 ? 'New Personal Best' : 'Session Highlight';
   const shouldShareWorkout = shareToFeed && privacy !== 'private';
-  const canSave = workoutData.totalSets > 0 && !isSaving;
+  const isFinalizingRecordings = recordingFinalizationCount > 0 || !!pendingRecording;
+  const canSave = workoutData.totalSets > 0 && workoutName.trim().length > 0 && !isSaving && !isFinalizingRecordings;
 
   const handleSave = async () => {
     if (workoutData.totalSets === 0) {
@@ -142,7 +152,7 @@ export const SaveWorkoutScreen: React.FC = () => {
     if (isSaving) return;
 
     const success = await saveWorkout({
-      name: formatWorkoutName(workoutData.category),
+      name: workoutName.trim(),
       durationSeconds: workoutElapsedSeconds,
       category: workoutData.category,
       notes: workoutDescription.trim() || undefined,
@@ -304,6 +314,28 @@ export const SaveWorkoutScreen: React.FC = () => {
               </LinearGradient>
 
               <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>WORKOUT NAME</Text>
+              </View>
+
+              <LinearGradient
+                colors={[...CARD_GRADIENT_COLORS]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.nameCard}
+              >
+                <TextInput
+                  style={styles.nameInput}
+                  placeholder="Name your workout"
+                  placeholderTextColor="rgba(173, 178, 182, 0.58)"
+                  value={workoutName}
+                  onChangeText={setWorkoutName}
+                  maxLength={60}
+                  returnKeyType="done"
+                  selectTextOnFocus
+                />
+              </LinearGradient>
+
+              <View style={styles.sectionHeader}>
                 <Text style={styles.sectionLabel}>NOTES (OPTIONAL)</Text>
               </View>
 
@@ -371,7 +403,9 @@ export const SaveWorkoutScreen: React.FC = () => {
                   {isSaving ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Save Workout</Text>
+                    <Text style={styles.saveButtonText}>
+                      {isFinalizingRecordings ? 'Finalizing Recordings...' : 'Save Workout'}
+                    </Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
@@ -590,6 +624,22 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.bold,
     fontSize: 13,
     color: COLORS.textSecondary,
+  },
+  nameCard: {
+    minHeight: 58,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    ...CARD_SHADOW,
+  },
+  nameInput: {
+    padding: 0,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 17,
+    color: COLORS.text,
   },
   notesCard: {
     minHeight: 101,

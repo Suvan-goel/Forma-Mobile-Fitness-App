@@ -9,8 +9,9 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../app/RootNavigator';
 import { InsightsData } from '../../backend/services/api';
-import { useInsights } from '../../backend/hooks';
-import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { useInsights } from '../../backend/hooks/useInsights';
+import { ErrorState } from '../components/ui/ErrorState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 
 type InsightsScreenRouteProp = RouteProp<RootStackParamList, 'Insights'>;
 type InsightsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Insights'>;
@@ -211,4 +212,3 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 });
-

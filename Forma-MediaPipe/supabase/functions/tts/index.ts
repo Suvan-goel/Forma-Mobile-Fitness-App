@@ -73,7 +73,15 @@ serve(async (req) => {
     );
 
     if (!elevenLabsRes.ok) {
-      return new Response(JSON.stringify({ error: `ElevenLabs error: ${elevenLabsRes.status}` }), {
+      const upstreamBody = await elevenLabsRes.text().catch(() => '');
+      console.warn('ElevenLabs TTS request failed', {
+        status: elevenLabsRes.status,
+        body: upstreamBody.slice(0, 500),
+      });
+      return new Response(JSON.stringify({
+        error: `ElevenLabs error: ${elevenLabsRes.status}`,
+        details: upstreamBody ? upstreamBody.slice(0, 500) : undefined,
+      }), {
         status: elevenLabsRes.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

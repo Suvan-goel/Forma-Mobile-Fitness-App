@@ -25,7 +25,6 @@ export const NeonButton: React.FC<NeonButtonProps> = memo(({
   disabled,
   testID,
   accessibilityLabel,
-  ...props
 }) => {
   // Only pass through explicitly allowed TouchableOpacity props
   // This prevents variant and title from leaking through
@@ -75,4 +74,3 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 });
-

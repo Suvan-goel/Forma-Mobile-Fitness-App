@@ -151,7 +151,7 @@ export function getMockComparison(friendId: string): ComparisonData {
 
 const now = Date.now();
 
-export const mockActivityEvents: ActivityEvent[] = [
+const mockActivityEvents: ActivityEvent[] = [
   {
     id: 'ae1', userId: 'u1', displayName: 'Alex Chen', eventType: 'workout_completed',
     payload: { form_score: 96, duration: '42 min', exercise_count: 4 },
@@ -238,8 +238,6 @@ export function getMockActivityFeed(
 // ── Reactions mock data ─────────────────────────────────────
 
 const MOCK_CURRENT_USER_ID = 'current';
-const ALL_REACTION_TYPES: ReactionType[] = ['like', 'muscle', 'fire', 'clap'];
-
 // Map<eventId, Map<userId, ReactionType>> — each user has at most one reaction per event
 const reactionStore = new Map<string, Map<string, ReactionType>>();
 

@@ -66,8 +66,6 @@ export const WorkoutExercisesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { category, color, iconName } = route.params;
   const Icon = iconMap[iconName] || Dumbbell;
-  const navBarMargin = insets.bottom > 0 ? insets.bottom - 20 : 0;
-  const footerHeight = 80 + navBarMargin + 20;
 
   const exercises = workoutExercises[category] || [];
 
@@ -267,4 +265,3 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 });
-

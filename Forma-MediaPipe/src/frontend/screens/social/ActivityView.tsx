@@ -13,10 +13,11 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { Inbox, Plus } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
-import { useActivityFeed, useReactions } from '../../../backend/hooks';
+import { useActivityFeed } from '../../../backend/hooks/useActivityFeed';
+import { useReactions } from '../../../backend/hooks/useReactions';
 import { ActivityEvent } from '../../../backend/services/api/types';
 import { ActivityEventCard } from '../../components/ui/ActivityEventCard';
 

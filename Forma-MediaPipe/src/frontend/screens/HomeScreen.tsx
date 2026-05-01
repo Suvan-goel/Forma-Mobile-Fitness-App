@@ -52,9 +52,10 @@ import {
   getScoreColor,
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useHomeData } from '../../backend/hooks';
-import { useUser } from '../../backend/hooks';
-import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { useHomeData } from '../../backend/hooks/useHomeData';
+import { useUser } from '../../backend/hooks/useUser';
+import { ErrorState } from '../components/ui/ErrorState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 const RING_SIZE = 78;

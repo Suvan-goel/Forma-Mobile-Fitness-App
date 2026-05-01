@@ -60,7 +60,7 @@ import { MonoText } from '../components/typography/MonoText';
 import { CameraSetupGuide } from './CameraSetupGuide';
 
 import type { RecordStackParamList, RootStackParamList } from '../app/RootNavigator';
-import { useCustomTemplates } from '../../backend/hooks';
+import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import { useAlert } from '../contexts/AlertContext';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';

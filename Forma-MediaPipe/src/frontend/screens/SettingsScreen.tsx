@@ -32,10 +32,12 @@ import {
   CARD_RADIUS_SM,
   CARD_SHADOW,
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { DEFAULT_TRAINER_ID, TRAINERS } from '../constants/trainers';
 import { useAuth } from '../../backend/contexts/AuthContext';
-import { useWorkoutPreferences, useUser } from '../../backend/hooks';
+import { useUser } from '../../backend/hooks/useUser';
+import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences';
 import { useAlert } from '../contexts/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';

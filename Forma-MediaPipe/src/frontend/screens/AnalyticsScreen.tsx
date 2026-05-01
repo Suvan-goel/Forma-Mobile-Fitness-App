@@ -39,8 +39,11 @@ import {
   CARD_SHADOW
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useAnalytics, useExercises, useWorkoutPreferences } from '../../backend/hooks';
-import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { useAnalytics } from '../../backend/hooks/useAnalytics';
+import { useExercises } from '../../backend/hooks/useExercises';
+import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences';
+import { ErrorState } from '../components/ui/ErrorState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { TimeRangeSelector, TIME_RANGE_OPTIONS } from '../components/ui/TimeRangeSelector';
 import { TrendChart } from '../components/ui/TrendChart';
 import { LeaderboardView } from './social/LeaderboardView';

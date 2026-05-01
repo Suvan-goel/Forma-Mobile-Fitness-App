@@ -43,7 +43,10 @@ import {
   SCREEN_GRADIENT_END,
   getScoreColor,
 } from '../constants/theme';
-import { useWorkouts, useRewards, useAnalytics, useCreateActivityPost } from '../../backend/hooks';
+import { useAnalytics } from '../../backend/hooks/useAnalytics';
+import { useCreateActivityPost } from '../../backend/hooks/useCreateActivityPost';
+import { useRewards } from '../../backend/hooks/useRewards';
+import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import { useAlert } from '../contexts/AlertContext';
 import type { RootStackParamList } from '../app/RootNavigator';
 import type { WorkoutSession, Reward, ActivityEventType } from '../../backend/services/api/types';
@@ -51,8 +54,6 @@ import type { WorkoutSession, Reward, ActivityEventType } from '../../backend/se
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 // ── Attachment types ────────────────────────────────────────
-
-type AttachmentType = 'workout' | 'badge' | 'stat';
 
 interface WorkoutAttachment {
   type: 'workout';

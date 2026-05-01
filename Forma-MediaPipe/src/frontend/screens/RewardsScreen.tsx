@@ -35,8 +35,10 @@ import {
   FONTS,
   SPACING,
 } from '../constants/theme';
-import { useRewards } from '../../backend/hooks';
-import { LoadingSkeleton, ErrorState, SettingsHeader } from '../components/ui';
+import { useRewards } from '../../backend/hooks/useRewards';
+import { ErrorState } from '../components/ui/ErrorState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useAlert } from '../contexts/AlertContext';
 import { Reward } from '../../backend/services/api';
 import type { RootStackParamList } from '../app/RootNavigator';

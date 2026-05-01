@@ -27,7 +27,7 @@ import {
   getScoreColor,
 } from '../../constants/theme';
 import { ScreenBackground } from '../../components/ui/ScreenBackground';
-import { useFriendComparison } from '../../../backend/hooks';
+import { useFriendComparison } from '../../../backend/hooks/useFriendComparison';
 import type { ComparisonStats } from '../../../backend/services/api';
 
 type MetricFormat = 'score' | 'integer' | 'decimal';

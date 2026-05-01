@@ -38,7 +38,8 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
 } from '../../constants/theme';
-import { useFriendProfile, useFollowing } from '../../../backend/hooks';
+import { useFollowing } from '../../../backend/hooks/useFollowing';
+import { useFriendProfile } from '../../../backend/hooks/useFriendProfile';
 
 const XP_PER_LEVEL = 220;
 const LEVEL_TARGET = 3000;

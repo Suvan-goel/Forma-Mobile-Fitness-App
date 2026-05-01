@@ -38,7 +38,7 @@ function parseLocalDate(dateStr: string): Date {
  * Convert a named time range to { startDate, endDate } strings (YYYY-MM-DD).
  * endDate is always today. startDate is N days back (inclusive).
  */
-export function getDateRange(timeRange: string): { startDate: string; endDate: string } {
+function getDateRange(timeRange: string): { startDate: string; endDate: string } {
   const today = new Date();
   const endDate = toDateStr(today) + 'T23:59:59.999Z';
 

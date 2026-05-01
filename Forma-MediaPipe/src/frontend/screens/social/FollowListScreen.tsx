@@ -19,7 +19,7 @@ import type { RouteProp } from '@react-navigation/native';
 import { ChevronLeft, UserPlus, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
-import { useFollowing } from '../../../backend/hooks';
+import { useFollowing } from '../../../backend/hooks/useFollowing';
 import type { FollowRelation } from '../../../backend/services/api/types';
 import type { RootStackParamList } from '../../app/RootNavigator';
 

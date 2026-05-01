@@ -24,6 +24,7 @@ import {
   Video,
   FileText,
   Pause,
+  Play,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, getScoreColor ,
   SCREEN_GRADIENT_COLORS, SCREEN_GRADIENT_START, SCREEN_GRADIENT_END,
@@ -164,7 +165,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     addSet,
     clearSets,
     updateSetWeight,
-    attachRecordingToSet,
     updateSetRecordingFlags,
     removeExercise,
     removeSetFromExercise,
@@ -172,8 +172,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     workoutElapsedSeconds: contextElapsed,
     setWorkoutElapsedSeconds,
     workoutPaused,
-    pendingRecording,
-    setPendingRecording,
   } = useCurrentWorkout();
   const elapsedSecondsRef = useRef(contextElapsed);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
@@ -198,6 +196,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     saveToCameraRoll: boolean;
   } | null>(null);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
+  const [restTimerPaused, setRestTimerPaused] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const isPausedRef = useRef(false);
   const prevSetCountsRef = useRef<Map<string, number>>(new Map());
@@ -218,29 +217,45 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   /* ── Rest timer logic ──── */
 
-  const startRestTimer = useCallback(() => {
-    if (!restTimerEnabled || restTimerDurationSeconds <= 0) return;
+  const runRestTimer = useCallback((durationSeconds: number) => {
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
 
-    const endTime = Date.now() + restTimerDurationSeconds * 1000;
-    setRestSecondsLeft(restTimerDurationSeconds);
-
+    const endTime = Date.now() + durationSeconds * 1000;
     restIntervalRef.current = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
       setRestSecondsLeft(remaining);
       if (remaining <= 0) {
         if (restIntervalRef.current) clearInterval(restIntervalRef.current);
         restIntervalRef.current = null;
+        setRestTimerPaused(false);
         setRestSecondsLeft(null);
       }
     }, 1000);
-  }, [restTimerEnabled, restTimerDurationSeconds]);
-
-  const cancelRestTimer = useCallback(() => {
-    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-    restIntervalRef.current = null;
-    setRestSecondsLeft(null);
   }, []);
+
+  const startRestTimer = useCallback(() => {
+    if (!restTimerEnabled || restTimerDurationSeconds <= 0) return;
+    setRestTimerPaused(false);
+    setRestSecondsLeft(restTimerDurationSeconds);
+    runRestTimer(restTimerDurationSeconds);
+  }, [restTimerEnabled, restTimerDurationSeconds, runRestTimer]);
+
+  const toggleRestTimerPaused = useCallback(() => {
+    setRestTimerPaused((wasPaused) => {
+      if (wasPaused) {
+        const secondsToResume = restSecondsLeft ?? 0;
+        if (secondsToResume > 0) {
+          runRestTimer(secondsToResume);
+          return false;
+        }
+        return wasPaused;
+      }
+
+      if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      restIntervalRef.current = null;
+      return true;
+    });
+  }, [restSecondsLeft, runRestTimer]);
 
   useEffect(() => {
     return () => {
@@ -341,26 +356,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setWorkoutElapsedSeconds(elapsedSecondsRef.current);
     navigation.reset({ index: 0, routes: [{ name: 'RecordLanding' }] });
   }, [setWorkoutElapsedSeconds, navigation]);
-
-  // Auto-attach pending recording to the latest set when it arrives
-  useEffect(() => {
-    if (!pendingRecording) return;
-    const exercise = exercises.find((ex) => ex.name === pendingRecording.exerciseName);
-    if (exercise) {
-      // Find the latest set without a recording attached
-      let targetIndex = -1;
-      for (let i = exercise.sets.length - 1; i >= 0; i--) {
-        if (!exercise.sets[i].tempRecordingUrl) {
-          targetIndex = i;
-          break;
-        }
-      }
-      if (targetIndex >= 0) {
-        attachRecordingToSet(exercise.id, targetIndex, pendingRecording.tempUrl);
-      }
-    }
-    setPendingRecording(null);
-  }, [pendingRecording, exercises, attachRecordingToSet, setPendingRecording]);
 
   const handleSaveRecordingPrefs = useCallback((saveToLibrary: boolean, saveToCameraRoll: boolean) => {
     const data = weightModalDataRef.current;
@@ -669,17 +664,21 @@ export const CurrentWorkoutScreen: React.FC = () => {
                               <View style={styles.restTimerCopy}>
                                 <Text style={styles.restTimerTitle}>Rest Timer</Text>
                                 <Text style={styles.restTimerSubtitle}>
-                                  {Math.round(restTimerDurationSeconds / 60)} min rest
+                                  {restTimerPaused ? 'Paused' : `${Math.round(restTimerDurationSeconds / 60)} min rest`}
                                 </Text>
                               </View>
                               <TouchableOpacity
-                                style={styles.restTimerPauseButton}
-                                onPress={cancelRestTimer}
+                                style={[styles.restTimerPauseButton, restTimerPaused && styles.restTimerPauseButtonActive]}
+                                onPress={toggleRestTimerPaused}
                                 activeOpacity={0.78}
                                 accessibilityRole="button"
-                                accessibilityLabel="Stop rest timer"
+                                accessibilityLabel={restTimerPaused ? 'Resume rest timer' : 'Pause rest timer'}
                               >
-                                <Pause size={20} color={COLORS.text} fill={COLORS.text} strokeWidth={1.6} />
+                                {restTimerPaused ? (
+                                  <Play size={20} color={COLORS.text} fill={COLORS.text} strokeWidth={1.8} />
+                                ) : (
+                                  <Pause size={20} color={COLORS.text} fill={COLORS.text} strokeWidth={1.6} />
+                                )}
                               </TouchableOpacity>
                             </View>
                           )}
@@ -1117,6 +1116,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.055)',
+  },
+  restTimerPauseButtonActive: {
+    backgroundColor: 'rgba(122, 85, 255, 0.18)',
+    borderColor: 'rgba(122, 85, 255, 0.32)',
   },
 
   /* ── Add Set Row ────────────────────────── */

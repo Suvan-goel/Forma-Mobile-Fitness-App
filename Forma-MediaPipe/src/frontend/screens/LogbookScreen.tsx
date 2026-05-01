@@ -25,8 +25,6 @@ import {
   X,
   Check,
   BookOpen,
-  Search,
-  SlidersHorizontal,
   Settings as SettingsIcon,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
@@ -34,9 +32,10 @@ import { COLORS, SPACING, FONTS, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, C
   CARD_SHADOW
 } from '../constants/theme';
 import { useScroll } from '../contexts/ScrollContext';
-import { useWorkouts, useDeleteWorkout } from '../../backend/hooks';
+import { useDeleteWorkout, useWorkouts } from '../../backend/hooks/useWorkouts';
 import { useAlert } from '../contexts/AlertContext';
-import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { ErrorState } from '../components/ui/ErrorState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { WorkoutSession } from '../../backend/services/api';
 
 /* ── Helpers ──────────────────────────────── */
@@ -263,7 +262,6 @@ interface WorkoutCardProps {
 
 const CARD_INNER_HEIGHT = 122;
 const CARD_GAP = 9;
-const ITEM_HEIGHT = CARD_INNER_HEIGHT + CARD_GAP;
 const DELETE_AREA_WIDTH = 72;
 
 const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ session, onDelete, index }) => {

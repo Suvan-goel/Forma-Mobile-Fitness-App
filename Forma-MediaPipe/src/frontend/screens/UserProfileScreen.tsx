@@ -40,14 +40,13 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
-import {
-  useUser,
-  useWorkouts,
-  useAnalytics,
-  useRewards,
-  useVideoLibrary,
-} from '../../backend/hooks';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { useAnalytics } from '../../backend/hooks/useAnalytics';
+import { useRewards } from '../../backend/hooks/useRewards';
+import { useUser } from '../../backend/hooks/useUser';
+import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
+import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import type { RootStackParamList } from '../app/RootNavigator';
 
 type UserProfileNavigationProp = NativeStackNavigationProp<RootStackParamList>;

@@ -175,15 +175,3 @@ export async function cleanupTempRecording(url: string): Promise<void> {
     // Best-effort cleanup
   }
 }
-
-/**
- * Clean all temporary recording files via the library's clean method.
- */
-export async function cleanAllTempRecordings(): Promise<void> {
-  if (!nativeModulesAvailable || !RecordScreen) return;
-  try {
-    await RecordScreen.clean();
-  } catch {
-    // Best-effort cleanup
-  }
-}

@@ -64,28 +64,12 @@ export const CARD_RADIUS = 14;
 export const CARD_RADIUS_SM = 10;
 export const CARD_RADIUS_LG = 18;
 
-/** Card glass edge — thin light border */
-export const CARD_GLASS_BORDER = {
-  borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.06)',
-  borderRadius: CARD_RADIUS,
-} as const;
-
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
   backgroundColor: '#171B1E',
   borderWidth: 1,
   borderColor: 'rgba(255, 255, 255, 0.06)',
   borderRadius: CARD_RADIUS,
-} as const;
-
-/** Violet glow shadow for iOS */
-export const GLOW_SHADOW = {
-  shadowColor: '#7A55FF',
-  shadowOffset: { width: 0, height: 0 },
-  shadowOpacity: 0.45,
-  shadowRadius: 18,
-  elevation: 8,
 } as const;
 
 /** Card surfaces avoid legacy shadows because clipped Android elevation can render as a black inset while content mounts. */

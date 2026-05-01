@@ -25,8 +25,10 @@ import {
   CARD_RADIUS_SM,
   CARD_SHADOW,
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
-import { useUser, useUpdateUser } from '../../backend/hooks';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { useUpdateUser } from '../../backend/hooks/useUpdateUser';
+import { useUser } from '../../backend/hooks/useUser';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 

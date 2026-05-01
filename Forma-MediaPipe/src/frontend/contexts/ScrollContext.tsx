@@ -12,13 +12,6 @@ interface ScrollContextValue {
 
 const ScrollContext = createContext<ScrollContextValue | undefined>(undefined);
 
-// Export the context itself for optional usage
-export { ScrollContext };
-
-export const HEADER_MAX_SCROLL = 80; // Maximum distance to scroll before fully hiding header
-const SCROLL_UP_THRESHOLD = 50; // Pixels user must scroll up before header reappears
-const ANIMATION_DURATION = 150; // Animation duration in milliseconds
-
 export const ScrollProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const contentMarginTop = useRef(new Animated.Value(0)).current;

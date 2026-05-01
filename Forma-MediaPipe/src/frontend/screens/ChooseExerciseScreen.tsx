@@ -22,8 +22,9 @@ import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD
   CARD_SHADOW
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
-import { useExercises, useFavouriteExercises } from '../../backend/hooks';
-import { LoadingSkeleton } from '../components/ui';
+import { useExercises } from '../../backend/hooks/useExercises';
+import { useFavouriteExercises } from '../../backend/hooks/useFavouriteExercises';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { Exercise } from '../../backend/services/api';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';

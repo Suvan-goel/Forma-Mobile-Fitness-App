@@ -25,7 +25,7 @@ import {
   SPACING,
 } from '../constants/theme';
 import { useAlert } from '../contexts/AlertContext';
-import { useCustomTemplates } from '../../backend/hooks';
+import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import type { CustomTemplate } from '../../backend/services/api';
 import type { RecordStackParamList } from '../app/RootNavigator';
 

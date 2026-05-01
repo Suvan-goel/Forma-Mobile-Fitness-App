@@ -122,42 +122,55 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
         socialService.emitPersonalRecordsIfNeeded(sessionId, payload.exercises).catch(() => {
           if (__DEV__) console.warn('[useSaveWorkout] Personal record check failed');
         });
+      }
 
-        // Save opted-in recordings to video library — fire and forget
+      // Save opted-in recordings independently of social sharing/privacy.
+      // These are user-selected local persistence options, not feed activity.
+      if (sessionId) {
+        const recordingSaveTasks: Promise<void>[] = [];
         for (const ex of params.exercises) {
           for (let j = 0; j < ex.sets.length; j++) {
             const s = ex.sets[j];
             if (!s.tempRecordingUrl) continue;
-            if (s.saveRecordingToLibrary !== false) {
-              saveRecording(s.tempRecordingUrl, {
-                sessionId: params.workoutSessionId || '',
-                exerciseName: ex.name,
-                setNumber: j + 1,
-                durationSeconds: s.durationSeconds ?? 0,
-                formScore: s.formScore,
-                reps: s.reps,
-              }).then((record) => {
-                // Link to workout
-                if (record && params.workoutSessionId) {
-                  linkWorkoutId(params.workoutSessionId, sessionId).catch((err) => {
+
+            const shouldSaveRecording = s.saveRecordingToLibrary !== false || s.saveToCameraRoll === true;
+            if (shouldSaveRecording) {
+              recordingSaveTasks.push((async () => {
+                const record = await saveRecording(s.tempRecordingUrl!, {
+                  sessionId: params.workoutSessionId || '',
+                  exerciseName: ex.name,
+                  setNumber: j + 1,
+                  durationSeconds: s.durationSeconds ?? 0,
+                  formScore: s.formScore,
+                  reps: s.reps,
+                });
+
+                if (!record) {
+                  if (__DEV__) console.warn('[useSaveWorkout] Recording save returned no record for', ex.name, 'set', j + 1);
+                  return;
+                }
+
+                if (params.workoutSessionId) {
+                  await linkWorkoutId(params.workoutSessionId, sessionId).catch((err) => {
                     if (__DEV__) console.warn('[useSaveWorkout] Failed to link workout ID', err);
                   });
                 }
-                // Save to camera roll if requested
-                if (s.saveToCameraRoll && record && MediaLibrary) {
-                  MediaLibrary.requestPermissionsAsync().then(({ status }: { status: string }) => {
+
+                if (s.saveToCameraRoll && MediaLibrary) {
+                  try {
+                    const { status } = await MediaLibrary.requestPermissionsAsync();
                     if (status === 'granted') {
-                      MediaLibrary.saveToLibraryAsync(record.videoPath).catch((err: unknown) => {
-                        if (__DEV__) console.warn('[useSaveWorkout] Failed to save to camera roll', err);
-                      });
+                      await MediaLibrary.saveToLibraryAsync(record.videoPath);
+                    } else if (__DEV__) {
+                      console.warn('[useSaveWorkout] Camera roll permission not granted');
                     }
-                  }).catch((err: unknown) => {
-                    if (__DEV__) console.warn('[useSaveWorkout] Failed to request media library permissions', err);
-                  });
+                  } catch (err: unknown) {
+                    if (__DEV__) console.warn('[useSaveWorkout] Failed to save to camera roll', err);
+                  }
                 }
-              }).catch(() => {
-                if (__DEV__) console.warn('[useSaveWorkout] Recording save failed for', ex.name, 'set', j + 1);
-              });
+              })().catch((err) => {
+                if (__DEV__) console.warn('[useSaveWorkout] Recording save failed for', ex.name, 'set', j + 1, err);
+              }));
             } else {
               // Clean up opted-out recordings
               cleanupTempRecording(s.tempRecordingUrl).catch((err) => {
@@ -165,6 +178,10 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
               });
             }
           }
+        }
+
+        if (recordingSaveTasks.length > 0) {
+          await Promise.allSettled(recordingSaveTasks);
         }
       }
 

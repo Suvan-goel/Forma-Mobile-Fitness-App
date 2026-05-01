@@ -30,9 +30,10 @@ import {
   CARD_SHADOW
 } from '../constants/theme';
 import { MonoText } from '../components/typography/MonoText';
-import { useWorkoutDetails } from '../../backend/hooks';
-import { useVideoLibrary } from '../../backend/hooks';
-import { LoadingSkeleton, ErrorState } from '../components/ui';
+import { useWorkoutDetails } from '../../backend/hooks/useWorkouts';
+import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
+import { ErrorState } from '../components/ui/ErrorState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { WorkoutExercise } from '../../backend/services/api';
 import type { VideoRecord } from '../../backend/services/videoLibrary';

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Image,
@@ -28,11 +27,14 @@ import {
   SPACING,
   getScoreColor,
 } from '../constants/theme';
-import { EmptyState, LoadingSkeleton, ScreenBackground, SettingsHeader } from '../components/ui';
+import { EmptyState } from '../components/ui/EmptyState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { MonoText } from '../components/typography/MonoText';
 import { useAlert } from '../contexts/AlertContext';
 import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
-import { useWorkouts } from '../../backend/hooks';
+import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
 
 let VideoComponent: any = null;

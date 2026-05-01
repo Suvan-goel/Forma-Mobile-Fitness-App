@@ -26,7 +26,7 @@ import {
   CARD_RADIUS,
   CARD_SHADOW
 } from '../../constants/theme';
-import { useFriends } from '../../../backend/hooks';
+import { useFriends } from '../../../backend/hooks/useFriends';
 import { Friend, FriendRequest, SuggestedFriend } from '../../../backend/services/api/types';
 import { FriendRow } from '../../components/ui/FriendRow';
 

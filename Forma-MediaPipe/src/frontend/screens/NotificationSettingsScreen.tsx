@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   Text,
-  TouchableOpacity,
   ScrollView,
   Animated,
   Switch,
@@ -23,8 +22,9 @@ import {
   CARD_RADIUS_SM,
   CARD_SHADOW
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
-import { useNotificationPreferences } from '../../backend/hooks';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { useNotificationPreferences } from '../../backend/hooks/useNotificationPreferences';
 
 interface NotificationSettingsScreenProps {
   navigation: any;

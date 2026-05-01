@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
 
 export interface LoggedSet {
   exerciseName: string;
@@ -44,6 +44,7 @@ type CurrentWorkoutContextValue = {
   workoutElapsedSeconds: number;
   workoutPaused: boolean;
   pendingRecording: PendingRecording | null;
+  recordingFinalizationCount: number;
   addExercise: (exercise: { name: string; category: string }) => void;
   addSetToExercise: (exerciseId: string, set: LoggedSet) => void;
   addSet: (set: LoggedSet) => void; // Deprecated but kept for compatibility
@@ -57,6 +58,8 @@ type CurrentWorkoutContextValue = {
   setWorkoutElapsedSeconds: (value: number | ((prev: number) => number)) => void;
   setWorkoutPaused: (value: boolean | ((prev: boolean) => boolean)) => void;
   setPendingRecording: (value: PendingRecording | null) => void;
+  beginRecordingFinalization: () => void;
+  endRecordingFinalization: () => void;
 };
 
 const defaultValue: CurrentWorkoutContextValue = {
@@ -67,6 +70,7 @@ const defaultValue: CurrentWorkoutContextValue = {
   workoutElapsedSeconds: 0,
   workoutPaused: false,
   pendingRecording: null,
+  recordingFinalizationCount: 0,
   addExercise: () => {},
   addSetToExercise: () => {},
   addSet: () => {},
@@ -80,6 +84,8 @@ const defaultValue: CurrentWorkoutContextValue = {
   setWorkoutElapsedSeconds: () => {},
   setWorkoutPaused: () => {},
   setPendingRecording: () => {},
+  beginRecordingFinalization: () => {},
+  endRecordingFinalization: () => {},
 };
 
 const CurrentWorkoutContext = createContext<CurrentWorkoutContextValue>(defaultValue);
@@ -90,6 +96,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
   const [workoutElapsedSeconds, setWorkoutElapsedSeconds] = useState(0);
   const [workoutPaused, setWorkoutPaused] = useState(false);
   const [pendingRecording, setPendingRecording] = useState<PendingRecording | null>(null);
+  const [recordingFinalizationCount, setRecordingFinalizationCount] = useState(0);
   const sessionIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const addExercise = useCallback((exercise: { name: string; category: string }) => {
@@ -154,11 +161,12 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
         if (ex.id === exerciseId) {
           const updatedSets = [...ex.sets];
           if (updatedSets[setIndex]) {
+            const existingSet = updatedSets[setIndex];
             updatedSets[setIndex] = {
-              ...updatedSets[setIndex],
+              ...existingSet,
               tempRecordingUrl: tempUrl,
-              saveRecordingToLibrary: true,
-              saveToCameraRoll: false,
+              saveRecordingToLibrary: existingSet.saveRecordingToLibrary ?? true,
+              saveToCameraRoll: existingSet.saveToCameraRoll ?? false,
             };
           }
           return { ...ex, sets: updatedSets };
@@ -187,6 +195,49 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     );
   }, []);
 
+  useEffect(() => {
+    if (!pendingRecording) return;
+
+    setExercises((prev) => {
+      const exercise = prev.find((ex) => ex.name === pendingRecording.exerciseName);
+      if (!exercise) return prev;
+
+      let targetIndex = -1;
+      for (let i = exercise.sets.length - 1; i >= 0; i--) {
+        if (!exercise.sets[i].tempRecordingUrl) {
+          targetIndex = i;
+          break;
+        }
+      }
+
+      if (targetIndex < 0) return prev;
+
+      return prev.map((ex) => {
+        if (ex.id !== exercise.id) return ex;
+        const updatedSets = [...ex.sets];
+        const existingSet = updatedSets[targetIndex];
+        updatedSets[targetIndex] = {
+          ...existingSet,
+          tempRecordingUrl: pendingRecording.tempUrl,
+          durationSeconds: existingSet.durationSeconds ?? pendingRecording.durationSeconds,
+          saveRecordingToLibrary: existingSet.saveRecordingToLibrary ?? true,
+          saveToCameraRoll: existingSet.saveToCameraRoll ?? false,
+        };
+        return { ...ex, sets: updatedSets };
+      });
+    });
+
+    setPendingRecording(null);
+  }, [pendingRecording]);
+
+  const beginRecordingFinalization = useCallback(() => {
+    setRecordingFinalizationCount((count) => count + 1);
+  }, []);
+
+  const endRecordingFinalization = useCallback(() => {
+    setRecordingFinalizationCount((count) => Math.max(0, count - 1));
+  }, []);
+
   const removeExercise = useCallback((exerciseId: string) => {
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
   }, []);
@@ -209,6 +260,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     setWorkoutElapsedSeconds(0);
     setWorkoutPaused(false);
     setPendingRecording(null);
+    setRecordingFinalizationCount(0);
     sessionIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }, []);
 
@@ -225,6 +277,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     workoutElapsedSeconds,
     workoutPaused,
     pendingRecording,
+    recordingFinalizationCount,
     addExercise,
     addSetToExercise,
     addSet,
@@ -238,10 +291,12 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     setWorkoutElapsedSeconds,
     setWorkoutPaused,
     setPendingRecording,
+    beginRecordingFinalization,
+    endRecordingFinalization,
   }), [
-    exercises, sets, workoutInProgress, workoutElapsedSeconds, workoutPaused, pendingRecording,
+    exercises, sets, workoutInProgress, workoutElapsedSeconds, workoutPaused, pendingRecording, recordingFinalizationCount,
     addExercise, addSetToExercise, addSet, updateSetWeight, attachRecordingToSet,
-    updateSetRecordingFlags, removeExercise, removeSetFromExercise, clearSets,
+    updateSetRecordingFlags, removeExercise, removeSetFromExercise, clearSets, beginRecordingFinalization, endRecordingFinalization,
   ]);
 
   return (

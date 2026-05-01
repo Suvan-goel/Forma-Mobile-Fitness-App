@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Animated,
 } from 'react-native';
@@ -21,9 +20,10 @@ import {
   CARD_RADIUS,
   CARD_SHADOW
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { TRAINERS, type Trainer } from '../constants/trainers';
-import { useWorkoutPreferences } from '../../backend/hooks';
+import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences';
 import { setActiveVoiceId, setActiveVoiceSettings, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
 
 const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');

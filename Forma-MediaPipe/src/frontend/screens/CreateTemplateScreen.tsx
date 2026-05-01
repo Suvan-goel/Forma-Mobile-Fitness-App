@@ -29,7 +29,7 @@ import {
   CARD_SHADOW,
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
-import { useCustomTemplates } from '../../backend/hooks';
+import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import { useAlert } from '../contexts/AlertContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
 

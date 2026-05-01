@@ -25,7 +25,7 @@ import {
   FONTS,
   SPACING,
 } from '../constants/theme';
-import { ScreenBackground } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 
 const TOTAL_SLIDES = 3;
 

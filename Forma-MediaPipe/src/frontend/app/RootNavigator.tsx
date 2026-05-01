@@ -13,7 +13,6 @@ import { AddFriendScreen } from '../screens/social/AddFriendScreen';
 import { FriendProfileScreen } from '../screens/social/FriendProfileScreen';
 import { FriendComparisonScreen } from '../screens/social/FriendComparisonScreen';
 import { FollowListScreen } from '../screens/social/FollowListScreen';
-import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ProfileSettingsScreen } from '../screens/ProfileSettingsScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';

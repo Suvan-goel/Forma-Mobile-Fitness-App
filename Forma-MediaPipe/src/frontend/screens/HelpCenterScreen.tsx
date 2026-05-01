@@ -29,7 +29,8 @@ import {
   CARD_RADIUS,
   CARD_SHADOW
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 
 interface HelpCenterScreenProps {
   navigation: any;

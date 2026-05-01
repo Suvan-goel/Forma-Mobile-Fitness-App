@@ -13,13 +13,6 @@ export type Keypoint = {
   score: number;
 };
 
-type ExerciseState = {
-  name: string | null;
-  repCount: number;
-  phase: 'up' | 'down' | 'idle';
-  lastPhaseChange: number;
-};
-
 /** Point with optional z for 3D */
 type Point3D = { x: number; y: number; z?: number };
 
@@ -388,12 +381,10 @@ function detectBicepCurl(keypoints: Keypoint[]): {
   const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
   const leftElbow = getKeypoint(keypoints, 'left_elbow');
   const leftWrist = getKeypoint(keypoints, 'left_wrist');
-  const leftHip = getKeypoint(keypoints, 'left_hip');
   
   const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
   const rightElbow = getKeypoint(keypoints, 'right_elbow');
   const rightWrist = getKeypoint(keypoints, 'right_wrist');
-  const rightHip = getKeypoint(keypoints, 'right_hip');
 
   let leftCurl = false;
   let rightCurl = false;

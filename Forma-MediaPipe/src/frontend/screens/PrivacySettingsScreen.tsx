@@ -32,9 +32,10 @@ import {
   FONTS,
   SPACING,
 } from '../constants/theme';
-import { ScreenBackground, SettingsHeader } from '../components/ui';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useAlert } from '../contexts/AlertContext';
-import { PrivacyLevel, usePrivacyLevel } from '../../backend/hooks';
+import { usePrivacyLevel, type PrivacyLevel } from '../../backend/hooks/usePrivacyLevel';
 
 interface PrivacySettingsScreenProps {
   navigation: any;

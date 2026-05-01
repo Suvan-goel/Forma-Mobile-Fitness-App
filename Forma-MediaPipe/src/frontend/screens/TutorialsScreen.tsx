@@ -32,8 +32,10 @@ import {
   CARD_GRADIENT_END,
   CARD_SHADOW
 } from '../constants/theme';
-import { useExercises, useFavouriteExercises } from '../../backend/hooks';
-import { LoadingSkeleton, SettingsHeader } from '../components/ui';
+import { useExercises } from '../../backend/hooks/useExercises';
+import { useFavouriteExercises } from '../../backend/hooks/useFavouriteExercises';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { Exercise } from '../../backend/services/api';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';

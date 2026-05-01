@@ -13,7 +13,6 @@ export const MonoText: React.FC<MonoTextProps> = memo(({
   color = COLORS.text,
   style,
   children,
-  ...textProps
 }) => {
   // Ensure bold is explicitly boolean
   const isBold = Boolean(bold);
@@ -47,4 +46,3 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.bold,
   },
 });
-

@@ -28,7 +28,9 @@ import {
   SCREEN_GRADIENT_START,
   SCREEN_GRADIENT_END,
 } from '../../constants/theme';
-import { useUserSearch, useFriends, useFollowing } from '../../../backend/hooks';
+import { useFollowing } from '../../../backend/hooks/useFollowing';
+import { useFriends } from '../../../backend/hooks/useFriends';
+import { useUserSearch } from '../../../backend/hooks/useUserSearch';
 import { UserSearchResult } from '../../../backend/services/api/types';
 
 const StatusIndicator = memo(({ status }: { status: UserSearchResult['relationshipStatus'] }) => {

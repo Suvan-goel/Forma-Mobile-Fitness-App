@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
-import { useLeaderboard } from '../../../backend/hooks';
+import { useLeaderboard } from '../../../backend/hooks/useLeaderboard';
 import { LeaderboardEntry, TimeWindow } from '../../../backend/services/api/types';
 import { Top3Podium } from '../../components/ui/Top3Podium';
 import { LeaderboardRow } from '../../components/ui/LeaderboardRow';

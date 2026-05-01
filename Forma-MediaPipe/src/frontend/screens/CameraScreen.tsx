@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator, PermissionsAndroid, NativeModules } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, PermissionsAndroid, NativeModules } from 'react-native';
 import { PoseDetectionView, switchCamera } from 'expo-pose-detection';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -28,9 +28,6 @@ import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
 
-/** Exercises with dedicated heuristics (FSM-based form analysis) */
-const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
-
 const MAX_FEED_ITEMS = 5;
 type FeedbackFeedItem = { id: number; text: string };
 
@@ -38,7 +35,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Use 'screen' height to include the Android navigation bar area (avoids black bar at bottom)
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
-const CAMERA_BORDER_RADIUS = 20;
 const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 
@@ -140,7 +136,13 @@ export const CameraScreen: React.FC = () => {
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
-  const { addSetToExercise, sessionId, setPendingRecording } = useCurrentWorkout();
+  const {
+    addSetToExercise,
+    sessionId,
+    setPendingRecording,
+    beginRecordingFinalization,
+    endRecordingFinalization,
+  } = useCurrentWorkout();
   const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording, poseModel } = useCameraSettings();
   const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
@@ -160,6 +162,10 @@ export const CameraScreen: React.FC = () => {
   const [feedbackFeed, setFeedbackFeed] = useState<FeedbackFeedItem[]>([]);
   const feedbackIdRef = useRef(0);
   const [exerciseDebug, setExerciseDebug] = useState<Record<string, unknown> | null>(null);
+  const currentTrainer = useMemo(
+    () => TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ?? TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID)!,
+    [selectedTrainerId]
+  );
 
   // Unified exercise state ref — populated via ExerciseRegistry on mount and recording start
   const exerciseStateRef = useRef<ExerciseState | null>(null);
@@ -231,18 +237,19 @@ export const CameraScreen: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       if (!debugMode && isTTSEnabled && exerciseNameFromRoute) {
+        setActiveVoiceId(currentTrainer.voiceId);
+        setActiveVoiceSettings(currentTrainer.voiceSettings);
         ttsResetCoach();
         ttsOnSetStarted(exerciseNameFromRoute).catch(() => {});
       }
-    }, [debugMode, isTTSEnabled, exerciseNameFromRoute])
+    }, [debugMode, isTTSEnabled, exerciseNameFromRoute, currentTrainer])
   );
 
   // Keep ElevenLabs voice ID in sync with the selected trainer
   useEffect(() => {
-    const trainer = TRAINERS.find((t) => t.id === selectedTrainerId) ?? TRAINERS.find((t) => t.id === DEFAULT_TRAINER_ID)!;
-    setActiveVoiceId(trainer.voiceId);
-    setActiveVoiceSettings(trainer.voiceSettings);
-  }, [selectedTrainerId]);
+    setActiveVoiceId(currentTrainer.voiceId);
+    setActiveVoiceSettings(currentTrainer.voiceSettings);
+  }, [currentTrainer]);
 
   // Use refs to track exercise state without triggering re-renders
   const exercisePhaseRef = useRef(exercisePhase);
@@ -682,6 +689,7 @@ export const CameraScreen: React.FC = () => {
             durationSeconds: durationSeconds > 0 ? durationSeconds : 0,
             sessionId,
           };
+          beginRecordingFinalization();
           stopScreenRec().then((tempUrl) => {
             if (__DEV__) console.log('[CameraScreen] stopScreenRec resolved, tempUrl:', tempUrl);
             if (tempUrl) {
@@ -689,6 +697,8 @@ export const CameraScreen: React.FC = () => {
             }
           }).catch((err) => {
             if (__DEV__) console.warn('[CameraScreen] Screen recording stop failed:', err);
+          }).finally(() => {
+            endRecordingFinalization();
           });
         }
 
@@ -755,12 +765,16 @@ export const CameraScreen: React.FC = () => {
       // Auto-start screen recording (if enabled in settings)
       if (screenRecAvailable && autoScreenRecording) {
         screenRecAttemptedRef.current = true;
-        startScreenRec().catch(() => {
+        startScreenRec().then((started) => {
+          screenRecAttemptedRef.current = started;
+          if (!started && __DEV__) console.warn('[CameraScreen] Auto screen recording did not start');
+        }).catch(() => {
+          screenRecAttemptedRef.current = false;
           if (__DEV__) console.warn('[CameraScreen] Auto screen recording start failed');
         });
       }
     }
-  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording]);
+  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording, beginRecordingFinalization, endRecordingFinalization, setPendingRecording, sessionId]);
 
   const handleAutoRecToggle = useCallback(() => {
     const next = !autoScreenRecording;

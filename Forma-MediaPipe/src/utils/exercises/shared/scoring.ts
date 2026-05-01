@@ -21,7 +21,7 @@ export interface PenaltyConfig {
  * @param config - Penalty configuration
  * @returns Penalty points (0 to cap)
  */
-export function computePenalty(value: number, config: PenaltyConfig): number {
+function computePenalty(value: number, config: PenaltyConfig): number {
   const d = Math.max(0, value - config.deadzone);
   return Math.min(config.cap, config.scale * d * d);
 }

@@ -30,7 +30,7 @@ export function mergeSummaryConfig(config: Record<string, string>): void {
 export function generateSetSummary(
   repFeedback: string[],
   formScore: number,
-  exerciseName: string
+  _exerciseName: string
 ): string {
   if (repFeedback.length === 0) {
     return `No rep-by-rep feedback was recorded for this set. Your form score was ${formScore}/100.`;

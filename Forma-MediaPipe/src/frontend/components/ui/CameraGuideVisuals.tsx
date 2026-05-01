@@ -22,8 +22,8 @@ import { COLORS } from '../../constants/theme';
 // Visual stage constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const VIS_W = 280;
-export const VIS_H = 220;
+const VIS_W = 280;
+const VIS_H = 220;
 const FLOOR_Y = 200;
 
 // Image sources (loaded once at module level)
@@ -147,26 +147,6 @@ const HolographicFigure: React.FC<{
       backgroundColor: COLORS.primary,
       opacity: 0.03,
     }} />
-  </View>
-);
-
-const HolographicScene: React.FC<{ source: any }> = ({ source }) => (
-  <View
-    style={[
-      StyleSheet.absoluteFill,
-      Platform.OS === 'ios' && {
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.35,
-        shadowRadius: 18,
-      },
-    ]}
-  >
-    <Image
-      source={source}
-      style={{ width: VIS_W, height: VIS_H, opacity: 0.88 }}
-      resizeMode="contain"
-    />
   </View>
 );
 

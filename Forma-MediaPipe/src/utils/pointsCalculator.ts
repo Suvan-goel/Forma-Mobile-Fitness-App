@@ -102,7 +102,7 @@ export function calculateWeeklyConsistencyPoints(
  * Returns the ISO week string 'YYYY-WNN' for a given date.
  * Used as source_id in the points ledger for deduplication.
  */
-export function isoWeekId(date: Date): string {
+function isoWeekId(date: Date): string {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   // ISO 8601: week containing the Thursday of the given date
