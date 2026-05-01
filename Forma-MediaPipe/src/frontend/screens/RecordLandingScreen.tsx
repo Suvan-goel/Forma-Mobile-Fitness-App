@@ -18,7 +18,6 @@ import {
   Image,
   ImageSourcePropType,
   Animated,
-  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -66,6 +65,8 @@ import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import { useAlert } from '../contexts/AlertContext';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
+const CAPTURE_HORIZONTAL_PADDING = 14;
+const TEMPLATE_CARD_GAP = 9;
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -220,22 +221,12 @@ export const RecordLandingScreen: React.FC = () => {
     clearSets,
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
-  const sectionGap = windowHeight < 740 ? 10 : 14;
-  const contentMinHeight = Math.max(
-    430,
-    windowHeight - insets.top - navigationBarHeight - 56,
-  );
-  const availableSectionHeight = contentMinHeight - sectionGap * 2;
-  const standardSectionHeight = Math.floor(availableSectionHeight * 0.305);
+  const compactHeight = windowHeight < 740;
+  const sectionGap = compactHeight ? 8 : 12;
   const templateCardWidth =
-    (windowWidth - SPACING.screenHorizontal * 2 - 9 * 2) / 3;
-  const templateThumbHeight = templateCardWidth;
-  const templateCardHeight = templateThumbHeight + 66;
-  const templateSectionHeight = Math.max(
-    standardSectionHeight + 18,
-    templateCardHeight + 34,
-    availableSectionHeight - standardSectionHeight * 2,
-  );
+    (windowWidth - CAPTURE_HORIZONTAL_PADDING * 2 - TEMPLATE_CARD_GAP * 2) / 3;
+  const templateThumbHeight = Math.min(templateCardWidth, compactHeight ? 78 : 104);
+  const templateCardHeight = templateThumbHeight + (compactHeight ? 52 : 60);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -379,28 +370,23 @@ export const RecordLandingScreen: React.FC = () => {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
+      <View
+        style={[
+          styles.captureContent,
           { paddingBottom: navigationBarHeight },
         ]}
-        showsVerticalScrollIndicator={false}
       >
         <Animated.View
           style={[
             styles.contentStack,
             {
-              minHeight: contentMinHeight,
               gap: sectionGap,
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
             },
           ]}
         >
-          <View
-            style={[styles.screenSection, { minHeight: standardSectionHeight }]}
-          >
+          <View style={[styles.screenSection, styles.heroSection]}>
             <Text style={styles.dateLine}>{formatDateLine()}</Text>
 
             {workoutInProgress ? (
@@ -610,9 +596,7 @@ export const RecordLandingScreen: React.FC = () => {
           </View>
 
           {/* ── TOOLS ───────────────────────────────── */}
-          <View
-            style={[styles.screenSection, { minHeight: standardSectionHeight }]}
-          >
+          <View style={[styles.screenSection, styles.toolsSection]}>
             <Text style={styles.sectionLabel}>TOOLS</Text>
             <View style={styles.toolsCardOuter}>
               <LinearGradient
@@ -624,7 +608,7 @@ export const RecordLandingScreen: React.FC = () => {
                 <ToolRow
                   icon={
                     <BookOpen
-                      size={22}
+                      size={18}
                       color={COLORS.accent}
                       strokeWidth={1.7}
                     />
@@ -636,7 +620,7 @@ export const RecordLandingScreen: React.FC = () => {
                 />
                 <ToolRow
                   icon={
-                    <Camera size={22} color={COLORS.accent} strokeWidth={1.7} />
+                    <Camera size={18} color={COLORS.accent} strokeWidth={1.7} />
                   }
                   title="Camera Setup"
                   subtitle="Check angles and positioning"
@@ -651,7 +635,6 @@ export const RecordLandingScreen: React.FC = () => {
             style={[
               styles.screenSection,
               styles.templatesBlock,
-              { minHeight: templateSectionHeight },
             ]}
           >
             <View style={styles.sectionHeaderRow}>
@@ -715,7 +698,7 @@ export const RecordLandingScreen: React.FC = () => {
             </View>
           </View>
         </Animated.View>
-      </ScrollView>
+      </View>
     </LinearGradient>
   );
 };
@@ -806,18 +789,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 14,
+  captureContent: {
+    flex: 1,
+    paddingHorizontal: CAPTURE_HORIZONTAL_PADDING,
     paddingTop: 2,
-    flexGrow: 1,
   },
   contentStack: {
+    flex: 1,
     paddingBottom: 8,
+    justifyContent: 'space-between',
   },
   screenSection: {
     justifyContent: 'center',
-    paddingVertical: 2,
+    flexShrink: 1,
+  },
+  heroSection: {
+    flex: 1.1,
+    minHeight: 0,
+  },
+  toolsSection: {
+    flex: 0.72,
+    minHeight: 0,
   },
 
   dateLine: {
@@ -862,7 +854,7 @@ const styles = StyleSheet.create({
   idleCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 146,
+    minHeight: 128,
   },
   idleTextWrap: {
     flex: 1,
@@ -885,8 +877,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bodyVisual: {
-    width: 108,
-    height: 150,
+    width: 94,
+    height: 130,
     marginRight: -2,
     overflow: 'visible',
     alignItems: 'center',
@@ -1051,44 +1043,46 @@ const styles = StyleSheet.create({
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 17,
+    gap: 12,
+    minHeight: 52,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   toolRowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
   toolIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     backgroundColor: 'rgba(124,92,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   toolTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontSize: 13,
     color: COLORS.text,
   },
   toolSubtitle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12.5,
+    fontSize: 10.5,
     color: COLORS.textSecondary,
-    marginTop: 3,
+    marginTop: 2,
   },
 
   /* Templates */
   templatesRow: {
     flexDirection: 'row',
-    gap: 9,
+    gap: TEMPLATE_CARD_GAP,
     alignItems: 'stretch',
     minHeight: 132,
   },
   templatesBlock: {
+    flex: 1.05,
+    minHeight: 0,
     justifyContent: 'center',
-    paddingBottom: 6,
   },
   templateCard: {
     borderRadius: CARD_RADIUS,

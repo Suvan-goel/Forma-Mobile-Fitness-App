@@ -17,15 +17,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
-  Award,
   Check,
   ChevronLeft,
   GitCompare,
-  Medal,
   Shield,
   Sparkles,
   Target,
-  Trophy,
   UserMinus,
   UserPlus,
 } from 'lucide-react-native';
@@ -160,7 +157,6 @@ export const FriendProfileScreen: React.FC = memo(() => {
   );
   const level = Math.max(1, Math.floor(estimatedXp / XP_PER_LEVEL) + 1);
   const levelProgress = Math.min(estimatedXp / LEVEL_TARGET, 1);
-  const hiddenBadgeCount = Math.max(0, profile.earnedBadgeIds.length - 4);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -301,50 +297,6 @@ export const FriendProfileScreen: React.FC = memo(() => {
               {estimatedXp.toLocaleString()} / {LEVEL_TARGET.toLocaleString()}{' '}
               XP
             </Text>
-
-            <View style={styles.combinedCardDivider} />
-
-            <View style={styles.badgeSectionHeader}>
-              <Text style={styles.sectionTitle}>Badges</Text>
-              <Text style={styles.badgeCountText}>{profile.earnedBadgeIds.length} earned</Text>
-            </View>
-            <View style={styles.badgeRow}>
-              {(profile.earnedBadgeIds.length > 0
-                ? profile.earnedBadgeIds
-                : ['1', '2', '3', '4']
-              )
-                .slice(0, 4)
-                .map((badgeId, index) => (
-                  <View key={badgeId} style={styles.badgeShell}>
-                    <LinearGradient
-                      colors={
-                        profile.earnedBadgeIds.includes(badgeId)
-                          ? ['#3C4651', '#1A222C']
-                          : ['#272D34', '#161A1F']
-                      }
-                      style={styles.badgeHex}
-                    >
-                      {index % 4 === 0 ? (
-                        <Trophy size={20} color={COLORS.yellow} />
-                      ) : null}
-                      {index % 4 === 1 ? (
-                        <Medal size={20} color={COLORS.yellow} />
-                      ) : null}
-                      {index % 4 === 2 ? (
-                        <Award size={20} color={COLORS.yellow} />
-                      ) : null}
-                      {index % 4 === 3 ? (
-                        <Target size={20} color={COLORS.yellow} />
-                      ) : null}
-                    </LinearGradient>
-                  </View>
-                ))}
-              {hiddenBadgeCount > 0 && (
-                <View style={styles.moreBadge}>
-                  <Text style={styles.moreBadgeText}>+{hiddenBadgeCount}</Text>
-                </View>
-              )}
-            </View>
           </ProfileCard>
 
           <ProfileCard>
@@ -644,57 +596,6 @@ const styles = StyleSheet.create({
   xpText: {
     fontFamily: FONTS.mono.regular,
     fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  combinedCardDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginTop: 15,
-    marginBottom: 13,
-  },
-  badgeSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  badgeCountText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 14,
-  },
-  badgeShell: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.22)',
-    padding: 3,
-  },
-  badgeHex: {
-    flex: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  moreBadgeText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
     color: COLORS.textSecondary,
   },
   achievementList: {
