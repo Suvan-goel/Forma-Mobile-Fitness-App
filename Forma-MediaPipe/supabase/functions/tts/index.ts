@@ -6,18 +6,52 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const MAX_TEXT_LENGTH = 240;
+const ALLOWED_VOICE_IDS = new Set([
+  '21m00Tcm4TlvDq8ikWAM',
+  'SAz9YHcvj6GT2YYXdXww',
+  'FGY2WhTYpPnrIDTdsKH5',
+  'Xb7hH8MSUJpSbSDYk0k2',
+  'iP95p4xoKVk53GoZ742B',
+  'bIHbv24MWmeRgasZH58o',
+  'TX3LPaxmHKxFdv7VOQHJ',
+]);
+
+function jsonResponse(body: Record<string, unknown>, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeVoiceSettings(value: unknown) {
+  const settings = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    stability: boundedNumber(settings.stability, 0.45, 0, 1),
+    similarity_boost: boundedNumber(settings.similarity_boost, 0.8, 0, 1),
+    speed: boundedNumber(settings.speed, 0.9, 0.7, 1.2),
+    style: boundedNumber(settings.style, 0.0, 0, 1),
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    if (req.method !== 'POST') {
+      return jsonResponse({ error: 'Method not allowed' }, 405);
+    }
+
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
     // Verify caller is an authenticated Forma user
@@ -28,26 +62,23 @@ serve(async (req) => {
     );
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
     const { text, voiceId, voiceSettings } = await req.json();
-    if (!text || !voiceId) {
-      return new Response(JSON.stringify({ error: 'Missing text or voiceId' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (typeof text !== 'string' || text.trim().length === 0 || typeof voiceId !== 'string') {
+      return jsonResponse({ error: 'Missing text or voiceId' }, 400);
+    }
+    if (text.length > MAX_TEXT_LENGTH) {
+      return jsonResponse({ error: `Text must be ${MAX_TEXT_LENGTH} characters or fewer` }, 400);
+    }
+    if (!ALLOWED_VOICE_IDS.has(voiceId)) {
+      return jsonResponse({ error: 'Voice not allowed' }, 400);
     }
 
     const apiKey = Deno.env.get('ELEVENLABS_API_KEY');
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'TTS service not configured' }), {
-        status: 503,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'TTS service not configured' }, 503);
     }
 
     const elevenLabsRes = await fetch(
@@ -60,14 +91,9 @@ serve(async (req) => {
           'xi-api-key': apiKey,
         },
         body: JSON.stringify({
-          text,
+          text: text.trim(),
           model_id: 'eleven_turbo_v2_5',
-          voice_settings: voiceSettings ?? {
-            stability: 0.45,
-            similarity_boost: 0.8,
-            speed: 0.9,
-            style: 0.0,
-          },
+          voice_settings: sanitizeVoiceSettings(voiceSettings),
         }),
       }
     );
@@ -78,22 +104,14 @@ serve(async (req) => {
         status: elevenLabsRes.status,
         body: upstreamBody.slice(0, 500),
       });
-      return new Response(JSON.stringify({
-        error: `ElevenLabs error: ${elevenLabsRes.status}`,
-        details: upstreamBody ? upstreamBody.slice(0, 500) : undefined,
-      }), {
-        status: elevenLabsRes.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: `ElevenLabs error: ${elevenLabsRes.status}` }, elevenLabsRes.status);
     }
 
     return new Response(elevenLabsRes.body, {
       headers: { ...corsHeaders, 'Content-Type': 'audio/mpeg' },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('TTS function failed', e);
+    return jsonResponse({ error: 'Internal server error' }, 500);
   }
 });

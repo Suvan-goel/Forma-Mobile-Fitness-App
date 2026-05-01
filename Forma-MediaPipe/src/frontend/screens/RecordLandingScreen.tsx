@@ -53,13 +53,16 @@ import {
   SCREEN_GRADIENT_COLORS,
   SCREEN_GRADIENT_START,
   SCREEN_GRADIENT_END,
-  CARD_SHADOW
+  CARD_SHADOW,
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 import { CameraSetupGuide } from './CameraSetupGuide';
 
-import type { RecordStackParamList, RootStackParamList } from '../app/RootNavigator';
+import type {
+  RecordStackParamList,
+  RootStackParamList,
+} from '../app/RootNavigator';
 import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import { useAlert } from '../contexts/AlertContext';
 
@@ -92,8 +95,20 @@ const getTimerParts = (totalSeconds: number) => {
 
 const formatDateLine = (): string => {
   const d = new Date();
-  const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                  'July', 'August', 'September', 'October', 'November', 'December'];
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
   return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
@@ -109,15 +124,6 @@ type CaptureTemplate = {
   }[];
 };
 
-const TEMPLATE_IMAGES_BY_NAME: Record<string, ImageSourcePropType> = {
-  'lower body strength': require('../assets/generated/templates/lower-body-strength.png'),
-  'upper body push': require('../assets/generated/templates/push-day.png'),
-  'push day': require('../assets/generated/templates/push-day.png'),
-  'pull strength': require('../assets/generated/templates/pull-day.png'),
-  'pull day': require('../assets/generated/templates/pull-day.png'),
-  'full body': require('../assets/generated/templates/full-body.png'),
-};
-
 const EXERCISE_IMAGES_BY_NAME: Record<string, ImageSourcePropType> = {
   'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
   'Back Squat': require('../assets/exercises/barbell_squat.png'),
@@ -127,20 +133,31 @@ const EXERCISE_IMAGES_BY_NAME: Record<string, ImageSourcePropType> = {
   'Cable Row': require('../assets/exercises/cable_row.png'),
   'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
   'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Romanian Deadlift': require('../assets/exercises/lying_leg_curl.png'),
+  'Walking Lunge': require('../assets/exercises/leg_extensions.png'),
+  'Leg Press': require('../assets/exercises/leg_extensions.png'),
   'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
   'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
   'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
 };
 
-const DEFAULT_TEMPLATE_IMAGE = require('../assets/generated/templates/full-body.png');
+const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
 
-const getTemplateImage = (template: CaptureTemplate): ImageSourcePropType => {
-  const namedTemplate = TEMPLATE_IMAGES_BY_NAME[template.name.trim().toLowerCase()];
-  if (template.templateImage || namedTemplate) {
-    return template.templateImage ?? namedTemplate;
-  }
+const getExerciseImage = (name: string): ImageSourcePropType =>
+  EXERCISE_IMAGES_BY_NAME[name] ?? DEFAULT_EXERCISE_IMAGE;
 
-  return EXERCISE_IMAGES_BY_NAME[template.exercises[0]?.name] ?? DEFAULT_TEMPLATE_IMAGE;
+const getTemplateCollageSources = (
+  exercises: CaptureTemplate['exercises'],
+): ImageSourcePropType[] => {
+  const baseSources =
+    exercises.length > 0
+      ? exercises.map((exercise) => getExerciseImage(exercise.name))
+      : [DEFAULT_EXERCISE_IMAGE];
+
+  return Array.from(
+    { length: 4 },
+    (_, index) => baseSources[index % baseSources.length],
+  );
 };
 
 const DEFAULT_TEMPLATES: CaptureTemplate[] = [
@@ -150,38 +167,46 @@ const DEFAULT_TEMPLATES: CaptureTemplate[] = [
     description: 'Squat-focused lower body session.',
     templateImage: require('../assets/generated/templates/lower-body-strength.png'),
     exercises: [
-      { name: 'Barbell Squat', category: 'Weightlifting', targetSets: 4 },
-      { name: 'Leg Extensions', category: 'Weightlifting', targetSets: 3 },
-      { name: 'Lying Leg Curl', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Back Squat', category: 'Weightlifting', targetSets: 4 },
+      { name: 'Romanian Deadlift', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Walking Lunge', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Leg Press', category: 'Weightlifting', targetSets: 3 },
     ],
   },
   {
     id: 'default-upper-push',
-    name: 'Upper Body Push',
+    name: 'Push Day',
     description: 'Chest, shoulders, and triceps.',
     templateImage: require('../assets/generated/templates/push-day.png'),
     exercises: [
       { name: 'Push-Up', category: 'Calisthenics', targetSets: 4 },
-      { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting', targetSets: 3 },
+      {
+        name: 'Standing Dumbbell Lateral Raises',
+        category: 'Weightlifting',
+        targetSets: 3,
+      },
       { name: 'Cable Pushdowns', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Machine Ab Crunches', category: 'Weightlifting', targetSets: 3 },
     ],
   },
   {
     id: 'default-pull',
-    name: 'Pull Strength',
+    name: 'Pull Day',
     description: 'Back and biceps session.',
     templateImage: require('../assets/generated/templates/pull-day.png'),
     exercises: [
-      { name: 'Cable Row', category: 'Weightlifting', targetSets: 4 },
-      { name: 'Cable Lat Pulldowns', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Cable Lat Pulldowns', category: 'Weightlifting', targetSets: 4 },
+      { name: 'Cable Row', category: 'Weightlifting', targetSets: 3 },
       { name: 'Barbell Curl', category: 'Weightlifting', targetSets: 3 },
+      { name: 'Machine Ab Crunches', category: 'Weightlifting', targetSets: 3 },
     ],
   },
 ];
 
 export const RecordLandingScreen: React.FC = () => {
   const navigation = useNavigation<RecordLandingNavigationProp>();
-  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const rootNavigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -197,32 +222,50 @@ export const RecordLandingScreen: React.FC = () => {
   } = useCurrentWorkout();
   const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
   const sectionGap = windowHeight < 740 ? 10 : 14;
-  const contentMinHeight = Math.max(430, windowHeight - insets.top - navigationBarHeight - 56);
+  const contentMinHeight = Math.max(
+    430,
+    windowHeight - insets.top - navigationBarHeight - 56,
+  );
   const availableSectionHeight = contentMinHeight - sectionGap * 2;
   const standardSectionHeight = Math.floor(availableSectionHeight * 0.305);
-  const templateSectionHeight = Math.max(standardSectionHeight + 18, availableSectionHeight - standardSectionHeight * 2);
-  const templateCardHeight = Math.max(132, Math.min(156, templateSectionHeight - 18));
-  const templateCardWidth = (windowWidth - SPACING.screenHorizontal * 2 - 9 * 2) / 3;
-  const templateThumbHeight = Math.max(78, Math.min(100, templateCardHeight - 62));
+  const templateCardWidth =
+    (windowWidth - SPACING.screenHorizontal * 2 - 9 * 2) / 3;
+  const templateThumbHeight = templateCardWidth;
+  const templateCardHeight = templateThumbHeight + 58;
+  const templateSectionHeight = Math.max(
+    standardSectionHeight + 18,
+    templateCardHeight + 34,
+    availableSectionHeight - standardSectionHeight * 2,
+  );
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
   const [showSetupGuide, setShowSetupGuide] = useState<boolean | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(CAMERA_SETUP_SEEN_KEY).then((value) => {
-      setShowSetupGuide(value !== 'true');
-    }).catch(() => {
-      setShowSetupGuide(false);
-    });
+    AsyncStorage.getItem(CAMERA_SETUP_SEEN_KEY)
+      .then((value) => {
+        setShowSetupGuide(value !== 'true');
+      })
+      .catch(() => {
+        setShowSetupGuide(false);
+      });
   }, []);
 
   const handleGuideComplete = useCallback(() => {
@@ -250,7 +293,7 @@ export const RecordLandingScreen: React.FC = () => {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Discard', style: 'destructive', onPress: clearSets },
-      ]
+      ],
     );
   };
 
@@ -258,14 +301,17 @@ export const RecordLandingScreen: React.FC = () => {
 
   const handleFinishWorkout = () => {
     if (sets.length === 0) {
-      showAlert('No sets recorded', 'Add at least one set before ending the workout.');
+      showAlert(
+        'No sets recorded',
+        'Add at least one set before ending the workout.',
+      );
       return;
     }
     const duration = formatStopwatch(workoutElapsedSeconds);
     const totalSets = sets.length;
     const totalReps = sets.reduce((sum, set) => sum + set.reps, 0);
     const avgFormScore = Math.round(
-      sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length
+      sets.reduce((sum, set) => sum + set.formScore, 0) / sets.length,
     );
     const category = sets[0]?.exerciseName || 'General';
 
@@ -283,22 +329,29 @@ export const RecordLandingScreen: React.FC = () => {
     );
   }
 
-  const savedTemplates: CaptureTemplate[] = templates.slice(0, 3).map(template => ({
+  const savedTemplates: CaptureTemplate[] = templates
+    .slice(0, 3)
+    .map((template) => ({
       id: template.id,
       name: template.name,
       description: template.description || 'Your saved workout template.',
-      exercises: template.exercises.map(exercise => ({
+      exercises: template.exercises.map((exercise) => ({
         name: exercise.name,
         category: exercise.category,
         targetSets: exercise.targetSets,
       })),
     }));
-  const savedTemplateNames = new Set(savedTemplates.map(template => template.name.trim().toLowerCase()));
+  const savedTemplateNames = new Set(
+    savedTemplates.map((template) => template.name.trim().toLowerCase()),
+  );
   const recentTemplates: CaptureTemplate[] = [
     ...savedTemplates,
-    ...DEFAULT_TEMPLATES.filter(template => !savedTemplateNames.has(template.name.trim().toLowerCase())),
+    ...DEFAULT_TEMPLATES.filter(
+      (template) => !savedTemplateNames.has(template.name.trim().toLowerCase()),
+    ),
   ].slice(0, 3);
-  const templatesLabel = templates.length > 0 ? 'RECENT TEMPLATES' : 'FAVOURITE TEMPLATES';
+  const templatesLabel =
+    templates.length > 0 ? 'RECENT TEMPLATES' : 'FAVOURITE TEMPLATES';
 
   return (
     <LinearGradient
@@ -317,14 +370,21 @@ export const RecordLandingScreen: React.FC = () => {
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+            <SettingsIcon
+              size={20}
+              color={COLORS.textSecondary}
+              strokeWidth={1.6}
+            />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: navigationBarHeight }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: navigationBarHeight },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View
@@ -338,153 +398,221 @@ export const RecordLandingScreen: React.FC = () => {
             },
           ]}
         >
-          <View style={[styles.screenSection, { minHeight: standardSectionHeight }]}>
+          <View
+            style={[styles.screenSection, { minHeight: standardSectionHeight }]}
+          >
             <Text style={styles.dateLine}>{formatDateLine()}</Text>
 
             {workoutInProgress ? (
               /* ── ACTIVE WORKOUT CARD ── */
               <View style={styles.activeOuter}>
-              <LinearGradient
-                colors={[...CARD_GRADIENT_ELEVATED]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.activeGradient}
-              >
-                <View style={styles.activeEdge}>
-                  <View style={styles.activeBody}>
-                    <View style={styles.activeBodyText}>
-                      <Text style={styles.activeWorkoutName}>CURRENT WORKOUT</Text>
-                      <View style={styles.timerDisplay}>
-                        {getTimerParts(workoutElapsedSeconds).map((part, i) => (
-                          <MonoText
-                            key={i}
-                            bold={part !== ':'}
-                            style={part === ':' ? styles.timerColon : styles.timerDigit}
-                          >
-                            {part}
-                          </MonoText>
-                        ))}
-                      </View>
-                      <View style={styles.activeMetaRow}>
-                        <View style={styles.metaIconRow}>
-                          <Dumbbell size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
-                          <Text style={styles.metaText}>{sets.length} sets</Text>
+                <LinearGradient
+                  colors={[...CARD_GRADIENT_ELEVATED]}
+                  start={CARD_GRADIENT_START}
+                  end={CARD_GRADIENT_END}
+                  style={styles.activeGradient}
+                >
+                  <View style={styles.activeEdge}>
+                    <View style={styles.activeBody}>
+                      <View style={styles.activeBodyText}>
+                        <Text style={styles.activeWorkoutName}>
+                          CURRENT WORKOUT
+                        </Text>
+                        <View style={styles.timerDisplay}>
+                          {getTimerParts(workoutElapsedSeconds).map(
+                            (part, i) => (
+                              <MonoText
+                                key={i}
+                                bold={part !== ':'}
+                                style={
+                                  part === ':'
+                                    ? styles.timerColon
+                                    : styles.timerDigit
+                                }
+                              >
+                                {part}
+                              </MonoText>
+                            ),
+                          )}
                         </View>
-                        <View style={styles.metaIconRow}>
-                          <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
-                          <Text style={styles.metaText}>
-                            {sets.reduce((sum, set) => sum + set.reps, 0)} reps
-                          </Text>
+                        <View style={styles.activeMetaRow}>
+                          <View style={styles.metaIconRow}>
+                            <Dumbbell
+                              size={12}
+                              color={COLORS.textTertiary}
+                              strokeWidth={1.6}
+                            />
+                            <Text style={styles.metaText}>
+                              {sets.length} sets
+                            </Text>
+                          </View>
+                          <View style={styles.metaIconRow}>
+                            <Clock
+                              size={12}
+                              color={COLORS.textTertiary}
+                              strokeWidth={1.6}
+                            />
+                            <Text style={styles.metaText}>
+                              {sets.reduce((sum, set) => sum + set.reps, 0)}{' '}
+                              reps
+                            </Text>
+                          </View>
                         </View>
                       </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.pauseBtn,
+                          workoutPaused && styles.pauseBtnActive,
+                        ]}
+                        onPress={handlePauseWorkout}
+                        activeOpacity={0.7}
+                      >
+                        {workoutPaused ? (
+                          <Play size={16} color={COLORS.text} strokeWidth={2} />
+                        ) : (
+                          <Pause
+                            size={16}
+                            color={COLORS.textSecondary}
+                            strokeWidth={2}
+                          />
+                        )}
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                      style={[styles.pauseBtn, workoutPaused && styles.pauseBtnActive]}
-                      onPress={handlePauseWorkout}
-                      activeOpacity={0.7}
-                    >
-                      {workoutPaused ? (
-                        <Play size={16} color={COLORS.text} strokeWidth={2} />
-                      ) : (
-                        <Pause size={16} color={COLORS.textSecondary} strokeWidth={2} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
 
-                  <TouchableOpacity
-                    onPress={handleResumeWorkout}
-                    activeOpacity={0.85}
-                    style={styles.startBtnOuter}
-                  >
-                    <LinearGradient
-                      colors={['#7A55FF', '#633FE5']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.startBtn}
+                    <TouchableOpacity
+                      onPress={handleResumeWorkout}
+                      activeOpacity={0.85}
+                      style={styles.startBtnOuter}
                     >
-                      <Text style={styles.startBtnText}>Open workout</Text>
-                      <ArrowRight size={14} color="#FFFFFF" strokeWidth={2.5} />
-                    </LinearGradient>
-                  </TouchableOpacity>
+                      <LinearGradient
+                        colors={['#7A55FF', '#633FE5']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.startBtn}
+                      >
+                        <Text style={styles.startBtnText}>Open workout</Text>
+                        <ArrowRight
+                          size={14}
+                          color="#FFFFFF"
+                          strokeWidth={2.5}
+                        />
+                      </LinearGradient>
+                    </TouchableOpacity>
 
-                  <View style={styles.activeFooterRow}>
-                    <TouchableOpacity
-                      style={styles.footerBtn}
-                      onPress={handleDiscardWorkout}
-                      activeOpacity={0.7}
-                    >
-                      <Trash2 size={13} color={COLORS.red} strokeWidth={1.7} />
-                      <Text style={[styles.footerBtnText, { color: COLORS.red }]}>Discard</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.footerBtn}
-                      onPress={handleFinishWorkout}
-                      activeOpacity={0.7}
-                    >
-                      <Flag size={13} color={COLORS.green} strokeWidth={1.7} />
-                      <Text style={[styles.footerBtnText, { color: COLORS.green }]}>Finish</Text>
-                    </TouchableOpacity>
+                    <View style={styles.activeFooterRow}>
+                      <TouchableOpacity
+                        style={styles.footerBtn}
+                        onPress={handleDiscardWorkout}
+                        activeOpacity={0.7}
+                      >
+                        <Trash2
+                          size={13}
+                          color={COLORS.red}
+                          strokeWidth={1.7}
+                        />
+                        <Text
+                          style={[styles.footerBtnText, { color: COLORS.red }]}
+                        >
+                          Discard
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.footerBtn}
+                        onPress={handleFinishWorkout}
+                        activeOpacity={0.7}
+                      >
+                        <Flag
+                          size={13}
+                          color={COLORS.green}
+                          strokeWidth={1.7}
+                        />
+                        <Text
+                          style={[
+                            styles.footerBtnText,
+                            { color: COLORS.green },
+                          ]}
+                        >
+                          Finish
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              </LinearGradient>
-            </View>
+                </LinearGradient>
+              </View>
             ) : (
               /* ── QUICK START (idle) CARD ── */
               <View style={styles.activeOuter}>
-              <LinearGradient
-                colors={[...CARD_GRADIENT_ELEVATED]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.activeGradient}
-              >
-                <View style={[styles.activeEdge, styles.idleEdge]}>
-                  <View style={styles.idleCardContent}>
-                    <View style={styles.idleTextWrap}>
-                      <Text style={styles.cardLabel}>READY TO TRAIN</Text>
-                      <Text style={styles.idleTitle}>Start a Session</Text>
-                      <View style={styles.idleMetaRow}>
-                        <View style={styles.metaIconRow}>
-                          <Dumbbell size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
-                          <Text style={styles.metaText}>Any workout</Text>
+                <LinearGradient
+                  colors={[...CARD_GRADIENT_ELEVATED]}
+                  start={CARD_GRADIENT_START}
+                  end={CARD_GRADIENT_END}
+                  style={styles.activeGradient}
+                >
+                  <View style={[styles.activeEdge, styles.idleEdge]}>
+                    <View style={styles.idleCardContent}>
+                      <View style={styles.idleTextWrap}>
+                        <Text style={styles.cardLabel}>READY TO TRAIN</Text>
+                        <Text style={styles.idleTitle}>Start a Session</Text>
+                        <View style={styles.idleMetaRow}>
+                          <View style={styles.metaIconRow}>
+                            <Dumbbell
+                              size={12}
+                              color={COLORS.textTertiary}
+                              strokeWidth={1.6}
+                            />
+                            <Text style={styles.metaText}>Any workout</Text>
+                          </View>
+                          <View style={styles.metaIconRow}>
+                            <Clock
+                              size={12}
+                              color={COLORS.textTertiary}
+                              strokeWidth={1.6}
+                            />
+                            <Text style={styles.metaText}>~30 min</Text>
+                          </View>
                         </View>
-                        <View style={styles.metaIconRow}>
-                          <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.6} />
-                          <Text style={styles.metaText}>~30 min</Text>
-                        </View>
-                      </View>
 
-                      <TouchableOpacity
-                        onPress={handleStartWorkout}
-                        activeOpacity={0.85}
-                        style={styles.idleStartBtnOuter}
-                      >
-                        <LinearGradient
-                          colors={['#7A55FF', '#633FE5']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.idleStartBtn}
+                        <TouchableOpacity
+                          onPress={handleStartWorkout}
+                          activeOpacity={0.85}
+                          style={styles.idleStartBtnOuter}
                         >
-                          <Play size={14} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
-                          <Text style={styles.startBtnText}>Start Workout</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.bodyVisual}>
-                      <Image
-                        source={require('../assets/generated/workout-card-figure.png')}
-                        style={styles.bodyVisualImage}
-                        resizeMode="contain"
-                      />
+                          <LinearGradient
+                            colors={['#7A55FF', '#633FE5']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.idleStartBtn}
+                          >
+                            <Play
+                              size={14}
+                              color="#FFFFFF"
+                              strokeWidth={2.5}
+                              fill="#FFFFFF"
+                            />
+                            <Text style={styles.startBtnText}>
+                              Start Workout
+                            </Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.bodyVisual}>
+                        <Image
+                          source={require('../assets/generated/workout-card-figure.png')}
+                          style={styles.bodyVisualImage}
+                          resizeMode="contain"
+                        />
+                      </View>
                     </View>
                   </View>
-                </View>
-              </LinearGradient>
-            </View>
+                </LinearGradient>
+              </View>
             )}
           </View>
 
           {/* ── TOOLS ───────────────────────────────── */}
-          <View style={[styles.screenSection, { minHeight: standardSectionHeight }]}>
+          <View
+            style={[styles.screenSection, { minHeight: standardSectionHeight }]}
+          >
             <Text style={styles.sectionLabel}>TOOLS</Text>
             <View style={styles.toolsCardOuter}>
               <LinearGradient
@@ -494,21 +622,35 @@ export const RecordLandingScreen: React.FC = () => {
                 style={styles.toolsCard}
               >
                 <ToolRow
-                  icon={<LayoutTemplate size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  icon={
+                    <LayoutTemplate
+                      size={18}
+                      color={COLORS.accent}
+                      strokeWidth={1.6}
+                    />
+                  }
                   title="Choose Template"
                   subtitle="Browse saved workouts"
                   onPress={handleChooseTemplate}
                   divider
                 />
                 <ToolRow
-                  icon={<BookOpen size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  icon={
+                    <BookOpen
+                      size={18}
+                      color={COLORS.accent}
+                      strokeWidth={1.6}
+                    />
+                  }
                   title="Exercise Guide"
                   subtitle="Learn form and technique"
                   onPress={() => rootNavigation.navigate('Tutorials')}
                   divider
                 />
                 <ToolRow
-                  icon={<Camera size={18} color={COLORS.accent} strokeWidth={1.6} />}
+                  icon={
+                    <Camera size={18} color={COLORS.accent} strokeWidth={1.6} />
+                  }
                   title="Camera Setup"
                   subtitle="Check angles and positioning"
                   onPress={handleCameraSetup}
@@ -518,7 +660,13 @@ export const RecordLandingScreen: React.FC = () => {
           </View>
 
           {/* ── RECENT / FAVOURITE TEMPLATES ───────── */}
-          <View style={[styles.screenSection, styles.templatesBlock, { minHeight: templateSectionHeight }]}>
+          <View
+            style={[
+              styles.screenSection,
+              styles.templatesBlock,
+              { minHeight: templateSectionHeight },
+            ]}
+          >
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionLabel}>{templatesLabel}</Text>
               <TouchableOpacity
@@ -533,13 +681,16 @@ export const RecordLandingScreen: React.FC = () => {
               {recentTemplates.slice(0, 3).map((tmpl) => (
                 <TouchableOpacity
                   key={tmpl.id}
-                  style={[styles.templateCard, { width: templateCardWidth, height: templateCardHeight }]}
+                  style={[
+                    styles.templateCard,
+                    { width: templateCardWidth, height: templateCardHeight },
+                  ]}
                   activeOpacity={0.85}
                   onPress={() =>
                     navigation.navigate('TemplatePreview', {
                       templateName: tmpl.name,
                       description: tmpl.description,
-                      exercises: tmpl.exercises.map(e => ({
+                      exercises: tmpl.exercises.map((e) => ({
                         name: e.name,
                         category: e.category,
                         targetSets: e.targetSets,
@@ -553,19 +704,23 @@ export const RecordLandingScreen: React.FC = () => {
                     end={CARD_GRADIENT_END}
                     style={styles.templateGradient}
                   >
-                    <View style={[styles.templateThumb, { height: templateThumbHeight }]}>
-                      <Image
-                        source={getTemplateImage(tmpl)}
-                        style={styles.templateThumbImage}
-                        resizeMode="cover"
-                      />
+                    <View
+                      style={[
+                        styles.templateThumb,
+                        { height: templateThumbHeight },
+                      ]}
+                    >
+                      <CaptureTemplateCollage template={tmpl} />
                       <View style={styles.templateThumbShade} />
                     </View>
                     <View style={styles.templateInfo}>
                       <Text style={styles.templateMeta}>
-                        {tmpl.exercises.length} exercise{tmpl.exercises.length === 1 ? '' : 's'}
+                        {tmpl.exercises.length} exercise
+                        {tmpl.exercises.length === 1 ? '' : 's'}
                       </Text>
-                      <Text style={styles.templateName} numberOfLines={2}>{tmpl.name}</Text>
+                      <Text style={styles.templateName} numberOfLines={2}>
+                        {tmpl.name}
+                      </Text>
                     </View>
                   </LinearGradient>
                 </TouchableOpacity>
@@ -600,6 +755,39 @@ const ToolRow: React.FC<{
     <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.6} />
   </TouchableOpacity>
 );
+
+const CaptureTemplateCollage: React.FC<{ template: CaptureTemplate }> = ({
+  template,
+}) => {
+  const imageSources = getTemplateCollageSources(
+    template.exercises.slice(0, 4),
+  );
+
+  return (
+    <View style={styles.templateCollageGrid}>
+      <View style={styles.templateCollageGridRow}>
+        {imageSources.slice(0, 2).map((source, index) => (
+          <Image
+            key={`${template.id}-capture-collage-top-${index}`}
+            source={source}
+            style={styles.templateCollageGridImage}
+            resizeMode="cover"
+          />
+        ))}
+      </View>
+      <View style={styles.templateCollageGridRow}>
+        {imageSources.slice(2, 4).map((source, index) => (
+          <Image
+            key={`${template.id}-capture-collage-bottom-${index}`}
+            source={source}
+            style={styles.templateCollageGridImage}
+            resizeMode="cover"
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
 
 // ── Styles ─────────────────────────────────────
 
@@ -767,10 +955,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
   },
   pauseBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.06)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pauseBtnActive: {
     borderColor: 'rgba(122, 85, 255, 0.32)',
@@ -924,7 +1116,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 0,
     paddingTop: 0,
-    paddingBottom: 20,
+    paddingBottom: 0,
     gap: 6,
     overflow: 'hidden',
   },
@@ -937,8 +1129,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
-  templateThumbImage: {
+  templateCollageGrid: {
     width: '100%',
+    height: '100%',
+    gap: 2,
+  },
+  templateCollageGridRow: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 2,
+  },
+  templateCollageGridImage: {
+    flex: 1,
     height: '100%',
   },
   templateThumbShade: {

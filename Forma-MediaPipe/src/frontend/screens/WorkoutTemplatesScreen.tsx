@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Animated,
   Image,
@@ -34,7 +40,7 @@ type WorkoutTemplatesNavigationProp = NativeStackNavigationProp<
   'WorkoutTemplates'
 >;
 
-type TemplateTab = 'discover' | 'favourites';
+type TemplateTab = 'discover' | 'myTemplates' | 'favourites';
 
 interface TemplateExercise {
   name: string;
@@ -76,57 +82,131 @@ const EXERCISE_IMAGES: Record<string, ImageSourcePropType> = {
 const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
 const FAVOURITE_TEMPLATES_STORAGE_KEY = 'forma:favourite-template-ids';
 
-const getExerciseImage = (name: string): ImageSourcePropType => (
-  EXERCISE_IMAGES[name] ?? DEFAULT_EXERCISE_IMAGE
-);
+const getExerciseImage = (name: string): ImageSourcePropType =>
+  EXERCISE_IMAGES[name] ?? DEFAULT_EXERCISE_IMAGE;
 
 const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   {
     id: 'lower-body-strength',
     name: 'Lower Body Strength',
-    description: 'Build lower body strength and muscle with compound lifts and unilateral work.',
+    description:
+      'Build lower body strength and muscle with compound lifts and unilateral work.',
     focusTags: ['Strength', 'Lower Body', 'Hypertrophy'],
     estimatedDuration: '~45 min',
     lastUsed: '15 sets · 1,250 kg',
     volumeLabel: 'Last used',
     templateImage: require('../assets/generated/templates/lower-body-strength.png'),
     exercises: [
-      { name: 'Back Squat', category: 'Weightlifting', targetSets: 4, reps: '6-8', rest: '2 min' },
-      { name: 'Romanian Deadlift', category: 'Weightlifting', targetSets: 3, reps: '8-10', rest: '2 min' },
-      { name: 'Walking Lunge', category: 'Weightlifting', targetSets: 3, reps: '10/leg', rest: '90 sec' },
-      { name: 'Leg Press', category: 'Weightlifting', targetSets: 3, reps: '10-12', rest: '2 min' },
+      {
+        name: 'Back Squat',
+        category: 'Weightlifting',
+        targetSets: 4,
+        reps: '6-8',
+        rest: '2 min',
+      },
+      {
+        name: 'Romanian Deadlift',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '8-10',
+        rest: '2 min',
+      },
+      {
+        name: 'Walking Lunge',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10/leg',
+        rest: '90 sec',
+      },
+      {
+        name: 'Leg Press',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '2 min',
+      },
     ],
   },
   {
     id: 'push-day',
     name: 'Push Day',
-    description: 'Chest, shoulders, and triceps with a balanced pressing emphasis.',
+    description:
+      'Chest, shoulders, and triceps with a balanced pressing emphasis.',
     focusTags: ['Push', 'Upper Body', 'Strength'],
     estimatedDuration: '~40 min',
     lastUsed: 'May 12, 2025',
     volumeLabel: 'Last used',
     templateImage: require('../assets/generated/templates/push-day.png'),
     exercises: [
-      { name: 'Push-Up', category: 'Calisthenics', targetSets: 4, reps: '8-12', rest: '90 sec' },
-      { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting', targetSets: 3, reps: '10-12', rest: '60 sec' },
-      { name: 'Cable Pushdowns', category: 'Weightlifting', targetSets: 3, reps: '10-12', rest: '60 sec' },
-      { name: 'Machine Ab Crunches', category: 'Weightlifting', targetSets: 3, reps: '12-15', rest: '60 sec' },
+      {
+        name: 'Push-Up',
+        category: 'Calisthenics',
+        targetSets: 4,
+        reps: '8-12',
+        rest: '90 sec',
+      },
+      {
+        name: 'Standing Dumbbell Lateral Raises',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Cable Pushdowns',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Machine Ab Crunches',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '12-15',
+        rest: '60 sec',
+      },
     ],
   },
   {
     id: 'pull-day',
     name: 'Pull Day',
-    description: 'Back and biceps with enough volume for posture and arm strength.',
+    description:
+      'Back and biceps with enough volume for posture and arm strength.',
     focusTags: ['Pull', 'Back', 'Biceps'],
     estimatedDuration: '~42 min',
     lastUsed: 'May 10, 2025',
     volumeLabel: 'Last used',
     templateImage: require('../assets/generated/templates/pull-day.png'),
     exercises: [
-      { name: 'Cable Lat Pulldowns', category: 'Weightlifting', targetSets: 4, reps: '8-10', rest: '90 sec' },
-      { name: 'Cable Row', category: 'Weightlifting', targetSets: 3, reps: '8-10', rest: '90 sec' },
-      { name: 'Barbell Curl', category: 'Weightlifting', targetSets: 3, reps: '10-12', rest: '60 sec' },
-      { name: 'Machine Ab Crunches', category: 'Weightlifting', targetSets: 3, reps: '12-15', rest: '60 sec' },
+      {
+        name: 'Cable Lat Pulldowns',
+        category: 'Weightlifting',
+        targetSets: 4,
+        reps: '8-10',
+        rest: '90 sec',
+      },
+      {
+        name: 'Cable Row',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '8-10',
+        rest: '90 sec',
+      },
+      {
+        name: 'Barbell Curl',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Machine Ab Crunches',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '12-15',
+        rest: '60 sec',
+      },
     ],
   },
   {
@@ -139,11 +219,41 @@ const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     volumeLabel: 'Last used',
     templateImage: require('../assets/generated/templates/full-body.png'),
     exercises: [
-      { name: 'Back Squat', category: 'Weightlifting', targetSets: 3, reps: '6-8', rest: '2 min' },
-      { name: 'Push-Up', category: 'Calisthenics', targetSets: 3, reps: '8-12', rest: '90 sec' },
-      { name: 'Cable Row', category: 'Weightlifting', targetSets: 3, reps: '8-10', rest: '90 sec' },
-      { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting', targetSets: 3, reps: '10-12', rest: '60 sec' },
-      { name: 'Barbell Curl', category: 'Weightlifting', targetSets: 2, reps: '10-12', rest: '60 sec' },
+      {
+        name: 'Back Squat',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '6-8',
+        rest: '2 min',
+      },
+      {
+        name: 'Push-Up',
+        category: 'Calisthenics',
+        targetSets: 3,
+        reps: '8-12',
+        rest: '90 sec',
+      },
+      {
+        name: 'Cable Row',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '8-10',
+        rest: '90 sec',
+      },
+      {
+        name: 'Standing Dumbbell Lateral Raises',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Barbell Curl',
+        category: 'Weightlifting',
+        targetSets: 2,
+        reps: '10-12',
+        rest: '60 sec',
+      },
     ],
   },
 ];
@@ -151,17 +261,35 @@ const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
 const templateToRouteParams = (template: WorkoutTemplate) => ({
   templateName: template.name,
   description: template.description,
-  exercises: template.exercises.map(ex => ({
+  exercises: template.exercises.map((ex) => ({
     name: ex.name,
     category: ex.category,
     targetSets: ex.targetSets,
   })),
 });
 
-const estimateDuration = (exerciseCount: number): string => `~${Math.max(30, exerciseCount * 10)} min`;
+const estimateDuration = (exerciseCount: number): string =>
+  `~${Math.max(30, exerciseCount * 10)} min`;
+
+const getCollageSources = (
+  exercises: TemplateExercise[],
+): ImageSourcePropType[] => {
+  const baseSources =
+    exercises.length > 0
+      ? exercises.map((exercise) => getExerciseImage(exercise.name))
+      : [DEFAULT_EXERCISE_IMAGE];
+
+  return Array.from(
+    { length: 4 },
+    (_, index) => baseSources[index % baseSources.length],
+  );
+};
 
 const mapCustomTemplate = (template: CustomTemplate): WorkoutTemplate => {
-  const totalSets = template.exercises.reduce((sum, ex) => sum + ex.targetSets, 0);
+  const totalSets = template.exercises.reduce(
+    (sum, ex) => sum + ex.targetSets,
+    0,
+  );
   const firstExerciseName = template.exercises[0]?.name ?? '';
 
   return {
@@ -173,7 +301,7 @@ const mapCustomTemplate = (template: CustomTemplate): WorkoutTemplate => {
     lastUsed: `${totalSets} sets`,
     volumeLabel: 'Planned',
     templateImage: getExerciseImage(firstExerciseName),
-    exercises: template.exercises.map(ex => ({
+    exercises: template.exercises.map((ex) => ({
       name: ex.name,
       category: ex.category,
       targetSets: ex.targetSets,
@@ -190,34 +318,20 @@ const TemplateCard: React.FC<{
   onFavouritePress: (template: WorkoutTemplate) => void;
   onMorePress?: (template: WorkoutTemplate) => void;
 }> = ({ template, isFavourite, onPress, onFavouritePress, onMorePress }) => {
-  const previewImages = template.exercises.slice(0, 4);
-
   return (
-    <TouchableOpacity style={styles.card} onPress={() => onPress(template)} activeOpacity={0.86}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => onPress(template)}
+      activeOpacity={0.86}
+    >
       <View style={styles.cardMainRow}>
-        {template.templateImage ? (
-          <View style={styles.templateImageRail}>
-            <Image source={template.templateImage} style={styles.templateImage} resizeMode="contain" />
-          </View>
-        ) : (
-          <View style={styles.imageRail}>
-            <Image source={getExerciseImage(template.exercises[0]?.name)} style={styles.heroImage} resizeMode="cover" />
-            <View style={styles.thumbRow}>
-              {previewImages.slice(1, 4).map((exercise, index) => (
-                <Image
-                  key={`${template.id}-${exercise.name}-${index}`}
-                  source={getExerciseImage(exercise.name)}
-                  style={styles.thumbImage}
-                  resizeMode="cover"
-                />
-              ))}
-            </View>
-          </View>
-        )}
+        <TemplateExerciseCollage template={template} />
 
         <View style={styles.cardCopy}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{template.name}</Text>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {template.name}
+            </Text>
             <TouchableOpacity
               style={styles.iconButton}
               onPress={() => onFavouritePress(template)}
@@ -237,30 +351,22 @@ const TemplateCard: React.FC<{
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MoreHorizontal size={17} color={COLORS.textSecondary} strokeWidth={2} />
+              <MoreHorizontal
+                size={17}
+                color={COLORS.textSecondary}
+                strokeWidth={2}
+              />
             </TouchableOpacity>
           </View>
 
           <Text style={styles.cardMeta} numberOfLines={1}>
-            {template.exercises.length} exercises  ·  {template.estimatedDuration}
+            {template.exercises.length} exercises · {template.estimatedDuration}
           </Text>
           <Text style={styles.cardSubmeta} numberOfLines={1}>
-            {template.volumeLabel}  ·  {template.lastUsed}
+            {template.volumeLabel} · {template.lastUsed}
           </Text>
 
-          <View style={[styles.cardFooterRow, template.templateImage ? styles.cardFooterRowImageOnly : null]}>
-            {!template.templateImage && (
-              <View style={styles.miniThumbs}>
-                {previewImages.slice(0, 3).map((exercise, index) => (
-                  <Image
-                    key={`${template.id}-mini-${exercise.name}-${index}`}
-                    source={getExerciseImage(exercise.name)}
-                    style={styles.miniThumb}
-                    resizeMode="cover"
-                  />
-                ))}
-              </View>
-            )}
+          <View style={styles.cardFooterRow}>
             <LinearGradient
               colors={[COLORS.primary, COLORS.primaryDark]}
               start={{ x: 0, y: 0 }}
@@ -276,13 +382,38 @@ const TemplateCard: React.FC<{
   );
 };
 
+const TemplateExerciseCollage: React.FC<{ template: WorkoutTemplate }> = ({
+  template,
+}) => {
+  const imageSources = getCollageSources(template.exercises.slice(0, 4));
+
+  return (
+    <View style={styles.collageRail}>
+      {imageSources.map((source, index) => (
+        <Image
+          key={`${template.id}-collage-grid-${index}`}
+          source={source}
+          style={styles.collageGridImage}
+          resizeMode="cover"
+        />
+      ))}
+    </View>
+  );
+};
+
 export const WorkoutTemplatesScreen: React.FC = () => {
   const navigation = useNavigation<WorkoutTemplatesNavigationProp>();
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
-  const { templates: customTemplates, deleteTemplate } = useCustomTemplates();
+  const {
+    templates: customTemplates,
+    isLoading: customTemplatesLoading,
+    deleteTemplate,
+  } = useCustomTemplates();
   const [activeTab, setActiveTab] = useState<TemplateTab>('discover');
-  const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => new Set());
+  const [favouriteIds, setFavouriteIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -291,24 +422,56 @@ export const WorkoutTemplatesScreen: React.FC = () => {
     [customTemplates],
   );
 
-  const discoverTemplates = useMemo(
-    () => [...WORKOUT_TEMPLATES, ...customTemplateCards],
-    [customTemplateCards],
-  );
+  const discoverTemplates = WORKOUT_TEMPLATES;
 
   const favouriteTemplates = useMemo(
-    () => discoverTemplates.filter(template => favouriteIds.has(template.id)),
-    [discoverTemplates, favouriteIds],
+    () =>
+      [...discoverTemplates, ...customTemplateCards].filter((template) =>
+        favouriteIds.has(template.id),
+      ),
+    [customTemplateCards, favouriteIds],
   );
 
-  const visibleTemplates = activeTab === 'favourites'
-    ? favouriteTemplates
-    : discoverTemplates;
+  const visibleTemplates = useMemo(() => {
+    switch (activeTab) {
+      case 'myTemplates':
+        return customTemplateCards;
+      case 'favourites':
+        return favouriteTemplates;
+      case 'discover':
+      default:
+        return discoverTemplates;
+    }
+  }, [activeTab, customTemplateCards, favouriteTemplates]);
+
+  const emptyCopy = useMemo(() => {
+    if (activeTab === 'myTemplates') {
+      return {
+        title: customTemplatesLoading ? 'Loading templates...' : 'No templates yet',
+        body: customTemplatesLoading
+          ? 'Your saved templates will appear here.'
+          : 'Create a template to add it here.',
+      };
+    }
+
+    return {
+      title: 'No favourites yet',
+      body: 'Tap the heart on a template to keep it here.',
+    };
+  }, [activeTab, customTemplatesLoading]);
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 420, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 420,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 420,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
@@ -316,11 +479,11 @@ export const WorkoutTemplatesScreen: React.FC = () => {
     let mounted = true;
 
     AsyncStorage.getItem(FAVOURITE_TEMPLATES_STORAGE_KEY)
-      .then(value => {
+      .then((value) => {
         if (!mounted || !value) return;
         const ids = JSON.parse(value);
         if (Array.isArray(ids)) {
-          setFavouriteIds(new Set(ids.filter(id => typeof id === 'string')));
+          setFavouriteIds(new Set(ids.filter((id) => typeof id === 'string')));
         }
       })
       .catch(() => {
@@ -332,9 +495,12 @@ export const WorkoutTemplatesScreen: React.FC = () => {
     };
   }, []);
 
-  const handleSelectTemplate = useCallback((template: WorkoutTemplate) => {
-    navigation.navigate('TemplatePreview', templateToRouteParams(template));
-  }, [navigation]);
+  const handleSelectTemplate = useCallback(
+    (template: WorkoutTemplate) => {
+      navigation.navigate('TemplatePreview', templateToRouteParams(template));
+    },
+    [navigation],
+  );
 
   const handleGoBack = useCallback(() => {
     navigation.navigate('RecordLanding');
@@ -345,7 +511,7 @@ export const WorkoutTemplatesScreen: React.FC = () => {
   }, [navigation]);
 
   const handleToggleFavourite = useCallback((template: WorkoutTemplate) => {
-    setFavouriteIds(prev => {
+    setFavouriteIds((prev) => {
       const next = new Set(prev);
       if (next.has(template.id)) {
         next.delete(template.id);
@@ -353,7 +519,10 @@ export const WorkoutTemplatesScreen: React.FC = () => {
         next.add(template.id);
       }
 
-      AsyncStorage.setItem(FAVOURITE_TEMPLATES_STORAGE_KEY, JSON.stringify(Array.from(next))).catch(() => {
+      AsyncStorage.setItem(
+        FAVOURITE_TEMPLATES_STORAGE_KEY,
+        JSON.stringify(Array.from(next)),
+      ).catch(() => {
         // UI can still update even if persistence fails.
       });
 
@@ -361,19 +530,38 @@ export const WorkoutTemplatesScreen: React.FC = () => {
     });
   }, []);
 
-  const handleMorePress = useCallback((template: WorkoutTemplate) => {
-    const custom = customTemplates.find(item => item.id === template.id);
-    if (!custom) return;
+  const handleMorePress = useCallback(
+    (template: WorkoutTemplate) => {
+      const custom = customTemplates.find((item) => item.id === template.id);
+      if (!custom) return;
 
-    showAlert(
-      'Delete Template?',
-      `Delete "${template.name}"? This can't be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteTemplate(template.id) },
-      ],
-    );
-  }, [customTemplates, deleteTemplate, showAlert]);
+      showAlert(
+        'Delete Template?',
+        `Delete "${template.name}"? This can't be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              deleteTemplate(template.id);
+              setFavouriteIds((prev) => {
+                if (!prev.has(template.id)) return prev;
+                const next = new Set(prev);
+                next.delete(template.id);
+                AsyncStorage.setItem(
+                  FAVOURITE_TEMPLATES_STORAGE_KEY,
+                  JSON.stringify(Array.from(next)),
+                ).catch(() => {});
+                return next;
+              });
+            },
+          },
+        ],
+      );
+    },
+    [customTemplates, deleteTemplate, showAlert],
+  );
 
   return (
     <LinearGradient
@@ -384,12 +572,24 @@ export const WorkoutTemplatesScreen: React.FC = () => {
     >
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerTitleRow}>
-          <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.72}>
-            <ChevronLeft size={24} color={COLORS.textSecondary} strokeWidth={1.7} />
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleGoBack}
+            activeOpacity={0.72}
+          >
+            <ChevronLeft
+              size={24}
+              color={COLORS.textSecondary}
+              strokeWidth={1.7}
+            />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Templates</Text>
         </View>
-        <TouchableOpacity style={styles.newButton} onPress={handleCreateTemplate} activeOpacity={0.75}>
+        <TouchableOpacity
+          style={styles.newButton}
+          onPress={handleCreateTemplate}
+          activeOpacity={0.75}
+        >
           <Plus size={17} color={COLORS.accent} strokeWidth={2.3} />
           <Text style={styles.newButtonText}>New</Text>
         </TouchableOpacity>
@@ -397,20 +597,53 @@ export const WorkoutTemplatesScreen: React.FC = () => {
 
       <View style={styles.segmentedControl}>
         <TouchableOpacity
-          style={[styles.segment, activeTab === 'discover' && styles.segmentActive]}
+          style={[
+            styles.segment,
+            activeTab === 'discover' && styles.segmentActive,
+          ]}
           onPress={() => setActiveTab('discover')}
           activeOpacity={0.82}
         >
-          <Text style={[styles.segmentText, activeTab === 'discover' && styles.segmentTextActive]}>
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'discover' && styles.segmentTextActive,
+            ]}
+          >
             Discover
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.segment, activeTab === 'favourites' && styles.segmentActive]}
+          style={[
+            styles.segment,
+            activeTab === 'myTemplates' && styles.segmentActive,
+          ]}
+          onPress={() => setActiveTab('myTemplates')}
+          activeOpacity={0.82}
+        >
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'myTemplates' && styles.segmentTextActive,
+            ]}
+          >
+            My Templates
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.segment,
+            activeTab === 'favourites' && styles.segmentActive,
+          ]}
           onPress={() => setActiveTab('favourites')}
           activeOpacity={0.82}
         >
-          <Text style={[styles.segmentText, activeTab === 'favourites' && styles.segmentTextActive]}>
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'favourites' && styles.segmentTextActive,
+            ]}
+          >
             Favourites
           </Text>
         </TouchableOpacity>
@@ -418,12 +651,20 @@ export const WorkoutTemplatesScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 32 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={[styles.list, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <Animated.View
+          style={[
+            styles.list,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
           {visibleTemplates.length > 0 ? (
-            visibleTemplates.map(template => (
+            visibleTemplates.map((template) => (
               <TemplateCard
                 key={template.id}
                 template={template}
@@ -435,8 +676,8 @@ export const WorkoutTemplatesScreen: React.FC = () => {
             ))
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No favourites yet</Text>
-              <Text style={styles.emptyText}>Tap the heart on a template to keep it here.</Text>
+              <Text style={styles.emptyTitle}>{emptyCopy.title}</Text>
+              <Text style={styles.emptyText}>{emptyCopy.body}</Text>
             </View>
           )}
         </Animated.View>
@@ -547,36 +788,19 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 12,
   },
-  imageRail: {
-    width: 66,
-    gap: 9,
-  },
-  templateImageRail: {
+  collageRail: {
     width: 132,
     height: 132,
     borderRadius: 7,
     overflow: 'hidden',
     backgroundColor: COLORS.cardBackgroundLight,
-  },
-  templateImage: {
-    width: '100%',
-    height: '100%',
-  },
-  heroImage: {
-    width: 66,
-    height: 66,
-    borderRadius: 7,
-    backgroundColor: COLORS.cardBackgroundLight,
-  },
-  thumbRow: {
     flexDirection: 'row',
-    gap: 6,
+    flexWrap: 'wrap',
+    gap: 2,
   },
-  thumbImage: {
-    width: 18,
-    height: 42,
-    borderRadius: 5,
-    backgroundColor: COLORS.cardBackgroundLight,
+  collageGridImage: {
+    width: 65,
+    height: 65,
   },
   cardCopy: {
     flex: 1,
@@ -621,22 +845,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  cardFooterRowImageOnly: {
     justifyContent: 'flex-start',
-  },
-  miniThumbs: {
-    flexDirection: 'row',
-    gap: 7,
-    paddingBottom: 2,
-  },
-  miniThumb: {
-    width: 42,
-    height: 34,
-    borderRadius: 5,
-    backgroundColor: COLORS.cardBackgroundLight,
+    gap: 10,
   },
   chooseButton: {
     minWidth: 88,

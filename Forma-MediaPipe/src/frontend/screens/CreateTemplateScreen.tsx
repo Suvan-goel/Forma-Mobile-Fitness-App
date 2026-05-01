@@ -15,7 +15,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronLeft, ChevronUp, ChevronDown, Plus, Minus, X, Dumbbell, FileText } from 'lucide-react-native';
+import {
+  Check,
+  ChevronLeft,
+  ChevronUp,
+  ChevronDown,
+  Plus,
+  Minus,
+  X,
+  Dumbbell,
+  FileText,
+} from 'lucide-react-native';
 import {
   COLORS,
   SPACING,
@@ -33,7 +43,10 @@ import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import { useAlert } from '../contexts/AlertContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
 
-type CreateTemplateNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'CreateTemplate'>;
+type CreateTemplateNavigationProp = NativeStackNavigationProp<
+  RecordStackParamList,
+  'CreateTemplate'
+>;
 
 interface TemplateExerciseLocal {
   localId: string;
@@ -43,11 +56,15 @@ interface TemplateExerciseLocal {
 }
 
 const DELETE_AREA_WIDTH = 72;
+const MIN_TEMPLATE_EXERCISES = 2;
 
 // Module-level queue: ChooseExercise pushes here, CreateTemplate consumes on focus
 let _pendingTemplateExercises: { name: string; category: string }[] = [];
 
-export function addPendingTemplateExercise(exercise: { name: string; category: string }) {
+export function addPendingTemplateExercise(exercise: {
+  name: string;
+  category: string;
+}) {
   _pendingTemplateExercises.push(exercise);
 }
 
@@ -61,14 +78,26 @@ const ExerciseCard: React.FC<{
   onMoveDown: (index: number) => void;
   onAdjustSets: (localId: string, delta: number) => void;
   onDelete: (localId: string) => void;
-}> = ({ exercise, index, total, onMoveUp, onMoveDown, onAdjustSets, onDelete }) => {
+}> = ({
+  exercise,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
+  onAdjustSets,
+  onDelete,
+}) => {
   const { showAlert } = useAlert();
   const translateX = useRef(new Animated.Value(0)).current;
   const isSwipeOpen = useRef(false);
 
   const closeSwipe = useCallback(() => {
     isSwipeOpen.current = false;
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 4,
+    }).start();
   }, [translateX]);
 
   const panResponder = useRef(
@@ -81,7 +110,9 @@ const ExerciseCard: React.FC<{
       onPanResponderMove: (_, gs) => {
         const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
         const newValue = startOffset + gs.dx;
-        translateX.setValue(Math.min(0, Math.max(newValue, -DELETE_AREA_WIDTH)));
+        translateX.setValue(
+          Math.min(0, Math.max(newValue, -DELETE_AREA_WIDTH)),
+        );
       },
       onPanResponderRelease: (_, gs) => {
         const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
@@ -94,7 +125,7 @@ const ExerciseCard: React.FC<{
           bounciness: 4,
         }).start();
       },
-    })
+    }),
   ).current;
 
   const handleDelete = useCallback(() => {
@@ -104,7 +135,11 @@ const ExerciseCard: React.FC<{
       `Remove ${exercise.name} from this template?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => onDelete(exercise.localId) },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => onDelete(exercise.localId),
+        },
       ],
     );
   }, [closeSwipe, showAlert, exercise.name, exercise.localId, onDelete]);
@@ -116,13 +151,20 @@ const ExerciseCard: React.FC<{
     <View style={styles.swipeContainer}>
       {/* Delete area */}
       <View style={styles.deleteArea}>
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDelete}
+          activeOpacity={0.7}
+        >
           <X size={18} color="#EF4444" strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
       {/* Card */}
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
         <View style={styles.exerciseCardOuter}>
           <LinearGradient
             colors={[...CARD_GRADIENT_ELEVATED]}
@@ -137,29 +179,51 @@ const ExerciseCard: React.FC<{
                 </View>
 
                 <View style={styles.exerciseCardCopy}>
-                  <Text style={styles.exerciseCardName} numberOfLines={1}>{exercise.name}</Text>
-                  <Text style={styles.exerciseCardMeta} numberOfLines={1}>{exercise.category}</Text>
+                  <Text style={styles.exerciseCardName} numberOfLines={1}>
+                    {exercise.name}
+                  </Text>
+                  <Text style={styles.exerciseCardMeta} numberOfLines={1}>
+                    {exercise.category}
+                  </Text>
                 </View>
 
                 <View style={styles.exerciseCardRight}>
                   <View style={styles.arrowsColumn}>
                     <TouchableOpacity
-                      style={[styles.orderButton, isFirst && styles.orderButtonDisabled]}
+                      style={[
+                        styles.orderButton,
+                        isFirst && styles.orderButtonDisabled,
+                      ]}
                       onPress={() => onMoveUp(index)}
                       disabled={isFirst}
                       activeOpacity={0.7}
                       hitSlop={{ top: 6, bottom: 2, left: 8, right: 8 }}
                     >
-                      <ChevronUp size={15} color={isFirst ? COLORS.textTertiary : COLORS.textSecondary} strokeWidth={1.8} />
+                      <ChevronUp
+                        size={15}
+                        color={
+                          isFirst ? COLORS.textTertiary : COLORS.textSecondary
+                        }
+                        strokeWidth={1.8}
+                      />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.orderButton, isLast && styles.orderButtonDisabled]}
+                      style={[
+                        styles.orderButton,
+                        isLast && styles.orderButtonDisabled,
+                      ]}
                       onPress={() => onMoveDown(index)}
                       disabled={isLast}
                       activeOpacity={0.7}
                       hitSlop={{ top: 2, bottom: 6, left: 8, right: 8 }}
                     >
-                      <ChevronDown size={15} color={isLast ? COLORS.textTertiary : COLORS.textSecondary} strokeWidth={1.8} />
+                      <ChevronDown
+                        size={15}
+                        color={
+                          isLast ? COLORS.textTertiary : COLORS.textSecondary
+                        }
+                        strokeWidth={1.8}
+                      />
                     </TouchableOpacity>
                   </View>
 
@@ -170,10 +234,16 @@ const ExerciseCard: React.FC<{
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
                     >
-                      <Minus size={13} color={COLORS.textSecondary} strokeWidth={2.2} />
+                      <Minus
+                        size={13}
+                        color={COLORS.textSecondary}
+                        strokeWidth={2.2}
+                      />
                     </TouchableOpacity>
                     <View style={styles.setsValueWrap}>
-                      <Text style={styles.setsCount}>{exercise.targetSets}</Text>
+                      <Text style={styles.setsCount}>
+                        {exercise.targetSets}
+                      </Text>
                       <Text style={styles.setsLabel}>sets</Text>
                     </View>
                     <TouchableOpacity
@@ -182,7 +252,11 @@ const ExerciseCard: React.FC<{
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
                     >
-                      <Plus size={13} color={COLORS.textSecondary} strokeWidth={2.2} />
+                      <Plus
+                        size={13}
+                        color={COLORS.textSecondary}
+                        strokeWidth={2.2}
+                      />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -207,52 +281,69 @@ export const CreateTemplateScreen: React.FC = () => {
   const [description, setDescription] = useState('');
   const [exercises, setExercises] = useState<TemplateExerciseLocal[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const totalSets = exercises.reduce((sum, exercise) => sum + exercise.targetSets, 0);
+  const totalSets = exercises.reduce(
+    (sum, exercise) => sum + exercise.targetSets,
+    0,
+  );
   const estimatedMinutes = Math.max(0, exercises.length * 10);
-  const canSave = name.trim().length > 0 && exercises.length > 0 && !isSaving;
+  const canSave =
+    name.trim().length > 0 &&
+    exercises.length >= MIN_TEMPLATE_EXERCISES &&
+    !isSaving;
 
   // Consume pending exercises pushed by ChooseExercise on every focus
   useFocusEffect(
     useCallback(() => {
       if (_pendingTemplateExercises.length === 0) return;
-      const toAdd = _pendingTemplateExercises.map(ex => ({
+      const toAdd = _pendingTemplateExercises.map((ex) => ({
         localId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: ex.name,
         category: ex.category,
         targetSets: 3,
       }));
       _pendingTemplateExercises = [];
-      setExercises(prev => [...prev, ...toAdd]);
-    }, [])
+      setExercises((prev) => [...prev, ...toAdd]);
+    }, []),
   );
 
-
-  const moveExercise = useCallback((index: number, direction: 'up' | 'down') => {
-    const target = direction === 'up' ? index - 1 : index + 1;
-    setExercises(prev => {
-      if (target < 0 || target >= prev.length) return prev;
-      const arr = [...prev];
-      [arr[index], arr[target]] = [arr[target], arr[index]];
-      return arr;
-    });
-  }, []);
+  const moveExercise = useCallback(
+    (index: number, direction: 'up' | 'down') => {
+      const target = direction === 'up' ? index - 1 : index + 1;
+      setExercises((prev) => {
+        if (target < 0 || target >= prev.length) return prev;
+        const arr = [...prev];
+        [arr[index], arr[target]] = [arr[target], arr[index]];
+        return arr;
+      });
+    },
+    [],
+  );
 
   const adjustSets = useCallback((localId: string, delta: number) => {
-    setExercises(prev =>
-      prev.map(ex =>
+    setExercises((prev) =>
+      prev.map((ex) =>
         ex.localId === localId
-          ? { ...ex, targetSets: Math.max(1, Math.min(10, ex.targetSets + delta)) }
-          : ex
-      )
+          ? {
+              ...ex,
+              targetSets: Math.max(1, Math.min(10, ex.targetSets + delta)),
+            }
+          : ex,
+      ),
     );
   }, []);
 
   const deleteExercise = useCallback((localId: string) => {
-    setExercises(prev => prev.filter(ex => ex.localId !== localId));
+    setExercises((prev) => prev.filter((ex) => ex.localId !== localId));
   }, []);
 
-  const handleMoveUp = useCallback((index: number) => moveExercise(index, 'up'), [moveExercise]);
-  const handleMoveDown = useCallback((index: number) => moveExercise(index, 'down'), [moveExercise]);
+  const handleMoveUp = useCallback(
+    (index: number) => moveExercise(index, 'up'),
+    [moveExercise],
+  );
+  const handleMoveDown = useCallback(
+    (index: number) => moveExercise(index, 'down'),
+    [moveExercise],
+  );
 
   const handleAddExercise = useCallback(() => {
     navigation.navigate('ChooseExercise', { mode: 'template' });
@@ -264,8 +355,11 @@ export const CreateTemplateScreen: React.FC = () => {
       showAlert('Name Required', 'Please enter a template name.');
       return;
     }
-    if (exercises.length === 0) {
-      showAlert('No Exercises', 'Add at least one exercise to the template.');
+    if (exercises.length < MIN_TEMPLATE_EXERCISES) {
+      showAlert(
+        'More Exercises Required',
+        'Add at least 2 exercises to create a template.',
+      );
       return;
     }
 
@@ -301,8 +395,16 @@ export const CreateTemplateScreen: React.FC = () => {
       >
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <View style={styles.headerTitleRow}>
-            <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.72}>
-              <ChevronLeft size={24} color={COLORS.textSecondary} strokeWidth={1.7} />
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handleGoBack}
+              activeOpacity={0.72}
+            >
+              <ChevronLeft
+                size={24}
+                color={COLORS.textSecondary}
+                strokeWidth={1.7}
+              />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Create Template</Text>
           </View>
@@ -312,8 +414,17 @@ export const CreateTemplateScreen: React.FC = () => {
             activeOpacity={0.75}
             disabled={!canSave}
           >
-            <Check size={16} color={canSave ? COLORS.text : COLORS.textTertiary} strokeWidth={2.3} />
-            <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
+            <Check
+              size={16}
+              color={canSave ? COLORS.text : COLORS.textTertiary}
+              strokeWidth={2.3}
+            />
+            <Text
+              style={[
+                styles.saveButtonText,
+                !canSave && styles.saveButtonTextDisabled,
+              ]}
+            >
               {isSaving ? 'Saving' : 'Save'}
             </Text>
           </TouchableOpacity>
@@ -321,7 +432,10 @@ export const CreateTemplateScreen: React.FC = () => {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 32 },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -384,7 +498,9 @@ export const CreateTemplateScreen: React.FC = () => {
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>{estimatedMinutes > 0 ? `~${estimatedMinutes}` : '—'}</Text>
+                <Text style={styles.summaryValue}>
+                  {estimatedMinutes > 0 ? `~${estimatedMinutes}` : '—'}
+                </Text>
                 <Text style={styles.summaryLabel}>Minutes</Text>
               </View>
             </View>
@@ -410,7 +526,9 @@ export const CreateTemplateScreen: React.FC = () => {
                   <Dumbbell size={22} color={COLORS.accent} strokeWidth={1.8} />
                 </View>
                 <Text style={styles.emptyStateTitle}>No exercises yet</Text>
-                <Text style={styles.emptyStateText}>Add exercises to start shaping this template.</Text>
+                <Text style={styles.emptyStateText}>
+                  Add at least 2 exercises to start shaping this template.
+                </Text>
               </View>
             </LinearGradient>
           ) : (
@@ -427,10 +545,19 @@ export const CreateTemplateScreen: React.FC = () => {
                   onDelete={deleteExercise}
                 />
               ))}
+              {exercises.length < MIN_TEMPLATE_EXERCISES && (
+                <Text style={styles.minimumHint}>
+                  Add 1 more exercise to save this template.
+                </Text>
+              )}
             </View>
           )}
 
-          <TouchableOpacity onPress={handleAddExercise} activeOpacity={0.85} style={styles.addExerciseTouchable}>
+          <TouchableOpacity
+            onPress={handleAddExercise}
+            activeOpacity={0.85}
+            style={styles.addExerciseTouchable}
+          >
             <LinearGradient
               colors={[COLORS.primary, COLORS.primaryDark]}
               start={{ x: 0, y: 0 }}
@@ -665,6 +792,13 @@ const styles = StyleSheet.create({
   },
   exerciseList: {
     gap: 8,
+  },
+  minimumHint: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    marginTop: 2,
   },
   swipeContainer: {
     height: 76,

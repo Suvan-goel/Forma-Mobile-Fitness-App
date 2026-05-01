@@ -75,7 +75,7 @@ Once rebuilt, test that TTS works:
 ### Still no audio after rebuild
 
 **Check**:
-- Your `.env` file has `EXPO_PUBLIC_ELEVENLABS_API_KEY` set
+- The Supabase Edge Function has the server-side `ELEVENLABS_API_KEY` secret set
 - Internet connection is working
 - TTS toggle (speaker icon) is not muted in the camera screen
 - Check console for any API errors

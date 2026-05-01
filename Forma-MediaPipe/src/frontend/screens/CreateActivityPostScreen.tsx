@@ -111,7 +111,13 @@ export const CreateActivityPostScreen: React.FC = () => {
         opts.push({ type: 'stat', label: 'Total Reps', value: `${s.totalReps.toLocaleString()}`, icon: 'reps' });
       }
       if (s.workoutCount > 0) {
-        opts.push({ type: 'stat', label: 'Avg Form Score', value: `${Math.round(s.avgRepsPerWorkout)}`, icon: 'score' });
+        const formValues = analytics.formData.values;
+        const avgFormScore = formValues.length > 0
+          ? Math.round(formValues.reduce((total, value) => total + value, 0) / formValues.length)
+          : 0;
+        if (avgFormScore > 0) {
+          opts.push({ type: 'stat', label: 'Avg Form Score', value: `${avgFormScore}/100`, icon: 'score' });
+        }
       }
       if (s.personalBest) {
         opts.push({ type: 'stat', label: `PR — ${s.personalBest.exercise}`, value: `${s.personalBest.weight} lbs`, icon: 'score' });

@@ -349,30 +349,6 @@ export const socialService = {
 
     if (error) return { data: undefined, success: false, error: error.message };
 
-    // Auto-follow both directions when accepting a friend request
-    // Uses SECURITY DEFINER RPC to bypass RLS (can't insert rows for other user)
-    if (accept) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: friendship } = await supabase
-          .from('friendships')
-          .select('requester_id, addressee_id')
-          .eq('id', friendshipId)
-          .single();
-
-        if (friendship) {
-          const otherId = friendship.requester_id === user.id
-            ? friendship.addressee_id
-            : friendship.requester_id;
-
-          await supabase.rpc('auto_follow_both', {
-            user_a: user.id,
-            user_b: otherId,
-          });
-        }
-      }
-    }
-
     return { data: undefined, success: true };
   },
 
@@ -385,32 +361,12 @@ export const socialService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { data: undefined, success: false, error: 'Not authenticated' };
 
-    // Query friendship to get the other user's ID before deleting
-    const { data: friendship } = await supabase
-      .from('friendships')
-      .select('requester_id, addressee_id')
-      .eq('id', friendshipId)
-      .single();
-
     const { error } = await supabase
       .from('friendships')
       .delete()
       .eq('id', friendshipId);
 
     if (error) return { data: undefined, success: false, error: error.message };
-
-    // Auto-unfollow both directions
-    // Uses SECURITY DEFINER RPC to bypass RLS (can't delete rows for other user)
-    if (friendship) {
-      const otherId = friendship.requester_id === user.id
-        ? friendship.addressee_id
-        : friendship.requester_id;
-
-      await supabase.rpc('auto_unfollow_both', {
-        user_a: user.id,
-        user_b: otherId,
-      });
-    }
 
     return { data: undefined, success: true };
   },

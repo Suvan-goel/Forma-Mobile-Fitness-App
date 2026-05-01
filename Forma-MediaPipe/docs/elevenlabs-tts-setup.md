@@ -16,14 +16,13 @@ This guide walks you through integrating ElevenLabs TTS into your Forma app.
 
 ### 1. Configure API Key
 
-Add your ElevenLabs API key to `.env`:
+Set your ElevenLabs API key as a Supabase Edge Function secret:
 
 ```bash
-EXPO_PUBLIC_ELEVENLABS_API_KEY=sk_your_api_key_here
-
-# Optional: Choose a specific voice (default is Rachel)
-# EXPO_PUBLIC_ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
+supabase secrets set ELEVENLABS_API_KEY=sk_your_api_key_here
 ```
+
+Do not put the ElevenLabs API key in an `EXPO_PUBLIC_*` variable; those values are bundled into the mobile app.
 
 Browse available voices at: https://elevenlabs.io/voice-library
 
@@ -91,10 +90,11 @@ This ensures:
 ### TTS Flow
 
 1. Rep detected → Feedback generated
-2. Call ElevenLabs API with feedback text
-3. Download MP3 audio to temporary file
-4. Play audio using `expo-av`
-5. Clean up old audio files
+2. Send feedback text to the Supabase Edge Function
+3. Edge Function calls ElevenLabs with the server-side API key
+4. Download MP3 audio to temporary file
+5. Play audio using `expo-av`
+6. Clean up old audio files
 
 ### Caching
 
@@ -112,9 +112,9 @@ This ensures:
 
 ### "ElevenLabs API error: 401"
 
-**Cause**: Invalid or missing API key
+**Cause**: Invalid or missing Supabase Edge Function secret
 
-**Fix**: Check your `.env` file has the correct `EXPO_PUBLIC_ELEVENLABS_API_KEY`
+**Fix**: Check that `ELEVENLABS_API_KEY` is configured in Supabase secrets and redeploy the function.
 
 ### No audio plays
 
