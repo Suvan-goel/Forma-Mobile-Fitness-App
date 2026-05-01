@@ -11,6 +11,7 @@ import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import java.nio.ByteBuffer
 
 class PoseLandmarkerHelper(
   private val context: Context,
@@ -25,12 +26,23 @@ class PoseLandmarkerHelper(
   }
 
   private var poseLandmarker: PoseLandmarker? = null
+  private var hasLoggedMissingLandmarker = false
 
   init {
     setupPoseLandmarker()
   }
 
   private fun setupPoseLandmarker() {
+    Log.d(TAG, "Setting up PoseLandmarker with model asset: $modelAsset")
+    try {
+      context.assets.open(modelAsset).use { stream ->
+        Log.d(TAG, "Pose model asset found: $modelAsset (${stream.available()} bytes)")
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Pose model asset is missing or unreadable: $modelAsset", e)
+      return
+    }
+
     try {
       val baseOptions = BaseOptions.builder()
         .setDelegate(Delegate.GPU)
@@ -49,7 +61,7 @@ class PoseLandmarkerHelper(
         .build()
 
       poseLandmarker = PoseLandmarker.createFromOptions(context, options)
-      Log.d(TAG, "PoseLandmarker initialized with GPU delegate")
+      Log.d(TAG, "PoseLandmarker initialized with GPU delegate for $modelAsset")
     } catch (e: Exception) {
       Log.w(TAG, "GPU delegate failed, falling back to CPU: ${e.message}")
       try {
@@ -70,9 +82,9 @@ class PoseLandmarkerHelper(
           .build()
 
         poseLandmarker = PoseLandmarker.createFromOptions(context, options)
-        Log.d(TAG, "PoseLandmarker initialized with CPU delegate (fallback)")
+        Log.d(TAG, "PoseLandmarker initialized with CPU delegate (fallback) for $modelAsset")
       } catch (e2: Exception) {
-        Log.e(TAG, "Failed to setup PoseLandmarker: ${e2.message}")
+        Log.e(TAG, "Failed to setup PoseLandmarker with $modelAsset: ${e2.message}", e2)
       }
     }
   }
@@ -83,8 +95,14 @@ class PoseLandmarkerHelper(
     val imageWidth = imageProxy.width
     val imageHeight = imageProxy.height
 
-    val bitmapBuffer = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888)
-    imageProxy.use { bitmapBuffer.copyPixelsFromBuffer(imageProxy.planes[0].buffer) }
+    val bitmapBuffer = try {
+      rgbaImageProxyToBitmap(imageProxy)
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to convert camera frame for pose detection", e)
+      return
+    } finally {
+      imageProxy.close()
+    }
 
     // Apply rotation and mirror for front camera
     val matrix = Matrix().apply {
@@ -104,11 +122,70 @@ class PoseLandmarkerHelper(
     detectAsync(mpImage, frameTime)
   }
 
+  private fun rgbaImageProxyToBitmap(imageProxy: ImageProxy): Bitmap {
+    val imageWidth = imageProxy.width
+    val imageHeight = imageProxy.height
+    val plane = imageProxy.planes.firstOrNull()
+      ?: throw IllegalStateException("Camera frame has no image planes")
+    val buffer = plane.buffer.duplicate()
+    buffer.rewind()
+
+    val bitmapBuffer = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888)
+    val bytesPerPixel = 4
+    val expectedRowBytes = imageWidth * bytesPerPixel
+    val rowStride = plane.rowStride
+    val pixelStride = plane.pixelStride
+
+    if (pixelStride == bytesPerPixel && rowStride == expectedRowBytes) {
+      bitmapBuffer.copyPixelsFromBuffer(buffer)
+      return bitmapBuffer
+    }
+
+    if (pixelStride < bytesPerPixel) {
+      throw IllegalStateException("Unexpected RGBA pixel stride: $pixelStride")
+    }
+
+    val packedPixels = ByteArray(imageWidth * imageHeight * bytesPerPixel)
+    val rowBuffer = ByteArray(rowStride)
+    var outputOffset = 0
+
+    for (row in 0 until imageHeight) {
+      val rowStart = row * rowStride
+      if (rowStart >= buffer.limit()) break
+
+      buffer.position(rowStart)
+      val bytesToRead = minOf(rowStride, buffer.remaining())
+      buffer.get(rowBuffer, 0, bytesToRead)
+
+      for (col in 0 until imageWidth) {
+        val inputOffset = col * pixelStride
+        if (inputOffset + 3 >= bytesToRead) break
+
+        packedPixels[outputOffset] = rowBuffer[inputOffset]
+        packedPixels[outputOffset + 1] = rowBuffer[inputOffset + 1]
+        packedPixels[outputOffset + 2] = rowBuffer[inputOffset + 2]
+        packedPixels[outputOffset + 3] = rowBuffer[inputOffset + 3]
+        outputOffset += bytesPerPixel
+      }
+    }
+
+    bitmapBuffer.copyPixelsFromBuffer(ByteBuffer.wrap(packedPixels))
+    return bitmapBuffer
+  }
+
   private fun detectAsync(mpImage: com.google.mediapipe.framework.image.MPImage, frameTime: Long) {
     try {
-      poseLandmarker?.detectAsync(mpImage, frameTime)
+      val landmarker = poseLandmarker
+      if (landmarker == null) {
+        if (!hasLoggedMissingLandmarker) {
+          Log.w(TAG, "Skipping pose detection because PoseLandmarker is not initialized")
+          hasLoggedMissingLandmarker = true
+        }
+        return
+      }
+      landmarker.detectAsync(mpImage, frameTime)
     } catch (e: Exception) {
-      Log.e(TAG, "Detection error: ${e.message}")
+      Log.e(TAG, "Detection error: ${e.message}", e)
     }
   }
 
