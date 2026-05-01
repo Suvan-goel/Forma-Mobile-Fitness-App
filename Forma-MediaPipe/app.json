@@ -92,7 +92,8 @@
         "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
       ],
       "./plugins/withArmOnly",
-      "./plugins/withUncompressedPoseTasks"
+      "./plugins/withUncompressedPoseTasks",
+      "./plugins/withPoseDetectionProguardRules"
     ]
   }
 }
