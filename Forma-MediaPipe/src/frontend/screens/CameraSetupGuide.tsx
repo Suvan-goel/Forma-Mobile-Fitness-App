@@ -391,7 +391,7 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
           {
             opacity: fadeIn,
             paddingTop: insets.top + 12,
-            paddingBottom: insets.bottom + 18,
+            paddingBottom: insets.bottom + 34,
             paddingHorizontal: horizontalPadding,
           },
         ]}
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
   /* CTA */
   ctaWrapper: {
     marginTop: 'auto',
-    marginBottom: 12,
+    marginBottom: 16,
     borderRadius: CARD_RADIUS,
     overflow: 'visible',
   },

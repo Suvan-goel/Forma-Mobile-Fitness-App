@@ -26,10 +26,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  Trash2,
   Pause,
   Play,
-  Flag,
   ChevronRight,
   ArrowRight,
   BookOpen,
@@ -67,6 +65,8 @@ import { useAlert } from '../contexts/AlertContext';
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
 const CAPTURE_HORIZONTAL_PADDING = 14;
 const TEMPLATE_CARD_GAP = 9;
+const WORKOUT_CARD_HEIGHT = 176;
+const ACTIVE_SECONDARY_ACTIONS_WIDTH = 152;
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -226,7 +226,7 @@ export const RecordLandingScreen: React.FC = () => {
   const templateCardWidth =
     (windowWidth - CAPTURE_HORIZONTAL_PADDING * 2 - TEMPLATE_CARD_GAP * 2) / 3;
   const templateThumbHeight = Math.min(templateCardWidth, compactHeight ? 78 : 104);
-  const templateCardHeight = templateThumbHeight + (compactHeight ? 52 : 60);
+  const templateCardHeight = templateThumbHeight + (compactHeight ? 58 : 66);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -398,12 +398,36 @@ export const RecordLandingScreen: React.FC = () => {
                   end={CARD_GRADIENT_END}
                   style={styles.activeGradient}
                 >
-                  <View style={styles.activeEdge}>
-                    <View style={styles.activeBody}>
-                      <View style={styles.activeBodyText}>
-                        <Text style={styles.activeWorkoutName}>
-                          CURRENT WORKOUT
+                  <View style={[styles.activeEdge, styles.activeWorkoutEdge]}>
+                    <View style={styles.activeDashboardTop}>
+                      <View style={styles.activeTitleBlock}>
+                        <Text style={styles.activeEyebrow}>IN PROGRESS</Text>
+                        <Text style={styles.activeWorkoutTitle}>
+                          Current Workout
                         </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.activePauseControl,
+                          workoutPaused && styles.activePauseControlActive,
+                        ]}
+                        onPress={handlePauseWorkout}
+                        activeOpacity={0.7}
+                      >
+                        {workoutPaused ? (
+                          <Play size={16} color={COLORS.text} strokeWidth={2} />
+                        ) : (
+                          <Pause
+                            size={16}
+                            color={COLORS.textSecondary}
+                            strokeWidth={2}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.activeDashboardMiddle}>
+                      <View style={styles.activeTimerPanel}>
                         <View style={styles.timerDisplay}>
                           {getTimerParts(workoutElapsedSeconds).map(
                             (part, i) => (
@@ -421,106 +445,74 @@ export const RecordLandingScreen: React.FC = () => {
                             ),
                           )}
                         </View>
-                        <View style={styles.activeMetaRow}>
-                          <View style={styles.metaIconRow}>
-                            <Dumbbell
-                              size={12}
-                              color={COLORS.textTertiary}
-                              strokeWidth={1.6}
-                            />
-                            <Text style={styles.metaText}>
-                              {sets.length} sets
-                            </Text>
-                          </View>
-                          <View style={styles.metaIconRow}>
-                            <Clock
-                              size={12}
-                              color={COLORS.textTertiary}
-                              strokeWidth={1.6}
-                            />
-                            <Text style={styles.metaText}>
-                              {sets.reduce((sum, set) => sum + set.reps, 0)}{' '}
-                              reps
-                            </Text>
-                          </View>
+                      </View>
+                      <View style={styles.activeStatsPanel}>
+                        <View style={styles.activeStatItem}>
+                          <MonoText bold style={styles.activeStatValue}>
+                            {sets.length}
+                          </MonoText>
+                          <Text style={styles.activeStatLabel}>sets</Text>
+                        </View>
+                        <View style={styles.activeStatDivider} />
+                        <View style={styles.activeStatItem}>
+                          <MonoText bold style={styles.activeStatValue}>
+                            {sets.reduce((sum, set) => sum + set.reps, 0)}
+                          </MonoText>
+                          <Text style={styles.activeStatLabel}>reps</Text>
                         </View>
                       </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.pauseBtn,
-                          workoutPaused && styles.pauseBtnActive,
-                        ]}
-                        onPress={handlePauseWorkout}
-                        activeOpacity={0.7}
-                      >
-                        {workoutPaused ? (
-                          <Play size={16} color={COLORS.text} strokeWidth={2} />
-                        ) : (
-                          <Pause
-                            size={16}
-                            color={COLORS.textSecondary}
-                            strokeWidth={2}
-                          />
-                        )}
-                      </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity
-                      onPress={handleResumeWorkout}
-                      activeOpacity={0.85}
-                      style={styles.startBtnOuter}
-                    >
-                      <LinearGradient
-                        colors={['#7A55FF', '#633FE5']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.startBtn}
-                      >
-                        <Text style={styles.startBtnText}>Open workout</Text>
-                        <ArrowRight
-                          size={14}
-                          color="#FFFFFF"
-                          strokeWidth={2.5}
-                        />
-                      </LinearGradient>
-                    </TouchableOpacity>
-
-                    <View style={styles.activeFooterRow}>
+                    <View style={styles.activeActionStrip}>
                       <TouchableOpacity
-                        style={styles.footerBtn}
-                        onPress={handleDiscardWorkout}
-                        activeOpacity={0.7}
+                        onPress={handleResumeWorkout}
+                        activeOpacity={0.85}
+                        style={styles.activePrimaryAction}
                       >
-                        <Trash2
-                          size={13}
-                          color={COLORS.red}
-                          strokeWidth={1.7}
-                        />
-                        <Text
-                          style={[styles.footerBtnText, { color: COLORS.red }]}
+                        <LinearGradient
+                          colors={['#7A55FF', '#633FE5']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.activePrimaryGradient}
                         >
-                          Discard
-                        </Text>
+                          <Text style={styles.startBtnText}>Open</Text>
+                          <ArrowRight
+                            size={14}
+                            color="#FFFFFF"
+                            strokeWidth={2.5}
+                          />
+                        </LinearGradient>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.footerBtn}
-                        onPress={handleFinishWorkout}
-                        activeOpacity={0.7}
-                      >
-                        <Flag
-                          size={13}
-                          color={COLORS.green}
-                          strokeWidth={1.7}
-                        />
-                        <Text
-                          style={[
-                            styles.footerBtnText,
-                            { color: COLORS.green },
-                          ]}
+                      <View style={styles.activeSecondaryActions}>
+                        <TouchableOpacity
+                          style={styles.activeSecondaryButton}
+                          onPress={handleDiscardWorkout}
+                          activeOpacity={0.7}
                         >
-                          Finish
-                        </Text>
-                      </TouchableOpacity>
+                          <Text
+                            style={[
+                              styles.activeSecondaryText,
+                              { color: COLORS.red },
+                            ]}
+                          >
+                            Discard
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.activeSecondaryButton}
+                          onPress={handleFinishWorkout}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.activeSecondaryText,
+                              { color: COLORS.green },
+                            ]}
+                          >
+                            Finish
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 </LinearGradient>
@@ -554,7 +546,7 @@ export const RecordLandingScreen: React.FC = () => {
                               color={COLORS.textTertiary}
                               strokeWidth={1.6}
                             />
-                            <Text style={styles.metaText}>~30 min</Text>
+                            <Text style={styles.metaText}>Any length</Text>
                           </View>
                         </View>
 
@@ -741,7 +733,7 @@ const CaptureTemplateCollage: React.FC<{ template: CaptureTemplate }> = ({
             key={`${template.id}-capture-collage-top-${index}`}
             source={source}
             style={styles.templateCollageGridImage}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         ))}
       </View>
@@ -751,7 +743,7 @@ const CaptureTemplateCollage: React.FC<{ template: CaptureTemplate }> = ({
             key={`${template.id}-capture-collage-bottom-${index}`}
             source={source}
             style={styles.templateCollageGridImage}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         ))}
       </View>
@@ -837,11 +829,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   activeEdge: {
+    height: WORKOUT_CARD_HEIGHT,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 15,
+    paddingTop: 14,
+    paddingBottom: 14,
+  },
+  activeWorkoutEdge: {
+    justifyContent: 'space-between',
     paddingTop: 14,
     paddingBottom: 14,
   },
@@ -897,98 +895,143 @@ const styles = StyleSheet.create({
   },
 
   /* Active body */
-  activeBody: {
+  activeDashboardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 14,
-    marginBottom: 16,
+    justifyContent: 'space-between',
   },
-  activeBodyText: { flex: 1, gap: 7 },
-  activeWorkoutName: {
+  activeTitleBlock: {
+    gap: 2,
+  },
+  activeEyebrow: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+  },
+  activeWorkoutTitle: {
     fontFamily: FONTS.display.bold,
     fontSize: 18,
     color: COLORS.text,
-    letterSpacing: 0,
+    letterSpacing: -0.25,
   },
-  activeMetaRow: {
+  activeDashboardMiddle: {
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 1,
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  activeTimerPanel: {
+    flex: 1.35,
+    minHeight: 52,
+    paddingVertical: 4,
+    justifyContent: 'center',
+  },
+  activeStatsPanel: {
+    width: ACTIVE_SECONDARY_ACTIONS_WIDTH,
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  activeStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+  },
+  activeStatValue: {
+    fontSize: 16,
+    color: COLORS.text,
+    lineHeight: 19,
+  },
+  activeStatLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 9,
+    color: COLORS.textTertiary,
+  },
+  activeStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
 
   /* Timer (active) */
   timerDisplay: { flexDirection: 'row', alignItems: 'center' },
   timerDigit: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 29,
+    fontSize: 23,
     color: COLORS.text,
-    lineHeight: 33,
+    lineHeight: 26,
     letterSpacing: 1.1,
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
-    fontSize: 22,
+    fontSize: 17,
     color: 'rgba(122, 85, 255, 0.62)',
-    lineHeight: 33,
+    lineHeight: 26,
     marginHorizontal: 1,
   },
-  pauseBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  activePauseControl: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pauseBtnActive: {
+  activePauseControlActive: {
     borderColor: 'rgba(122, 85, 255, 0.32)',
     backgroundColor: 'rgba(122, 85, 255, 0.14)',
   },
 
-  /* Active footer */
-  activeFooterRow: {
+  /* Active actions */
+  activeActionStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.045)',
+    gap: 9,
   },
-  footerBtn: {
+  activePrimaryAction: {
+    flex: 1,
+    borderRadius: CARD_RADIUS_SM,
+    overflow: 'hidden',
+  },
+  activePrimaryGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
+    minHeight: 38,
+    paddingVertical: 8,
+  },
+  activeSecondaryActions: {
+    width: ACTIVE_SECONDARY_ACTIONS_WIDTH,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    minHeight: 30,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+  },
+  activeSecondaryButton: {
+    flex: 1,
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
     borderRadius: 8,
   },
-  footerBtnText: {
+  activeSecondaryText: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 11,
+    fontSize: 10.5,
   },
 
   /* Start button */
-  startBtnOuter: { borderRadius: CARD_RADIUS_SM, overflow: 'hidden' },
   idleStartBtnOuter: {
     width: '100%',
     maxWidth: 218,
     borderRadius: CARD_RADIUS_SM,
     overflow: 'hidden',
     marginTop: 2,
-  },
-  startBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    minHeight: 44,
-    paddingVertical: 11,
+    transform: [{ translateY: -4 }],
   },
   idleStartBtn: {
     flexDirection: 'row',
@@ -1135,7 +1178,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingHorizontal: 12,
     paddingTop: 4,
-    paddingBottom: 14,
+    paddingBottom: 16,
   },
   templateName: {
     fontFamily: FONTS.display.semibold,

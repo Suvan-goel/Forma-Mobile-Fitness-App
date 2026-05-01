@@ -29,6 +29,7 @@ import {
   Pause,
   Play,
   Check,
+  Trash2,
   X,
 } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_VERTICAL_GAP, getScoreColor,
@@ -399,21 +400,24 @@ export const CurrentWorkoutScreen: React.FC = () => {
 
   /* ── Rest timer logic ──── */
 
+  const clearRestTimer = useCallback(() => {
+    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    restIntervalRef.current = null;
+    setRestTimerPaused(false);
+    setRestSecondsLeft(null);
+  }, []);
+
   const runRestTimer = useCallback((durationSeconds: number) => {
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-
     const endTime = Date.now() + durationSeconds * 1000;
     restIntervalRef.current = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
       setRestSecondsLeft(remaining);
       if (remaining <= 0) {
-        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-        restIntervalRef.current = null;
-        setRestTimerPaused(false);
-        setRestSecondsLeft(null);
+        clearRestTimer();
       }
     }, 1000);
-  }, []);
+  }, [clearRestTimer]);
 
   const startRestTimer = useCallback(() => {
     if (!restTimerEnabled || restTimerDurationSeconds <= 0) return;
@@ -438,6 +442,21 @@ export const CurrentWorkoutScreen: React.FC = () => {
       return true;
     });
   }, [restSecondsLeft, runRestTimer]);
+
+  const handleDeleteRestTimer = useCallback(() => {
+    showAlert(
+      'Delete rest timer?',
+      'Are you sure you want to delete this rest timer?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: clearRestTimer,
+        },
+      ]
+    );
+  }, [clearRestTimer, showAlert]);
 
   useEffect(() => {
     return () => {
@@ -886,19 +905,30 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                   {restTimerPaused ? 'Paused' : `${Math.round(restTimerDurationSeconds / 60)} min rest`}
                                 </Text>
                               </View>
-                              <TouchableOpacity
-                                style={[styles.restTimerPauseButton, restTimerPaused && styles.restTimerPauseButtonActive]}
-                                onPress={toggleRestTimerPaused}
-                                activeOpacity={0.78}
-                                accessibilityRole="button"
-                                accessibilityLabel={restTimerPaused ? 'Resume rest timer' : 'Pause rest timer'}
-                              >
-                                {restTimerPaused ? (
-                                  <Play size={20} color={COLORS.text} fill={COLORS.text} strokeWidth={1.8} />
-                                ) : (
-                                  <Pause size={20} color={COLORS.text} fill={COLORS.text} strokeWidth={1.6} />
-                                )}
-                              </TouchableOpacity>
+                              <View style={styles.restTimerActions}>
+                                <TouchableOpacity
+                                  style={[styles.restTimerActionButton, restTimerPaused && styles.restTimerPauseButtonActive]}
+                                  onPress={toggleRestTimerPaused}
+                                  activeOpacity={0.78}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={restTimerPaused ? 'Resume rest timer' : 'Pause rest timer'}
+                                >
+                                  {restTimerPaused ? (
+                                    <Play size={18} color={COLORS.text} fill={COLORS.text} strokeWidth={1.8} />
+                                  ) : (
+                                    <Pause size={18} color={COLORS.text} fill={COLORS.text} strokeWidth={1.6} />
+                                  )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.restTimerActionButton, styles.restTimerDeleteButton]}
+                                  onPress={handleDeleteRestTimer}
+                                  activeOpacity={0.78}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Delete rest timer"
+                                >
+                                  <Trash2 size={17} color={COLORS.red} strokeWidth={1.8} />
+                                </TouchableOpacity>
+                              </View>
                             </View>
                           )}
                         </View>
@@ -1384,10 +1414,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
   },
-  restTimerPauseButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  restTimerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  restTimerActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
@@ -1397,6 +1432,10 @@ const styles = StyleSheet.create({
   restTimerPauseButtonActive: {
     backgroundColor: 'rgba(122, 85, 255, 0.18)',
     borderColor: 'rgba(122, 85, 255, 0.32)',
+  },
+  restTimerDeleteButton: {
+    backgroundColor: 'rgba(240, 82, 82, 0.10)',
+    borderColor: 'rgba(240, 82, 82, 0.18)',
   },
 
   /* ── Add Set Row ────────────────────────── */

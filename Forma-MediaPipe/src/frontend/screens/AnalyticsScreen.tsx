@@ -15,7 +15,6 @@ import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image, 
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Settings as SettingsIcon,
-  Info,
   Check,
   Trophy,
   Activity,
@@ -393,7 +392,6 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── FORM SCORE TREND ────────────────────── */}
           <TrendChart
             title="FORM SCORE TREND"
-            icon={Info}
             data={analytics.formData}
             unit=""
             timeRange={selectedTimeRange}
