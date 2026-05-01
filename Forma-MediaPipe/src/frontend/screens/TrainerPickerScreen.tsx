@@ -23,7 +23,7 @@ import {
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { TRAINERS, type Trainer } from '../constants/trainers';
-import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences';
+import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { setActiveVoiceId, setActiveVoiceSettings, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
 
 const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');
@@ -34,8 +34,7 @@ export const TrainerPickerScreen: React.FC = () => {
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
-  const { prefs, updatePref } = useWorkoutPreferences();
-  const selectedTrainerId = prefs.selectedTrainerId;
+  const { selectedTrainerId, setSelectedTrainerId } = useCameraSettings();
   const [greetingEnabled, setGreetingEnabled] = useState(true);
 
   useEffect(() => {
@@ -55,7 +54,7 @@ export const TrainerPickerScreen: React.FC = () => {
 
   const handleSelectTrainer = (trainer: Trainer) => {
     if (trainer.id === selectedTrainerId) return;
-    updatePref('selectedTrainerId', trainer.id);
+    setSelectedTrainerId(trainer.id);
     setActiveVoiceId(trainer.voiceId);
     setActiveVoiceSettings(trainer.voiceSettings);
     if (greetingEnabled) {

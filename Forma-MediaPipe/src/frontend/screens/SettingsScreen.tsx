@@ -39,6 +39,7 @@ import { useAuth } from '../../backend/contexts/AuthContext';
 import { useUser } from '../../backend/hooks/useUser';
 import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences';
 import { useAlert } from '../contexts/AlertContext';
+import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 
@@ -62,12 +63,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const { prefs, updatePref } = useWorkoutPreferences();
+  const {
+    showFeedback,
+    isTTSEnabled,
+    showSkeletonOverlay,
+    selectedTrainerId,
+    autoScreenRecording,
+    setShowFeedback,
+    setIsTTSEnabled,
+    setShowSkeletonOverlay,
+    setAutoScreenRecording,
+  } = useCameraSettings();
   const [infoModal, setInfoModal] = useState<string | null>(null);
   const selectedTrainer = useMemo(
     () =>
-      TRAINERS.find((trainer) => trainer.id === prefs.selectedTrainerId) ??
+      TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ??
       TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID),
-    [prefs.selectedTrainerId],
+    [selectedTrainerId],
   );
 
   const SETTING_INFO: Record<string, { title: string; description: string }> = {
@@ -262,7 +274,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 iconColor={COLORS.textSecondary}
                 label="Camera Settings"
                 sub="Angles, grid, resolution"
-                onPress={() => navigation.navigate('MainTabs', { screen: 'Record', params: { screen: 'WorkoutSettings' } })}
+                onPress={() => navigation.navigate('CameraSettings')}
               />
               <View style={styles.rowDivider} />
               <NavRow
@@ -299,8 +311,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 iconColor={COLORS.textSecondary}
                 label="Visual Feedback"
                 sub="Real-time form correction"
-                value={prefs.showFeedback}
-                onToggle={(v) => updatePref('showFeedback', v)}
+                value={showFeedback}
+                onToggle={setShowFeedback}
                 infoKey="Visual Feedback"
               />
               <View style={styles.rowDivider} />
@@ -309,8 +321,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 iconColor={COLORS.textSecondary}
                 label="Voice Coaching"
                 sub="AI coach speaks corrections"
-                value={prefs.isTTSEnabled}
-                onToggle={(v) => updatePref('isTTSEnabled', v)}
+                value={isTTSEnabled}
+                onToggle={setIsTTSEnabled}
                 infoKey="Voice Coaching"
               />
               {DEV_FEATURES_ENABLED && (
@@ -321,8 +333,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                     iconColor={COLORS.textSecondary}
                     label="Skeleton Overlay"
                     sub="Body joints overlay"
-                    value={prefs.showSkeletonOverlay}
-                    onToggle={(v) => updatePref('showSkeletonOverlay', v)}
+                    value={showSkeletonOverlay}
+                    onToggle={setShowSkeletonOverlay}
                     infoKey="Skeleton Overlay"
                   />
                 </>
@@ -333,8 +345,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 iconColor={COLORS.textSecondary}
                 label="Auto Screen Recording"
                 sub="Capture workouts"
-                value={prefs.autoScreenRecording}
-                onToggle={(v) => updatePref('autoScreenRecording', v)}
+                value={autoScreenRecording}
+                onToggle={setAutoScreenRecording}
                 infoKey="Auto Screen Recording"
               />
               <View style={styles.rowDivider} />

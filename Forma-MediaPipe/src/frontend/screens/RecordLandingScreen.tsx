@@ -231,7 +231,7 @@ export const RecordLandingScreen: React.FC = () => {
   const templateCardWidth =
     (windowWidth - SPACING.screenHorizontal * 2 - 9 * 2) / 3;
   const templateThumbHeight = templateCardWidth;
-  const templateCardHeight = templateThumbHeight + 58;
+  const templateCardHeight = templateThumbHeight + 66;
   const templateSectionHeight = Math.max(
     standardSectionHeight + 18,
     templateCardHeight + 34,
@@ -1152,7 +1152,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingHorizontal: 12,
     paddingTop: 4,
-    paddingBottom: 8,
+    paddingBottom: 14,
   },
   templateName: {
     fontFamily: FONTS.display.semibold,

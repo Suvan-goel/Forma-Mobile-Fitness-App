@@ -146,7 +146,7 @@ const WorkoutTimerDisplay = React.memo(({
 /* ── Main Screen ──────────────────────────── */
 
 const TIMER_FONT_SIZE_MAX = 15;
-const TIMER_FONT_SIZE_MIN = 13;
+const TIMER_FONT_SIZE_MIN = 14;
 const LOWER_BODY_EXERCISE_PATTERN = /squat|deadlift|lunge|leg|calf|hamstring|quad|glute|hip/i;
 
 export const CurrentWorkoutScreen: React.FC = () => {
@@ -469,19 +469,20 @@ export const CurrentWorkoutScreen: React.FC = () => {
       {/* ── HEADER ──────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={styles.headerIconButton} onPress={handleGoBack} activeOpacity={0.7}>
-          <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+          <ChevronLeft size={23} color={COLORS.textSecondary} strokeWidth={1.7} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Current Workout</Text>
           <View style={styles.headerTimerPill}>
-          <WorkoutTimerDisplay
-            startTimeRef={startTimeRef}
-            isPausedRef={isPausedRef}
-            contextElapsed={contextElapsed}
-            elapsedSecondsRef={elapsedSecondsRef}
-            timerFontSize={timerFontSize}
-            timerLineHeight={timerLineHeight}
-          />
+            <WorkoutTimerDisplay
+              startTimeRef={startTimeRef}
+              isPausedRef={isPausedRef}
+              contextElapsed={contextElapsed}
+              elapsedSecondsRef={elapsedSecondsRef}
+              timerFontSize={timerFontSize}
+              timerLineHeight={timerLineHeight}
+            />
           </View>
         </View>
 
@@ -490,7 +491,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={() => navigation.navigate('WorkoutSettings')}
           activeOpacity={0.7}
         >
-          <CogIcon size={18} color={COLORS.textSecondary} />
+          <CogIcon size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -793,30 +794,41 @@ const styles = StyleSheet.create({
   /* ── Header ─────────────────────────────── */
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 6,
+    paddingBottom: 11,
   },
   headerIconButton: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 8,
   },
   headerCenter: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: 13,
+    gap: 3,
+  },
+  headerTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 17,
+    lineHeight: 30,
+    color: COLORS.text,
+    letterSpacing: -0.15,
   },
   headerTimerPill: {
-    minWidth: 76,
+    minWidth: 92,
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   timerDisplay: {
     flexDirection: 'row',
@@ -864,7 +876,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 0,
-    gap: 8,
+    gap: 10,
   },
   scrollContentEmpty: {
     flexGrow: 1,
@@ -872,39 +884,43 @@ const styles = StyleSheet.create({
   },
   /* ── Workout Summary ───────────────────── */
   summaryCardOuter: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: 8,
     ...CARD_SHADOW,
   },
   summaryCardGradient: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   summaryCardEdge: {
-    borderRadius: CARD_RADIUS,
+    minHeight: 88,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: 12,
+    paddingTop: 13,
+    paddingBottom: 15,
   },
   summaryEyebrow: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 8,
-    color: COLORS.textTertiary,
-    letterSpacing: 1.4,
-    marginBottom: 5,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.7,
+    marginBottom: 8,
   },
   summaryTitle: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontSize: 14,
+    lineHeight: 18,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: -0.1,
   },
   summaryMeta: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
     color: COLORS.textSecondary,
-    marginTop: 4,
+    marginTop: 2,
   },
 
   /* ── Exercise Card ──────────────────────── */

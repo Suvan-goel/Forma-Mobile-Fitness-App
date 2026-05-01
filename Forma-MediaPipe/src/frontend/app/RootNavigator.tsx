@@ -57,6 +57,7 @@ export type RootStackParamList = {
   NotificationSettings: undefined;
   PrivacySettings: undefined;
   HelpCenter: undefined;
+  CameraSettings: undefined;
   TrainerPicker: undefined;
   Membership: undefined;
   Camera: { category?: string; exerciseName?: string; exerciseId?: string; returnToCurrentWorkout?: boolean } | undefined;
@@ -161,12 +162,10 @@ const RecordStackNavigator: React.FC = memo(() => {
   );
 });
 
-// Record tab wrapper: current-workout state + shared camera/workout settings
+// Record tab wrapper: current-workout state scoped to the record flow.
 const RecordTabWithProvider: React.FC = memo(() => (
   <CurrentWorkoutProvider>
-    <CameraSettingsProvider>
-      <RecordStackNavigator />
-    </CameraSettingsProvider>
+    <RecordStackNavigator />
   </CurrentWorkoutProvider>
 ));
 
@@ -269,6 +268,11 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="HelpCenter"
             component={HelpCenterScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="CameraSettings"
+            component={CameraSettingsScreen}
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
@@ -406,7 +410,9 @@ export const RootNavigator: React.FC = () => {
   return (
     <AuthProvider>
       <AlertProvider>
-        <RootStackNavigator />
+        <CameraSettingsProvider>
+          <RootStackNavigator />
+        </CameraSettingsProvider>
       </AlertProvider>
     </AuthProvider>
   );

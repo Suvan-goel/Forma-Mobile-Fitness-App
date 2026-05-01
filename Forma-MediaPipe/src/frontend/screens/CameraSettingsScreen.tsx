@@ -205,7 +205,7 @@ const wheelStyles = StyleSheet.create({
 
 export const CameraSettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const {
@@ -310,6 +310,18 @@ export const CameraSettingsScreen: React.FC = () => {
     setIsTimerModalVisible(false);
   }, [pendingMinutes, pendingSeconds, setRestTimerDurationSeconds]);
 
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.navigate('MainTabs', {
+      screen: 'Record',
+      params: { screen: 'RecordLanding' },
+    });
+  }, [navigation]);
+
   const formattedDuration = `${currentMinutes}:${snappedSeconds.toString().padStart(2, '0')}`;
   const IconBubble = ({ icon: Icon, color = COLORS.textSecondary }: { icon: any; color?: string }) => (
     <View style={styles.iconBubble}>
@@ -319,7 +331,7 @@ export const CameraSettingsScreen: React.FC = () => {
 
   return (
     <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
-      <SettingsHeader title="CAMERA SETTINGS" onBack={() => navigation.goBack()} />
+      <SettingsHeader title="CAMERA SETTINGS" onBack={handleBack} />
 
       <ScrollView
         style={styles.scroll}
