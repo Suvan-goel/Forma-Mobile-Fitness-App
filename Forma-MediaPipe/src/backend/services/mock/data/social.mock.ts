@@ -22,25 +22,27 @@ import {
 // ── Leaderboard mock data ─────────────────────────────────────
 
 const mockLeaderboardEntries: LeaderboardEntry[] = [
-  { userId: 'u1', rank: 1, displayName: 'Alex Chen', score: 96.2, trend: 'up' },
-  { userId: 'u2', rank: 2, displayName: 'Jordan Lee', score: 94.8, trend: 'stable' },
-  { userId: 'u3', rank: 3, displayName: 'Sam Rivera', score: 93.1, trend: 'up' },
-  { userId: 'u4', rank: 4, displayName: 'Taylor Kim', score: 91.7, trend: 'down' },
-  { userId: 'u5', rank: 5, displayName: 'Morgan Wu', score: 90.3, trend: 'up' },
-  { userId: 'u6', rank: 6, displayName: 'Casey Park', score: 88.9, trend: 'stable' },
-  { userId: 'u7', rank: 7, displayName: 'Riley Zhang', score: 87.4, trend: 'down' },
-  { userId: 'u8', rank: 8, displayName: 'Dakota Patel', score: 86.1, trend: 'up' },
-  { userId: 'u9', rank: 9, displayName: 'Avery Singh', score: 85.0, trend: 'stable' },
-  { userId: 'u10', rank: 10, displayName: 'Quinn Nakamura', score: 83.6, trend: 'up' },
-  { userId: 'u11', rank: 11, displayName: 'Reese Tanaka', score: 82.2, trend: 'down' },
-  { userId: 'u12', rank: 12, displayName: 'Finley Cho', score: 80.9, trend: 'stable' },
+  { userId: 'u1', rank: 1, displayName: 'Alex Chen', score: 96.2, streakDays: 8, trend: 'up' },
+  { userId: 'u2', rank: 2, displayName: 'Jordan Lee', score: 94.8, streakDays: 7, trend: 'stable' },
+  { userId: 'u3', rank: 3, displayName: 'Sam Rivera', score: 93.1, streakDays: 6, trend: 'up' },
+  { userId: 'u4', rank: 4, displayName: 'Taylor Kim', score: 91.7, streakDays: 6, trend: 'down' },
+  { userId: 'u5', rank: 5, displayName: 'Morgan Wu', score: 90.3, streakDays: 5, trend: 'up' },
+  { userId: 'current', rank: 6, displayName: 'You', score: 89.4, streakDays: 4, trend: 'up' },
+  { userId: 'u6', rank: 7, displayName: 'Casey Park', score: 88.9, streakDays: 3, trend: 'stable' },
+  { userId: 'u7', rank: 8, displayName: 'Riley Zhang', score: 87.4, streakDays: 3, trend: 'down' },
+  { userId: 'u8', rank: 9, displayName: 'Dakota Patel', score: 86.1, streakDays: 2, trend: 'up' },
+  { userId: 'u9', rank: 10, displayName: 'Avery Singh', score: 85.0, streakDays: 2, trend: 'stable' },
+  { userId: 'u10', rank: 11, displayName: 'Quinn Nakamura', score: 83.6, streakDays: 1, trend: 'up' },
+  { userId: 'u11', rank: 12, displayName: 'Reese Tanaka', score: 82.2, streakDays: 1, trend: 'down' },
+  { userId: 'u12', rank: 13, displayName: 'Finley Cho', score: 80.9, streakDays: 1, trend: 'stable' },
 ];
 
 const mockCurrentUser: LeaderboardEntry = {
   userId: 'current',
-  rank: 15,
+  rank: 6,
   displayName: 'You',
-  score: 78.4,
+  score: 89.4,
+  streakDays: 4,
   trend: 'up',
 };
 
@@ -149,7 +151,7 @@ export function getMockComparison(friendId: string): ComparisonData {
 
 const now = Date.now();
 
-export const mockActivityEvents: ActivityEvent[] = [
+const mockActivityEvents: ActivityEvent[] = [
   {
     id: 'ae1', userId: 'u1', displayName: 'Alex Chen', eventType: 'workout_completed',
     payload: { form_score: 96, duration: '42 min', exercise_count: 4 },
@@ -236,8 +238,6 @@ export function getMockActivityFeed(
 // ── Reactions mock data ─────────────────────────────────────
 
 const MOCK_CURRENT_USER_ID = 'current';
-const ALL_REACTION_TYPES: ReactionType[] = ['like', 'muscle', 'fire', 'clap'];
-
 // Map<eventId, Map<userId, ReactionType>> — each user has at most one reaction per event
 const reactionStore = new Map<string, Map<string, ReactionType>>();
 

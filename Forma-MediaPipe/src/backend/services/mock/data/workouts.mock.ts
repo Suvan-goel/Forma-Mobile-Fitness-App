@@ -14,6 +14,7 @@ export const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 15,
     totalReps: 120,
     formScore: 87,
+    firstExerciseName: 'Push-Up',
   },
   {
     id: '2',
@@ -24,6 +25,7 @@ export const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 18,
     totalReps: 210,
     formScore: 85,
+    firstExerciseName: 'Barbell Squat',
   },
   {
     id: '3',
@@ -34,6 +36,7 @@ export const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 12,
     totalReps: 300,
     formScore: 82,
+    firstExerciseName: 'Barbell Curl',
   },
   {
     id: '4',
@@ -44,6 +47,7 @@ export const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 8,
     totalReps: 50,
     formScore: 75,
+    firstExerciseName: 'Machine Ab Crunches',
   },
   {
     id: '5',
@@ -54,6 +58,7 @@ export const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 16,
     totalReps: 180,
     formScore: 90,
+    firstExerciseName: 'Cable Row',
   },
   {
     id: '6',
@@ -64,6 +69,7 @@ export const mockWorkoutSessions: WorkoutSession[] = [
     totalSets: 10,
     totalReps: 200,
     formScore: 78,
+    firstExerciseName: 'Push-Up',
   },
 ];
 

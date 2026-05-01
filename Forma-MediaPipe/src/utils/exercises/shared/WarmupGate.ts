@@ -10,7 +10,7 @@
  */
 
 import type { Keypoint } from '../../poseAnalysis';
-import { getKeypoint, isVisible } from '../../poseAnalysis';
+import { getKeypoint } from '../../poseAnalysis';
 
 export interface WarmupGateConfig {
   requiredFrames?: number;         // Default: 12 (~0.6s at 20fps)

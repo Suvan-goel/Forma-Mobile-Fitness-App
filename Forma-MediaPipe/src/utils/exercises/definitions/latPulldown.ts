@@ -59,8 +59,8 @@ const FORM_THRESHOLDS = {
   PULL_ROM_FAIL: 0.60,
   /** Max ratio below which extension is insufficient */
   EXTENSION_ROM_FAIL: 0.86,
-  /** Torso lean above which there is excessive lean (degrees from vertical) */
-  TORSO_LEAN_WARN: 95,
+  /** Torso lean above which there is excessive lean (degrees from vertical, 0-90) */
+  TORSO_LEAN_WARN: 30,
   /** Concentric (pull down) too fast threshold (seconds). */
   TEMPO_PULL_MIN: 0.20,
   /** Eccentric (return) too fast threshold (seconds). */
@@ -76,16 +76,16 @@ const FORM_THRESHOLDS = {
  * | ROM extension    | 25  | 0        | 300    | maxRatio shortfall from 0.97     |
  * | Torso lean       | 25  | 8        | 0.12   | max torso lean from vertical     |
  * | Tempo pull       | 10  | 0.35s    | 50     | concentric time deficit          |
- * | Tempo return     | 40  | 0.85s    | 2500   | eccentric time deficit           |
+ * | Tempo return     | 25  | 0.80s    | 800    | eccentric time deficit           |
  *
  * Max total penalty: 100 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
   PULL_ROM:      { cap: 30, deadzone: 0, scale: 400 } as PenaltyConfig,
   EXTENSION_ROM: { cap: 25, deadzone: 0, scale: 300 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 90, scale: 0.10 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 25, deadzone: 20, scale: 0.10 } as PenaltyConfig,
   TEMPO_PULL:    { cap: 10, deadzone: 0.35, scale: 50 } as PenaltyConfig,
-  TEMPO_RETURN:  { cap: 40, deadzone: 0.85, scale: 2500 } as PenaltyConfig,
+  TEMPO_RETURN:  { cap: 25, deadzone: 0.8, scale: 800 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -124,6 +124,8 @@ interface LatPulldownState {
   tRepStart: number | null;
   /** Current rep window accumulator */
   repWindow: RepWindow | null;
+  /** Side used for the just-completed frame; kept for stable debug traces. */
+  debugSide: 'left' | 'right';
   /** Last completed rep result */
   lastRepResult: RepResult | null;
   /** Smoothed tracker for the active arm's reach ratio */
@@ -174,6 +176,7 @@ function initializeState(): LatPulldownState {
     repCount: 0,
     tRepStart: null,
     repWindow: null,
+    debugSide: 'right',
     lastRepResult: null,
     ratioTracker: new SmoothedAngleTracker(),
     torsoLeanTracker: new SmoothedAngleTracker(),
@@ -425,11 +428,12 @@ function updateLatPulldownState(
   const rh = getKeypoint(keypoints, 'right_hip');
 
   // -- Pick active side during REST; lock it during a rep --
-  if (state.phase === 'REST') {
+  if (state.phase === 'REST' && !state.repWindow) {
     state.activeSide = pickBetterSide(ls ?? undefined, rs ?? undefined);
   }
 
   const side = state.activeSide;
+  state.debugSide = side;
   const shoulder = side === 'left' ? ls : rs;
   const elbow    = side === 'left' ? le : re;
   const wrist    = side === 'left' ? lw : rw;
@@ -531,6 +535,7 @@ function updateLatPulldownState(
 
     state.repWindow = null;
     state.tRepStart = null;
+    state.debugSide = state.activeSide;
   }
 
   // -- Handle aborted pull (PULLING -> REST without rep completion) --
@@ -562,7 +567,7 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
   return {
     phase: state.phase,
     warmedUp: state.warmedUp,
-    activeSide: state.activeSide,
+    activeSide: state.debugSide,
     ratio: fmt(state.smoothedRatio),
     torsoLean: fmt(state.smoothedTorsoLean),
     minRatio: w ? (w.minRatio < Infinity ? fmt(w.minRatio) : null) : null,

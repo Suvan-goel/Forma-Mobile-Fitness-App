@@ -5,7 +5,7 @@
 
 import React, { memo, useEffect, useRef } from 'react';
 import { StyleSheet, Animated, ViewStyle, DimensionValue } from 'react-native';
-import { COLORS, CARD_STYLE } from '../../constants/theme';
+import { COLORS, CARD_RADIUS } from '../../constants/theme';
 
 type SkeletonVariant = 'card' | 'text' | 'circle' | 'button';
 
@@ -48,9 +48,10 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = memo(({
     switch (variant) {
       case 'card':
         return {
-          ...CARD_STYLE,
           width: width ?? '100%',
           height: height ?? 100,
+          borderRadius: CARD_RADIUS,
+          backgroundColor: COLORS.cardBackground,
         };
       case 'text':
         return {

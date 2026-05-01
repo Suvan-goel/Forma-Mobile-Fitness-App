@@ -553,14 +553,16 @@ function updateLateralRaiseState(
   state.phase = fsmResult.phase;
 
   // -- Capture rest-state torso height baseline (used for shrug detection) --
-  // Updated every frame in REST so it reflects the true relaxed shoulder position
-  // just before the rep starts.
-  if (state.phase === 'REST' && allTorsoVisible) {
+  // Updated only when the arms are genuinely down so early shrugging or a
+  // low-amplitude raise cannot overwrite the relaxed shoulder baseline.
+  if (state.phase === 'REST' && smoothedAvgHeightRatio < THRESHOLDS.REST_ENTER * 0.5 && allTorsoVisible) {
     const midShoulderY = (ls!.y + rs!.y) / 2;
     const midHipY = (lh!.y + rh!.y) / 2;
     const torsoH = midHipY - midShoulderY;
     if (torsoH > 0.01) {
-      state.restTorsoHeight = torsoH;
+      state.restTorsoHeight = state.restTorsoHeight === null
+        ? torsoH
+        : Math.min(state.restTorsoHeight, torsoH);
     }
   }
 

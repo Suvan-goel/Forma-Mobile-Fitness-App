@@ -115,15 +115,26 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 2): P
     const response = await fetch(url, options);
     if (response.ok) return response;
     if (response.status !== 429 && response.status !== 503) {
-      throw new Error(`TTS error: ${response.status}`);
+      throw new Error(await formatTtsError(response));
     }
     if (attempt < retries) {
       await new Promise<void>(resolve => setTimeout(() => resolve(), 500 * Math.pow(2, attempt)));
     } else {
-      throw new Error(`TTS error: ${response.status}`);
+      throw new Error(await formatTtsError(response));
     }
   }
   throw new Error('TTS request failed');
+}
+
+async function formatTtsError(response: Response): Promise<string> {
+  const fallback = `TTS error: ${response.status}`;
+  try {
+    const body = await response.text();
+    if (!body) return fallback;
+    return `${fallback} ${body.slice(0, 300)}`;
+  } catch {
+    return fallback;
+  }
 }
 
 async function generateSpeech(text: string): Promise<string> {

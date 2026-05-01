@@ -5,16 +5,28 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Platform,
   Image,
   ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft } from 'lucide-react-native';
+import { AlertTriangle, Camera, CheckCircle2, ChevronLeft, Dumbbell, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  SCREEN_GRADIENT_COLORS,
+  SCREEN_GRADIENT_START,
+  SCREEN_GRADIENT_END,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  CARD_SHADOW,
+} from '../constants/theme';
 import { ArchetypeVisual, VIEW_TYPE_LABEL } from '../components/ui/CameraGuideVisuals';
 import { EXERCISE_PERFORM_DATA } from '../constants/exerciseGuideData';
 import type { RecordStackParamList } from '../app/RootNavigator';
@@ -55,11 +67,50 @@ const TabPill: React.FC<{
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
-      {label}
-    </Text>
-    {isActive && <View style={styles.pillUnderline} />}
+    {isActive ? (
+      <LinearGradient
+        colors={['rgba(122, 85, 255, 0.26)', 'rgba(122, 85, 255, 0.12)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.pillActiveFill}
+      >
+        <Text style={[styles.pillText, styles.pillTextActive]}>{label}</Text>
+      </LinearGradient>
+    ) : (
+      <Text style={styles.pillText}>{label}</Text>
+    )}
   </TouchableOpacity>
+);
+
+const GuideCard: React.FC<{
+  children: React.ReactNode;
+  style?: object;
+  edgeStyle?: object;
+}> = ({ children, style, edgeStyle }) => (
+  <LinearGradient
+    colors={[...CARD_GRADIENT_COLORS]}
+    start={CARD_GRADIENT_START}
+    end={CARD_GRADIENT_END}
+    style={[styles.guideCard, style]}
+  >
+    <View style={[styles.guideCardEdge, edgeStyle]}>
+      {children}
+    </View>
+  </LinearGradient>
+);
+
+const SectionTitle: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  meta?: string;
+}> = ({ icon, title, meta }) => (
+  <View style={styles.sectionTitleRow}>
+    <View style={styles.sectionTitleLeft}>
+      {icon}
+      <Text style={styles.sectionHeader}>{title}</Text>
+    </View>
+    {meta ? <Text style={styles.sectionMeta}>{meta}</Text> : null}
+  </View>
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,30 +124,44 @@ const RecordTabContent: React.FC<{
   cameraTips?: string[];
 }> = ({ viewType, keySetup, reasonText, cameraTips }) => (
   <View style={styles.tabContent}>
-    {/* Visual stage */}
-    <View style={styles.visualStage}>
-      <Text style={styles.viewTypeLabel}>
-        {VIEW_TYPE_LABEL[viewType] ?? 'SIDE VIEW'}
-      </Text>
+    <GuideCard edgeStyle={styles.visualStage}>
+      <View style={styles.visualHeader}>
+        <View style={styles.viewTypeChip}>
+          <Camera size={13} color={COLORS.accent} strokeWidth={1.8} />
+          <Text style={styles.viewTypeLabel}>
+            {VIEW_TYPE_LABEL[viewType] ?? 'SIDE VIEW'}
+          </Text>
+        </View>
+      </View>
       <ArchetypeVisual viewType={viewType} />
-    </View>
+    </GuideCard>
 
-    {/* Instructions */}
-    <View style={styles.instructionsSection}>
+    <GuideCard>
+      <SectionTitle
+        icon={<Info size={14} color={COLORS.accent} strokeWidth={1.8} />}
+        title="SETUP"
+      />
       <Text style={styles.keySetup}>{keySetup}</Text>
       <Text style={styles.reasonText}>{reasonText}</Text>
-      {cameraTips && cameraTips.length > 0 && (
-        <View style={styles.cameraTipsSection}>
-          <Text style={styles.sectionHeader}>CAMERA SETUP TIPS</Text>
-          {cameraTips.map((tip, index) => (
-            <View key={index} style={styles.cameraTipRow}>
-              <View style={styles.cameraTipBullet} />
-              <Text style={styles.cameraTipText}>{tip}</Text>
+    </GuideCard>
+
+    {cameraTips && cameraTips.length > 0 && (
+      <GuideCard>
+        <SectionTitle
+          icon={<Camera size={14} color={COLORS.accent} strokeWidth={1.8} />}
+          title="CAMERA TIPS"
+          meta={`${cameraTips.length}`}
+        />
+        {cameraTips.map((tip, index) => (
+          <View key={index} style={[styles.cameraTipRow, index > 0 && styles.rowDivider]}>
+            <View style={styles.smallNumberBadge}>
+              <Text style={styles.smallNumberText}>{index + 1}</Text>
             </View>
-          ))}
-        </View>
-      )}
-    </View>
+            <Text style={styles.cameraTipText}>{tip}</Text>
+          </View>
+        ))}
+      </GuideCard>
+    )}
   </View>
 );
 
@@ -118,37 +183,46 @@ const PerformTabContent: React.FC<{
     <View style={styles.tabContent}>
       {/* Exercise image */}
       {exerciseImage ? (
-        <View style={styles.imageContainer}>
+        <GuideCard edgeStyle={styles.imageCardEdge}>
           <Image source={exerciseImage} style={styles.exerciseImage} resizeMode="contain" />
-        </View>
+        </GuideCard>
       ) : (
-        <View style={styles.imagePlaceholder}>
+        <GuideCard edgeStyle={styles.imagePlaceholder}>
           <Text style={styles.imagePlaceholderText}>Exercise demo</Text>
-        </View>
+        </GuideCard>
       )}
 
       {/* How to Perform */}
-      <View style={styles.instructionsSection}>
-        <Text style={styles.sectionHeader}>HOW TO PERFORM</Text>
+      <GuideCard>
+        <SectionTitle
+          icon={<Dumbbell size={14} color={COLORS.accent} strokeWidth={1.8} />}
+          title="HOW TO PERFORM"
+          meta={`${performData.steps.length} steps`}
+        />
         {performData.steps.map((step, i) => (
-          <View key={i} style={styles.stepRow}>
-            <Text style={styles.stepNumber}>{i + 1}</Text>
+          <View key={i} style={[styles.stepRow, i > 0 && styles.rowDivider]}>
+            <View style={styles.stepNumber}>
+              <Text style={styles.stepNumberText}>{i + 1}</Text>
+            </View>
             <Text style={styles.stepText}>{step}</Text>
           </View>
         ))}
-      </View>
+      </GuideCard>
 
       {/* Common Mistakes */}
       {performData.commonMistakes.length > 0 && (
-        <View style={styles.mistakesSection}>
-          <Text style={styles.sectionHeader}>COMMON MISTAKES</Text>
+        <GuideCard>
+          <SectionTitle
+            icon={<AlertTriangle size={14} color={COLORS.yellow} strokeWidth={1.8} />}
+            title="COMMON MISTAKES"
+          />
           {performData.commonMistakes.map((mistake, i) => (
-            <View key={i} style={styles.mistakeRow}>
-              <View style={styles.bulletDot} />
+            <View key={i} style={[styles.mistakeRow, i > 0 && styles.rowDivider]}>
+              <CheckCircle2 size={16} color={COLORS.textTertiary} strokeWidth={1.7} style={styles.mistakeIcon} />
               <Text style={styles.mistakeText}>{mistake}</Text>
             </View>
           ))}
-        </View>
+        </GuideCard>
       )}
     </View>
   );
@@ -177,62 +251,77 @@ export const ExerciseGuideScreen: React.FC = () => {
   }, [navigation]);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={handleBack}
-          style={styles.backButton}
-          activeOpacity={0.6}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {exerciseName.toUpperCase()}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      {/* Tab Switcher */}
-      <View style={styles.tabBar}>
-        {TABS.map((tab) => (
-          <TabPill
-            key={tab.key}
-            label={tab.label}
-            isActive={activeTab === tab.key}
-            onPress={() => setActiveTab(tab.key)}
-          />
-        ))}
-      </View>
-
-      {/* Scrollable Content */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {activeTab === 'record' ? (
-          <RecordTabContent
-            viewType={viewType}
-            keySetup={keySetup}
-            reasonText={reasonText}
-            cameraTips={cameraTips}
-          />
-        ) : (
-          <PerformTabContent exerciseName={exerciseName} />
-        )}
-      </ScrollView>
-
-      {/* CTA Button */}
-      <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, SPACING.xxl) }]}>
-        <TouchableOpacity onPress={handleGotIt} activeOpacity={0.85}>
-          <View style={styles.ctaButton}>
-            <Text style={styles.ctaText}>Got it</Text>
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={styles.background}
+    >
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={handleBack}
+            style={styles.backButton}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.7} />
+          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerEyebrow}>Exercise Tutorial</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {exerciseName}
+            </Text>
           </View>
-        </TouchableOpacity>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Tab Switcher */}
+        <View style={styles.tabBar}>
+          {TABS.map((tab) => (
+            <TabPill
+              key={tab.key}
+              label={tab.label}
+              isActive={activeTab === tab.key}
+              onPress={() => setActiveTab(tab.key)}
+            />
+          ))}
+        </View>
+
+        {/* Scrollable Content */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {activeTab === 'record' ? (
+            <RecordTabContent
+              viewType={viewType}
+              keySetup={keySetup}
+              reasonText={reasonText}
+              cameraTips={cameraTips}
+            />
+          ) : (
+            <PerformTabContent exerciseName={exerciseName} />
+          )}
+        </ScrollView>
+
+        {/* CTA Button */}
+        <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, SPACING.md) + SPACING.md }]}>
+          <TouchableOpacity onPress={handleGotIt} activeOpacity={0.85}>
+            <LinearGradient
+              colors={['#7A55FF', '#633FE5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.ctaButton}
+            >
+              <Text style={styles.ctaText}>Got it</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 };
 
@@ -241,34 +330,45 @@ export const ExerciseGuideScreen: React.FC = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+  },
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
 
   /* ── Header ── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 6,
+    paddingBottom: 12,
+    gap: 10,
   },
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
+  headerTextWrap: {
     flex: 1,
-    fontFamily: FONTS.mono.bold,
-    fontSize: 13,
+    alignItems: 'center',
+    gap: 1,
+  },
+  headerEyebrow: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.1,
+  },
+  headerTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
     color: COLORS.text,
-    letterSpacing: 2,
     textAlign: 'center',
-    opacity: 0.7,
   },
   headerSpacer: {
     width: 36,
@@ -276,33 +376,42 @@ const styles = StyleSheet.create({
 
   /* ── Tab Switcher ── */
   tabBar: {
+    height: 40,
     flexDirection: 'row',
-    gap: 40,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm + 5,
-    paddingBottom: SPACING.md - 2,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 12,
+    padding: 3,
+    borderRadius: CARD_RADIUS_SM,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
   },
   pill: {
+    flex: 1,
+    height: '100%',
     alignItems: 'center',
-    paddingBottom: 6,
+    justifyContent: 'center',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  pillActiveFill: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
   },
   pillText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 15,
-    letterSpacing: 2,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    letterSpacing: 1.2,
     color: COLORS.textTertiary,
   },
   pillTextActive: {
     color: '#FFFFFF',
-  },
-  pillUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
   },
 
   /* ── Scroll ── */
@@ -310,87 +419,130 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.xl,
   },
 
   /* ── Tab content shared ── */
   tabContent: {
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.screenHorizontal,
+    gap: 12,
+  },
+  guideCard: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  guideCardEdge: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    padding: 16,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  },
+  sectionTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  sectionMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
   },
 
   /* ── Record tab: visual stage ── */
   visualStage: {
-    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.lg,
-    marginBottom: SPACING.sm,
-    borderRadius: 16,
+    paddingVertical: 18,
+    overflow: 'hidden',
+  },
+  visualHeader: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  viewTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(122, 85, 255, 0.20)',
   },
   viewTypeLabel: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 11,
-    color: COLORS.primary,
-    letterSpacing: 4,
-    marginBottom: 16,
-  },
-
-  /* ── Shared instructions section ── */
-  instructionsSection: {
-    paddingTop: SPACING.md,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.text,
+    letterSpacing: 1.2,
   },
   keySetup: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 22,
-    color: COLORS.primary,
+    color: COLORS.text,
     letterSpacing: -0.3,
-    lineHeight: 30,
-    marginBottom: 10,
+    lineHeight: 28,
+    marginBottom: 8,
   },
   reasonText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.textSecondary,
-    lineHeight: 22,
+    lineHeight: 21,
   },
 
   /* ── Record tab: camera tips ── */
-  cameraTipsSection: {
-    paddingTop: SPACING.lg,
-  },
   cameraTipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: SPACING.sm,
+    gap: 12,
+    paddingVertical: 10,
   },
-  cameraTipBullet: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: COLORS.textSecondary,
-    marginTop: 8,
-    marginRight: 12,
+  smallNumberBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.20)',
+    marginTop: 1,
+  },
+  smallNumberText: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 11,
+    color: COLORS.accent,
   },
   cameraTipText: {
     flex: 1,
     fontFamily: FONTS.ui.regular,
     fontSize: 14,
     color: COLORS.textSecondary,
-    lineHeight: 20,
+    lineHeight: 21,
+  },
+  rowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.045)',
   },
 
   /* ── Perform tab: image ── */
-  imageContainer: {
-    height: 200,
-    borderRadius: 16,
+  imageCardEdge: {
+    height: 230,
+    padding: 12,
     overflow: 'hidden',
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseImage: {
     width: '100%',
@@ -399,16 +551,9 @@ const styles = StyleSheet.create({
 
   /* ── Perform tab: image placeholder (fallback) ── */
   imagePlaceholder: {
-    height: 200,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderStyle: 'dashed',
+    height: 220,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   imagePlaceholderText: {
     fontFamily: FONTS.mono.regular,
@@ -419,52 +564,49 @@ const styles = StyleSheet.create({
 
   /* ── Section headers ── */
   sectionHeader: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 11,
-    color: COLORS.primary,
-    letterSpacing: 3,
-    marginBottom: SPACING.md,
-    marginTop: SPACING.xs,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.4,
   },
 
   /* ── Steps ── */
   stepRow: {
     flexDirection: 'row',
-    marginBottom: SPACING.md,
     alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 11,
   },
   stepNumber: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 14,
-    color: COLORS.primary,
-    width: 24,
-    opacity: 0.7,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.20)',
+  },
+  stepNumberText: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.accent,
   },
   stepText: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.text,
-    lineHeight: 22,
+    lineHeight: 21,
     flex: 1,
-    opacity: 0.85,
-  },
-
-  /* ── Mistakes ── */
-  mistakesSection: {
-    paddingTop: SPACING.lg,
   },
   mistakeRow: {
     flexDirection: 'row',
-    marginBottom: SPACING.sm + 4,
     alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 10,
   },
-  bulletDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: COLORS.textSecondary,
-    marginTop: 8,
-    marginRight: 12,
+  mistakeIcon: {
+    marginTop: 2,
   },
   mistakeText: {
     fontFamily: FONTS.ui.regular,
@@ -476,17 +618,16 @@ const styles = StyleSheet.create({
 
   /* ── CTA ── */
   ctaContainer: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
   },
   ctaButton: {
-    height: 56,
-    borderRadius: 28,
+    height: 54,
+    borderRadius: CARD_RADIUS_SM,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
   ctaText: {
     fontFamily: FONTS.display.bold,

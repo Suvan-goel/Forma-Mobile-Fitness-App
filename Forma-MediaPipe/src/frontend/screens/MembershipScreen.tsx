@@ -10,7 +10,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ChevronLeft,
   Crown,
   Check,
   Lock,
@@ -25,8 +24,12 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW
 } from '../constants/theme';
-import { useSubscription } from '../../backend/hooks';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { useSubscription } from '../../backend/hooks/useSubscription';
 import { useAlert } from '../contexts/AlertContext';
 
 interface MembershipScreenProps {
@@ -66,20 +69,8 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Membership</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader title="MEMBERSHIP" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
@@ -156,13 +147,13 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
                       <Text style={styles.featureName}>{feature.name}</Text>
                       <View style={styles.featureCheck}>
                         {feature.freeIncluded ? (
-                          <Check size={14} color="#34D399" strokeWidth={2} />
+                          <Check size={14} color="#34E0A6" strokeWidth={2} />
                         ) : (
                           <Lock size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
                         )}
                       </View>
                       <View style={styles.featureCheck}>
-                        <Check size={14} color="#34D399" strokeWidth={2} />
+                        <Check size={14} color="#34E0A6" strokeWidth={2} />
                       </View>
                     </View>
                     {!isLast && <View style={styles.divider} />}
@@ -176,7 +167,7 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
           {!isPremium ? (
             <TouchableOpacity activeOpacity={0.8} onPress={handleUpgrade} style={styles.upgradeBtn}>
               <LinearGradient
-                colors={['#8B5CF6', '#7C3AED'] as const}
+                colors={['#7A55FF', '#633FE5'] as const}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.upgradeBtnGradient}
@@ -187,7 +178,7 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
             </TouchableOpacity>
           ) : (
             <View style={styles.currentPlanBadge}>
-              <Check size={14} color="#34D399" strokeWidth={2} />
+              <Check size={14} color="#34E0A6" strokeWidth={2} />
               <Text style={styles.currentPlanText}>You're on the Premium plan</Text>
             </View>
           )}
@@ -197,41 +188,14 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
           </Text>
         </Animated.View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-  },
-  headerSpacer: {
-    width: 40,
+    backgroundColor: 'transparent',
   },
   scroll: {
     flex: 1,
@@ -241,14 +205,17 @@ const styles = StyleSheet.create({
     paddingBottom: 160,
   },
   planCard: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS,
     marginTop: 18,
     marginBottom: 8,
-  },
+
+    ...CARD_SHADOW,
+},
   planCardEdge: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 20,
   },
   planCardEdgePremium: {
@@ -285,8 +252,8 @@ const styles = StyleSheet.create({
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 7,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -295,9 +262,9 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.3,
   },
   columnHeaders: {
     flexDirection: 'row',
@@ -321,24 +288,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   cardGradient: {
-    borderRadius: 18,
-  },
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: CARD_RADIUS,
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
-    borderRadius: 18,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
+    paddingVertical: 10,
   },
   featureName: {
     flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
     color: COLORS.text,
     letterSpacing: 0.1,
   },
@@ -349,7 +321,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
   upgradeBtn: {
     marginTop: 28,
@@ -385,7 +357,7 @@ const styles = StyleSheet.create({
   currentPlanText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 14,
-    color: '#34D399',
+    color: '#34E0A6',
   },
   footerNote: {
     fontFamily: FONTS.ui.regular,

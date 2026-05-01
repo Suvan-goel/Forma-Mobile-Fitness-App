@@ -73,6 +73,8 @@ function computeReachRatio(
 
 /** FSM thresholds (reach ratio) */
 const THRESHOLDS = {
+  /** Ratio below which the pull clock starts before the FSM commits */
+  PULL_CLOCK_START: 0.985,
   /** Ratio below which we transition REST -> PULLING (arms starting to bend) */
   PULLING_ENTER: 0.90,
   /** Ratio below which we consider peak contraction (PULLING -> CONTRACTED) */
@@ -136,6 +138,8 @@ interface CableRowFSM {
   phase: CableRowPhase;
   /** Timestamp when pull began (REST -> PULLING) */
   tRepStart: number | null;
+  /** Timestamp when the user first moved out of full extension */
+  tPullStart: number | null;
   /** Timestamp when peak contraction was reached */
   tContracted: number | null;
   /** Timestamp when rep completed (RETURNING -> REST) */
@@ -158,6 +162,7 @@ interface RepWindow {
   /** Timestamps */
   tStart: number;
   tContracted: number | null;
+  tReturnStart: number | null;
   tEnd: number;
   /** Frame count */
   frameCount: number;
@@ -183,6 +188,8 @@ interface CableRowState {
   warmedUp: boolean;
   /** Current smoothed values for debug */
   smoothedRatio: number | null;
+  /** Median-only ratio used for responsive FSM transitions */
+  fastRatio: number | null;
   smoothedShoulder: number | null;
   smoothedTorso: number | null;
   /** Feedback */
@@ -197,6 +204,7 @@ interface CableRowDebugInfo {
   side: 'left' | 'right';
   warmedUp: boolean;
   ratio: number | null;
+  fastRatio: number | null;
   shoulderAngle: number | null;
   torsoDev: number | null;
   ratioMin: number | null;
@@ -213,21 +221,23 @@ function initFSM(): CableRowFSM {
   return {
     phase: 'REST',
     tRepStart: null,
+    tPullStart: null,
     tContracted: null,
     tRepEnd: null,
   };
 }
 
-function initRepWindow(tStart: number): RepWindow {
+function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   return {
-    minRatio: Infinity,
-    maxRatio: -Infinity,
+    minRatio: initialRatio ?? Infinity,
+    maxRatio: initialRatio ?? -Infinity,
     shoulderAngleBaseline: null,
     maxShoulderDelta: 0,
     torsoDevBaseline: null,
     maxTorsoDev: 0,
     tStart,
     tContracted: null,
+    tReturnStart: null,
     tEnd: tStart,
     frameCount: 0,
   };
@@ -252,6 +262,7 @@ function initializeCableRowState(): CableRowState {
     }),
     warmedUp: false,
     smoothedRatio: null,
+    fastRatio: null,
     smoothedShoulder: null,
     smoothedTorso: null,
     feedback: null,
@@ -387,9 +398,15 @@ function updateFSM(
     case 'REST':
       // Waiting for pull to begin. When ratio drops below threshold,
       // transition to PULLING.
+      if (ratio < THRESHOLDS.PULL_CLOCK_START) {
+        fsm.tPullStart ??= t;
+      } else {
+        fsm.tPullStart = null;
+      }
+
       if (ratio < THRESHOLDS.PULLING_ENTER) {
         fsm.phase = 'PULLING';
-        fsm.tRepStart = t;
+        fsm.tRepStart = fsm.tPullStart ?? t;
         fsm.tContracted = null;
         fsm.tRepEnd = null;
       }
@@ -404,6 +421,7 @@ function updateFSM(
         // Went back to extended without contracting -- abort
         fsm.phase = 'REST';
         fsm.tRepStart = null;
+        fsm.tPullStart = null;
       }
       break;
 
@@ -460,7 +478,7 @@ function computeCableRowScore(repWindow: RepWindow): number {
   // 5. Tempo
   if (repWindow.tContracted !== null) {
     const tPull = repWindow.tContracted - repWindow.tStart;    // concentric (pull)
-    const tReturn = repWindow.tEnd - repWindow.tContracted;     // eccentric (return)
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tContracted); // eccentric (return)
 
     // Penalize if too fast
     if (tPull > 0 && tPull < PENALTY_CONFIGS.TEMPO_PULL.deadzone) {
@@ -506,7 +524,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   // 5. Tempo
   if (repWindow.tContracted !== null) {
     const tPull = repWindow.tContracted - repWindow.tStart;
-    const tReturn = repWindow.tEnd - repWindow.tContracted;
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tContracted);
 
     if (tPull > 0 && tPull < FORM_THRESHOLDS.TEMPO_PULL_MIN) {
       messages.push('Slow down the pull \u2014 control the contraction.');
@@ -554,6 +572,7 @@ function updateCableRowState(
       ...currentState,
       visibleSide,
       smoothedRatio: null,
+      fastRatio: null,
       smoothedShoulder: null,
       smoothedTorso: null,
     };
@@ -561,6 +580,7 @@ function updateCableRowState(
 
   // Smooth values
   const smoothedRatio = currentState.ratioTracker.push(rawRatio);
+  const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedShoulder = rawShoulder !== null
     ? currentState.shoulderTracker.push(rawShoulder)
     : currentState.shoulderTracker.value;
@@ -572,22 +592,23 @@ function updateCableRowState(
     ...currentState,
     visibleSide,
     smoothedRatio,
+    fastRatio: isNaN(fastRatio) ? null : fastRatio,
     smoothedShoulder: isNaN(smoothedShoulder) ? null : smoothedShoulder,
     smoothedTorso: isNaN(smoothedTorso) ? null : smoothedTorso,
   };
 
-  if (isNaN(smoothedRatio)) {
+  if (isNaN(fastRatio)) {
     return newState;
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothedRatio, t);
+  const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
 
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
-    newState.repWindow = initRepWindow(t);
+    newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio);
   }
 
   if (newState.repWindow && inRep) {
@@ -643,6 +664,14 @@ function updateCableRowState(
     // Record contracted timestamp
     if (newState.fsm.phase === 'CONTRACTED' && window.tContracted === null) {
       window.tContracted = t;
+    }
+
+    if (
+      currentState.fsm.phase === 'CONTRACTED' &&
+      newState.fsm.phase === 'RETURNING' &&
+      window.tReturnStart === null
+    ) {
+      window.tReturnStart = t;
     }
   }
 
@@ -702,6 +731,7 @@ function getDebugInfo(state: CableRowState): CableRowDebugInfo {
     side: state.visibleSide,
     warmedUp: state.warmedUp,
     ratio: fmt(state.smoothedRatio),
+    fastRatio: fmt(state.fastRatio),
     shoulderAngle: fmt(state.smoothedShoulder),
     torsoDev: fmt(state.smoothedTorso),
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,

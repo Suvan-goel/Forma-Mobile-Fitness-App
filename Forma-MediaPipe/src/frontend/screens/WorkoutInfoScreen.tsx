@@ -6,14 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, Video, Lightbulb, ChevronDown } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
-import { RootStackParamList } from '../app/RootNavigator';
-
-type WorkoutInfoRouteProp = RouteProp<RootStackParamList, 'WorkoutInfo'>;
-
 const category = {
   title: 'Weightlifting',
   color: COLORS.primary,
@@ -70,7 +66,6 @@ const recordingInstructions = [
 
 export const WorkoutInfoScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const route = useRoute<WorkoutInfoRouteProp>();
   const insets = useSafeAreaInsets();
   const color = category.color;
 
@@ -114,7 +109,6 @@ export const WorkoutInfoScreen: React.FC = () => {
           <View style={styles.instructionsList}>
             {recordingInstructions.map((instruction, index) => {
               const InstructionIcon = instruction.icon;
-              const iconColors = instruction.colors || { faded: color + '20', full: color };
               return (
                 <View key={index} style={styles.instructionItem}>
                   <InstructionIcon size={20} color={COLORS.text} />
@@ -135,7 +129,7 @@ export const WorkoutInfoScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   header: {
     paddingHorizontal: SPACING.screenHorizontal,
@@ -205,4 +199,3 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
-

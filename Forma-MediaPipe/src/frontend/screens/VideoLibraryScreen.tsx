@@ -1,35 +1,40 @@
-import React, { useCallback, useState, useRef, useEffect, useMemo, memo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  Animated,
   FlatList,
-  TouchableOpacity,
   Image,
   Modal,
-  Platform,
-  Animated,
   RefreshControl,
   ScrollView,
-  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  ChevronLeft, Trash2, Play, HardDrive,
-  Filter, X, Dumbbell, ChevronRight,
+  Bookmark,
+  Filter,
+  Play,
 } from 'lucide-react-native';
 import {
-  COLORS, FONTS, SPACING,
-  SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  COLORS,
+  FONTS,
+  SPACING,
   getScoreColor,
 } from '../constants/theme';
+import { EmptyState } from '../components/ui/EmptyState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { MonoText } from '../components/typography/MonoText';
-import { LoadingSkeleton, EmptyState } from '../components/ui';
 import { useAlert } from '../contexts/AlertContext';
 import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
-import { useWorkouts } from '../../backend/hooks';
+import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
 
 let VideoComponent: any = null;
@@ -38,8 +43,6 @@ try {
 } catch {
   // expo-av Video not available
 }
-
-// ── Types ────────────────────────────────────────────
 
 type FilterMode = 'all' | 'exercise' | 'workout' | 'date';
 type DateRange = 'all' | 'today' | 'week' | 'month';
@@ -51,8 +54,6 @@ interface WorkoutGroup {
   exercises: string[];
   setCount: number;
 }
-
-// ── Constants ────────────────────────────────────────
 
 const FILTER_TABS: { key: FilterMode; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -68,159 +69,162 @@ const DATE_RANGES: { value: DateRange; label: string }[] = [
   { value: 'month', label: 'This Month' },
 ];
 
-// ── Helpers ──────────────────────────────────────────
-
-const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-};
-
-const formatFullDate = (iso: string) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-};
+const MOBILITY_TERMS = ['mobility', 'stretch', 'yoga', 'warmup', 'warm-up', 'activation'];
+const RECOVERY_TERMS = ['recovery', 'cooldown', 'cool-down', 'rest', 'breathing'];
 
 const formatDuration = (seconds: number) => {
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  const safeSeconds = Math.max(0, Math.round(seconds || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
 };
 
-// ── Layout ───────────────────────────────────────────
+const formatDate = (iso: string) => {
+  const date = new Date(iso);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
-const GRID_GAP = 10;
-const CARD_WIDTH = (Dimensions.get('window').width - SPACING.screenHorizontal * 2 - GRID_GAP) / 2;
-const THUMB_HEIGHT = CARD_WIDTH * 1.25;
+const getCategory = (record: VideoRecord): 'Strength' | 'Mobility' | 'Recovery' => {
+  const name = record.exerciseName.toLowerCase();
+  if (MOBILITY_TERMS.some(term => name.includes(term))) return 'Mobility';
+  if (RECOVERY_TERMS.some(term => name.includes(term))) return 'Recovery';
+  return 'Strength';
+};
 
-// ── VideoCard Component ──────────────────────────────
+const getDifficulty = (score: number) => {
+  if (score >= 85) return 'Advanced';
+  if (score >= 70) return 'Intermediate';
+  return 'Beginner';
+};
 
-const VideoCard = memo(({ item, onPlay, onDelete }: {
+const getSubtitle = (record: VideoRecord) => {
+  return `Set ${record.setNumber} · ${record.reps} reps`;
+};
+
+const VideoRow = memo(({
+  item,
+  workoutName,
+  onPlay,
+  onDelete,
+}: {
   item: VideoRecord;
+  workoutName: string;
   onPlay: (item: VideoRecord) => void;
   onDelete: (item: VideoRecord) => void;
 }) => {
+  const category = getCategory(item);
+  const difficulty = getDifficulty(item.formScore);
   const scoreColor = getScoreColor(item.formScore);
 
   return (
     <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.85}
+      activeOpacity={0.84}
       onPress={() => onPlay(item)}
       onLongPress={() => onDelete(item)}
+      style={styles.videoRow}
     >
-      <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
-        start={CARD_GRADIENT_START}
-        end={CARD_GRADIENT_END}
-        style={styles.cardGradient}
-      >
-        <View style={styles.cardEdge}>
-          {/* Thumbnail area */}
-          <View style={styles.thumbWrap}>
-            {item.thumbnailPath ? (
-              <Image source={{ uri: item.thumbnailPath }} style={styles.thumbnail} />
-            ) : (
-              <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-                <View style={styles.playIconWrap}>
-                  <Play size={20} color="rgba(255,255,255,0.7)" strokeWidth={1.5} fill="rgba(255,255,255,0.7)" />
-                </View>
-              </View>
-            )}
-            {/* Duration + date badge */}
-            <View style={styles.durationBadge}>
-              <MonoText style={styles.durationText}>{formatFullDate(item.date)} · {formatDuration(item.durationSeconds)}</MonoText>
-            </View>
-            {/* Score badge */}
-            <View style={[styles.scoreBadge, { backgroundColor: 'rgba(0, 0, 0, 0.65)' }]}>
-              <MonoText style={[styles.scoreText, { color: scoreColor }]}>{item.formScore}</MonoText>
-            </View>
-          </View>
+      <View style={styles.thumbWrap}>
+        {item.thumbnailPath ? (
+          <Image source={{ uri: item.thumbnailPath }} style={styles.thumbnail} />
+        ) : (
+          <LinearGradient
+            colors={['rgba(255,255,255,0.075)', 'rgba(255,255,255,0.025)']}
+            style={[styles.thumbnail, styles.thumbnailPlaceholder]}
+          >
+            <Play size={20} color="rgba(255,255,255,0.76)" fill="rgba(255,255,255,0.76)" />
+          </LinearGradient>
+        )}
+        <View style={styles.durationBadge}>
+          <MonoText style={styles.durationText}>{formatDuration(item.durationSeconds)}</MonoText>
+        </View>
+      </View>
 
-          {/* Info area */}
-          <View style={styles.cardInfo}>
-            <View style={styles.infoTopRow}>
-              <Text style={styles.cardExercise} numberOfLines={1}>{item.exerciseName}</Text>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => onDelete(item)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Trash2 size={12} color="#EF4444" strokeWidth={1.5} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.statsRow}>
-              <Text style={styles.statLabel}>REPS</Text>
-              <MonoText style={styles.statValue}>{item.reps}</MonoText>
-              <View style={styles.statDivider} />
-              <Text style={styles.statLabel}>SET</Text>
-              <MonoText style={styles.statValue}>{item.setNumber}</MonoText>
-            </View>
+      <View style={styles.videoCopy}>
+        <Text style={styles.videoTitle} numberOfLines={1}>{item.exerciseName}</Text>
+        <Text style={styles.videoMetaLine} numberOfLines={1}>
+          {formatDate(item.date)} · {workoutName}
+        </Text>
+        <Text style={styles.videoSubtitle} numberOfLines={1}>{getSubtitle(item)}</Text>
+        <View style={styles.metaRow}>
+          <View style={styles.metaPill}>
+            <Text style={styles.metaText}>{category}</Text>
+          </View>
+          <View style={styles.metaPill}>
+            <Text style={styles.metaText}>{difficulty}</Text>
+          </View>
+          <View style={[styles.metaPill, styles.scorePill]}>
+            <Text style={[styles.metaText, { color: scoreColor }]}>Form {item.formScore}</Text>
           </View>
         </View>
-      </LinearGradient>
+      </View>
+
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onLongPress={() => onDelete(item)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={styles.bookmarkButton}
+      >
+        <Bookmark size={20} color={COLORS.textSecondary} strokeWidth={1.7} />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 });
-
-// ── Main Screen ──────────────────────────────────────
 
 export const VideoLibraryScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { showAlert } = useAlert();
   const {
-    recordings, isLoading, refreshing, storageInfo,
-    deleteRecording, refreshRecordings, pullToRefresh,
+    recordings,
+    isLoading,
+    refreshing,
+    storageInfo,
+    deleteRecording,
+    refreshRecordings,
+    pullToRefresh,
   } = useVideoLibrary();
   const { workouts } = useWorkouts();
 
-  // UI state
   const [playingVideo, setPlayingVideo] = useState<VideoRecord | null>(null);
-  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
-
-  // Filter state
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('all');
 
-  // Animated entrance
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(16)).current;
 
   useFocusEffect(
     useCallback(() => {
       refreshRecordings();
-    }, [refreshRecordings])
+    }, [refreshRecordings]),
   );
 
   useEffect(() => {
-    if (!isLoading && recordings.length > 0) {
+    if (!isLoading) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 700,
+          duration: 420,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 700,
+          duration: 420,
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, [isLoading, recordings.length, fadeAnim, slideAnim]);
-
-  // ── Derived data ──────────────────────────────────
+  }, [fadeAnim, isLoading, slideAnim]);
 
   const uniqueExercises = useMemo(() => {
-    const names = new Set(recordings.map(r => r.exerciseName));
+    const names = new Set(recordings.map(record => record.exerciseName));
     return Array.from(names).sort();
   }, [recordings]);
 
   const workoutNameMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const w of workouts) map.set(w.id, w.name);
+    for (const workout of workouts) map.set(workout.id, workout.name);
     return map;
   }, [workouts]);
 
@@ -228,28 +232,33 @@ export const VideoLibraryScreen: React.FC = () => {
     const workoutMap = new Map<string, { id: string; date: string; exercises: Set<string>; setCount: number }>();
     let unlinkedCount = 0;
 
-    for (const r of recordings) {
-      if (!r.workoutId) {
+    for (const record of recordings) {
+      if (!record.workoutId) {
         unlinkedCount++;
         continue;
       }
-      const existing = workoutMap.get(r.workoutId);
+
+      const existing = workoutMap.get(record.workoutId);
       if (existing) {
-        existing.exercises.add(r.exerciseName);
+        existing.exercises.add(record.exerciseName);
         existing.setCount++;
-        if (r.date < existing.date) existing.date = r.date;
+        if (record.date < existing.date) existing.date = record.date;
       } else {
-        workoutMap.set(r.workoutId, {
-          id: r.workoutId,
-          date: r.date,
-          exercises: new Set([r.exerciseName]),
+        workoutMap.set(record.workoutId, {
+          id: record.workoutId,
+          date: record.date,
+          exercises: new Set([record.exerciseName]),
           setCount: 1,
         });
       }
     }
 
     const linked: WorkoutGroup[] = Array.from(workoutMap.values())
-      .map(w => ({ ...w, name: workoutNameMap.get(w.id) || '', exercises: Array.from(w.exercises) }))
+      .map(workout => ({
+        ...workout,
+        name: workoutNameMap.get(workout.id) || '',
+        exercises: Array.from(workout.exercises),
+      }))
       .sort((a, b) => b.date.localeCompare(a.date));
 
     return { linked, hasUnlinked: unlinkedCount > 0 };
@@ -259,39 +268,37 @@ export const VideoLibraryScreen: React.FC = () => {
     let result = recordings;
 
     if (filterMode === 'exercise' && selectedExercise) {
-      result = result.filter(r => r.exerciseName === selectedExercise);
+      result = result.filter(record => record.exerciseName === selectedExercise);
     } else if (filterMode === 'workout' && selectedWorkoutId) {
-      if (selectedWorkoutId === '__unlinked__') {
-        result = result.filter(r => !r.workoutId);
-      } else {
-        result = result.filter(r => r.workoutId === selectedWorkoutId);
-      }
+      result = selectedWorkoutId === '__unlinked__'
+        ? result.filter(record => !record.workoutId)
+        : result.filter(record => record.workoutId === selectedWorkoutId);
     } else if (filterMode === 'date' && selectedDateRange !== 'all') {
       const now = new Date();
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
       if (selectedDateRange === 'today') {
-        result = result.filter(r => new Date(r.date) >= startOfDay);
+        result = result.filter(record => new Date(record.date) >= startOfDay);
       } else if (selectedDateRange === 'week') {
         const weekAgo = new Date(startOfDay);
         weekAgo.setDate(weekAgo.getDate() - 7);
-        result = result.filter(r => new Date(r.date) >= weekAgo);
+        result = result.filter(record => new Date(record.date) >= weekAgo);
       } else if (selectedDateRange === 'month') {
         const monthAgo = new Date(startOfDay);
         monthAgo.setMonth(monthAgo.getMonth() - 1);
-        result = result.filter(r => new Date(r.date) >= monthAgo);
+        result = result.filter(record => new Date(record.date) >= monthAgo);
       }
     }
 
     return result;
-  }, [recordings, filterMode, selectedExercise, selectedWorkoutId, selectedDateRange]);
+  }, [filterMode, recordings, selectedDateRange, selectedExercise, selectedWorkoutId]);
 
-  const hasActiveFilter = filterMode !== 'all' && (
-    (filterMode === 'exercise' && selectedExercise !== null) ||
-    (filterMode === 'workout' && selectedWorkoutId !== null) ||
-    (filterMode === 'date' && selectedDateRange !== 'all')
-  );
-
-  // ── Handlers ──────────────────────────────────────
+  const handleFilterModeChange = useCallback((mode: FilterMode) => {
+    setFilterMode(mode);
+    setSelectedExercise(null);
+    setSelectedWorkoutId(null);
+    setSelectedDateRange('all');
+  }, []);
 
   const handleDelete = useCallback((record: VideoRecord) => {
     showAlert(
@@ -304,7 +311,7 @@ export const VideoLibraryScreen: React.FC = () => {
           style: 'destructive',
           onPress: () => deleteRecording(record.id),
         },
-      ]
+      ],
     );
   }, [deleteRecording, showAlert]);
 
@@ -312,99 +319,147 @@ export const VideoLibraryScreen: React.FC = () => {
     setPlayingVideo(record);
   }, []);
 
-  const handleFilterModeChange = useCallback((mode: FilterMode) => {
-    setFilterMode(mode);
-    setSelectedExercise(null);
-    setSelectedWorkoutId(null);
-    setSelectedDateRange('all');
-  }, []);
-
-  const clearFilters = useCallback(() => {
-    setFilterMode('all');
-    setSelectedExercise(null);
-    setSelectedWorkoutId(null);
-    setSelectedDateRange('all');
-  }, []);
-
-  const getActiveFilterLabel = useCallback(() => {
-    if (filterMode === 'exercise' && selectedExercise) return selectedExercise;
-    if (filterMode === 'workout' && selectedWorkoutId) {
-      if (selectedWorkoutId === '__unlinked__') return 'Unlinked';
-      const workout = uniqueWorkouts.linked.find(w => w.id === selectedWorkoutId);
-      return workout ? formatFullDate(workout.date) : 'Workout';
-    }
-    if (filterMode === 'date' && selectedDateRange !== 'all') {
-      const range = DATE_RANGES.find(r => r.value === selectedDateRange);
-      return range?.label ?? '';
-    }
-    return '';
-  }, [filterMode, selectedExercise, selectedWorkoutId, selectedDateRange, uniqueWorkouts.linked]);
+  const getWorkoutNameForRecording = useCallback((record: VideoRecord) => {
+    if (!record.workoutId) return 'Unlinked workout';
+    return workoutNameMap.get(record.workoutId) || 'Saved workout';
+  }, [workoutNameMap]);
 
   const renderItem = useCallback(({ item }: { item: VideoRecord }) => (
-    <VideoCard item={item} onPlay={handlePlay} onDelete={handleDelete} />
-  ), [handlePlay, handleDelete]);
+    <VideoRow
+      item={item}
+      workoutName={getWorkoutNameForRecording(item)}
+      onPlay={handlePlay}
+      onDelete={handleDelete}
+    />
+  ), [getWorkoutNameForRecording, handleDelete, handlePlay]);
 
-  // ── Loading state ─────────────────────────────────
+  const header = (
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterRow}
+      >
+        {FILTER_TABS.map(tab => {
+          const isActive = filterMode === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.filterPill, isActive && styles.filterPillActive]}
+              onPress={() => handleFilterModeChange(tab.key)}
+              activeOpacity={0.78}
+            >
+              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {filterMode === 'exercise' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.subFilterScroll}
+          contentContainerStyle={styles.subFilterRow}
+        >
+          {uniqueExercises.map(name => (
+            <TouchableOpacity
+              key={name}
+              style={[styles.subFilterPill, selectedExercise === name && styles.subFilterPillActive]}
+              onPress={() => setSelectedExercise(prev => prev === name ? null : name)}
+              activeOpacity={0.76}
+            >
+              <Text style={[styles.subFilterText, selectedExercise === name && styles.subFilterTextActive]} numberOfLines={1}>
+                {name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {filterMode === 'workout' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.subFilterScroll}
+          contentContainerStyle={styles.subFilterRow}
+        >
+          {uniqueWorkouts.linked.map(workout => (
+            <TouchableOpacity
+              key={workout.id}
+              style={[styles.subFilterPill, selectedWorkoutId === workout.id && styles.subFilterPillActive]}
+              onPress={() => setSelectedWorkoutId(prev => prev === workout.id ? null : workout.id)}
+              activeOpacity={0.76}
+            >
+              <Text style={[styles.subFilterText, selectedWorkoutId === workout.id && styles.subFilterTextActive]} numberOfLines={1}>
+                {workout.name || formatDate(workout.date)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {uniqueWorkouts.hasUnlinked && (
+            <TouchableOpacity
+              style={[styles.subFilterPill, selectedWorkoutId === '__unlinked__' && styles.subFilterPillActive]}
+              onPress={() => setSelectedWorkoutId(prev => prev === '__unlinked__' ? null : '__unlinked__')}
+              activeOpacity={0.76}
+            >
+              <Text style={[styles.subFilterText, selectedWorkoutId === '__unlinked__' && styles.subFilterTextActive]}>
+                Unlinked
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      )}
+
+      {filterMode === 'date' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.subFilterScroll}
+          contentContainerStyle={styles.subFilterRow}
+        >
+          {DATE_RANGES.map(range => (
+            <TouchableOpacity
+              key={range.value}
+              style={[styles.subFilterPill, selectedDateRange === range.value && styles.subFilterPillActive]}
+              onPress={() => setSelectedDateRange(range.value)}
+              activeOpacity={0.76}
+            >
+              <Text style={[styles.subFilterText, selectedDateRange === range.value && styles.subFilterTextActive]}>
+                {range.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>All Videos</Text>
+        <Text style={styles.sectionCount}>
+          {filteredRecordings.length} {filteredRecordings.length === 1 ? 'video' : 'videos'}
+        </Text>
+      </View>
+    </View>
+  );
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
-              <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-            </TouchableOpacity>
-            <View style={styles.logoWrap}>
-              <Image
-                source={require('../assets/forma_purple_logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
-            <View style={styles.headerTextWrap}>
-              <Text style={styles.headerName}>VIDEOS</Text>
-              <Text style={styles.headerSubtitle}>LOADING...</Text>
-            </View>
-          </View>
-        </View>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+        <Header onBack={() => navigation.goBack()} storageLabel={`${storageInfo.totalSizeMB}MB`} />
         <View style={styles.loadingWrap}>
-          <LoadingSkeleton variant="card" height={48} style={{ marginBottom: SPACING.md }} />
-          <View style={styles.loadingGrid}>
-            <LoadingSkeleton variant="card" height={THUMB_HEIGHT + 60} style={{ flex: 1 }} />
-            <LoadingSkeleton variant="card" height={THUMB_HEIGHT + 60} style={{ flex: 1 }} />
-          </View>
-          <View style={[styles.loadingGrid, { marginTop: GRID_GAP }]}>
-            <LoadingSkeleton variant="card" height={THUMB_HEIGHT + 60} style={{ flex: 1 }} />
-            <LoadingSkeleton variant="card" height={THUMB_HEIGHT + 60} style={{ flex: 1 }} />
-          </View>
+          <LoadingSkeleton variant="card" height={34} style={{ marginBottom: 18 }} />
+          <LoadingSkeleton variant="card" height={94} style={{ marginBottom: 8 }} />
+          <LoadingSkeleton variant="card" height={94} style={{ marginBottom: 8 }} />
+          <LoadingSkeleton variant="card" height={94} />
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
-  // ── Empty state (no recordings) ───────────────────
-
   if (recordings.length === 0) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
-              <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-            </TouchableOpacity>
-            <View style={styles.logoWrap}>
-              <Image
-                source={require('../assets/forma_purple_logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
-            <View style={styles.headerTextWrap}>
-              <Text style={styles.headerName}>VIDEOS</Text>
-              <Text style={styles.headerSubtitle}>0 RECORDINGS</Text>
-            </View>
-          </View>
-        </View>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+        <Header onBack={() => navigation.goBack()} storageLabel={`${storageInfo.totalSizeMB}MB`} />
         <View style={styles.emptyWrap}>
           <EmptyState
             title="No recordings yet"
@@ -412,46 +467,20 @@ export const VideoLibraryScreen: React.FC = () => {
             icon={Play}
           />
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
-  // ── Main content ──────────────────────────────────
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── Header (Social-style) ────────────────── */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
-            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerName}>VIDEOS</Text>
-            <Text style={styles.headerSubtitle}>{storageInfo.count} {storageInfo.count === 1 ? 'RECORDING' : 'RECORDINGS'}</Text>
-          </View>
-        </View>
-        <View style={styles.storageBadge}>
-          <HardDrive size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-          <MonoText style={styles.storageText}>{storageInfo.totalSizeMB}MB</MonoText>
-        </View>
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <Header onBack={() => navigation.goBack()} storageLabel={`${storageInfo.totalSizeMB}MB`} />
 
       <Animated.View style={[styles.contentWrap, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <FlatList
           data={filteredRecordings}
           renderItem={renderItem}
           keyExtractor={item => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 20 }]}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 22 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -461,211 +490,23 @@ export const VideoLibraryScreen: React.FC = () => {
               colors={[COLORS.accent]}
             />
           }
-          removeClippedSubviews
-          initialNumToRender={6}
-          maxToRenderPerBatch={4}
-          windowSize={7}
-          ListHeaderComponent={
-            <View>
-              {/* ── Filter Tab Bar ─────────────────── */}
-              <View style={styles.filterTabRow}>
-                {FILTER_TABS.map(tab => (
-                  <TouchableOpacity
-                    key={tab.key}
-                    style={styles.filterTab}
-                    onPress={() => handleFilterModeChange(tab.key)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.filterTabText, filterMode === tab.key && styles.filterTabTextActive]}>
-                      {tab.label}
-                    </Text>
-                    {filterMode === tab.key && <View style={styles.filterUnderline} />}
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* ── Sub-filters ────────────────────── */}
-              {filterMode === 'exercise' && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.subFilterScroll}
-                  contentContainerStyle={styles.subFilterContent}
-                >
-                  {uniqueExercises.map(name => (
-                    <TouchableOpacity
-                      key={name}
-                      style={[styles.subFilterPill, selectedExercise === name && styles.subFilterPillActive]}
-                      onPress={() => setSelectedExercise(prev => prev === name ? null : name)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.subFilterPillText, selectedExercise === name && styles.subFilterPillTextActive]}>
-                        {name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-
-              {filterMode === 'workout' && (
-                <TouchableOpacity
-                  style={styles.selectWorkoutBtn}
-                  onPress={() => setShowWorkoutModal(true)}
-                  activeOpacity={0.7}
-                >
-                  <Dumbbell size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-                  <Text style={styles.selectWorkoutBtnText} numberOfLines={1}>
-                    {selectedWorkoutId
-                      ? (selectedWorkoutId === '__unlinked__'
-                        ? 'Unlinked Recordings'
-                        : (() => {
-                            const w = uniqueWorkouts.linked.find(wk => wk.id === selectedWorkoutId);
-                            if (!w) return 'Select Workout';
-                            return w.name ? `${w.name} — ${formatFullDate(w.date)}` : `${formatFullDate(w.date)} — ${w.exercises.join(', ')}`;
-                          })())
-                      : 'Select Workout'}
-                  </Text>
-                  <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
-                </TouchableOpacity>
-              )}
-
-              {filterMode === 'date' && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.subFilterScroll}
-                  contentContainerStyle={styles.subFilterContent}
-                >
-                  {DATE_RANGES.map(range => (
-                    <TouchableOpacity
-                      key={range.value}
-                      style={[styles.subFilterPill, selectedDateRange === range.value && styles.subFilterPillActive]}
-                      onPress={() => setSelectedDateRange(range.value)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.subFilterPillText, selectedDateRange === range.value && styles.subFilterPillTextActive]}>
-                        {range.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-
-              {/* ── Active filter chip ─────────────── */}
-              {hasActiveFilter && (
-                <View style={styles.activeFilterRow}>
-                  <View style={styles.activeFilterChip}>
-                    <Text style={styles.activeFilterText}>{getActiveFilterLabel()}</Text>
-                    <TouchableOpacity onPress={clearFilters} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <X size={12} color={COLORS.textSecondary} strokeWidth={2} />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.resultCount}>
-                    {filteredRecordings.length} {filteredRecordings.length === 1 ? 'recording' : 'recordings'}
-                  </Text>
-                </View>
-              )}
+          ListHeaderComponent={header}
+          ListEmptyComponent={
+            <View style={styles.filteredEmpty}>
+              <EmptyState
+                title="No matching recordings"
+                message="Try another filter"
+                icon={Filter}
+              />
             </View>
           }
-          ListEmptyComponent={
-            <EmptyState
-              title="No matching recordings"
-              message="Try adjusting your filters"
-              icon={Filter}
-            />
-          }
+          ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          windowSize={9}
         />
       </Animated.View>
 
-      {/* ── Workout Selection Modal ────────────── */}
-      <Modal
-        visible={showWorkoutModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWorkoutModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowWorkoutModal(false)}
-        >
-          <View style={styles.selectionContainer} onStartShouldSetResponder={() => true}>
-            <LinearGradient
-              colors={SCREEN_GRADIENT_COLORS}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.selectionGradient}
-            >
-              <View style={styles.selectionEdge}>
-                <View style={styles.selectionHeader}>
-                  <View style={styles.sectionLabelRow}>
-                    <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
-                    <Text style={styles.sectionLabel}>SELECT WORKOUT</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setShowWorkoutModal(false)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <X size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
-                  </TouchableOpacity>
-                </View>
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  style={styles.selectionScroll}
-                >
-                  {uniqueWorkouts.linked.map(workout => (
-                    <TouchableOpacity
-                      key={workout.id}
-                      style={[
-                        styles.selectionItem,
-                        selectedWorkoutId === workout.id && styles.selectionItemActive,
-                      ]}
-                      onPress={() => {
-                        setSelectedWorkoutId(workout.id);
-                        setShowWorkoutModal(false);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      {workout.name ? (
-                        <Text style={styles.selectionItemDate}>{workout.name}</Text>
-                      ) : null}
-                      <Text style={workout.name ? styles.selectionItemExercises : styles.selectionItemDate} numberOfLines={1}>
-                        {formatFullDate(workout.date)} — {workout.exercises.join(', ')}
-                      </Text>
-                      <Text style={styles.selectionItemExercises}>
-                        {workout.setCount} {workout.setCount === 1 ? 'set' : 'sets'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                  {uniqueWorkouts.hasUnlinked && (
-                    <TouchableOpacity
-                      style={[
-                        styles.selectionItem,
-                        selectedWorkoutId === '__unlinked__' && styles.selectionItemActive,
-                      ]}
-                      onPress={() => {
-                        setSelectedWorkoutId('__unlinked__');
-                        setShowWorkoutModal(false);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.selectionItemDate}>Unlinked Recordings</Text>
-                      <Text style={styles.selectionItemExercises}>
-                        Recordings not linked to a saved workout
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  {uniqueWorkouts.linked.length === 0 && !uniqueWorkouts.hasUnlinked && (
-                    <Text style={styles.selectionEmpty}>No workouts with recordings</Text>
-                  )}
-                </ScrollView>
-              </View>
-            </LinearGradient>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* ── Video Playback Modal ──────────────── */}
       {playingVideo && VideoComponent && (
         <Modal
           visible={!!playingVideo}
@@ -692,414 +533,239 @@ export const VideoLibraryScreen: React.FC = () => {
           </View>
         </Modal>
       )}
-    </View>
+    </ScreenBackground>
   );
 };
 
-// ── Styles ───────────────────────────────────────────
+const Header = memo(({ onBack, storageLabel }: { onBack: () => void; storageLabel: string }) => (
+  <SettingsHeader
+    title="VIDEO LIBRARY"
+    onBack={onBack}
+    rightSlot={(
+      <View style={styles.storageBadge}>
+        <MonoText style={styles.storageText}>{storageLabel}</MonoText>
+      </View>
+    )}
+  />
+));
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   contentWrap: {
     flex: 1,
   },
-
-  /* ── Header (Social-style) ───────────────── */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  backBtn: {
-    width: 24,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-  },
-  logoWrap: {
-    width: 50,
-    height: 55,
-    borderRadius: 13,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 55,
-    height: 55,
-  },
-  headerTextWrap: {
-    gap: 1,
-  },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  headerName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-  },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
-    color: COLORS.text,
-    letterSpacing: 2,
-  },
   storageBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    minWidth: 54,
+    minHeight: 28,
     paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: CARD_RADIUS_SM,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   storageText: {
     fontSize: 10,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
   },
-
-  /* ── Loading ─────────────────────────────── */
   loadingWrap: {
     flex: 1,
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.xl,
+    paddingTop: 14,
   },
-
-  /* ── Empty ───────────────────────────────── */
   emptyWrap: {
     flex: 1,
     paddingHorizontal: SPACING.screenHorizontal,
     justifyContent: 'center',
   },
-
-  /* ── Loading Grid ─────────────────────────── */
-  loadingGrid: {
-    flexDirection: 'row',
-    gap: GRID_GAP,
-  },
-
-  /* ── List ────────────────────────────────── */
   list: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: SPACING.md,
+    paddingTop: 8,
   },
-  gridRow: {
-    gap: GRID_GAP,
-    marginBottom: GRID_GAP,
-  },
-
-  /* ── Filter Tabs ─────────────────────────── */
-  filterTabRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    marginBottom: 16,
-    marginTop: 12,
-    gap: 20,
-  },
-  filterTab: {
-    alignItems: 'center',
-    paddingBottom: 6,
-  },
-  filterTabText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  filterTabTextActive: {
-    color: '#FFFFFF',
-  },
-  filterUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
-  },
-
-  /* ── Sub-filter pills ────────────────────── */
-  subFilterScroll: {
+  filterScroll: {
     marginBottom: 10,
   },
-  subFilterContent: {
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingRight: 4,
+  },
+  filterPill: {
+    minHeight: 34,
+    paddingHorizontal: 11,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.065)',
+  },
+  filterPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: 'rgba(255,255,255,0.20)',
+  },
+  filterText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  filterTextActive: {
+    color: COLORS.text,
+  },
+  subFilterScroll: {
+    marginBottom: 16,
+  },
+  subFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+    paddingRight: 4,
   },
   subFilterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    maxWidth: 150,
+    minHeight: 31,
+    paddingHorizontal: 11,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255,255,255,0.055)',
   },
   subFilterPillActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderColor: 'rgba(139, 92, 246, 0.40)',
+    backgroundColor: 'rgba(122,85,255,0.16)',
+    borderColor: 'rgba(122,85,255,0.34)',
   },
-  subFilterPillText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
+  subFilterText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10.5,
+    color: COLORS.textTertiary,
   },
-  subFilterPillTextActive: {
-    color: '#FFFFFF',
+  subFilterTextActive: {
+    color: COLORS.text,
   },
-
-  /* ── Workout selector button ─────────────── */
-  selectWorkoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 10,
-  },
-  selectWorkoutBtnText: {
-    flex: 1,
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-
-  /* ── Active filter chip ──────────────────── */
-  activeFilterRow: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  activeFilterChip: {
+  sectionTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 16,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  sectionCount: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.primary,
+  },
+  videoRow: {
+    height: 94,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+    backgroundColor: 'rgba(255,255,255,0.035)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.20)',
-  },
-  activeFilterText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  resultCount: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
-
-  /* ── Video Card (Portrait) ──────────────── */
-  card: {
-    width: CARD_WIDTH,
-    borderRadius: 16,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
-      },
-      android: { elevation: 3 },
-    }),
   },
-  cardGradient: {
-    borderRadius: 16,
-  },
-  cardEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+  rowSeparator: {
+    height: 8,
   },
   thumbWrap: {
-    position: 'relative',
+    alignSelf: 'stretch',
+    width: 118,
+    height: '100%',
+    borderTopLeftRadius: CARD_RADIUS,
+    borderBottomLeftRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   thumbnail: {
     width: '100%',
-    height: THUMB_HEIGHT,
-    borderTopLeftRadius: 15,
-    borderTopRightRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    height: '100%',
+    borderTopLeftRadius: CARD_RADIUS,
+    borderBottomLeftRadius: CARD_RADIUS,
   },
   thumbnailPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   durationBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    paddingHorizontal: 6,
+    right: 5,
+    bottom: 5,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.72)',
   },
   durationText: {
     fontSize: 10,
-    color: '#FFFFFF',
+    color: COLORS.text,
   },
-  infoTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  videoCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingLeft: 12,
+    paddingRight: 4,
+    paddingVertical: 8,
     gap: 4,
   },
-  scoreBadge: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  scoreText: {
-    fontSize: 12,
-    letterSpacing: -0.3,
-  },
-  deleteButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardInfo: {
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 10,
-    gap: 3,
-  },
-  cardExercise: {
-    flex: 1,
-    fontSize: 14,
+  videoTitle: {
     fontFamily: FONTS.display.semibold,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  statValue: {
     fontSize: 14,
-    letterSpacing: -0.3,
     color: COLORS.text,
+    letterSpacing: 0,
   },
-  statLabel: {
-    fontSize: 10,
+  videoMetaLine: {
     fontFamily: FONTS.ui.regular,
+    fontSize: 11,
     color: COLORS.textTertiary,
-    letterSpacing: 0.8,
+    lineHeight: 15,
   },
-  statDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    marginHorizontal: 2,
-  },
-
-  /* ── Workout Selection Modal ─────────────── */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.xl,
-  },
-  selectionContainer: {
-    maxHeight: '70%',
-  },
-  selectionGradient: {
-    borderRadius: 22,
-  },
-  selectionEdge: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 18,
-  },
-  selectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  selectionScroll: {
-    maxHeight: 400,
-  },
-  selectionItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  selectionItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-  },
-  selectionItemDate: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  selectionItemExercises: {
+  videoSubtitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    lineHeight: 16,
   },
-  selectionEmpty: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-    paddingVertical: SPACING.xl,
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 1,
   },
-
-  /* ── Video Playback ──────────────────────── */
+  metaPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+  },
+  scorePill: {
+    backgroundColor: 'rgba(52,224,166,0.08)',
+  },
+  metaText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+  },
+  bookmarkButton: {
+    width: 30,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filteredEmpty: {
+    paddingTop: 70,
+  },
   playerContainer: {
     flex: 1,
     backgroundColor: '#000',
@@ -1111,7 +777,7 @@ const styles = StyleSheet.create({
   playerClose: {
     position: 'absolute',
     right: 16,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,

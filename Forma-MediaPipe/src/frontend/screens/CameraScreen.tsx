@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, ActivityIndicator, PermissionsAndroid } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, PermissionsAndroid, NativeModules } from 'react-native';
 import { PoseDetectionView, switchCamera } from 'expo-pose-detection';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { X, Video, VideoOff } from 'lucide-react-native';
 import CogIcon from '../components/icons/CogIcon';
-import { COLORS, FONTS, SPACING, getScoreColor } from '../constants/theme';
+import { COLORS, FONTS, SPACING, getScoreColor ,
+  CARD_SHADOW
+} from '../constants/theme';
 import CameraSwitchIcon from '../components/icons/CameraSwitchIcon';
 import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
@@ -26,9 +28,6 @@ import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
 
-/** Exercises with dedicated heuristics (FSM-based form analysis) */
-const EXERCISES_WITH_HEURISTICS = new Set(['Barbell Curl', 'Push-Up']);
-
 const MAX_FEED_ITEMS = 5;
 type FeedbackFeedItem = { id: number; text: string };
 
@@ -36,7 +35,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Use 'screen' height to include the Android navigation bar area (avoids black bar at bottom)
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
-const CAMERA_BORDER_RADIUS = 20;
+const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
+const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
@@ -54,6 +54,48 @@ const MEDIAPIPE_LANDMARK_NAMES = [
   'left_ankle', 'right_ankle', 'left_heel', 'right_heel',
   'left_foot_index', 'right_foot_index'
 ];
+
+function getLandmarkRecordingUploadUrl(): string | null {
+  const configuredUrl = process.env.EXPO_PUBLIC_LANDMARK_RECORDING_UPLOAD_URL;
+  if (configuredUrl) return configuredUrl;
+
+  const scriptURL = NativeModules.SourceCode?.scriptURL;
+  if (typeof scriptURL !== 'string') return null;
+
+  const match = scriptURL.match(/^(?:https?|exp):\/\/([^/:]+)(?::\d+)?/);
+  const host = match?.[1];
+  if (!host) return null;
+
+  return `http://${host}:${LANDMARK_RECORDING_UPLOAD_PORT}/recording`;
+}
+
+async function uploadLandmarkRecordingToDevServer(json: string, filename: string): Promise<void> {
+  if (!__DEV__) return;
+
+  const uploadUrl = getLandmarkRecordingUploadUrl();
+  if (!uploadUrl) {
+    console.log('[LandmarkRecording] No dev upload URL available; using device file only.');
+    return;
+  }
+
+  try {
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Recording-Filename': filename,
+      },
+      body: json,
+    });
+    if (!response.ok) {
+      console.warn(`[LandmarkRecording] Dev upload failed: ${response.status} ${response.statusText}`);
+      return;
+    }
+    console.log(`[LandmarkRecording] Uploaded to dev server: ${filename}`);
+  } catch (error: any) {
+    console.warn('[LandmarkRecording] Dev upload failed:', error?.message ?? error);
+  }
+}
 
 /* ── Self-contained Duration Display (memo'd to avoid re-rendering parent) ──── */
 
@@ -94,7 +136,13 @@ export const CameraScreen: React.FC = () => {
   const route = useRoute<CameraScreenRouteProp>();
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
-  const { addSetToExercise, sessionId, setPendingRecording } = useCurrentWorkout();
+  const {
+    addSetToExercise,
+    sessionId,
+    setPendingRecording,
+    beginRecordingFinalization,
+    endRecordingFinalization,
+  } = useCurrentWorkout();
   const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording, poseModel } = useCameraSettings();
   const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
@@ -114,6 +162,10 @@ export const CameraScreen: React.FC = () => {
   const [feedbackFeed, setFeedbackFeed] = useState<FeedbackFeedItem[]>([]);
   const feedbackIdRef = useRef(0);
   const [exerciseDebug, setExerciseDebug] = useState<Record<string, unknown> | null>(null);
+  const currentTrainer = useMemo(
+    () => TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ?? TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID)!,
+    [selectedTrainerId]
+  );
 
   // Unified exercise state ref — populated via ExerciseRegistry on mount and recording start
   const exerciseStateRef = useRef<ExerciseState | null>(null);
@@ -185,18 +237,19 @@ export const CameraScreen: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       if (!debugMode && isTTSEnabled && exerciseNameFromRoute) {
+        setActiveVoiceId(currentTrainer.voiceId);
+        setActiveVoiceSettings(currentTrainer.voiceSettings);
         ttsResetCoach();
         ttsOnSetStarted(exerciseNameFromRoute).catch(() => {});
       }
-    }, [debugMode, isTTSEnabled, exerciseNameFromRoute])
+    }, [debugMode, isTTSEnabled, exerciseNameFromRoute, currentTrainer])
   );
 
   // Keep ElevenLabs voice ID in sync with the selected trainer
   useEffect(() => {
-    const trainer = TRAINERS.find((t) => t.id === selectedTrainerId) ?? TRAINERS.find((t) => t.id === DEFAULT_TRAINER_ID)!;
-    setActiveVoiceId(trainer.voiceId);
-    setActiveVoiceSettings(trainer.voiceSettings);
-  }, [selectedTrainerId]);
+    setActiveVoiceId(currentTrainer.voiceId);
+    setActiveVoiceSettings(currentTrainer.voiceSettings);
+  }, [currentTrainer]);
 
   // Use refs to track exercise state without triggering re-renders
   const exercisePhaseRef = useRef(exercisePhase);
@@ -217,16 +270,16 @@ export const CameraScreen: React.FC = () => {
   // Synchronous accumulator for per-rep data — immune to InteractionManager deferral
   const accumulatedFormScoresRef = useRef<number[]>([]);
   const accumulatedRepFeedbackRef = useRef<string[]>([]);
-  
+
   // Sync refs with state
   useEffect(() => {
     exercisePhaseRef.current = exercisePhase;
   }, [exercisePhase]);
-  
+
   useEffect(() => {
     repCountRef.current = repCount;
   }, [repCount]);
-  
+
   useEffect(() => {
     currentExerciseRef.current = currentExercise;
   }, [currentExercise]);
@@ -476,10 +529,10 @@ export const CameraScreen: React.FC = () => {
     } else if (!exerciseDef) {
       // Generic exercise detection - also throttled
       const detection = detectExercise(keypoints);
-      
+
       if (detection.exercise && detection.angle !== null) {
         const exerciseName = detection.exercise;
-        
+
         // Update exercise name if changed
         if (currentExerciseRef.current !== exerciseName) {
           setCurrentExercise(exerciseName);
@@ -570,13 +623,15 @@ export const CameraScreen: React.FC = () => {
             console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
           }
 
+          const ts = new Date().toISOString().replace(/[:.]/g, '-');
+          const safeName = (exerciseNameFromRoute || 'Unknown').replace(/\s+/g, '_');
+          const filename = `recording_${safeName}_${ts}.json`;
+          uploadLandmarkRecordingToDevServer(json, filename);
+
           // Write to device filesystem (works in Release builds too)
           (async () => {
             try {
               const FS = require('expo-file-system');
-              const ts = new Date().toISOString().replace(/[:.]/g, '-');
-              const safeName = (exerciseNameFromRoute || 'Unknown').replace(/\s+/g, '_');
-              const filename = `recording_${safeName}_${ts}.json`;
               const uri = FS.documentDirectory + filename;
               await FS.writeAsStringAsync(uri, json);
               if (__DEV__) console.log(`[LandmarkRecording] Saved to: ${uri}`);
@@ -634,6 +689,7 @@ export const CameraScreen: React.FC = () => {
             durationSeconds: durationSeconds > 0 ? durationSeconds : 0,
             sessionId,
           };
+          beginRecordingFinalization();
           stopScreenRec().then((tempUrl) => {
             if (__DEV__) console.log('[CameraScreen] stopScreenRec resolved, tempUrl:', tempUrl);
             if (tempUrl) {
@@ -641,6 +697,8 @@ export const CameraScreen: React.FC = () => {
             }
           }).catch((err) => {
             if (__DEV__) console.warn('[CameraScreen] Screen recording stop failed:', err);
+          }).finally(() => {
+            endRecordingFinalization();
           });
         }
 
@@ -651,7 +709,7 @@ export const CameraScreen: React.FC = () => {
           (navigation as any).navigate('CurrentWorkout', {
             showWeightFor: { exerciseId, hasRecording: wasRecording },
           });
-        }, 450);
+        }, CAMERA_RELEASE_BEFORE_NAVIGATE_MS);
       } else {
         // Original flow: navigate to SaveWorkout
         const minutes = Math.floor(durationRef.current / 60);
@@ -707,12 +765,16 @@ export const CameraScreen: React.FC = () => {
       // Auto-start screen recording (if enabled in settings)
       if (screenRecAvailable && autoScreenRecording) {
         screenRecAttemptedRef.current = true;
-        startScreenRec().catch(() => {
+        startScreenRec().then((started) => {
+          screenRecAttemptedRef.current = started;
+          if (!started && __DEV__) console.warn('[CameraScreen] Auto screen recording did not start');
+        }).catch(() => {
+          screenRecAttemptedRef.current = false;
           if (__DEV__) console.warn('[CameraScreen] Auto screen recording start failed');
         });
       }
     }
-  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording]);
+  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording, beginRecordingFinalization, endRecordingFinalization, setPendingRecording, sessionId]);
 
   const handleAutoRecToggle = useCallback(() => {
     const next = !autoScreenRecording;
@@ -806,7 +868,7 @@ export const CameraScreen: React.FC = () => {
             setCameraMounted(false);
             setTimeout(() => {
               (navigation as any).navigate('CurrentWorkout');
-            }, 450);
+            }, CAMERA_RELEASE_BEFORE_NAVIGATE_MS);
           },
         },
       ]
@@ -917,6 +979,10 @@ export const CameraScreen: React.FC = () => {
     const mid = (titleRight + settingsLeft) / 2;
     return mid - speakerWidth / 2;
   }, [headerMeasurements]);
+
+  if (isClosing) {
+    return <View style={styles.container} />;
+  }
 
   const showCamera = cameraMounted && !isClosing;
 
@@ -1066,14 +1132,14 @@ export const CameraScreen: React.FC = () => {
           return (
             <View style={[styles.varianceContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={[styles.torsoDebugTitle, { color: isStatic ? '#34D399' : '#FBBF24' }]}>
+                <Text style={[styles.torsoDebugTitle, { color: isStatic ? '#34E0A6' : '#FBBF24' }]}>
                   {isStatic ? 'STATIC' : 'MOVING'} ({frameCount}f)
                 </Text>
                 {keys.map((key) => {
                   const { mean, stdev } = angles[key];
                   return (
                     <Text key={key} style={styles.torsoDebugText}>
-                      {key}: {mean.toFixed(1)}° <Text style={{ color: stdev < 1.5 ? '#34D399' : stdev < 3 ? '#FBBF24' : '#F87171' }}>(σ {stdev.toFixed(2)}°)</Text>
+                      {key}: {mean.toFixed(1)}° <Text style={{ color: stdev < 1.5 ? '#34E0A6' : stdev < 3 ? '#FBBF24' : '#F87171' }}>(σ {stdev.toFixed(2)}°)</Text>
                     </Text>
                   );
                 })}
@@ -1091,7 +1157,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Barbell Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Barbell Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   L: {d.leftArmState ?? '–'} | R: {d.rightArmState ?? '–'}
                 </Text>
@@ -1141,7 +1207,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Push-Up{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Push-Up{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side}
                 </Text>
@@ -1173,7 +1239,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Barbell Squat{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Barbell Squat{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side}
                 </Text>
@@ -1204,7 +1270,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Cable Pushdown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Cable Pushdown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1235,7 +1301,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Cable Row{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Cable Row{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1266,7 +1332,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Lat Pulldown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Lat Pulldown{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'} | {d.activeSide ?? '–'} arm
                 </Text>
@@ -1294,7 +1360,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Lateral Raise{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Lateral Raise{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1326,7 +1392,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Leg Extension{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Leg Extension{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1357,7 +1423,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Lying Leg Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Lying Leg Curl{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1385,7 +1451,7 @@ export const CameraScreen: React.FC = () => {
             return (
             <View style={[styles.torsoDebugContainer, { bottom: controlStripApproxHeight + SPACING.lg }]}>
               <View style={styles.torsoDebugCard}>
-                <Text style={styles.torsoDebugTitle}>Machine Ab Crunch{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34D399' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
+                <Text style={styles.torsoDebugTitle}>Machine Ab Crunch{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
@@ -1477,7 +1543,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'column',
-    backgroundColor: COLORS.background,
+    backgroundColor: '#000000',
   },
   headerLeftGroup: {
     flexDirection: 'row',
@@ -1546,11 +1612,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-  },
+
+    ...CARD_SHADOW,
+},
   exerciseTopCard: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
+
+    ...CARD_SHADOW,
+},
   headerRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1615,23 +1685,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 44,
   },
-  /* Reference style: outer thin white ring, inner white circle with thin black border */
+  /* Purple-ringed record button to match design */
   recordButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: '#7A55FF',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(124, 92, 255, 0.08)',
+    shadowColor: '#7A55FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 6,
   },
   recordButtonInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: '#000000',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#FFFFFF',
   },
   pauseButton: {
@@ -1713,10 +1786,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.xs,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(20, 26, 32, 0.7)',
     borderRadius: 50,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   metricLabel: {
     fontSize: 11,
@@ -1750,8 +1825,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   feedbackFeedItem: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(20, 26, 32, 0.85)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     alignSelf: 'flex-start',
@@ -1763,7 +1840,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   feedbackFeedTextGood: {
-    color: '#34D399',
+    color: '#34E0A6',
   },
   varianceContainer: {
     position: 'absolute',
@@ -1783,7 +1860,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     borderRadius: 12,
     padding: SPACING.md,
-  },
+
+    ...CARD_SHADOW,
+},
   torsoDebugTitle: {
     fontSize: 12,
     fontFamily: FONTS.ui.bold,
@@ -1802,4 +1881,3 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
-

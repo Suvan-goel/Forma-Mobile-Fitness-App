@@ -3,70 +3,75 @@
  */
 
 import React, { memo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { Image, View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
 import { LeaderboardEntry } from '../../../backend/services/api/types';
 
 interface LeaderboardRowProps {
   entry: LeaderboardEntry;
   isCurrentUser: boolean;
+  isFirstRow?: boolean;
+  isLastRow?: boolean;
 }
 
-export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCurrentUser }) => {
-  const TrendIcon = entry.trend === 'up' ? TrendingUp : entry.trend === 'down' ? TrendingDown : Minus;
-  const trendColor = entry.trend === 'up' ? '#34D399' : entry.trend === 'down' ? '#E07856' : COLORS.textTertiary;
-
+export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({
+  entry,
+  isCurrentUser,
+  isFirstRow = false,
+  isLastRow = false,
+}) => {
   return (
     <View style={[
       styles.cardOuter,
-      isCurrentUser && styles.cardOuterHighlight,
-      isCurrentUser && Platform.OS === 'ios' && {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-      },
+      isFirstRow && styles.cardOuterFirst,
+      isLastRow && styles.cardOuterLast,
     ]}>
       <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
+        colors={isCurrentUser ? ['#7B5CFF', '#694AE8', '#5639CA'] : ['rgba(25, 31, 35, 0.92)', 'rgba(13, 20, 24, 0.92)', 'rgba(8, 14, 17, 0.92)']}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
-        style={styles.card}
+        style={[
+          styles.card,
+          isFirstRow && styles.cardFirst,
+          isLastRow && styles.cardLast,
+        ]}
       >
-        <View style={[styles.cardEdge, isCurrentUser && styles.cardEdgeHighlight]}>
-          {/* Rank badge */}
+        <View style={[
+          styles.cardEdge,
+          isCurrentUser && styles.cardEdgeHighlight,
+          isFirstRow && styles.cardEdgeFirst,
+          isLastRow && styles.cardEdgeLast,
+        ]}>
           <Text style={[styles.rank, isCurrentUser && styles.rankHighlight]}>
             {entry.rank}
           </Text>
 
-          {/* Avatar */}
           <View style={[styles.avatar, isCurrentUser && styles.avatarHighlight]}>
-            <Text style={styles.avatarText}>
-              {entry.displayName.charAt(0).toUpperCase()}
-            </Text>
+            {entry.avatarUrl ? (
+              <Image source={{ uri: entry.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {entry.displayName.charAt(0).toUpperCase()}
+              </Text>
+            )}
           </View>
 
-          {/* Name + trend */}
           <View style={styles.nameContainer}>
             <Text style={[styles.name, isCurrentUser && styles.nameHighlight]} numberOfLines={1}>
               {isCurrentUser ? 'You' : entry.displayName}
             </Text>
-            <View style={styles.trendRow}>
-              <TrendIcon size={12} color={trendColor} />
-              <Text style={[styles.trendLabel, { color: trendColor }]}>
-                {entry.trend === 'up' ? 'Rising' : entry.trend === 'down' ? 'Falling' : 'Steady'}
-              </Text>
-            </View>
           </View>
 
-          {/* Score */}
           <View style={styles.scoreContainer}>
-            <Text style={[styles.score, { color: getScoreColor(entry.score) }]}>
-              {entry.score.toFixed(1)}
+            <Text style={[styles.score, isCurrentUser && styles.scoreHighlight]}>
+              {entry.score.toLocaleString(undefined, { maximumFractionDigits: 1 })}
             </Text>
           </View>
+
+          <Text style={[styles.streakColumn, isCurrentUser && styles.streakColumnHighlight]}>
+            {entry.streakDays ?? '-'}
+          </Text>
         </View>
       </LinearGradient>
     </View>
@@ -76,83 +81,119 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({ entry, isCu
 const styles = StyleSheet.create({
   cardOuter: {
     marginHorizontal: SPACING.screenHorizontal,
-    marginBottom: 6,
-    borderRadius: 18,
+    borderRadius: 0,
     overflow: 'hidden',
   },
-  cardOuterHighlight: {},
+  cardOuterFirst: {
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  cardOuterLast: {
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+  },
   card: {
-    borderRadius: 18,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 0,
+  },
+  cardFirst: {
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  cardLast: {
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
   },
   cardEdge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: SPACING.md,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    minHeight: 46,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+  },
+  cardEdgeFirst: {
+    borderTopWidth: 1,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  cardEdgeLast: {
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
   },
   cardEdgeHighlight: {
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.075)',
   },
   rank: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 13,
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12,
     color: COLORS.textSecondary,
+    width: 28,
+    textAlign: 'center',
   },
   rankHighlight: {
-    color: COLORS.primary,
+    color: COLORS.text,
   },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: SPACING.sm,
+    overflow: 'hidden',
   },
   avatarHighlight: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontSize: 12,
     color: COLORS.text,
   },
   nameContainer: {
     flex: 1,
-    marginLeft: SPACING.md,
+    marginLeft: 9,
   },
   name: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 14,
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12,
     color: COLORS.text,
   },
   nameHighlight: {
     fontFamily: FONTS.ui.bold,
-    color: COLORS.primary,
-  },
-  trendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  trendLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    color: COLORS.text,
   },
   scoreContainer: {
     marginLeft: SPACING.sm,
-    minWidth: 48,
+    width: 76,
     alignItems: 'flex-end',
   },
   score: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 16,
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12,
+    color: COLORS.text,
+  },
+  scoreHighlight: {
+    color: COLORS.text,
+  },
+  streakColumn: {
+    width: 42,
+    textAlign: 'center',
+    fontFamily: FONTS.ui.bold,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  streakColumnHighlight: {
+    color: COLORS.text,
   },
 });

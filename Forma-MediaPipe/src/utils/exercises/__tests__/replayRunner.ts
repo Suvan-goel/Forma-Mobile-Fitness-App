@@ -7,6 +7,7 @@
 
 import type { ExerciseDefinition } from '../types';
 import type {
+  FrameTrace,
   FsmTransition,
   LandmarkRecording,
   RepTrace,
@@ -22,17 +23,23 @@ export function replayRecording(
   const repScores: number[] = [];
   const feedbackMessages: string[] = [];
   let lastRepCount = 0;
+  const originalDateNow = Date.now;
 
-  for (const frame of recording.frames) {
-    state = definition.update(frame.keypoints, state);
+  try {
+    for (const frame of recording.frames) {
+      Date.now = () => frame.timestamp;
+      state = definition.update(frame.keypoints, state);
 
-    if (state.repCount > lastRepCount) {
-      if (state.lastRepResult) {
-        repScores.push(state.lastRepResult.score);
-        feedbackMessages.push(...state.lastRepResult.messages);
+      if (state.repCount > lastRepCount) {
+        if (state.lastRepResult) {
+          repScores.push(state.lastRepResult.score);
+          feedbackMessages.push(...state.lastRepResult.messages);
+        }
+        lastRepCount = state.repCount;
       }
-      lastRepCount = state.repCount;
     }
+  } finally {
+    Date.now = originalDateNow;
   }
 
   return { finalRepCount: state.repCount, repScores, feedbackMessages };
@@ -82,52 +89,69 @@ export function replayRecordingVerbose(
   let state = definition.createState();
   const repScores: number[] = [];
   const feedbackMessages: string[] = [];
+  const frameTraces: FrameTrace[] = [];
   const fsmTransitions: FsmTransition[] = [];
   const repTraces: RepTrace[] = [];
+  const originalDateNow = Date.now;
 
   let lastRepCount = 0;
   let lastPhase = extractPhase(state.debugInfo);
   // Transitions accumulated since the last completed rep
   let pendingTransitions: FsmTransition[] = [];
 
-  for (let i = 0; i < recording.frames.length; i++) {
-    const frame = recording.frames[i];
-    state = definition.update(frame.keypoints, state);
+  try {
+    for (let i = 0; i < recording.frames.length; i++) {
+      const frame = recording.frames[i];
+      Date.now = () => frame.timestamp;
+      state = definition.update(frame.keypoints, state);
 
-    const currentPhase = extractPhase(state.debugInfo);
-    if (currentPhase !== lastPhase) {
-      const transition: FsmTransition = {
+      const currentPhase = extractPhase(state.debugInfo);
+      frameTraces.push({
         frameIndex: i,
         timestamp: frame.timestamp,
-        fromPhase: lastPhase,
-        toPhase: currentPhase,
-        angles: extractAngles(state.debugInfo),
-      };
-      fsmTransitions.push(transition);
-      pendingTransitions.push(transition);
-      lastPhase = currentPhase;
-    }
+        phase: currentPhase,
+        repCount: state.repCount,
+        feedback: state.feedback,
+        debugInfo: state.debugInfo,
+      });
 
-    if (state.repCount > lastRepCount) {
-      if (state.lastRepResult) {
-        repScores.push(state.lastRepResult.score);
-        feedbackMessages.push(...state.lastRepResult.messages);
-        repTraces.push({
-          repIndex: state.lastRepResult.repIndex,
-          score: state.lastRepResult.score,
-          messages: state.lastRepResult.messages,
-          transitions: pendingTransitions,
-        });
+      if (currentPhase !== lastPhase) {
+        const transition: FsmTransition = {
+          frameIndex: i,
+          timestamp: frame.timestamp,
+          fromPhase: lastPhase,
+          toPhase: currentPhase,
+          angles: extractAngles(state.debugInfo),
+        };
+        fsmTransitions.push(transition);
+        pendingTransitions.push(transition);
+        lastPhase = currentPhase;
       }
-      pendingTransitions = [];
-      lastRepCount = state.repCount;
+
+      if (state.repCount > lastRepCount) {
+        if (state.lastRepResult) {
+          repScores.push(state.lastRepResult.score);
+          feedbackMessages.push(...state.lastRepResult.messages);
+          repTraces.push({
+            repIndex: state.lastRepResult.repIndex,
+            score: state.lastRepResult.score,
+            messages: state.lastRepResult.messages,
+            transitions: pendingTransitions,
+          });
+        }
+        pendingTransitions = [];
+        lastRepCount = state.repCount;
+      }
     }
+  } finally {
+    Date.now = originalDateNow;
   }
 
   return {
     finalRepCount: state.repCount,
     repScores,
     feedbackMessages,
+    frameTraces,
     fsmTransitions,
     repTraces,
   };

@@ -1,8 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_RADIUS,
+  CARD_SHADOW,
+} from '../constants/theme';
 
 const BARBELL_WIDTH = 260;
 const BARBELL_HEIGHT = 80;
@@ -98,7 +105,7 @@ const phaseStyles = StyleSheet.create({
   },
   dotUpcoming: {
     width: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
 });
 
@@ -307,8 +314,15 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
           onPress={onComplete}
           activeOpacity={0.7}
         >
-          <Text style={styles.ctaText}>Begin Training</Text>
-          <Text style={styles.ctaArrow}>→</Text>
+          <LinearGradient
+            colors={[COLORS.primary, COLORS.primaryDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.ctaGradient}
+          >
+            <Text style={styles.ctaText}>Begin Training</Text>
+            <Text style={styles.ctaArrow}>→</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
 
@@ -321,7 +335,7 @@ export const OnboardingInterstitial: React.FC<OnboardingInterstitialProps> = ({ 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
 
   /* ── Center area (loading + success share this space) ─── */
@@ -344,8 +358,18 @@ const styles = StyleSheet.create({
 
   /* ── Loading group ──────────────────────── */
   loadingGroup: {
+    width: '88%',
+    maxWidth: 360,
     alignItems: 'center',
-    gap: 28,
+    gap: 24,
+    paddingVertical: 28,
+    paddingHorizontal: 18,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: 'rgba(23, 27, 30, 0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    ...CARD_SHADOW,
   },
 
   /* ── Label row ───────────────────────────── */
@@ -360,10 +384,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 92, 246, 0.35)',
   },
   labelText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontFamily: FONTS.display.bold,
+    fontSize: 11,
     color: COLORS.primary,
-    letterSpacing: 2.5,
+    letterSpacing: 1.8,
   },
 
   /* ── Barbell wrapper (contains brackets + glow) ─────── */
@@ -383,7 +407,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 92, 246, 0.03)',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOpacity: 0.13,
         shadowRadius: 48,
         shadowOffset: { width: 0, height: 0 },
@@ -450,11 +474,11 @@ const styles = StyleSheet.create({
   scanCore: {
     width: 2,
     height: '100%',
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#7A55FF',
     borderRadius: 1,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOpacity: 0.9,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 0 },
@@ -474,8 +498,8 @@ const styles = StyleSheet.create({
   loadingText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 0.3,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
     textAlign: 'center',
   },
 
@@ -489,36 +513,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    gap: 20,
+    gap: 18,
   },
   accentDot: {
     color: COLORS.primary,
   },
   successHeader: {
     fontFamily: FONTS.display.bold,
-    fontSize: 52,
+    fontSize: 42,
     color: '#FFFFFF',
-    letterSpacing: -2,
+    letterSpacing: 0,
     textAlign: 'center',
+    lineHeight: 48,
   },
   successSubtext: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 0.2,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
     textAlign: 'center',
+    lineHeight: 22,
   },
 
   /* ── Metrics card ────────────────────────── */
   metricsCard: {
     alignSelf: 'stretch',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: 'rgba(23, 27, 30, 0.84)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderRadius: 16,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    borderRadius: CARD_RADIUS,
     paddingVertical: 4,
     paddingHorizontal: 20,
     marginTop: 8,
+    ...CARD_SHADOW,
   },
   metricRow: {
     flexDirection: 'row',
@@ -527,10 +555,10 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   metricLabel: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.35)',
-    letterSpacing: 0.3,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
   },
   metricStatus: {
     flexDirection: 'row',
@@ -544,7 +572,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOpacity: 0.9,
         shadowRadius: 4,
         shadowOffset: { width: 0, height: 0 },
@@ -552,14 +580,14 @@ const styles = StyleSheet.create({
     }),
   },
   metricValue: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 12,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
     color: COLORS.primary,
-    letterSpacing: 0.3,
+    letterSpacing: 0,
   },
   metricSeparator: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
   },
 
   /* ── CTA button ──────────────────────────── */
@@ -568,27 +596,28 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   ctaButton: {
-    marginTop: 45,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 48,
+    alignSelf: 'stretch',
+    marginTop: 18,
+    borderRadius: 12,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  ctaGradient: {
+    minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    backgroundColor: 'rgba(139, 92, 246, 0.07)',
   },
   ctaText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 16,
     color: '#FFFFFF',
-    letterSpacing: 0.2,
+    letterSpacing: 0,
   },
   ctaArrow: {
     fontFamily: FONTS.display.medium,
     fontSize: 16,
-    color: COLORS.primary,
+    color: '#FFFFFF',
   },
 });

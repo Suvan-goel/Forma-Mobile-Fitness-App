@@ -3,12 +3,11 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, CircleUserRound, UserRound, Volume2, VolumeX } from 'lucide-react-native';
+import { CircleUserRound, UserRound, Volume2, VolumeX } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -18,9 +17,13 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW
 } from '../constants/theme';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { TRAINERS, type Trainer } from '../constants/trainers';
-import { useWorkoutPreferences } from '../../backend/hooks';
+import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences';
 import { setActiveVoiceId, setActiveVoiceSettings, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
 
 const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');
@@ -97,30 +100,24 @@ export const TrainerPickerScreen: React.FC = () => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronLeft size={22} color={COLORS.textSecondary} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Your Trainer</Text>
-        <TouchableOpacity
-          style={styles.speakerBtn}
-          onPress={() => setGreetingEnabled((v) => !v)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          {greetingEnabled
-            ? <Volume2 size={20} color={COLORS.accent} strokeWidth={1.5} />
-            : <VolumeX size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
-          }
-        </TouchableOpacity>
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader
+        title="TRAINER VOICE"
+        onBack={() => navigation.goBack()}
+        rightSlot={(
+          <TouchableOpacity
+            style={styles.speakerBtn}
+            onPress={() => setGreetingEnabled((v) => !v)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {greetingEnabled
+              ? <Volume2 size={20} color={COLORS.accent} strokeWidth={1.5} />
+              : <VolumeX size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
+            }
+          </TouchableOpacity>
+        )}
+      />
 
       <Animated.ScrollView
         style={[styles.scroll, { opacity: fadeAnim }]}
@@ -173,46 +170,19 @@ export const TrainerPickerScreen: React.FC = () => {
           </LinearGradient>
         </Animated.View>
       </Animated.ScrollView>
-    </View>
+    </ScreenBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
 
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-  },
   speakerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -237,8 +207,8 @@ const styles = StyleSheet.create({
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 7,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -247,27 +217,33 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.3,
   },
 
   /* Cards (matches Home) */
   cardGradient: {
-    borderRadius: 18,
-  },
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: CARD_RADIUS,
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardEdge: {
-    borderRadius: 18,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    paddingHorizontal: 12,
+    paddingVertical: 2,
   },
 
   /* Trainer Rows */
   trainerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   trainerRowFirst: {
     paddingTop: 4,
@@ -277,7 +253,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     marginLeft: 32,
   },
 
@@ -316,8 +292,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   trainerName: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 16,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12.5,
     color: COLORS.textSecondary,
     lineHeight: 20,
   },
@@ -335,9 +311,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 7,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   specialtyBadgeSelected: {
     backgroundColor: 'rgba(139, 92, 246, 0.12)',

@@ -1,26 +1,27 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  View,
+  Animated,
+  Image,
+  ImageSourcePropType,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  ScrollView,
-  Platform,
-  Animated,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Dumbbell, Layers, Play } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import {
+  CARD_SHADOW,
   COLORS,
-  SPACING,
   FONTS,
   SCREEN_GRADIENT_COLORS,
-  CARD_GRADIENT_COLORS,
-  CARD_GRADIENT_START,
-  CARD_GRADIENT_END,
+  SCREEN_GRADIENT_END,
+  SCREEN_GRADIENT_START,
+  SPACING,
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
@@ -28,26 +29,77 @@ import type { RecordStackParamList } from '../app/RootNavigator';
 type TemplatePreviewNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'TemplatePreview'>;
 type TemplatePreviewRouteProp = RouteProp<RecordStackParamList, 'TemplatePreview'>;
 
-/* ── Exercise Row ────────────────────────── */
+const EXERCISE_IMAGES: Record<string, ImageSourcePropType> = {
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Back Squat': require('../assets/exercises/barbell_squat.png'),
+  'Romanian Deadlift': require('../assets/exercises/lying_leg_curl.png'),
+  'Walking Lunge': require('../assets/exercises/leg_extensions.png'),
+  'Leg Press': require('../assets/exercises/leg_extensions.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+};
+
+const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
+
+const PLAN_BY_EXERCISE: Record<string, { reps: string; rest: string }> = {
+  'Back Squat': { reps: '6-8', rest: '2 min' },
+  'Barbell Squat': { reps: '6-8', rest: '2 min' },
+  'Romanian Deadlift': { reps: '8-10', rest: '2 min' },
+  'Walking Lunge': { reps: '10/leg', rest: '90 sec' },
+  'Leg Press': { reps: '10-12', rest: '2 min' },
+  'Push-Up': { reps: '8-12', rest: '90 sec' },
+  'Cable Pushdowns': { reps: '10-12', rest: '60 sec' },
+  'Barbell Curl': { reps: '10-12', rest: '60 sec' },
+  'Machine Ab Crunches': { reps: '12-15', rest: '60 sec' },
+  'Leg Extensions': { reps: '10-12', rest: '75 sec' },
+  'Lying Leg Curl': { reps: '10-12', rest: '75 sec' },
+  'Cable Lat Pulldowns': { reps: '8-10', rest: '90 sec' },
+  'Standing Dumbbell Lateral Raises': { reps: '10-12', rest: '60 sec' },
+  'Cable Row': { reps: '8-10', rest: '90 sec' },
+};
+
+const getExerciseImage = (name: string): ImageSourcePropType => (
+  EXERCISE_IMAGES[name] ?? DEFAULT_EXERCISE_IMAGE
+);
+
+const estimateDuration = (exerciseCount: number, totalSets: number): string => {
+  const minutes = Math.max(35, Math.round(totalSets * 3.25 + exerciseCount * 2));
+  return `~${minutes} min`;
+};
+
+const getTags = (templateName: string): string[] => {
+  const lowerName = templateName.toLowerCase();
+  if (lowerName.includes('lower') || lowerName.includes('leg')) return ['Strength', 'Lower Body', 'Hypertrophy'];
+  if (lowerName.includes('push')) return ['Push', 'Upper Body', 'Strength'];
+  if (lowerName.includes('pull')) return ['Pull', 'Back', 'Biceps'];
+  return ['Strength', 'Full Body', 'Conditioning'];
+};
 
 const ExerciseRow: React.FC<{
   name: string;
   index: number;
-  targetSets: number;
-  isLast: boolean;
-}> = ({ name, index, targetSets, isLast }) => (
-  <View style={[styles.exerciseRow, isLast && styles.exerciseRowLast]}>
-    <View style={styles.exerciseIndexBadge}>
-      <Text style={styles.exerciseIndexText}>{index + 1}</Text>
+  sets: number;
+  reps: string;
+  rest: string;
+}> = ({ name, index, sets, reps, rest }) => (
+  <View style={styles.exerciseRow}>
+    <Text style={styles.exerciseIndex}>{index + 1}</Text>
+    <View style={styles.exerciseNameCell}>
+      <Image source={getExerciseImage(name)} style={styles.exerciseThumb} resizeMode="cover" />
+      <Text style={styles.exerciseName} numberOfLines={2}>{name}</Text>
     </View>
-    <Text style={styles.exerciseRowName} numberOfLines={1}>{name}</Text>
-    <View style={styles.exerciseSetsBadge}>
-      <Text style={styles.exerciseSetsText}>{targetSets} sets</Text>
-    </View>
+    <Text style={styles.valueCell}>{sets}</Text>
+    <Text style={styles.valueCell}>{reps}</Text>
+    <Text style={styles.restCell}>{rest}</Text>
   </View>
 );
-
-/* ── Main Screen ─────────────────────────── */
 
 export const TemplatePreviewScreen: React.FC = () => {
   const navigation = useNavigation<TemplatePreviewNavigationProp>();
@@ -56,14 +108,22 @@ export const TemplatePreviewScreen: React.FC = () => {
   const { addExercise, clearSets } = useCurrentWorkout();
 
   const { templateName, description, exercises } = route.params;
-
+  const totalSets = useMemo(
+    () => exercises.reduce((sum, exercise) => sum + exercise.targetSets, 0),
+    [exercises],
+  );
+  const estimatedDuration = useMemo(
+    () => estimateDuration(exercises.length, totalSets),
+    [exercises.length, totalSets],
+  );
+  const tags = useMemo(() => getTags(templateName), [templateName]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(14)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 420, useNativeDriver: true }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
@@ -73,340 +133,289 @@ export const TemplatePreviewScreen: React.FC = () => {
       addExercise({ name: ex.name, category: ex.category });
     });
     navigation.navigate('CurrentWorkout');
-  }, [clearSets, addExercise, exercises, navigation]);
+  }, [addExercise, clearSets, exercises, navigation]);
 
   const handleGoBack = useCallback(() => {
     navigation.goBack();
   }, [navigation]);
 
   return (
-    <View style={styles.container}>
-      {/* ── Header ────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.7}>
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{templateName}</Text>
-        <View style={styles.headerPlaceholder} />
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={styles.container}
+    >
+      <View style={[styles.header, { paddingTop: insets.top + 7 }]}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity style={styles.headerIconButton} onPress={handleGoBack} activeOpacity={0.72}>
+            <ChevronLeft size={24} color={COLORS.textSecondary} strokeWidth={1.6} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>{templateName}</Text>
+        </View>
+        <Text style={styles.headerMeta}>
+          {exercises.length} exercises  ·  {estimatedDuration}
+        </Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 112 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
-          {/* ── Summary Card ──────────── */}
-          <LinearGradient
-            colors={SCREEN_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.summaryCard}
-          >
-            <View style={styles.summaryEdge}>
-              <View style={styles.summaryTitleRow}>
-                <Layers size={12} color={COLORS.accent} strokeWidth={1.5} />
-                <Text style={styles.summaryTitle}>TEMPLATE OVERVIEW</Text>
-              </View>
-
-              {description ? (
-                <Text style={styles.descriptionText}>{description}</Text>
-              ) : null}
-
-              {/* Inline stats */}
-              <View style={styles.summaryStatsRow}>
-                <View style={styles.summaryStat}>
-                  <Text style={styles.summaryStatValue}>{exercises.length}</Text>
-                  <Text style={styles.summaryStatLabel}>exercises</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryStat}>
-                  <Text style={styles.summaryStatValue}>
-                    {exercises.reduce((sum, ex) => sum + ex.targetSets, 0)}
-                  </Text>
-                  <Text style={styles.summaryStatLabel}>total sets</Text>
-                </View>
-              </View>
+          <View style={styles.tableCard}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, styles.exerciseHeaderText]}>Exercise</Text>
+              <Text style={styles.tableHeaderText}>Sets</Text>
+              <Text style={styles.tableHeaderText}>Reps</Text>
+              <Text style={styles.tableHeaderText}>Rest</Text>
             </View>
-          </LinearGradient>
 
-          {/* ── Exercises Section ─────── */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>EXERCISES</Text>
-            </View>
-            <Text style={styles.exerciseCount}>{exercises.length}</Text>
+            {exercises.map((exercise, index) => {
+              const plan = PLAN_BY_EXERCISE[exercise.name] ?? { reps: '8-12', rest: '90 sec' };
+              return (
+                <ExerciseRow
+                  key={`${exercise.name}-${index}`}
+                  name={exercise.name}
+                  index={index}
+                  sets={exercise.targetSets}
+                  reps={plan.reps}
+                  rest={plan.rest}
+                />
+              );
+            })}
           </View>
 
-          <View style={styles.exerciseCardOuter}>
-            <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
-              start={CARD_GRADIENT_START}
-              end={CARD_GRADIENT_END}
-              style={styles.exerciseCardGradient}
-            >
-              <View style={styles.exerciseCardEdge}>
-                {exercises.map((ex, i) => (
-                  <ExerciseRow
-                    key={`${ex.name}-${i}`}
-                    name={ex.name}
-                    index={i}
-                    targetSets={ex.targetSets}
-                    isLast={i === exercises.length - 1}
-                  />
-                ))}
-              </View>
-            </LinearGradient>
+          <View style={styles.aboutCard}>
+            <Text style={styles.aboutTitle}>About this template</Text>
+            <Text style={styles.aboutText}>
+              {description || 'Build strength and consistency with a focused session built around clean movement and repeatable volume.'}
+            </Text>
+            <View style={styles.tagRow}>
+              {tags.map(tag => (
+                <View key={tag} style={styles.tagPill}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-
         </Animated.View>
       </ScrollView>
 
-      {/* ── Bottom CTA ────────────────── */}
-      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 4 }]}>
-        <TouchableOpacity onPress={handleStartWorkout} activeOpacity={0.85}>
+      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, 12) + 6 }]}>
+        <TouchableOpacity onPress={handleStartWorkout} activeOpacity={0.86}>
           <LinearGradient
-            colors={['#8B5CF6', '#7C3AED']}
+            colors={[COLORS.primary, COLORS.primaryDark]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.startButton}
           >
-            <Play size={18} color="#FFFFFF" fill="#FFFFFF" strokeWidth={0} />
             <Text style={styles.startButtonText}>Start Workout</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </View>
+    </LinearGradient>
   );
 };
-
-/* ── Styles ──────────────────────────────── */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-
-  /* ── Header ──────────────────── */
   header: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingBottom: 10,
+  },
+  headerTopRow: {
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    gap: 4,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    marginLeft: -10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,
+    textAlign: 'left',
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 22,
     color: COLORS.text,
-    letterSpacing: -0.4,
-    textAlign: 'center',
-    marginHorizontal: SPACING.sm,
+    letterSpacing: 0,
   },
-  headerPlaceholder: {
-    width: 40,
+  headerMeta: {
+    marginTop: 2,
+    marginLeft: 32,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
   },
-
-  /* ── Scroll ──────────────────── */
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
   },
-
-  /* ── Summary Card ────────────── */
-  summaryCard: {
-    borderRadius: 16,
-    marginTop: 14,
-    marginBottom: 4,
-  },
-  summaryEdge: {
-    borderRadius: 16,
+  tableCard: {
+    marginTop: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(31, 39, 45, 0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
-  summaryTitleRow: {
+  tableHeader: {
+    height: 41,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    paddingLeft: 50,
+    paddingRight: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.045)',
   },
-  summaryTitle: {
+  tableHeaderText: {
+    width: 50,
+    textAlign: 'center',
     fontFamily: FONTS.display.semibold,
     fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
   },
-  descriptionText: {
-    fontFamily: FONTS.ui.regular,
+  exerciseHeaderText: {
+    flex: 1,
+    width: undefined,
+    textAlign: 'left',
+  },
+  exerciseRow: {
+    minHeight: 81,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 8,
+    paddingRight: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.038)',
+  },
+  exerciseIndex: {
+    width: 30,
+    textAlign: 'center',
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
+  },
+  exerciseNameCell: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  exerciseThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+    backgroundColor: COLORS.cardBackgroundLight,
+  },
+  exerciseName: {
+    flex: 1,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    lineHeight: 17,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  valueCell: {
+    width: 50,
+    textAlign: 'center',
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
+  },
+  restCell: {
+    width: 50,
+    textAlign: 'center',
+    fontFamily: FONTS.display.semibold,
     fontSize: 13,
     color: COLORS.textSecondary,
-    lineHeight: 19,
+    letterSpacing: 0,
   },
-  summaryStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryStat: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 3,
-  },
-  summaryStatValue: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  summaryStatLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 9,
-    color: COLORS.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  summaryDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-
-  /* ── Section Header ──────────── */
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
-  },
-  exerciseCount: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-  },
-
-  /* ── Exercise Card ───────────── */
-  exerciseCardOuter: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  exerciseCardGradient: {
-    borderRadius: 18,
-  },
-  exerciseCardEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 4,
-  },
-
-  /* ── Exercise Row ────────────── */
-  exerciseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
-    gap: 12,
-  },
-  exerciseRowLast: {
-    borderBottomWidth: 0,
-  },
-  exerciseIndexBadge: {
-    width: 28,
-    height: 28,
+  aboutCard: {
+    marginTop: 14,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(31, 39, 45, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    paddingHorizontal: 13,
+    paddingVertical: 14,
+    ...CARD_SHADOW,
   },
-  exerciseIndexText: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  exerciseRowName: {
-    flex: 1,
+  aboutTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 14,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
-  exerciseSetsBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-  },
-  exerciseSetsText: {
+  aboutText: {
+    marginTop: 10,
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.accent,
-    letterSpacing: 0.3,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
   },
-
-  /* ── Bottom Panel ────────────── */
-  bottomPanel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  startButton: {
+  tagRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginTop: 13,
+  },
+  tagPill: {
+    minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
-    paddingVertical: 16,
-    gap: 10,
+    borderRadius: 7,
+    paddingHorizontal: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.045)',
+  },
+  tagText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
+  },
+  bottomPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(7, 10, 13, 0.92)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.045)',
+  },
+  startButton: {
+    height: 52,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   startButtonText: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 16,
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
+    color: COLORS.text,
+    letterSpacing: 0,
   },
 });

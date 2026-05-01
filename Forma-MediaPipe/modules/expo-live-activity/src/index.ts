@@ -2,9 +2,7 @@ import { Platform } from 'react-native';
 
 let ExpoLiveActivity: {
   startWorkoutActivity(elapsedSeconds: number): boolean;
-  updateWorkoutActivity(isPaused: boolean, elapsedSeconds: number): void;
   endWorkoutActivity(): void;
-  isAvailable(): boolean;
 } | null = null;
 
 if (Platform.OS === 'ios') {
@@ -25,25 +23,9 @@ export function startWorkoutActivity(elapsedSeconds: number = 0): boolean {
   }
 }
 
-export function updateWorkoutActivity(isPaused: boolean, elapsedSeconds: number): void {
-  if (!ExpoLiveActivity) return;
-  try {
-    ExpoLiveActivity.updateWorkoutActivity(isPaused, elapsedSeconds);
-  } catch {}
-}
-
 export function endWorkoutActivity(): void {
   if (!ExpoLiveActivity) return;
   try {
     ExpoLiveActivity.endWorkoutActivity();
   } catch {}
-}
-
-export function isLiveActivityAvailable(): boolean {
-  if (!ExpoLiveActivity) return false;
-  try {
-    return ExpoLiveActivity.isAvailable();
-  } catch {
-    return false;
-  }
 }

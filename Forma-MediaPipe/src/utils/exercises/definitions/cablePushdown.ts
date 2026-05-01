@@ -87,6 +87,8 @@ function computeReachRatio(
 
 /** FSM thresholds (reach ratios) */
 const THRESHOLDS = {
+  /** Ratio above which the push clock starts before the FSM commits */
+  PUSH_CLOCK_START: 0.62,
   /** Ratio above which we transition REST -> EXTENDING (arm starting to straighten) */
   EXTENDING_ENTER: 0.65,
   /** Ratio above which we consider near-full extension (EXTENDING -> EXTENDED) */
@@ -150,6 +152,8 @@ interface CablePushdownFSM {
   phase: CablePushdownPhase;
   /** Timestamp when push began (REST -> EXTENDING) */
   tRepStart: number | null;
+  /** Timestamp when the user first moved out of the bent start position */
+  tPushStart: number | null;
   /** Timestamp when full extension was reached */
   tExtended: number | null;
   /** Timestamp when rep completed (RETURNING -> REST) */
@@ -170,6 +174,7 @@ interface RepWindow {
   /** Timestamps */
   tStart: number;
   tExtended: number | null;
+  tReturnStart: number | null;
   tEnd: number;
   /** Frame count */
   frameCount: number;
@@ -195,6 +200,8 @@ interface CablePushdownState {
   warmedUp: boolean;
   /** Current smoothed values for debug */
   smoothedRatio: number | null;
+  /** Median-only ratio used for responsive FSM transitions */
+  fastRatio: number | null;
   smoothedShoulder: number | null;
   smoothedTorso: number | null;
   /** Feedback */
@@ -211,6 +218,7 @@ interface CablePushdownDebugInfo {
   side: 'left' | 'right';
   warmedUp: boolean;
   ratio: number | null;
+  fastRatio: number | null;
   shoulderAngle: number | null;
   torsoDev: number | null;
   // Rep window
@@ -307,20 +315,22 @@ function initFSM(): CablePushdownFSM {
   return {
     phase: 'REST',
     tRepStart: null,
+    tPushStart: null,
     tExtended: null,
     tRepEnd: null,
   };
 }
 
-function initRepWindow(tStart: number): RepWindow {
+function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   return {
-    minRatio: Infinity,
-    maxRatio: -Infinity,
+    minRatio: initialRatio ?? Infinity,
+    maxRatio: initialRatio ?? -Infinity,
     shoulderAngleBaseline: null,
     maxShoulderDelta: 0,
     maxTorsoDev: 0,
     tStart,
     tExtended: null,
+    tReturnStart: null,
     tEnd: tStart,
     frameCount: 0,
   };
@@ -345,6 +355,7 @@ function initializeCablePushdownState(): CablePushdownState {
     }),
     warmedUp: false,
     smoothedRatio: null,
+    fastRatio: null,
     smoothedShoulder: null,
     smoothedTorso: null,
     feedback: null,
@@ -398,9 +409,15 @@ function updateFSM(
     case 'REST':
       // Waiting for push to begin. When ratio rises past threshold (arm straightening),
       // transition to EXTENDING.
+      if (ratio > THRESHOLDS.PUSH_CLOCK_START) {
+        fsm.tPushStart ??= t;
+      } else {
+        fsm.tPushStart = null;
+      }
+
       if (ratio > THRESHOLDS.EXTENDING_ENTER) {
         fsm.phase = 'EXTENDING';
-        fsm.tRepStart = t;
+        fsm.tRepStart = fsm.tPushStart ?? t;
         fsm.tExtended = null;
         fsm.tRepEnd = null;
       }
@@ -415,6 +432,7 @@ function updateFSM(
         // Went back to bent without extending -- reset
         fsm.phase = 'REST';
         fsm.tRepStart = null;
+        fsm.tPushStart = null;
       }
       break;
 
@@ -469,7 +487,7 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
   // 5. Tempo
   if (repWindow.tExtended !== null) {
     const tPush = repWindow.tExtended - repWindow.tStart;  // concentric (push down)
-    const tReturn = repWindow.tEnd - repWindow.tExtended;   // eccentric (return)
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended); // eccentric (return)
 
     // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
     if (tPush > 0 && tPush < PENALTY_CONFIGS.TEMPO_PUSH.deadzone) {
@@ -515,7 +533,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   // 5. Tempo
   if (repWindow.tExtended !== null) {
     const tPush = repWindow.tExtended - repWindow.tStart;
-    const tReturn = repWindow.tEnd - repWindow.tExtended;
+    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended);
 
     if (tPush > 0 && tPush < FORM_THRESHOLDS.TEMPO_PUSH_MIN) {
       messages.push('Slow down the push \u2014 control the extension.');
@@ -547,8 +565,10 @@ function updateCablePushdownState(
     currentState.warmedUp = true;
   }
 
-  // Select visible side
-  const visibleSide = selectVisibleSide(keypoints);
+  // Select visible side in REST, then lock it through the active rep so
+  // transient confidence changes do not splice two arms into one rep.
+  const inActiveRep = currentState.fsm.phase !== 'REST';
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
 
   // Calculate raw values
   const rawRatio = computeReachRatio(keypoints, visibleSide);
@@ -561,6 +581,7 @@ function updateCablePushdownState(
       ...currentState,
       visibleSide,
       smoothedRatio: null,
+      fastRatio: null,
       smoothedShoulder: null,
       smoothedTorso: null,
     };
@@ -568,6 +589,7 @@ function updateCablePushdownState(
 
   // Smooth values
   const smoothedRatio = currentState.ratioTracker.push(rawRatio);
+  const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedShoulder = rawShoulder !== null
     ? currentState.shoulderTracker.push(rawShoulder)
     : currentState.shoulderTracker.value;
@@ -579,16 +601,17 @@ function updateCablePushdownState(
     ...currentState,
     visibleSide,
     smoothedRatio,
+    fastRatio: isNaN(fastRatio) ? null : fastRatio,
     smoothedShoulder: isNaN(smoothedShoulder) ? null : smoothedShoulder,
     smoothedTorso: isNaN(smoothedTorso) ? null : smoothedTorso,
   };
 
-  if (isNaN(smoothedRatio)) {
+  if (isNaN(fastRatio)) {
     return newState;
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothedRatio, t);
+  const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
 
   // Track minimum ratio during REST (captures true starting bent position)
@@ -599,7 +622,7 @@ function updateCablePushdownState(
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
-    newState.repWindow = initRepWindow(t);
+    newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio);
     // Pre-seed minRatio with the resting bent ratio so flexion ROM is measured correctly
     if (currentState.restMinRatio !== Infinity) {
       newState.repWindow.minRatio = currentState.restMinRatio;
@@ -636,10 +659,24 @@ function updateCablePushdownState(
     if (newState.fsm.phase === 'EXTENDED' && window.tExtended === null) {
       window.tExtended = t;
     }
+
+    if (
+      currentState.fsm.phase === 'EXTENDED' &&
+      newState.fsm.phase === 'RETURNING' &&
+      window.tReturnStart === null
+    ) {
+      window.tReturnStart = t;
+    }
   }
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    newState.repWindow.tEnd = t;
+    if (!isNaN(smoothedRatio)) {
+      newState.repWindow.minRatio = Math.min(newState.repWindow.minRatio, smoothedRatio);
+      newState.repWindow.maxRatio = Math.max(newState.repWindow.maxRatio, smoothedRatio);
+    }
+
     newState.repCount++;
 
     const score = computeCablePushdownScore(newState.repWindow);
@@ -686,6 +723,7 @@ function getDebugInfo(state: CablePushdownState): CablePushdownDebugInfo {
     side: state.visibleSide,
     warmedUp: state.warmedUp,
     ratio: fmt(state.smoothedRatio),
+    fastRatio: fmt(state.fastRatio),
     shoulderAngle: fmt(state.smoothedShoulder),
     torsoDev: fmt(state.smoothedTorso),
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,

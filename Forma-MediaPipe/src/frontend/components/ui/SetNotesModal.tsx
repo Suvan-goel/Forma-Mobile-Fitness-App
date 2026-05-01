@@ -11,12 +11,12 @@ import {
   NativeSyntheticEvent,
   TextLayoutEventData,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { X, ChevronDown, ChevronUp, Clock, TrendingUp, Target, FileText } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_RADIUS_LG, getScoreColor } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { MonoText } from '../typography/MonoText';
 import { generateSetSummary } from '../../../utils/setNotesSummary';
+
 const MAX_FEEDBACK_LINES = 2;
 
 interface SetNotesModalProps {
@@ -47,7 +47,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
   const [overflowedReps, setOverflowedReps] = useState<Set<number>>(new Set());
   const [headerHeight, setHeaderHeight] = useState(0);
 
-  const maxModalHeight = windowHeight * 0.8;
+  const maxModalHeight = windowHeight * 0.82;
   const scrollMaxHeight = headerHeight > 0 ? maxModalHeight - headerHeight : undefined;
 
   useEffect(() => {
@@ -75,8 +75,12 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 
   const getRepDetails = (idx: number) => ({
     formScore: repFormScores[idx] ?? set.formScore,
-    feedback: repFeedback[idx] ?? '—',
+    feedback: repFeedback[idx] ?? '-',
   });
+
+  const durationLabel = set.durationSeconds != null && set.durationSeconds > 0
+    ? `${Math.floor(set.durationSeconds / 60)}:${(set.durationSeconds % 60).toString().padStart(2, '0')}`
+    : null;
 
   return (
     <Modal
@@ -95,21 +99,15 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
           activeOpacity={1}
           onPress={() => {}}
         >
-          <View style={styles.sheetGlassEdge}>
-            {/* Hero header with purple gradient */}
-            <LinearGradient
-              colors={SCREEN_GRADIENT_COLORS}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.headerGradient}
+          <View style={styles.sheetSurface}>
+            <View
+              style={styles.header}
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
             >
-              {/* Drag handle */}
               <View style={styles.handleContainer}>
                 <View style={styles.handle} />
               </View>
 
-              {/* Title row */}
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
                   <Text style={styles.title}>Set {setNumber}</Text>
@@ -119,60 +117,50 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                   style={styles.closeButton}
                   onPress={onClose}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close set notes"
                 >
                   <X size={18} color={COLORS.textSecondary} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
 
-              {/* Hero score + stats */}
-              {hasNotes && (
-                <View style={styles.heroStats}>
-                  {/* Score hero */}
-                  <View style={styles.scoreHero}>
-                    <View style={styles.scoreLabelRow}>
-                      <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
-                      <Text style={styles.scoreLabel}>FORM SCORE</Text>
-                    </View>
-                    <View style={styles.scoreValueRow}>
-                      <MonoText bold style={[styles.scoreValue, { color: scoreColor }]}>
-                        {set.formScore}
-                      </MonoText>
-                      <Text style={styles.scoreUnit}>/100</Text>
-                    </View>
+              <View style={styles.metricsGrid}>
+                <View style={styles.metricTile}>
+                  <View style={styles.metricLabelRow}>
+                    <Target size={13} color={COLORS.accent} strokeWidth={1.6} />
+                    <Text style={styles.metricLabel}>Form Score</Text>
                   </View>
-
-                  {/* Stat chips */}
-                  <View style={styles.statChips}>
-                    {set.durationSeconds != null && set.durationSeconds > 0 && (
-                      <View style={styles.statChip}>
-                        <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        <MonoText style={styles.statChipText}>
-                          {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
-                        </MonoText>
-                      </View>
-                    )}
-                    <View style={styles.statChip}>
-                      <TrendingUp size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-                      <MonoText style={styles.statChipText}>
-                        {repCount} rep{repCount !== 1 ? 's' : ''}
-                      </MonoText>
-                    </View>
+                  <View style={styles.metricValueRow}>
+                    <MonoText bold style={[styles.scoreValue, { color: scoreColor }]}>
+                      {set.formScore}
+                    </MonoText>
+                    <Text style={styles.scoreUnit}>/100</Text>
                   </View>
                 </View>
-              )}
 
-              {/* Minimal stats for no-notes case */}
-              {!hasNotes && (set.durationSeconds != null && set.durationSeconds > 0) && (
-                <View style={styles.heroStatsMinimal}>
-                  <View style={styles.statChip}>
-                    <Clock size={12} color={COLORS.textTertiary} strokeWidth={1.5} />
-                    <MonoText style={styles.statChipText}>
-                      {Math.floor(set.durationSeconds / 60)}:{(set.durationSeconds % 60).toString().padStart(2, '0')}
+                <View style={styles.metricTile}>
+                  <View style={styles.metricLabelRow}>
+                    <TrendingUp size={13} color={COLORS.textTertiary} strokeWidth={1.6} />
+                    <Text style={styles.metricLabel}>Reps</Text>
+                  </View>
+                  <MonoText bold style={styles.metricValue}>
+                    {repCount}
+                  </MonoText>
+                </View>
+
+                {durationLabel && (
+                  <View style={styles.metricTile}>
+                    <View style={styles.metricLabelRow}>
+                      <Clock size={13} color={COLORS.textTertiary} strokeWidth={1.6} />
+                      <Text style={styles.metricLabel}>Duration</Text>
+                    </View>
+                    <MonoText bold style={styles.metricValue}>
+                      {durationLabel}
                     </MonoText>
                   </View>
-                </View>
-              )}
-            </LinearGradient>
+                )}
+              </View>
+            </View>
 
             <ScrollView
               style={[styles.scrollView, scrollMaxHeight != null && { maxHeight: scrollMaxHeight }]}
@@ -180,126 +168,109 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
               showsVerticalScrollIndicator={false}
               bounces
             >
-                {hasNotes ? (
-                  <>
-                    {/* Rep breakdown */}
-                    <View style={styles.section}>
-                      <View style={styles.sectionLabelRow}>
-                        <FileText size={12} color={COLORS.accent} strokeWidth={1.5} />
-                        <Text style={styles.sectionTitle}>REP BREAKDOWN</Text>
-                      </View>
+              {hasNotes ? (
+                <>
+                  <View style={styles.section}>
+                    <View style={styles.sectionLabelRow}>
+                      <FileText size={12} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.sectionTitle}>REP BREAKDOWN</Text>
+                    </View>
 
-                      <View style={styles.repListOuter}>
-                        <LinearGradient
-                          colors={[...CARD_GRADIENT_COLORS]}
-                          start={CARD_GRADIENT_START}
-                          end={CARD_GRADIENT_END}
-                          style={styles.repListGradient}
-                        >
-                          <View style={styles.repListEdge}>
-                            {Array.from({ length: repCount }, (_, idx) => {
-                              const { formScore, feedback } = getRepDetails(idx);
-                              const isExpanded = expandedReps.has(idx);
-                              const showExpand = overflowedReps.has(idx) || isExpanded;
-                              const isGoodRep = feedback === 'Great rep!' || feedback === 'Good rep.';
-                              const repScoreColor = getScoreColor(formScore);
+                    <View style={styles.repList}>
+                      {Array.from({ length: repCount }, (_, idx) => {
+                        const { formScore, feedback } = getRepDetails(idx);
+                        const isExpanded = expandedReps.has(idx);
+                        const showExpand = overflowedReps.has(idx) || isExpanded;
+                        const isGoodRep = feedback === 'Great rep!' || feedback === 'Good rep.';
+                        const repScoreColor = getScoreColor(formScore);
 
-                              return (
-                                <View
-                                  key={idx}
-                                  style={[
-                                    styles.repRow,
-                                    idx === repCount - 1 && styles.repRowLast,
-                                  ]}
-                                >
-                                  <View style={styles.repHeader}>
-                                    <View style={styles.repLabelRow}>
-                                      <View style={styles.repIndexBadge}>
-                                        <MonoText bold style={styles.repIndexText}>{idx + 1}</MonoText>
-                                      </View>
-                                      <View style={[styles.scoreBadge, { backgroundColor: `${repScoreColor}15` }]}>
-                                        <MonoText bold style={[styles.scoreBadgeText, { color: repScoreColor }]}>
-                                          {formScore}
-                                        </MonoText>
-                                      </View>
-                                    </View>
-                                    {showExpand && (
-                                      <TouchableOpacity
-                                        style={styles.repExpandButton}
-                                        onPress={() => toggleRepExpanded(idx)}
-                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={isExpanded ? 'Collapse feedback' : 'Expand feedback'}
-                                      >
-                                        {isExpanded ? (
-                                          <ChevronUp size={14} color={COLORS.textTertiary} strokeWidth={2} />
-                                        ) : (
-                                          <ChevronDown size={14} color={COLORS.textTertiary} strokeWidth={2} />
-                                        )}
-                                      </TouchableOpacity>
-                                    )}
-                                  </View>
-                                  <View style={styles.repFeedbackContainer}>
-                                    {/* Hidden text to measure real line count for overflow */}
-                                    <Text
-                                      style={[styles.repFeedback, styles.repFeedbackMeasure]}
-                                      onTextLayout={(e) => handleFeedbackLayout(idx, e)}
-                                      pointerEvents="none"
-                                    >
-                                      {feedback}
-                                    </Text>
-                                    <Text
-                                      style={[
-                                        styles.repFeedback,
-                                        isGoodRep && styles.repFeedbackGood,
-                                      ]}
-                                      numberOfLines={isExpanded ? undefined : MAX_FEEDBACK_LINES}
-                                    >
-                                      {feedback}
-                                    </Text>
-                                  </View>
+                        return (
+                          <View
+                            key={idx}
+                            style={[
+                              styles.repRow,
+                              idx === repCount - 1 && styles.repRowLast,
+                            ]}
+                          >
+                            <View style={styles.repIndexBadge}>
+                              <MonoText bold style={styles.repIndexText}>{idx + 1}</MonoText>
+                            </View>
+
+                            <View style={styles.repContent}>
+                              <View style={styles.repHeader}>
+                                <Text style={styles.repTitle}>Rep {idx + 1}</Text>
+                                <View style={[styles.scoreBadge, { borderColor: `${repScoreColor}55` }]}>
+                                  <MonoText bold style={[styles.scoreBadgeText, { color: repScoreColor }]}>
+                                    {formScore}
+                                  </MonoText>
                                 </View>
-                              );
-                            })}
-                          </View>
-                        </LinearGradient>
-                      </View>
-                    </View>
+                              </View>
 
-                    {/* Form summary */}
-                    <View style={styles.section}>
-                      <View style={styles.sectionLabelRow}>
-                        <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
-                        <Text style={styles.sectionTitle}>SUMMARY</Text>
-                      </View>
+                              <View style={styles.repFeedbackContainer}>
+                                <Text
+                                  style={[styles.repFeedback, styles.repFeedbackMeasure]}
+                                  onTextLayout={(e) => handleFeedbackLayout(idx, e)}
+                                  pointerEvents="none"
+                                >
+                                  {feedback}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.repFeedback,
+                                    isGoodRep && styles.repFeedbackGood,
+                                  ]}
+                                  numberOfLines={isExpanded ? undefined : MAX_FEEDBACK_LINES}
+                                >
+                                  {feedback}
+                                </Text>
+                              </View>
+                            </View>
 
-                      <View style={styles.summaryOuter}>
-                        <LinearGradient
-                          colors={[...CARD_GRADIENT_COLORS]}
-                          start={CARD_GRADIENT_START}
-                          end={CARD_GRADIENT_END}
-                          style={styles.summaryGradient}
-                        >
-                          <View style={styles.summaryEdge}>
-                            <Text style={styles.summaryText}>{summary}</Text>
+                            {showExpand && (
+                              <TouchableOpacity
+                                style={styles.repExpandButton}
+                                onPress={() => toggleRepExpanded(idx)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={isExpanded ? 'Collapse feedback' : 'Expand feedback'}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp size={14} color={COLORS.textTertiary} strokeWidth={2} />
+                                ) : (
+                                  <ChevronDown size={14} color={COLORS.textTertiary} strokeWidth={2} />
+                                )}
+                              </TouchableOpacity>
+                            )}
                           </View>
-                        </LinearGradient>
-                      </View>
+                        );
+                      })}
                     </View>
-                  </>
-                ) : (
-                  <View style={styles.emptyState}>
-                    <View style={styles.emptyIconWrap}>
-                      <FileText size={24} color={COLORS.textTertiary} strokeWidth={1} />
-                    </View>
-                    <Text style={styles.emptyText}>
-                      No rep-by-rep feedback for this set.
-                    </Text>
-                    <Text style={styles.emptySubtext}>
-                      Feedback is captured for exercises with form analysis. Form score: {set.formScore}/100
-                    </Text>
                   </View>
-                )}
+
+                  <View style={styles.section}>
+                    <View style={styles.sectionLabelRow}>
+                      <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
+                      <Text style={styles.sectionTitle}>SUMMARY</Text>
+                    </View>
+
+                    <View style={styles.summaryCard}>
+                      <Text style={styles.summaryText}>{summary}</Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyIconWrap}>
+                    <FileText size={24} color={COLORS.textTertiary} strokeWidth={1} />
+                  </View>
+                  <Text style={styles.emptyText}>
+                    No rep-by-rep feedback for this set.
+                  </Text>
+                  <Text style={styles.emptySubtext}>
+                    Feedback is captured for exercises with form analysis. Form score: {set.formScore}/100
+                  </Text>
+                </View>
+              )}
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -311,237 +282,220 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     justifyContent: 'flex-end',
   },
   sheetOuter: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: -6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: -8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 18,
       },
       android: { elevation: 10 },
     }),
   },
-  sheetGlassEdge: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  sheetSurface: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: COLORS.borderStrong,
     overflow: 'hidden',
-    backgroundColor: '#0C0A14',
+    backgroundColor: COLORS.background,
   },
-
-  /* ── Header ──────────────────────────────── */
-  headerGradient: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  header: {
+    backgroundColor: COLORS.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   handleContainer: {
     alignItems: 'center',
     paddingTop: 10,
-    paddingBottom: 2,
+    paddingBottom: 4,
   },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
   },
   headerLeft: {
     flex: 1,
     marginRight: SPACING.md,
   },
   title: {
-    fontSize: 22,
-    fontFamily: FONTS.display.bold,
+    fontSize: 21,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: 13,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    marginTop: 3,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  /* ── Hero Stats ──────────────────────────── */
-  heroStats: {
+  metricsGrid: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
+  },
+  metricTile: {
+    flex: 1,
+    minHeight: 72,
+    borderRadius: CARD_RADIUS_LG,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+    paddingHorizontal: 11,
+    paddingVertical: 10,
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.lg,
   },
-  heroStatsMinimal: {
-    flexDirection: 'row',
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: SPACING.lg,
-  },
-  scoreHero: {
-    gap: 4,
-  },
-  scoreLabelRow: {
+  metricLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
-  scoreLabel: {
-    fontFamily: FONTS.display.semibold,
+  metricLabel: {
     fontSize: 10,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
+    fontFamily: FONTS.display.semibold,
+    color: COLORS.textTertiary,
+    letterSpacing: 0.6,
   },
-  scoreValueRow: {
+  metricValueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 3,
+    gap: 2,
   },
   scoreValue: {
-    fontSize: 40,
-    letterSpacing: -1.5,
-    lineHeight: 44,
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -1,
   },
   scoreUnit: {
     fontFamily: FONTS.mono.regular,
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.textTertiary,
   },
-  statChips: {
-    gap: 8,
-    alignItems: 'flex-end',
-    paddingBottom: 6,
+  metricValue: {
+    fontSize: 21,
+    lineHeight: 26,
+    color: COLORS.text,
   },
-  statChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  scrollView: {
+    backgroundColor: COLORS.background,
   },
-  statChipText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-
-  /* ── Scroll ──────────────────────────────── */
-  scrollView: {},
   scrollContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
+    gap: SPACING.lg,
   },
-
-  /* ── Sections ─────────────────────────────── */
   section: {
-    marginBottom: SPACING.xl,
+    gap: SPACING.sm,
   },
   sectionLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: SPACING.sm,
   },
   sectionTitle: {
-    fontSize: 11,
-    fontFamily: FONTS.display.bold,
+    fontSize: 10,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
+    letterSpacing: 1.6,
   },
-
-  /* ── Rep List ─────────────────────────────── */
-  repListOuter: {
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  repListGradient: {
-    borderRadius: 18,
-  },
-  repListEdge: {
-    borderRadius: 18,
+  repList: {
+    borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardBackground,
     overflow: 'hidden',
   },
   repRow: {
-    paddingHorizontal: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   repRowLast: {
     borderBottomWidth: 0,
+  },
+  repIndexBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  repIndexText: {
+    fontSize: 12,
+    color: COLORS.accent,
+    lineHeight: 16,
+  },
+  repContent: {
+    flex: 1,
+    minWidth: 0,
   },
   repHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  repLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: SPACING.sm,
+    marginBottom: 5,
   },
-  repIndexBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  repIndexText: {
-    fontSize: 11,
-    color: COLORS.accent,
-    lineHeight: 14,
+  repTitle: {
+    fontSize: 13,
+    fontFamily: FONTS.display.semibold,
+    color: COLORS.text,
+    letterSpacing: -0.1,
   },
   scoreBadge: {
+    minWidth: 36,
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 9,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
   },
   scoreBadgeText: {
     fontSize: 11,
+    lineHeight: 14,
   },
   repFeedbackContainer: {
-    paddingLeft: 32,
     position: 'relative',
-  },
-  repExpandButton: {
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   repFeedback: {
     fontSize: 13,
@@ -552,25 +506,25 @@ const styles = StyleSheet.create({
   repFeedbackMeasure: {
     position: 'absolute',
     opacity: 0,
-    left: 32,
+    left: 0,
     right: 0,
   },
   repFeedbackGood: {
-    color: '#34D399',
+    color: COLORS.green,
   },
-
-  /* ── Summary ──────────────────────────────── */
-  summaryOuter: {
-    borderRadius: 18,
-    overflow: 'hidden',
+  repExpandButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
   },
-  summaryGradient: {
-    borderRadius: 18,
-  },
-  summaryEdge: {
-    borderRadius: 18,
+  summaryCard: {
+    borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardBackground,
     padding: SPACING.md,
   },
   summaryText: {
@@ -579,8 +533,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 20,
   },
-
-  /* ── Empty State ──────────────────────────── */
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING.xxl,
@@ -590,8 +542,8 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardBackground,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,

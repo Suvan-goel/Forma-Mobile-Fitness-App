@@ -40,6 +40,8 @@ const THRESHOLDS = {
   FLEXED_ENTER: 0.54,
   /** Reach ratio above which we start detecting downward motion from TOP */
   FLEXED_EXIT: 0.57,
+  /** Ratio rebound from the deepest curl that marks the start of lowering. */
+  FLEXED_EXIT_DELTA: 0.04,
   MIN_REP_TIME: 0.25, // seconds
   SYNC_WINDOW: 0.75, // seconds between arms
   /** Minimum reach ratio ROM (max - min) for a valid rep */
@@ -153,6 +155,15 @@ function penaltyAsymmetry(deltaMinRatio: number, deltaRomRatio: number): number 
   return Math.min(15, minPenalty + romPenalty);
 }
 
+function getConcentricDuration(arm: ArmFSM): number {
+  return arm.tUpToTop !== null && arm.tRestToUp !== null ? arm.tUpToTop - arm.tRestToUp : 0;
+}
+
+function getEccentricDuration(arm: ArmFSM): number {
+  const loweringStart = arm.tTopToDown !== null ? arm.tTopToDown : arm.tUpToTop;
+  return arm.tDownToRest !== null && loweringStart !== null ? arm.tDownToRest - loweringStart : 0;
+}
+
 /** Compute a continuous rep score from ratio-based measurements. */
 function computeRepScore(
   repWindow: RepWindow,
@@ -211,10 +222,10 @@ function computeRepScore(
   );
 
   // Tempo penalty — average across both arms in frontal mode
-  const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
-  const tUpR = _rightArm.tUpToTop && _rightArm.tRestToUp ? _rightArm.tUpToTop - _rightArm.tRestToUp : 0;
-  const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
-  const tDownR = _rightArm.tDownToRest && _rightArm.tTopToDown ? _rightArm.tDownToRest - _rightArm.tTopToDown : 0;
+  const tUpL = getConcentricDuration(leftArm);
+  const tUpR = getConcentricDuration(_rightArm);
+  const tDownL = getEccentricDuration(leftArm);
+  const tDownR = getEccentricDuration(_rightArm);
   let tUp: number;
   let tDown: number;
   if (isFrontal) {
@@ -222,8 +233,8 @@ function computeRepScore(
     tDown = tDownL > 0 && tDownR > 0 ? (tDownL + tDownR) / 2 : Math.max(tDownL, tDownR);
   } else {
     const tempoArm = primaryIsLeft ? leftArm : _rightArm;
-    tUp   = tempoArm.tUpToTop   && tempoArm.tRestToUp  ? tempoArm.tUpToTop   - tempoArm.tRestToUp  : 0;
-    tDown = tempoArm.tDownToRest && tempoArm.tTopToDown ? tempoArm.tDownToRest - tempoArm.tTopToDown : 0;
+    tUp = getConcentricDuration(tempoArm);
+    tDown = getEccentricDuration(tempoArm);
   }
   const tempoP = penaltyTempo(tUp, tDown);
 
@@ -864,7 +875,10 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
     case 'TOP':
       newArm.minRatio = Math.min(newArm.minRatio, reachRatio);
       newArm.maxRatio = Math.max(newArm.maxRatio, reachRatio);
-      if (reachRatio > THRESHOLDS.FLEXED_EXIT) {
+      if (
+        reachRatio > THRESHOLDS.FLEXED_EXIT ||
+        reachRatio > newArm.minRatio + THRESHOLDS.FLEXED_EXIT_DELTA
+      ) {
         newArm.state = 'DOWN';
         newArm.tTopToDown = t;
       }
@@ -1013,10 +1027,10 @@ function evaluateForm(
   }
 
   // 6. Tempo — average across both arms in frontal mode
-  const tUpL = leftArm.tUpToTop && leftArm.tRestToUp ? leftArm.tUpToTop - leftArm.tRestToUp : 0;
-  const tUpR = rightArm.tUpToTop && rightArm.tRestToUp ? rightArm.tUpToTop - rightArm.tRestToUp : 0;
-  const tDownL = leftArm.tDownToRest && leftArm.tTopToDown ? leftArm.tDownToRest - leftArm.tTopToDown : 0;
-  const tDownR = rightArm.tDownToRest && rightArm.tTopToDown ? rightArm.tDownToRest - rightArm.tTopToDown : 0;
+  const tUpL = getConcentricDuration(leftArm);
+  const tUpR = getConcentricDuration(rightArm);
+  const tDownL = getEccentricDuration(leftArm);
+  const tDownR = getEccentricDuration(rightArm);
 
   let tUp: number;
   let tDown: number;
@@ -1025,8 +1039,8 @@ function evaluateForm(
     tDown = tDownL > 0 && tDownR > 0 ? (tDownL + tDownR) / 2 : Math.max(tDownL, tDownR);
   } else {
     const tempoArm = primaryIsLeft ? leftArm : rightArm;
-    tUp   = tempoArm.tUpToTop   && tempoArm.tRestToUp  ? tempoArm.tUpToTop   - tempoArm.tRestToUp  : 0;
-    tDown = tempoArm.tDownToRest && tempoArm.tTopToDown ? tempoArm.tDownToRest - tempoArm.tTopToDown : 0;
+    tUp = getConcentricDuration(tempoArm);
+    tDown = getEccentricDuration(tempoArm);
   }
 
   if (tUp < FORM_THRESHOLDS.TEMPO_UP_MIN && tUp > 0) {
@@ -1256,14 +1270,8 @@ function completeRep(
     ? newState.leftArm
     : (viewAngle.primarySide === 'right' ? newState.rightArm : newState.leftArm);
 
-  const tUp =
-    tempoArm.tUpToTop && tempoArm.tRestToUp
-      ? tempoArm.tUpToTop - tempoArm.tRestToUp
-      : 0;
-  const tDown =
-    tempoArm.tDownToRest && tempoArm.tTopToDown
-      ? tempoArm.tDownToRest - tempoArm.tTopToDown
-      : 0;
+  const tUp = getConcentricDuration(tempoArm);
+  const tDown = getEccentricDuration(tempoArm);
 
   const { score, messages } = evaluateForm(
     newState.repWindow!,
@@ -1308,11 +1316,15 @@ const _safeDelta = (min: number, max: number) =>
 function getBarbellCurlDebugInfo(state: BarbellCurlState): {
   leftArmState: string;
   rightArmState: string;
+  view: ViewAngle;
+  warmupFrames: number;
   current: {
     leftElbow: number | null;
     rightElbow: number | null;
     leftRatio: number | null;
     rightRatio: number | null;
+    fastLeftRatio: number | null;
+    fastRightRatio: number | null;
     leftShoulder: number | null;
     rightShoulder: number | null;
     torso: number | null;
@@ -1338,6 +1350,8 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
     rightElbow: _formatAngle(angles?.rightElbow ?? NaN),
     leftRatio: _formatAngle(angles?.leftRatio ?? NaN),
     rightRatio: _formatAngle(angles?.rightRatio ?? NaN),
+    fastLeftRatio: _formatAngle(state.fast?.leftRatio ?? NaN),
+    fastRightRatio: _formatAngle(state.fast?.rightRatio ?? NaN),
     leftShoulder: _formatAngle(angles?.leftShoulder ?? NaN),
     rightShoulder: _formatAngle(angles?.rightShoulder ?? NaN),
     torso: _formatAngle(angles?.torso ?? NaN),
@@ -1364,6 +1378,8 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
   return {
     leftArmState: state.leftArm.state,
     rightArmState: state.rightArm.state,
+    view: state.viewAngle,
+    warmupFrames: state.warmupFrames,
     current,
     repRatios,
     repDelta,

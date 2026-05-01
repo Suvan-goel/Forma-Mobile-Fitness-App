@@ -3,19 +3,30 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   Animated,
   Platform,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line, Rect, G, Ellipse, Defs, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import { ArrowRight, Check, HelpCircle } from 'lucide-react-native';
+import {
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_LG,
+  CARD_SHADOW,
+  COLORS,
+  FONTS,
+  SPACING,
+} from '../constants/theme';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_SLIDES = 3;
 
 // Front-view holographic model asset
@@ -65,7 +76,7 @@ const PhoneSetupVector: React.FC = () => (
     </G>
 
     {/* Angle reference — vertical dashed guide + arc */}
-    <Line x1={130} y1={225} x2={130} y2={200} stroke="rgba(255,255,255,0.10)" strokeWidth={0.8} strokeDasharray="3,3" />
+    <Line x1={130} y1={225} x2={130} y2={200} stroke="rgba(255, 255, 255, 0.055)" strokeWidth={0.8} strokeDasharray="3,3" />
     <Path d="M 130 213 Q 126 207, 123 202" stroke="rgba(139,92,246,0.20)" strokeWidth={0.8} fill="none" />
   </Svg>
 );
@@ -161,42 +172,42 @@ const HeaderHintVector: React.FC = () => (
   <Svg width={280} height={240} viewBox="0 0 280 240">
     {/* Phone frame (top portion) */}
     <Rect x={18} y={8} width={244} height={224} rx={24}
-      stroke="rgba(255,255,255,0.06)" strokeWidth={1.2} fill="rgba(255,255,255,0.015)" />
+      stroke="rgba(255, 255, 255, 0.04)" strokeWidth={1.2} fill="rgba(255,255,255,0.015)" />
 
     {/* Status bar hints */}
-    <Rect x={38} y={22} width={24} height={5} rx={2.5} fill="rgba(255,255,255,0.07)" />
-    <Rect x={218} y={22} width={14} height={5} rx={2} stroke="rgba(255,255,255,0.06)" strokeWidth={0.7} fill="none" />
+    <Rect x={38} y={22} width={24} height={5} rx={2.5} fill="rgba(255, 255, 255, 0.055)" />
+    <Rect x={218} y={22} width={14} height={5} rx={2} stroke="rgba(255, 255, 255, 0.04)" strokeWidth={0.7} fill="none" />
 
     {/* Header bar fill */}
-    <Rect x={18} y={36} width={244} height={38} fill="rgba(255,255,255,0.02)" />
+    <Rect x={18} y={36} width={244} height={38} fill="rgba(255, 255, 255, 0.022)" />
 
     {/* Header separator */}
-    <Line x1={28} y1={74} x2={252} y2={74} stroke="rgba(255,255,255,0.06)" strokeWidth={0.5} />
+    <Line x1={28} y1={74} x2={252} y2={74} stroke="rgba(255, 255, 255, 0.04)" strokeWidth={0.5} />
 
     {/* ? icon placeholder (dimmed circle — the real one is an overlay) */}
     <Circle cx={HINT_ICON_CX} cy={HINT_ICON_CY} r={15}
-      stroke="rgba(255,255,255,0.06)" strokeWidth={0.8} fill="none" />
+      stroke="rgba(255, 255, 255, 0.04)" strokeWidth={0.8} fill="none" />
 
     {/* Exercise title placeholder */}
-    <Rect x={108} y={49} width={64} height={11} rx={4} fill="rgba(255,255,255,0.06)" />
+    <Rect x={108} y={49} width={64} height={11} rx={4} fill="rgba(255, 255, 255, 0.04)" />
 
     {/* Right-side icon placeholder */}
-    <Circle cx={234} cy={52} r={1.5} fill="rgba(255,255,255,0.06)" />
-    <Circle cx={234} cy={58} r={1.5} fill="rgba(255,255,255,0.06)" />
+    <Circle cx={234} cy={52} r={1.5} fill="rgba(255, 255, 255, 0.04)" />
+    <Circle cx={234} cy={58} r={1.5} fill="rgba(255, 255, 255, 0.04)" />
 
     {/* Camera content area — faint viewfinder brackets */}
-    <Path d="M 55 95 L 38 95 L 38 115" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
-    <Path d="M 225 95 L 242 95 L 242 115" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
-    <Path d="M 55 195 L 38 195 L 38 175" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
-    <Path d="M 225 195 L 242 195 L 242 175" stroke="rgba(255,255,255,0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 55 95 L 38 95 L 38 115" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 225 95 L 242 95 L 242 115" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 55 195 L 38 195 L 38 175" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
+    <Path d="M 225 195 L 242 195 L 242 175" stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} fill="none" strokeLinecap="round" />
 
     {/* Center crosshair */}
-    <Line x1={131} y1={145} x2={149} y2={145} stroke="rgba(255,255,255,0.03)" strokeWidth={0.8} />
-    <Line x1={140} y1={136} x2={140} y2={154} stroke="rgba(255,255,255,0.03)" strokeWidth={0.8} />
+    <Line x1={131} y1={145} x2={149} y2={145} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={0.8} />
+    <Line x1={140} y1={136} x2={140} y2={154} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={0.8} />
 
     {/* Bottom controls hint */}
-    <Line x1={28} y1={210} x2={252} y2={210} stroke="rgba(255,255,255,0.03)" strokeWidth={0.5} />
-    <Circle cx={140} cy={224} r={8} stroke="rgba(255,255,255,0.05)" strokeWidth={1} fill="none" />
+    <Line x1={28} y1={210} x2={252} y2={210} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={0.5} />
+    <Circle cx={140} cy={224} r={8} stroke="rgba(255, 255, 255, 0.055)" strokeWidth={1} fill="none" />
   </Svg>
 );
 
@@ -208,7 +219,11 @@ interface CameraSetupGuideProps {
 
 export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }) => {
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const isCompactHeight = height < 720;
+  const horizontalPadding = Math.max(SPACING.screenHorizontal, Math.min(26, width * 0.055));
+  const artStageHeight = isCompactHeight ? 310 : 360;
 
   // Animation values
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -349,6 +364,7 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
   // CTA glow
   const glowOp = buttonGlow.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.8] });
   const glowRad = buttonGlow.interpolate({ inputRange: [0, 1], outputRange: [12, 25] });
+  const isFinalSlide = currentSlide === TOTAL_SLIDES - 1;
 
   // Ripple ring helper
   const RING_SIZE = 34;
@@ -368,126 +384,153 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
   });
 
   return (
-    <Animated.View style={[styles.root, { opacity: fadeIn, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      {/* ── Top 60 %: SVG Art ─────────────────── */}
-      <View style={styles.artSection}>
-        {/* Slide 0 — Phone Setup */}
-        <Animated.View style={[styles.slideLayer, { opacity: s0Opacity, transform: [{ translateX: s0Tx }] }]}>
-          <Text style={styles.stepLabel}>THE SETUP</Text>
-          <Animated.View style={[
-            styles.vectorWrap,
-            Platform.OS === 'ios' && {
-              shadowColor: COLORS.primary,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: phoneGlow as any,
-              shadowRadius: 22,
-            },
-          ]}>
-            <PhoneSetupVector />
-          </Animated.View>
-        </Animated.View>
+    <ScreenBackground style={styles.root}>
+      <Animated.View
+        style={[
+          styles.content,
+          {
+            opacity: fadeIn,
+            paddingTop: insets.top + 12,
+            paddingBottom: insets.bottom + 18,
+            paddingHorizontal: horizontalPadding,
+          },
+        ]}
+      >
+        <View style={styles.topBar}>
+          <View style={styles.titleBlock}>
+            <Text style={styles.kicker}>CAMERA SETUP</Text>
+            <Text style={styles.topTitle}>Frame every rep cleanly</Text>
+          </View>
+          <View style={styles.counterPill}>
+            <Text style={styles.counterText}>{currentSlide + 1}/{TOTAL_SLIDES}</Text>
+          </View>
+        </View>
 
-        {/* Slide 1 — Viewfinder */}
-        <Animated.View style={[styles.slideLayer, styles.slideLayerAbsolute, { opacity: s1Opacity, transform: [{ translateX: s1Tx }] }]}>
-          <Text style={styles.stepLabel}>THE FRAME</Text>
-          <Animated.View style={[styles.vectorWrap, { transform: [{ scale: bracketPulse }] }]}>
-            <FrameViewVisual />
-          </Animated.View>
-        </Animated.View>
-
-        {/* Slide 2 — Header Hint with Ripple */}
-        <Animated.View style={[styles.slideLayer, styles.slideLayerAbsolute, { opacity: s2Opacity, transform: [{ translateX: s2Tx }] }]}>
-          <Text style={styles.stepLabel}>PRO TIP</Text>
-          <View style={styles.hintWrap}>
-            <HeaderHintVector />
-            {/* Ripple rings overlay */}
-            <View style={styles.rippleOverlay} pointerEvents="none">
-              {ripples.map((anim, i) => (
-                <Animated.View key={i} style={rippleRingStyle(anim)} />
-              ))}
-              {/* Glowing ? icon */}
-              <View style={styles.qIcon}>
-                <Text style={styles.qText}>?</Text>
+        <LinearGradient
+          colors={[...CARD_GRADIENT_COLORS]}
+          start={CARD_GRADIENT_START}
+          end={CARD_GRADIENT_END}
+          style={[styles.artCard, { height: artStageHeight }]}
+        >
+          <View style={styles.artCardEdge}>
+            <View style={styles.artHeaderRow}>
+              <View style={styles.artIconBubble}>
+                <HelpCircle size={16} color={COLORS.accent} strokeWidth={1.7} />
               </View>
+              <Text style={styles.stepLabel}>
+                {currentSlide === 0 ? 'STABLE BASE' : currentSlide === 1 ? 'FULL BODY FRAME' : 'EXERCISE-SPECIFIC HELP'}
+              </Text>
+            </View>
+
+            <View style={styles.artStage}>
+              <Animated.View style={[styles.slideLayer, { opacity: s0Opacity, transform: [{ translateX: s0Tx }] }]}>
+                <Animated.View style={[
+                  styles.vectorWrap,
+                  Platform.OS === 'ios' && {
+                    shadowColor: COLORS.primary,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: phoneGlow as any,
+                    shadowRadius: 22,
+                  },
+                ]}>
+                  <PhoneSetupVector />
+                </Animated.View>
+              </Animated.View>
+
+              <Animated.View style={[styles.slideLayer, { opacity: s1Opacity, transform: [{ translateX: s1Tx }] }]}>
+                <Animated.View style={[styles.vectorWrap, { transform: [{ scale: bracketPulse }] }]}>
+                  <FrameViewVisual />
+                </Animated.View>
+              </Animated.View>
+
+              <Animated.View style={[styles.slideLayer, { opacity: s2Opacity, transform: [{ translateX: s2Tx }] }]}>
+                <View style={styles.hintWrap}>
+                  <HeaderHintVector />
+                  <View style={styles.rippleOverlay} pointerEvents="none">
+                    {ripples.map((anim, i) => (
+                      <Animated.View key={i} style={rippleRingStyle(anim)} />
+                    ))}
+                    <View style={styles.qIcon}>
+                      <Text style={styles.qText}>?</Text>
+                    </View>
+                  </View>
+                </View>
+              </Animated.View>
             </View>
           </View>
-        </Animated.View>
-      </View>
+        </LinearGradient>
 
-      {/* ── Pagination Dots ───────────────────── */}
-      <View style={styles.paginationRow}>
-        <Animated.View style={[styles.dot, { width: dot0W, opacity: dot0Op, backgroundColor: COLORS.primary }]} />
-        <Animated.View style={[styles.dot, { width: dot1W, opacity: dot1Op, backgroundColor: COLORS.primary }]} />
-        <Animated.View style={[styles.dot, { width: dot2W, opacity: dot2Op, backgroundColor: COLORS.primary }]} />
-      </View>
+        <View style={styles.paginationRow}>
+          <Animated.View style={[styles.dot, { width: dot0W, opacity: dot0Op, backgroundColor: COLORS.primary }]} />
+          <Animated.View style={[styles.dot, { width: dot1W, opacity: dot1Op, backgroundColor: COLORS.primary }]} />
+          <Animated.View style={[styles.dot, { width: dot2W, opacity: dot2Op, backgroundColor: COLORS.primary }]} />
+        </View>
 
-      {/* ── Bottom 40 %: Text + CTA ───────────── */}
-      <View style={styles.textSection}>
-        {/* Slide 0 text */}
-        <Animated.View
-          pointerEvents={currentSlide === 0 ? 'auto' : 'none'}
-          style={[styles.textLayer, { opacity: s0Opacity, transform: [{ translateX: s0Tx }] }]}
-        >
-          <Text style={styles.header}>Position the Camera</Text>
-          <Text style={styles.subtext}>
-            Prop your phone on a tripod or a water bottle a few feet away from you.
-          </Text>
-          <TouchableOpacity onPress={handleNext} style={styles.nextButton} activeOpacity={0.6}>
-            <Text style={styles.nextText}>{'Next  \u2192'}</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Slide 1 text */}
-        <Animated.View
-          pointerEvents={currentSlide === 1 ? 'auto' : 'none'}
-          style={[styles.textLayer, styles.textLayerAbsolute, { opacity: s1Opacity, transform: [{ translateX: s1Tx }] }]}
-        >
-          <Text style={styles.header}>Stay in Frame</Text>
-          <Text style={styles.subtext}>
-            Make sure your full body is visible on screen during the entire lift.
-          </Text>
-          <TouchableOpacity onPress={handleNext} style={styles.nextButton} activeOpacity={0.6}>
-            <Text style={styles.nextText}>{'Next  \u2192'}</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Slide 2 text */}
-        <Animated.View
-          pointerEvents={currentSlide === 2 ? 'auto' : 'none'}
-          style={[styles.textLayer, styles.textLayerAbsolute, { opacity: s2Opacity, transform: [{ translateX: s2Tx }] }]}
-        >
-          <Text style={styles.header}>Tailored Setup</Text>
-          <Text style={styles.subtext}>
-            Every exercise is different. Tap the '?' icon in the top left anytime to see exactly how to frame your current movement.
-          </Text>
+        <View style={[styles.textStage, isCompactHeight && styles.textStageCompact]}>
           <Animated.View
-            style={[
-              styles.ctaWrapper,
-              Platform.OS === 'ios' && {
-                shadowColor: COLORS.primary,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: glowOp as any,
-                shadowRadius: glowRad as any,
-              },
-            ]}
+            pointerEvents={currentSlide === 0 ? 'auto' : 'none'}
+            style={[styles.textLayer, { opacity: s0Opacity, transform: [{ translateX: s0Tx }] }]}
           >
-            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-              <TouchableOpacity onPress={handleOpenCamera} activeOpacity={0.85}>
-                <LinearGradient
-                  // Use a flat purple fill so styling matches the Google button
-                  colors={['rgba(139, 92, 246, 0.12)', 'rgba(139, 92, 246, 0.12)']}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={styles.ctaButton}
-                >
-                  <Text style={styles.ctaText}>Start Recording</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animated.View>
+            <Text style={styles.header}>Position the Camera</Text>
+            <Text style={styles.subtext}>
+              Set your phone on a stable surface a few feet away, with the lens around hip to chest height.
+            </Text>
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents={currentSlide === 1 ? 'auto' : 'none'}
+            style={[styles.textLayer, { opacity: s1Opacity, transform: [{ translateX: s1Tx }] }]}
+          >
+            <Text style={styles.header}>Stay in Frame</Text>
+            <Text style={styles.subtext}>
+              Keep your full body visible through each rep so Forma can track joints without losing context.
+            </Text>
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents={currentSlide === 2 ? 'auto' : 'none'}
+            style={[styles.textLayer, { opacity: s2Opacity, transform: [{ translateX: s2Tx }] }]}
+          >
+            <Text style={styles.header}>Use the Setup Guide</Text>
+            <Text style={styles.subtext}>
+              Tap the help icon in the camera header for exercise-specific framing before you record.
+            </Text>
+          </Animated.View>
+        </View>
+
+        <Animated.View
+          style={[
+            styles.ctaWrapper,
+            Platform.OS === 'ios' && isFinalSlide && {
+              shadowColor: COLORS.primary,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: glowOp as any,
+              shadowRadius: glowRad as any,
+            },
+          ]}
+        >
+          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+            <TouchableOpacity onPress={isFinalSlide ? handleOpenCamera : handleNext} activeOpacity={0.86}>
+              <LinearGradient
+                colors={isFinalSlide ? [COLORS.primary, COLORS.primaryDark] : ['rgba(255,255,255,0.065)', 'rgba(255,255,255,0.035)']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={[styles.ctaButton, !isFinalSlide && styles.secondaryButton]}
+              >
+                <Text style={[styles.ctaText, !isFinalSlide && styles.secondaryButtonText]}>
+                  {isFinalSlide ? 'Start Recording' : 'Next'}
+                </Text>
+                {isFinalSlide ? (
+                  <Check size={18} color="#FFFFFF" strokeWidth={2} />
+                ) : (
+                  <ArrowRight size={18} color={COLORS.text} strokeWidth={2} />
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
           </Animated.View>
         </Animated.View>
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </ScreenBackground>
   );
 };
 
@@ -498,38 +541,109 @@ const Q_SIZE = 32;
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+  },
+  content: {
+    flex: 1,
+    gap: 16,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  titleBlock: {
+    flex: 1,
+    gap: 5,
+  },
+  kicker: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.accent,
+    letterSpacing: 1.8,
+  },
+  topTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 24,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  counterPill: {
+    height: 34,
+    minWidth: 54,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  counterText: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 12,
+    color: COLORS.textSecondary,
   },
 
-  /* ── Art section (top 60%) ── */
-  artSection: {
-    flex: 0.6,
-    justifyContent: 'center',
+  /* Art card */
+  artCard: {
+    borderRadius: CARD_RADIUS_LG,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  artCardEdge: {
+    flex: 1,
+    borderRadius: CARD_RADIUS_LG,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderTopColor: COLORS.borderStrong,
+    overflow: 'hidden',
+  },
+  artHeaderRow: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    zIndex: 3,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 9,
+  },
+  artIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: CARD_RADIUS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.28)',
+  },
+  artStage: {
+    flex: 1,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   slideLayer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  slideLayerAbsolute: {
     position: 'absolute',
-    top: 0,
+    top: 30,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   stepLabel: {
-    fontFamily: FONTS.mono.bold,
+    flex: 1,
+    fontFamily: FONTS.display.semibold,
     fontSize: 11,
-    color: COLORS.primary,
-    letterSpacing: 4,
-    marginBottom: 28,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.3,
   },
   vectorWrap: {},
 
-  /* ── Header hint (slide 2) ── */
+  /* Header hint (slide 2) */
   hintWrap: {
     width: 280,
     height: 240,
@@ -571,82 +685,79 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  /* ── Pagination ── */
+  /* Pagination */
   paginationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
+    paddingTop: 2,
+    paddingBottom: 2,
   },
   dot: {
     height: 6,
     borderRadius: 3,
   },
 
-  /* ── Text section (bottom 40%) ── */
-  textSection: {
-    flex: 0.4,
-    paddingHorizontal: 40,
+  /* Text */
+  textStage: {
+    minHeight: 150,
+    position: 'relative',
+  },
+  textStageCompact: {
+    minHeight: 128,
   },
   textLayer: {
-    alignItems: 'center',
-  },
-  textLayerAbsolute: {
     position: 'absolute',
     top: 0,
-    left: 40,
-    right: 40,
+    left: 0,
+    right: 0,
     alignItems: 'center',
   },
   header: {
     fontFamily: FONTS.display.bold,
-    fontSize: 28,
+    fontSize: 27,
     color: COLORS.text,
     textAlign: 'center',
-    letterSpacing: -0.5,
-    marginBottom: 12,
+    letterSpacing: 0,
+    marginBottom: 10,
   },
   subtext: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 36,
-  },
-
-  /* ── Next button ── */
-  nextButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  nextText: {
-    fontFamily: FONTS.ui.regular,
     fontSize: 15,
     color: COLORS.textSecondary,
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 330,
   },
 
-  /* ── CTA button (final slide) ── */
+  /* CTA */
   ctaWrapper: {
-    alignSelf: 'stretch',
-    borderRadius: 28,
+    marginTop: 'auto',
+    marginBottom: 12,
+    borderRadius: CARD_RADIUS,
     overflow: 'visible',
   },
   ctaButton: {
     height: 56,
-    borderRadius: 28,
+    borderRadius: CARD_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    flexDirection: 'row',
+    gap: 10,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  secondaryButton: {
+    borderColor: COLORS.borderStrong,
   },
   ctaText: {
     fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontSize: 16,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.1,
+  },
+  secondaryButtonText: {
+    color: COLORS.text,
   },
 });

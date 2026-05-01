@@ -11,7 +11,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, Video, Download, Check, Dumbbell } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS ,
+  CARD_SHADOW
+} from '../../constants/theme';
 
 interface WeightInputModalProps {
   visible: boolean;
@@ -283,10 +285,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     borderRadius: 22,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.25,
         shadowRadius: 24,
@@ -295,12 +296,17 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 22,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
   },
   headerRow: {
@@ -332,9 +338,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -399,7 +405,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -467,19 +473,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     gap: 8,
   },
   recordingCardActive: {
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderColor: 'rgba(139, 92, 246, 0.38)',
+    backgroundColor: 'rgba(139, 92, 246, 0.10)',
   },
   recordingCardIcon: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -501,7 +507,7 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
@@ -520,8 +526,8 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   recordingCardDisabled: {
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   notRecordedText: {
     fontSize: 11,
@@ -541,8 +547,8 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -555,21 +561,12 @@ const styles = StyleSheet.create({
     flex: 2,
     borderRadius: 16,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-    }),
   },
   saveButtonGradient: {
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -15,13 +15,38 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronUp, ChevronDown, Plus, Minus, X, Dumbbell } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
-import { useCustomTemplates } from '../../backend/hooks';
+import {
+  Check,
+  ChevronLeft,
+  ChevronUp,
+  ChevronDown,
+  Plus,
+  Minus,
+  X,
+  Dumbbell,
+  FileText,
+} from 'lucide-react-native';
+import {
+  COLORS,
+  SPACING,
+  FONTS,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_SM,
+  CARD_SHADOW,
+} from '../constants/theme';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import { useAlert } from '../contexts/AlertContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
 
-type CreateTemplateNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'CreateTemplate'>;
+type CreateTemplateNavigationProp = NativeStackNavigationProp<
+  RecordStackParamList,
+  'CreateTemplate'
+>;
 
 interface TemplateExerciseLocal {
   localId: string;
@@ -31,11 +56,15 @@ interface TemplateExerciseLocal {
 }
 
 const DELETE_AREA_WIDTH = 72;
+const MIN_TEMPLATE_EXERCISES = 2;
 
 // Module-level queue: ChooseExercise pushes here, CreateTemplate consumes on focus
 let _pendingTemplateExercises: { name: string; category: string }[] = [];
 
-export function addPendingTemplateExercise(exercise: { name: string; category: string }) {
+export function addPendingTemplateExercise(exercise: {
+  name: string;
+  category: string;
+}) {
   _pendingTemplateExercises.push(exercise);
 }
 
@@ -49,14 +78,26 @@ const ExerciseCard: React.FC<{
   onMoveDown: (index: number) => void;
   onAdjustSets: (localId: string, delta: number) => void;
   onDelete: (localId: string) => void;
-}> = ({ exercise, index, total, onMoveUp, onMoveDown, onAdjustSets, onDelete }) => {
+}> = ({
+  exercise,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
+  onAdjustSets,
+  onDelete,
+}) => {
   const { showAlert } = useAlert();
   const translateX = useRef(new Animated.Value(0)).current;
   const isSwipeOpen = useRef(false);
 
   const closeSwipe = useCallback(() => {
     isSwipeOpen.current = false;
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 4,
+    }).start();
   }, [translateX]);
 
   const panResponder = useRef(
@@ -69,7 +110,9 @@ const ExerciseCard: React.FC<{
       onPanResponderMove: (_, gs) => {
         const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
         const newValue = startOffset + gs.dx;
-        translateX.setValue(Math.min(0, Math.max(newValue, -DELETE_AREA_WIDTH)));
+        translateX.setValue(
+          Math.min(0, Math.max(newValue, -DELETE_AREA_WIDTH)),
+        );
       },
       onPanResponderRelease: (_, gs) => {
         const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
@@ -82,7 +125,7 @@ const ExerciseCard: React.FC<{
           bounciness: 4,
         }).start();
       },
-    })
+    }),
   ).current;
 
   const handleDelete = useCallback(() => {
@@ -92,7 +135,11 @@ const ExerciseCard: React.FC<{
       `Remove ${exercise.name} from this template?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => onDelete(exercise.localId) },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => onDelete(exercise.localId),
+        },
       ],
     );
   }, [closeSwipe, showAlert, exercise.name, exercise.localId, onDelete]);
@@ -104,68 +151,113 @@ const ExerciseCard: React.FC<{
     <View style={styles.swipeContainer}>
       {/* Delete area */}
       <View style={styles.deleteArea}>
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDelete}
+          activeOpacity={0.7}
+        >
           <X size={18} color="#EF4444" strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
       {/* Card */}
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
         <View style={styles.exerciseCardOuter}>
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
+            colors={[...CARD_GRADIENT_ELEVATED]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.exerciseCardGradient}
           >
             <View style={styles.exerciseCardGlassEdge}>
-              <View style={styles.exerciseAccentLine} />
               <View style={styles.exerciseCardContent}>
-                {/* Left: name */}
-                <View style={styles.exerciseCardLeft}>
-                  <Text style={styles.exerciseCardName} numberOfLines={1}>{exercise.name}</Text>
+                <View style={styles.exerciseIndexBadge}>
+                  <Text style={styles.exerciseIndexText}>{index + 1}</Text>
                 </View>
 
-                {/* Right: arrows + sets adjuster */}
+                <View style={styles.exerciseCardCopy}>
+                  <Text style={styles.exerciseCardName} numberOfLines={1}>
+                    {exercise.name}
+                  </Text>
+                  <Text style={styles.exerciseCardMeta} numberOfLines={1}>
+                    {exercise.category}
+                  </Text>
+                </View>
+
                 <View style={styles.exerciseCardRight}>
-                  {/* Move arrows */}
                   <View style={styles.arrowsColumn}>
                     <TouchableOpacity
+                      style={[
+                        styles.orderButton,
+                        isFirst && styles.orderButtonDisabled,
+                      ]}
                       onPress={() => onMoveUp(index)}
                       disabled={isFirst}
                       activeOpacity={0.7}
                       hitSlop={{ top: 6, bottom: 2, left: 8, right: 8 }}
                     >
-                      <ChevronUp size={16} color={isFirst ? COLORS.textTertiary : COLORS.accent} strokeWidth={1.5} />
+                      <ChevronUp
+                        size={15}
+                        color={
+                          isFirst ? COLORS.textTertiary : COLORS.textSecondary
+                        }
+                        strokeWidth={1.8}
+                      />
                     </TouchableOpacity>
                     <TouchableOpacity
+                      style={[
+                        styles.orderButton,
+                        isLast && styles.orderButtonDisabled,
+                      ]}
                       onPress={() => onMoveDown(index)}
                       disabled={isLast}
                       activeOpacity={0.7}
                       hitSlop={{ top: 2, bottom: 6, left: 8, right: 8 }}
                     >
-                      <ChevronDown size={16} color={isLast ? COLORS.textTertiary : COLORS.accent} strokeWidth={1.5} />
+                      <ChevronDown
+                        size={15}
+                        color={
+                          isLast ? COLORS.textTertiary : COLORS.textSecondary
+                        }
+                        strokeWidth={1.8}
+                      />
                     </TouchableOpacity>
                   </View>
 
-                  {/* Sets adjuster */}
                   <View style={styles.setsAdjuster}>
                     <TouchableOpacity
+                      style={styles.setButton}
                       onPress={() => onAdjustSets(exercise.localId, -1)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
                     >
-                      <Minus size={14} color={COLORS.accent} strokeWidth={2} />
+                      <Minus
+                        size={13}
+                        color={COLORS.textSecondary}
+                        strokeWidth={2.2}
+                      />
                     </TouchableOpacity>
-                    <Text style={styles.setsCount}>{exercise.targetSets}</Text>
+                    <View style={styles.setsValueWrap}>
+                      <Text style={styles.setsCount}>
+                        {exercise.targetSets}
+                      </Text>
+                      <Text style={styles.setsLabel}>sets</Text>
+                    </View>
                     <TouchableOpacity
+                      style={styles.setButton}
                       onPress={() => onAdjustSets(exercise.localId, 1)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
                     >
-                      <Plus size={14} color={COLORS.accent} strokeWidth={2} />
+                      <Plus
+                        size={13}
+                        color={COLORS.textSecondary}
+                        strokeWidth={2.2}
+                      />
                     </TouchableOpacity>
-                    <Text style={styles.setsLabel}>sets</Text>
                   </View>
                 </View>
               </View>
@@ -189,49 +281,69 @@ export const CreateTemplateScreen: React.FC = () => {
   const [description, setDescription] = useState('');
   const [exercises, setExercises] = useState<TemplateExerciseLocal[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const totalSets = exercises.reduce(
+    (sum, exercise) => sum + exercise.targetSets,
+    0,
+  );
+  const estimatedMinutes = Math.max(0, exercises.length * 10);
+  const canSave =
+    name.trim().length > 0 &&
+    exercises.length >= MIN_TEMPLATE_EXERCISES &&
+    !isSaving;
 
   // Consume pending exercises pushed by ChooseExercise on every focus
   useFocusEffect(
     useCallback(() => {
       if (_pendingTemplateExercises.length === 0) return;
-      const toAdd = _pendingTemplateExercises.map(ex => ({
+      const toAdd = _pendingTemplateExercises.map((ex) => ({
         localId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: ex.name,
         category: ex.category,
         targetSets: 3,
       }));
       _pendingTemplateExercises = [];
-      setExercises(prev => [...prev, ...toAdd]);
-    }, [])
+      setExercises((prev) => [...prev, ...toAdd]);
+    }, []),
   );
 
-
-  const moveExercise = useCallback((index: number, direction: 'up' | 'down') => {
-    const target = direction === 'up' ? index - 1 : index + 1;
-    setExercises(prev => {
-      if (target < 0 || target >= prev.length) return prev;
-      const arr = [...prev];
-      [arr[index], arr[target]] = [arr[target], arr[index]];
-      return arr;
-    });
-  }, []);
+  const moveExercise = useCallback(
+    (index: number, direction: 'up' | 'down') => {
+      const target = direction === 'up' ? index - 1 : index + 1;
+      setExercises((prev) => {
+        if (target < 0 || target >= prev.length) return prev;
+        const arr = [...prev];
+        [arr[index], arr[target]] = [arr[target], arr[index]];
+        return arr;
+      });
+    },
+    [],
+  );
 
   const adjustSets = useCallback((localId: string, delta: number) => {
-    setExercises(prev =>
-      prev.map(ex =>
+    setExercises((prev) =>
+      prev.map((ex) =>
         ex.localId === localId
-          ? { ...ex, targetSets: Math.max(1, Math.min(10, ex.targetSets + delta)) }
-          : ex
-      )
+          ? {
+              ...ex,
+              targetSets: Math.max(1, Math.min(10, ex.targetSets + delta)),
+            }
+          : ex,
+      ),
     );
   }, []);
 
   const deleteExercise = useCallback((localId: string) => {
-    setExercises(prev => prev.filter(ex => ex.localId !== localId));
+    setExercises((prev) => prev.filter((ex) => ex.localId !== localId));
   }, []);
 
-  const handleMoveUp = useCallback((index: number) => moveExercise(index, 'up'), [moveExercise]);
-  const handleMoveDown = useCallback((index: number) => moveExercise(index, 'down'), [moveExercise]);
+  const handleMoveUp = useCallback(
+    (index: number) => moveExercise(index, 'up'),
+    [moveExercise],
+  );
+  const handleMoveDown = useCallback(
+    (index: number) => moveExercise(index, 'down'),
+    [moveExercise],
+  );
 
   const handleAddExercise = useCallback(() => {
     navigation.navigate('ChooseExercise', { mode: 'template' });
@@ -243,8 +355,11 @@ export const CreateTemplateScreen: React.FC = () => {
       showAlert('Name Required', 'Please enter a template name.');
       return;
     }
-    if (exercises.length === 0) {
-      showAlert('No Exercises', 'Add at least one exercise to the template.');
+    if (exercises.length < MIN_TEMPLATE_EXERCISES) {
+      showAlert(
+        'More Exercises Required',
+        'Add at least 2 exercises to create a template.',
+      );
       return;
     }
 
@@ -273,105 +388,191 @@ export const CreateTemplateScreen: React.FC = () => {
   }, [navigation]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {/* ── Header ────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.7}>
-            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Template</Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.saveButton, (!name.trim() || exercises.length === 0 || isSaving) && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          activeOpacity={0.7}
-          disabled={isSaving}
-        >
-          <Text style={styles.saveButtonText}>{isSaving ? 'Saving...' : 'Save'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+    <ScreenBackground style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* ── Name Input ────────────── */}
-        <Text style={styles.inputLabel}>TEMPLATE NAME</Text>
-        <TextInput
-          style={styles.textInput}
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Upper Body Power"
-          placeholderTextColor={COLORS.textTertiary}
-          maxLength={50}
-          returnKeyType="next"
-        />
-
-        {/* ── Description Input ─────── */}
-        <Text style={styles.inputLabel}>DESCRIPTION</Text>
-        <TextInput
-          style={[styles.textInput, styles.textInputMultiline]}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Optional description..."
-          placeholderTextColor={COLORS.textTertiary}
-          multiline
-          maxLength={200}
-          returnKeyType="default"
-        />
-
-        {/* ── Exercises Section ─────── */}
-        <View style={styles.sectionRow}>
-          <View style={styles.sectionLabelRow}>
-            <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
-            <Text style={styles.sectionLabel}>EXERCISES</Text>
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.headerTitleRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handleGoBack}
+              activeOpacity={0.72}
+            >
+              <ChevronLeft
+                size={24}
+                color={COLORS.textSecondary}
+                strokeWidth={1.7}
+              />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Create Template</Text>
           </View>
-          <Text style={styles.exercisesCount}>{exercises.length}</Text>
+          <TouchableOpacity
+            style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            activeOpacity={0.75}
+            disabled={!canSave}
+          >
+            <Check
+              size={16}
+              color={canSave ? COLORS.text : COLORS.textTertiary}
+              strokeWidth={2.3}
+            />
+            <Text
+              style={[
+                styles.saveButtonText,
+                !canSave && styles.saveButtonTextDisabled,
+              ]}
+            >
+              {isSaving ? 'Saving' : 'Save'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {exercises.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No exercises added yet</Text>
-          </View>
-        ) : (
-          <View style={styles.exerciseList}>
-            {exercises.map((ex, i) => (
-              <ExerciseCard
-                key={ex.localId}
-                exercise={ex}
-                index={i}
-                total={exercises.length}
-                onMoveUp={handleMoveUp}
-                onMoveDown={handleMoveDown}
-                onAdjustSets={adjustSets}
-                onDelete={deleteExercise}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* ── Add Exercise CTA ──────── */}
-        <TouchableOpacity onPress={handleAddExercise} activeOpacity={0.85} style={styles.addExerciseTouchable}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 32 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <LinearGradient
-            colors={['rgba(139, 92, 246, 0.45)', 'rgba(124, 58, 237, 0.2)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.addExerciseGradient}
+            colors={[...CARD_GRADIENT_ELEVATED]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.formCard}
           >
-            <View style={styles.addExerciseIconWrap}>
-              <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+            <View style={styles.formCardEdge}>
+              <View style={styles.cardLabelRow}>
+                <FileText size={15} color={COLORS.accent} strokeWidth={1.8} />
+                <Text style={styles.cardLabel}>DETAILS</Text>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>TEMPLATE NAME</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Upper Body Power"
+                  placeholderTextColor={COLORS.textTertiary}
+                  maxLength={50}
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>DESCRIPTION</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textInputMultiline]}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Optional notes for this session"
+                  placeholderTextColor={COLORS.textTertiary}
+                  multiline
+                  maxLength={200}
+                  returnKeyType="default"
+                />
+              </View>
             </View>
-            <Text style={styles.addExerciseText}>Add Exercise</Text>
           </LinearGradient>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.summaryCard}
+          >
+            <View style={styles.summaryCardEdge}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>{exercises.length}</Text>
+                <Text style={styles.summaryLabel}>Exercises</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>{totalSets}</Text>
+                <Text style={styles.summaryLabel}>Sets</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>
+                  {estimatedMinutes > 0 ? `~${estimatedMinutes}` : '—'}
+                </Text>
+                <Text style={styles.summaryLabel}>Minutes</Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.7} />
+              <Text style={styles.sectionLabel}>EXERCISES</Text>
+            </View>
+            <Text style={styles.exercisesCount}>{exercises.length}</Text>
+          </View>
+
+          {exercises.length === 0 ? (
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.emptyState}
+            >
+              <View style={styles.emptyStateEdge}>
+                <View style={styles.emptyIconWrap}>
+                  <Dumbbell size={22} color={COLORS.accent} strokeWidth={1.8} />
+                </View>
+                <Text style={styles.emptyStateTitle}>No exercises yet</Text>
+                <Text style={styles.emptyStateText}>
+                  Add at least 2 exercises to start shaping this template.
+                </Text>
+              </View>
+            </LinearGradient>
+          ) : (
+            <View style={styles.exerciseList}>
+              {exercises.map((ex, i) => (
+                <ExerciseCard
+                  key={ex.localId}
+                  exercise={ex}
+                  index={i}
+                  total={exercises.length}
+                  onMoveUp={handleMoveUp}
+                  onMoveDown={handleMoveDown}
+                  onAdjustSets={adjustSets}
+                  onDelete={deleteExercise}
+                />
+              ))}
+              {exercises.length < MIN_TEMPLATE_EXERCISES && (
+                <Text style={styles.minimumHint}>
+                  Add 1 more exercise to save this template.
+                </Text>
+              )}
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={handleAddExercise}
+            activeOpacity={0.85}
+            style={styles.addExerciseTouchable}
+          >
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.addExerciseGradient}
+            >
+              <View style={styles.addExerciseIconWrap}>
+                <Plus size={15} color="#FFFFFF" strokeWidth={2.6} />
+              </View>
+              <Text style={styles.addExerciseText}>Add Exercise</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ScreenBackground>
   );
 };
 
@@ -380,94 +581,160 @@ export const CreateTemplateScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
-
-  /* ── Header ──────────────────── */
+  keyboardView: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    paddingBottom: 14,
   },
-  headerLeft: {
+  headerTitleRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 4,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 34,
+    height: 34,
+    marginLeft: -9,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 24,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 0,
   },
   saveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 9,
     backgroundColor: COLORS.accent,
+    paddingHorizontal: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.10)',
   },
   saveButtonDisabled: {
-    opacity: 0.4,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   saveButtonText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 14,
     color: '#FFFFFF',
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
-
-  /* ── Scroll ──────────────────── */
+  saveButtonTextDisabled: {
+    color: COLORS.textTertiary,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
+    gap: 12,
   },
-
-  /* ── Inputs ──────────────────── */
+  formCard: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  formCardEdge: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    padding: 15,
+    gap: 14,
+  },
+  cardLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardLabel: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
+    color: COLORS.text,
+    letterSpacing: 1.8,
+  },
+  fieldGroup: {
+    gap: 7,
+  },
   inputLabel: {
     fontFamily: FONTS.display.bold,
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.textTertiary,
-    letterSpacing: 2,
-    marginTop: 20,
-    marginBottom: 8,
+    letterSpacing: 1.6,
   },
   textInput: {
     fontFamily: FONTS.ui.regular,
     fontSize: 15,
     color: COLORS.text,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 12,
+    minHeight: 46,
+    backgroundColor: 'rgba(6, 9, 12, 0.34)',
+    borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
+    letterSpacing: 0,
   },
   textInputMultiline: {
-    minHeight: 72,
+    minHeight: 78,
+    paddingTop: 12,
     textAlignVertical: 'top',
   },
-
-  /* ── Section Header ──────────── */
+  summaryCard: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  summaryCardEdge: {
+    minHeight: 74,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    paddingHorizontal: 6,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  summaryValue: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 22,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  summaryLabel: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 34,
+    backgroundColor: 'rgba(255, 255, 255, 0.065)',
+  },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 4,
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -478,33 +745,63 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.bold,
     fontSize: 12,
     color: COLORS.text,
-    letterSpacing: 2,
+    letterSpacing: 1.8,
   },
   exercisesCount: {
     fontFamily: FONTS.display.semibold,
     fontSize: 13,
     color: COLORS.accent,
   },
-
-  /* ── Empty State ─────────────── */
   emptyState: {
-    paddingVertical: 24,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  emptyStateEdge: {
+    minHeight: 156,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 20,
+    gap: 8,
+  },
+  emptyIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.24)',
+    marginBottom: 2,
+  },
+  emptyStateTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 17,
+    color: COLORS.text,
+    letterSpacing: 0,
   },
   emptyStateText: {
     fontFamily: FONTS.ui.regular,
     fontSize: 13,
     color: COLORS.textTertiary,
+    textAlign: 'center',
+    letterSpacing: 0,
   },
-
-  /* ── Exercise List ───────────── */
   exerciseList: {
     gap: 8,
   },
-
-  /* ── Swipe-to-Delete ─────────── */
+  minimumHint: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    marginTop: 2,
+  },
   swipeContainer: {
-    height: 72,
+    height: 76,
   },
   deleteArea: {
     ...StyleSheet.absoluteFillObject,
@@ -515,47 +812,31 @@ const styles = StyleSheet.create({
   deleteButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(240, 82, 82, 0.11)',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.22)',
+    borderColor: 'rgba(240, 82, 82, 0.24)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  /* ── Exercise Card ───────────── */
   exerciseCardOuter: {
-    height: 72,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-    }),
+    height: 76,
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
   },
   exerciseCardGradient: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
   },
   exerciseCardGlassEdge: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  exerciseAccentLine: {
-    width: 3,
-    height: 32,
-    borderRadius: 2,
-    backgroundColor: COLORS.accent,
-    marginLeft: 12,
   },
   exerciseCardContent: {
     flex: 1,
@@ -563,68 +844,116 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
+    gap: 10,
   },
-  exerciseCardLeft: {
+  exerciseIndexBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122, 85, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.24)',
+  },
+  exerciseIndexText: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: COLORS.accent,
+    letterSpacing: 0,
+  },
+  exerciseCardCopy: {
     flex: 1,
-    marginRight: 12,
+    minWidth: 0,
+    gap: 3,
   },
   exerciseCardName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
+  },
+  exerciseCardMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
   },
   exerciseCardRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   arrowsColumn: {
     gap: 2,
   },
+  orderButton: {
+    width: 24,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+  },
+  orderButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.018)',
+  },
   setsAdjuster: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    gap: 6,
+    minHeight: 44,
+    backgroundColor: 'rgba(5, 8, 12, 0.32)',
+    borderRadius: 12,
+    paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+  },
+  setButton: {
+    width: 26,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+  },
+  setsValueWrap: {
+    alignItems: 'center',
+    minWidth: 34,
+    gap: 0,
   },
   setsCount: {
     fontFamily: FONTS.display.bold,
     fontSize: 16,
     color: COLORS.text,
-    minWidth: 18,
     textAlign: 'center',
+    lineHeight: 18,
   },
   setsLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
+    fontSize: 9,
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
-    marginLeft: -4,
+    letterSpacing: 0,
   },
-
-  /* ── Add Exercise CTA ────────── */
   addExerciseTouchable: {
-    marginTop: 16,
+    marginTop: 2,
+    borderRadius: 12,
+    ...CARD_SHADOW,
   },
   addExerciseGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    justifyContent: 'center',
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    gap: 10,
+    gap: 8,
   },
   addExerciseIconWrap: {
-    width: 24,
-    height: 24,
+    width: 23,
+    height: 23,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },

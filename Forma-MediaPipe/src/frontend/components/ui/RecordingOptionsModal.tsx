@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, Video, Download, Check } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS ,
+  CARD_SHADOW
+} from '../../constants/theme';
 
 interface RecordingOptionsModalProps {
   visible: boolean;
@@ -147,10 +149,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     borderRadius: 22,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.2,
         shadowRadius: 24,
@@ -159,12 +160,17 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 22,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   header: {
     flexDirection: 'row',
@@ -195,9 +201,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -224,10 +230,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(39, 48, 55, 0.78)',
     gap: 10,
-  },
+
+    ...CARD_SHADOW,
+},
   optionCardActive: {
     borderColor: 'rgba(139, 92, 246, 0.3)',
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
@@ -236,7 +244,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -258,7 +266,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',

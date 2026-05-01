@@ -31,6 +31,16 @@ export interface ReplayResult {
   feedbackMessages: string[];
 }
 
+/** Per-frame debug sample captured during verbose replay. */
+export interface FrameTrace {
+  frameIndex: number;
+  timestamp: number;
+  phase: string;
+  repCount: number;
+  feedback: string | null;
+  debugInfo: Record<string, unknown>;
+}
+
 /** One entry in the FSM trace — emitted each time the FSM phase changes. */
 export interface FsmTransition {
   frameIndex: number;
@@ -51,6 +61,8 @@ export interface RepTrace {
 }
 
 export interface ReplayResultVerbose extends ReplayResult {
+  /** One debug sample per processed frame. */
+  frameTraces: FrameTrace[];
   /** Every FSM phase transition across the entire recording. */
   fsmTransitions: FsmTransition[];
   /** Per-rep breakdown. */

@@ -74,6 +74,8 @@ function getPoint(kp: Keypoint | null): Point2D | null {
 
 /** FSM thresholds — knee reach ratio (hip-ankle / chain length) */
 const THRESHOLDS = {
+  /** Ratio below which the curl clock starts before the FSM commits */
+  CURL_CLOCK_START: 0.96,
   /** Ratio below which we transition REST -> CURLING (legs start to bend) */
   CURLING_ENTER: 0.90,
   /** Ratio below which we consider peak flexion (CURLING -> CURLED) */
@@ -133,6 +135,8 @@ interface LyingLegCurlFSM {
   phase: LyingLegCurlPhase;
   /** Timestamp when curl began (REST -> CURLING) */
   tRepStart: number | null;
+  /** Timestamp when the user first moved out of full extension */
+  tCurlStart: number | null;
   /** Timestamp when peak flexion was reached */
   tCurled: number | null;
   /** Timestamp when rep completed (LOWERING -> REST) */
@@ -151,6 +155,7 @@ interface RepWindow {
   /** Timestamps */
   tStart: number;
   tCurled: number | null;
+  tLowerStart: number | null;
   tEnd: number;
   /** Frame count */
   frameCount: number;
@@ -175,12 +180,16 @@ interface LyingLegCurlState {
   warmedUp: boolean;
   /** Current smoothed values for debug */
   smoothedRatio: number | null;
+  /** Median-only ratio used for responsive FSM transitions */
+  fastRatio: number | null;
   smoothedHip: number | null;
   /** Feedback */
   feedback: string | null;
   lastFeedbackTime: number;
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
+  /** Maximum smoothed ratio observed in REST before the current rep starts */
+  restMaxRatio: number;
 }
 
 interface LyingLegCurlDebugInfo {
@@ -188,6 +197,7 @@ interface LyingLegCurlDebugInfo {
   side: 'left' | 'right';
   warmedUp: boolean;
   ratio: number | null;
+  fastRatio: number | null;
   hipAngle: number | null;
   // Rep window
   ratioMin: number | null;
@@ -203,19 +213,21 @@ function initFSM(): LyingLegCurlFSM {
   return {
     phase: 'REST',
     tRepStart: null,
+    tCurlStart: null,
     tCurled: null,
     tRepEnd: null,
   };
 }
 
-function initRepWindow(tStart: number): RepWindow {
+function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   return {
-    minRatio: Infinity,
-    maxRatio: -Infinity,
+    minRatio: initialRatio ?? Infinity,
+    maxRatio: initialRatio ?? -Infinity,
     hipAngleBaseline: null,
     maxHipDelta: 0,
     tStart,
     tCurled: null,
+    tLowerStart: null,
     tEnd: tStart,
     frameCount: 0,
   };
@@ -239,10 +251,12 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
     }),
     warmedUp: false,
     smoothedRatio: null,
+    fastRatio: null,
     smoothedHip: null,
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
+    restMaxRatio: -Infinity,
   };
 }
 
@@ -351,9 +365,15 @@ function updateFSM(
   switch (fsm.phase) {
     case 'REST':
       // Legs extended (high ratio). When ratio drops, begin curl.
+      if (ratio < THRESHOLDS.CURL_CLOCK_START) {
+        fsm.tCurlStart ??= t;
+      } else {
+        fsm.tCurlStart = null;
+      }
+
       if (ratio < THRESHOLDS.CURLING_ENTER) {
         fsm.phase = 'CURLING';
-        fsm.tRepStart = t;
+        fsm.tRepStart = fsm.tCurlStart ?? t;
         fsm.tCurled = null;
         fsm.tRepEnd = null;
       }
@@ -368,6 +388,7 @@ function updateFSM(
         // Extended back out without curling far enough -- reset
         fsm.phase = 'REST';
         fsm.tRepStart = null;
+        fsm.tCurlStart = null;
       }
       break;
 
@@ -419,7 +440,7 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
   // 4. Tempo
   if (repWindow.tCurled !== null) {
     const tCurl = repWindow.tCurled - repWindow.tStart;    // concentric (curl up)
-    const tLower = repWindow.tEnd - repWindow.tCurled;      // eccentric (lower down)
+    const tLower = repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled); // eccentric (lower down)
 
     // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
     if (tCurl > 0 && tCurl < PENALTY_CONFIGS.TEMPO_CURL.deadzone) {
@@ -460,7 +481,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   // 4. Tempo
   if (repWindow.tCurled !== null) {
     const tCurl = repWindow.tCurled - repWindow.tStart;
-    const tLower = repWindow.tEnd - repWindow.tCurled;
+    const tLower = repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled);
 
     if (tCurl > 0 && tCurl < FORM_THRESHOLDS.TEMPO_CURL_MIN) {
       messages.push('Slow down the curl \u2014 control the contraction.');
@@ -492,8 +513,10 @@ function updateLyingLegCurlState(
     currentState.warmedUp = true;
   }
 
-  // Select visible side
-  const visibleSide = selectVisibleSide(keypoints);
+  // Select visible side in REST, then lock it through the active rep so
+  // transient confidence changes do not splice two legs into one rep.
+  const inActiveRep = currentState.fsm.phase !== 'REST';
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
 
   // Calculate raw ratio and hip angle
   const rawRatio = calculateKneeRatio(keypoints, visibleSide);
@@ -505,12 +528,14 @@ function updateLyingLegCurlState(
       ...currentState,
       visibleSide,
       smoothedRatio: null,
+      fastRatio: null,
       smoothedHip: null,
     };
   }
 
   // Smooth values through tracker pipeline
   const smoothedRatio = currentState.ratioTracker.push(rawRatio);
+  const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedHip = rawHip !== null
     ? currentState.hipTracker.push(rawHip)
     : currentState.hipTracker.value;
@@ -519,21 +544,30 @@ function updateLyingLegCurlState(
     ...currentState,
     visibleSide,
     smoothedRatio,
+    fastRatio: isNaN(fastRatio) ? null : fastRatio,
     smoothedHip: isNaN(smoothedHip) ? null : smoothedHip,
   };
 
-  if (isNaN(smoothedRatio)) {
+  if (isNaN(fastRatio)) {
     return newState;
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, smoothedRatio, t);
+  const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
+
+  if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
+    newState.restMaxRatio = Math.max(newState.restMaxRatio, smoothedRatio);
+  }
 
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
-    newState.repWindow = initRepWindow(t);
+    newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio);
+    if (currentState.restMaxRatio !== -Infinity) {
+      newState.repWindow.maxRatio = currentState.restMaxRatio;
+    }
+    newState.restMaxRatio = -Infinity;
   }
 
   if (newState.repWindow && inRep) {
@@ -560,10 +594,25 @@ function updateLyingLegCurlState(
     if (newState.fsm.phase === 'CURLED' && window.tCurled === null) {
       window.tCurled = t;
     }
+
+    if (
+      currentState.fsm.phase === 'CURLED' &&
+      window.minRatio <= FORM_THRESHOLDS.FLEXION_FAIL &&
+      fastRatio > FORM_THRESHOLDS.FLEXION_FAIL &&
+      window.tLowerStart === null
+    ) {
+      window.tLowerStart = t;
+    }
   }
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    newState.repWindow.tEnd = t;
+    if (!isNaN(smoothedRatio)) {
+      newState.repWindow.minRatio = Math.min(newState.repWindow.minRatio, smoothedRatio);
+      newState.repWindow.maxRatio = Math.max(newState.repWindow.maxRatio, smoothedRatio);
+    }
+
     newState.repCount++;
 
     const score = computeLyingLegCurlScore(newState.repWindow);
@@ -615,6 +664,7 @@ function getDebugInfo(state: LyingLegCurlState): LyingLegCurlDebugInfo {
     side: state.visibleSide,
     warmedUp: state.warmedUp,
     ratio: fmtRatio(state.smoothedRatio),
+    fastRatio: fmtRatio(state.fastRatio),
     hipAngle: fmt(state.smoothedHip),
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmtRatio(repWin.minRatio) : null,
     ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmtRatio(repWin.maxRatio) : null,

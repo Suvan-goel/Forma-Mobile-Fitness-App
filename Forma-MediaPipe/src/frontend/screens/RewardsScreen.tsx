@@ -1,16 +1,49 @@
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   Text,
   TouchableOpacity,
-  Platform,
-  Image,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
+  Activity,
+  Award,
+  CheckCircle,
+  ChevronRight,
+  Crown,
+  Flame,
+  Lock,
+  LucideIcon,
+  Shield,
+  Star,
+  Target,
+  Trophy,
+  Zap,
+} from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_END,
+  CARD_GRADIENT_START,
+  COLORS,
+  FONTS,
+  SPACING,
+} from '../constants/theme';
+import { useRewards } from '../../backend/hooks/useRewards';
+import { ErrorState } from '../components/ui/ErrorState';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { useAlert } from '../contexts/AlertContext';
+import { Reward } from '../../backend/services/api';
+import type { RootStackParamList } from '../app/RootNavigator';
+
+const iconMap: Record<string, LucideIcon> = {
   Zap,
   Target,
   Activity,
@@ -21,155 +54,156 @@ import {
   Crown,
   Lock,
   CheckCircle,
-  ChevronLeft,
-  LucideIcon,
-} from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
-import { useRewards, useUser } from '../../backend/hooks';
-import { LoadingSkeleton, ErrorState } from '../components/ui';
-import { useAlert } from '../contexts/AlertContext';
-import { Reward } from '../../backend/services/api';
-import type { RootStackParamList } from '../app/RootNavigator';
-
-const iconMap: { [key: string]: LucideIcon } = {
-  Zap, Target, Activity, Shield, Star, Flame, Trophy, Crown, Lock, CheckCircle,
 };
 
 const getIconComponent = (iconName: string): LucideIcon => iconMap[iconName] || Star;
 
-/* ── Badge Card ──────────────────────────── */
-
 interface BadgeCardProps {
   reward: Reward;
   userPoints: number;
-  earnedBadgeIds: string[];
+  isUnlocked: boolean;
   isRedeemed: boolean;
   isRedeeming: boolean;
   onRedeem?: () => void;
 }
 
-const BadgeCard = memo(({ reward, userPoints, earnedBadgeIds, isRedeemed, isRedeeming, onRedeem }: BadgeCardProps) => {
-  const isUnlocked = earnedBadgeIds.includes(reward.id);
-  const progress = Math.min((userPoints / reward.pointsRequired) * 100, 100);
+const BadgeCard = memo(({
+  reward,
+  userPoints,
+  isUnlocked,
+  isRedeemed,
+  isRedeeming,
+  onRedeem,
+}: BadgeCardProps) => {
+  const progress = reward.pointsRequired > 0
+    ? Math.min((userPoints / reward.pointsRequired) * 100, 100)
+    : 100;
+  const remaining = Math.max(0, reward.pointsRequired - userPoints);
   const Icon = getIconComponent(reward.iconName);
   const accent = reward.color;
 
   return (
-    <TouchableOpacity
-      activeOpacity={isUnlocked ? 0.82 : 1}
-      style={styles.cardOuter}
+    <LinearGradient
+      colors={[...CARD_GRADIENT_COLORS]}
+      start={CARD_GRADIENT_START}
+      end={CARD_GRADIENT_END}
+      style={styles.badgeCard}
     >
-      <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
-        start={CARD_GRADIENT_START}
-        end={CARD_GRADIENT_END}
-        style={styles.cardGradient}
-      >
-        <View style={[styles.cardGlassEdge, !isUnlocked && styles.cardLocked]}>
-          {/* Icon */}
-          {isUnlocked ? (
-            <Icon size={20} color={accent} strokeWidth={1.5} />
-          ) : (
-            <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.5} />
-          )}
+      <View style={[styles.badgeCardInner, !isUnlocked && styles.badgeCardLocked]}>
+        <View style={[styles.badgeIconWrap, { borderColor: isUnlocked ? `${accent}55` : 'rgba(255,255,255,0.07)' }]}>
+          <LinearGradient
+            colors={isUnlocked ? [`${accent}33`, 'rgba(255,255,255,0.025)'] : ['rgba(255,255,255,0.045)', 'rgba(255,255,255,0.02)']}
+            style={styles.badgeIconGradient}
+          >
+            {isUnlocked ? (
+              <Icon size={21} color={accent} strokeWidth={1.8} />
+            ) : (
+              <Lock size={20} color={COLORS.textTertiary} strokeWidth={1.8} />
+            )}
+          </LinearGradient>
+        </View>
 
-          {/* Info */}
-          <View style={styles.cardInfo}>
-            <View style={styles.cardTitleRow}>
-              <Text style={[styles.cardTitle, !isUnlocked && styles.cardTitleLocked]}>
-                {reward.title}
+        <View style={styles.badgeContent}>
+          <View style={styles.badgeTopRow}>
+            <Text style={[styles.badgeTitle, !isUnlocked && styles.badgeTitleLocked]} numberOfLines={1}>
+              {reward.title}
+            </Text>
+            <View style={[styles.categoryPill, { backgroundColor: `${accent}1F`, borderColor: `${accent}33` }]}>
+              <Text style={[styles.categoryText, { color: isUnlocked ? accent : COLORS.textTertiary }]}>
+                {reward.category}
               </Text>
-              <View style={[styles.tierPill, { backgroundColor: accent + '1A' }]}>
-                <Text style={[styles.tierText, { color: accent }]}>{reward.category.toUpperCase()}</Text>
-              </View>
-            </View>
-            <Text style={styles.cardDesc}>{reward.description}</Text>
-
-            {/* Progress bar */}
-            <View style={styles.progressRow}>
-              <View style={styles.progressTrack}>
-                {progress > 0 && (
-                  <LinearGradient
-                    colors={[accent + 'BB', accent] as [string, string]}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    style={[styles.progressFill, { width: `${progress}%` }]}
-                  />
-                )}
-              </View>
-              <Text style={styles.pointsLabel}>{reward.pointsRequired} pts</Text>
             </View>
           </View>
 
-          {/* Status indicator */}
-          {isUnlocked && (
-            <View style={styles.statusColumn}>
-              {isRedeemed ? (
-                <View style={[styles.earnedBadge, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
-                  <CheckCircle size={10} color={accent} strokeWidth={2.5} />
-                  <Text style={[styles.earnedText, { color: accent }]}>REDEEMED</Text>
-                </View>
-              ) : (
-                <>
-                  <View style={[styles.earnedBadge, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
-                    <CheckCircle size={10} color={accent} strokeWidth={2.5} />
-                    <Text style={[styles.earnedText, { color: accent }]}>EARNED</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={onRedeem}
-                    disabled={isRedeeming}
-                    activeOpacity={0.7}
-                    style={[styles.redeemBtn, { backgroundColor: accent }]}
-                  >
-                    {isRedeeming ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.redeemBtnText}>Redeem</Text>
-                    )}
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
+          <Text style={styles.badgeDescription} numberOfLines={2}>
+            {reward.description}
+          </Text>
+
+          <View style={styles.progressMetaRow}>
+            <Text style={styles.progressMeta}>
+              {isUnlocked ? 'Unlocked' : `${remaining.toLocaleString()} pts to unlock`}
+            </Text>
+            <Text style={styles.progressMeta}>{reward.pointsRequired.toLocaleString()} pts</Text>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.max(4, progress)}%`,
+                  backgroundColor: isUnlocked ? accent : COLORS.primary,
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        <View style={styles.badgeAction}>
+          {isUnlocked ? (
+            isRedeemed ? (
+              <View style={[styles.statusPill, { borderColor: `${accent}44`, backgroundColor: `${accent}1A` }]}>
+                <CheckCircle size={12} color={accent} strokeWidth={2.4} />
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={onRedeem}
+                disabled={isRedeeming}
+                activeOpacity={0.75}
+                style={[styles.redeemButton, { backgroundColor: accent }]}
+              >
+                {isRedeeming ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.redeemText}>Redeem</Text>
+                )}
+              </TouchableOpacity>
+            )
+          ) : (
+            <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.7} />
           )}
         </View>
-      </LinearGradient>
-    </TouchableOpacity>
+      </View>
+    </LinearGradient>
   );
 });
-
-/* ── Main Screen ──────────────────────────── */
 
 export const RewardsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
-  const { user: profileUser } = useUser();
   const { rewards, userStats, userPoints, redeemedBadgeIds, isLoading, error, refetch, redeemReward } = useRewards();
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
+
+  const earnedBadgeIds = userStats?.earnedBadgeIds ?? [];
+
+  const sortedRewards = useMemo(
+    () => [...rewards].sort((a, b) => a.pointsRequired - b.pointsRequired),
+    [rewards],
+  );
+  const nextReward = sortedRewards.find(reward => !earnedBadgeIds.includes(reward.id));
+  const earnedBadges = sortedRewards.filter(reward => earnedBadgeIds.includes(reward.id));
+  const lockedBadges = sortedRewards.filter(reward => !earnedBadgeIds.includes(reward.id));
+  const nextProgress = nextReward
+    ? Math.min((userPoints / nextReward.pointsRequired) * 100, 100)
+    : 100;
 
   const handleRedeem = useCallback(async (rewardId: string) => {
     setRedeemingId(rewardId);
     const result = await redeemReward(rewardId);
     setRedeemingId(null);
-    if (result.success) {
-      showAlert('Badge Redeemed', result.message, [{ text: 'OK' }]);
-    } else {
-      showAlert('Redeem Failed', result.message, [{ text: 'OK' }]);
-    }
+    showAlert(result.success ? 'Badge Redeemed' : 'Redeem Failed', result.message, [{ text: 'OK' }]);
   }, [redeemReward, showAlert]);
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <SettingsHeader title="REWARDS" onBack={() => navigation.goBack()} />
         <View style={styles.loadingWrap}>
-          <LoadingSkeleton variant="card" height={160} style={{ marginBottom: SPACING.md }} />
-          <LoadingSkeleton variant="text" width="40%" height={20} style={{ marginBottom: SPACING.md }} />
-          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
-          <LoadingSkeleton variant="card" height={80} style={{ marginBottom: SPACING.sm }} />
-          <LoadingSkeleton variant="card" height={80} />
+          <LoadingSkeleton variant="card" height={150} style={{ marginBottom: SPACING.md }} />
+          <LoadingSkeleton variant="card" height={84} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={84} style={{ marginBottom: SPACING.sm }} />
+          <LoadingSkeleton variant="card" height={84} />
         </View>
       </View>
     );
@@ -177,7 +211,8 @@ export const RewardsScreen: React.FC = () => {
 
   if (error) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <SettingsHeader title="REWARDS" onBack={() => navigation.goBack()} />
         <View style={styles.errorWrap}>
           <ErrorState message={error} onRetry={refetch} />
         </View>
@@ -185,128 +220,109 @@ export const RewardsScreen: React.FC = () => {
     );
   }
 
-  const earnedBadgeIds = userStats?.earnedBadgeIds ?? [];
-  const earnedBadges = rewards.filter(r => earnedBadgeIds.includes(r.id));
-  const lockedBadges = rewards.filter(r => !earnedBadgeIds.includes(r.id));
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── HEADER (Social-style) ────────────────── */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
-            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerName}>REWARDS</Text>
-            <Text style={styles.headerSubtitle}>EARN BADGES</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('UserProfile')}
-          activeOpacity={0.7}
-          style={styles.profileBtn}
-        >
-          {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
-          ) : profileUser ? (
-            <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileGradient}
-            >
-              <Text style={styles.profileInitial}>
-                {profileUser.displayName[0].toUpperCase()}
-              </Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.profilePlaceholder} />
-          )}
-        </TouchableOpacity>
-      </View>
+      <SettingsHeader title="REWARDS" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
       >
-        {/* ── HERO SCORE ─────────────────────────── */}
-        <View style={styles.heroSection}>
-          <Text style={styles.heroValue}>{userPoints}</Text>
-          <Text style={styles.heroLabel}>TOTAL POINTS</Text>
-
-          {/* Sub-stats */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>+{userStats?.formScore || 0}</Text>
-              <Text style={styles.statLabel}>FORM</Text>
-              <Text style={styles.statHint}>quality · 25 max/session</Text>
+        <LinearGradient
+          colors={[...CARD_GRADIENT_ELEVATED]}
+          start={CARD_GRADIENT_START}
+          end={CARD_GRADIENT_END}
+          style={styles.heroCard}
+        >
+          <View style={styles.heroCardInner}>
+            <View style={styles.heroTopRow}>
+              <View>
+                <Text style={styles.heroLabel}>TOTAL POINTS</Text>
+                <Text style={styles.heroValue}>{userPoints.toLocaleString()}</Text>
+              </View>
+              <View style={styles.heroBadge}>
+                <Award size={22} color={COLORS.primary} strokeWidth={1.8} />
+              </View>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>+{userStats?.consistencyScore || 0}</Text>
-              <Text style={styles.statLabel}>CONSISTENCY</Text>
-              <Text style={styles.statHint}>weekly target · 35 max/week</Text>
+
+            <View style={styles.statStrip}>
+              <SummaryStat value={`+${userStats?.formScore ?? 0}`} label="Form" />
+              <View style={styles.statDivider} />
+              <SummaryStat value={`+${userStats?.consistencyScore ?? 0}`} label="Consistency" />
+              <View style={styles.statDivider} />
+              <SummaryStat value={`${earnedBadges.length}/${sortedRewards.length}`} label="Badges" />
+            </View>
+
+            <View style={styles.nextRewardBlock}>
+              <View style={styles.nextRewardHeader}>
+                <Text style={styles.nextRewardLabel}>Next Reward</Text>
+                <Text style={styles.nextRewardTitle}>
+                  {nextReward ? nextReward.title : 'All badges unlocked'}
+                </Text>
+              </View>
+              <View style={styles.heroProgressTrack}>
+                <View style={[styles.heroProgressFill, { width: `${Math.max(6, nextProgress)}%` }]} />
+              </View>
+              <Text style={styles.nextRewardMeta}>
+                {nextReward
+                  ? `${Math.max(0, nextReward.pointsRequired - userPoints).toLocaleString()} points remaining`
+                  : 'You have completed the current rewards track.'}
+              </Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
-        {/* ── EARNED BADGES ──────────────────────── */}
         {earnedBadges.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>EARNED BADGES</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Earned Badges</Text>
             {earnedBadges.map(reward => (
               <BadgeCard
                 key={reward.id}
                 reward={reward}
                 userPoints={userPoints}
-                earnedBadgeIds={earnedBadgeIds}
+                isUnlocked
                 isRedeemed={redeemedBadgeIds.includes(reward.id)}
                 isRedeeming={redeemingId === reward.id}
                 onRedeem={() => handleRedeem(reward.id)}
               />
             ))}
-          </>
+          </View>
         )}
 
-        {/* ── LOCKED BADGES ──────────────────────── */}
         {lockedBadges.length > 0 && (
-          <>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              {earnedBadges.length > 0 ? 'LOCKED BADGES' : 'BADGES'}
+              {earnedBadges.length > 0 ? 'Locked Badges' : 'Badge Track'}
             </Text>
             {lockedBadges.map(reward => (
               <BadgeCard
                 key={reward.id}
                 reward={reward}
                 userPoints={userPoints}
-                earnedBadgeIds={earnedBadgeIds}
+                isUnlocked={false}
                 isRedeemed={false}
                 isRedeeming={false}
               />
             ))}
-          </>
+          </View>
         )}
       </ScrollView>
     </View>
   );
 };
 
-/* ── Styles ──────────────────────────────── */
+const SummaryStat = ({ value, label }: { value: string; label: string }) => (
+  <View style={styles.summaryStat}>
+    <Text style={styles.summaryValue}>{value}</Text>
+    <Text style={styles.summaryLabel}>{label}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
   loadingWrap: {
     flex: 1,
@@ -323,288 +339,237 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 0,
-    paddingBottom: 150,
+    paddingTop: 8,
   },
-
-  /* ── Header (Social-style) ───────────────────── */
-  header: {
+  heroCard: {
+    borderRadius: 14,
+    marginBottom: 18,
+  },
+  heroCardInner: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    padding: 16,
+  },
+  heroTopRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  backBtn: {
-    width: 24,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-  },
-  logoWrap: {
-    width: 50,
-    height: 55,
-    borderRadius: 13,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 55,
-    height: 55,
-  },
-  headerTextWrap: {
-    gap: 1,
-  },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  headerName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: -0.4,
-  },
-  profileBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  profileGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profilePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#27272A',
-  },
-  profileInitial: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-
-  /* ── Hero Score ────────────────────────────── */
-  heroSection: {
-    alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 28,
-  },
-  heroValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 80,
-    color: '#8B5CF6',
-    letterSpacing: -2,
-    lineHeight: 88,
-    ...Platform.select({
-      ios: {
-        textShadowColor: 'rgba(139, 92, 246, 0.5)',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 24,
-      },
-      android: {},
-    }),
+    marginBottom: 16,
   },
   heroLabel: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.semibold,
     fontSize: 11,
-    color: '#71717A',
-    letterSpacing: 3,
+    color: COLORS.textTertiary,
+    letterSpacing: 1.6,
+  },
+  heroValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 42,
+    color: COLORS.text,
+    fontVariant: ['tabular-nums'],
     marginTop: 4,
   },
-  statsRow: {
+  heroBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122,85,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(122,85,255,0.20)',
+  },
+  statStrip: {
+    minHeight: 64,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
-    gap: 24,
+    marginBottom: 14,
   },
-  statItem: {
+  summaryStat: {
+    flex: 1,
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
+    paddingHorizontal: 4,
   },
-  statValue: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 20,
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
+  summaryValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 17,
+    color: COLORS.text,
+    fontVariant: ['tabular-nums'],
   },
-  statLabel: {
+  summaryLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: '#52525B',
-    letterSpacing: 2,
-  },
-  statHint: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 9,
-    color: '#3F3F46',
-    letterSpacing: 0.3,
-    marginTop: 1,
+    fontSize: 11,
+    color: COLORS.textSecondary,
   },
   statDivider: {
     width: 1,
-    height: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    height: 34,
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
-
-  /* ── Section Title ─────────────────────────── */
-  sectionTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 13,
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    marginTop: 8,
-    marginBottom: 14,
-  },
-
-  /* ── Badge Card ───────────────────────────── */
-  cardOuter: {
-    borderRadius: 19,
-    overflow: 'hidden',
-    marginBottom: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
-        shadowRadius: 15,
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  cardGradient: {
-    borderRadius: 19,
-  },
-  cardGlassEdge: {
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 14,
-  },
-  cardLocked: {
-    opacity: 0.55,
-  },
-
-
-  /* ── Card Info ─────────────────────────────── */
-  cardInfo: {
-    flex: 1,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  nextRewardBlock: {
     gap: 8,
   },
-  cardTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: -0.2,
+  nextRewardHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  cardTitleLocked: {
-    color: COLORS.textSecondary,
-  },
-  tierPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  tierText: {
+  nextRewardLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 8,
-    letterSpacing: 1,
+    fontSize: 12,
+    color: COLORS.textTertiary,
   },
-  cardDesc: {
+  nextRewardTitle: {
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.text,
+  },
+  heroProgressTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  heroProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
+  nextRewardMeta: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
-    marginTop: 3,
   },
-
-  /* ── Progress Bar ──────────────────────────── */
-  progressRow: {
+  section: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 15,
+    color: COLORS.text,
+    letterSpacing: 0,
+    marginBottom: 10,
+  },
+  badgeCard: {
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  badgeCardInner: {
+    minHeight: 94,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+  },
+  badgeCardLocked: {
+    opacity: 0.72,
+  },
+  badgeIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 1,
+  },
+  badgeIconGradient: {
+    flex: 1,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  badgeTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 3,
+  },
+  badgeTitle: {
+    flex: 1,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  badgeTitleLocked: {
+    color: COLORS.textSecondary,
+  },
+  categoryPill: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  categoryText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 9,
+  },
+  badgeDescription: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.textTertiary,
+  },
+  progressMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
     marginTop: 10,
   },
+  progressMeta: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 10,
+    color: COLORS.textTertiary,
+  },
   progressTrack: {
-    flex: 1,
     height: 4,
-    backgroundColor: '#27272A',
     borderRadius: 2,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginTop: 5,
   },
   progressFill: {
     height: '100%',
     borderRadius: 2,
   },
-  pointsLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+  badgeAction: {
+    width: 66,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
-
-  /* ── Earned Badge ──────────────────────────── */
-  earnedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+  statusPill: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
-  },
-  earnedText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 9,
-    letterSpacing: 1,
-  },
-
-  /* ── Redeem Button ──────────────────────────── */
-  statusColumn: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  redeemBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 72,
   },
-  redeemBtnText: {
+  redeemButton: {
+    minWidth: 66,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  redeemText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 11,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
   },
 });

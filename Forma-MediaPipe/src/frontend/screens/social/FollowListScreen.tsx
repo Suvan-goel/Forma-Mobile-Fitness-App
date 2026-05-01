@@ -19,7 +19,7 @@ import type { RouteProp } from '@react-navigation/native';
 import { ChevronLeft, UserPlus, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
-import { useFollowing } from '../../../backend/hooks';
+import { useFollowing } from '../../../backend/hooks/useFollowing';
 import type { FollowRelation } from '../../../backend/services/api/types';
 import type { RootStackParamList } from '../../app/RootNavigator';
 
@@ -71,7 +71,7 @@ export const FollowListScreen: React.FC = memo(() => {
             <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} />
           ) : (
             <LinearGradient
-              colors={['#9F75FF', '#7C3AED']}
+              colors={['#9F75FF', '#633FE5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.avatarGradient}
@@ -164,7 +164,7 @@ export const FollowListScreen: React.FC = memo(() => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
   },
   avatar: {
     width: 44,
@@ -246,9 +246,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   followBtnActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   followBtnText: {
     fontFamily: FONTS.ui.bold,
@@ -264,9 +264,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   unfollowBtnText: {
     fontFamily: FONTS.ui.regular,
@@ -282,11 +282,11 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.055)',
     marginBottom: SPACING.xs,
   },
   emptyText: {

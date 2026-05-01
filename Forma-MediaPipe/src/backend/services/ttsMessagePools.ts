@@ -186,7 +186,7 @@ export const POSITIVE_POOLS: Record<PositiveCategory, MessagePool> = {
 
 export type SetStartCategory = 'encouragement' | 'form_reminder' | 'neutral';
 
-export const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
+const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
   encouragement: {
     messages: [
       "Let's go — {exercise}. You've got this!",
@@ -215,7 +215,7 @@ export const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
 };
 
 /** All set-start categories in rotation order. */
-export const SET_START_CATEGORIES: SetStartCategory[] = [
+const SET_START_CATEGORIES: SetStartCategory[] = [
   'encouragement',
   'form_reminder',
   'neutral',

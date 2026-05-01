@@ -3,30 +3,22 @@
  */
 
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft } from 'lucide-react-native';
+import { View, Text, Animated, StyleSheet, TouchableOpacity } from 'react-native';
+import { Settings as SettingsIcon, UserPlus } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { SocialTabSelector, SocialTab } from '../components/ui/SocialTabSelector';
-import { LeaderboardView } from './social/LeaderboardView';
 import { FriendsView } from './social/FriendsView';
 import { ActivityView } from './social/ActivityView';
-import { useUser } from '../../backend/hooks';
 import type { RootStackParamList } from '../app/RootNavigator';
 
-const formatHeaderDate = (): string => {
-  const d = new Date();
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${months[d.getMonth()]} ${d.getDate()} \u2022 TODAY`;
-};
-
 export const SocialScreen: React.FC = memo(() => {
-  const [activeTab, setActiveTab] = useState<SocialTab>('leaderboard');
+  const [activeTab, setActiveTab] = useState<SocialTab>('activity');
+  const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { user: profileUser } = useUser();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -40,57 +32,40 @@ export const SocialScreen: React.FC = memo(() => {
     setActiveTab(tab);
   }, []);
 
+  const handleHeaderAction = useCallback(() => {
+    if (activeTab === 'friends') {
+      navigation.navigate('AddFriend');
+      return;
+    }
+    navigation.navigate('Settings');
+  }, [activeTab, navigation]);
+
   const renderContent = () => {
     switch (activeTab) {
-      case 'leaderboard':
-        return <LeaderboardView />;
-      case 'friends':
-        return <FriendsView />;
       case 'activity':
         return <ActivityView />;
+      case 'friends':
+        return <FriendsView />;
     }
   };
 
   return (
     <View style={styles.container}>
       {/* ── HEADER (matches Rewards style) ── */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
-            <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/forma_purple_logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerName}>SOCIAL</Text>
-            <Text style={styles.headerSubtitle}>{formatHeaderDate()}</Text>
-          </View>
-        </View>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
+        <Text style={styles.headerName}>
+          {activeTab === 'friends' ? 'FRIENDS' : 'SOCIAL'}
+        </Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('UserProfile')}
+          onPress={handleHeaderAction}
           activeOpacity={0.7}
-          style={styles.profileBtn}
+          style={styles.iconBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          {profileUser?.avatarUrl ? (
-            <Image source={{ uri: profileUser.avatarUrl }} style={styles.profileImage} />
-          ) : profileUser ? (
-            <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileGradient}
-            >
-              <Text style={styles.profileInitial}>
-                {profileUser.displayName[0].toUpperCase()}
-              </Text>
-            </LinearGradient>
+          {activeTab === 'friends' ? (
+            <UserPlus size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
           ) : (
-            <View style={styles.profilePlaceholder} />
+            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
           )}
         </TouchableOpacity>
       </View>
@@ -109,85 +84,29 @@ export const SocialScreen: React.FC = memo(() => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 4,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  backBtn: {
-    width: 24,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-  },
-  logoWrap: {
-    width: 50,
-    height: 55,
-    borderRadius: 13,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 55,
-    height: 55,
-  },
-  headerTextWrap: {
-    gap: 1,
-  },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    paddingBottom: 12,
   },
   headerName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 22,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 4,
+    flex: 1,
+    textAlign: 'left',
   },
-  profileBtn: {
+  iconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  profileGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  profilePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#27272A',
-  },
-  profileInitial: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
-    color: '#FFFFFF',
   },
   content: {
     flex: 1,

@@ -5,17 +5,22 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { Check } from 'lucide-react-native';
 import {
   COLORS,
   FONTS,
   SPACING,
   CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW,
 } from '../constants/theme';
 
 // ── Step Data ───────────────────────────────────────────────
@@ -94,7 +99,7 @@ const dotStyles = StyleSheet.create({
   },
   dotInactive: {
     width: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
 });
 
@@ -122,7 +127,7 @@ const OptionCard: React.FC<OptionCardProps> = ({ label, subtext, isSelected, onP
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity onPress={handlePress} activeOpacity={0.85}>
         <LinearGradient
-          colors={CARD_GRADIENT_COLORS}
+          colors={isSelected ? CARD_GRADIENT_ELEVATED : CARD_GRADIENT_COLORS}
           start={CARD_GRADIENT_START}
           end={CARD_GRADIENT_END}
           style={[cardStyles.card, isSelected && cardStyles.cardSelected]}
@@ -137,7 +142,7 @@ const OptionCard: React.FC<OptionCardProps> = ({ label, subtext, isSelected, onP
           </View>
 
           <View style={[cardStyles.indicator, isSelected && cardStyles.indicatorSelected]}>
-            {isSelected && <View style={cardStyles.indicatorDot} />}
+            {isSelected && <Check size={13} color={COLORS.text} strokeWidth={2.8} />}
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -150,19 +155,21 @@ const cardStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 20,
-    paddingHorizontal: 22,
-    borderRadius: 16,
+    minHeight: 76,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
     overflow: 'hidden',
+    ...CARD_SHADOW,
   },
   cardSelected: {
-    borderColor: COLORS.primary,
-    borderWidth: 1.5,
+    borderColor: 'rgba(122, 85, 255, 0.62)',
   },
   selectedOverlay: {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    backgroundColor: 'rgba(122, 85, 255, 0.10)',
   },
   content: {
     flex: 1,
@@ -170,9 +177,9 @@ const cardStyles = StyleSheet.create({
   },
   label: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 17,
+    fontSize: 16,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   subtext: {
     fontFamily: FONTS.ui.regular,
@@ -180,11 +187,11 @@ const cardStyles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   indicator: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 16,
@@ -192,12 +199,6 @@ const cardStyles = StyleSheet.create({
   indicatorSelected: {
     borderColor: COLORS.primary,
     backgroundColor: COLORS.primary,
-  },
-  indicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
   },
 });
 
@@ -279,7 +280,7 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
       <View style={styles.progressTrack}>
         <Animated.View style={[styles.progressFill, { width: progressBarWidth }]}>
           <LinearGradient
-            colors={['#8B5CF6', '#A78BFA']}
+            colors={['#7A55FF', '#A78BFA']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={StyleSheet.absoluteFill}
@@ -294,33 +295,41 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
           { opacity: contentOpacity, transform: [{ translateX: contentTranslateX }] },
         ]}
       >
-        {/* Background step number — decorative */}
-        <Text style={styles.bgNumber} pointerEvents="none">
-          {`0${stepIndex + 1}`}
-        </Text>
-
-        {/* Header zone */}
-        <View style={styles.headerZone}>
-          <StepDots current={stepIndex} total={STEPS.length} />
-
-          <View style={styles.questionWrapper}>
-            <Text style={styles.categoryLabel}>{currentStep.category}</Text>
-            <Text style={styles.question}>{currentStep.question}</Text>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topRow}>
+            <StepDots current={stepIndex} total={STEPS.length} />
+            <Text style={styles.stepCount}>{stepIndex + 1}/{STEPS.length}</Text>
           </View>
-        </View>
 
-        {/* Options zone */}
-        <View style={styles.optionsZone}>
-          {currentStep.options.map((option) => (
-            <OptionCard
-              key={option.label}
-              label={option.label}
-              subtext={option.subtext}
-              isSelected={selected === option.label}
-              onPress={() => handleSelect(option.label)}
-            />
-          ))}
-        </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_ELEVATED]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.questionCard}
+          >
+            <View style={styles.questionCardEdge}>
+              <Text style={styles.categoryLabel}>{currentStep.category}</Text>
+              <Text style={styles.question}>{currentStep.question}</Text>
+              <Text style={styles.helperText}>Tap one option to continue.</Text>
+            </View>
+          </LinearGradient>
+
+          <View style={styles.optionsZone}>
+            {currentStep.options.map((option) => (
+              <OptionCard
+                key={option.label}
+                label={option.label}
+                subtext={option.subtext}
+                isSelected={selected === option.label}
+                onPress={() => handleSelect(option.label)}
+              />
+            ))}
+          </View>
+        </ScrollView>
       </Animated.View>
 
     </View>
@@ -332,11 +341,11 @@ export const OnboardingQuestions: React.FC<OnboardingQuestionsProps> = ({ onComp
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   progressTrack: {
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     width: '100%',
   },
   progressFill: {
@@ -345,49 +354,63 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: SPACING.screenHorizontal + 8,
-    paddingTop: 44,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: SPACING.screenHorizontal,
+    paddingTop: 24,
     paddingBottom: 28,
+    gap: 14,
   },
-  // ── Background decoration ──
-  bgNumber: {
-    position: 'absolute',
-    top: -20,
-    right: -16,
-    fontFamily: FONTS.mono.bold,
-    fontSize: 220,
-    lineHeight: 220,
-    color: 'rgba(255,255,255,0.025)',
-    letterSpacing: -12,
+  topRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  // ── Header zone ──
-  headerZone: {
-    gap: 28,
-    marginTop: 50,
+  stepCount: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
   },
-  questionWrapper: {
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-    paddingLeft: 18,
-    gap: 10,
+  questionCard: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  questionCardEdge: {
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    padding: 18,
+    gap: 9,
   },
   categoryLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontFamily: FONTS.display.bold,
+    fontSize: 12,
     color: COLORS.primary,
-    letterSpacing: 2.5,
+    letterSpacing: 1.8,
     textTransform: 'uppercase',
   },
   question: {
     fontFamily: FONTS.display.bold,
-    fontSize: 32,
+    fontSize: 29,
     color: COLORS.text,
-    letterSpacing: -0.8,
-    lineHeight: 40,
+    letterSpacing: 0,
+    lineHeight: 36,
   },
-  // ── Options zone ──
+  helperText: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    lineHeight: 19,
+    letterSpacing: 0,
+  },
   optionsZone: {
-    gap: 12,
-    marginTop: 100,
+    gap: 10,
   },
 });

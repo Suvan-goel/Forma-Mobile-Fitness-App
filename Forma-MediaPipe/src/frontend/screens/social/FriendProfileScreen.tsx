@@ -1,9 +1,8 @@
 /**
  * FriendProfileScreen — View a friend's public profile
- * Redesigned to match HomeScreen card / gradient style
  */
 
-import React, { memo, useCallback, useRef, useEffect } from 'react';
+import React, { memo, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,36 +10,39 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Platform,
   Animated,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
-  ChevronLeft,
-  GitCompare,
   Award,
-  Calendar,
+  Check,
+  ChevronLeft,
   Flame,
-  Dumbbell,
-  Trophy,
-  ChevronRight,
+  GitCompare,
+  Medal,
+  Shield,
+  Sparkles,
   Target,
-  UserPlus,
+  Trophy,
   UserMinus,
+  UserPlus,
 } from 'lucide-react-native';
 import {
   COLORS,
   FONTS,
   SPACING,
-  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
-  getScoreColor,
 } from '../../constants/theme';
-import { useFriendProfile, useFollowing } from '../../../backend/hooks';
+import { useFollowing } from '../../../backend/hooks/useFollowing';
+import { useFriendProfile } from '../../../backend/hooks/useFriendProfile';
+
+const XP_PER_LEVEL = 220;
+const LEVEL_TARGET = 3000;
 
 export const FriendProfileScreen: React.FC = memo(() => {
   const insets = useSafeAreaInsets();
@@ -52,19 +54,19 @@ export const FriendProfileScreen: React.FC = memo(() => {
   const isCurrentlyFollowing = isFollowingUser(userId);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
     if (profile) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 700,
+          duration: 420,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 700,
+          duration: 420,
           useNativeDriver: true,
         }),
       ]).start();
@@ -75,14 +77,68 @@ export const FriendProfileScreen: React.FC = memo(() => {
     navigation.navigate('FriendComparison', { friendId: userId });
   }, [navigation, userId]);
 
+  const handleFollow = useCallback(async () => {
+    if (isCurrentlyFollowing) {
+      await unfollowUser(userId);
+      return;
+    }
+    await followUser(userId);
+  }, [followUser, isCurrentlyFollowing, unfollowUser, userId]);
+
+  const achievements = useMemo(() => {
+    if (!profile) return [];
+
+    const workouts = profile.recentWorkouts.slice(0, 2).map((workout) => ({
+      id: workout.id,
+      title: workout.name,
+      subtitle: `${workout.duration} • ${workout.totalSets} sets`,
+      meta: `${workout.formScore} form score`,
+      icon: 'target' as const,
+    }));
+
+    return [
+      ...(profile.streakDays > 0
+        ? [
+            {
+              id: 'streak',
+              title: 'Form Streak',
+              subtitle: `${profile.streakDays} ${profile.streakDays === 1 ? 'day' : 'days'} in a row`,
+              meta: 'Active recently',
+              icon: 'check' as const,
+            },
+          ]
+        : []),
+      ...workouts,
+      ...(profile.earnedBadgeIds.length > 0
+        ? [
+            {
+              id: 'badge',
+              title: 'Badge Collector',
+              subtitle: `${profile.earnedBadgeIds.length} earned badges`,
+              meta: 'Rewards progress',
+              icon: 'badge' as const,
+            },
+          ]
+        : []),
+    ].slice(0, 3);
+  }, [profile]);
+
   if (isLoading || !profile) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
-            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.headerIcon}
+            activeOpacity={0.7}
+          >
+            <ChevronLeft
+              size={26}
+              color={COLORS.textSecondary}
+              strokeWidth={1.7}
+            />
           </TouchableOpacity>
-          <View style={{ width: 36 }} />
+          <View style={styles.headerIcon} />
         </View>
         <View style={styles.centerContainer}>
           <ActivityIndicator color={COLORS.primary} size="large" />
@@ -91,263 +147,299 @@ export const FriendProfileScreen: React.FC = memo(() => {
     );
   }
 
-  const scoreColor = getScoreColor(profile.avgFormScore);
+  const displayName = profile.displayName || 'Forma Athlete';
+  const handle = `@${
+    displayName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 18) || 'forma'
+  }`;
+  const initial = displayName.charAt(0).toUpperCase();
+  const estimatedXp = Math.round(
+    (profile.totalWorkouts * Math.max(profile.avgFormScore, 1)) / 1.5,
+  );
+  const level = Math.max(1, Math.floor(estimatedXp / XP_PER_LEVEL) + 1);
+  const levelProgress = Math.min(estimatedXp / LEVEL_TARGET, 1);
+  const hiddenBadgeCount = Math.max(0, profile.earnedBadgeIds.length - 4);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── Header ──────────────────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
-          <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerIcon}
+          activeOpacity={0.7}
+        >
+          <ChevronLeft
+            size={26}
+            color={COLORS.textSecondary}
+            strokeWidth={1.7}
+          />
         </TouchableOpacity>
-        <View style={{ width: 36 }} />
+        <View style={styles.headerIcon} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 96 },
+        ]}
+      >
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
+          <View style={styles.profileRow}>
+            <View style={styles.avatarRing}>
+              {profile.avatarUrl ? (
+                <Image
+                  source={{ uri: profile.avatarUrl }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <LinearGradient
+                  colors={['#F3F4F6', '#B8BCC5']}
+                  style={styles.avatarFallback}
+                >
+                  <Text style={styles.avatarInitial}>{initial}</Text>
+                </LinearGradient>
+              )}
+            </View>
 
-          {/* ═══════════════════════════════════════════
-              PROFILE HERO CARD
-              ═══════════════════════════════════════════ */}
-          <LinearGradient
-            colors={SCREEN_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <View style={styles.heroEdge}>
-              {/* Avatar + Name */}
-              <View style={styles.profileRow}>
-                <View style={[
-                  styles.avatarOuter,
-                  Platform.OS === 'ios' && {
-                    shadowColor: '#8B5CF6',
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 12,
-                  },
-                ]}>
+            <View style={styles.nameBlock}>
+              <Text style={styles.displayName} numberOfLines={1}>
+                {displayName}
+              </Text>
+              <Text style={styles.handle} numberOfLines={1}>
+                {handle}
+              </Text>
+              <View style={styles.actionRow}>
+                <TouchableOpacity activeOpacity={0.75} onPress={handleFollow}>
                   <LinearGradient
-                    colors={['rgba(139, 92, 246, 0.30)', 'rgba(139, 92, 246, 0.10)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.avatar}
+                    colors={
+                      isCurrentlyFollowing
+                        ? ['#252B31', '#171B20']
+                        : ['#8D67FF', '#5A38D6']
+                    }
+                    style={styles.actionPill}
                   >
-                    <Text style={styles.avatarText}>
-                      {profile.displayName.charAt(0).toUpperCase()}
+                    {isCurrentlyFollowing ? (
+                      <UserMinus size={12} color={COLORS.textSecondary} />
+                    ) : (
+                      <UserPlus size={12} color="#FFFFFF" />
+                    )}
+                    <Text
+                      style={[
+                        styles.actionText,
+                        isCurrentlyFollowing && styles.actionTextMuted,
+                      ]}
+                    >
+                      {isCurrentlyFollowing ? 'Following' : 'Follow'}
                     </Text>
                   </LinearGradient>
-                </View>
-                <View style={styles.nameWrap}>
-                  <Text style={styles.displayName}>{profile.displayName}</Text>
-                  <Text style={styles.memberSince}>
-                    Member since {profile.memberSince.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </Text>
-                </View>
+                </TouchableOpacity>
               </View>
-
-              {/* Form Score */}
-              <View style={styles.heroScoreSection}>
-                <View style={styles.heroLabelRow}>
-                  <Target size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.heroLabel}>AVG FORM SCORE</Text>
-                </View>
-                <View style={styles.heroScoreRow}>
-                  <Text style={[styles.heroScore, { color: scoreColor }]}>
-                    {profile.avgFormScore.toFixed(1)}
-                  </Text>
-                  <Text style={styles.heroScoreUnit}>/100</Text>
-                </View>
-              </View>
-            </View>
-          </LinearGradient>
-
-          {/* ═══════════════════════════════════════════
-              STATS ROW: BENTO GRID
-              ═══════════════════════════════════════════ */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCell}>
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.statGradient}
-              >
-                <View style={styles.statEdge}>
-                  <View style={styles.statIconRow}>
-                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.10)' }]}>
-                      <Dumbbell size={14} color={COLORS.accent} strokeWidth={1.5} />
-                    </View>
-                  </View>
-                  <Text style={styles.statValue}>{profile.totalWorkouts}</Text>
-                  <Text style={styles.statLabel}>workouts</Text>
-                </View>
-              </LinearGradient>
-            </View>
-
-            <View style={styles.statCell}>
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.statGradient}
-              >
-                <View style={styles.statEdge}>
-                  <View style={styles.statIconRow}>
-                    <View style={[styles.statIconWrap, { backgroundColor: 'rgba(245, 166, 35, 0.10)' }]}>
-                      <Flame size={14} color={COLORS.yellow} strokeWidth={1.5} />
-                    </View>
-                  </View>
-                  <Text style={styles.statValue}>
-                    {profile.streakDays > 0 ? profile.streakDays : '—'}
-                  </Text>
-                  <Text style={styles.statLabel}>
-                    {profile.streakDays === 1 ? 'day streak' : profile.streakDays > 0 ? 'day streak' : 'no streak'}
-                  </Text>
-                </View>
-              </LinearGradient>
             </View>
           </View>
 
-          {/* ═══════════════════════════════════════════
-              FOLLOW / UNFOLLOW
-              ═══════════════════════════════════════════ */}
           <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={async () => {
-              if (isCurrentlyFollowing) {
-                await unfollowUser(userId);
-              } else {
-                await followUser(userId);
-              }
-            }}
-          >
-            <View style={[styles.followCta, isCurrentlyFollowing && styles.followCtaActive]}>
-              {isCurrentlyFollowing ? (
-                <>
-                  <UserMinus size={16} color={COLORS.textSecondary} strokeWidth={1.5} />
-                  <Text style={styles.followCtaTextDim}>Following</Text>
-                </>
-              ) : (
-                <>
-                  <UserPlus size={16} color={COLORS.primary} strokeWidth={1.5} />
-                  <Text style={styles.followCtaTextAccent}>Follow</Text>
-                </>
-              )}
-            </View>
-          </TouchableOpacity>
-
-          {/* ═══════════════════════════════════════════
-              COMPARE CTA — Accent gradient button
-              ═══════════════════════════════════════════ */}
-          <TouchableOpacity
-            activeOpacity={0.85}
+            activeOpacity={0.78}
             onPress={handleCompare}
+            style={styles.compareCtaOuter}
           >
             <LinearGradient
-              colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGradient}
+              colors={['#8D67FF', '#5A38D6']}
+              style={styles.compareCta}
             >
-              <View style={styles.ctaInner}>
-                <View style={styles.ctaIconWrap}>
-                  <GitCompare size={16} color="#FFFFFF" strokeWidth={2} />
-                </View>
-                <View style={styles.ctaTextWrap}>
-                  <Text style={styles.ctaTitle}>Compare Stats</Text>
-                  <Text style={styles.ctaSub}>See how you stack up</Text>
-                </View>
-                <ChevronRight size={18} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
-              </View>
+              <GitCompare size={17} color="#FFFFFF" strokeWidth={1.8} />
+              <Text style={styles.compareCtaText}>Compare</Text>
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* ═══════════════════════════════════════════
-              BADGES
-              ═══════════════════════════════════════════ */}
-          {profile.earnedBadgeIds.length > 0 && (
-            <>
-              <View style={styles.sectionRow}>
-                <View style={styles.sectionLabelRow}>
-                  <Trophy size={13} color={COLORS.yellow} strokeWidth={1.5} />
-                  <Text style={styles.sectionLabel}>BADGES</Text>
-                </View>
-              </View>
+          <View style={styles.statStrip}>
+            <StatBlock
+              value={profile.totalWorkouts || 0}
+              label="Total Workouts"
+            />
+            <View style={styles.statDivider} />
+            <StatBlock
+              value={profile.streakDays || 0}
+              label="Week Streak"
+              prefix={
+                <Flame size={13} color={COLORS.yellow} fill={COLORS.yellow} />
+              }
+            />
+            <View style={styles.statDivider} />
+            <StatBlock
+              value={Math.round(profile.avgFormScore) || 0}
+              label="Avg Form Score"
+            />
+          </View>
 
+          <ProfileCard>
+            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
+              Level & Rewards
+            </Text>
+            <View style={styles.levelRow}>
               <LinearGradient
-                colors={['#1A1510', '#111008', '#0E0C07']}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.badgeCard}
+                colors={['#8F6BFF', '#442087']}
+                style={styles.levelBadge}
               >
-                <View style={styles.badgeEdge}>
-                  <View style={styles.badgeRow}>
-                    {profile.earnedBadgeIds.map(badgeId => (
-                      <View key={badgeId} style={styles.badge}>
-                        <Award size={18} color={COLORS.yellow} />
-                      </View>
-                    ))}
-                  </View>
-                  <Text style={styles.badgeCount}>
-                    {profile.earnedBadgeIds.length} {profile.earnedBadgeIds.length === 1 ? 'badge' : 'badges'} earned
-                  </Text>
-                </View>
+                <Shield
+                  size={48}
+                  color="rgba(255,255,255,0.62)"
+                  strokeWidth={1.5}
+                />
+                <Text style={styles.levelNumber}>{level}</Text>
               </LinearGradient>
-            </>
-          )}
-
-          {/* ═══════════════════════════════════════════
-              RECENT WORKOUTS
-              ═══════════════════════════════════════════ */}
-          {profile.recentWorkouts.length > 0 && (
-            <>
-              <View style={styles.sectionRow}>
-                <View style={styles.sectionLabelRow}>
-                  <Calendar size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.sectionLabel}>RECENT WORKOUTS</Text>
-                </View>
+              <View style={styles.levelCopy}>
+                <Text style={styles.levelTitle}>Level {level}</Text>
+                <Text style={styles.levelSubtitle}>Strong Performer</Text>
               </View>
+            </View>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.max(8, levelProgress * 100)}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.xpText}>
+              {estimatedXp.toLocaleString()} / {LEVEL_TARGET.toLocaleString()}{' '}
+              XP
+            </Text>
 
-              {profile.recentWorkouts.map((workout) => (
-                <View key={workout.id} style={styles.workoutOuter}>
+            <View style={styles.combinedCardDivider} />
+
+            <View style={styles.badgeSectionHeader}>
+              <Text style={styles.sectionTitle}>Badges</Text>
+              <Text style={styles.badgeCountText}>{profile.earnedBadgeIds.length} earned</Text>
+            </View>
+            <View style={styles.badgeRow}>
+              {(profile.earnedBadgeIds.length > 0
+                ? profile.earnedBadgeIds
+                : ['1', '2', '3', '4']
+              )
+                .slice(0, 4)
+                .map((badgeId, index) => (
+                  <View key={badgeId} style={styles.badgeShell}>
+                    <LinearGradient
+                      colors={
+                        profile.earnedBadgeIds.includes(badgeId)
+                          ? ['#3C4651', '#1A222C']
+                          : ['#272D34', '#161A1F']
+                      }
+                      style={styles.badgeHex}
+                    >
+                      {index % 4 === 0 ? (
+                        <Trophy size={20} color={COLORS.yellow} />
+                      ) : null}
+                      {index % 4 === 1 ? (
+                        <Medal size={20} color={COLORS.yellow} />
+                      ) : null}
+                      {index % 4 === 2 ? (
+                        <Award size={20} color={COLORS.yellow} />
+                      ) : null}
+                      {index % 4 === 3 ? (
+                        <Target size={20} color={COLORS.yellow} />
+                      ) : null}
+                    </LinearGradient>
+                  </View>
+                ))}
+              {hiddenBadgeCount > 0 && (
+                <View style={styles.moreBadge}>
+                  <Text style={styles.moreBadgeText}>+{hiddenBadgeCount}</Text>
+                </View>
+              )}
+            </View>
+          </ProfileCard>
+
+          <ProfileCard>
+            <Text style={styles.sectionTitle}>Recent Achievements</Text>
+            <View style={styles.achievementList}>
+              {achievements.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.achievementRow,
+                    index === achievements.length - 1 &&
+                      styles.achievementRowLast,
+                  ]}
+                >
                   <LinearGradient
-                    colors={[...CARD_GRADIENT_COLORS]}
-                    start={CARD_GRADIENT_START}
-                    end={CARD_GRADIENT_END}
-                    style={styles.workoutGradient}
+                    colors={
+                      item.icon === 'check'
+                        ? ['#62E5A9', '#269A67']
+                        : ['#8D67FF', '#4A2BB4']
+                    }
+                    style={styles.achievementIcon}
                   >
-                    <View style={styles.workoutEdge}>
-                      <View style={styles.workoutTopRow}>
-                        <View style={styles.workoutTextWrap}>
-                          <Text style={styles.workoutName}>{workout.name}</Text>
-                          <Text style={styles.workoutMeta}>
-                            {workout.date} • {workout.duration} • {workout.totalSets} sets
-                          </Text>
-                        </View>
-                        <View style={[styles.workoutScoreBadge, { backgroundColor: getScoreColor(workout.formScore) + '15' }]}>
-                          <Text style={[styles.workoutScore, { color: getScoreColor(workout.formScore) }]}>
-                            {workout.formScore}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
+                    {item.icon === 'check' ? (
+                      <Check size={20} color="#FFFFFF" strokeWidth={2.5} />
+                    ) : null}
+                    {item.icon === 'badge' ? (
+                      <Sparkles size={19} color="#FFFFFF" strokeWidth={2.1} />
+                    ) : null}
+                    {item.icon === 'target' ? (
+                      <Target size={19} color="#FFFFFF" strokeWidth={2.1} />
+                    ) : null}
                   </LinearGradient>
+                  <View style={styles.achievementText}>
+                    <Text style={styles.achievementTitle}>{item.title}</Text>
+                    <Text style={styles.achievementSubtitle}>
+                      {item.subtitle}
+                    </Text>
+                    <Text style={styles.achievementMeta}>{item.meta}</Text>
+                  </View>
+                  <View style={styles.statusDot}>
+                    <Check size={12} color={COLORS.green} strokeWidth={3} />
+                  </View>
                 </View>
               ))}
-            </>
-          )}
-
+            </View>
+          </ProfileCard>
         </Animated.View>
       </ScrollView>
     </View>
   );
 });
 
+const StatBlock = ({
+  value,
+  label,
+  prefix,
+}: {
+  value: number;
+  label: string;
+  prefix?: React.ReactNode;
+}) => (
+  <View style={styles.statBlock}>
+    <View style={styles.statValueRow}>
+      {prefix}
+      <Text style={styles.statValue}>{value}</Text>
+    </View>
+    <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>
+      {label}
+    </Text>
+  </View>
+);
+
+const ProfileCard = ({ children }: { children: React.ReactNode }) => (
+  <LinearGradient
+    colors={[...CARD_GRADIENT_COLORS]}
+    start={CARD_GRADIENT_START}
+    end={CARD_GRADIENT_END}
+    style={styles.card}
+  >
+    <View style={styles.cardInner}>{children}</View>
+  </LinearGradient>
+);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   centerContainer: {
     flex: 1,
@@ -355,307 +447,317 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
+    height: 50,
+    paddingHorizontal: SPACING.screenHorizontal,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 8,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  headerIcon: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 60,
-  },
-
-  /* ── Hero Profile Card ─────────────────────── */
-  heroCard: {
-    borderRadius: 22,
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  heroEdge: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    padding: 20,
   },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 20,
+    gap: 14,
+    paddingTop: 6,
+    paddingBottom: 12,
   },
-  avatarOuter: {},
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
+  avatarRing: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    padding: 1,
+    backgroundColor: 'rgba(255,255,255,0.58)',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 43,
+  },
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 43,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
+  avatarInitial: {
     fontFamily: FONTS.display.bold,
-    fontSize: 24,
-    color: COLORS.text,
+    fontSize: 34,
+    color: '#101418',
   },
-  nameWrap: {
+  nameBlock: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   displayName: {
     fontFamily: FONTS.display.bold,
-    fontSize: 22,
+    fontSize: 26,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 0,
   },
-  memberSince: {
+  handle: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
+    fontSize: 13,
+    color: COLORS.textSecondary,
   },
-  heroScoreSection: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.10)',
-  },
-  heroLabelRow: {
+  actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginTop: 3,
   },
-  heroLabel: {
+  actionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  actionText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 2,
-  },
-  heroScoreRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  heroScore: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 44,
-    letterSpacing: -2,
-    lineHeight: 48,
-  },
-  heroScoreUnit: {
-    fontFamily: FONTS.mono.regular,
-    fontSize: 16,
-    color: COLORS.textTertiary,
-  },
-
-  /* ── Stats Row (Bento) ─────────────────────── */
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  statCell: {
-    flex: 1,
-  },
-  statGradient: {
-    borderRadius: 18,
-  },
-  statEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 16,
-  },
-  statIconRow: {
-    marginBottom: 12,
-  },
-  statIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 30,
     color: COLORS.text,
-    letterSpacing: -1,
-    lineHeight: 34,
   },
-  statLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    marginTop: 2,
+  actionTextMuted: {
+    color: COLORS.textSecondary,
   },
-
-  /* ── Follow CTA ──────────────────────────────── */
-  followCta: {
+  compareCtaOuter: {
+    marginBottom: 14,
+  },
+  compareCta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.20)',
-    marginBottom: 12,
+    height: 48,
+    borderRadius: 14,
   },
-  followCtaActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  followCtaTextAccent: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.primary,
-    letterSpacing: -0.2,
-  },
-  followCtaTextDim: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    letterSpacing: -0.2,
-  },
-
-  /* ── Compare CTA ───────────────────────────── */
-  ctaGradient: {
-    borderRadius: 16,
-    marginBottom: 12,
-  },
-  ctaInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    gap: 14,
-  },
-  ctaIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  ctaTitle: {
+  compareCtaText: {
     fontFamily: FONTS.display.bold,
     fontSize: 16,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    color: COLORS.text,
   },
-  ctaSub: {
+  statStrip: {
+    minHeight: 76,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  statBlock: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 4,
+  },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statValue: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 22,
+    color: COLORS.text,
+    fontVariant: ['tabular-nums'],
+  },
+  statLabel: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.55)',
+    fontSize: 11,
+    color: COLORS.textSecondary,
   },
-
-  /* ── Section Headers ───────────────────────── */
-  sectionRow: {
+  statDivider: {
+    width: 1,
+    height: 42,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  card: {
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  cardInner: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+    padding: 14,
+  },
+  sectionTitle: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 16,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  sectionTitleSpaced: {
+    marginBottom: 12,
+  },
+  levelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  levelBadge: {
+    width: 54,
+    height: 62,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  levelNumber: {
+    position: 'absolute',
+    fontFamily: FONTS.mono.bold,
+    fontSize: 20,
+    color: COLORS.text,
+  },
+  levelCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  levelTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  levelSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
+  xpText: {
+    fontFamily: FONTS.mono.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  combinedCardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: 15,
+    marginBottom: 13,
+  },
+  badgeSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 20,
-    marginBottom: 12,
   },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.display.bold,
+  badgeCountText: {
+    fontFamily: FONTS.display.semibold,
     fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
-  },
-
-  /* ── Badges Card ───────────────────────────── */
-  badgeCard: {
-    borderRadius: 18,
-  },
-  badgeEdge: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 166, 35, 0.12)',
-    padding: 16,
+    color: COLORS.textTertiary,
   },
   badgeRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 14,
   },
-  badge: {
+  badgeShell: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(245, 166, 35, 0.10)',
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.22)',
+    padding: 3,
+  },
+  badgeHex: {
+    flex: 1,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeCount: {
+  moreBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  moreBadgeText: {
+    fontFamily: FONTS.display.bold,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  achievementList: {
+    marginTop: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.035)',
+  },
+  achievementRow: {
+    minHeight: 70,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.035)',
+    backgroundColor: 'rgba(255,255,255,0.015)',
+  },
+  achievementRowLast: {
+    borderBottomWidth: 0,
+  },
+  achievementIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achievementText: {
+    flex: 1,
+    gap: 1,
+  },
+  achievementTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  achievementSubtitle: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  achievementMeta: {
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
     color: COLORS.textTertiary,
   },
-
-  /* ── Workout Cards ─────────────────────────── */
-  workoutOuter: {
-    marginBottom: 8,
-  },
-  workoutGradient: {
-    borderRadius: 16,
-  },
-  workoutEdge: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 14,
-  },
-  workoutTopRow: {
-    flexDirection: 'row',
+  statusDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  workoutTextWrap: {
-    flex: 1,
-    marginRight: 12,
-  },
-  workoutName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  workoutMeta: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    marginTop: 3,
-  },
-  workoutScoreBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  workoutScore: {
-    fontFamily: FONTS.mono.bold,
-    fontSize: 16,
-    letterSpacing: -0.3,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(52,224,166,0.12)',
   },
 });

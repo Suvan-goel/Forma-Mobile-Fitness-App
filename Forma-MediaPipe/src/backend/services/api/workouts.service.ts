@@ -24,6 +24,11 @@ function formatDate(dateStr: string): string {
 }
 
 function mapWorkoutSessionRow(row: any): WorkoutSession {
+  const workoutExercises = Array.isArray(row.workout_exercises) ? row.workout_exercises : [];
+  const firstExercise = [...workoutExercises].sort(
+    (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+  )[0];
+
   return {
     id: row.id,
     name: row.name,
@@ -34,6 +39,7 @@ function mapWorkoutSessionRow(row: any): WorkoutSession {
     totalReps: row.total_reps,
     formScore: Math.round(row.form_score),
     category: row.category ?? undefined,
+    firstExerciseName: firstExercise?.name,
     userId: row.user_id,
   };
 }
@@ -75,7 +81,7 @@ export const workoutsService = {
 
     let query = supabase
       .from('workout_sessions')
-      .select('*')
+      .select('*, workout_exercises(name, order_index)')
       .order('date', { ascending: false });
 
     if (userId) query = query.eq('user_id', userId);
@@ -120,7 +126,7 @@ export const workoutsService = {
 
     let query = supabase
       .from('workout_sessions')
-      .select('*')
+      .select('*, workout_exercises(name, order_index)')
       .order('date', { ascending: false })
       .limit(limit);
 

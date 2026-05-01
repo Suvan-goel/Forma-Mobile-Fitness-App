@@ -1,22 +1,37 @@
-import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
-  View,
+  Animated,
+  Image,
+  ImageSourcePropType,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  ScrollView,
-  Platform,
-  Animated,
-  PanResponder,
+  View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Dumbbell, Layers, Plus, Sparkles, X, Zap } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../constants/theme';
+import { ChevronLeft, Heart, MoreHorizontal, Plus } from 'lucide-react-native';
+import {
+  CARD_SHADOW,
+  COLORS,
+  FONTS,
+  SCREEN_GRADIENT_COLORS,
+  SCREEN_GRADIENT_END,
+  SCREEN_GRADIENT_START,
+  SPACING,
+} from '../constants/theme';
 import { useAlert } from '../contexts/AlertContext';
-import { useWorkoutPreferences, useCustomTemplates } from '../../backend/hooks';
+import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import type { CustomTemplate } from '../../backend/services/api';
 import type { RecordStackParamList } from '../app/RootNavigator';
 
@@ -25,715 +40,852 @@ type WorkoutTemplatesNavigationProp = NativeStackNavigationProp<
   'WorkoutTemplates'
 >;
 
-/* ── Template Data ──────────────────────── */
+type TemplateTab = 'discover' | 'myTemplates' | 'favourites';
 
 interface TemplateExercise {
   name: string;
   category: string;
+  targetSets: number;
+  reps: string;
+  rest: string;
 }
 
 interface WorkoutTemplate {
   id: string;
   name: string;
-  focusTag: string;
   description: string;
+  focusTags: string[];
+  estimatedDuration: string;
+  lastUsed: string;
+  volumeLabel: string;
+  templateImage?: ImageSourcePropType;
   exercises: TemplateExercise[];
 }
 
+const EXERCISE_IMAGES: Record<string, ImageSourcePropType> = {
+  'Push-Up': require('../assets/exercises/push_up.png'),
+  'Cable Pushdowns': require('../assets/exercises/cable_pushdowns.png'),
+  'Barbell Curl': require('../assets/exercises/barbell_curl.png'),
+  'Machine Ab Crunches': require('../assets/exercises/machine_ab_crunches.png'),
+  'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
+  'Back Squat': require('../assets/exercises/barbell_squat.png'),
+  'Romanian Deadlift': require('../assets/exercises/lying_leg_curl.png'),
+  'Walking Lunge': require('../assets/exercises/leg_extensions.png'),
+  'Leg Press': require('../assets/exercises/leg_extensions.png'),
+  'Leg Extensions': require('../assets/exercises/leg_extensions.png'),
+  'Lying Leg Curl': require('../assets/exercises/lying_leg_curl.png'),
+  'Cable Lat Pulldowns': require('../assets/exercises/cable_lat_pulldowns.png'),
+  'Standing Dumbbell Lateral Raises': require('../assets/exercises/standing_dumbbell_lateral_raises.png'),
+  'Cable Row': require('../assets/exercises/cable_row.png'),
+};
+
+const DEFAULT_EXERCISE_IMAGE = require('../assets/sports_bg.png');
+const FAVOURITE_TEMPLATES_STORAGE_KEY = 'forma:favourite-template-ids';
+
+const getExerciseImage = (name: string): ImageSourcePropType =>
+  EXERCISE_IMAGES[name] ?? DEFAULT_EXERCISE_IMAGE;
+
 const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   {
-    id: 'push-press',
-    name: 'Push & Press',
-    focusTag: 'CHEST · SHOULDERS · TRICEPS',
-    description: 'Upper body pushing power with shoulder isolation.',
+    id: 'lower-body-strength',
+    name: 'Lower Body Strength',
+    description:
+      'Build lower body strength and muscle with compound lifts and unilateral work.',
+    focusTags: ['Strength', 'Lower Body', 'Hypertrophy'],
+    estimatedDuration: '~45 min',
+    lastUsed: '15 sets · 1,250 kg',
+    volumeLabel: 'Last used',
+    templateImage: require('../assets/generated/templates/lower-body-strength.png'),
     exercises: [
-      { name: 'Push-Up', category: 'Calisthenics' },
-      { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting' },
-      { name: 'Cable Pushdowns', category: 'Weightlifting' },
-      { name: 'Machine Ab Crunches', category: 'Weightlifting' },
+      {
+        name: 'Back Squat',
+        category: 'Weightlifting',
+        targetSets: 4,
+        reps: '6-8',
+        rest: '2 min',
+      },
+      {
+        name: 'Romanian Deadlift',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '8-10',
+        rest: '2 min',
+      },
+      {
+        name: 'Walking Lunge',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10/leg',
+        rest: '90 sec',
+      },
+      {
+        name: 'Leg Press',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '2 min',
+      },
     ],
   },
   {
-    id: 'pull-curl',
-    name: 'Pull & Curl',
-    focusTag: 'BACK · BICEPS · CORE',
-    description: 'Build a strong back and thick biceps.',
+    id: 'push-day',
+    name: 'Push Day',
+    description:
+      'Chest, shoulders, and triceps with a balanced pressing emphasis.',
+    focusTags: ['Push', 'Upper Body', 'Strength'],
+    estimatedDuration: '~40 min',
+    lastUsed: 'May 12, 2025',
+    volumeLabel: 'Last used',
+    templateImage: require('../assets/generated/templates/push-day.png'),
     exercises: [
-      { name: 'Cable Lat Pulldowns', category: 'Weightlifting' },
-      { name: 'Cable Row', category: 'Weightlifting' },
-      { name: 'Barbell Curl', category: 'Weightlifting' },
-      { name: 'Machine Ab Crunches', category: 'Weightlifting' },
+      {
+        name: 'Push-Up',
+        category: 'Calisthenics',
+        targetSets: 4,
+        reps: '8-12',
+        rest: '90 sec',
+      },
+      {
+        name: 'Standing Dumbbell Lateral Raises',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Cable Pushdowns',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Machine Ab Crunches',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '12-15',
+        rest: '60 sec',
+      },
     ],
   },
   {
-    id: 'leg-day',
-    name: 'Leg Day',
-    focusTag: 'QUADS · HAMSTRINGS · CORE',
-    description: 'Complete lower body strength and isolation.',
+    id: 'pull-day',
+    name: 'Pull Day',
+    description:
+      'Back and biceps with enough volume for posture and arm strength.',
+    focusTags: ['Pull', 'Back', 'Biceps'],
+    estimatedDuration: '~42 min',
+    lastUsed: 'May 10, 2025',
+    volumeLabel: 'Last used',
+    templateImage: require('../assets/generated/templates/pull-day.png'),
     exercises: [
-      { name: 'Barbell Squat', category: 'Weightlifting' },
-      { name: 'Leg Extensions', category: 'Weightlifting' },
-      { name: 'Lying Leg Curl', category: 'Weightlifting' },
-      { name: 'Machine Ab Crunches', category: 'Weightlifting' },
+      {
+        name: 'Cable Lat Pulldowns',
+        category: 'Weightlifting',
+        targetSets: 4,
+        reps: '8-10',
+        rest: '90 sec',
+      },
+      {
+        name: 'Cable Row',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '8-10',
+        rest: '90 sec',
+      },
+      {
+        name: 'Barbell Curl',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Machine Ab Crunches',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '12-15',
+        rest: '60 sec',
+      },
     ],
   },
   {
-    id: 'upper-body-blast',
-    name: 'Upper Body Blast',
-    focusTag: 'CHEST · BACK · SHOULDERS · ARMS',
-    description: 'Balanced push-pull superset for full upper body.',
+    id: 'full-body',
+    name: 'Full Body',
+    description: 'A compact full-body session for busy training days.',
+    focusTags: ['Full Body', 'Balanced', 'Conditioning'],
+    estimatedDuration: '~50 min',
+    lastUsed: 'May 9, 2025',
+    volumeLabel: 'Last used',
+    templateImage: require('../assets/generated/templates/full-body.png'),
     exercises: [
-      { name: 'Push-Up', category: 'Calisthenics' },
-      { name: 'Cable Lat Pulldowns', category: 'Weightlifting' },
-      { name: 'Standing Dumbbell Lateral Raises', category: 'Weightlifting' },
-      { name: 'Cable Row', category: 'Weightlifting' },
-      { name: 'Barbell Curl', category: 'Weightlifting' },
-      { name: 'Cable Pushdowns', category: 'Weightlifting' },
-    ],
-  },
-  {
-    id: 'full-body-power',
-    name: 'Full Body Power',
-    focusTag: 'FULL BODY',
-    description: 'Hit every muscle group in a single session.',
-    exercises: [
-      { name: 'Barbell Squat', category: 'Calisthenics' },
-      { name: 'Push-Up', category: 'Calisthenics' },
-      { name: 'Cable Lat Pulldowns', category: 'Weightlifting' },
-      { name: 'Cable Row', category: 'Weightlifting' },
-      { name: 'Barbell Curl', category: 'Weightlifting' },
-      { name: 'Leg Extensions', category: 'Weightlifting' },
-      { name: 'Lying Leg Curl', category: 'Weightlifting' },
-      { name: 'Machine Ab Crunches', category: 'Weightlifting' },
+      {
+        name: 'Back Squat',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '6-8',
+        rest: '2 min',
+      },
+      {
+        name: 'Push-Up',
+        category: 'Calisthenics',
+        targetSets: 3,
+        reps: '8-12',
+        rest: '90 sec',
+      },
+      {
+        name: 'Cable Row',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '8-10',
+        rest: '90 sec',
+      },
+      {
+        name: 'Standing Dumbbell Lateral Raises',
+        category: 'Weightlifting',
+        targetSets: 3,
+        reps: '10-12',
+        rest: '60 sec',
+      },
+      {
+        name: 'Barbell Curl',
+        category: 'Weightlifting',
+        targetSets: 2,
+        reps: '10-12',
+        rest: '60 sec',
+      },
     ],
   },
 ];
 
-/* ── Frequency → Recommended Template IDs ─ */
+const templateToRouteParams = (template: WorkoutTemplate) => ({
+  templateName: template.name,
+  description: template.description,
+  exercises: template.exercises.map((ex) => ({
+    name: ex.name,
+    category: ex.category,
+    targetSets: ex.targetSets,
+  })),
+});
 
-const RECOMMENDED_BY_FREQUENCY: Record<string, string[]> = {
-  '1-2': ['full-body-power', 'upper-body-blast'],
-  '3-4': ['push-press', 'pull-curl', 'leg-day'],
-  '5+': ['push-press', 'pull-curl', 'leg-day', 'upper-body-blast', 'full-body-power'],
+const estimateDuration = (exerciseCount: number): string =>
+  `~${Math.max(30, exerciseCount * 10)} min`;
+
+const getCollageSources = (
+  exercises: TemplateExercise[],
+): ImageSourcePropType[] => {
+  const baseSources =
+    exercises.length > 0
+      ? exercises.map((exercise) => getExerciseImage(exercise.name))
+      : [DEFAULT_EXERCISE_IMAGE];
+
+  return Array.from(
+    { length: 4 },
+    (_, index) => baseSources[index % baseSources.length],
+  );
 };
 
-/* ── Exercise Chip ──────────────────────── */
+const mapCustomTemplate = (template: CustomTemplate): WorkoutTemplate => {
+  const totalSets = template.exercises.reduce(
+    (sum, ex) => sum + ex.targetSets,
+    0,
+  );
+  const firstExerciseName = template.exercises[0]?.name ?? '';
 
-const ExerciseChip: React.FC<{ name: string }> = ({ name }) => (
-  <View style={styles.chip}>
-    <Text style={styles.chipText} numberOfLines={1}>{name}</Text>
-  </View>
-);
-
-/* ── Template Card ──────────────────────── */
+  return {
+    id: template.id,
+    name: template.name,
+    description: template.description || 'Your saved workout template.',
+    focusTags: ['Custom', 'Saved'],
+    estimatedDuration: estimateDuration(template.exercises.length),
+    lastUsed: `${totalSets} sets`,
+    volumeLabel: 'Planned',
+    templateImage: getExerciseImage(firstExerciseName),
+    exercises: template.exercises.map((ex) => ({
+      name: ex.name,
+      category: ex.category,
+      targetSets: ex.targetSets,
+      reps: '8-12',
+      rest: '90 sec',
+    })),
+  };
+};
 
 const TemplateCard: React.FC<{
   template: WorkoutTemplate;
+  isFavourite: boolean;
   onPress: (template: WorkoutTemplate) => void;
-}> = ({ template, onPress }) => (
-  <TouchableOpacity
-    style={styles.cardOuter}
-    onPress={() => onPress(template)}
-    activeOpacity={0.85}
-  >
-    <LinearGradient
-      colors={[...CARD_GRADIENT_COLORS]}
-      start={CARD_GRADIENT_START}
-      end={CARD_GRADIENT_END}
-      style={styles.cardGradient}
+  onFavouritePress: (template: WorkoutTemplate) => void;
+  onMorePress?: (template: WorkoutTemplate) => void;
+}> = ({ template, isFavourite, onPress, onFavouritePress, onMorePress }) => {
+  return (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => onPress(template)}
+      activeOpacity={0.86}
     >
-      <View style={styles.cardGlassEdge}>
-        {/* ── Top Row: name + count badge ── */}
-        <View style={styles.cardTopRow}>
-          <View style={styles.cardTitleBlock}>
-            <Text style={styles.cardName}>{template.name}</Text>
-            <Text style={styles.focusTag}>{template.focusTag}</Text>
-          </View>
-          <View style={styles.cardTopRight}>
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{template.exercises.length}</Text>
-              <Text style={styles.countBadgeLabel}>EX</Text>
-            </View>
-            <ChevronRight size={16} color={COLORS.accent} strokeWidth={1.5} />
-          </View>
-        </View>
+      <View style={styles.cardMainRow}>
+        <TemplateExerciseCollage template={template} />
 
-        {/* ── Description ── */}
-        <Text style={styles.cardDescription}>{template.description}</Text>
+        <View style={styles.cardCopy}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {template.name}
+            </Text>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => onFavouritePress(template)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Heart
+                size={17}
+                color={isFavourite ? COLORS.accent : COLORS.textSecondary}
+                fill={isFavourite ? COLORS.accent : 'transparent'}
+                strokeWidth={2}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => onMorePress?.(template)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MoreHorizontal
+                size={17}
+                color={COLORS.textSecondary}
+                strokeWidth={2}
+              />
+            </TouchableOpacity>
+          </View>
 
-        {/* ── Exercise Chips ── */}
-        <View style={styles.chipsRow}>
-          {template.exercises.map((ex) => (
-            <ExerciseChip key={ex.name} name={ex.name} />
-          ))}
+          <Text style={styles.cardMeta} numberOfLines={1}>
+            {template.exercises.length} exercises · {template.estimatedDuration}
+          </Text>
+          <Text style={styles.cardSubmeta} numberOfLines={1}>
+            {template.volumeLabel} · {template.lastUsed}
+          </Text>
+
+          <View style={styles.cardFooterRow}>
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.chooseButton}
+            >
+              <Text style={styles.chooseButtonText}>Choose</Text>
+            </LinearGradient>
+          </View>
         </View>
       </View>
-    </LinearGradient>
-  </TouchableOpacity>
-);
+    </TouchableOpacity>
+  );
+};
 
-/* ── Custom Template Card (swipe-to-delete) ── */
-
-const DELETE_AREA_WIDTH = 72;
-
-const CustomTemplateCard: React.FC<{
-  template: CustomTemplate;
-  onPress: (template: CustomTemplate) => void;
-  onDelete: (id: string) => void;
-}> = ({ template, onPress, onDelete }) => {
-  const { showAlert } = useAlert();
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isSwipeOpen = useRef(false);
-
-  const closeSwipe = useCallback(() => {
-    isSwipeOpen.current = false;
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-  }, [translateX]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > Math.abs(gs.dy) * 2 && Math.abs(gs.dx) > 8,
-      onPanResponderGrant: () => {
-        translateX.stopAnimation();
-      },
-      onPanResponderMove: (_, gs) => {
-        const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
-        const newValue = startOffset + gs.dx;
-        translateX.setValue(Math.min(0, Math.max(newValue, -DELETE_AREA_WIDTH)));
-      },
-      onPanResponderRelease: (_, gs) => {
-        const startOffset = isSwipeOpen.current ? -DELETE_AREA_WIDTH : 0;
-        const projected = startOffset + gs.dx;
-        const shouldOpen = projected < -(DELETE_AREA_WIDTH / 2);
-        isSwipeOpen.current = shouldOpen;
-        Animated.spring(translateX, {
-          toValue: shouldOpen ? -DELETE_AREA_WIDTH : 0,
-          useNativeDriver: true,
-          bounciness: 4,
-        }).start();
-      },
-    })
-  ).current;
-
-  const handlePress = useCallback(() => {
-    if (isSwipeOpen.current) {
-      closeSwipe();
-      return;
-    }
-    onPress(template);
-  }, [template, onPress, closeSwipe]);
-
-  const handleDelete = useCallback(() => {
-    closeSwipe();
-    showAlert(
-      'Delete Template?',
-      `Delete "${template.name}"? This can't be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => onDelete(template.id) },
-      ],
-    );
-  }, [closeSwipe, showAlert, template.name, template.id, onDelete]);
+const TemplateExerciseCollage: React.FC<{ template: WorkoutTemplate }> = ({
+  template,
+}) => {
+  const imageSources = getCollageSources(template.exercises.slice(0, 4));
 
   return (
-    <View style={styles.customSwipeContainer}>
-      <View style={styles.customDeleteArea}>
-        <TouchableOpacity style={styles.customDeleteButton} onPress={handleDelete} activeOpacity={0.7}>
-          <X size={18} color="#EF4444" strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-        <TouchableOpacity
-          style={styles.cardOuter}
-          onPress={handlePress}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardGlassEdge}>
-              <View style={styles.cardTopRow}>
-                <View style={styles.cardTitleBlock}>
-                  <Text style={styles.cardName}>{template.name}</Text>
-                  {template.description ? (
-                    <Text style={styles.focusTag} numberOfLines={1}>{template.description.toUpperCase()}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.cardTopRight}>
-                  <View style={styles.countBadge}>
-                    <Text style={styles.countBadgeText}>{template.exercises.length}</Text>
-                    <Text style={styles.countBadgeLabel}>EX</Text>
-                  </View>
-                  <ChevronRight size={16} color={COLORS.accent} strokeWidth={1.5} />
-                </View>
-              </View>
-              <View style={styles.chipsRow}>
-                {template.exercises.map((ex) => (
-                  <ExerciseChip key={ex.id} name={ex.name} />
-                ))}
-              </View>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
+    <View style={styles.collageRail}>
+      {imageSources.map((source, index) => (
+        <Image
+          key={`${template.id}-collage-grid-${index}`}
+          source={source}
+          style={styles.collageGridImage}
+          resizeMode="cover"
+        />
+      ))}
     </View>
   );
 };
 
-/* ── Main Screen ────────────────────────── */
-
 export const WorkoutTemplatesScreen: React.FC = () => {
   const navigation = useNavigation<WorkoutTemplatesNavigationProp>();
   const insets = useSafeAreaInsets();
-  const { prefs } = useWorkoutPreferences();
-  const { templates: customTemplates, isLoading: templatesLoading, deleteTemplate } = useCustomTemplates();
   const { showAlert } = useAlert();
-  const [showAll, setShowAll] = useState(false);
+  const {
+    templates: customTemplates,
+    isLoading: customTemplatesLoading,
+    deleteTemplate,
+  } = useCustomTemplates();
+  const [activeTab, setActiveTab] = useState<TemplateTab>('discover');
+  const [favouriteIds, setFavouriteIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(16)).current;
 
-  const recommendedIds = RECOMMENDED_BY_FREQUENCY[prefs.weeklyTrainingTarget] ?? RECOMMENDED_BY_FREQUENCY['3-4'];
+  const customTemplateCards = useMemo(
+    () => customTemplates.map(mapCustomTemplate),
+    [customTemplates],
+  );
 
-  const recommended = useMemo(
-    () => WORKOUT_TEMPLATES.filter((t) => recommendedIds.includes(t.id)),
-    [recommendedIds],
+  const discoverTemplates = WORKOUT_TEMPLATES;
+
+  const favouriteTemplates = useMemo(
+    () =>
+      [...discoverTemplates, ...customTemplateCards].filter((template) =>
+        favouriteIds.has(template.id),
+      ),
+    [customTemplateCards, favouriteIds],
   );
-  const remaining = useMemo(
-    () => WORKOUT_TEMPLATES.filter((t) => !recommendedIds.includes(t.id)),
-    [recommendedIds],
-  );
+
+  const visibleTemplates = useMemo(() => {
+    switch (activeTab) {
+      case 'myTemplates':
+        return customTemplateCards;
+      case 'favourites':
+        return favouriteTemplates;
+      case 'discover':
+      default:
+        return discoverTemplates;
+    }
+  }, [activeTab, customTemplateCards, favouriteTemplates]);
+
+  const emptyCopy = useMemo(() => {
+    if (activeTab === 'myTemplates') {
+      return {
+        title: customTemplatesLoading ? 'Loading templates...' : 'No templates yet',
+        body: customTemplatesLoading
+          ? 'Your saved templates will appear here.'
+          : 'Create a template to add it here.',
+      };
+    }
+
+    return {
+      title: 'No favourites yet',
+      body: 'Tap the heart on a template to keep it here.',
+    };
+  }, [activeTab, customTemplatesLoading]);
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 700,
+        duration: 420,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 700,
+        duration: 420,
         useNativeDriver: true,
       }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const handleSelectTemplate = useCallback((template: WorkoutTemplate) => {
-    navigation.navigate('TemplatePreview', {
-      templateName: template.name,
-      description: template.description,
-      exercises: template.exercises.map(ex => ({ name: ex.name, category: ex.category, targetSets: 3 })),
-    });
-  }, [navigation]);
+  useEffect(() => {
+    let mounted = true;
 
-  const handleGoBack = useCallback(() => {
-    navigation.goBack();
-  }, [navigation]);
+    AsyncStorage.getItem(FAVOURITE_TEMPLATES_STORAGE_KEY)
+      .then((value) => {
+        if (!mounted || !value) return;
+        const ids = JSON.parse(value);
+        if (Array.isArray(ids)) {
+          setFavouriteIds(new Set(ids.filter((id) => typeof id === 'string')));
+        }
+      })
+      .catch(() => {
+        // Favourites are non-critical; ignore storage read failures.
+      });
 
-  const handleToggleShowAll = useCallback(() => {
-    setShowAll((prev) => !prev);
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const handleSelectCustomTemplate = useCallback((template: CustomTemplate) => {
-    navigation.navigate('TemplatePreview', {
-      templateName: template.name,
-      description: template.description,
-      exercises: template.exercises.map(ex => ({
-        name: ex.name,
-        category: ex.category,
-        targetSets: ex.targetSets,
-      })),
-    });
-  }, [navigation]);
+  const handleSelectTemplate = useCallback(
+    (template: WorkoutTemplate) => {
+      navigation.navigate('TemplatePreview', templateToRouteParams(template));
+    },
+    [navigation],
+  );
 
-  const handleDeleteCustomTemplate = useCallback(async (id: string) => {
-    await deleteTemplate(id);
-  }, [deleteTemplate]);
+  const handleGoBack = useCallback(() => {
+    navigation.navigate('RecordLanding');
+  }, [navigation]);
 
   const handleCreateTemplate = useCallback(() => {
     navigation.navigate('CreateTemplate');
   }, [navigation]);
 
+  const handleToggleFavourite = useCallback((template: WorkoutTemplate) => {
+    setFavouriteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(template.id)) {
+        next.delete(template.id);
+      } else {
+        next.add(template.id);
+      }
+
+      AsyncStorage.setItem(
+        FAVOURITE_TEMPLATES_STORAGE_KEY,
+        JSON.stringify(Array.from(next)),
+      ).catch(() => {
+        // UI can still update even if persistence fails.
+      });
+
+      return next;
+    });
+  }, []);
+
+  const handleMorePress = useCallback(
+    (template: WorkoutTemplate) => {
+      const custom = customTemplates.find((item) => item.id === template.id);
+      if (!custom) return;
+
+      showAlert(
+        'Delete Template?',
+        `Delete "${template.name}"? This can't be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              deleteTemplate(template.id);
+              setFavouriteIds((prev) => {
+                if (!prev.has(template.id)) return prev;
+                const next = new Set(prev);
+                next.delete(template.id);
+                AsyncStorage.setItem(
+                  FAVOURITE_TEMPLATES_STORAGE_KEY,
+                  JSON.stringify(Array.from(next)),
+                ).catch(() => {});
+                return next;
+              });
+            },
+          },
+        ],
+      );
+    },
+    [customTemplates, deleteTemplate, showAlert],
+  );
+
   return (
-    <View style={styles.container}>
-      {/* ── Header ──────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.7}>
-            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
+    <LinearGradient
+      colors={[...SCREEN_GRADIENT_COLORS]}
+      start={SCREEN_GRADIENT_START}
+      end={SCREEN_GRADIENT_END}
+      style={styles.container}
+    >
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.headerTitleRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleGoBack}
+            activeOpacity={0.72}
+          >
+            <ChevronLeft
+              size={24}
+              color={COLORS.textSecondary}
+              strokeWidth={1.7}
+            />
           </TouchableOpacity>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerTitle}>Templates</Text>
-            <Text style={styles.headerSubtitle}>{WORKOUT_TEMPLATES.length + customTemplates.length} routines</Text>
-          </View>
+          <Text style={styles.headerTitle}>Templates</Text>
         </View>
+        <TouchableOpacity
+          style={styles.newButton}
+          onPress={handleCreateTemplate}
+          activeOpacity={0.75}
+        >
+          <Plus size={17} color={COLORS.accent} strokeWidth={2.3} />
+          <Text style={styles.newButtonText}>New</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.segmentedControl}>
+        <TouchableOpacity
+          style={[
+            styles.segment,
+            activeTab === 'discover' && styles.segmentActive,
+          ]}
+          onPress={() => setActiveTab('discover')}
+          activeOpacity={0.82}
+        >
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'discover' && styles.segmentTextActive,
+            ]}
+          >
+            Discover
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.segment,
+            activeTab === 'myTemplates' && styles.segmentActive,
+          ]}
+          onPress={() => setActiveTab('myTemplates')}
+          activeOpacity={0.82}
+        >
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'myTemplates' && styles.segmentTextActive,
+            ]}
+          >
+            My Templates
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.segment,
+            activeTab === 'favourites' && styles.segmentActive,
+          ]}
+          onPress={() => setActiveTab('favourites')}
+          activeOpacity={0.82}
+        >
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'favourites' && styles.segmentTextActive,
+            ]}
+          >
+            Favourites
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 32 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
-          {/* ── My Templates Section ──────────────── */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Layers size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>MY TEMPLATES</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.seeAllBtn}
-              activeOpacity={0.7}
-              onPress={handleCreateTemplate}
-            >
-              <Plus size={11} color={COLORS.accent} strokeWidth={2} />
-              <Text style={styles.seeAllText}>Create</Text>
-            </TouchableOpacity>
-          </View>
-
-          {customTemplates.length === 0 ? (
-            <TouchableOpacity style={styles.emptyCustomCard} onPress={handleCreateTemplate} activeOpacity={0.7}>
-              <Text style={styles.emptyCustomText}>Create your first custom template</Text>
-              <Text style={styles.emptyCustomLink}>Create</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.templateList}>
-              {customTemplates.map((template) => (
-                <CustomTemplateCard
-                  key={template.id}
-                  template={template}
-                  onPress={handleSelectCustomTemplate}
-                  onDelete={handleDeleteCustomTemplate}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* ── Recommended Section ─────────────── */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <Sparkles size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>RECOMMENDED</Text>
-            </View>
-            <View style={styles.templateCountPill}>
-              <Zap size={10} color={COLORS.accent} strokeWidth={2} />
-              <Text style={styles.templateCountText}>{recommended.length}</Text>
-            </View>
-          </View>
-
-          <View style={styles.templateList}>
-            {recommended.map((template) => (
+        <Animated.View
+          style={[
+            styles.list,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          {visibleTemplates.length > 0 ? (
+            visibleTemplates.map((template) => (
               <TemplateCard
                 key={template.id}
                 template={template}
+                isFavourite={favouriteIds.has(template.id)}
                 onPress={handleSelectTemplate}
+                onFavouritePress={handleToggleFavourite}
+                onMorePress={handleMorePress}
               />
-            ))}
-          </View>
-
-          {/* ── All Routines Section ────────────── */}
-          {remaining.length > 0 && (
-            <>
-              <View style={styles.sectionRow}>
-                <View style={styles.sectionLabelRow}>
-                  <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.sectionLabel}>ALL ROUTINES</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.seeAllBtn}
-                  activeOpacity={0.7}
-                  onPress={handleToggleShowAll}
-                >
-                  <Text style={styles.seeAllText}>{showAll ? 'Hide' : 'See All'}</Text>
-                  <ChevronRight
-                    size={11}
-                    color={COLORS.accent}
-                    strokeWidth={2}
-                    style={showAll ? { transform: [{ rotate: '90deg' }] } : undefined}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {showAll && (
-                <View style={styles.templateList}>
-                  {remaining.map((template) => (
-                    <TemplateCard
-                      key={template.id}
-                      template={template}
-                      onPress={handleSelectTemplate}
-                    />
-                  ))}
-                </View>
-              )}
-            </>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>{emptyCopy.title}</Text>
+              <Text style={styles.emptyText}>{emptyCopy.body}</Text>
+            </View>
           )}
-
         </Animated.View>
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 };
-
-/* ── Styles ──────────────────────────────── */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-
-  /* ── Header ─────────────────────────────── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.13)',
+    paddingBottom: 14,
   },
-  headerLeft: {
+  headerTitleRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 4,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 34,
+    height: 34,
+    marginLeft: -9,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTextWrap: {
-    gap: 1,
-  },
   headerTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontSize: 24,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: 0,
   },
-  headerSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+  newButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 32,
+    paddingLeft: 8,
+  },
+  newButtonText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.accent,
+    letterSpacing: 0,
+  },
+  segmentedControl: {
+    height: 39,
+    flexDirection: 'row',
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 14,
+    padding: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(26, 32, 37, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 7,
+  },
+  segmentActive: {
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  segmentText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 13,
     color: COLORS.textTertiary,
-    letterSpacing: 0.3,
+    letterSpacing: 0,
   },
-
-  /* ── Scroll ─────────────────────────────── */
+  segmentTextActive: {
+    color: COLORS.text,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 160,
   },
-
-  /* ── Section Header ──────────────────────── */
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+  list: {
+    gap: 12,
   },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
-    color: COLORS.text,
-    letterSpacing: 2,
-  },
-  templateCountPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  card: {
+    minHeight: 154,
     borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-  },
-  templateCountText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    color: COLORS.accent,
-    letterSpacing: -0.3,
-  },
-  seeAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  seeAllText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 12,
-    color: COLORS.accent,
-  },
-
-  /* ── Template List ───────────────────────── */
-  templateList: {
-    gap: 10,
-  },
-
-  /* ── Card ─────────────────────────────── */
-  cardOuter: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: { elevation: 4 },
-    }),
-  },
-  cardGradient: {
-    borderRadius: 18,
-  },
-  cardGlassEdge: {
-    borderRadius: 18,
+    backgroundColor: 'rgba(31, 39, 45, 0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 16,
-    gap: 10,
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
-
-  /* ── Card Top Row ─────────────────────── */
-  cardTopRow: {
+  cardMainRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    padding: 10,
+    gap: 12,
   },
-  cardTitleBlock: {
-    flex: 1,
-    gap: 4,
-    marginRight: 12,
-  },
-  cardName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
-    color: COLORS.text,
-    letterSpacing: -0.3,
-  },
-  focusTag: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 10,
-    color: COLORS.accent,
-    letterSpacing: 1.5,
-  },
-  cardTopRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  countBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
-    flexDirection: 'row',
-    gap: 3,
-  },
-  countBadgeText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 13,
-    color: COLORS.accent,
-    lineHeight: 16,
-  },
-  countBadgeLabel: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 9,
-    color: COLORS.accent,
-    letterSpacing: 1,
-    lineHeight: 16,
-  },
-
-  /* ── Description ─────────────────────── */
-  cardDescription: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.1,
-    lineHeight: 18,
-  },
-
-  /* ── Exercise Chips ─────────────────── */
-  chipsRow: {
+  collageRail: {
+    width: 132,
+    height: 132,
+    borderRadius: 7,
+    overflow: 'hidden',
+    backgroundColor: COLORS.cardBackgroundLight,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 2,
+    gap: 2,
   },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+  collageGridImage: {
+    width: 65,
+    height: 65,
   },
-  chipText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.2,
+  cardCopy: {
+    flex: 1,
+    minHeight: 132,
+    justifyContent: 'flex-start',
   },
-
-  /* ── Custom Template Swipe-to-Delete ────── */
-  customSwipeContainer: {
-    overflow: 'hidden',
-    borderRadius: 18,
-  },
-  customDeleteArea: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingRight: 12,
-  },
-  customDeleteButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.22)',
+  cardTitleRow: {
+    minHeight: 28,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-
-  /* ── Empty Custom Templates ────────────── */
-  emptyCustomCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderStyle: 'dashed',
-    paddingVertical: 20,
-    alignItems: 'center',
-    gap: 6,
-  },
-  emptyCustomText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    color: COLORS.textTertiary,
-  },
-  emptyCustomLink: {
+  cardTitle: {
+    flex: 1,
     fontFamily: FONTS.display.semibold,
+    fontSize: 16,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  iconButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardMeta: {
+    marginTop: 2,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    letterSpacing: 0,
+  },
+  cardSubmeta: {
+    marginTop: 7,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
+  },
+  cardFooterRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    gap: 10,
+  },
+  chooseButton: {
+    minWidth: 88,
+    height: 42,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  chooseButtonText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  emptyState: {
+    minHeight: 164,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(31, 39, 45, 0.36)',
+    paddingHorizontal: 18,
+  },
+  emptyTitle: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 16,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  emptyText: {
+    marginTop: 7,
+    textAlign: 'center',
+    fontFamily: FONTS.ui.regular,
     fontSize: 13,
-    color: COLORS.accent,
+    lineHeight: 18,
+    color: COLORS.textTertiary,
+    letterSpacing: 0,
   },
 });

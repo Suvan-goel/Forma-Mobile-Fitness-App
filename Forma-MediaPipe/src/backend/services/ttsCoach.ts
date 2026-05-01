@@ -66,7 +66,7 @@ let state: CoachState = { ...DEFAULT_STATE };
  */
 export async function onRepCompleted(
   feedbackMessages: string[],
-  score: number
+  _score: number
 ): Promise<void> {
   if (!isElevenLabsAvailable()) return;
 

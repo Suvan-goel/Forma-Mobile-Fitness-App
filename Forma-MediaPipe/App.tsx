@@ -21,6 +21,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { COLORS } from './src/frontend/constants/theme';
 import { RootNavigator } from './src/frontend/app/RootNavigator';
+import { ScreenBackground } from './src/frontend/components/ui/ScreenBackground';
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -40,7 +41,7 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.accent} />
-            <StatusBar style="light" />
+            <StatusBar style="light" translucent backgroundColor="transparent" />
           </View>
         </GestureHandlerRootView>
       </SafeAreaProvider>
@@ -55,10 +56,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <NavigationContainer>
-          <RootNavigator />
-          <StatusBar style="light" />
-        </NavigationContainer>
+        <ScreenBackground>
+          <NavigationContainer>
+            <RootNavigator />
+            <StatusBar style="light" translucent backgroundColor="transparent" />
+          </NavigationContainer>
+        </ScreenBackground>
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

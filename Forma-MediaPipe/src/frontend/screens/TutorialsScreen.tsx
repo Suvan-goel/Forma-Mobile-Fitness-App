@@ -22,7 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Bookmark, Search, X } from 'lucide-react-native';
+import { Bookmark, Search, X } from 'lucide-react-native';
 import {
   COLORS,
   SPACING,
@@ -30,9 +30,13 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_SHADOW
 } from '../constants/theme';
-import { useExercises, useFavouriteExercises } from '../../backend/hooks';
-import { LoadingSkeleton } from '../components/ui';
+import { useExercises } from '../../backend/hooks/useExercises';
+import { useFavouriteExercises } from '../../backend/hooks/useFavouriteExercises';
+import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { Exercise } from '../../backend/services/api';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { ExerciseRegistry } from '../../utils/exercises';
@@ -131,8 +135,8 @@ const TutorialCard = memo(({ exercise, muscleLabel, cardWidth, cardHeight, onPre
           >
             <Bookmark
               size={16}
-              color={isFavourited ? '#8B5CF6' : COLORS.textTertiary}
-              fill={isFavourited ? '#8B5CF6' : 'transparent'}
+              color={isFavourited ? '#7A55FF' : COLORS.textTertiary}
+              fill={isFavourited ? '#7A55FF' : 'transparent'}
               strokeWidth={1.5}
             />
           </TouchableOpacity>
@@ -252,16 +256,16 @@ export const TutorialsScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-            <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>TUTORIALS</Text>
-          <TouchableOpacity style={styles.headerIconBtn}>
-            <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+        <SettingsHeader
+          title="TUTORIALS"
+          onBack={handleGoBack}
+          rightSlot={(
+            <TouchableOpacity style={styles.headerIconBtn}>
+              <Search size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+            </TouchableOpacity>
+          )}
+        />
         <View style={styles.loadingWrap}>
           <View style={styles.pillSkeletons}>
             {[1, 2, 3, 4, 5].map(i => (
@@ -275,25 +279,24 @@ export const TutorialsScreen: React.FC = () => {
             <LoadingSkeleton variant="card" height={200} width={cardWidth} />
           </View>
         </View>
-      </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* ── Header ──────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-          <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>TUTORIALS</Text>
-        <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleSearch}>
-          {showSearch
-            ? <X size={20} color="#FFFFFF" strokeWidth={1.5} />
-            : <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
-          }
-        </TouchableOpacity>
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader
+        title="TUTORIALS"
+        onBack={handleGoBack}
+        rightSlot={(
+          <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleSearch}>
+            {showSearch
+              ? <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+              : <Search size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+            }
+          </TouchableOpacity>
+        )}
+      />
 
       {/* ── Subtitle ────────────────────────────── */}
       {!showSearch && (
@@ -369,7 +372,7 @@ export const TutorialsScreen: React.FC = () => {
           </View>
         }
       />
-    </View>
+    </ScreenBackground>
   );
 };
 
@@ -378,38 +381,13 @@ export const TutorialsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
 
   /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 10,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
-    color: '#FFFFFF',
-    letterSpacing: 2,
-  },
   headerIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#27272A',
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -504,10 +482,9 @@ const styles = StyleSheet.create({
   /* Card */
   cardOuter: {
     borderRadius: 19,
-    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#7A55FF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.25,
         shadowRadius: 15,
@@ -516,14 +493,19 @@ const styles = StyleSheet.create({
     }),
   },
   cardGradient: {
+    backgroundColor: COLORS.cardBackground,
     flex: 1,
     borderRadius: 19,
-  },
+
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+},
   cardGlassEdge: {
     flex: 1,
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 8,
   },
   cardHeader: {
