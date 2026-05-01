@@ -1441,6 +1441,17 @@ export const barbellCurlDefinition: ExerciseDefinition = {
       "Keep your elbows in — don't flare them out to the sides.": 'elbow_flare',
       "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
     },
+    issueDefinitions: [
+      {
+        issueType: 'elbow_flare',
+        priority: 18,
+        messages: [
+          'Keep your elbows tucked.',
+          'Elbows in — keep the curl strict.',
+          "Don't let your elbows flare.",
+        ],
+      },
+    ],
   },
 
   summaryConfig: {

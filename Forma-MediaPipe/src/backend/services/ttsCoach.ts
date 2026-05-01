@@ -52,6 +52,33 @@ const DEFAULT_STATE: CoachState = {
 
 let state: CoachState = { ...DEFAULT_STATE };
 
+function getTopIssue(feedbackMessages: string[]): string | null {
+  const issues = feedbackMessages
+    .map((msg) => FEEDBACK_TO_ISSUE[msg])
+    .filter((issue): issue is string => issue !== undefined);
+
+  if (issues.length === 0) return null;
+
+  const sorted = [...issues].sort(
+    (a, b) => (ISSUE_PRIORITY[b] ?? 0) - (ISSUE_PRIORITY[a] ?? 0)
+  );
+  return sorted[0];
+}
+
+async function speakIssue(issue: string): Promise<void> {
+  const pool = ISSUE_POOLS[issue];
+  if (pool) {
+    state.lastSpokenIssue = issue;
+    await trySpeak(pickFromPool(pool));
+  }
+}
+
+function markBadFeedback(): void {
+  state.prevRepWasBad = true;
+  state.cleanStreak = 0;
+  state.praiseInterval = 2;
+}
+
 // ============================================================================
 // CORE API
 // ============================================================================
@@ -72,28 +99,12 @@ export async function onRepCompleted(
 
   state.totalRepsInSet++;
 
-  // Map visual feedback strings to issue types
-  const issues = feedbackMessages
-    .map((msg) => FEEDBACK_TO_ISSUE[msg])
-    .filter((issue): issue is string => issue !== undefined);
+  const topIssue = getTopIssue(feedbackMessages);
 
-  if (issues.length > 0) {
+  if (topIssue) {
     // ── Bad rep ──
-    // Pick the highest-priority issue
-    const sorted = [...issues].sort(
-      (a, b) => (ISSUE_PRIORITY[b] ?? 0) - (ISSUE_PRIORITY[a] ?? 0)
-    );
-    const topIssue = sorted[0];
-
-    state.prevRepWasBad = true;
-    state.cleanStreak = 0;
-    state.praiseInterval = 2; // Reset adaptive interval
-
-    const pool = ISSUE_POOLS[topIssue];
-    if (pool) {
-      state.lastSpokenIssue = topIssue;
-      await trySpeak(pickFromPool(pool));
-    }
+    markBadFeedback();
+    await speakIssue(topIssue);
   } else {
     // ── Clean rep ──
     state.cleanStreak++;
@@ -118,6 +129,21 @@ export async function onRepCompleted(
     }
     // Otherwise: stay quiet — let the user work
   }
+}
+
+/**
+ * Call when a form issue is detected outside a completed rep, such as a
+ * no-count partial rep. This speaks the highest-priority issue without
+ * incrementing the set's completed-rep counter or triggering clean-rep praise.
+ */
+export async function onFormFeedback(feedbackMessages: string[]): Promise<void> {
+  if (!isElevenLabsAvailable()) return;
+
+  const topIssue = getTopIssue(feedbackMessages);
+  if (!topIssue) return;
+
+  markBadFeedback();
+  await speakIssue(topIssue);
 }
 
 /**

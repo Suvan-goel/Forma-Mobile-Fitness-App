@@ -22,7 +22,7 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
-import { onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
+import { onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
@@ -257,6 +257,7 @@ export const CameraScreen: React.FC = () => {
   const currentExerciseRef = useRef(currentExercise);
   const lastDetectionTimeRef = useRef(0);
   const lastUIUpdateTimeRef = useRef(0);
+  const lastTTSFeedbackTimestampRef = useRef<number | null>(null);
   const pendingUIStateRef = useRef<{
     repCount?: number;
     formScore?: number;
@@ -317,6 +318,7 @@ export const CameraScreen: React.FC = () => {
     setExerciseDebug(null);
     angleBufferRef.current = {};
     setVarianceStats(null);
+    lastTTSFeedbackTimestampRef.current = null;
     const def = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (def) {
       exerciseStateRef.current = def.createState();
@@ -485,7 +487,10 @@ export const CameraScreen: React.FC = () => {
       pending.feedback = newState.feedback;
       pending.exerciseDebug = newState.debugInfo;
 
-      if (newState.repCount > accumulatedFormScoresRef.current.length) {
+      const completedNewTrackedRep = newState.repCount > accumulatedFormScoresRef.current.length;
+      const feedbackTimestamp = newState.feedbackTimestamp;
+
+      if (completedNewTrackedRep) {
         pending.workoutUpdate = {
           totalReps: newState.repCount,
           formScore: repScore,
@@ -500,6 +505,15 @@ export const CameraScreen: React.FC = () => {
           const repMessages = newState.lastRepResult?.messages ?? [];
           ttsOnRepCompleted(repMessages, repScore).catch(() => {});
         }
+        lastTTSFeedbackTimestampRef.current = feedbackTimestamp ?? lastTTSFeedbackTimestampRef.current;
+      } else if (
+        isTTSEnabledRef.current &&
+        newState.feedback &&
+        feedbackTimestamp !== null &&
+        feedbackTimestamp !== lastTTSFeedbackTimestampRef.current
+      ) {
+        lastTTSFeedbackTimestampRef.current = feedbackTimestamp;
+        ttsOnFormFeedback([newState.feedback]).catch(() => {});
       }
       pendingUIStateRef.current = pending;
 
@@ -745,6 +759,7 @@ export const CameraScreen: React.FC = () => {
       if (exerciseDef) {
         exerciseStateRef.current = exerciseDef.createState();
       }
+      lastTTSFeedbackTimestampRef.current = null;
       setWorkoutData({
         totalReps: 0,
         formScores: [],

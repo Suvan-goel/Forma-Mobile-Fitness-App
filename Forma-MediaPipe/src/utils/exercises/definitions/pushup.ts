@@ -1003,6 +1003,7 @@ export const pushupDefinition: ExerciseDefinition = {
 
   ttsConfig: {
     feedbackToIssue: {
+      'Go deeper \u2014 try to hit 90 degrees.': 'depth_short',
       'Go deeper \u2014 aim for elbows at 90 degrees.': 'depth_short',
       'Lock out your arms fully at the top.': 'lockout_short',
       'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': 'incomplete_rom',
@@ -1016,6 +1017,7 @@ export const pushupDefinition: ExerciseDefinition = {
   },
 
   summaryConfig: {
+    'Go deeper \u2014 try to hit 90 degrees.': 'Focus on reaching full push-up depth before returning to plank.',
     'Go deeper \u2014 aim for elbows at 90 degrees.': 'Focus on hitting full depth each rep.',
     'Lock out your arms fully at the top.': 'Fully extend at the top of each rep for complete range of motion.',
     'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': 'Achieve complete range of motion in both directions.',
