@@ -55,11 +55,14 @@ const FMT_NEW = '#  define FMT_CONSTEVAL /* consteval — patched out by scripts
 const PODFILE_PATCH = `
     # ${FMT_MARKER} fmt 11.x ships consteval that breaks under Xcode 15.3+.
     # base.h hardcodes the define, so build flags don't help — patch the header.
+    # CocoaPods marks Pod source files read-only after install, so we must
+    # chmod 0644 before File.write or the patch silently fails with EACCES.
     fmt_base = File.expand_path('${FMT_BASE_REL}', __dir__)
     if File.exist?(fmt_base)
       contents = File.read(fmt_base)
       patched = contents.gsub('${FMT_OLD}', '${FMT_NEW}')
       if patched != contents
+        File.chmod(0644, fmt_base)
         File.write(fmt_base, patched)
         Pod::UI.puts "[forma] Patched fmt/base.h to disable consteval"
       end
@@ -85,11 +88,14 @@ if (!fs.existsSync(podfilePath)) {
   }
 }
 
-// (b) Patch the currently-checked-out base.h directly (if Pods/ exists)
+// (b) Patch the currently-checked-out base.h directly (if Pods/ exists).
+// CocoaPods marks Pod source files read-only after install, so chmod 0644
+// before writing or the write fails with EACCES.
 const fmtBasePath = path.join(iosDir, FMT_BASE_REL);
 if (fs.existsSync(fmtBasePath)) {
   const original = fs.readFileSync(fmtBasePath, 'utf8');
   if (original.includes(FMT_OLD)) {
+    fs.chmodSync(fmtBasePath, 0o644);
     fs.writeFileSync(fmtBasePath, original.replace(FMT_OLD, FMT_NEW));
     console.log('[fix-ios-jsc] Patched Pods/fmt/include/fmt/base.h directly.');
   } else if (original.includes(FMT_NEW)) {

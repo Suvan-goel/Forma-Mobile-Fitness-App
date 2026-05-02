@@ -19,7 +19,8 @@ import type { Keypoint } from '../../utils/poseAnalysis';
 import '../../utils/exercises/definitions/register';
 import { ExerciseRegistry } from '../../utils/exercises';
 import type { ExerciseState } from '../../utils/exercises';
-import { createMediaPipeAdapter } from '../../skeleton';
+import { CANONICAL_JOINTS, createMediaPipeAdapter, createVisionAdapter } from '../../skeleton';
+import type { SkeletonFrame, VisionBridgePayload } from '../../skeleton';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -147,7 +148,7 @@ export const CameraScreen: React.FC = () => {
     beginRecordingFinalization,
     endRecordingFinalization,
   } = useCurrentWorkout();
-  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording, poseModel } = useCameraSettings();
+  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording, poseModel, poseDualEmit } = useCameraSettings();
   const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -195,6 +196,9 @@ export const CameraScreen: React.FC = () => {
   // Unified exercise state ref — populated via ExerciseRegistry on mount and recording start
   const exerciseStateRef = useRef<ExerciseState | null>(null);
   const mediaPipeAdapterRef = useRef(createMediaPipeAdapter());
+  const visionAdapterRef = useRef(createVisionAdapter());
+  const latestMediaPipeFrameRef = useRef<SkeletonFrame | null>(null);
+  const lastVisionTelemetryLogRef = useRef(0);
 
   // Screen recording pulse animation + attempt tracking
   const screenRecPulseAnim = useRef(new Animated.Value(1)).current;
@@ -502,6 +506,7 @@ export const CameraScreen: React.FC = () => {
     const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (exerciseDef && exerciseStateRef.current) {
       const skeletonFrame = mediaPipeAdapterRef.current.update(keypoints, now);
+      latestMediaPipeFrameRef.current = skeletonFrame;
       const newState = exerciseDef.update(keypoints, exerciseStateRef.current, skeletonFrame);
       exerciseStateRef.current = newState;
 
@@ -620,6 +625,40 @@ export const CameraScreen: React.FC = () => {
       }
     }
   }, [convertLandmarksToKeypoints, exerciseNameFromRoute, flushPendingUI]);
+
+  const handleVisionFrame = useCallback((payload: VisionBridgePayload) => {
+    if (!poseDualEmit || Platform.OS !== 'ios') return;
+
+    const visionFrame = visionAdapterRef.current.update(payload);
+    const mediaPipeFrame = latestMediaPipeFrameRef.current;
+    if (!mediaPipeFrame) return;
+
+    const now = Date.now();
+    if (now - lastVisionTelemetryLogRef.current < 1000) return;
+    lastVisionTelemetryLogRef.current = now;
+
+    let sum = 0;
+    let count = 0;
+    for (const joint of CANONICAL_JOINTS) {
+      const mediaPipeJoint = mediaPipeFrame.joints[joint];
+      const visionJoint = visionFrame.joints[joint];
+      if (mediaPipeJoint.confidence <= 0 || visionJoint.confidence <= 0) continue;
+      const dx = mediaPipeJoint.x - visionJoint.x;
+      const dy = mediaPipeJoint.y - visionJoint.y;
+      const dz = mediaPipeJoint.z - visionJoint.z;
+      sum += Math.sqrt(dx * dx + dy * dy + dz * dz);
+      count += 1;
+    }
+
+    if (__DEV__) {
+      console.log('[VisionDualEmit]', {
+        sourceQuality: visionFrame.sourceQuality,
+        timestamp: visionFrame.timestamp,
+        comparedJoints: count,
+        meanJointAgreementMeters: count > 0 ? sum / count : null,
+      });
+    }
+  }, [poseDualEmit]);
 
   // Memoize button handlers to prevent recreating on every render
   const workoutDataRef = useRef(workoutData);
@@ -930,7 +969,8 @@ export const CameraScreen: React.FC = () => {
     frameLimit: 30,
     showSkeleton: effectiveShowSkeleton,
     modelName: poseModel,
-  }), [effectiveShowSkeleton, poseModel]);
+    enableVisionDualEmit: Platform.OS === 'ios' && poseDualEmit,
+  }), [effectiveShowSkeleton, poseModel, poseDualEmit]);
 
   // Memoize display values to avoid recalculation (timer handled by CameraDurationDisplay)
   const displayValues = useMemo(() => {
@@ -1043,6 +1083,7 @@ export const CameraScreen: React.FC = () => {
                   style={{ width: cameraDisplayWidth, height: cameraDisplayHeight }}
                   {...poseDetectionProps}
                   onLandmark={handleLandmark}
+                  onVisionFrame={handleVisionFrame}
                 />
               )}
             </View>

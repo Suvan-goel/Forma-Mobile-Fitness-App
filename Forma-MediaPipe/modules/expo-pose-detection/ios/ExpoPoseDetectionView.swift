@@ -6,6 +6,7 @@ import UIKit
 class ExpoPoseDetectionView: ExpoView {
   // MARK: - Event dispatcher
   let onLandmark = EventDispatcher()
+  let onVisionFrame = EventDispatcher()
 
   // MARK: - Subviews
   private var previewView: UIView?
@@ -21,6 +22,8 @@ class ExpoPoseDetectionView: ExpoView {
 
   // MARK: - Pose detection
   private var poseLandmarkerService: PoseLandmarkerService?
+  @available(iOS 17.0, *)
+  private var visionPoseService: VisionPoseService?
   private let landmarkerQueue = DispatchQueue(
     label: "expo.posedetection.landmarker",
     attributes: .concurrent
@@ -29,6 +32,8 @@ class ExpoPoseDetectionView: ExpoView {
   // MARK: - Configuration
   private var frameLimit: Int = 30
   private var showSkeleton: Bool = false
+  private var enableVisionDualEmit: Bool = false
+  private var visionDualEmitStartedAtMs: Double?
   private var modelName: String = "pose_landmarker_heavy"
   private var isSessionRunning = false
   private let lifecycleLock = NSLock()
@@ -112,6 +117,28 @@ class ExpoPoseDetectionView: ExpoView {
       guard validName != self.modelName else { return }
       self.modelName = validName
       self.reinitializePoseLandmarker()
+    }
+  }
+
+  func configureVisionDualEmit(_ enabled: Bool) {
+    guard !isDisposed() else { return }
+    processingQueue.async { [weak self] in
+      guard let self = self, !self.isDisposed() else { return }
+      let nextValue = enabled
+      guard self.enableVisionDualEmit != nextValue else { return }
+      self.enableVisionDualEmit = nextValue
+      self.visionDualEmitStartedAtMs = nextValue ? ProcessInfo.processInfo.systemUptime * 1000 : nil
+
+      if #available(iOS 17.0, *) {
+        if nextValue {
+          if self.visionPoseService == nil {
+            self.visionPoseService = VisionPoseService(delegate: self)
+          }
+        } else {
+          self.visionPoseService?.close()
+          self.visionPoseService = nil
+        }
+      }
     }
   }
 
@@ -298,6 +325,12 @@ class ExpoPoseDetectionView: ExpoView {
       guard let self = self else { return }
       self.poseLandmarkerService?.clearPoseLandmarker()
       self.poseLandmarkerService = nil
+      if #available(iOS 17.0, *) {
+        self.visionPoseService?.close()
+        self.visionPoseService = nil
+      }
+      self.enableVisionDualEmit = false
+      self.visionDualEmitStartedAtMs = nil
       self.lastProcessedFrameTimeMs = 0
       self.lastPoseTimestampMs = 0
     }
@@ -411,6 +444,31 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
       orientation: .up,
       timeStamps: timestamp
     )
+
+    if shouldRunVisionDualEmit(now) {
+      if #available(iOS 17.0, *) {
+        visionPoseService?.detect(
+          sampleBuffer: sampleBuffer,
+          orientation: .up,
+          timestampMs: timestamp
+        )
+      }
+    }
+  }
+
+  private func shouldRunVisionDualEmit(_ nowMs: Double) -> Bool {
+    guard enableVisionDualEmit else { return false }
+    guard let startedAt = visionDualEmitStartedAtMs else { return false }
+    if nowMs - startedAt > 5 * 60 * 1000 {
+      enableVisionDualEmit = false
+      visionDualEmitStartedAtMs = nil
+      if #available(iOS 17.0, *) {
+        visionPoseService?.close()
+        visionPoseService = nil
+      }
+      return false
+    }
+    return true
   }
 
   private func nextPoseTimestampMs(_ now: Double) -> Int {
@@ -489,6 +547,23 @@ extension ExpoPoseDetectionView: PoseLandmarkerServiceDelegate {
           imageContentMode: .scaleAspectFill
         )
       }
+    }
+  }
+}
+
+// MARK: - VisionPoseServiceDelegate
+
+@available(iOS 17.0, *)
+extension ExpoPoseDetectionView: VisionPoseServiceDelegate {
+  func visionPoseService(
+    _ service: VisionPoseService,
+    didEmitFrame payload: [String: Any],
+    timestampMs: Int
+  ) {
+    guard !isDisposed(), enableVisionDualEmit else { return }
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self, !self.isDisposed(), self.enableVisionDualEmit else { return }
+      self.onVisionFrame(payload)
     }
   }
 }

@@ -6,7 +6,16 @@ const NativePoseDetectionView: React.ComponentType<any> =
   requireNativeViewManager('ExpoPoseDetection');
 
 export function PoseDetectionView(props: PoseDetectionViewProps) {
-  const { style, frameLimit = 20, showSkeleton = false, modelName = 'pose_landmarker_heavy', onLandmark, ...rest } = props;
+  const {
+    style,
+    frameLimit = 20,
+    showSkeleton = false,
+    modelName = 'pose_landmarker_heavy',
+    onLandmark,
+    onVisionFrame,
+    enableVisionDualEmit = false,
+    ...rest
+  } = props;
 
   const handleLandmark = useCallback(
     (event: any) => {
@@ -23,6 +32,16 @@ export function PoseDetectionView(props: PoseDetectionViewProps) {
     [onLandmark]
   );
 
+  const handleVisionFrame = useCallback(
+    (event: any) => {
+      if (onVisionFrame) {
+        const data = event?.nativeEvent ?? event;
+        onVisionFrame(data);
+      }
+    },
+    [onVisionFrame]
+  );
+
   return (
     <NativePoseDetectionView
       style={style}
@@ -30,6 +49,8 @@ export function PoseDetectionView(props: PoseDetectionViewProps) {
       showSkeleton={showSkeleton}
       modelName={modelName}
       onLandmark={handleLandmark}
+      enableVisionDualEmit={enableVisionDualEmit}
+      onVisionFrame={handleVisionFrame}
       {...rest}
     />
   );

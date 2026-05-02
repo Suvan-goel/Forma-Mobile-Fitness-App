@@ -219,6 +219,7 @@ export const CameraSettingsScreen: React.FC = () => {
     selectedTrainerId,
     autoScreenRecording,
     poseModel,
+    poseDualEmit,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
@@ -227,6 +228,7 @@ export const CameraSettingsScreen: React.FC = () => {
     setRestTimerDurationSeconds,
     setAutoScreenRecording,
     setPoseModel,
+    setPoseDualEmit,
   } = useCameraSettings();
 
   const [infoModal, setInfoModal] = useState<string | null>(null);
@@ -259,6 +261,10 @@ export const CameraSettingsScreen: React.FC = () => {
     'Heavy Model': {
       title: 'Heavy Model',
       description: 'Uses the heavy (29 MB) pose detection model instead of the default full (9 MB) model. The heavy model may provide more accurate landmark detection but uses more memory and may run slower on older devices.\n\nRequires a brief re-initialization when toggled.',
+    },
+    'Vision Dual Emit': {
+      title: 'Vision Dual Emit',
+      description: 'Runs Apple Vision 3D in parallel with MediaPipe on supported iOS devices and logs sampled joint agreement for development validation. MediaPipe still drives rep counting and feedback.',
     },
   };
 
@@ -573,6 +579,23 @@ export const CameraSettingsScreen: React.FC = () => {
                       onValueChange={(val) => setPoseModel(val ? 'pose_landmarker_heavy' : 'pose_landmarker_full')}
                       trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(96, 165, 250, 0.4)' }}
                       thumbColor={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : 'rgba(255, 255, 255, 0.3)'}
+                    />
+                  </View>
+                  <View style={styles.rowDivider} />
+                  <View style={styles.groupRow}>
+                    <IconBubble icon={SlidersHorizontal} color={poseDualEmit ? '#A78BFA' : COLORS.textSecondary} />
+                    <View style={styles.rowLabelCol}>
+                      <Text style={[styles.rowLabel, poseDualEmit && { color: '#A78BFA' }]}>Vision Dual Emit</Text>
+                      <Text style={styles.rowSubLabel}>iOS 17+ dark comparison path</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setInfoModal('Vision Dual Emit')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    </TouchableOpacity>
+                    <Switch
+                      value={poseDualEmit}
+                      onValueChange={setPoseDualEmit}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(167, 139, 250, 0.4)' }}
+                      thumbColor={poseDualEmit ? '#A78BFA' : 'rgba(255, 255, 255, 0.3)'}
                     />
                   </View>
                 </View>

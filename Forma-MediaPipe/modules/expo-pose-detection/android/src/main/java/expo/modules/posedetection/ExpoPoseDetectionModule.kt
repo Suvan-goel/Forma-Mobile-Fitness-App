@@ -12,7 +12,7 @@ class ExpoPoseDetectionModule : Module() {
     }
 
     View(ExpoPoseDetectionView::class) {
-      Events("onLandmark")
+      Events("onLandmark", "onVisionFrame")
 
       Prop("frameLimit") { view: ExpoPoseDetectionView, limit: Int ->
         view.configureFrameLimit(limit)
@@ -24,6 +24,10 @@ class ExpoPoseDetectionModule : Module() {
 
       Prop("modelName") { view: ExpoPoseDetectionView, name: String ->
         view.configureModelName(name)
+      }
+
+      Prop("enableVisionDualEmit") { view: ExpoPoseDetectionView, enabled: Boolean ->
+        view.configureVisionDualEmit(enabled)
       }
     }
   }

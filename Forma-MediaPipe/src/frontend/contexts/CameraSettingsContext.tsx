@@ -14,6 +14,7 @@ export type CameraSettings = {
   selectedTrainerId: string;
   autoScreenRecording: boolean;
   poseModel: PoseModelName;
+  poseDualEmit: boolean;
 };
 
 type CameraSettingsContextValue = CameraSettings & {
@@ -26,6 +27,7 @@ type CameraSettingsContextValue = CameraSettings & {
   setSelectedTrainerId: (id: string) => void;
   setAutoScreenRecording: (value: boolean) => void;
   setPoseModel: (model: PoseModelName) => void;
+  setPoseDualEmit: (value: boolean) => void;
 };
 
 const defaultSettings: CameraSettings = {
@@ -38,6 +40,7 @@ const defaultSettings: CameraSettings = {
   selectedTrainerId: 'marcus',
   autoScreenRecording: false,
   poseModel: 'pose_landmarker_heavy',
+  poseDualEmit: false,
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
@@ -52,6 +55,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const [selectedTrainerId, setSelectedTrainerIdRaw] = useState(defaultSettings.selectedTrainerId);
   const [autoScreenRecording, setAutoScreenRecordingRaw] = useState(defaultSettings.autoScreenRecording);
   const [poseModel, setPoseModelRaw] = useState<PoseModelName>(defaultSettings.poseModel);
+  const [poseDualEmit, setPoseDualEmitRaw] = useState(defaultSettings.poseDualEmit);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -67,6 +71,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
         if (typeof saved.autoScreenRecording === 'boolean') setAutoScreenRecordingRaw(saved.autoScreenRecording);
         if (DEV_FEATURES_ENABLED && (saved.poseModel === 'pose_landmarker_full' || saved.poseModel === 'pose_landmarker_heavy')) setPoseModelRaw(saved.poseModel);
+        if (DEV_FEATURES_ENABLED && typeof saved.poseDualEmit === 'boolean') setPoseDualEmitRaw(saved.poseDualEmit);
       } catch { /* ignore corrupt data */ }
     });
   }, []);
@@ -118,6 +123,11 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     persistSetting('poseModel', model);
   }, [persistSetting]);
 
+  const setPoseDualEmit = useCallback((value: boolean) => {
+    setPoseDualEmitRaw(value);
+    persistSetting('poseDualEmit', value);
+  }, [persistSetting]);
+
   const contextValue = useMemo<CameraSettingsContextValue>(() => ({
     showFeedback,
     isTTSEnabled,
@@ -128,6 +138,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     selectedTrainerId,
     autoScreenRecording,
     poseModel: DEV_FEATURES_ENABLED ? poseModel : 'pose_landmarker_heavy',
+    poseDualEmit: DEV_FEATURES_ENABLED ? poseDualEmit : false,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
@@ -137,11 +148,12 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     setSelectedTrainerId,
     setAutoScreenRecording,
     setPoseModel,
+    setPoseDualEmit,
   }), [
     showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode,
-    restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording, poseModel,
+    restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording, poseModel, poseDualEmit,
     setShowFeedback, setIsTTSEnabled, setShowSkeletonOverlay, setDebugMode,
-    setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording, setPoseModel,
+    setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording, setPoseModel, setPoseDualEmit,
   ]);
 
   return (

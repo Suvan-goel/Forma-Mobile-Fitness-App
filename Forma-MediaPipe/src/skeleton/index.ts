@@ -24,3 +24,12 @@ export {
 export type {
   MediaPipeAdapter,
 } from './adapters/MediaPipeAdapter';
+export {
+  createVisionAdapter,
+} from './adapters/VisionAdapter';
+export type {
+  VisionAdapter,
+  VisionBridgeJoint2D,
+  VisionBridgeJoint3D,
+  VisionBridgePayload,
+} from './adapters/VisionAdapter';

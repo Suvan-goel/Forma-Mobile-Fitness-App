@@ -25,4 +25,6 @@ export interface PoseDetectionViewProps {
   showSkeleton?: boolean;
   modelName?: PoseModelName;
   onLandmark?: (data: any) => void;
+  enableVisionDualEmit?: boolean;
+  onVisionFrame?: (data: any) => void;
 }

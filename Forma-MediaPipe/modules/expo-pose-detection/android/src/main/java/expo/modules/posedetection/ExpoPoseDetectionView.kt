@@ -140,6 +140,10 @@ class ExpoPoseDetectionView(
     }
   }
 
+  fun configureVisionDualEmit(enabled: Boolean) {
+    // Vision 3D is iOS-only. Android remains MediaPipe-only in Phase 2.
+  }
+
   fun switchCamera() {
     // Must run on main thread — switchCamera() is called from the JS thread
     // via Expo Module Function, but CameraX requires the main thread.
