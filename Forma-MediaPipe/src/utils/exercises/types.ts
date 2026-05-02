@@ -6,6 +6,7 @@
  */
 
 import type { Keypoint } from '../poseAnalysis';
+import type { SkeletonFrame } from '../../skeleton';
 
 // ============================================================================
 // ExerciseState — the standard external state every exercise exposes
@@ -101,6 +102,12 @@ export interface OptimizationResult {
   reportPath?: string;
 }
 
+export type ExerciseUpdate = (
+  keypoints: Keypoint[],
+  currentState: ExerciseState,
+  skeletonFrame?: SkeletonFrame
+) => ExerciseState;
+
 // ============================================================================
 // ExerciseDefinition — the contract every exercise must satisfy
 // ============================================================================
@@ -115,8 +122,8 @@ export interface ExerciseDefinition {
   /** Create a fresh state object for this exercise */
   createState: () => ExerciseState;
 
-  /** Process one frame of landmarks. Returns updated state (may mutate _internal). */
-  update: (keypoints: Keypoint[], currentState: ExerciseState) => ExerciseState;
+  /** Process one frame. Phase 1 accepts SkeletonFrame plus legacy keypoints for compatibility. */
+  update: ExerciseUpdate;
 
   /**
    * Default deterministic heuristic config for this exercise.

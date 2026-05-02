@@ -19,6 +19,7 @@ import type { Keypoint } from '../../utils/poseAnalysis';
 import '../../utils/exercises/definitions/register';
 import { ExerciseRegistry } from '../../utils/exercises';
 import type { ExerciseState } from '../../utils/exercises';
+import { createMediaPipeAdapter } from '../../skeleton';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -193,6 +194,7 @@ export const CameraScreen: React.FC = () => {
 
   // Unified exercise state ref — populated via ExerciseRegistry on mount and recording start
   const exerciseStateRef = useRef<ExerciseState | null>(null);
+  const mediaPipeAdapterRef = useRef(createMediaPipeAdapter());
 
   // Screen recording pulse animation + attempt tracking
   const screenRecPulseAnim = useRef(new Animated.Value(1)).current;
@@ -499,7 +501,8 @@ export const CameraScreen: React.FC = () => {
     // Registry-based exercise processing (handles all registered exercises uniformly)
     const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (exerciseDef && exerciseStateRef.current) {
-      const newState = exerciseDef.update(keypoints, exerciseStateRef.current);
+      const skeletonFrame = mediaPipeAdapterRef.current.update(keypoints, now);
+      const newState = exerciseDef.update(keypoints, exerciseStateRef.current, skeletonFrame);
       exerciseStateRef.current = newState;
 
       const repScore = newState.lastRepResult?.score ?? 0;
