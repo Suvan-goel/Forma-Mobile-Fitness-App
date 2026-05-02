@@ -54,6 +54,8 @@ export function setActiveVoiceSettings(settings: ActiveVoiceSettings): void {
 let audioInstance: any = null;
 let isInitialized = false;
 let speechGeneration = 0; // Incremented on every speakWithElevenLabs call; used to cancel stale fetches
+let activePlaybackSound: any = null;
+let activePlaybackResolve: (() => void) | null = null;
 
 // Audio cache: maps "voiceId:text" → file URI to avoid re-generating identical phrases.
 // Coaching message pools are small and fixed (~50 phrases), so cache stays bounded.
@@ -232,6 +234,35 @@ async function cleanupOldAudioFiles(): Promise<void> {
   }
 }
 
+function resolveActivePlayback(sound?: any): void {
+  if (sound && activePlaybackSound && activePlaybackSound !== sound) return;
+
+  const resolve = activePlaybackResolve;
+  activePlaybackSound = null;
+  activePlaybackResolve = null;
+  if (resolve) resolve();
+}
+
+async function stopActiveAudio(): Promise<void> {
+  const sound = audioInstance;
+  audioInstance = null;
+
+  if (!sound) {
+    resolveActivePlayback();
+    return;
+  }
+
+  try {
+    await sound.stopAsync();
+  } catch {}
+
+  try {
+    await sound.unloadAsync();
+  } catch {}
+
+  resolveActivePlayback(sound);
+}
+
 /**
  * Speak the given text using ElevenLabs TTS.
  * Configures audio session to avoid conflicts with camera.
@@ -251,16 +282,8 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
     // Initialize audio session
     await initializeAudio();
 
-    // Stop any currently playing audio
-    if (audioInstance) {
-      try {
-        await audioInstance.stopAsync();
-        await audioInstance.unloadAsync();
-      } catch (e) {
-        // Ignore errors when stopping
-      }
-      audioInstance = null;
-    }
+    // Stop any currently playing audio and resolve its pending speech promise.
+    await stopActiveAudio();
 
     // Generate speech from ElevenLabs (downloads to temp file)
     const audioUri = await generateSpeech(text.trim());
@@ -271,21 +294,46 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
     // Cleanup old files asynchronously (don't block playback)
     cleanupOldAudioFiles().catch(() => {});
 
-    // Load and play the audio
+    // Load the audio, then resolve this function only after playback completes.
     const { sound } = await Audio.Sound.createAsync(
       { uri: audioUri },
-      { shouldPlay: true, volume: 1.0 },
-      (status: any) => {
-        // Cleanup when playback finishes
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync().catch(() => {});
-        }
-      }
+      { shouldPlay: false, volume: 1.0 }
     );
 
+    // A newer speakWithElevenLabs call may have arrived while this audio loaded.
+    if (generation !== speechGeneration) {
+      await sound.unloadAsync().catch(() => {});
+      return;
+    }
+
+    const playbackFinished = new Promise<void>((resolve) => {
+      activePlaybackSound = sound;
+      activePlaybackResolve = resolve;
+
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (!status.isLoaded) {
+          if (status.error) {
+            if (audioInstance === sound) audioInstance = null;
+            sound.unloadAsync().catch(() => {});
+            resolveActivePlayback(sound);
+          }
+          return;
+        }
+
+        if (status.didJustFinish) {
+          if (audioInstance === sound) audioInstance = null;
+          sound.unloadAsync().catch(() => {});
+          resolveActivePlayback(sound);
+        }
+      });
+    });
+
     audioInstance = sound;
+    await sound.playAsync();
+    await playbackFinished;
   } catch (error) {
     console.error('ElevenLabs TTS error:', error);
+    await stopActiveAudio();
     throw error;
   }
 }
@@ -295,15 +343,8 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
  */
 export async function stopSpeech(): Promise<void> {
   speechGeneration++; // Cancel any in-flight fetch
-  if (!nativeModulesAvailable || !audioInstance) return;
-
-  try {
-    await audioInstance.stopAsync();
-    await audioInstance.unloadAsync();
-  } catch (e) {
-    // Ignore errors
-  }
-  audioInstance = null;
+  if (!nativeModulesAvailable) return;
+  await stopActiveAudio();
 }
 
 /**
