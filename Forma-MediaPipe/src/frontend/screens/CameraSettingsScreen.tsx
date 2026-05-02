@@ -46,6 +46,7 @@ import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { MonoText } from '../components/typography/MonoText';
 import { TRAINERS } from '../constants/trainers';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 /* ── Scroll Wheel Picker ─────────────────── */
 
@@ -335,7 +336,10 @@ export const CameraSettingsScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 120) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>

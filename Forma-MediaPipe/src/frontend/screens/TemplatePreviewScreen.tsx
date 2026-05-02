@@ -25,6 +25,7 @@ import {
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type TemplatePreviewNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'TemplatePreview'>;
 type TemplatePreviewRouteProp = RouteProp<RecordStackParamList, 'TemplatePreview'>;
@@ -160,7 +161,10 @@ export const TemplatePreviewScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 112 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 112) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -203,7 +207,7 @@ export const TemplatePreviewScreen: React.FC = () => {
         </Animated.View>
       </ScrollView>
 
-      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, 12) + 6 }]}>
+      <View style={[styles.bottomPanel, { paddingBottom: getBottomOverlayPadding(insets.bottom, 10) }]}>
         <TouchableOpacity onPress={handleStartWorkout} activeOpacity={0.86}>
           <LinearGradient
             colors={[COLORS.primary, COLORS.primaryDark]}

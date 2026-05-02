@@ -26,6 +26,7 @@ import {
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useNotificationPreferences } from '../../backend/hooks/useNotificationPreferences';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 interface NotificationSettingsScreenProps {
   navigation: any;
@@ -64,7 +65,10 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 112) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -185,7 +189,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 150,
     paddingTop: 4,
   },
 

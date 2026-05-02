@@ -37,6 +37,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
 import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 let VideoComponent: any = null;
 try {
@@ -481,7 +482,10 @@ export const VideoLibraryScreen: React.FC = () => {
           data={filteredRecordings}
           renderItem={renderItem}
           keyExtractor={item => item.id}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 22 }]}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: getBottomOverlayPadding(insets.bottom, 22) },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

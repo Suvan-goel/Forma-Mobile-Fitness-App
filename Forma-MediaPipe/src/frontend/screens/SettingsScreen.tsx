@@ -42,6 +42,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 const hexToRgba = (hex: string, alpha: number): string => {
   const h = hex.replace('#', '');
@@ -217,7 +218,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 112) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -452,7 +456,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 150,
     paddingTop: 4,
   },
 

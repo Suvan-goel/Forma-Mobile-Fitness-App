@@ -32,6 +32,7 @@ import { useFollowing } from '../../../backend/hooks/useFollowing';
 import { useFriends } from '../../../backend/hooks/useFriends';
 import { useUserSearch } from '../../../backend/hooks/useUserSearch';
 import { UserSearchResult } from '../../../backend/services/api/types';
+import { getBottomOverlayPadding } from '../../utils/safeAreaSpacing';
 
 const StatusIndicator = memo(({ status }: { status: UserSearchResult['relationshipStatus'] }) => {
   switch (status) {
@@ -244,7 +245,10 @@ export const AddFriendScreen: React.FC = memo(() => {
               </View>
             )
           }
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: getBottomOverlayPadding(insets.bottom, 40) },
+          ]}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -379,7 +383,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: 16,
-    paddingBottom: 48,
   },
   resultsHeader: {
     flexDirection: 'row',

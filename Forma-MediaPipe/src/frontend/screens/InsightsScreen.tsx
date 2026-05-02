@@ -12,6 +12,7 @@ import { InsightsData } from '../../backend/services/api';
 import { useInsights } from '../../backend/hooks/useInsights';
 import { ErrorState } from '../components/ui/ErrorState';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type InsightsScreenRouteProp = RouteProp<RootStackParamList, 'Insights'>;
 type InsightsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Insights'>;
@@ -74,7 +75,10 @@ export const InsightsScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 100) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* AI Insights Section */}

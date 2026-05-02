@@ -43,6 +43,7 @@ import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import { useAlert } from '../contexts/AlertContext';
 import type { RecordStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type CreateTemplateNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -435,7 +436,7 @@ export const CreateTemplateScreen: React.FC = () => {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + 32 },
+            { paddingBottom: getBottomOverlayPadding(insets.bottom, 32) },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

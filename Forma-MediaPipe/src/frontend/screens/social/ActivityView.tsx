@@ -14,14 +14,17 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Inbox, Plus } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useActivityFeed } from '../../../backend/hooks/useActivityFeed';
 import { useReactions } from '../../../backend/hooks/useReactions';
 import { ActivityEvent } from '../../../backend/services/api/types';
 import { ActivityEventCard } from '../../components/ui/ActivityEventCard';
+import { getTabScreenBottomPadding } from '../../utils/safeAreaSpacing';
 
 export const ActivityView: React.FC = memo(() => {
+  const insets = useSafeAreaInsets();
   const { events, isLoading, isLoadingMore, error, hasMore, loadMore, refetch } = useActivityFeed('all');
   const navigation = useNavigation<any>();
 
@@ -68,7 +71,13 @@ export const ActivityView: React.FC = memo(() => {
   }, [navigation, refetch]);
 
   const fab = (
-    <View style={styles.fabWrapper} pointerEvents="box-none">
+    <View
+      style={[
+        styles.fabWrapper,
+        { bottom: getTabScreenBottomPadding(insets.bottom, 12) },
+      ]}
+      pointerEvents="box-none"
+    >
       <TouchableOpacity
         style={styles.fab}
         onPress={handleCreatePost}
@@ -121,7 +130,10 @@ export const ActivityView: React.FC = memo(() => {
         }
         onEndReached={hasMore ? loadMore : undefined}
         onEndReachedThreshold={0.3}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: getTabScreenBottomPadding(insets.bottom) },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isLoading && events.length > 0}
@@ -148,13 +160,11 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: 2,
-    paddingBottom: 120,
   },
 
   /* ── FAB ── */
   fabWrapper: {
     position: 'absolute',
-    bottom: 102,
     right: SPACING.screenHorizontal,
     alignItems: 'flex-end',
   },

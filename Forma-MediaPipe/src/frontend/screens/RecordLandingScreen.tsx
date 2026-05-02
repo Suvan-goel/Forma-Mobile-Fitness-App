@@ -55,6 +55,7 @@ import {
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 import { CameraSetupGuide } from './CameraSetupGuide';
+import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 import type {
   RecordStackParamList,
@@ -221,7 +222,7 @@ export const RecordLandingScreen: React.FC = () => {
     setWorkoutPaused,
     clearSets,
   } = useCurrentWorkout();
-  const navigationBarHeight = 90 + Math.max(insets.bottom, 8);
+  const navigationBarHeight = getTabScreenBottomPadding(insets.bottom, 24);
   const compactHeight = windowHeight < 740;
   const sectionGap = compactHeight ? 8 : 12;
   const templateCardWidth =

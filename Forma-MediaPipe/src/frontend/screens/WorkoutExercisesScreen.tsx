@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, Video, Lightbulb, Dumbbell, Activity, Move, Award, ChevronLeft } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
 import { RootStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type WorkoutExercisesRouteProp = RouteProp<RootStackParamList, 'WorkoutExercises'>;
 
@@ -92,7 +93,10 @@ export const WorkoutExercisesScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 100 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 124) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -137,8 +141,8 @@ export const WorkoutExercisesScreen: React.FC = () => {
       {/* Start Workout Button */}
       <View style={[styles.buttonContainer, { 
         bottom: 0, 
-        paddingTop: Math.max(insets.bottom, SPACING.md),
-        paddingBottom: Math.max(insets.bottom, SPACING.md)
+        paddingTop: SPACING.md,
+        paddingBottom: getBottomOverlayPadding(insets.bottom, SPACING.md)
       }]}>
         <TouchableOpacity
           style={[styles.startButton, { backgroundColor: color }]}
@@ -174,7 +178,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.md,
-    paddingBottom: 100,
   },
   header: {
     flexDirection: 'row',

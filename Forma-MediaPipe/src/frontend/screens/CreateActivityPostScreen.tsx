@@ -50,6 +50,7 @@ import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import { useAlert } from '../contexts/AlertContext';
 import type { RootStackParamList } from '../app/RootNavigator';
 import type { WorkoutSession, Reward, ActivityEventType } from '../../backend/services/api/types';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -254,7 +255,10 @@ export const CreateActivityPostScreen: React.FC = () => {
 
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, SPACING.md) + SPACING.xl }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: getBottomOverlayPadding(insets.bottom, SPACING.xl) },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

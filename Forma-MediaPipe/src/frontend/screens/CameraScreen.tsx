@@ -28,6 +28,7 @@ import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
+import { getBottomOverlayPadding, getBottomSafePadding } from '../utils/safeAreaSpacing';
 
 const MAX_FEED_ITEMS = 5;
 type FeedbackFeedItem = { id: number; text: string };
@@ -918,7 +919,7 @@ export const CameraScreen: React.FC = () => {
   const topBarHeight = topInset + 48;
   const cameraDisplayHeight = SCREEN_HEIGHT;
   const cameraDisplayWidth = SCREEN_WIDTH;
-  const controlStripApproxHeight = 165 + insets.bottom;
+  const controlStripApproxHeight = 165 + getBottomSafePadding(insets.bottom);
 
   // Memoize pose detection props
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
@@ -1512,7 +1513,7 @@ export const CameraScreen: React.FC = () => {
           </View>
 
           {/* Control strip — overlays bottom of 9:16 camera (same container, no gap) */}
-          <View style={[styles.controlStrip, { paddingBottom: insets.bottom + SPACING.sm }]}>
+          <View style={[styles.controlStrip, { paddingBottom: getBottomOverlayPadding(insets.bottom, SPACING.sm) }]}>
             <View style={styles.controlStripMetrics}>
             <View style={styles.metricsCombined}>
               <View style={styles.metricBlock}>

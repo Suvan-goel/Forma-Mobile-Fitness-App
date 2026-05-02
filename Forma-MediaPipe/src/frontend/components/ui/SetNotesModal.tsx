@@ -11,11 +11,13 @@ import {
   NativeSyntheticEvent,
   TextLayoutEventData,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, ChevronDown, ChevronUp, Clock, TrendingUp, Target, FileText } from 'lucide-react-native';
 import { COLORS, FONTS, SPACING, CARD_RADIUS_LG, getScoreColor } from '../../constants/theme';
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { MonoText } from '../typography/MonoText';
 import { generateSetSummary } from '../../../utils/setNotesSummary';
+import { getBottomSafePadding } from '../../utils/safeAreaSpacing';
 
 const MAX_FEEDBACK_LINES = 2;
 
@@ -34,6 +36,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
   setNumber,
   exerciseName,
 }) => {
+  const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const repFeedback = set.repFeedback ?? [];
   const repFormScores = set.repFormScores ?? [];
@@ -99,7 +102,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
           activeOpacity={1}
           onPress={() => {}}
         >
-          <View style={styles.sheetSurface}>
+          <View style={[styles.sheetSurface, { paddingBottom: getBottomSafePadding(insets.bottom) }]}>
             <View
               style={styles.header}
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}

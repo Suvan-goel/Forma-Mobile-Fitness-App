@@ -54,6 +54,7 @@ import { useUser } from '../../backend/hooks/useUser';
 import { ErrorState } from '../components/ui/ErrorState';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import type { RootStackParamList } from '../app/RootNavigator';
+import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 const RING_SIZE = 78;
 const RING_STROKE = 7;
@@ -286,7 +287,10 @@ export const HomeScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getTabScreenBottomPadding(insets.bottom) },
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
@@ -623,7 +627,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 140,
   },
 
   /* Header */

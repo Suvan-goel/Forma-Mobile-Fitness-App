@@ -32,6 +32,7 @@ import {
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 interface HelpCenterScreenProps {
   navigation: any;
@@ -234,7 +235,10 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 112) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -328,7 +332,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 150,
     paddingTop: 2,
   },
 

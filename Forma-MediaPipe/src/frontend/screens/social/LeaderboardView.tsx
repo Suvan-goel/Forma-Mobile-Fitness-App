@@ -12,11 +12,13 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useLeaderboard } from '../../../backend/hooks/useLeaderboard';
 import { LeaderboardEntry, TimeWindow } from '../../../backend/services/api/types';
 import { Top3Podium } from '../../components/ui/Top3Podium';
 import { LeaderboardRow } from '../../components/ui/LeaderboardRow';
+import { getTabScreenBottomPadding } from '../../utils/safeAreaSpacing';
 
 const TIME_WINDOWS: { key: TimeWindow; label: string }[] = [
   { key: '1_week', label: 'This Week' },
@@ -59,6 +61,7 @@ const TableHeader = memo(() => (
 ));
 
 export const LeaderboardView: React.FC = memo(() => {
+  const insets = useSafeAreaInsets();
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('1_week');
   const { entries, currentUser, isLoading, error, refetch } = useLeaderboard('form_score', timeWindow);
 
@@ -115,7 +118,10 @@ export const LeaderboardView: React.FC = memo(() => {
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: getTabScreenBottomPadding(insets.bottom, showStickyBanner ? 112 : 32) },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isLoading && entries.length > 0}
@@ -128,7 +134,7 @@ export const LeaderboardView: React.FC = memo(() => {
 
       {/* Sticky current user banner */}
       {showStickyBanner && currentUser && (
-        <View style={styles.stickyBanner}>
+        <View style={[styles.stickyBanner, { bottom: getTabScreenBottomPadding(insets.bottom, 0) }]}>
           <View style={styles.stickyRankBadge}>
             <Text style={styles.stickyRank}>#{currentUser.rank}</Text>
           </View>
@@ -147,7 +153,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 106,
   },
 
   filterBar: {
@@ -267,7 +272,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
-    paddingBottom: 28,
+    paddingBottom: 10,
     paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: '#0E151A',
     borderTopWidth: 1,

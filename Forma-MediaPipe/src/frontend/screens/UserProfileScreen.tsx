@@ -49,6 +49,7 @@ import { useUser } from '../../backend/hooks/useUser';
 import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
 import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import type { RootStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type UserProfileNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -203,7 +204,7 @@ export const UserProfileScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 96 },
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 96) },
         ]}
       >
         <Animated.View

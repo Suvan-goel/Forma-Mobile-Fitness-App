@@ -30,6 +30,7 @@ import {
 import { ScreenBackground } from '../../components/ui/ScreenBackground';
 import { useFriendComparison } from '../../../backend/hooks/useFriendComparison';
 import type { ComparisonStats } from '../../../backend/services/api';
+import { getBottomOverlayPadding } from '../../utils/safeAreaSpacing';
 
 type MetricFormat = 'score' | 'integer' | 'decimal';
 
@@ -140,7 +141,10 @@ export const FriendComparisonScreen: React.FC = memo(() => {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: getBottomOverlayPadding(insets.bottom, 36) },
+          ]}
         >
           <LinearGradient
             colors={[...CARD_GRADIENT_COLORS]}
@@ -414,7 +418,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 44,
   },
   heroCard: {
     borderRadius: CARD_RADIUS,

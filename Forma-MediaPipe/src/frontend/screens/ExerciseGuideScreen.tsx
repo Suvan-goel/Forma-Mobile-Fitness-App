@@ -31,6 +31,7 @@ import {
 import { ArchetypeVisual, VIEW_TYPE_LABEL } from '../components/ui/CameraGuideVisuals';
 import { EXERCISE_PERFORM_DATA } from '../constants/exerciseGuideData';
 import type { RecordStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type GuideRouteProp = RouteProp<RecordStackParamList, 'ExerciseGuide'>;
 
@@ -293,7 +294,10 @@ export const ExerciseGuideScreen: React.FC = () => {
         {/* Scrollable Content */}
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: getBottomOverlayPadding(insets.bottom, SPACING.xl + 54) },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {activeTab === 'record' ? (
@@ -309,7 +313,7 @@ export const ExerciseGuideScreen: React.FC = () => {
         </ScrollView>
 
         {/* CTA Button */}
-        <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, SPACING.md) + SPACING.md }]}>
+        <View style={[styles.ctaContainer, { paddingBottom: getBottomOverlayPadding(insets.bottom, SPACING.md) }]}>
           <TouchableOpacity onPress={handleGotIt} activeOpacity={0.85}>
             <LinearGradient
               colors={['#7A55FF', '#633FE5']}
@@ -420,7 +424,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: SPACING.xl,
   },
 
   /* ── Tab content shared ── */

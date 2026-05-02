@@ -10,6 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, Video, Lightbulb, ChevronDown } from 'lucide-react-native';
 import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 const category = {
   title: 'Weightlifting',
   color: COLORS.primary,
@@ -86,7 +87,7 @@ export const WorkoutInfoScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { 
           paddingTop: SPACING.xs,
-          paddingBottom: Math.max(insets.bottom, SPACING.xl) + 100 
+          paddingBottom: getBottomOverlayPadding(insets.bottom, 124),
         }]}
         showsVerticalScrollIndicator={false}
       >
@@ -147,7 +148,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 100,
   },
   section: {
     marginBottom: SPACING.xl,

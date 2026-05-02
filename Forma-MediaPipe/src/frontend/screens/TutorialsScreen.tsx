@@ -43,6 +43,7 @@ import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { ExerciseRegistry } from '../../utils/exercises';
 import '../../utils/exercises/definitions/register';
 import type { RootStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type TutorialsNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -356,7 +357,10 @@ export const TutorialsScreen: React.FC = () => {
         renderItem={renderCard}
         keyExtractor={keyExtractor}
         numColumns={2}
-        contentContainerStyle={styles.gridContent}
+        contentContainerStyle={[
+          styles.gridContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 112) },
+        ]}
         columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
@@ -473,7 +477,6 @@ const styles = StyleSheet.create({
   /* Grid */
   gridContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 150,
   },
   gridRow: {
     gap: 12,

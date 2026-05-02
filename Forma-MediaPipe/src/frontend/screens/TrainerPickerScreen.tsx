@@ -25,6 +25,7 @@ import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { TRAINERS, type Trainer } from '../constants/trainers';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { setActiveVoiceId, setActiveVoiceSettings, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');
 const FEMALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'female');
@@ -120,7 +121,10 @@ export const TrainerPickerScreen: React.FC = () => {
 
       <Animated.ScrollView
         style={[styles.scroll, { opacity: fadeAnim }]}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 160 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 160) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>

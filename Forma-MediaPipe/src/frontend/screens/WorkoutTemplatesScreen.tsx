@@ -35,6 +35,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { useCustomTemplates } from '../../backend/hooks/useCustomTemplates';
 import type { CustomTemplate } from '../../backend/services/api';
 import type { RecordStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type WorkoutTemplatesNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -654,7 +655,7 @@ export const WorkoutTemplatesScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 32 },
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 32) },
         ]}
         showsVerticalScrollIndicator={false}
       >

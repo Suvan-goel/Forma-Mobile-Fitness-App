@@ -45,6 +45,7 @@ import { RecordingOptionsModal } from '../components/ui/RecordingOptionsModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { cleanupTempRecording } from '../../backend/services/screenRecording';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 export type { LoggedSet };
 
@@ -732,7 +733,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
             styles.scrollContent,
             exercises.length === 0
               ? styles.scrollContentEmpty
-              : { paddingBottom: Math.max(insets.bottom, SPACING.xl) + 146 },
+              : { paddingBottom: getBottomOverlayPadding(insets.bottom, 170) },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -1019,7 +1020,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
       )}
 
       {/* ── BOTTOM PANEL ── */}
-      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 4 }]}>
+      <View style={[styles.bottomPanel, { paddingBottom: getBottomOverlayPadding(insets.bottom, 12) }]}>
         {/* Add Exercise — Gradient CTA */}
         <TouchableOpacity onPress={handleAddExercise} activeOpacity={0.85}>
           <LinearGradient

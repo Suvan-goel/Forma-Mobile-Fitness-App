@@ -37,6 +37,7 @@ import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useAlert } from '../contexts/AlertContext';
 import { usePrivacyLevel, type PrivacyLevel } from '../../backend/hooks/usePrivacyLevel';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 interface PrivacySettingsScreenProps {
   navigation: any;
@@ -134,7 +135,10 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 96) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>

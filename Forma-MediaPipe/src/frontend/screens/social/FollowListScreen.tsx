@@ -22,6 +22,7 @@ import { COLORS, FONTS, SPACING } from '../../constants/theme';
 import { useFollowing } from '../../../backend/hooks/useFollowing';
 import type { FollowRelation } from '../../../backend/services/api/types';
 import type { RootStackParamList } from '../../app/RootNavigator';
+import { getBottomOverlayPadding } from '../../utils/safeAreaSpacing';
 
 type FollowListNavProp = NativeStackNavigationProp<RootStackParamList>;
 type FollowListRouteProp = RouteProp<RootStackParamList, 'FollowList'>;
@@ -153,7 +154,10 @@ export const FollowListScreen: React.FC = memo(() => {
               </Text>
             </View>
           }
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: getBottomOverlayPadding(insets.bottom, 32) },
+          ]}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -191,7 +195,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: SPACING.sm,
-    paddingBottom: 40,
   },
   userRow: {
     flexDirection: 'row',

@@ -37,6 +37,7 @@ import {
 } from '../../constants/theme';
 import { useFollowing } from '../../../backend/hooks/useFollowing';
 import { useFriendProfile } from '../../../backend/hooks/useFriendProfile';
+import { getBottomOverlayPadding } from '../../utils/safeAreaSpacing';
 
 const XP_PER_LEVEL = 220;
 const LEVEL_TARGET = 3000;
@@ -179,7 +180,7 @@ export const FriendProfileScreen: React.FC = memo(() => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 96 },
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 96) },
         ]}
       >
         <Animated.View

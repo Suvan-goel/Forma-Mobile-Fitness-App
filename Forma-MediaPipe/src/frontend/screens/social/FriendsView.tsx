@@ -16,6 +16,7 @@ import {
 import { UserPlus, Users, Search, Check, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   COLORS,
   FONTS,
@@ -29,6 +30,7 @@ import {
 import { useFriends } from '../../../backend/hooks/useFriends';
 import { Friend, FriendRequest, SuggestedFriend } from '../../../backend/services/api/types';
 import { FriendRow } from '../../components/ui/FriendRow';
+import { getTabScreenBottomPadding } from '../../utils/safeAreaSpacing';
 
 // ── Friend Request Row ───────────────────────────────────────
 
@@ -106,6 +108,7 @@ const SuggestedRow = memo(({
 // ── Main View ─────────────────────────────────────────────────
 
 export const FriendsView: React.FC = memo(() => {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const {
     friends,
@@ -295,7 +298,10 @@ export const FriendsView: React.FC = memo(() => {
             </TouchableOpacity>
           </View>
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: getTabScreenBottomPadding(insets.bottom) },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isLoading && friends.length > 0}
@@ -322,7 +328,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: 0,
-    paddingBottom: 96,
   },
   searchShell: {
     flexDirection: 'row',

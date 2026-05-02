@@ -37,6 +37,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { ErrorState } from '../components/ui/ErrorState';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { WorkoutSession } from '../../backend/services/api';
+import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 /* ── Helpers ──────────────────────────────── */
 
@@ -923,7 +924,10 @@ export const LogbookScreen: React.FC = () => {
             renderItem={renderListItem}
             keyExtractor={keyExtractor}
             ListHeaderComponent={ListHeader}
-            contentContainerStyle={[styles.listContent, { paddingBottom: 200 }]}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: getTabScreenBottomPadding(insets.bottom, 96) },
+            ]}
             showsVerticalScrollIndicator={false}
             onScroll={onScroll}
             scrollEventThrottle={16}

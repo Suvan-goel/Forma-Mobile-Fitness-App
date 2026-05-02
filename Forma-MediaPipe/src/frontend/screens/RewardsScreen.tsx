@@ -43,6 +43,7 @@ import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useAlert } from '../contexts/AlertContext';
 import { Reward } from '../../backend/services/api';
 import type { RootStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 const iconMap: Record<string, LucideIcon> = {
   Zap,
@@ -227,7 +228,10 @@ export const RewardsScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 96) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <LinearGradient

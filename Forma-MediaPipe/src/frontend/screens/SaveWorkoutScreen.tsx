@@ -38,6 +38,7 @@ import { useSaveWorkout } from '../../backend/hooks/useSaveWorkout';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useAlert } from '../contexts/AlertContext';
 import { cleanupTempRecording } from '../../backend/services/screenRecording';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type SaveWorkoutRouteProp = RouteProp<RecordStackParamList, 'SaveWorkout'>;
 type SaveWorkoutNavigationProp = NativeStackNavigationProp<RecordStackParamList, 'SaveWorkout'>;
@@ -272,7 +273,7 @@ export const SaveWorkoutScreen: React.FC = () => {
             style={styles.scroll}
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingBottom: Math.max(insets.bottom, SPACING.lg) + 24 },
+              { paddingBottom: getBottomOverlayPadding(insets.bottom, SPACING.xl) },
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"

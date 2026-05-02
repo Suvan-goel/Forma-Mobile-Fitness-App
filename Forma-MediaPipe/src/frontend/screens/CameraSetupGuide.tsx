@@ -26,6 +26,7 @@ import {
   SPACING,
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 const TOTAL_SLIDES = 3;
 
@@ -391,7 +392,7 @@ export const CameraSetupGuide: React.FC<CameraSetupGuideProps> = ({ onComplete }
           {
             opacity: fadeIn,
             paddingTop: insets.top + 12,
-            paddingBottom: insets.bottom + 34,
+            paddingBottom: getBottomOverlayPadding(insets.bottom, 34),
             paddingHorizontal: horizontalPadding,
           },
         ]}

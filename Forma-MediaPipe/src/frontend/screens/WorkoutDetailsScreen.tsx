@@ -39,6 +39,7 @@ import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { WorkoutExercise } from '../../backend/services/api';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
 import { useAlert } from '../contexts/AlertContext';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 let VideoComponent: any = null;
 try {
@@ -363,7 +364,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: 140 + Math.max(insets.bottom, SPACING.lg) },
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 160) },
         ]}
         showsVerticalScrollIndicator={false}
       >

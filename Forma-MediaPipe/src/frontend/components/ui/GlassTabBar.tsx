@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Home, BookOpen, BarChart2, Video, Users } from 'lucide-react-native';
 import { COLORS, FONTS } from '../../constants/theme';
+import { getBottomSafePadding } from '../../utils/safeAreaSpacing';
 
 const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
   Home:      { icon: Home,       label: 'Today' },
@@ -94,7 +95,7 @@ export const GlassTabBar = memo(({ state, navigation }: any) => {
   if (hideTabBar) return null;
 
   return (
-    <View style={[styles.outerWrap, { paddingBottom: insets.bottom }]}>
+    <View style={[styles.outerWrap, { paddingBottom: getBottomSafePadding(insets.bottom) }]}>
       <View style={styles.bar}>
         {inner}
       </View>

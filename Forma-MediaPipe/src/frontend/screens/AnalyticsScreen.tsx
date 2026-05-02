@@ -45,6 +45,7 @@ import { TimeRangeSelector, TIME_RANGE_OPTIONS } from '../components/ui/TimeRang
 import { TrendChart } from '../components/ui/TrendChart';
 import { LeaderboardView } from './social/LeaderboardView';
 import type { RootStackParamList } from '../app/RootNavigator';
+import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const PROGRESS_CHART_GREEN = '#5FCE7A';
@@ -261,7 +262,10 @@ export const AnalyticsScreen: React.FC = () => {
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: getTabScreenBottomPadding(insets.bottom) },
+          ]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -532,7 +536,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 160,
   },
   tabsWrap: {
     paddingHorizontal: SPACING.screenHorizontal,

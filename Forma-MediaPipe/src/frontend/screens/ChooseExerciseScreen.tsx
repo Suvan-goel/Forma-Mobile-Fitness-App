@@ -31,6 +31,7 @@ import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { ExerciseRegistry } from '../../utils/exercises';
 import '../../utils/exercises/definitions/register';
 import { RecordStackParamList } from '../app/RootNavigator';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
   'Weightlifting': require('../assets/weightlifting_bg.png'),
@@ -371,7 +372,10 @@ export const ChooseExerciseScreen: React.FC = () => {
         renderItem={renderExerciseCard}
         keyExtractor={keyExtractor}
         numColumns={2}
-        contentContainerStyle={styles.gridContent}
+        contentContainerStyle={[
+          styles.gridContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 112) },
+        ]}
         columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
@@ -503,7 +507,6 @@ const styles = StyleSheet.create({
   /* ── Grid ───────────────────────────────── */
   gridContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 150,
   },
   gridRow: {
     gap: 12,

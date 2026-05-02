@@ -32,6 +32,7 @@ import { useUpdateUser } from '../../backend/hooks/useUpdateUser';
 import { useUser } from '../../backend/hooks/useUser';
 import { useAuth } from '../../backend/contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 interface ProfileSettingsScreenProps {
   navigation: any;
@@ -189,7 +190,10 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({ na
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 112) },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -473,7 +477,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 150,
     paddingTop: 4,
   },
 

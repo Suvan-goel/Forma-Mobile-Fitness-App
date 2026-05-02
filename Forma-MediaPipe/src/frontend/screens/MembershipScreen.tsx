@@ -32,6 +32,7 @@ import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useSubscription } from '../../backend/hooks/useSubscription';
 import { useAlert } from '../contexts/AlertContext';
+import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 interface MembershipScreenProps {
   navigation: any;
@@ -75,7 +76,10 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: getBottomOverlayPadding(insets.bottom, 120) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -203,7 +207,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 160,
   },
   planCard: {
     borderRadius: CARD_RADIUS,
