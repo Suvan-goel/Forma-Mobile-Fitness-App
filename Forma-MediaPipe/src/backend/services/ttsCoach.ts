@@ -19,6 +19,7 @@ import {
   getTopFeedbackIssueCandidate,
   pickFromPool,
   pickSetStartMessage,
+  pickSetSummaryMessage,
 } from './ttsMessagePools';
 
 // ============================================================================
@@ -139,15 +140,7 @@ export async function onSetEnded(
 ): Promise<void> {
   if (!isElevenLabsAvailable() || totalReps === 0) return;
 
-  // Generate summary based on form quality
-  let summary: string;
-  if (avgFormScore >= 90) {
-    summary = `Nice set. ${totalReps} reps, solid form.`;
-  } else if (avgFormScore >= 70) {
-    summary = `${totalReps} reps done. Form was decent — keep working on it.`;
-  } else {
-    summary = `Set done. ${totalReps} reps. Focus on cleaning up your form next set.`;
-  }
+  const summary = pickSetSummaryMessage(totalReps, avgFormScore);
 
   // Wait for any current speech to finish before speaking summary
   await waitForSilence(3000); // max 3s wait

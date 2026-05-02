@@ -32,6 +32,7 @@ export type IssueType =
   | 'hip_pike';
 
 export type PositiveCategory = 'positive' | 'transition_good';
+export type SetSummaryCategory = 'excellent' | 'solid' | 'needs_work';
 
 export interface MessagePool {
   messages: string[];
@@ -156,28 +157,68 @@ export const ISSUE_POOLS: Record<string, MessagePool> = {
 export const POSITIVE_POOLS: Record<PositiveCategory, MessagePool> = {
   positive: {
     messages: [
-      'Nice rep.',
-      'Good one.',
-      'That looked clean.',
-      'Solid.',
-      'Good control.',
-      "That's the one.",
-      'Looking strong.',
-      'Keep that up.',
-      'Yep, just like that.',
-      'Perfect — stay with it.',
+      'Nice rep. Keep that rhythm.',
+      'Good control. Stay with it.',
+      'Clean rep. Same again.',
+      'That moved well.',
+      'Solid form. Keep going.',
+      "That's the shape we want.",
+      'Looking strong. Stay smooth.',
+      'Great control there.',
+      'Yes, just like that.',
+      'Perfect. Own the next one.',
     ],
   },
   transition_good: {
     messages: [
-      'There you go — much better.',
-      "That's more like it.",
-      'Good correction.',
-      "Now you've got it.",
-      'Better. Keep that form.',
+      'There you go. Much better.',
+      "That's the correction.",
+      'Good adjustment. Keep it there.',
+      "Now you've got it. Stay consistent.",
+      'Better form. Repeat that.',
+      'Nice fix. Keep that control.',
     ],
   },
 };
+
+// ============================================================================
+// SET-SUMMARY POOLS — spoken once when recording stops
+// Templates use {reps} placeholder, replaced at runtime.
+// ============================================================================
+
+const SET_SUMMARY_POOLS: Record<SetSummaryCategory, MessagePool> = {
+  excellent: {
+    messages: [
+      'Great set. {reps}, strong form throughout.',
+      'Nice work. {reps} with clean control.',
+      'Excellent set. {reps}, and the form stayed sharp.',
+      'That was a strong one. {reps}, well controlled.',
+    ],
+  },
+  solid: {
+    messages: [
+      'Good set. {reps}. Keep chasing cleaner reps.',
+      '{reps} done. Solid work, with room to sharpen the form.',
+      'Nice effort. {reps}. Stay patient with the technique.',
+      'Set complete. {reps}. Keep building that consistency.',
+    ],
+  },
+  needs_work: {
+    messages: [
+      'Set done. {reps}. Next set, slow it down and clean it up.',
+      '{reps} complete. Focus on control before adding intensity.',
+      'Good effort. {reps}. Let the next set be cleaner.',
+      'Set finished. {reps}. Reset, breathe, and tighten the form.',
+    ],
+  },
+};
+
+export function pickSetSummaryMessage(totalReps: number, avgFormScore: number): string {
+  const category: SetSummaryCategory =
+    avgFormScore >= 90 ? 'excellent' : avgFormScore >= 70 ? 'solid' : 'needs_work';
+  const reps = `${totalReps} ${totalReps === 1 ? 'rep' : 'reps'}`;
+  return pickFromPool(SET_SUMMARY_POOLS[category]).replace('{reps}', reps);
+}
 
 // ============================================================================
 // SET-START POOLS — spoken once when a new set begins
@@ -189,27 +230,29 @@ export type SetStartCategory = 'encouragement' | 'form_reminder' | 'neutral';
 const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
   encouragement: {
     messages: [
-      "Let's go — {exercise}. You've got this!",
-      '{exercise}. Time to work!',
-      "All right. {exercise}. Let's make these count!",
-      '{exercise} — give it everything!',
-      "Here we go, {exercise}. Stay strong.",
+      "Let's go. {exercise}. You've got this.",
+      '{exercise}. Time to lock in.',
+      'All right. {exercise}. Make these reps count.',
+      '{exercise}. Bring strong, controlled reps.',
+      'Here we go. {exercise}. Stay steady.',
     ],
   },
   form_reminder: {
     messages: [
-      '{exercise}. Remember, keep those reps clean.',
-      '{exercise} coming up. Control the tempo and focus on your breathing.',
-      "{exercise}. Focus on your form — that's what matters.",
-      '{exercise}. Keep it smooth and controlled.',
+      '{exercise}. Keep every rep clean.',
+      '{exercise} coming up. Control the tempo and breathe.',
+      '{exercise}. Form first, then power.',
+      '{exercise}. Smooth reps from start to finish.',
+      '{exercise}. Stay braced and move with control.',
     ],
   },
   neutral: {
     messages: [
       '{exercise}. Ready when you are.',
       'Next up: {exercise}.',
-      '{exercise} — set starting.',
-      '{exercise}. Lock in!',
+      '{exercise}. Set starting.',
+      '{exercise}. Lock in.',
+      '{exercise}. Start strong.',
     ],
   },
 };

@@ -34,7 +34,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'female',
     voiceId: 'SAz9YHcvj6GT2YYXdXww', // Rachel
     voiceSettings: { speed: 0.9, stability: 0.5, similarity: 0.8, styleExaggeration: 0.1 },
-    greeting: 'Hi, I\'m Maya. Lift with confidence and intention. Strong, controlled movement builds lasting results',
+    greeting: "Hi, I'm Maya. Move with confidence and intention. Keep it controlled, and I'll help you build strength that lasts.",
   },
   {
     id: 'jess',
@@ -45,7 +45,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'female',
     voiceId: 'FGY2WhTYpPnrIDTdsKH5', // Domi
     voiceSettings: { speed: 1.05, stability: 0.4, similarity: 0.8, styleExaggeration: 0.3 },
-    greeting: 'Hey, I\'m Jess. Stay controlled, stay powerful, and make every rep count. Let\'s build real strength',
+    greeting: "Hey, I'm Jess. Stay powerful, stay steady, and make every rep count. Let's build real strength.",
   },
   {
     id: 'sofia',
@@ -56,7 +56,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'female',
     voiceId: 'Xb7hH8MSUJpSbSDYk0k2', // Bella
     voiceSettings: { speed: 1.0, stability: 0.55, similarity: 0.8, styleExaggeration: 0.1 },
-    greeting: 'Hello, I\'m Sofia. Clean movement creates sustainable strength. Train smart, and progress follows',
+    greeting: "Hello, I'm Sofia. Clean movement first. Train smart, stay patient, and progress will follow.",
   },
   // Male trainers
   {
@@ -68,7 +68,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'male',
     voiceId: 'iP95p4xoKVk53GoZ742B', // Chris
     voiceSettings: { speed: 0.95, stability: 0.6, similarity: 0.8, styleExaggeration: 0.05 },
-    greeting: 'I\'m Marcus. We build real strength through control and precision. Focus on every rep — the results will come.',
+    greeting: "I'm Marcus. Strength comes from control and precision. Focus on the next rep, and the results will come.",
   },
   {
     id: 'jake',
@@ -79,7 +79,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'male',
     voiceId: 'bIHbv24MWmeRgasZH58o', // Will
     voiceSettings: { speed: 1.05, stability: 0.45, similarity: 0.8, styleExaggeration: 0.25 },
-    greeting: 'Hi, I\'m Jake. Train with energy, move with purpose, and improve every session. Let\'s get to work.',
+    greeting: "Hi, I'm Jake. Bring the energy, move with purpose, and get a little better every set. Let's work.",
   },
   {
     id: 'owen',
@@ -90,7 +90,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'male',
     voiceId: 'TX3LPaxmHKxFdv7VOQHJ', // Liam
     voiceSettings: { speed: 0.9, stability: 0.6, similarity: 0.8, styleExaggeration: 0.1 },
-    greeting: 'Hey, I\'m Owen. Discipline drives progress. Stay focused, commit to the reps, and we\'ll build real strength',
+    greeting: "Hey, I'm Owen. Stay disciplined, own every rep, and we'll build strength you can keep.",
   },
 ];
 

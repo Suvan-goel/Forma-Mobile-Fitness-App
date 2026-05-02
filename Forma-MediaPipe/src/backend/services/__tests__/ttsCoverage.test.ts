@@ -7,6 +7,7 @@ import {
   FEEDBACK_TO_ISSUE,
   FEEDBACK_TTS_POOLS,
   ISSUE_POOLS,
+  pickSetSummaryMessage,
   getTopFeedbackIssueCandidate,
   normalizeFeedbackMessages,
 } from '../ttsMessagePools';
@@ -136,5 +137,11 @@ describe('exercise TTS coverage', () => {
 
     expect(topFeedback?.pool).toBe(FEEDBACK_TTS_POOLS[feedback]);
     expect(topFeedback?.pool.messages).toContain('Chest up.');
+  });
+
+  it('varies set summaries while keeping rep counts natural', () => {
+    expect(pickSetSummaryMessage(1, 95)).toContain('1 rep');
+    expect(pickSetSummaryMessage(8, 75)).toContain('8 reps');
+    expect(pickSetSummaryMessage(5, 60)).toContain('5 reps');
   });
 });
