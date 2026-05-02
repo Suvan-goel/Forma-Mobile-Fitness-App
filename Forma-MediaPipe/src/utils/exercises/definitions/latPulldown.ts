@@ -706,7 +706,7 @@ export function createLatPulldownDefinition(
       'Pull deeper \u2014 bring the bar to your upper chest.': [
         'Pull to your upper chest.',
         'Bring the bar a little lower.',
-        'Finish the pull down to the chest.',
+        'Finish the pull to your chest.',
       ],
       'Extend fully \u2014 reach all the way up at the top.': [
         'Reach all the way up.',
@@ -716,7 +716,7 @@ export function createLatPulldownDefinition(
       'Stay upright \u2014 avoid leaning back excessively.': [
         'Stay tall through the pull.',
         'Only a slight lean back.',
-        'Less lean, more lat pull.',
+        'Less lean. Pull with your lats.',
       ],
       'Slow down the pull \u2014 control the descent.': [
         'Slow the pull down.',
@@ -725,7 +725,7 @@ export function createLatPulldownDefinition(
       ],
       'Control the return \u2014 resist the weight on the way up.': [
         'Control the bar on the way up.',
-        'Resist the return.',
+        'Resist on the way up.',
         'Let it rise with control.',
       ],
     },

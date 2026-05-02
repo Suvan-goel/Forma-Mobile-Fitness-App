@@ -826,7 +826,7 @@ export function createLyingLegCurlDefinition(
         priority: 25,
         messages: [
           'Curl it all the way up.',
-          'Get those heels to your glutes.',
+          'Bring your heels closer to your glutes.',
           'Full range on the curl.',
         ],
       },
@@ -836,7 +836,7 @@ export function createLyingLegCurlDefinition(
         messages: [
           'Straighten fully at the bottom.',
           'Full extension before the next rep.',
-          'Legs all the way down.',
+          'Let your legs straighten.',
         ],
       },
       {
@@ -844,7 +844,7 @@ export function createLyingLegCurlDefinition(
         priority: 30,
         messages: [
           'Keep your hips down.',
-          'Hips on the pad.',
+          'Keep your hips on the pad.',
           'Don\'t lift your hips.',
         ],
       },

@@ -1124,7 +1124,7 @@ export function createPushupDefinition(
     feedbackMessages: {
       'Slow down the push \u2014 control the movement.': [
         'Press up with control.',
-        "Don't rush the push.",
+        'Press up steady.',
         'Smooth push to the top.',
       ],
     },
@@ -1135,7 +1135,7 @@ export function createPushupDefinition(
         messages: [
           'Keep your head neutral.',
           'Neck in line with your spine.',
-          'Eyes down, neck long.',
+          'Look down. Keep your neck long.',
         ],
       },
     ],

@@ -1592,8 +1592,8 @@ export function createBarbellCurlDefinition(
         priority: 18,
         messages: [
           'Keep your elbows tucked.',
-          'Elbows in — keep the curl strict.',
-          "Don't let your elbows flare.",
+          'Elbows in. Keep the curl strict.',
+          'Keep your elbows from flaring.',
         ],
       },
       {
@@ -1602,7 +1602,7 @@ export function createBarbellCurlDefinition(
         messages: [
           'Keep your wrists straight.',
           "Don't curl your wrists in.",
-          'Neutral wrists through the rep.',
+          'Keep your wrists neutral.',
         ],
       },
     ],

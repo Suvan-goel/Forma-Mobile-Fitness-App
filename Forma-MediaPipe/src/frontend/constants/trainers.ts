@@ -32,9 +32,9 @@ export const TRAINERS: Trainer[] = [
     specialty: 'Training for muscle tone & confidence',
     description: 'Maya began weightlifting during university and fell in love with how it built confidence beyond the gym. She specialises in helping clients feel strong and capable, especially beginners who feel intimidated by the weights area.',
     gender: 'female',
-    voiceId: 'SAz9YHcvj6GT2YYXdXww', // Rachel
-    voiceSettings: { speed: 0.9, stability: 0.5, similarity: 0.8, styleExaggeration: 0.1 },
-    greeting: "Hi, I'm Maya. Move with confidence and intention. Keep it controlled, and I'll help you build strength that lasts.",
+    voiceId: '8N2ng9i2uiUWqstgmWlH',
+    voiceSettings: { speed: 0.96, stability: 0.56, similarity: 0.86, styleExaggeration: 0.08 },
+    greeting: "Hey, I'm Maya. I'm glad you're here. Take the first few reps easy, find your rhythm, and I'll keep you moving well.",
   },
   {
     id: 'jess',
@@ -43,9 +43,9 @@ export const TRAINERS: Trainer[] = [
     specialty: 'Lower body strength & hypertrophy',
     description: 'Jess built a large online following teaching proper lower-body mechanics and glute training. She\'s passionate about teaching proper hip hinge technique and eliminating ego lifting.',
     gender: 'female',
-    voiceId: 'FGY2WhTYpPnrIDTdsKH5', // Domi
-    voiceSettings: { speed: 1.05, stability: 0.4, similarity: 0.8, styleExaggeration: 0.3 },
-    greeting: "Hey, I'm Jess. Stay powerful, stay steady, and make every rep count. Let's build real strength.",
+    voiceId: 'l4Coq6695JDX9xtLqXDE',
+    voiceSettings: { speed: 1.07, stability: 0.48, similarity: 0.84, styleExaggeration: 0.18 },
+    greeting: "Hey, I'm Jess. Let's settle in, get strong, and make these reps count. I'll nudge you when something needs cleaning up.",
   },
   {
     id: 'sofia',
@@ -54,9 +54,9 @@ export const TRAINERS: Trainer[] = [
     specialty: 'Biomechanics & injury-preventive strength',
     description: 'Sofia holds a PhD in Biomechanics and worked in sports rehabilitation before transitioning into strength coaching. She blends scientific explanation with practical cues.',
     gender: 'female',
-    voiceId: 'Xb7hH8MSUJpSbSDYk0k2', // Bella
-    voiceSettings: { speed: 1.0, stability: 0.55, similarity: 0.8, styleExaggeration: 0.1 },
-    greeting: "Hello, I'm Sofia. Clean movement first. Train smart, stay patient, and progress will follow.",
+    voiceId: 'uJCs8Cm3vdGWEkXI6wUX',
+    voiceSettings: { speed: 0.98, stability: 0.64, similarity: 0.88, styleExaggeration: 0.04 },
+    greeting: "Hi, I'm Sofia. We'll keep this smart and steady. Move well first, then we can build from there.",
   },
   // Male trainers
   {
@@ -66,9 +66,9 @@ export const TRAINERS: Trainer[] = [
     specialty: 'Strength & Hypertrophy',
     description: 'Marcus competed in regional powerlifting competitions in his 20s before transitioning into coaching. He holds a degree in Sports Science and has coached over 300 clients in strength transformation programs. He’s obsessed with perfect bar path, controlled eccentrics, and measurable progression.',
     gender: 'male',
-    voiceId: 'iP95p4xoKVk53GoZ742B', // Chris
-    voiceSettings: { speed: 0.95, stability: 0.6, similarity: 0.8, styleExaggeration: 0.05 },
-    greeting: "I'm Marcus. Strength comes from control and precision. Focus on the next rep, and the results will come.",
+    voiceId: 'c6SfcYrb2t09NHXiT80T',
+    voiceSettings: { speed: 0.97, stability: 0.62, similarity: 0.87, styleExaggeration: 0.06 },
+    greeting: "Hey, I'm Marcus. Good to have you here. Stay controlled, listen for the small fixes, and we'll get some solid work in.",
   },
   {
     id: 'jake',
@@ -77,9 +77,9 @@ export const TRAINERS: Trainer[] = [
     specialty: 'Lean muscle & athletic conditioning',
     description: 'Jake grew up playing football and transitioned into strength training after a knee injury ended his competitive career. He now focuses on functional strength, explosive training, and building aesthetic, athletic physiques.',
     gender: 'male',
-    voiceId: 'bIHbv24MWmeRgasZH58o', // Will
-    voiceSettings: { speed: 1.05, stability: 0.45, similarity: 0.8, styleExaggeration: 0.25 },
-    greeting: "Hi, I'm Jake. Bring the energy, move with purpose, and get a little better every set. Let's work.",
+    voiceId: 'l30f87tf05uxyknGdDw6',
+    voiceSettings: { speed: 1.08, stability: 0.5, similarity: 0.84, styleExaggeration: 0.16 },
+    greeting: "Hey, I'm Jake. Glad you're training today. Bring a bit of energy, and I'll help you keep the reps sharp.",
   },
   {
     id: 'owen',
@@ -88,9 +88,9 @@ export const TRAINERS: Trainer[] = [
     specialty: 'Advanced strength & body recomposition',
     description: 'Owen started lifting at 16 and has trained consistently for over 20 years. After transforming his own physique dramatically in his early 30s, he became a coach specialising in sustainable fat loss and muscle retention.',
     gender: 'male',
-    voiceId: 'TX3LPaxmHKxFdv7VOQHJ', // Liam
-    voiceSettings: { speed: 0.9, stability: 0.6, similarity: 0.8, styleExaggeration: 0.1 },
-    greeting: "Hey, I'm Owen. Stay disciplined, own every rep, and we'll build strength you can keep.",
+    voiceId: 'MdeqL1TMyZWz86QOELK8',
+    voiceSettings: { speed: 0.94, stability: 0.65, similarity: 0.88, styleExaggeration: 0.05 },
+    greeting: "Hey, I'm Owen. Let's keep this simple: clean reps, steady effort, and no rushing. I'll talk you through it.",
   },
 ];
 

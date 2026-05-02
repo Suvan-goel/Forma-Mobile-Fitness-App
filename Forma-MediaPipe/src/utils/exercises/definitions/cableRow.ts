@@ -893,7 +893,7 @@ export function createCableRowDefinition(
       ],
       'Slow down the pull \u2014 control the contraction.': [
         'Slow the pull.',
-        'Control the contraction.',
+        'Control the squeeze.',
         'Pull back smoothly and squeeze.',
       ],
       "Control the return \u2014 don't let the weight pull you forward.": [
@@ -909,24 +909,24 @@ export function createCableRowDefinition(
         messages: [
           'Pull it all the way back.',
           'Squeeze those shoulder blades.',
-          'Deeper pull, more back activation.',
+          'Pull deeper and squeeze.',
         ],
       },
       {
         issueType: 'row_extension',
         priority: 15,
         messages: [
-          'Stretch those arms out fully.',
+          'Let your arms stretch forward.',
           'Full extension at the front.',
-          'Get a complete stretch.',
+          'Find the full stretch.',
         ],
       },
       {
         issueType: 'shoulder_retraction',
         priority: 20,
         messages: [
-          'Elbows back, squeeze the back.',
-          'Focus on retracting your shoulders.',
+          'Elbows back. Squeeze your shoulder blades.',
+          'Squeeze your shoulder blades.',
           'Drive those elbows behind you.',
         ],
       },

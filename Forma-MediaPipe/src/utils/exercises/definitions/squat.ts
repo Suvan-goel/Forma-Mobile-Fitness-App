@@ -971,28 +971,28 @@ export function createSquatDefinition(
     feedbackMessages: {
       'Squat deeper \u2014 aim to get your thighs parallel.': [
         'Squat deeper.',
-        'Aim for thighs parallel.',
+        'Aim for parallel.',
         'Drop a little lower with control.',
       ],
       'Try to go a little deeper for full range of motion.': [
         'A little more depth.',
-        'You are close. Sink slightly deeper.',
-        'Reach full squat depth next rep.',
+        "You're close. Sink a touch deeper.",
+        'Find full depth next rep.',
       ],
       'Stand all the way up \u2014 fully extend your knees.': [
         'Stand all the way up.',
         'Finish tall at the top.',
-        'Fully extend your knees at the top.',
+        'Finish with your knees straight.',
       ],
       'Too much forward lean \u2014 keep your chest up.': [
         'Chest up.',
         'Too much forward lean. Stay tall.',
-        'Brace hard and keep your chest lifted.',
+        'Brace and keep your chest up.',
       ],
       'Stay more upright \u2014 brace your core.': [
         'Stay more upright.',
         'Brace your core and keep your chest up.',
-        'Tall torso through the rep.',
+        'Keep your torso tall.',
       ],
       'Control the ascent \u2014 don\'t bounce out of the hole.': [
         'Drive up with control.',
@@ -1000,7 +1000,7 @@ export function createSquatDefinition(
         'Smooth ascent, stay braced.',
       ],
       'Slow the descent \u2014 control the weight down.': [
-        'Control the way down.',
+        'Control it on the way down.',
         'Slow the descent.',
         "Don't drop into the squat.",
       ],

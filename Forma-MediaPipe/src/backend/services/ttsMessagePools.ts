@@ -46,53 +46,53 @@ export interface MessagePool {
 export const ISSUE_POOLS: Record<string, MessagePool> = {
   incomplete_flex: {
     messages: [
-      'Squeeze harder at the top.',
-      'Curl it all the way up.',
-      'Get a full contraction up top.',
-      'Bring it higher — full curl.',
+      'Squeeze at the top.',
+      'Curl all the way up.',
+      'Finish the contraction up top.',
+      'Bring it a bit higher.',
     ],
   },
   incomplete_extend: {
     messages: [
       'Extend all the way down.',
-      'Let your arms straighten at the bottom.',
-      'Full stretch at the bottom.',
-      "Don't cut the rep short — extend fully.",
+      'Let your arms straighten.',
+      'Find the stretch at the bottom.',
+      "Don't cut it short. Finish the rep.",
     ],
   },
   incomplete_rom: {
     messages: [
-      'Bigger range of motion.',
-      'Use the full range.',
+      'Use a bigger range.',
+      'Give me the full range.',
       'Go all the way up and all the way down.',
     ],
   },
   shoulder_fail: {
     messages: [
-      'Too much shoulder. Drop the weight.',
-      "Your shoulders are doing the work — go lighter.",
-      'Shoulders are taking over. Reduce the load.',
+      'Too much shoulder. Go lighter.',
+      'Shoulders are taking over. Ease the load.',
+      'Make it stricter. Drop the weight.',
     ],
   },
   shoulder_warn: {
     messages: [
-      'Pin your elbows to your sides.',
-      'Keep those elbows still.',
-      "Elbows are drifting — lock them in.",
+      'Keep your elbows by your sides.',
+      'Hold those elbows still.',
+      'Elbows are drifting. Lock them in.',
       'Tighter elbows.',
     ],
   },
   torso_fail: {
     messages: [
-      "Way too much swing. That's momentum, not muscle.",
-      "Stop swinging — that's not a real rep.",
-      "You're using your whole body. Brace and isolate.",
+      'Too much swing. Tighten it up.',
+      'Brace hard and keep it strict.',
+      'Less momentum. Make the muscle work.',
     ],
   },
   torso_warn: {
     messages: [
-      "Stay upright — don't swing.",
-      'Keep your torso still.',
+      'Stay upright and steady.',
+      'Keep your torso quiet.',
       'Brace your core and stay tight.',
       'Less body swing.',
     ],
@@ -100,15 +100,15 @@ export const ISSUE_POOLS: Record<string, MessagePool> = {
   tempo_up: {
     messages: [
       'Slow it down.',
-      "Control the curl — don't rush it.",
+      'Move with control. No rushing.',
       'Slower on the way up.',
     ],
   },
   tempo_down: {
     messages: [
-      'Control the descent.',
-      'Slow the negative.',
-      "Don't just drop it — lower with control.",
+      'Control the way down.',
+      'Lower with control.',
+      "Don't drop it. Stay smooth.",
     ],
   },
   asymmetry: {
@@ -120,10 +120,10 @@ export const ISSUE_POOLS: Record<string, MessagePool> = {
   },
   depth_short: {
     messages: [
-      'Go deeper.',
-      'Get your chest closer to the floor.',
-      'Lower — aim for ninety degrees.',
-      'Not deep enough.',
+      'Go a little deeper.',
+      'Find a bit more depth.',
+      'Lower with control.',
+      'Not quite deep enough.',
     ],
   },
   lockout_short: {
@@ -135,17 +135,17 @@ export const ISSUE_POOLS: Record<string, MessagePool> = {
   },
   hip_sag: {
     messages: [
-      'Hips are dropping — squeeze your core.',
-      'Tighten your core — keep that body straight.',
-      'Your hips are sagging.',
-      'Brace your abs — straight line from head to heels.',
+      'Hips are dropping. Brace your core.',
+      'Tighten your core and hold the line.',
+      'Lift your hips slightly.',
+      'Straight line from head to heels.',
     ],
   },
   hip_pike: {
     messages: [
-      'Drop your hips down.',
-      'Your hips are too high — flatten out.',
-      'Stop piking — keep a straight body line.',
+      'Bring your hips down.',
+      'Hips are too high. Flatten out.',
+      'Less pike. Keep one straight line.',
     ],
   },
 };
@@ -162,11 +162,11 @@ export const POSITIVE_POOLS: Record<PositiveCategory, MessagePool> = {
       'Clean rep. Same again.',
       'That moved well.',
       'Solid form. Keep going.',
-      "That's the shape we want.",
+      "That's the shape. Keep it there.",
       'Looking strong. Stay smooth.',
-      'Great control there.',
+      'Good control there.',
       'Yes, just like that.',
-      'Perfect. Own the next one.',
+      'Nice. Own the next one.',
     ],
   },
   transition_good: {
@@ -174,7 +174,7 @@ export const POSITIVE_POOLS: Record<PositiveCategory, MessagePool> = {
       'There you go. Much better.',
       "That's the correction.",
       'Good adjustment. Keep it there.',
-      "Now you've got it. Stay consistent.",
+      "You've got it now. Stay consistent.",
       'Better form. Repeat that.',
       'Nice fix. Keep that control.',
     ],
@@ -189,26 +189,26 @@ export const POSITIVE_POOLS: Record<PositiveCategory, MessagePool> = {
 const SET_SUMMARY_POOLS: Record<SetSummaryCategory, MessagePool> = {
   excellent: {
     messages: [
-      'Great set. {reps}, strong form throughout.',
+      'Great set. {reps}, and the form stayed sharp.',
       'Nice work. {reps} with clean control.',
-      'Excellent set. {reps}, and the form stayed sharp.',
+      'Excellent set. {reps}, smooth from start to finish.',
       'That was a strong one. {reps}, well controlled.',
     ],
   },
   solid: {
     messages: [
       'Good set. {reps}. Keep chasing cleaner reps.',
-      '{reps} done. Solid work, with room to sharpen the form.',
+      '{reps} done. Solid work. A little cleaner next time.',
       'Nice effort. {reps}. Stay patient with the technique.',
       'Set complete. {reps}. Keep building that consistency.',
     ],
   },
   needs_work: {
     messages: [
-      'Set done. {reps}. Next set, slow it down and clean it up.',
-      '{reps} complete. Focus on control before adding intensity.',
+      'Set done. {reps}. Next one, slow it down and clean it up.',
+      '{reps} complete. Focus on control before intensity.',
       'Good effort. {reps}. Let the next set be cleaner.',
-      'Set finished. {reps}. Reset, breathe, and tighten the form.',
+      'Set finished. {reps}. Reset, breathe, and tighten it up.',
     ],
   },
 };
@@ -230,29 +230,29 @@ export type SetStartCategory = 'encouragement' | 'form_reminder' | 'neutral';
 const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
   encouragement: {
     messages: [
-      "Let's go. {exercise}. You've got this.",
-      '{exercise}. Time to lock in.',
-      'All right. {exercise}. Make these reps count.',
-      '{exercise}. Bring strong, controlled reps.',
-      'Here we go. {exercise}. Stay steady.',
+      "Alright, {exercise}. Let's get into it.",
+      '{exercise} next. Take a breath and lock in.',
+      'Here we go: {exercise}. Make these reps count.',
+      '{exercise}. Strong and controlled.',
+      'Okay, {exercise}. Start smooth.',
     ],
   },
   form_reminder: {
     messages: [
-      '{exercise}. Keep every rep clean.',
-      '{exercise} coming up. Control the tempo and breathe.',
+      '{exercise}. Keep the first rep clean.',
+      '{exercise} coming up. Control it and breathe.',
       '{exercise}. Form first, then power.',
-      '{exercise}. Smooth reps from start to finish.',
-      '{exercise}. Stay braced and move with control.',
+      '{exercise}. Smooth reps, start to finish.',
+      '{exercise}. Stay braced and move well.',
     ],
   },
   neutral: {
     messages: [
       '{exercise}. Ready when you are.',
       'Next up: {exercise}.',
-      '{exercise}. Set starting.',
-      '{exercise}. Lock in.',
-      '{exercise}. Start strong.',
+      '{exercise}. Set starts now.',
+      '{exercise}. Lock it in.',
+      '{exercise}. Start steady.',
     ],
   },
 };
@@ -319,7 +319,7 @@ export const FEEDBACK_TO_ISSUE: Record<string, string> = {
 export const FEEDBACK_TTS_POOLS: Record<string, MessagePool> = {
   'Use more range for this rep to count.': {
     messages: [
-      'Use more range for this rep to count.',
+      'Use more range for that rep.',
       'That one was short. Give me more range.',
       'Bigger range next rep, nice and controlled.',
       'Make the next one fuller.',

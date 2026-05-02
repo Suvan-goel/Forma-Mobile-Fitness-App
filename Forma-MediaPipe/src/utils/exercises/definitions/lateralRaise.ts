@@ -856,9 +856,9 @@ export function createLateralRaiseDefinition(
         issueType: 'rom_height',
         priority: 25,
         messages: [
-          'Get those arms up higher.',
-          'Raise to shoulder height.',
           'Lift a bit higher.',
+          'Raise to shoulder height.',
+          'Bring the weights to shoulder height.',
         ],
       },
       {
@@ -867,7 +867,7 @@ export function createLateralRaiseDefinition(
         messages: [
           'Stop at shoulder height.',
           "Don't lift above shoulder level.",
-          'Cap the raise at shoulder height.',
+          'Keep it at shoulder height.',
         ],
       },
       {
@@ -876,7 +876,7 @@ export function createLateralRaiseDefinition(
         messages: [
           'Straighten your arms more.',
           'Less bend in the elbows.',
-          'Keep arms extended.',
+          'Keep your arms long.',
         ],
       },
       {

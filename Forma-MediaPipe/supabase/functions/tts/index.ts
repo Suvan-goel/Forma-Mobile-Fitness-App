@@ -9,12 +9,12 @@ const corsHeaders = {
 const MAX_TEXT_LENGTH = 240;
 const ALLOWED_VOICE_IDS = new Set([
   '21m00Tcm4TlvDq8ikWAM',
-  'SAz9YHcvj6GT2YYXdXww',
-  'FGY2WhTYpPnrIDTdsKH5',
-  'Xb7hH8MSUJpSbSDYk0k2',
-  'iP95p4xoKVk53GoZ742B',
-  'bIHbv24MWmeRgasZH58o',
-  'TX3LPaxmHKxFdv7VOQHJ',
+  '8N2ng9i2uiUWqstgmWlH',
+  'l4Coq6695JDX9xtLqXDE',
+  'uJCs8Cm3vdGWEkXI6wUX',
+  'c6SfcYrb2t09NHXiT80T',
+  'l30f87tf05uxyknGdDw6',
+  'MdeqL1TMyZWz86QOELK8',
 ]);
 
 function jsonResponse(body: Record<string, unknown>, status: number) {

@@ -227,8 +227,8 @@ export const RecordLandingScreen: React.FC = () => {
   const sectionGap = compactHeight ? 8 : 12;
   const templateCardWidth =
     (windowWidth - CAPTURE_HORIZONTAL_PADDING * 2 - TEMPLATE_CARD_GAP * 2) / 3;
-  const templateThumbHeight = Math.min(templateCardWidth, compactHeight ? 78 : 104);
-  const templateCardHeight = templateThumbHeight + (compactHeight ? 58 : 66);
+  const templateThumbHeight = Math.min(templateCardWidth + 6, compactHeight ? 84 : 112);
+  const templateCardHeight = templateThumbHeight + (compactHeight ? 70 : 80);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -1154,32 +1154,31 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 0,
-    gap: 6,
+    paddingTop: 9,
+    paddingBottom: 10,
+    gap: 7,
     overflow: 'hidden',
   },
   templateThumb: {
     width: '100%',
-    borderTopLeftRadius: CARD_RADIUS,
-    borderTopRightRadius: CARD_RADIUS,
+    borderRadius: CARD_RADIUS - 2,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingHorizontal: 5,
+    paddingTop: 2,
+    paddingBottom: 2,
     backgroundColor: 'transparent',
   },
   templateCollageGrid: {
     flex: 1,
     alignSelf: 'stretch',
-    gap: 2,
+    gap: 1,
   },
   templateCollageGridRow: {
     flex: 1,
     flexDirection: 'row',
-    gap: 2,
+    gap: 1,
   },
   templateCollageGridImage: {
     flex: 1,
@@ -1193,8 +1192,8 @@ const styles = StyleSheet.create({
     gap: 2,
     flexShrink: 0,
     paddingHorizontal: 12,
-    paddingTop: 4,
-    paddingBottom: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
   templateName: {
     fontFamily: FONTS.display.semibold,

@@ -874,7 +874,7 @@ export function createLegExtensionsDefinition(
     feedbackMessages: {
       'Extend fully \u2014 straighten your legs completely at the top.': [
         'Straighten your legs fully.',
-        'Finish the extension at the top.',
+        'Finish the rep at the top.',
         'Squeeze the quads at full extension.',
       ],
       'Keep your back against the pad \u2014 avoid leaning forward.': [
@@ -890,7 +890,7 @@ export function createLegExtensionsDefinition(
       'Slow down the extension \u2014 control the lift.': [
         'Slow the extension.',
         'Lift with control.',
-        'Smooth quad squeeze to the top.',
+        'Smooth squeeze to the top.',
       ],
       "Control the return \u2014 don't let the weight drop.": [
         'Control the return.',
@@ -903,8 +903,8 @@ export function createLegExtensionsDefinition(
         issueType: 'rom_short_leg_ext',
         priority: 20,
         messages: [
-          'Get a fuller bend at the bottom.',
-          'Start from a deeper position.',
+          'Use a deeper bend at the bottom.',
+          'Start from a deeper bend.',
           'More range at the bottom.',
         ],
       },
@@ -913,8 +913,8 @@ export function createLegExtensionsDefinition(
         priority: 25,
         messages: [
           'Stay seated.',
-          'Hips on the pad.',
-          'Keep your butt down.',
+          'Keep your hips on the pad.',
+          'Keep your seat planted.',
         ],
       },
     ],

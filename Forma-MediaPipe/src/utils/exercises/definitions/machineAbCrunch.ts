@@ -757,7 +757,7 @@ export function createMachineAbCrunchDefinition(
     feedbackMessages: {
       'Crunch deeper \u2014 bring your chest closer to your knees.': [
         'Crunch deeper.',
-        'Bring your ribs closer to your pelvis.',
+        'Bring your ribs toward your hips.',
         'Curl down a little farther.',
       ],
       'Extend fully \u2014 return to the upright position.': [
@@ -768,7 +768,7 @@ export function createMachineAbCrunchDefinition(
       'Slow down the crunch \u2014 control the movement.': [
         'Slow the crunch down.',
         'Curl with control.',
-        'Control the squeeze through your abs.',
+        'Squeeze through your abs.',
       ],
       'Control the return \u2014 resist on the way back.': [
         'Control the return.',

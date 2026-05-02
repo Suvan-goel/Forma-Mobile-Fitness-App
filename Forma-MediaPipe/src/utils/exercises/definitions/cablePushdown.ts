@@ -878,7 +878,7 @@ export function createCablePushdownDefinition(
     feedbackMessages: {
       'Extend fully \u2014 lock out at the bottom of each rep.': [
         'Lock out at the bottom.',
-        'Finish the pushdown all the way.',
+        'Finish the pushdown.',
         'Full extension at the bottom.',
       ],
       'Start with a deeper bend \u2014 bring your forearms closer to your biceps.': [
@@ -892,7 +892,7 @@ export function createCablePushdownDefinition(
         'Brace your core and stay upright.',
       ],
       'Slow down the push \u2014 control the extension.': [
-        'Slow the press down.',
+        'Press down with control.',
         'Control the pushdown.',
         'Press with control, no rushing.',
       ],
@@ -916,7 +916,7 @@ export function createCablePushdownDefinition(
         issueType: 'elbow_drift',
         priority: 25,
         messages: [
-          'Pin your elbows.',
+          'Keep your elbows pinned.',
           'Elbows tight to your sides.',
           'Lock those elbows in place.',
         ],
