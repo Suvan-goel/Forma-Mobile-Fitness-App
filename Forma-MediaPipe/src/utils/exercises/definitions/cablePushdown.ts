@@ -22,9 +22,16 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/cablePushdown.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
@@ -141,6 +148,35 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+
+const DEFAULT_CABLE_PUSHDOWN_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  penaltyConfigs: PENALTY_CONFIGS,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_CABLE_PUSHDOWN_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_CABLE_PUSHDOWN_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const CABLE_PUSHDOWN_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Cable Pushdowns',
+  DEFAULT_CABLE_PUSHDOWN_HEURISTIC_CONFIG,
+);
+
+const CABLE_PUSHDOWN_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
+];
+
+function withCablePushdownConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, CABLE_PUSHDOWN_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -737,7 +773,10 @@ function getDebugInfo(state: CablePushdownState): CablePushdownDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const cablePushdownDefinition: ExerciseDefinition = {
+export function createCablePushdownDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_CABLE_PUSHDOWN_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Cable Pushdowns',
   requiredView: 'side',
 
@@ -747,12 +786,15 @@ export const cablePushdownDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeCablePushdownState(),
+    _internal: withCablePushdownConfig(config, () => initializeCablePushdownState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as CablePushdownState;
-    const newInternal = updateCablePushdownState(keypoints, internal);
+    const newInternal = withCablePushdownConfig(
+      config,
+      () => updateCablePushdownState(keypoints, internal),
+    );
 
     // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
@@ -772,6 +814,12 @@ export const cablePushdownDefinition: ExerciseDefinition = {
       _internal: newInternal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: CABLE_PUSHDOWN_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/cablePushdown.json',
+  createVariant: (variantConfig) =>
+    createCablePushdownDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -818,4 +866,7 @@ export const cablePushdownDefinition: ExerciseDefinition = {
     "Control the return \u2014 don't let the weight snap back.":
       'Slow the eccentric phase \u2014 resist the weight on the way up for 2-3 seconds.',
   },
-};
+  };
+}
+
+export const cablePushdownDefinition: ExerciseDefinition = createCablePushdownDefinition();

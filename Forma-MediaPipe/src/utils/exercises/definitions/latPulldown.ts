@@ -24,9 +24,16 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/latPulldown.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
@@ -89,6 +96,35 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+
+const DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  penaltyConfigs: PENALTY_CONFIGS,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_LAT_PULLDOWN_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const LAT_PULLDOWN_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Cable Lat Pulldowns',
+  DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG,
+);
+
+const LAT_PULLDOWN_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
+];
+
+function withLatPulldownConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, LAT_PULLDOWN_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -580,7 +616,10 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const latPulldownDefinition: ExerciseDefinition = {
+export function createLatPulldownDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_LAT_PULLDOWN_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Cable Lat Pulldowns',
   requiredView: 'side',
 
@@ -590,12 +629,12 @@ export const latPulldownDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeState(),
+    _internal: withLatPulldownConfig(config, () => initializeState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as LatPulldownState;
-    updateLatPulldownState(keypoints, internal);
+    withLatPulldownConfig(config, () => updateLatPulldownState(keypoints, internal));
 
     const lastRepResult: FrameworkRepResult | null = internal.lastRepResult
       ? {
@@ -614,6 +653,12 @@ export const latPulldownDefinition: ExerciseDefinition = {
       _internal: internal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: LAT_PULLDOWN_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/latPulldown.json',
+  createVariant: (variantConfig) =>
+    createLatPulldownDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -637,4 +682,7 @@ export const latPulldownDefinition: ExerciseDefinition = {
     'Control the return \u2014 resist the weight on the way up.':
       'Slow the eccentric phase \u2014 resist the weight for 2-3 seconds on the way up for better lat engagement.',
   },
-};
+  };
+}
+
+export const latPulldownDefinition: ExerciseDefinition = createLatPulldownDefinition();

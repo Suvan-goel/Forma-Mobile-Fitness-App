@@ -1,0 +1,58 @@
+{
+  "_templateNotes": [
+    "Copy this file to a new label file such as lateral_raise_001.json, then edit the paths, split, expectedReps, and reps.",
+    "Use issueIds from availableIssues. Use an empty issueIds array for a clean rep.",
+    "Files named _template.json or *.template.json are ignored by dataset:evaluate and dataset:optimize."
+  ],
+  "schemaVersion": 1,
+  "exerciseName": "Standing Dumbbell Lateral Raises",
+  "sourceVideo": "videos/standing-dumbbell-lateral-raises/<video-file>.mp4",
+  "landmarkFile": "landmarks/standing-dumbbell-lateral-raises/<video-file>.json",
+  "split": "train",
+  "reviewStatus": "draft",
+  "expectedReps": 1,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 0,
+      "endMs": 1000,
+      "issueIds": [],
+      "notes": "Clean rep or describe the visible form issue.",
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "suggestedScore": 100
+    }
+  ],
+  "notes": "Draft label template. Copy to a real label file, review timings/issues, then set reviewStatus to reviewed.",
+  "availableIssues": [
+    {
+      "issueId": "standing-dumbbell-lateral-raises.rom_height",
+      "feedbackMessage": "Raise higher \u2014 aim for shoulder level."
+    },
+    {
+      "issueId": "standing-dumbbell-lateral-raises.elbow_bend",
+      "feedbackMessage": "Keep your arms straighter \u2014 avoid excessive elbow bend."
+    },
+    {
+      "issueId": "standing-dumbbell-lateral-raises.torso_warn",
+      "feedbackMessage": "Stay upright \u2014 avoid swaying or leaning."
+    },
+    {
+      "issueId": "standing-dumbbell-lateral-raises.asymmetry",
+      "feedbackMessage": "Even it out \u2014 raise both arms to the same height."
+    },
+    {
+      "issueId": "standing-dumbbell-lateral-raises.tempo_down",
+      "feedbackMessage": "Control the descent \u2014 lower the weights slowly."
+    },
+    {
+      "issueId": "standing-dumbbell-lateral-raises.shoulder_shrug",
+      "feedbackMessage": "Relax your traps \u2014 don't shrug the weight up."
+    }
+  ],
+  "draftMetadata": {
+    "generatedAt": "<generated-at>",
+    "generator": "manual-template",
+    "source": "heuristic-replay"
+  }
+}

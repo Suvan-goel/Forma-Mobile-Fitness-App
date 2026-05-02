@@ -25,9 +25,16 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/machineAbCrunch.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
@@ -90,6 +97,35 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+
+const DEFAULT_MACHINE_AB_CRUNCH_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  penaltyConfigs: PENALTY_CONFIGS,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_MACHINE_AB_CRUNCH_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_MACHINE_AB_CRUNCH_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const MACHINE_AB_CRUNCH_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Machine Ab Crunches',
+  DEFAULT_MACHINE_AB_CRUNCH_HEURISTIC_CONFIG,
+);
+
+const MACHINE_AB_CRUNCH_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
+];
+
+function withMachineAbCrunchConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, MACHINE_AB_CRUNCH_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -582,7 +618,10 @@ function getDebugInfo(state: AbCrunchState): AbCrunchDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const machineAbCrunchDefinition: ExerciseDefinition = {
+export function createMachineAbCrunchDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_MACHINE_AB_CRUNCH_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Machine Ab Crunches',
   requiredView: 'side',
 
@@ -592,12 +631,12 @@ export const machineAbCrunchDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeState(),
+    _internal: withMachineAbCrunchConfig(config, () => initializeState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as AbCrunchState;
-    updateAbCrunchState(keypoints, internal);
+    withMachineAbCrunchConfig(config, () => updateAbCrunchState(keypoints, internal));
 
     const lastRepResult: FrameworkRepResult | null = internal.lastRepResult
       ? {
@@ -616,6 +655,12 @@ export const machineAbCrunchDefinition: ExerciseDefinition = {
       _internal: internal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: MACHINE_AB_CRUNCH_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/machineAbCrunch.json',
+  createVariant: (variantConfig) =>
+    createMachineAbCrunchDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -651,4 +696,7 @@ export const machineAbCrunchDefinition: ExerciseDefinition = {
     'Control the return \u2014 resist on the way back.':
       'Slow the eccentric phase \u2014 resist the weight for 2-3 seconds on the way back for better ab engagement.',
   },
-};
+  };
+}
+
+export const machineAbCrunchDefinition: ExerciseDefinition = createMachineAbCrunchDefinition();

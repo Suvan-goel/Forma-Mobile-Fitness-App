@@ -30,9 +30,16 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/cableRow.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
@@ -127,6 +134,35 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+
+const DEFAULT_CABLE_ROW_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  penaltyConfigs: PENALTY_CONFIGS,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_CABLE_ROW_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_CABLE_ROW_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const CABLE_ROW_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Cable Row',
+  DEFAULT_CABLE_ROW_HEURISTIC_CONFIG,
+);
+
+const CABLE_ROW_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
+];
+
+function withCableRowConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, CABLE_ROW_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -745,7 +781,10 @@ function getDebugInfo(state: CableRowState): CableRowDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const cableRowDefinition: ExerciseDefinition = {
+export function createCableRowDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_CABLE_ROW_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Cable Row',
   requiredView: 'side',
 
@@ -755,12 +794,15 @@ export const cableRowDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeCableRowState(),
+    _internal: withCableRowConfig(config, () => initializeCableRowState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as CableRowState;
-    const newInternal = updateCableRowState(keypoints, internal);
+    const newInternal = withCableRowConfig(
+      config,
+      () => updateCableRowState(keypoints, internal),
+    );
 
     // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
@@ -780,6 +822,12 @@ export const cableRowDefinition: ExerciseDefinition = {
       _internal: newInternal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: CABLE_ROW_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/cableRow.json',
+  createVariant: (variantConfig) =>
+    createCableRowDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -835,4 +883,7 @@ export const cableRowDefinition: ExerciseDefinition = {
     "Control the return \u2014 don't let the weight pull you forward.":
       'Resist the weight on the return phase \u2014 aim for 2-3 seconds of controlled eccentric movement.',
   },
-};
+  };
+}
+
+export const cableRowDefinition: ExerciseDefinition = createCableRowDefinition();

@@ -29,9 +29,16 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/lyingLegCurl.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
@@ -124,6 +131,35 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+
+const DEFAULT_LYING_LEG_CURL_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  penaltyConfigs: PENALTY_CONFIGS,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_LYING_LEG_CURL_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_LYING_LEG_CURL_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const LYING_LEG_CURL_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Lying Leg Curl',
+  DEFAULT_LYING_LEG_CURL_HEURISTIC_CONFIG,
+);
+
+const LYING_LEG_CURL_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
+];
+
+function withLyingLegCurlConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, LYING_LEG_CURL_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -676,7 +712,10 @@ function getDebugInfo(state: LyingLegCurlState): LyingLegCurlDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const lyingLegCurlDefinition: ExerciseDefinition = {
+export function createLyingLegCurlDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_LYING_LEG_CURL_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Lying Leg Curl',
   requiredView: 'side',
 
@@ -686,12 +725,15 @@ export const lyingLegCurlDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeLyingLegCurlState(),
+    _internal: withLyingLegCurlConfig(config, () => initializeLyingLegCurlState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as LyingLegCurlState;
-    const newInternal = updateLyingLegCurlState(keypoints, internal);
+    const newInternal = withLyingLegCurlConfig(
+      config,
+      () => updateLyingLegCurlState(keypoints, internal),
+    );
 
     // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
@@ -711,6 +753,12 @@ export const lyingLegCurlDefinition: ExerciseDefinition = {
       _internal: newInternal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: LYING_LEG_CURL_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/lyingLegCurl.json',
+  createVariant: (variantConfig) =>
+    createLyingLegCurlDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -763,4 +811,7 @@ export const lyingLegCurlDefinition: ExerciseDefinition = {
     'Control the descent \u2014 lower the weight slowly.':
       'Slow the eccentric phase \u2014 resist the weight on the way down for 2-3 seconds.',
   },
-};
+  };
+}
+
+export const lyingLegCurlDefinition: ExerciseDefinition = createLyingLegCurlDefinition();

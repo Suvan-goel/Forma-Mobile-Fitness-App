@@ -1,0 +1,15 @@
+videos/**
+!videos/**/
+!videos/**/.gitkeep
+
+landmarks/**
+!landmarks/**/
+!landmarks/**/.gitkeep
+
+reports/**
+!reports/**/
+!reports/**/.gitkeep
+
+candidates/**
+!candidates/**/
+!candidates/**/.gitkeep

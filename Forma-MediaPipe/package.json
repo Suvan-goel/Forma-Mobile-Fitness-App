@@ -11,6 +11,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "recordings:server": "node scripts/recording-server.js",
+    "dataset:extract": "python3 scripts/extract-video-landmarks.py",
+    "dataset:prepare": "node scripts/run-dataset-command.js prepare",
+    "dataset:draft-label": "node scripts/run-dataset-command.js draft-label",
+    "dataset:evaluate": "FORMA_RUN_DATASET_EVALUATE=1 jest scripts/dataset-evaluate.ts --runInBand --no-coverage --verbose",
+    "dataset:optimize": "tsx scripts/dataset-optimize-cli.ts",
+    "dataset:optimize:exercise": "tsx scripts/dataset-optimize-cli.ts",
     "postinstall": "patch-package && node scripts/fix-ios-jsc.js",
     "prebuild:ios": "expo prebuild --platform ios --clean && node scripts/fix-ios-jsc.js && cd ios && pod install",
     "test": "jest",
@@ -60,6 +66,7 @@
     "patch-package": "^8.0.0",
     "react-native-svg-transformer": "^1.5.3",
     "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.3"
   },
   "overrides": {

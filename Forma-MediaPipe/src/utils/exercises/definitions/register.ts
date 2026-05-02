@@ -10,6 +10,7 @@
  */
 
 import { ExerciseRegistry } from '../ExerciseRegistry';
+import { getFeedbackIssueIdMap } from '../replay';
 import { mergeTTSConfig } from '../../../backend/services/ttsMessagePools';
 import { mergeSummaryConfig } from '../../setNotesSummary';
 import type { ExerciseDefinition } from '../types';
@@ -26,9 +27,14 @@ import { squatDefinition } from './squat';
 
 /** Register an exercise and merge its TTS + summary configs into the global maps. */
 function registerExercise(definition: ExerciseDefinition): void {
-  ExerciseRegistry.register(definition);
-  mergeTTSConfig(definition.ttsConfig);
-  mergeSummaryConfig(definition.summaryConfig);
+  const normalizedDefinition: ExerciseDefinition = {
+    ...definition,
+    feedbackToIssueId: getFeedbackIssueIdMap(definition),
+  };
+
+  ExerciseRegistry.register(normalizedDefinition);
+  mergeTTSConfig(normalizedDefinition.ttsConfig);
+  mergeSummaryConfig(normalizedDefinition.summaryConfig);
 }
 
 // ── Register all exercises ──

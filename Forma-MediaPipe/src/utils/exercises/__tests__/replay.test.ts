@@ -58,7 +58,7 @@ if (recordings.length === 0) {
     });
 
     it('scores within the expected range', () => {
-      const [minScore, maxScore] = recording.metadata.expectedScoreRange;
+      const [minScore, maxScore] = recording.metadata.expectedScoreRange ?? [0, 100];
       const result = replayRecording(definition, recording);
       result.repScores.forEach(score => {
         expect(score).toBeGreaterThanOrEqual(minScore);

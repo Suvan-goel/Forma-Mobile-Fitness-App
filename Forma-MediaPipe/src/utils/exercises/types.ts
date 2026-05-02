@@ -34,6 +34,11 @@ export interface RepResult {
   repIndex: number;
   score: number;         // 0-100
   messages: string[];    // Visual feedback strings (may be empty for perfect rep)
+  /**
+   * Stable issue identifiers for dataset evaluation.
+   * Runtime UI/TTS still uses messages; dataset tooling derives this when absent.
+   */
+  issueIds?: string[];
 }
 
 // ============================================================================
@@ -49,6 +54,49 @@ export interface ExerciseTTSConfig {
     priority: number;
     messages: string[];
   }>;
+}
+
+export type ExerciseHeuristicConfigValue =
+  | number
+  | string
+  | boolean
+  | null
+  | object;
+
+export interface ExerciseHeuristicConfig {
+  [key: string]: ExerciseHeuristicConfigValue;
+}
+
+export interface NumericTunable {
+  path: string;
+  min: number;
+  max: number;
+  step: number;
+  kind: 'fsm' | 'feedback' | 'scoring';
+}
+
+export interface TunableSpec {
+  exerciseName: string;
+  tunables: NumericTunable[];
+  search?: {
+    randomCandidates?: number;
+    survivorCount?: number;
+    refinementRounds?: number;
+    seed?: number;
+    applyGates?: {
+      minValidationImprovement?: number;
+      maxTestRepCountAccuracyRegression?: number;
+      maxTestCleanFalsePositiveRegression?: number;
+    };
+  };
+}
+
+export interface OptimizationResult {
+  exerciseName: string;
+  applied: boolean;
+  reason: string;
+  winningConfig: ExerciseHeuristicConfig | null;
+  reportPath?: string;
 }
 
 // ============================================================================
@@ -67,6 +115,35 @@ export interface ExerciseDefinition {
 
   /** Process one frame of landmarks. Returns updated state (may mutate _internal). */
   update: (keypoints: Keypoint[], currentState: ExerciseState) => ExerciseState;
+
+  /**
+   * Default deterministic heuristic config for this exercise.
+   * Current production definitions use their embedded defaults; dataset tooling
+   * reads this metadata and future definitions can expose createVariant().
+   */
+  heuristicConfig?: ExerciseHeuristicConfig;
+
+  /**
+   * Optional test-time variant factory for offline optimisation.
+   * The app should register and use the default definition; optimiser scripts
+   * may call this to replay candidate threshold configs.
+   */
+  createVariant?: (config: ExerciseHeuristicConfig) => ExerciseDefinition;
+
+  /** Declares which numeric config values the offline optimiser may tune. */
+  tunableSpec?: TunableSpec;
+
+  /** Optional guard for rejecting unsafe generated configs before replay. */
+  validateHeuristicConfig?: (config: ExerciseHeuristicConfig) => string[];
+
+  /** Repo-relative JSON file where the optimiser writes the active tuned config. */
+  tunedConfigPath?: string;
+
+  /**
+   * Stable dataset issue ids keyed by exact visual feedback string.
+   * If omitted, tooling derives ids from ttsConfig as "<exercise-slug>.<issueType>".
+   */
+  feedbackToIssueId?: Record<string, string>;
 
   /**
    * TTS config for this exercise.

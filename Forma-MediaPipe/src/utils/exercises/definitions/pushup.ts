@@ -17,9 +17,16 @@ import {
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/pushup.json';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -109,6 +116,35 @@ const SCORE_CURVES = {
 const MEDIAN_WINDOW = 5;
 const EMA_ALPHA = 0.3;
 const VISIBILITY_THRESHOLD = 0.2;
+
+const DEFAULT_PUSHUP_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  scoreCurves: SCORE_CURVES,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_PUSHUP_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_PUSHUP_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const PUSHUP_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Push-Up',
+  DEFAULT_PUSHUP_HEURISTIC_CONFIG,
+);
+
+const PUSHUP_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'scoreCurves', target: SCORE_CURVES as unknown as Record<string, unknown> },
+];
+
+function withPushupConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, PUSHUP_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -965,7 +1001,10 @@ function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const pushupDefinition: ExerciseDefinition = {
+export function createPushupDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_PUSHUP_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Push-Up',
   requiredView: 'side',
 
@@ -975,12 +1014,12 @@ export const pushupDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializePushupState(),
+    _internal: withPushupConfig(config, () => initializePushupState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as PushupState;
-    const newInternal = updatePushupState(keypoints, internal);
+    const newInternal = withPushupConfig(config, () => updatePushupState(keypoints, internal));
 
     // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
@@ -1000,6 +1039,12 @@ export const pushupDefinition: ExerciseDefinition = {
       _internal: newInternal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: PUSHUP_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/pushup.json',
+  createVariant: (variantConfig) =>
+    createPushupDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -1028,4 +1073,7 @@ export const pushupDefinition: ExerciseDefinition = {
     'Slow down the push \u2014 control the movement.': 'Slow the concentric phase \u2014 aim for 1-2 seconds up.',
     "Control the descent \u2014 don't drop into the pushup.": 'Slow the eccentric phase \u2014 2-3 seconds down.',
   },
-};
+  };
+}
+
+export const pushupDefinition: ExerciseDefinition = createPushupDefinition();

@@ -24,9 +24,16 @@ import {
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/squat.json';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -112,6 +119,35 @@ const SCORE_CURVES = {
 const MEDIAN_WINDOW = 5;
 const EMA_ALPHA = 0.3;
 const VISIBILITY_THRESHOLD = 0.2;
+
+const DEFAULT_SQUAT_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  scoreCurves: SCORE_CURVES,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_SQUAT_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_SQUAT_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const SQUAT_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Barbell Squat',
+  DEFAULT_SQUAT_HEURISTIC_CONFIG,
+);
+
+const SQUAT_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'scoreCurves', target: SCORE_CURVES as unknown as Record<string, unknown> },
+];
+
+function withSquatConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, SQUAT_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -838,7 +874,10 @@ function getSquatDebugInfo(state: SquatState): SquatDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const squatDefinition: ExerciseDefinition = {
+export function createSquatDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_SQUAT_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Barbell Squat',
   requiredView: 'side',
 
@@ -848,12 +887,12 @@ export const squatDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeSquatState(),
+    _internal: withSquatConfig(config, () => initializeSquatState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as SquatState;
-    const newInternal = updateSquatState(keypoints, internal);
+    const newInternal = withSquatConfig(config, () => updateSquatState(keypoints, internal));
 
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
       ? {
@@ -872,6 +911,12 @@ export const squatDefinition: ExerciseDefinition = {
       _internal: newInternal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: SQUAT_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/squat.json',
+  createVariant: (variantConfig) =>
+    createSquatDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -905,4 +950,7 @@ export const squatDefinition: ExerciseDefinition = {
     'Slow the descent \u2014 control the weight down.':
       'Aim for a 2-3 second descent. Controlled eccentrics build more strength and protect your joints.',
   },
-};
+  };
+}
+
+export const squatDefinition: ExerciseDefinition = createSquatDefinition();

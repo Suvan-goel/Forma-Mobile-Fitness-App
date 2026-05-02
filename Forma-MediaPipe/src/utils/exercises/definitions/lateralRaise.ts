@@ -21,6 +21,7 @@ import {
 
 import type {
   ExerciseDefinition,
+  ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
@@ -28,6 +29,12 @@ import type {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, PenaltyConfig } from '../shared/scoring';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/lateralRaise.json';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -104,6 +111,35 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+
+const DEFAULT_LATERAL_RAISE_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+  penaltyConfigs: PENALTY_CONFIGS,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_LATERAL_RAISE_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_LATERAL_RAISE_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const LATERAL_RAISE_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Standing Dumbbell Lateral Raises',
+  DEFAULT_LATERAL_RAISE_HEURISTIC_CONFIG,
+);
+
+const LATERAL_RAISE_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
+];
+
+function withLateralRaiseConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, LATERAL_RAISE_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // TYPES (module-private)
@@ -698,7 +734,10 @@ function getDebugInfo(state: LateralRaiseState): LateralRaiseDebugInfo {
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
-export const lateralRaiseDefinition: ExerciseDefinition = {
+export function createLateralRaiseDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_LATERAL_RAISE_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Standing Dumbbell Lateral Raises',
   requiredView: 'front',
 
@@ -708,12 +747,12 @@ export const lateralRaiseDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeState(),
+    _internal: withLateralRaiseConfig(config, () => initializeState()),
   }),
 
   update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
     const internal = state._internal as LateralRaiseState;
-    updateLateralRaiseState(keypoints, internal);
+    withLateralRaiseConfig(config, () => updateLateralRaiseState(keypoints, internal));
 
     // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = internal.lastRepResult
@@ -733,6 +772,12 @@ export const lateralRaiseDefinition: ExerciseDefinition = {
       _internal: internal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: LATERAL_RAISE_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/lateralRaise.json',
+  createVariant: (variantConfig) =>
+    createLateralRaiseDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -788,4 +833,7 @@ export const lateralRaiseDefinition: ExerciseDefinition = {
     'Relax your traps \u2014 don\'t shrug the weight up.':
       'Focus on leading with your elbows, not your shoulders. If you\'re shrugging, the weight may be too heavy.',
   },
-};
+  };
+}
+
+export const lateralRaiseDefinition: ExerciseDefinition = createLateralRaiseDefinition();

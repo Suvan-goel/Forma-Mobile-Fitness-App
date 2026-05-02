@@ -1,0 +1,58 @@
+{
+  "_templateNotes": [
+    "Copy this file to a new label file such as pushdown_001.json, then edit the paths, split, expectedReps, and reps.",
+    "Use issueIds from availableIssues. Use an empty issueIds array for a clean rep.",
+    "Files named _template.json or *.template.json are ignored by dataset:evaluate and dataset:optimize."
+  ],
+  "schemaVersion": 1,
+  "exerciseName": "Cable Pushdowns",
+  "sourceVideo": "videos/cable-pushdowns/<video-file>.mp4",
+  "landmarkFile": "landmarks/cable-pushdowns/<video-file>.json",
+  "split": "train",
+  "reviewStatus": "draft",
+  "expectedReps": 1,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 0,
+      "endMs": 1000,
+      "issueIds": [],
+      "notes": "Clean rep or describe the visible form issue.",
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "suggestedScore": 100
+    }
+  ],
+  "notes": "Draft label template. Copy to a real label file, review timings/issues, then set reviewStatus to reviewed.",
+  "availableIssues": [
+    {
+      "issueId": "cable-pushdowns.lockout_short",
+      "feedbackMessage": "Extend fully \u2014 lock out at the bottom of each rep."
+    },
+    {
+      "issueId": "cable-pushdowns.rom_short",
+      "feedbackMessage": "Start with a deeper bend \u2014 bring your forearms closer to your biceps."
+    },
+    {
+      "issueId": "cable-pushdowns.elbow_drift",
+      "feedbackMessage": "Keep your elbows pinned to your sides \u2014 avoid letting them drift."
+    },
+    {
+      "issueId": "cable-pushdowns.torso_warn",
+      "feedbackMessage": "Stay upright \u2014 avoid leaning into the pushdown."
+    },
+    {
+      "issueId": "cable-pushdowns.tempo_down",
+      "feedbackMessage": "Slow down the push \u2014 control the extension."
+    },
+    {
+      "issueId": "cable-pushdowns.tempo_up",
+      "feedbackMessage": "Control the return \u2014 don't let the weight snap back."
+    }
+  ],
+  "draftMetadata": {
+    "generatedAt": "<generated-at>",
+    "generator": "manual-template",
+    "source": "heuristic-replay"
+  }
+}

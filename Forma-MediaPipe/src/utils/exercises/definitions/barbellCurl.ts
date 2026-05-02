@@ -20,7 +20,18 @@ import {
   isVisible,
 } from '../../poseAnalysis';
 
-import type { ExerciseDefinition, ExerciseState, RepResult as FrameworkRepResult } from '../types';
+import {
+  createDefaultTunableSpec,
+  mergeHeuristicConfig,
+  runWithConfigBindings,
+} from '../heuristicConfig';
+import tunedConfig from './tuned/barbellCurl.json';
+import type {
+  ExerciseDefinition,
+  ExerciseHeuristicConfig,
+  ExerciseState,
+  RepResult as FrameworkRepResult,
+} from '../types';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -83,6 +94,33 @@ const VISIBILITY_THRESHOLD = 0.15;
 /** Warm-up: require N consecutive stable frames before enabling FSM */
 const WARMUP_REQUIRED = 12;          // ~0.6s at 20fps
 const WARMUP_VISIBILITY_MIN = 0.3;   // avg visibility of 8 key joints must exceed this
+
+const DEFAULT_BARBELL_CURL_HEURISTIC_CONFIG = {
+  thresholds: THRESHOLDS,
+  formThresholds: FORM_THRESHOLDS,
+} satisfies ExerciseHeuristicConfig;
+
+const ACTIVE_BARBELL_CURL_HEURISTIC_CONFIG = mergeHeuristicConfig(
+  DEFAULT_BARBELL_CURL_HEURISTIC_CONFIG,
+  tunedConfig,
+);
+
+const BARBELL_CURL_TUNABLE_SPEC = createDefaultTunableSpec(
+  'Barbell Curl',
+  DEFAULT_BARBELL_CURL_HEURISTIC_CONFIG,
+);
+
+const BARBELL_CURL_CONFIG_BINDINGS = [
+  { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+];
+
+function withBarbellCurlConfig<T>(
+  config: ExerciseHeuristicConfig,
+  fn: () => T,
+): T {
+  return runWithConfigBindings(config, BARBELL_CURL_CONFIG_BINDINGS, fn);
+}
 
 // ============================================================================
 // CONTINUOUS PENALTY FUNCTIONS (ratio-based where applicable)
@@ -1390,7 +1428,10 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
 // EXERCISE DEFINITION — the only export
 // ============================================================================
 
-export const barbellCurlDefinition: ExerciseDefinition = {
+export function createBarbellCurlDefinition(
+  config: ExerciseHeuristicConfig = ACTIVE_BARBELL_CURL_HEURISTIC_CONFIG,
+): ExerciseDefinition {
+  return {
   name: 'Barbell Curl',
   requiredView: 'front',
 
@@ -1400,12 +1441,15 @@ export const barbellCurlDefinition: ExerciseDefinition = {
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
-    _internal: initializeBarbellCurlState(),
+    _internal: withBarbellCurlConfig(config, () => initializeBarbellCurlState()),
   }),
 
   update: (keypoints, state) => {
     const internal = state._internal as BarbellCurlState;
-    const newInternal = updateBarbellCurlState(keypoints, internal);
+    const newInternal = withBarbellCurlConfig(
+      config,
+      () => updateBarbellCurlState(keypoints, internal),
+    );
 
     // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
@@ -1425,6 +1469,12 @@ export const barbellCurlDefinition: ExerciseDefinition = {
       _internal: newInternal,
     };
   },
+
+  heuristicConfig: config,
+  tunableSpec: BARBELL_CURL_TUNABLE_SPEC,
+  tunedConfigPath: 'src/utils/exercises/definitions/tuned/barbellCurl.json',
+  createVariant: (variantConfig) =>
+    createBarbellCurlDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
     feedbackToIssue: {
@@ -1468,4 +1518,7 @@ export const barbellCurlDefinition: ExerciseDefinition = {
     "Keep your elbows in — don't flare them out to the sides.": 'Keep elbows pinned to your sides — flaring reduces bicep isolation.',
     "Tuck your elbows in — they're drifting outward.": 'Focus on keeping elbows close to your body throughout the curl.',
   },
-};
+  };
+}
+
+export const barbellCurlDefinition: ExerciseDefinition = createBarbellCurlDefinition();
