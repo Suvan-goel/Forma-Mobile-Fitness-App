@@ -10,7 +10,8 @@ type TorsoPosture = 'upright' | 'leaned';
 const FRAME_MS = 50;
 const EXTENDED_ELBOW_Y = 0.24;
 const BOTTOM_ELBOW_Y = 0.76;
-const PARTIAL_ELBOW_Y = 0.48;
+const TINY_ELBOW_Y = 0.34;
+const PARTIAL_ELBOW_Y = 0.66;
 const EXTENDED_WRIST_Y = 0.0;
 const BOTTOM_WRIST_Y = 0.7;
 
@@ -38,8 +39,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(14).fill(EXTENDED_ELBOW_Y),
-    ...interpolate(EXTENDED_ELBOW_Y, PARTIAL_ELBOW_Y, 10),
-    ...interpolate(PARTIAL_ELBOW_Y, EXTENDED_ELBOW_Y, 10),
+    ...interpolate(EXTENDED_ELBOW_Y, TINY_ELBOW_Y, 8),
+    ...interpolate(TINY_ELBOW_Y, EXTENDED_ELBOW_Y, 8),
+    ...Array(8).fill(EXTENDED_ELBOW_Y),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(14).fill(EXTENDED_ELBOW_Y),
+    ...interpolate(EXTENDED_ELBOW_Y, PARTIAL_ELBOW_Y, 14),
+    ...interpolate(PARTIAL_ELBOW_Y, EXTENDED_ELBOW_Y, 18),
     ...Array(8).fill(EXTENDED_ELBOW_Y),
   ];
 }
@@ -170,14 +180,23 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial pull that never reaches bottom', () => {
+  it('does not count a tiny pulldown pulse', () => {
     const result = replayRecordingVerbose(
       latPulldownDefinition,
-      buildRecording('synthetic partial lat pulldown', partialPath()),
+      buildRecording('synthetic tiny lat pulldown pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial pulldown and records ROM feedback', () => {
+    const clean = replayRecording(latPulldownDefinition, buildRecording('synthetic clean lat pulldown', fullRepPath()));
+    const result = replayRecording(latPulldownDefinition, buildRecording('synthetic half lat pulldown', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Pull deeper — bring the bar to your upper chest.');
   });
 
   it('keeps the active side locked through a rep when visibility flips', () => {

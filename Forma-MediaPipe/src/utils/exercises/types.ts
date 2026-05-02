@@ -48,6 +48,8 @@ export interface RepResult {
 export interface ExerciseTTSConfig {
   /** Maps exact visual feedback strings to IssueType strings */
   feedbackToIssue: Record<string, string>;
+  /** Optional exact feedback-string TTS pools for more exercise-specific voice cues */
+  feedbackMessages?: Record<string, string[]>;
   /** New IssueType definitions with priority and message pools (only for types not already registered) */
   issueDefinitions?: Array<{
     issueType: string;

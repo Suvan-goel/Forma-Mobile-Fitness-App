@@ -26,6 +26,7 @@ import {
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import tunedConfig from './tuned/pushup.json';
 
 // ============================================================================
@@ -68,6 +69,8 @@ const THRESHOLDS = {
   TORSO_INCLINE_MAX: 115,
   /** Reach ratio above which arms are considered extended (for IDLE gate) */
   IDLE_ARMS_EXTENDED: 0.92,
+  /** Minimum ratio ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 0.11,
 } as const;
 
 /** Form heuristic thresholds — ratio-based for elbow, angle-based for hip/body */
@@ -88,6 +91,9 @@ const FORM_THRESHOLDS = {
   HIP_DEV_SAG_WARN: 0.05,
   HIP_DEV_PIKE_FAIL: 0.10,
   HIP_DEV_PIKE_WARN: 0.05,
+  // Head-spine angle (hip -> shoulder -> nose). This catches obvious head
+  // dropping/craning without trying to infer subtle neck position.
+  HEAD_SPINE_WARN: 150,
   // Tempo
   TEMPO_CONCENTRIC_MIN: 0.15,
   TEMPO_ECCENTRIC_MIN: 0.20,
@@ -108,6 +114,7 @@ const SCORE_CURVES = {
   LOCKOUT: { ideal: 0.97,    scale: 300, cap: 25 },
   HIP:     { deadzone: 8,    scale: 0.04, cap: 35, neutral: 180 },
   HIP_DEV: { deadzone: 0.04, scale: 1200, cap: 35 },
+  HEAD:    { min: 165,       scale: 0.04, cap: 10 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 10 },
   TEMPO_ECCENTRIC:  { deadzone: 0.4, scale: 40, cap: 10 },
 } as const;
@@ -728,7 +735,11 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
   const hipDevPenalty = SCORE_CURVES.HIP_DEV.scale * hipDevExcess * hipDevExcess;
   penalty += Math.min(SCORE_CURVES.HIP.cap, Math.max(hipAnglePenalty, hipDevPenalty));
 
-  // 4. Tempo -- too fast in either direction
+  // 4. Head/neck alignment -- obvious head drop/crane out of plank line
+  const headShortfall = Math.max(0, SCORE_CURVES.HEAD.min - repWindow.minHeadSpine);
+  penalty += Math.min(SCORE_CURVES.HEAD.cap, SCORE_CURVES.HEAD.scale * headShortfall * headShortfall);
+
+  // 5. Tempo -- too fast in either direction
   if (repWindow.tBottom !== null) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
@@ -792,7 +803,12 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
     messages.push('Hips are riding high \u2014 aim for a straight body line.');
   }
 
-  // 5. Tempo
+  // 5. Head/neck alignment
+  if (repWindow.minHeadSpine < FORM_THRESHOLDS.HEAD_SPINE_WARN) {
+    messages.push('Keep your head neutral \u2014 align your neck with your spine.');
+  }
+
+  // 6. Tempo
   if (repWindow.tBottom !== null) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
@@ -875,12 +891,57 @@ function updatePushupState(
     newState.activeSide = visibleSide;
   }
 
-  // Handle partial rep as a no-count reset. A shallow pulse should not inflate rep count.
+  // Handle returned partials: count meaningful ROM, ignore tiny setup pulses.
   if (fsmResult.partialRep) {
-    newState.feedback = 'Go deeper \u2014 try to hit 90 degrees.';
-    newState.lastFeedbackTime = t;
+    if (newState.repWindow) {
+      newState.repWindow.tEnd = t;
+      if (!isNaN(fast.elbowRatio)) {
+        newState.repWindow.minElbowRatio = Math.min(newState.repWindow.minElbowRatio, fast.elbowRatio);
+        newState.repWindow.maxElbowRatio = Math.max(newState.repWindow.maxElbowRatio, fast.elbowRatio);
+      }
+      if (!isNaN(smoothed.bodyAlignment)) {
+        newState.repWindow.minBodyAngle = Math.min(newState.repWindow.minBodyAngle, smoothed.bodyAlignment);
+        newState.repWindow.maxBodyAngle = Math.max(newState.repWindow.maxBodyAngle, smoothed.bodyAlignment);
+      }
+      if (!isNaN(smoothed.hipDeviation)) {
+        newState.repWindow.minHipDev = Math.min(newState.repWindow.minHipDev, smoothed.hipDeviation);
+        newState.repWindow.maxHipDev = Math.max(newState.repWindow.maxHipDev, smoothed.hipDeviation);
+      }
+      if (!isNaN(smoothed.headSpine)) {
+        newState.repWindow.minHeadSpine = Math.min(newState.repWindow.minHeadSpine, smoothed.headSpine);
+        newState.repWindow.maxHeadSpine = Math.max(newState.repWindow.maxHeadSpine, smoothed.headSpine);
+      }
+
+      const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
+      const duration = newState.repWindow.tEnd - newState.repWindow.tStart;
+      if (isMeaningfulPartialRep({
+        actualRom: romRatio,
+        minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+        duration,
+        minDuration: THRESHOLDS.MIN_DESCENDING_TIME,
+      })) {
+        newState.repCount++;
+        const { score, messages } = evaluateForm(newState.repWindow);
+        newState.lastRepResult = {
+          repIndex: newState.repCount,
+          romRatio,
+          tDown: duration,
+          tUp: 0,
+          score,
+          messages,
+        };
+        newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      } else {
+        newState.feedback = LOW_ROM_FEEDBACK;
+      }
+      newState.lastFeedbackTime = t;
+    } else {
+      newState.feedback = LOW_ROM_FEEDBACK;
+      newState.lastFeedbackTime = t;
+    }
     newState.repWindow = null;
     newState.activeSide = null;
+    newState.plankMaxElbowRatio = -Infinity;
     return newState;
   }
 
@@ -1056,9 +1117,28 @@ export function createPushupDefinition(
       'Keep your hips up \u2014 your body line is dropping.': 'hip_sag',
       'Hips are piking up \u2014 lower them to maintain a straight plank.': 'hip_pike',
       'Hips are riding high \u2014 aim for a straight body line.': 'hip_pike',
+      'Keep your head neutral \u2014 align your neck with your spine.': 'head_position',
       'Slow down the push \u2014 control the movement.': 'tempo_up',
       "Control the descent \u2014 don't drop into the pushup.": 'tempo_down',
     },
+    feedbackMessages: {
+      'Slow down the push \u2014 control the movement.': [
+        'Press up with control.',
+        "Don't rush the push.",
+        'Smooth push to the top.',
+      ],
+    },
+    issueDefinitions: [
+      {
+        issueType: 'head_position',
+        priority: 12,
+        messages: [
+          'Keep your head neutral.',
+          'Neck in line with your spine.',
+          'Eyes down, neck long.',
+        ],
+      },
+    ],
   },
 
   summaryConfig: {
@@ -1070,6 +1150,7 @@ export function createPushupDefinition(
     'Keep your hips up \u2014 your body line is dropping.': 'Focus on maintaining a rigid plank throughout each rep.',
     'Hips are piking up \u2014 lower them to maintain a straight plank.': 'Think about pushing the ground away while keeping your body rigid.',
     'Hips are riding high \u2014 aim for a straight body line.': 'Keep your body in a straight line from head to heels.',
+    'Keep your head neutral \u2014 align your neck with your spine.': 'Keep your neck aligned with your spine instead of dropping or craning your head.',
     'Slow down the push \u2014 control the movement.': 'Slow the concentric phase \u2014 aim for 1-2 seconds up.',
     "Control the descent \u2014 don't drop into the pushup.": 'Slow the eccentric phase \u2014 2-3 seconds down.',
   },

@@ -49,8 +49,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 0.45, 12),
-    ...interpolate(0.45, 0, 12),
+    ...interpolate(0, 0.15, 8),
+    ...interpolate(0.15, 0, 8),
+    ...Array(8).fill(0),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 0.62, 16),
+    ...interpolate(0.62, 0, 20),
     ...Array(8).fill(0),
   ];
 }
@@ -189,14 +198,23 @@ describe('Cable Row synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial row that never reaches contraction', () => {
+  it('does not count a tiny row pulse', () => {
     const result = replayRecordingVerbose(
       cableRowDefinition,
-      buildRecording('synthetic shallow cable row', partialPath()),
+      buildRecording('synthetic tiny cable row pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial row and records ROM feedback', () => {
+    const clean = replayRecording(cableRowDefinition, buildRecording('synthetic clean cable row', fullRepPath()));
+    const result = replayRecording(cableRowDefinition, buildRecording('synthetic half cable row', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Pull further back — squeeze your shoulder blades together.');
   });
 
   it('keeps the visible side locked through a rep when visibility flips', () => {

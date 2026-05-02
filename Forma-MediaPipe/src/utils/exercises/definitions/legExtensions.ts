@@ -28,6 +28,7 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
   mergeHeuristicConfig,
@@ -112,6 +113,8 @@ const THRESHOLDS = {
   REST_REENTER: 0.58,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
+  /** Minimum ratio ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 0.14,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
@@ -635,6 +638,48 @@ function updateLegExtensionState(
   const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
 
+  const returnedPartial =
+    currentState.fsm.phase === 'EXTENDING' &&
+    newState.fsm.phase === 'REST' &&
+    !fsmResult.repCompleted &&
+    newState.repWindow !== null;
+
+  if (returnedPartial && newState.repWindow) {
+    const window = newState.repWindow;
+    window.tEnd = t;
+    if (!isNaN(smoothedRatio)) {
+      window.minRatio = Math.min(window.minRatio, smoothedRatio);
+      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
+    }
+    const actualRom = window.maxRatio - window.minRatio;
+    const duration = window.tEnd - window.tStart;
+
+    if (isMeaningfulPartialRep({
+      actualRom,
+      minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+      duration,
+      minDuration: THRESHOLDS.MIN_REP_TIME,
+    })) {
+      newState.repCount++;
+      const score = computeLegExtensionScore(window);
+      const messages = generateFormMessages(window);
+      newState.lastRepResult = {
+        repIndex: newState.repCount,
+        score,
+        messages,
+      };
+      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      newState.lastFeedbackTime = t;
+    } else if (actualRom > 0) {
+      newState.feedback = LOW_ROM_FEEDBACK;
+      newState.lastFeedbackTime = t;
+    }
+
+    newState.repWindow = null;
+    newState.fsm = initFSM();
+    return newState;
+  }
+
   if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
     newState.restMinRatio = Math.min(newState.restMinRatio, smoothedRatio);
   }
@@ -825,6 +870,33 @@ export function createLegExtensionsDefinition(
       "Keep your hips on the seat \u2014 don't lift off the pad.": 'hip_lift',
       'Slow down the extension \u2014 control the lift.': 'tempo_up',
       "Control the return \u2014 don't let the weight drop.": 'tempo_down',
+    },
+    feedbackMessages: {
+      'Extend fully \u2014 straighten your legs completely at the top.': [
+        'Straighten your legs fully.',
+        'Finish the extension at the top.',
+        'Squeeze the quads at full extension.',
+      ],
+      'Keep your back against the pad \u2014 avoid leaning forward.': [
+        'Keep your back against the pad.',
+        'Stay pinned to the backrest.',
+        'Sit tall with your back supported.',
+      ],
+      "Keep your hips on the seat \u2014 don't lift off the pad.": [
+        'Hips stay on the seat.',
+        'Keep your hips down.',
+        'No lifting off the pad.',
+      ],
+      'Slow down the extension \u2014 control the lift.': [
+        'Slow the extension.',
+        'Lift with control.',
+        'Smooth quad squeeze to the top.',
+      ],
+      "Control the return \u2014 don't let the weight drop.": [
+        'Control the return.',
+        "Don't let the weight drop.",
+        'Lower the weight slowly.',
+      ],
     },
     issueDefinitions: [
       {

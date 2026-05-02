@@ -22,6 +22,7 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
   mergeHeuristicConfig,
@@ -106,6 +107,8 @@ const THRESHOLDS = {
   REST_REENTER: 0.65,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.5,
+  /** Minimum ratio ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 0.135,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
@@ -650,6 +653,48 @@ function updateCablePushdownState(
   const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
 
+  const returnedPartial =
+    currentState.fsm.phase === 'EXTENDING' &&
+    newState.fsm.phase === 'REST' &&
+    !fsmResult.repCompleted &&
+    newState.repWindow !== null;
+
+  if (returnedPartial && newState.repWindow) {
+    const window = newState.repWindow;
+    window.tEnd = t;
+    if (!isNaN(smoothedRatio)) {
+      window.minRatio = Math.min(window.minRatio, smoothedRatio);
+      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
+    }
+    const actualRom = window.maxRatio - window.minRatio;
+    const duration = window.tEnd - window.tStart;
+
+    if (isMeaningfulPartialRep({
+      actualRom,
+      minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+      duration,
+      minDuration: THRESHOLDS.MIN_REP_TIME,
+    })) {
+      newState.repCount++;
+      const score = computeCablePushdownScore(window);
+      const messages = generateFormMessages(window);
+      newState.lastRepResult = {
+        repIndex: newState.repCount,
+        score,
+        messages,
+      };
+      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      newState.lastFeedbackTime = t;
+    } else if (actualRom > 0) {
+      newState.feedback = LOW_ROM_FEEDBACK;
+      newState.lastFeedbackTime = t;
+    }
+
+    newState.repWindow = null;
+    newState.fsm = initFSM();
+    return newState;
+  }
+
   // Track minimum ratio during REST (captures true starting bent position)
   if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
     newState.restMinRatio = Math.min(newState.restMinRatio, smoothedRatio);
@@ -829,6 +874,33 @@ export function createCablePushdownDefinition(
       'Stay upright \u2014 avoid leaning into the pushdown.': 'torso_warn',
       'Slow down the push \u2014 control the extension.': 'tempo_down',
       "Control the return \u2014 don't let the weight snap back.": 'tempo_up',
+    },
+    feedbackMessages: {
+      'Extend fully \u2014 lock out at the bottom of each rep.': [
+        'Lock out at the bottom.',
+        'Finish the pushdown all the way.',
+        'Full extension at the bottom.',
+      ],
+      'Start with a deeper bend \u2014 bring your forearms closer to your biceps.': [
+        'Start from a deeper bend.',
+        'Let it come up for a fuller stretch.',
+        'More bend at the top before you press.',
+      ],
+      'Stay upright \u2014 avoid leaning into the pushdown.': [
+        'Stay tall through the pushdown.',
+        'Less lean. Let the triceps do it.',
+        'Brace your core and stay upright.',
+      ],
+      'Slow down the push \u2014 control the extension.': [
+        'Slow the press down.',
+        'Control the pushdown.',
+        'Press with control, no rushing.',
+      ],
+      "Control the return \u2014 don't let the weight snap back.": [
+        'Control the return.',
+        "Don't let it snap back.",
+        'Resist the weight on the way up.',
+      ],
     },
     issueDefinitions: [
       {

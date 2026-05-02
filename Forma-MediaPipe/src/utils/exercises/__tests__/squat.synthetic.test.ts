@@ -54,8 +54,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(20).fill(0),
-    ...interpolate(0, 0.5, 14),
-    ...interpolate(0.5, 0, 14),
+    ...interpolate(0, 0.22, 8),
+    ...interpolate(0.22, 0, 8),
+    ...Array(8).fill(0),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(20).fill(0),
+    ...interpolate(0, 0.5, 16),
+    ...interpolate(0.5, 0, 16),
     ...Array(8).fill(0),
   ];
 }
@@ -192,14 +201,23 @@ describe('Barbell Squat synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial squat that never reaches depth', () => {
+  it('does not count a tiny squat pulse', () => {
     const result = replayRecordingVerbose(
       squatDefinition,
-      buildRecording('synthetic shallow squat pulse', partialPath()),
+      buildRecording('synthetic tiny squat pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial squat and records depth feedback', () => {
+    const clean = replayRecording(squatDefinition, buildRecording('synthetic clean squat', fullRepPath()));
+    const result = replayRecording(squatDefinition, buildRecording('synthetic half squat', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Squat deeper — aim to get your thighs parallel.');
   });
 
   it('keeps the visible side locked through a rep when visibility flips', () => {

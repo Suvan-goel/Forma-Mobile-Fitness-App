@@ -43,3 +43,6 @@ yarn-error.*
 
 # local module build artifacts
 modules/expo-pose-detection/android/build/
+
+# local datasets
+datasets/RepCount/

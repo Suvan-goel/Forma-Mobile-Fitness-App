@@ -49,8 +49,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 0.24, 12),
-    ...interpolate(0.24, 0, 12),
+    ...interpolate(0, 0.12, 8),
+    ...interpolate(0.12, 0, 8),
+    ...Array(8).fill(0),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 0.50, 16),
+    ...interpolate(0.50, 0, 20),
     ...Array(8).fill(0),
   ];
 }
@@ -192,14 +201,23 @@ describe('Leg Extension synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial extension that never reaches lockout', () => {
+  it('does not count a tiny leg-extension pulse', () => {
     const result = replayRecordingVerbose(
       legExtensionsDefinition,
-      buildRecording('synthetic partial leg extension', partialPath()),
+      buildRecording('synthetic tiny leg-extension pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial leg extension and records ROM feedback', () => {
+    const clean = replayRecording(legExtensionsDefinition, buildRecording('synthetic clean leg extension', fullRepPath()));
+    const result = replayRecording(legExtensionsDefinition, buildRecording('synthetic half leg extension', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Extend fully — straighten your legs completely at the top.');
   });
 
   it('keeps the visible side locked through a rep when visibility flips', () => {

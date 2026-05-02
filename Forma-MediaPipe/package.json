@@ -11,6 +11,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "recordings:server": "node scripts/recording-server.js",
+    "dataset:download-repcount": "python3 scripts/download-repcount.py",
     "dataset:extract": "python3 scripts/extract-video-landmarks.py",
     "dataset:prepare": "node scripts/run-dataset-command.js prepare",
     "dataset:draft-label": "node scripts/run-dataset-command.js draft-label",

@@ -25,6 +25,7 @@ import {
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import tunedConfig from './tuned/barbellCurl.json';
 import type {
   ExerciseDefinition,
@@ -57,6 +58,8 @@ const THRESHOLDS = {
   SYNC_WINDOW: 0.75, // seconds between arms
   /** Minimum reach ratio ROM (max - min) for a valid rep */
   ROM_MIN: 0.38,
+  /** Minimum ratio ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 0.19,
   /** Min seconds the arm must be in DOWN state before normal completion.
    *  Filters pose-estimation noise spikes. */
   MIN_DOWN_GUARD: 0.10,
@@ -193,6 +196,12 @@ function penaltyAsymmetry(deltaMinRatio: number, deltaRomRatio: number): number 
   return Math.min(15, minPenalty + romPenalty);
 }
 
+/** Wrist deviation penalty — max 10 pts. Counts only sustained wrist curling. */
+function penaltyWristDeviation(deviationFrameRatio: number): number {
+  const d = Math.max(0, deviationFrameRatio - 0.25);
+  return Math.min(10, 80 * d * d);
+}
+
 function getConcentricDuration(arm: ArmFSM): number {
   return arm.tUpToTop !== null && arm.tRestToUp !== null ? arm.tUpToTop - arm.tRestToUp : 0;
 }
@@ -298,7 +307,22 @@ function computeRepScore(
     elbowFlareP = penaltyElbowFlare(maxFlare);
   }
 
-  const total = torsoP + shoulderP + romP + tempoP + asymmetryP + elbowFlareP;
+  // Wrist deviation penalty — frame ratio filters one-frame hand landmark noise.
+  const wristDenominator = Math.max(1, repWindow.frameCount);
+  let wristDeviationFrameRatio = 0;
+  if (isFrontal) {
+    wristDeviationFrameRatio = Math.max(
+      repWindow.wristDevFrames.left / wristDenominator,
+      repWindow.wristDevFrames.right / wristDenominator,
+    );
+  } else {
+    wristDeviationFrameRatio = primaryIsLeft
+      ? repWindow.wristDevFrames.left / wristDenominator
+      : repWindow.wristDevFrames.right / wristDenominator;
+  }
+  const wristP = penaltyWristDeviation(wristDeviationFrameRatio);
+
+  const total = torsoP + shoulderP + romP + tempoP + asymmetryP + elbowFlareP + wristP;
   return Math.max(0, Math.min(100, Math.round(100 - total)));
 }
 
@@ -323,6 +347,8 @@ interface ArmFSM {
   /** Guard: arm must reach full extension (ratio >= EXTENDED_EXIT) while in REST before a new rep
    *  can start. Prevents cascade false reps after a premature noise-spike completion. */
   hasReachedExtension: boolean;
+  /** True for the frame where an UP-state partial returned to REST before TOP. */
+  partialReturnedToRest: boolean;
 }
 
 interface RepWindow {
@@ -424,6 +450,7 @@ function initArmFSM(): ArmFSM {
     tTopToDown: null,
     tDownToRest: null,
     hasReachedExtension: false,
+    partialReturnedToRest: false,
   };
 }
 
@@ -890,6 +917,7 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
         newArm.minRatio = reachRatio;
         newArm.maxRatio = reachRatio;
         newArm.hasReachedExtension = false;
+        newArm.partialReturnedToRest = false;
       }
       break;
 
@@ -901,12 +929,14 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
         newArm.tUpToTop = t;
       } else if (reachRatio >= THRESHOLDS.EXTENDED_EXIT) {
         // Arm returned to near-full extension without curling deep enough — reset cleanly.
-        // Prevents the FSM from getting permanently stuck in UP if the EMA-smoothed ratio
-        // never reaches FLEXED_ENTER (e.g. abandoned or partial curl).
+        // Mark as a returned partial so the rep window can decide whether this was
+        // meaningful enough to count instead of silently discarding half reps.
         newArm.state = 'REST';
         newArm.hasReachedExtension = true;
-        newArm.tRestToUp = null;
+        newArm.tRestEntry = t;
+        newArm.tDownToRest = t;
         newArm.tUpToTop = null;
+        newArm.partialReturnedToRest = true;
       }
       break;
 
@@ -936,6 +966,7 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
         newArm.state = 'REST';
         newArm.tRestEntry = t;
         newArm.tDownToRest = t;
+        newArm.partialReturnedToRest = false;
       } else if (
         reachRatio < THRESHOLDS.FLEXED_EXIT &&
         newArm.tRestToUp !== null &&
@@ -947,6 +978,7 @@ function updateArmFSM(arm: ArmFSM, reachRatio: number, t: number): ArmFSM {
         newArm.state = 'REST';
         newArm.tRestEntry = t;
         newArm.tDownToRest = t;
+        newArm.partialReturnedToRest = false;
       }
       break;
   }
@@ -1097,6 +1129,20 @@ function evaluateForm(
     }
   }
 
+  // 8. Wrist neutrality — only after sustained deviation to avoid hand-keypoint flicker.
+  const wristDenominator = Math.max(1, repWindow.frameCount);
+  const wristDeviationFrameRatio = isFrontal
+    ? Math.max(
+        repWindow.wristDevFrames.left / wristDenominator,
+        repWindow.wristDevFrames.right / wristDenominator,
+      )
+    : primaryIsLeft
+      ? repWindow.wristDevFrames.left / wristDenominator
+      : repWindow.wristDevFrames.right / wristDenominator;
+  if (wristDeviationFrameRatio >= FORM_THRESHOLDS.WRIST_DEV_DURATION) {
+    messages.push('Keep your wrists neutral \u2014 avoid curling them in.');
+  }
+
   // Score: continuous penalty curves
   const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle);
 
@@ -1243,19 +1289,23 @@ function updateBarbellCurlState(
     const bothInRest = newState.leftArm.state === 'REST' && newState.rightArm.state === 'REST';
     const leftJustFinished = prevLeftState === 'DOWN' && newState.leftArm.state === 'REST';
     const rightJustFinished = prevRightState === 'DOWN' && newState.rightArm.state === 'REST';
+    const leftPartialFinished = prevLeftState === 'UP' && newState.leftArm.partialReturnedToRest;
+    const rightPartialFinished = prevRightState === 'UP' && newState.rightArm.partialReturnedToRest;
 
-    if (bothInRest && (leftJustFinished || rightJustFinished) && newState.repWindow) {
+    if (bothInRest && (leftJustFinished || rightJustFinished || leftPartialFinished || rightPartialFinished) && newState.repWindow) {
       const leftEndTime = newState.leftArm.tDownToRest ?? t;
       const rightEndTime = newState.rightArm.tDownToRest ?? t;
       const syncDelta = Math.abs(leftEndTime - rightEndTime);
 
       if (syncDelta <= THRESHOLDS.SYNC_WINDOW) {
-        completeRep(newState, t, viewAngle);
+        if (leftJustFinished || rightJustFinished) {
+          completeRep(newState, t, viewAngle);
+        } else {
+          completePartialRepIfMeaningful(newState, t, viewAngle);
+        }
       } else {
         // Not synced — reset
-        newState.repWindow = null;
-        newState.leftArm = initArmFSM();
-        newState.rightArm = initArmFSM();
+        resetBarbellCurlRepTracking(newState);
       }
     }
   } else {
@@ -1265,9 +1315,12 @@ function updateBarbellCurlState(
     const prevArmState = primaryArm === 'left' ? prevLeftState : prevRightState;
 
     const justFinished = prevArmState === 'DOWN' && armState.state === 'REST';
+    const partialFinished = prevArmState === 'UP' && armState.partialReturnedToRest;
 
     if (justFinished && newState.repWindow) {
       completeRep(newState, t, viewAngle);
+    } else if (partialFinished && newState.repWindow) {
+      completePartialRepIfMeaningful(newState, t, viewAngle);
     }
   }
 
@@ -1290,6 +1343,50 @@ function getPrimaryArm(
   if (viewAngle.primarySide === 'left') return 'left';
   if (viewAngle.primarySide === 'right') return 'right';
   return 'left';
+}
+
+function getRepWindowRomRatio(repWindow: RepWindow, viewAngle: ViewAngle): number {
+  const leftOk = isFinite(repWindow.ratios.minLeftRatio) && isFinite(repWindow.ratios.maxLeftRatio);
+  const rightOk = isFinite(repWindow.ratios.minRightRatio) && isFinite(repWindow.ratios.maxRightRatio);
+  const leftRom = leftOk ? repWindow.ratios.maxLeftRatio - repWindow.ratios.minLeftRatio : 0;
+  const rightRom = rightOk ? repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio : 0;
+
+  if (viewAngle.zone === 'frontal') {
+    return Math.max(leftRom, rightRom);
+  }
+  return viewAngle.primarySide === 'right' ? rightRom : leftRom;
+}
+
+function resetBarbellCurlRepTracking(newState: BarbellCurlState): void {
+  newState.repWindow = null;
+  newState.leftArm = initArmFSM();
+  newState.rightArm = initArmFSM();
+}
+
+function completePartialRepIfMeaningful(
+  newState: BarbellCurlState,
+  t: number,
+  viewAngle: ViewAngle
+): void {
+  const window = newState.repWindow;
+  if (!window) return;
+
+  const actualRom = getRepWindowRomRatio(window, viewAngle);
+  const duration = window.tEnd - window.tStart;
+
+  if (isMeaningfulPartialRep({
+    actualRom,
+    minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+    duration,
+    minDuration: THRESHOLDS.MIN_REP_TIME,
+  })) {
+    completeRep(newState, t, viewAngle);
+    return;
+  }
+
+  newState.feedback = LOW_ROM_FEEDBACK;
+  newState.lastFeedbackTime = t;
+  resetBarbellCurlRepTracking(newState);
 }
 
 /** Complete a rep: evaluate form, update state, reset FSMs. */
@@ -1336,10 +1433,7 @@ function completeRep(
   }
   newState.lastFeedbackTime = t;
 
-  // Reset rep window and arms
-  newState.repWindow = null;
-  newState.leftArm = initArmFSM();
-  newState.rightArm = initArmFSM();
+  resetBarbellCurlRepTracking(newState);
 }
 
 // ============================================================================
@@ -1490,6 +1584,7 @@ export function createBarbellCurlDefinition(
       'Arms are uneven — curl both sides together.': 'asymmetry',
       "Keep your elbows in — don't flare them out to the sides.": 'elbow_flare',
       "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
+      'Keep your wrists neutral \u2014 avoid curling them in.': 'wrist_curl',
     },
     issueDefinitions: [
       {
@@ -1499,6 +1594,15 @@ export function createBarbellCurlDefinition(
           'Keep your elbows tucked.',
           'Elbows in — keep the curl strict.',
           "Don't let your elbows flare.",
+        ],
+      },
+      {
+        issueType: 'wrist_curl',
+        priority: 12,
+        messages: [
+          'Keep your wrists straight.',
+          "Don't curl your wrists in.",
+          'Neutral wrists through the rep.',
         ],
       },
     ],
@@ -1517,6 +1621,7 @@ export function createBarbellCurlDefinition(
     'Arms are uneven — curl both sides together.': 'Focus on symmetry — curl both arms at the same speed.',
     "Keep your elbows in — don't flare them out to the sides.": 'Keep elbows pinned to your sides — flaring reduces bicep isolation.',
     "Tuck your elbows in — they're drifting outward.": 'Focus on keeping elbows close to your body throughout the curl.',
+    'Keep your wrists neutral \u2014 avoid curling them in.': 'Keep wrists straight and stacked with your forearms so the curl stays focused on the biceps.',
   },
   };
 }

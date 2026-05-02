@@ -39,8 +39,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 0.6, 16),
-    ...interpolate(0.6, 0, 16),
+    ...interpolate(0, 0.25, 8),
+    ...interpolate(0.25, 0, 8),
+    ...Array(8).fill(0),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 0.48, 18),
+    ...interpolate(0.48, 0, 22),
     ...Array(8).fill(0),
   ];
 }
@@ -147,14 +156,23 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial crunch that never reaches the bottom', () => {
+  it('does not count a tiny crunch pulse', () => {
     const result = replayRecordingVerbose(
       machineAbCrunchDefinition,
-      buildRecording('synthetic partial machine ab crunch', partialPath()),
+      buildRecording('synthetic tiny machine ab crunch pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial crunch and records ROM feedback', () => {
+    const clean = replayRecording(machineAbCrunchDefinition, buildRecording('synthetic clean machine ab crunch', fullRepPath()));
+    const result = replayRecording(machineAbCrunchDefinition, buildRecording('synthetic half machine ab crunch', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Crunch deeper — bring your chest closer to your knees.');
   });
 
   it('flags neck pulling without punishing neutral neck position', () => {

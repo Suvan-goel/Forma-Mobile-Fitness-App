@@ -36,8 +36,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(18).fill(0),
-    ...interpolate(0, 0.58, 14),
-    ...interpolate(0.58, 0, 14),
+    ...interpolate(0, 0.38, 10),
+    ...interpolate(0.38, 0, 10),
+    ...Array(8).fill(0),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(18).fill(0),
+    ...interpolate(0, 0.58, 16),
+    ...interpolate(0.58, 0, 20),
     ...Array(8).fill(0),
   ];
 }
@@ -48,6 +57,16 @@ function fastLowerPath(): number[] {
     ...interpolate(0, 1, 34),
     ...Array(4).fill(1),
     ...interpolate(1, 0, 4),
+    ...Array(8).fill(0),
+  ];
+}
+
+function overRaisePath(): number[] {
+  return [
+    ...Array(18).fill(0),
+    ...interpolate(0, 1.32, 34),
+    ...Array(4).fill(1.32),
+    ...interpolate(1.32, 0, 44),
     ...Array(8).fill(0),
   ];
 }
@@ -171,14 +190,23 @@ describe('Lateral Raise synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial raise that never reaches shoulder level', () => {
+  it('does not count a tiny lateral raise pulse', () => {
     const result = replayRecordingVerbose(
       lateralRaiseDefinition,
-      buildRecording('synthetic partial lateral raise', partialPath()),
+      buildRecording('synthetic tiny lateral raise pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial lateral raise and records ROM feedback', () => {
+    const clean = replayRecording(lateralRaiseDefinition, buildRecording('synthetic clean lateral raise', fullRepPath()));
+    const result = replayRecording(lateralRaiseDefinition, buildRecording('synthetic half lateral raise', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Raise higher — aim for shoulder level.');
   });
 
   it('flags excessive elbow bend without punishing straight arms', () => {
@@ -240,6 +268,22 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(clean.feedbackMessages).not.toContain("Relax your traps — don't shrug the weight up.");
     expect(shrug.finalRepCount).toBe(1);
     expect(shrug.feedbackMessages).toContain("Relax your traps — don't shrug the weight up.");
+  });
+
+  it('flags over-raising above shoulder height without punishing shoulder-level reps', () => {
+    const clean = replayRecording(
+      lateralRaiseDefinition,
+      buildRecording('synthetic shoulder-level lateral raise', fullRepPath()),
+    );
+    const overRaised = replayRecording(
+      lateralRaiseDefinition,
+      buildRecording('synthetic over-raised lateral raise', overRaisePath()),
+    );
+
+    expect(clean.feedbackMessages).not.toContain('Stop around shoulder height — avoid lifting too high.');
+    expect(overRaised.finalRepCount).toBe(1);
+    expect(overRaised.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(overRaised.feedbackMessages).toContain('Stop around shoulder height — avoid lifting too high.');
   });
 
   it('still flags a true fast descent', () => {

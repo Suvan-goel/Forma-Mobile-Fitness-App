@@ -12,6 +12,7 @@ const FEEDBACK_TO_IMPROVEMENT: Record<string, string> = {
   // Good reps (no improvement needed) — universal across exercises
   'Great rep!': '',
   'Good rep.': '',
+  'Use more range for this rep to count.': 'Use a larger range of motion before returning to the start position.',
 };
 
 /**

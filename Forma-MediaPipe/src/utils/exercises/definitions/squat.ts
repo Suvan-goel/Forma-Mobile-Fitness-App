@@ -33,6 +33,7 @@ import {
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import tunedConfig from './tuned/squat.json';
 
 // ============================================================================
@@ -71,7 +72,7 @@ const THRESHOLDS = {
   /** Maximum torso inclination from vertical for standing detection (degrees) */
   TORSO_INCLINE_MAX_IDLE: 25,
   /** Minimum ratio ROM for a partial rep to count */
-  MIN_PARTIAL_ROM: 0.08,
+  MIN_PARTIAL_ROM: 0.10,
   /** Minimum ratio ROM for a full rep to count */
   MIN_REP_ROM: 0.15,
   /** Minimum frames in rep window for a rep to count */
@@ -733,17 +734,55 @@ function updateSquatState(
   const fsmResult = updateFSM(currentState.fsm, fast.kneeRatio, t, fast.torsoLean);
   newState.fsm = fsmResult.fsm;
 
-  // Handle partial rep — provide feedback, but do not increment the rep count.
-  // Shallow pulses should not be treated as completed squat reps.
+  // Handle partial rep — count meaningful returned partials, but ignore tiny pulses.
   if (fsmResult.partialRep) {
     const partialROM = newState.repWindow
       ? newState.repWindow.maxKneeRatio - newState.repWindow.minKneeRatio
       : 0;
     const partialFrames = newState.repWindow?.frameCount ?? 0;
 
-    if (partialROM >= THRESHOLDS.MIN_PARTIAL_ROM && partialFrames >= THRESHOLDS.MIN_REP_FRAMES) {
-      const messages = ['Squat deeper \u2014 aim to get your thighs parallel.'];
-      newState.feedback = messages[0];
+    if (newState.repWindow) {
+      newState.repWindow.tEnd = t;
+      if (!isNaN(fast.kneeRatio)) {
+        newState.repWindow.minKneeRatio = Math.min(newState.repWindow.minKneeRatio, fast.kneeRatio);
+        newState.repWindow.maxKneeRatio = Math.max(newState.repWindow.maxKneeRatio, fast.kneeRatio);
+      }
+      if (!isNaN(smoothed.torsoLean)) {
+        const torsoConf = minKeypointConfidence(keypoints, [`${visibleSide}_shoulder`, `${visibleSide}_hip`]);
+        if (torsoConf >= 0.3) {
+          newState.repWindow.maxTorsoLean = Math.max(newState.repWindow.maxTorsoLean, smoothed.torsoLean);
+        }
+      }
+    }
+
+    const finalPartialROM = newState.repWindow
+      ? newState.repWindow.maxKneeRatio - newState.repWindow.minKneeRatio
+      : partialROM;
+
+    if (
+      newState.repWindow &&
+      isMeaningfulPartialRep({
+        actualRom: finalPartialROM,
+        minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+        frameCount: partialFrames,
+        minFrames: THRESHOLDS.MIN_REP_FRAMES,
+      })
+    ) {
+      newState.repCount++;
+      const tDown = newState.repWindow.tEnd - newState.repWindow.tStart;
+      const { score, messages } = evaluateForm(newState.repWindow);
+      newState.lastRepResult = {
+        repIndex: newState.repCount,
+        romRatio: finalPartialROM,
+        tDown,
+        tUp: 0,
+        score,
+        messages,
+      };
+      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      newState.lastFeedbackTime = t;
+    } else if (finalPartialROM > 0) {
+      newState.feedback = LOW_ROM_FEEDBACK;
       newState.lastFeedbackTime = t;
     }
     // Either way, reset the rep window and let FSM return to STANDING
@@ -928,6 +967,43 @@ export function createSquatDefinition(
       'Stay more upright \u2014 brace your core.': 'torso_warn',
       'Control the ascent \u2014 don\'t bounce out of the hole.': 'tempo_up',
       'Slow the descent \u2014 control the weight down.': 'tempo_down',
+    },
+    feedbackMessages: {
+      'Squat deeper \u2014 aim to get your thighs parallel.': [
+        'Squat deeper.',
+        'Aim for thighs parallel.',
+        'Drop a little lower with control.',
+      ],
+      'Try to go a little deeper for full range of motion.': [
+        'A little more depth.',
+        'You are close. Sink slightly deeper.',
+        'Reach full squat depth next rep.',
+      ],
+      'Stand all the way up \u2014 fully extend your knees.': [
+        'Stand all the way up.',
+        'Finish tall at the top.',
+        'Fully extend your knees at the top.',
+      ],
+      'Too much forward lean \u2014 keep your chest up.': [
+        'Chest up.',
+        'Too much forward lean. Stay tall.',
+        'Brace hard and keep your chest lifted.',
+      ],
+      'Stay more upright \u2014 brace your core.': [
+        'Stay more upright.',
+        'Brace your core and keep your chest up.',
+        'Tall torso through the rep.',
+      ],
+      'Control the ascent \u2014 don\'t bounce out of the hole.': [
+        'Drive up with control.',
+        "Don't bounce out of the bottom.",
+        'Smooth ascent, stay braced.',
+      ],
+      'Slow the descent \u2014 control the weight down.': [
+        'Control the way down.',
+        'Slow the descent.',
+        "Don't drop into the squat.",
+      ],
     },
     // All issue types reused from existing pools — no new definitions needed
   },

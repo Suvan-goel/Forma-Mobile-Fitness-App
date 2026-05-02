@@ -50,8 +50,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 0.62, 12),
-    ...interpolate(0.62, 0, 12),
+    ...interpolate(0, 0.22, 8),
+    ...interpolate(0.22, 0, 8),
+    ...Array(8).fill(0),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 0.62, 14),
+    ...interpolate(0.62, 0, 18),
     ...Array(8).fill(0),
   ];
 }
@@ -205,14 +214,23 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial pushdown that never reaches lockout', () => {
+  it('does not count a tiny pushdown pulse', () => {
     const result = replayRecordingVerbose(
       cablePushdownDefinition,
-      buildRecording('synthetic partial cable pushdown', partialPath()),
+      buildRecording('synthetic tiny cable pushdown pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial pushdown and records ROM feedback', () => {
+    const clean = replayRecording(cablePushdownDefinition, buildRecording('synthetic clean cable pushdown', fullRepPath()));
+    const result = replayRecording(cablePushdownDefinition, buildRecording('synthetic half cable pushdown', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Extend fully — lock out at the bottom of each rep.');
   });
 
   it('keeps the visible side locked through a rep when visibility flips', () => {

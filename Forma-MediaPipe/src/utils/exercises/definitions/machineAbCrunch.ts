@@ -25,6 +25,7 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
   mergeHeuristicConfig,
@@ -59,12 +60,14 @@ const THRESHOLDS = {
   REST_REENTER: 114,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.5,
+  /** Minimum hip-angle ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 12,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
 const FORM_THRESHOLDS = {
   /** Min hip angle above which crunch is too shallow */
-  CRUNCH_ROM_FAIL: 125,
+  CRUNCH_ROM_FAIL: 112,
   /** Max hip angle below which extension is incomplete */
   EXTENSION_ROM_FAIL: 114,
   /** Concentric (crunch down) too fast threshold (seconds) */
@@ -505,6 +508,19 @@ function updateAbCrunchState(
     }
   }
 
+  // Start tracking a meaningful partial attempt even if it returns before the
+  // deeper CRUNCHING threshold. Tiny setup pulses stay below MIN_PARTIAL_ROM.
+  if (
+    state.phase === 'REST' &&
+    !state.repWindow &&
+    isFinite(state.restMaxHipAngle) &&
+    state.restMaxHipAngle - smoothedHipAngle >= THRESHOLDS.MIN_PARTIAL_ROM
+  ) {
+    const tStart = state.tCrunchStart ?? t;
+    state.repWindow = initRepWindow(tStart);
+    state.repWindow.maxHipAngle = state.restMaxHipAngle;
+  }
+
   // -- FSM update --
   const fsmResult = updateFSM(state.phase, state.fastHipAngle, t, state.tRepStart);
   const prevPhase = state.phase;
@@ -512,17 +528,18 @@ function updateAbCrunchState(
 
   // -- Track rep start --
   if (prevPhase === 'REST' && state.phase === 'CRUNCHING') {
-    state.tRepStart = state.tCrunchStart ?? t;
-    state.repWindow = initRepWindow(state.tRepStart);
+    state.tRepStart = state.repWindow?.tStart ?? state.tCrunchStart ?? t;
+    state.repWindow ??= initRepWindow(state.tRepStart);
     // Seed maxHipAngle from the pre-crunch position observed during REST
-    state.repWindow.maxHipAngle = state.restMaxHipAngle;
+    state.repWindow.maxHipAngle = Math.max(state.repWindow.maxHipAngle, state.restMaxHipAngle);
     state.restMaxHipAngle = -Infinity;
     state.tCrunchStart = null;
   }
 
   // -- Accumulate rep window while in a rep --
   const inRep = state.phase !== 'REST';
-  if (state.repWindow && inRep) {
+  const trackingPartialInRest = state.phase === 'REST' && prevPhase === 'REST';
+  if (state.repWindow && (inRep || trackingPartialInRest)) {
     const w = state.repWindow;
     w.tEnd = t;
     w.frameCount++;
@@ -546,6 +563,44 @@ function updateAbCrunchState(
       w.tReturnStart === null
     ) {
       w.tReturnStart = t;
+    }
+  }
+
+  // -- Handle returned partial crunch that never crossed CRUNCHING_ENTER --
+  if (prevPhase === 'REST' && state.phase === 'REST' && state.repWindow) {
+    const w = state.repWindow;
+    const actualRom = w.maxHipAngle - w.minHipAngle;
+    const duration = w.tEnd - w.tStart;
+    const returnedToRest =
+      actualRom >= THRESHOLDS.MIN_PARTIAL_ROM &&
+      state.fastHipAngle >= w.maxHipAngle - 3 &&
+      state.fastHipAngle > w.minHipAngle + 6;
+
+    if (returnedToRest) {
+      if (isMeaningfulPartialRep({
+        actualRom,
+        minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+        duration,
+        minDuration: THRESHOLDS.MIN_REP_TIME,
+      })) {
+        state.repCount++;
+        const score = computeAbCrunchScore(w);
+        const messages = generateFormMessages(w);
+        state.lastRepResult = {
+          repIndex: state.repCount,
+          score,
+          messages,
+        };
+        state.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+        state.lastFeedbackTime = t;
+      } else if (actualRom > 0) {
+        state.feedback = LOW_ROM_FEEDBACK;
+        state.lastFeedbackTime = t;
+      }
+
+      state.repWindow = null;
+      state.tRepStart = null;
+      state.tCrunchStart = null;
     }
   }
 
@@ -580,6 +635,35 @@ function updateAbCrunchState(
 
   // -- Handle aborted crunch (CRUNCHING -> REST without rep completion) --
   if (prevPhase === 'CRUNCHING' && state.phase === 'REST' && !fsmResult.repCompleted) {
+    if (state.repWindow) {
+      const w = state.repWindow;
+      w.tEnd = t;
+      w.minHipAngle = Math.min(w.minHipAngle, smoothedHipAngle);
+      w.maxHipAngle = Math.max(w.maxHipAngle, smoothedHipAngle);
+      const actualRom = w.maxHipAngle - w.minHipAngle;
+      const duration = w.tEnd - w.tStart;
+
+      if (isMeaningfulPartialRep({
+        actualRom,
+        minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+        duration,
+        minDuration: THRESHOLDS.MIN_REP_TIME,
+      })) {
+        state.repCount++;
+        const score = computeAbCrunchScore(w);
+        const messages = generateFormMessages(w);
+        state.lastRepResult = {
+          repIndex: state.repCount,
+          score,
+          messages,
+        };
+        state.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+        state.lastFeedbackTime = t;
+      } else if (actualRom > 0) {
+        state.feedback = LOW_ROM_FEEDBACK;
+        state.lastFeedbackTime = t;
+      }
+    }
     state.repWindow = null;
     state.tRepStart = null;
     state.tCrunchStart = null;
@@ -669,6 +753,28 @@ export function createMachineAbCrunchDefinition(
       'Keep your neck neutral \u2014 avoid pulling with your head.': 'neck_forward',
       'Slow down the crunch \u2014 control the movement.': 'tempo_down',
       'Control the return \u2014 resist on the way back.': 'tempo_up',
+    },
+    feedbackMessages: {
+      'Crunch deeper \u2014 bring your chest closer to your knees.': [
+        'Crunch deeper.',
+        'Bring your ribs closer to your pelvis.',
+        'Curl down a little farther.',
+      ],
+      'Extend fully \u2014 return to the upright position.': [
+        'Return all the way upright.',
+        'Reset tall before the next crunch.',
+        'Open back up at the top.',
+      ],
+      'Slow down the crunch \u2014 control the movement.': [
+        'Slow the crunch down.',
+        'Curl with control.',
+        'Control the squeeze through your abs.',
+      ],
+      'Control the return \u2014 resist on the way back.': [
+        'Control the return.',
+        'Resist on the way back.',
+        'Come back up slowly.',
+      ],
     },
     issueDefinitions: [
       {

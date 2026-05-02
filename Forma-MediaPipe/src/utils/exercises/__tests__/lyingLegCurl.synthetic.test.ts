@@ -49,8 +49,17 @@ function fullRepPath(): number[] {
 function partialPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 0.68, 16),
-    ...interpolate(0.68, 0, 16),
+    ...interpolate(0, 0.25, 8),
+    ...interpolate(0.25, 0, 8),
+    ...Array(8).fill(0),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 0.68, 18),
+    ...interpolate(0.68, 0, 22),
     ...Array(8).fill(0),
   ];
 }
@@ -188,14 +197,23 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     },
   );
 
-  it('does not count a partial curl that never reaches peak flexion', () => {
+  it('does not count a tiny lying-leg-curl pulse', () => {
     const result = replayRecordingVerbose(
       lyingLegCurlDefinition,
-      buildRecording('synthetic partial lying leg curl', partialPath()),
+      buildRecording('synthetic tiny lying leg curl pulse', partialPath()),
     );
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial lying leg curl and records ROM feedback', () => {
+    const clean = replayRecording(lyingLegCurlDefinition, buildRecording('synthetic clean lying leg curl', fullRepPath()));
+    const result = replayRecording(lyingLegCurlDefinition, buildRecording('synthetic half lying leg curl', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Curl higher — bring your heels closer to your glutes.');
   });
 
   it('keeps the visible side locked through a rep when visibility flips', () => {

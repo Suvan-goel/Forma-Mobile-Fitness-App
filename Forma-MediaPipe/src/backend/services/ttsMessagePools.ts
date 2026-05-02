@@ -198,7 +198,7 @@ const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
   },
   form_reminder: {
     messages: [
-      '{exercise}. Remember, Keep those reps clean.',
+      '{exercise}. Remember, keep those reps clean.',
       '{exercise} coming up. Control the tempo and focus on your breathing.',
       "{exercise}. Focus on your form — that's what matters.",
       '{exercise}. Keep it smooth and controlled.',
@@ -263,7 +263,33 @@ export const ISSUE_PRIORITY: Record<string, number> = {
 // Populated dynamically by exercise definitions via mergeTTSConfig().
 // ============================================================================
 
-export const FEEDBACK_TO_ISSUE: Record<string, string> = {};
+export const FEEDBACK_TO_ISSUE: Record<string, string> = {
+  'Use more range for this rep to count.': 'incomplete_rom',
+};
+
+/**
+ * Exact feedback-string voice pools.
+ *
+ * These let runtime TTS stay exercise-specific without changing issueType keys,
+ * which are also used to derive stable dataset issue ids.
+ */
+export const FEEDBACK_TTS_POOLS: Record<string, MessagePool> = {
+  'Use more range for this rep to count.': {
+    messages: [
+      'Use more range for this rep to count.',
+      'That one was short. Give me more range.',
+      'Bigger range next rep, nice and controlled.',
+      'Make the next one fuller.',
+    ],
+  },
+};
+
+export interface FeedbackIssueCandidate {
+  feedback: string;
+  issueType: string;
+  priority: number;
+  pool: MessagePool;
+}
 
 // ============================================================================
 // MERGE — called by exercise registration to add feedback→issue mappings
@@ -279,10 +305,16 @@ export const FEEDBACK_TO_ISSUE: Record<string, string> = {};
  */
 export function mergeTTSConfig(config: {
   feedbackToIssue: Record<string, string>;
+  feedbackMessages?: Record<string, string[]>;
   issueDefinitions?: Array<{ issueType: string; priority: number; messages: string[] }>;
 }): void {
   for (const [feedback, issueType] of Object.entries(config.feedbackToIssue)) {
     FEEDBACK_TO_ISSUE[feedback] = issueType;
+  }
+  if (config.feedbackMessages) {
+    for (const [feedback, messages] of Object.entries(config.feedbackMessages)) {
+      FEEDBACK_TTS_POOLS[feedback] = { messages };
+    }
   }
   if (config.issueDefinitions) {
     for (const def of config.issueDefinitions) {
@@ -294,6 +326,56 @@ export function mergeTTSConfig(config: {
       }
     }
   }
+}
+
+/**
+ * Split visual feedback into individual mapped lines. Some screens pass
+ * newline-joined feedback for display, while TTS maps exact single messages.
+ */
+export function normalizeFeedbackMessages(feedbackMessages: string[]): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const message of feedbackMessages) {
+    for (const line of message.split(/\n+/)) {
+      const trimmed = line.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+  }
+
+  return normalized;
+}
+
+export function getFeedbackIssueCandidates(
+  feedbackMessages: string[]
+): FeedbackIssueCandidate[] {
+  return normalizeFeedbackMessages(feedbackMessages)
+    .map((feedback): FeedbackIssueCandidate | null => {
+      const issueType = FEEDBACK_TO_ISSUE[feedback];
+      if (!issueType) return null;
+
+      const pool = FEEDBACK_TTS_POOLS[feedback] ?? ISSUE_POOLS[issueType];
+      if (!pool) return null;
+
+      return {
+        feedback,
+        issueType,
+        priority: ISSUE_PRIORITY[issueType] ?? 0,
+        pool,
+      };
+    })
+    .filter((candidate): candidate is FeedbackIssueCandidate => candidate !== null);
+}
+
+export function getTopFeedbackIssueCandidate(
+  feedbackMessages: string[]
+): FeedbackIssueCandidate | null {
+  const candidates = getFeedbackIssueCandidates(feedbackMessages);
+  if (candidates.length === 0) return null;
+
+  return [...candidates].sort((a, b) => b.priority - a.priority)[0];
 }
 
 // ============================================================================

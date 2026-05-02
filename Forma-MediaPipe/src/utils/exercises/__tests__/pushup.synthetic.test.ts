@@ -6,11 +6,13 @@ import type { Keypoint } from '../../poseAnalysis';
 type PushupSide = 'left' | 'right';
 type PushupOrientation = 'facing-right' | 'facing-left';
 type PushupPosture = 'neutral' | 'sag' | 'pike';
+type PushupHeadPosture = 'neutral' | 'dropped';
 
 const FRAME_MS = 50;
 const EXTENDED_ELBOW_X = 0;
 const BOTTOM_ELBOW_X = 0.58;
-const PULSE_ELBOW_X = 0.12;
+const PULSE_ELBOW_X = 0.04;
+const HALF_ELBOW_X = 0.12;
 
 function kp(name: string, x: number, y: number, score = 0.99): Keypoint {
   return { name, x, y, z: 0, score };
@@ -38,6 +40,15 @@ function pulsePath(): number[] {
     ...Array(22).fill(EXTENDED_ELBOW_X),
     ...interpolate(EXTENDED_ELBOW_X, PULSE_ELBOW_X, 8),
     ...interpolate(PULSE_ELBOW_X, EXTENDED_ELBOW_X, 8),
+    ...Array(8).fill(EXTENDED_ELBOW_X),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(22).fill(EXTENDED_ELBOW_X),
+    ...interpolate(EXTENDED_ELBOW_X, HALF_ELBOW_X, 18),
+    ...interpolate(HALF_ELBOW_X, EXTENDED_ELBOW_X, 18),
     ...Array(8).fill(EXTENDED_ELBOW_X),
   ];
 }
@@ -98,19 +109,32 @@ function sideKeypoints(
   ];
 }
 
+function nosePoint(
+  shoulder: { x: number; y: number },
+  orientation: PushupOrientation,
+  headPosture: PushupHeadPosture,
+) {
+  const direction = orientation === 'facing-right' ? -1 : 1;
+  return headPosture === 'dropped'
+    ? { x: shoulder.x + direction * 0.12, y: shoulder.y + 0.14 }
+    : { x: shoulder.x + direction * 0.12, y: shoulder.y - 0.02 };
+}
+
 function makeFrameWithScores(
   timestamp: number,
   elbowOffsetX: number,
   orientation: PushupOrientation,
   posture: PushupPosture,
+  headPosture: PushupHeadPosture,
   leftScore: number,
   rightScore: number,
 ): LandmarkRecording['frames'][number] {
   const { shoulder } = bodyPoints(orientation, posture);
+  const nose = nosePoint(shoulder, orientation, headPosture);
   return {
     timestamp,
     keypoints: [
-      kp('nose', shoulder.x + (orientation === 'facing-right' ? -0.12 : 0.12), shoulder.y - 0.02),
+      kp('nose', nose.x, nose.y),
       ...sideKeypoints('left', elbowOffsetX, orientation, posture, leftScore),
       ...sideKeypoints('right', elbowOffsetX, orientation, posture, rightScore),
     ],
@@ -123,14 +147,16 @@ function makeFrame(
   side: PushupSide,
   orientation: PushupOrientation,
   posture: PushupPosture,
+  headPosture: PushupHeadPosture,
   hiddenSideScore = 0.05,
 ): LandmarkRecording['frames'][number] {
   const otherSide: PushupSide = side === 'left' ? 'right' : 'left';
   const { shoulder } = bodyPoints(orientation, posture);
+  const nose = nosePoint(shoulder, orientation, headPosture);
   return {
     timestamp,
     keypoints: [
-      kp('nose', shoulder.x + (orientation === 'facing-right' ? -0.12 : 0.12), shoulder.y - 0.02),
+      kp('nose', nose.x, nose.y),
       ...sideKeypoints(side, elbowOffsetX, orientation, posture, 0.99),
       ...sideKeypoints(otherSide, elbowOffsetX, orientation, posture, hiddenSideScore),
     ],
@@ -144,6 +170,7 @@ function buildRecording(
     side?: PushupSide;
     orientation?: PushupOrientation;
     posture?: PushupPosture;
+    headPosture?: PushupHeadPosture;
     sideSwitchFrame?: number;
   } = {},
 ): LandmarkRecording {
@@ -151,6 +178,7 @@ function buildRecording(
     side = 'left',
     orientation = 'facing-right',
     posture = 'neutral',
+    headPosture = 'neutral',
     sideSwitchFrame,
   } = options;
 
@@ -166,10 +194,10 @@ function buildRecording(
     frames: elbowPath.map((elbowOffsetX, index) => {
       if (sideSwitchFrame !== undefined && index >= sideSwitchFrame) {
         return side === 'left'
-          ? makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, 0.7, 0.99)
-          : makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, 0.99, 0.7);
+          ? makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, headPosture, 0.7, 0.99)
+          : makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, headPosture, 0.99, 0.7);
       }
-      return makeFrame(index * FRAME_MS, elbowOffsetX, side, orientation, posture);
+      return makeFrame(index * FRAME_MS, elbowOffsetX, side, orientation, posture, headPosture);
     }),
   };
 }
@@ -184,7 +212,7 @@ function buildRecordingWithPostureDuringRep(
     ...buildRecording(description, elbowPath, { orientation }),
     frames: elbowPath.map((elbowOffsetX, index) => {
       const activePosture = index < 22 ? 'neutral' : posture;
-      return makeFrame(index * FRAME_MS, elbowOffsetX, 'left', orientation, activePosture);
+      return makeFrame(index * FRAME_MS, elbowOffsetX, 'left', orientation, activePosture, 'neutral');
     }),
   };
 }
@@ -214,6 +242,15 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.repTraces).toEqual([]);
   });
 
+  it('counts a meaningful partial push-up and records depth feedback', () => {
+    const clean = replayRecording(pushupDefinition, buildRecording('synthetic clean pushup', fullRepPath()));
+    const result = replayRecording(pushupDefinition, buildRecording('synthetic half pushup', halfRepPath()));
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Go deeper — aim for elbows at 90 degrees.');
+  });
+
   it.each<PushupOrientation>(['facing-right', 'facing-left'])(
     'flags hip sag consistently when %s',
     orientation => {
@@ -239,6 +276,22 @@ describe('Push-Up synthetic replay coverage', () => {
       expect(result.feedbackMessages.join('\n')).toContain('Hips are piking');
     },
   );
+
+  it('flags head position without punishing neutral neck alignment', () => {
+    const clean = replayRecording(
+      pushupDefinition,
+      buildRecording('synthetic neutral head pushup', fullRepPath()),
+    );
+    const dropped = replayRecording(
+      pushupDefinition,
+      buildRecording('synthetic dropped head pushup', fullRepPath(), { headPosture: 'dropped' }),
+    );
+
+    expect(clean.feedbackMessages).not.toContain('Keep your head neutral — align your neck with your spine.');
+    expect(dropped.finalRepCount).toBe(1);
+    expect(dropped.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(dropped.feedbackMessages).toContain('Keep your head neutral — align your neck with your spine.');
+  });
 
   it('keeps the active side locked through a rep even if visibility flips', () => {
     const result = replayRecordingVerbose(

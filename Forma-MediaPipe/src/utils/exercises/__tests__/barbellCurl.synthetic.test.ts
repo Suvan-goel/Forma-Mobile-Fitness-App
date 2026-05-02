@@ -4,10 +4,12 @@ import type { LandmarkRecording } from './types';
 import type { Keypoint } from '../../poseAnalysis';
 
 type CurlView = 'front' | 'side-left' | 'side-right';
+type WristStyle = 'neutral' | 'curled';
 
 const EXTENDED_WRIST_Y = 0.6;
 const TOP_WRIST_Y = 1.2;
-const PULSE_WRIST_Y = 1.08;
+const PULSE_WRIST_Y = 0.78;
+const HALF_WRIST_Y = 1.08;
 const FRAME_MS = 50;
 
 function kp(name: string, x: number, y: number, z: number, score = 0.99): Keypoint {
@@ -50,22 +52,31 @@ function armKeypoints(
   z: number,
   wristY: number,
   visible: boolean,
+  wristStyle: WristStyle,
 ): Keypoint[] {
   const score = visible ? 0.99 : 0.05;
   const shoulderY = 1.4;
   const elbowY = 1.0;
   const indexY = wristY + (wristY - elbowY) * 0.2;
+  const indexX = wristStyle === 'curled'
+    ? x + (side === 'left' ? -0.18 : 0.18)
+    : x;
 
   return [
     kp(`${side}_shoulder`, x, shoulderY, z, 0.99),
     kp(`${side}_elbow`, x, elbowY, z, score),
     kp(`${side}_wrist`, x, wristY, z, score),
-    kp(`${side}_index`, x, indexY, z, score),
+    kp(`${side}_index`, indexX, indexY, z, score),
     kp(`${side}_hip`, x, 0.5, z, 0.99),
   ];
 }
 
-function makeFrame(timestamp: number, wristY: number, view: CurlView): LandmarkRecording['frames'][number] {
+function makeFrame(
+  timestamp: number,
+  wristY: number,
+  view: CurlView,
+  wristStyle: WristStyle,
+): LandmarkRecording['frames'][number] {
   const geom = sideGeometry(view);
   const leftVisible = geom.visibleArm === 'both' || geom.visibleArm === 'left';
   const rightVisible = geom.visibleArm === 'both' || geom.visibleArm === 'right';
@@ -74,8 +85,8 @@ function makeFrame(timestamp: number, wristY: number, view: CurlView): LandmarkR
     timestamp,
     keypoints: [
       kp('nose', 0, 1.72, -0.05, 0.99),
-      ...armKeypoints('left', geom.leftX, geom.leftZ, wristY, leftVisible),
-      ...armKeypoints('right', geom.rightX, geom.rightZ, wristY, rightVisible),
+      ...armKeypoints('left', geom.leftX, geom.leftZ, wristY, leftVisible, wristStyle),
+      ...armKeypoints('right', geom.rightX, geom.rightZ, wristY, rightVisible, wristStyle),
     ],
   };
 }
@@ -84,7 +95,12 @@ function buildRecording(
   description: string,
   wristPath: number[],
   view: CurlView = 'front',
+  options: {
+    wristStyle?: WristStyle | ((index: number) => WristStyle);
+  } = {},
 ): LandmarkRecording {
+  const { wristStyle = 'neutral' } = options;
+
   return {
     exerciseName: 'Barbell Curl',
     metadata: {
@@ -94,7 +110,10 @@ function buildRecording(
       expectedReps: 0,
       expectedScoreRange: [0, 100],
     },
-    frames: wristPath.map((wristY, index) => makeFrame(index * FRAME_MS, wristY, view)),
+    frames: wristPath.map((wristY, index) => {
+      const frameWristStyle = typeof wristStyle === 'function' ? wristStyle(index) : wristStyle;
+      return makeFrame(index * FRAME_MS, wristY, view, frameWristStyle);
+    }),
   };
 }
 
@@ -130,6 +149,15 @@ function fastLoweringPath(): number[] {
     ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 16),
     ...Array(20).fill(TOP_WRIST_Y),
     ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 3),
+    ...Array(8).fill(EXTENDED_WRIST_Y),
+  ];
+}
+
+function halfRepPath(): number[] {
+  return [
+    ...Array(16).fill(EXTENDED_WRIST_Y),
+    ...interpolate(EXTENDED_WRIST_Y, HALF_WRIST_Y, 16),
+    ...interpolate(HALF_WRIST_Y, EXTENDED_WRIST_Y, 18),
     ...Array(8).fill(EXTENDED_WRIST_Y),
   ];
 }
@@ -189,6 +217,39 @@ describe('Barbell Curl synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('counts a meaningful partial curl and records ROM feedback', () => {
+    const clean = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic clean front curl', fullRepPath(), 'front'),
+    );
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic half front curl', halfRepPath(), 'front'),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Flex more at the top of the curl.');
+  });
+
+  it('flags wrist curling without punishing neutral wrists', () => {
+    const clean = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic neutral wrist curl', fullRepPath(), 'front'),
+    );
+    const curled = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic curled wrist curl', fullRepPath(), 'front', {
+        wristStyle: index => (index < 16 ? 'neutral' : 'curled'),
+      }),
+    );
+
+    expect(clean.feedbackMessages).not.toContain('Keep your wrists neutral — avoid curling them in.');
+    expect(curled.finalRepCount).toBe(1);
+    expect(curled.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(curled.feedbackMessages).toContain('Keep your wrists neutral — avoid curling them in.');
   });
 
   it('still flags a true fast lowering after a top pause', () => {

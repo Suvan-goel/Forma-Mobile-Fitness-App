@@ -14,10 +14,9 @@
 
 import { speakWithElevenLabs, isElevenLabsAvailable } from './elevenlabsTTS';
 import {
-  ISSUE_POOLS,
   POSITIVE_POOLS,
-  ISSUE_PRIORITY,
-  FEEDBACK_TO_ISSUE,
+  type FeedbackIssueCandidate,
+  getTopFeedbackIssueCandidate,
   pickFromPool,
   pickSetStartMessage,
 } from './ttsMessagePools';
@@ -52,25 +51,9 @@ const DEFAULT_STATE: CoachState = {
 
 let state: CoachState = { ...DEFAULT_STATE };
 
-function getTopIssue(feedbackMessages: string[]): string | null {
-  const issues = feedbackMessages
-    .map((msg) => FEEDBACK_TO_ISSUE[msg])
-    .filter((issue): issue is string => issue !== undefined);
-
-  if (issues.length === 0) return null;
-
-  const sorted = [...issues].sort(
-    (a, b) => (ISSUE_PRIORITY[b] ?? 0) - (ISSUE_PRIORITY[a] ?? 0)
-  );
-  return sorted[0];
-}
-
-async function speakIssue(issue: string): Promise<void> {
-  const pool = ISSUE_POOLS[issue];
-  if (pool) {
-    state.lastSpokenIssue = issue;
-    await trySpeak(pickFromPool(pool));
-  }
+async function speakFeedback(candidate: FeedbackIssueCandidate): Promise<void> {
+  state.lastSpokenIssue = candidate.issueType;
+  await trySpeak(pickFromPool(candidate.pool));
 }
 
 function markBadFeedback(): void {
@@ -99,12 +82,12 @@ export async function onRepCompleted(
 
   state.totalRepsInSet++;
 
-  const topIssue = getTopIssue(feedbackMessages);
+  const topFeedback = getTopFeedbackIssueCandidate(feedbackMessages);
 
-  if (topIssue) {
+  if (topFeedback) {
     // ── Bad rep ──
     markBadFeedback();
-    await speakIssue(topIssue);
+    await speakFeedback(topFeedback);
   } else {
     // ── Clean rep ──
     state.cleanStreak++;
@@ -139,11 +122,11 @@ export async function onRepCompleted(
 export async function onFormFeedback(feedbackMessages: string[]): Promise<void> {
   if (!isElevenLabsAvailable()) return;
 
-  const topIssue = getTopIssue(feedbackMessages);
-  if (!topIssue) return;
+  const topFeedback = getTopFeedbackIssueCandidate(feedbackMessages);
+  if (!topFeedback) return;
 
   markBadFeedback();
-  await speakIssue(topIssue);
+  await speakFeedback(topFeedback);
 }
 
 /**

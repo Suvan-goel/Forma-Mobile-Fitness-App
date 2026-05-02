@@ -29,6 +29,7 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
   mergeHeuristicConfig,
@@ -93,6 +94,8 @@ const THRESHOLDS = {
   REST_REENTER: 0.90,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
+  /** Minimum ratio ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 0.19,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
@@ -592,6 +595,48 @@ function updateLyingLegCurlState(
   const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
 
+  const returnedPartial =
+    currentState.fsm.phase === 'CURLING' &&
+    newState.fsm.phase === 'REST' &&
+    !fsmResult.repCompleted &&
+    newState.repWindow !== null;
+
+  if (returnedPartial && newState.repWindow) {
+    const window = newState.repWindow;
+    window.tEnd = t;
+    if (!isNaN(smoothedRatio)) {
+      window.minRatio = Math.min(window.minRatio, smoothedRatio);
+      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
+    }
+    const actualRom = window.maxRatio - window.minRatio;
+    const duration = window.tEnd - window.tStart;
+
+    if (isMeaningfulPartialRep({
+      actualRom,
+      minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+      duration,
+      minDuration: THRESHOLDS.MIN_REP_TIME,
+    })) {
+      newState.repCount++;
+      const score = computeLyingLegCurlScore(window);
+      const messages = generateFormMessages(window);
+      newState.lastRepResult = {
+        repIndex: newState.repCount,
+        score,
+        messages,
+      };
+      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      newState.lastFeedbackTime = t;
+    } else if (actualRom > 0) {
+      newState.feedback = LOW_ROM_FEEDBACK;
+      newState.lastFeedbackTime = t;
+    }
+
+    newState.repWindow = null;
+    newState.fsm = initFSM();
+    return newState;
+  }
+
   if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
     newState.restMaxRatio = Math.max(newState.restMaxRatio, smoothedRatio);
   }
@@ -767,6 +812,13 @@ export function createLyingLegCurlDefinition(
       'Keep your hips down \u2014 avoid lifting off the pad.': 'hip_lift',
       'Slow down the curl \u2014 control the contraction.': 'tempo_up',
       'Control the descent \u2014 lower the weight slowly.': 'tempo_down',
+    },
+    feedbackMessages: {
+      'Keep your hips down \u2014 avoid lifting off the pad.': [
+        'Keep your hips down.',
+        'Press your hips into the pad.',
+        "Don't lift your hips during the curl.",
+      ],
     },
     issueDefinitions: [
       {

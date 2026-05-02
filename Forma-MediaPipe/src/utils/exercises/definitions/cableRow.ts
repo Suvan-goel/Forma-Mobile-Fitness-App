@@ -30,6 +30,7 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
   mergeHeuristicConfig,
@@ -92,6 +93,8 @@ const THRESHOLDS = {
   REST_REENTER: 0.90,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.5,
+  /** Minimum ratio ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 0.145,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
@@ -641,6 +644,50 @@ function updateCableRowState(
   const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
 
+  const returnedPartial =
+    currentState.fsm.phase === 'PULLING' &&
+    newState.fsm.phase === 'REST' &&
+    !fsmResult.repCompleted &&
+    newState.repWindow !== null;
+
+  if (returnedPartial && newState.repWindow) {
+    const window = newState.repWindow;
+    window.tEnd = t;
+    if (!isNaN(smoothedRatio)) {
+      window.minRatio = Math.min(window.minRatio, smoothedRatio);
+    }
+    if (rawRatio !== null) {
+      window.maxRatio = Math.max(window.maxRatio, rawRatio);
+    }
+    const actualRom = window.maxRatio - window.minRatio;
+    const duration = window.tEnd - window.tStart;
+
+    if (isMeaningfulPartialRep({
+      actualRom,
+      minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+      duration,
+      minDuration: THRESHOLDS.MIN_REP_TIME,
+    })) {
+      newState.repCount++;
+      const score = computeCableRowScore(window);
+      const messages = generateFormMessages(window);
+      newState.lastRepResult = {
+        repIndex: newState.repCount,
+        score,
+        messages,
+      };
+      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      newState.lastFeedbackTime = t;
+    } else if (actualRom > 0) {
+      newState.feedback = LOW_ROM_FEEDBACK;
+      newState.lastFeedbackTime = t;
+    }
+
+    newState.repWindow = null;
+    newState.fsm = initFSM();
+    return newState;
+  }
+
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
@@ -837,6 +884,23 @@ export function createCableRowDefinition(
       'Stay upright \u2014 avoid leaning back during the pull.': 'torso_warn',
       'Slow down the pull \u2014 control the contraction.': 'tempo_down',
       "Control the return \u2014 don't let the weight pull you forward.": 'tempo_up',
+    },
+    feedbackMessages: {
+      'Stay upright \u2014 avoid leaning back during the pull.': [
+        'Stay upright as you pull.',
+        'Less lean back. Keep the row strict.',
+        'Brace tall and pull with your back.',
+      ],
+      'Slow down the pull \u2014 control the contraction.': [
+        'Slow the pull.',
+        'Control the contraction.',
+        'Pull back smoothly and squeeze.',
+      ],
+      "Control the return \u2014 don't let the weight pull you forward.": [
+        'Control the return.',
+        "Don't let the weight pull you forward.",
+        'Reach forward with control.',
+      ],
     },
     issueDefinitions: [
       {

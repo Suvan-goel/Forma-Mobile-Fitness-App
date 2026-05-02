@@ -24,6 +24,7 @@ import {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
   mergeHeuristicConfig,
@@ -58,6 +59,8 @@ const THRESHOLDS = {
   /** Minimum time (seconds) to stay in PULLING before allowing abort back to REST.
    *  Prevents rapid flicker when the idle arm ratio hovers near PULLING_ENTER. */
   PULLING_ABORT_MIN_TIME: 0.25,
+  /** Minimum ratio ROM for a returned partial rep to count */
+  MIN_PARTIAL_ROM: 0.13,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
@@ -576,10 +579,41 @@ function updateLatPulldownState(
 
   // -- Handle aborted pull (PULLING -> REST without rep completion) --
   if (prevPhase === 'PULLING' && state.phase === 'REST' && !fsmResult.repCompleted) {
+    let countedPartial = false;
+    if (state.repWindow) {
+      const w = state.repWindow;
+      w.tEnd = t;
+      w.minRatio = Math.min(w.minRatio, smoothedRatio);
+      w.maxRatio = Math.max(w.maxRatio, smoothedRatio);
+      const actualRom = w.maxRatio - w.minRatio;
+      const duration = w.tEnd - w.tStart;
+
+      if (isMeaningfulPartialRep({
+        actualRom,
+        minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+        duration,
+        minDuration: THRESHOLDS.PULLING_ABORT_MIN_TIME,
+      })) {
+        state.repCount++;
+        countedPartial = true;
+        state.requireExtensionBeforeNextRep = true;
+        state.tRepCompleted = t;
+        const score = computeLatPulldownScore(w);
+        const messages = generateFormMessages(w);
+        state.lastRepResult = { repIndex: state.repCount, score, messages };
+        state.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+        state.lastFeedbackTime = t;
+      } else if (actualRom > 0) {
+        state.feedback = LOW_ROM_FEEDBACK;
+        state.lastFeedbackTime = t;
+      }
+    }
     state.repWindow = null;
     state.tRepStart = null;
-    state.requireExtensionBeforeNextRep = false;
-    state.tRepCompleted = null;
+    if (!countedPartial) {
+      state.requireExtensionBeforeNextRep = false;
+      state.tRepCompleted = null;
+    }
     state.tRestPeakRatio = null;
   }
 
@@ -667,6 +701,33 @@ export function createLatPulldownDefinition(
       'Stay upright \u2014 avoid leaning back excessively.': 'torso_warn',
       'Slow down the pull \u2014 control the descent.': 'tempo_down',
       'Control the return \u2014 resist the weight on the way up.': 'tempo_up',
+    },
+    feedbackMessages: {
+      'Pull deeper \u2014 bring the bar to your upper chest.': [
+        'Pull to your upper chest.',
+        'Bring the bar a little lower.',
+        'Finish the pull down to the chest.',
+      ],
+      'Extend fully \u2014 reach all the way up at the top.': [
+        'Reach all the way up.',
+        'Full stretch at the top.',
+        'Let your arms extend before the next pull.',
+      ],
+      'Stay upright \u2014 avoid leaning back excessively.': [
+        'Stay tall through the pull.',
+        'Only a slight lean back.',
+        'Less lean, more lat pull.',
+      ],
+      'Slow down the pull \u2014 control the descent.': [
+        'Slow the pull down.',
+        'Control the bar to your chest.',
+        'Pull smoothly, no rushing.',
+      ],
+      'Control the return \u2014 resist the weight on the way up.': [
+        'Control the bar on the way up.',
+        'Resist the return.',
+        'Let it rise with control.',
+      ],
     },
   },
 

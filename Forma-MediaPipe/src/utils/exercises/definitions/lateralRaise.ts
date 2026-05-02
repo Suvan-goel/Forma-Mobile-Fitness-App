@@ -29,6 +29,7 @@ import type {
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
 import { computeScore, PenaltyConfig } from '../shared/scoring';
+import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
   mergeHeuristicConfig,
@@ -56,12 +57,16 @@ const THRESHOLDS = {
   REST_ENTER: 0.30,
   /** Minimum time (seconds) for a rep to count */
   MIN_REP_TIME: 0.5,
+  /** Minimum height ratio for a returned partial rep to count */
+  MIN_PARTIAL_HEIGHT_RATIO: 0.46,
 } as const;
 
 /** Form heuristic thresholds — ratio-based where applicable */
 const FORM_THRESHOLDS = {
   /** Max height ratio should reach at least this for good ROM (1.0 = shoulder level) */
   ROM_MIN: 0.92,
+  /** Height ratio above which the raise is excessive (well above shoulder level). */
+  OVER_RAISE_WARN: 1.15,
   /** Arm straightness ratio below this triggers "keep arms straighter".
    *  1.0 = perfectly straight, ~0.85 = noticeably bent. */
   ELBOW_STRAIGHTNESS_WARN: 0.88,
@@ -98,6 +103,7 @@ const IDEAL = {
  * | Tempo lower  | 35  | 0.05s    | 1800  | ideal 0.55s − actual eccentric time            |
  * | Asymmetry    | 15  | 0.08     | 800   | maxHeightRatioDiff between arms                |
  * | Shrug        | 20  | 10%      | 0.50  | shoulder elevation % above rest baseline       |
+ * | Over-raise   | 10  | 0.10     | 500   | maxHeightRatio above shoulder level            |
  *
  * Max total penalty: 165 → worst possible rep = 0.
  */
@@ -108,6 +114,7 @@ const PENALTY_CONFIGS = {
   TEMPO_LOWER:    { cap: 35, deadzone: 0.05, scale: 1800 } as PenaltyConfig,
   ASYMMETRY:      { cap: 15, deadzone: 0.08, scale: 800  } as PenaltyConfig,
   SHRUG:          { cap: 20, deadzone: 10,   scale: 0.50 } as PenaltyConfig,
+  OVER_RAISE:     { cap: 10, deadzone: 0.10, scale: 500  } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -452,6 +459,10 @@ function computeRepWindowScore(repWindow: RepWindow): number {
   // 6. Shoulder shrug — torso height compression percentage (already ratio-based)
   penalties.push({ value: repWindow.maxShrugPct, config: PENALTY_CONFIGS.SHRUG });
 
+  // 7. Over-raising — above shoulder level shifts tension and often invites shrugging.
+  const overRaise = Math.max(0, repWindow.maxHeightRatio - IDEAL.MAX_HEIGHT_RATIO);
+  penalties.push({ value: overRaise, config: PENALTY_CONFIGS.OVER_RAISE });
+
   return computeScore(penalties);
 }
 
@@ -467,22 +478,27 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Raise higher \u2014 aim for shoulder level.');
   }
 
-  // 2. Arm straightness (ratio-based)
+  // 2. Over-raise (ratio-based)
+  if (repWindow.maxHeightRatio > FORM_THRESHOLDS.OVER_RAISE_WARN) {
+    messages.push('Stop around shoulder height \u2014 avoid lifting too high.');
+  }
+
+  // 3. Arm straightness (ratio-based)
   if (repWindow.minStraightnessRatio < FORM_THRESHOLDS.ELBOW_STRAIGHTNESS_WARN) {
     messages.push('Keep your arms straighter \u2014 avoid excessive elbow bend.');
   }
 
-  // 3. Torso lean
+  // 4. Torso lean
   if (repWindow.maxTorsoLean > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
     messages.push('Stay upright \u2014 avoid swaying or leaning.');
   }
 
-  // 4. Asymmetry (ratio-based)
+  // 5. Asymmetry (ratio-based)
   if (repWindow.maxHeightRatioDiff > FORM_THRESHOLDS.ASYMMETRY_WARN) {
     messages.push('Even it out \u2014 raise both arms to the same height.');
   }
 
-  // 5. Eccentric tempo only
+  // 6. Eccentric tempo only
   if (repWindow.tLoweringStart !== null) {
     const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN) {
@@ -490,7 +506,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     }
   }
 
-  // 6. Shoulder shrug
+  // 7. Shoulder shrug
   if (repWindow.maxShrugPct > FORM_THRESHOLDS.SHRUG_WARN) {
     messages.push('Relax your traps \u2014 don\'t shrug the weight up.');
   }
@@ -692,6 +708,45 @@ function updateLateralRaiseState(
 
   // -- Handle aborted raise (RAISING -> REST without rep completion) --
   if (prevPhase === 'RAISING' && state.phase === 'REST' && !fsmResult.repCompleted) {
+    if (state.repWindow) {
+      const w = state.repWindow;
+      w.tEnd = t;
+      w.maxHeightRatio = Math.max(w.maxHeightRatio, smoothedAvgHeightRatio);
+      w.maxLeftHeightRatio = Math.max(w.maxLeftHeightRatio, smoothedLeftHeightRatio);
+      w.maxRightHeightRatio = Math.max(w.maxRightHeightRatio, smoothedRightHeightRatio);
+      w.maxHeightRatioDiff = Math.max(
+        w.maxHeightRatioDiff,
+        Math.abs(smoothedLeftHeightRatio - smoothedRightHeightRatio),
+      );
+      w.minStraightnessRatio = Math.min(
+        w.minStraightnessRatio,
+        smoothedLeftStraightness,
+        smoothedRightStraightness,
+      );
+      w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+
+      const duration = w.tEnd - w.tStart;
+      if (isMeaningfulPartialRep({
+        actualRom: w.maxHeightRatio,
+        minRom: THRESHOLDS.MIN_PARTIAL_HEIGHT_RATIO,
+        duration,
+        minDuration: THRESHOLDS.MIN_REP_TIME,
+      })) {
+        state.repCount++;
+        const score = computeRepWindowScore(w);
+        const messages = generateFormMessages(w);
+        state.lastRepResult = {
+          repIndex: state.repCount,
+          score,
+          messages,
+        };
+        state.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+        state.lastFeedbackTime = t;
+      } else if (w.maxHeightRatio > 0) {
+        state.feedback = LOW_ROM_FEEDBACK;
+        state.lastFeedbackTime = t;
+      }
+    }
     state.repWindow = null;
     state.tRepStart = null;
   }
@@ -782,11 +837,19 @@ export function createLateralRaiseDefinition(
   ttsConfig: {
     feedbackToIssue: {
       'Raise higher \u2014 aim for shoulder level.': 'rom_height',
+      'Stop around shoulder height \u2014 avoid lifting too high.': 'over_raise',
       'Keep your arms straighter \u2014 avoid excessive elbow bend.': 'elbow_bend',
       'Stay upright \u2014 avoid swaying or leaning.': 'torso_warn',
       'Even it out \u2014 raise both arms to the same height.': 'asymmetry',
       'Control the descent \u2014 lower the weights slowly.': 'tempo_down',
       'Relax your traps \u2014 don\'t shrug the weight up.': 'shoulder_shrug',
+    },
+    feedbackMessages: {
+      'Even it out \u2014 raise both arms to the same height.': [
+        'Match both arms.',
+        'Raise both sides evenly.',
+        'Keep the left and right side level.',
+      ],
     },
     issueDefinitions: [
       {
@@ -796,6 +859,15 @@ export function createLateralRaiseDefinition(
           'Get those arms up higher.',
           'Raise to shoulder height.',
           'Lift a bit higher.',
+        ],
+      },
+      {
+        issueType: 'over_raise',
+        priority: 15,
+        messages: [
+          'Stop at shoulder height.',
+          "Don't lift above shoulder level.",
+          'Cap the raise at shoulder height.',
         ],
       },
       {
@@ -822,6 +894,8 @@ export function createLateralRaiseDefinition(
   summaryConfig: {
     'Raise higher \u2014 aim for shoulder level.':
       'Focus on raising the dumbbells to shoulder height for full range of motion.',
+    'Stop around shoulder height \u2014 avoid lifting too high.':
+      'Stop the raise around shoulder height to keep tension on the side delts and avoid turning the rep into a shrug.',
     'Keep your arms straighter \u2014 avoid excessive elbow bend.':
       'Maintain a slight bend but keep arms mostly straight throughout the lift.',
     'Stay upright \u2014 avoid swaying or leaning.':
