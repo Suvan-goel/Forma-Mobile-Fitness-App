@@ -92,7 +92,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           text: text.trim(),
-          model_id: 'eleven_turbo_v2_5',
+          model_id: 'eleven_flash_v2_5',
           voice_settings: sanitizeVoiceSettings(voiceSettings),
         }),
       }
