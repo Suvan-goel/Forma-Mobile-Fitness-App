@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  ScrollView,
   Modal,
   Image,
   ImageSourcePropType,
@@ -247,6 +248,10 @@ export const RecordLandingScreen: React.FC = () => {
   }, [fadeAnim, slideAnim]);
 
   const [showSetupGuide, setShowSetupGuide] = useState<boolean | null>(null);
+  const [captureViewportHeight, setCaptureViewportHeight] = useState(0);
+  const [captureContentHeight, setCaptureContentHeight] = useState(0);
+  const captureCanScroll =
+    captureViewportHeight > 0 && captureContentHeight > captureViewportHeight + 1;
 
   useEffect(() => {
     AsyncStorage.getItem(CAMERA_SETUP_SEEN_KEY)
@@ -370,11 +375,18 @@ export const RecordLandingScreen: React.FC = () => {
         </View>
       </View>
 
-      <View
-        style={[
+      <ScrollView
+        style={styles.captureScroll}
+        contentContainerStyle={[
           styles.captureContent,
           { paddingBottom: navigationBarHeight },
         ]}
+        scrollEnabled={captureCanScroll}
+        bounces={captureCanScroll}
+        alwaysBounceVertical={false}
+        showsVerticalScrollIndicator={captureCanScroll}
+        onLayout={(event) => setCaptureViewportHeight(event.nativeEvent.layout.height)}
+        onContentSizeChange={(_, height) => setCaptureContentHeight(height)}
       >
         <Animated.View
           style={[
@@ -690,7 +702,7 @@ export const RecordLandingScreen: React.FC = () => {
             </View>
           </View>
         </Animated.View>
-      </View>
+      </ScrollView>
     </LinearGradient>
   );
 };
@@ -781,13 +793,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  captureContent: {
+  captureScroll: {
     flex: 1,
+  },
+  captureContent: {
+    flexGrow: 1,
     paddingHorizontal: CAPTURE_HORIZONTAL_PADDING,
     paddingTop: 2,
   },
   contentStack: {
-    flex: 1,
+    flexGrow: 1,
     paddingBottom: 8,
     justifyContent: 'space-between',
   },

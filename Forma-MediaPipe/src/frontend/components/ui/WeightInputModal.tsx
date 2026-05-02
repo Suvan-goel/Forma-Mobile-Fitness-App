@@ -11,7 +11,15 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, Video, Download, Check, Dumbbell } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, SCREEN_GRADIENT_COLORS ,
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_RADIUS_LG,
   CARD_SHADOW
 } from '../../constants/theme';
 
@@ -132,9 +140,9 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
           onPress={() => {}}
         >
           <LinearGradient
-            colors={SCREEN_GRADIENT_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={CARD_GRADIENT_COLORS as any}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.cardGradient}
           >
             <View style={styles.cardGlassEdge}>
@@ -161,22 +169,27 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
             <View style={styles.body}>
               {/* Weight input hero */}
               <View style={styles.weightHero}>
-                <View style={styles.weightIconWrap}>
-                  <Dumbbell size={16} color={COLORS.accent} strokeWidth={1.5} />
+                <View style={styles.weightHeroHeader}>
+                  <View style={styles.weightIconWrap}>
+                    <Dumbbell size={15} color={COLORS.accent} strokeWidth={1.7} />
+                  </View>
+                  <Text style={styles.weightLabel}>WEIGHT</Text>
                 </View>
-                <View style={styles.weightInputWrap}>
-                  <TextInput
-                    ref={weightInputRef}
-                    style={styles.weightInput}
-                    value={weight}
-                    onChangeText={setWeight}
-                    keyboardType="decimal-pad"
-                    returnKeyType="done"
-                    onSubmitEditing={handleSubmit}
-                    placeholder="0"
-                    placeholderTextColor="rgba(139, 92, 246, 0.25)"
-                    selectTextOnFocus
-                  />
+                <View style={styles.weightEntryRow}>
+                  <View style={styles.weightInputWrap}>
+                    <TextInput
+                      ref={weightInputRef}
+                      style={styles.weightInput}
+                      value={weight}
+                      onChangeText={setWeight}
+                      keyboardType="decimal-pad"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSubmit}
+                      placeholder="0"
+                      placeholderTextColor="rgba(255, 255, 255, 0.22)"
+                      selectTextOnFocus
+                    />
+                  </View>
                   <Text style={styles.weightUnitHint}>{unit}</Text>
                 </View>
               </View>
@@ -254,24 +267,14 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                     </View>
                   </>
                 ) : (
-                  <View style={styles.recordingDisabledRow}>
-                    <View style={[styles.recordingCardsRow, styles.recordingCardsDisabled]}>
-                      <View style={[styles.recordingCard, styles.recordingCardDisabled]}>
-                        <View style={styles.recordingCardIcon}>
-                          <Video size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        </View>
-                        <Text style={styles.recordingCardLabel}>Video Library</Text>
-                        <View style={styles.recordingCardCheck} />
-                      </View>
-                      <View style={[styles.recordingCard, styles.recordingCardDisabled]}>
-                        <View style={styles.recordingCardIcon}>
-                          <Download size={18} color={COLORS.textTertiary} strokeWidth={1.5} />
-                        </View>
-                        <Text style={styles.recordingCardLabel}>Camera Roll</Text>
-                        <View style={styles.recordingCardCheck} />
-                      </View>
+                  <View style={styles.recordingStatusRow}>
+                    <View style={styles.recordingStatusIcon}>
+                      <Video size={16} color={COLORS.textTertiary} strokeWidth={1.6} />
                     </View>
-                    <Text style={styles.notRecordedText}>Set was not recorded</Text>
+                    <View style={styles.recordingStatusCopy}>
+                      <Text style={styles.recordingStatusTitle}>No recording attached</Text>
+                      <Text style={styles.recordingStatusText}>This set will save weight only.</Text>
+                    </View>
                   </View>
                 )}
               </View>
@@ -293,7 +296,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
                   activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={['rgba(139, 92, 246, 0.65)', 'rgba(124, 58, 237, 0.35)']}
+                    colors={[COLORS.primary, COLORS.primaryDark]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.saveButtonGradient}
@@ -314,194 +317,212 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.76)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.screenHorizontal + 4,
   },
   backdropHidden: {
     opacity: 0,
   },
   cardOuter: {
     width: '100%',
-    maxWidth: 380,
-    borderRadius: 22,
+    maxWidth: 388,
+    borderRadius: CARD_RADIUS_LG,
+    ...CARD_SHADOW,
     ...Platform.select({
       ios: {
-        shadowColor: '#7A55FF',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 24,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 18 },
+        shadowOpacity: 0.32,
+        shadowRadius: 26,
       },
-      android: { elevation: 10 },
+      android: { elevation: 8 },
     }),
   },
   cardGradient: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 22,
-
-    ...CARD_SHADOW,
+    borderRadius: CARD_RADIUS_LG,
     overflow: 'hidden',
-},
+  },
   cardGlassEdge: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
     overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.sm,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.045)',
   },
   headerLeft: {
     flex: 1,
-    marginRight: SPACING.md,
+    marginRight: 16,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
+    lineHeight: 27,
     fontFamily: FONTS.display.bold,
     color: COLORS.text,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
-    marginTop: 3,
-    letterSpacing: 0.2,
+    marginTop: 4,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   /* ── Body ─────────────────────────────────── */
   body: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xl,
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    paddingBottom: 22,
+    gap: 15,
   },
 
   /* ── Weight Hero ──────────────────────────── */
   weightHero: {
+    minHeight: 114,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: 'rgba(122, 85, 255, 0.075)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.20)',
+    gap: 12,
+  },
+  weightHeroHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    backgroundColor: 'rgba(139, 92, 246, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.1)',
-    marginBottom: SPACING.md,
+    gap: 8,
   },
   weightIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(122, 85, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+  },
+  weightLabel: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.2,
+  },
+  weightEntryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
   },
   weightInputWrap: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
   },
   weightInput: {
     flex: 1,
-    fontSize: 38,
+    minHeight: 46,
+    fontSize: 34,
+    lineHeight: 42,
     fontFamily: FONTS.display.bold,
     color: COLORS.accent,
-    letterSpacing: -1,
-    paddingVertical: 2,
+    letterSpacing: 0,
+    padding: 0,
   },
   weightUnitHint: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.textTertiary,
-    marginLeft: SPACING.sm,
-    marginBottom: 4,
+    minWidth: 34,
+    paddingBottom: 7,
+    fontSize: 15,
+    fontFamily: FONTS.display.semibold,
+    color: COLORS.textSecondary,
+    textAlign: 'right',
   },
 
   /* ── Unit Toggle ──────────────────────────── */
   unitRow: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.lg,
+    gap: 10,
   },
   unitPill: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
+    minHeight: 62,
+    paddingVertical: 10,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   unitPillActive: {
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderColor: 'rgba(122, 85, 255, 0.42)',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
   },
   unitPillText: {
-    fontSize: 15,
+    fontSize: 16,
+    lineHeight: 20,
     fontFamily: FONTS.display.semibold,
     color: COLORS.textTertiary,
-    lineHeight: 20,
   },
   unitPillTextActive: {
     color: COLORS.accent,
   },
   unitPillSub: {
-    fontSize: 10,
+    fontSize: 11,
+    lineHeight: 15,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
-    opacity: 0.5,
-    marginTop: 1,
+    marginTop: 2,
   },
   unitPillSubActive: {
     color: COLORS.textSecondary,
-    opacity: 1,
   },
 
   /* ── Recording Section ────────────────────── */
   recordingSection: {
-    paddingTop: SPACING.md,
+    paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.08)',
-    marginBottom: SPACING.sm,
+    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    gap: 11,
   },
   sectionLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: SPACING.sm,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 11,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 10,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
+    letterSpacing: 1.4,
   },
   recordingSaveToHeading: {
-    fontSize: 11,
-    fontFamily: FONTS.display.bold,
+    fontSize: 10,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: SPACING.sm,
+    letterSpacing: 1.2,
+    marginTop: -2,
   },
   recordingCardsRow: {
     flexDirection: 'row',
@@ -509,46 +530,49 @@ const styles = StyleSheet.create({
   },
   recordingCard: {
     flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 10,
-    borderRadius: 16,
+    minHeight: 96,
+    alignItems: 'flex-start',
+    paddingVertical: 13,
+    paddingHorizontal: 13,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    gap: 8,
+    gap: 9,
   },
   recordingCardActive: {
-    borderColor: 'rgba(139, 92, 246, 0.38)',
-    backgroundColor: 'rgba(139, 92, 246, 0.10)',
+    borderColor: 'rgba(122, 85, 255, 0.38)',
+    backgroundColor: 'rgba(122, 85, 255, 0.11)',
   },
   recordingCardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   recordingCardIconActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(122, 85, 255, 0.16)',
   },
   recordingCardLabel: {
     fontSize: 12,
+    lineHeight: 16,
     fontFamily: FONTS.display.semibold,
-    color: COLORS.textTertiary,
-    letterSpacing: -0.1,
-    textAlign: 'center',
+    color: COLORS.textSecondary,
   },
   recordingCardLabelActive: {
     color: COLORS.text,
   },
   recordingCardCheck: {
+    position: 'absolute',
+    right: 12,
+    top: 13,
     width: 18,
     height: 18,
     borderRadius: 9,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.10)',
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
@@ -560,61 +584,80 @@ const styles = StyleSheet.create({
   sectionLabelDisabled: {
     color: COLORS.textTertiary,
   },
-  recordingDisabledRow: {
-    alignItems: 'center' as const,
-  },
-  recordingCardsDisabled: {
-    opacity: 0.35,
-  },
-  recordingCardDisabled: {
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+  recordingStatusRow: {
+    minHeight: 62,
+    borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
   },
-  notRecordedText: {
-    fontSize: 11,
+  recordingStatusIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  recordingStatusCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  recordingStatusTitle: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontFamily: FONTS.display.semibold,
+    color: COLORS.textSecondary,
+  },
+  recordingStatusText: {
+    fontSize: 12,
+    lineHeight: 16,
     fontFamily: FONTS.ui.regular,
     color: COLORS.textTertiary,
-    marginTop: 10,
   },
 
   /* ── Buttons ──────────────────────────────── */
   buttonRow: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    paddingTop: SPACING.md,
+    gap: 10,
+    paddingTop: 2,
   },
   skipButton: {
     flex: 1,
-    height: 50,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.075)',
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   skipButtonText: {
-    fontSize: 14,
-    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
+    fontFamily: FONTS.display.semibold,
     color: COLORS.textSecondary,
   },
   saveButtonOuter: {
     flex: 2,
-    borderRadius: 16,
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
   },
   saveButtonGradient: {
-    height: 50,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveButtonText: {
-    fontSize: 15,
+    fontSize: 15.5,
     fontFamily: FONTS.display.semibold,
     color: '#FFFFFF',
-    letterSpacing: 0.2,
   },
 });
