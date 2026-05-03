@@ -22,8 +22,7 @@ class ExpoPoseDetectionView: ExpoView {
 
   // MARK: - Pose detection
   private var poseLandmarkerService: PoseLandmarkerService?
-  @available(iOS 17.0, *)
-  private var visionPoseService: VisionPoseService?
+  private var visionPoseService: AnyObject?
   private let landmarkerQueue = DispatchQueue(
     label: "expo.posedetection.landmarker",
     attributes: .concurrent
@@ -135,7 +134,7 @@ class ExpoPoseDetectionView: ExpoView {
             self.visionPoseService = VisionPoseService(delegate: self)
           }
         } else {
-          self.visionPoseService?.close()
+          (self.visionPoseService as? VisionPoseService)?.close()
           self.visionPoseService = nil
         }
       }
@@ -326,7 +325,7 @@ class ExpoPoseDetectionView: ExpoView {
       self.poseLandmarkerService?.clearPoseLandmarker()
       self.poseLandmarkerService = nil
       if #available(iOS 17.0, *) {
-        self.visionPoseService?.close()
+        (self.visionPoseService as? VisionPoseService)?.close()
         self.visionPoseService = nil
       }
       self.enableVisionDualEmit = false
@@ -447,7 +446,7 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
 
     if shouldRunVisionDualEmit(now) {
       if #available(iOS 17.0, *) {
-        visionPoseService?.detect(
+        (visionPoseService as? VisionPoseService)?.detect(
           sampleBuffer: sampleBuffer,
           orientation: .up,
           timestampMs: timestamp
@@ -463,7 +462,7 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
       enableVisionDualEmit = false
       visionDualEmitStartedAtMs = nil
       if #available(iOS 17.0, *) {
-        visionPoseService?.close()
+        (visionPoseService as? VisionPoseService)?.close()
         visionPoseService = nil
       }
       return false
