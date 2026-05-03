@@ -27,6 +27,14 @@ public class ExpoPoseDetectionModule: Module {
         view.configureModelName(name)
       }
 
+      Prop("poseBackend") { (view: ExpoPoseDetectionView, backend: String) in
+        view.configurePoseBackend(backend)
+      }
+
+      Prop("visionHeightPrior") { (view: ExpoPoseDetectionView, height: Double?) in
+        view.configureVisionHeightPrior(height)
+      }
+
       Prop("enableVisionDualEmit") { (view: ExpoPoseDetectionView, enabled: Bool) in
         view.configureVisionDualEmit(enabled)
       }

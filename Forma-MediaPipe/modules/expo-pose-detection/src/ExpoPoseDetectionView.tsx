@@ -1,5 +1,6 @@
 import { requireNativeViewManager } from 'expo-modules-core';
 import React, { useCallback } from 'react';
+import { Platform } from 'react-native';
 import type { PoseDetectionViewProps } from './ExpoPoseDetection.types';
 
 const NativePoseDetectionView: React.ComponentType<any> =
@@ -11,6 +12,8 @@ export function PoseDetectionView(props: PoseDetectionViewProps) {
     frameLimit = 20,
     showSkeleton = false,
     modelName = 'pose_landmarker_heavy',
+    poseBackend = 'mediapipe',
+    visionHeightPrior = null,
     onLandmark,
     onVisionFrame,
     enableVisionDualEmit = false,
@@ -42,6 +45,10 @@ export function PoseDetectionView(props: PoseDetectionViewProps) {
     [onVisionFrame]
   );
 
+  const iosVisionProps = Platform.OS === 'ios'
+    ? { poseBackend, visionHeightPrior }
+    : {};
+
   return (
     <NativePoseDetectionView
       style={style}
@@ -51,6 +58,7 @@ export function PoseDetectionView(props: PoseDetectionViewProps) {
       onLandmark={handleLandmark}
       enableVisionDualEmit={enableVisionDualEmit}
       onVisionFrame={handleVisionFrame}
+      {...iosVisionProps}
       {...rest}
     />
   );

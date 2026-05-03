@@ -3,6 +3,11 @@ import AVFoundation
 import MediaPipeTasksVision
 import UIKit
 
+private enum PoseBackend: String {
+  case mediapipe
+  case vision3d
+}
+
 class ExpoPoseDetectionView: ExpoView {
   // MARK: - Event dispatcher
   let onLandmark = EventDispatcher()
@@ -33,6 +38,8 @@ class ExpoPoseDetectionView: ExpoView {
   private var showSkeleton: Bool = false
   private var enableVisionDualEmit: Bool = false
   private var visionDualEmitStartedAtMs: Double?
+  private var poseBackend: PoseBackend = .mediapipe
+  private var visionHeightPrior: Double?
   private var modelName: String = "pose_landmarker_heavy"
   private var isSessionRunning = false
   private let lifecycleLock = NSLock()
@@ -94,6 +101,9 @@ class ExpoPoseDetectionView: ExpoView {
   func configureFrameLimit(_ limit: Int) {
     guard !isDisposed() else { return }
     frameLimit = max(1, min(60, limit))
+    sessionQueue.async { [weak self] in
+      self?.applyFrameLimitToActiveCamera()
+    }
   }
 
   func configureShowSkeleton(_ show: Bool) {
@@ -119,6 +129,45 @@ class ExpoPoseDetectionView: ExpoView {
     }
   }
 
+  func configurePoseBackend(_ backend: String) {
+    guard !isDisposed() else { return }
+    processingQueue.async { [weak self] in
+      guard let self = self, !self.isDisposed() else { return }
+      let nextBackend = PoseBackend(rawValue: backend) ?? .mediapipe
+      guard self.poseBackend != nextBackend else { return }
+      self.poseBackend = nextBackend
+
+      if #available(iOS 17.0, *) {
+        if nextBackend == .vision3d {
+          if self.visionPoseService == nil {
+            self.visionPoseService = VisionPoseService(delegate: self)
+          }
+          if let height = self.visionHeightPrior {
+            (self.visionPoseService as? VisionPoseService)?.setHeightPrior(height)
+          }
+        } else if !self.enableVisionDualEmit {
+          (self.visionPoseService as? VisionPoseService)?.close()
+          self.visionPoseService = nil
+        }
+      }
+    }
+  }
+
+  func configureVisionHeightPrior(_ height: Double?) {
+    guard !isDisposed() else { return }
+    processingQueue.async { [weak self] in
+      guard let self = self, !self.isDisposed() else { return }
+      guard let height = height, height > 0 else {
+        self.visionHeightPrior = nil
+        return
+      }
+      self.visionHeightPrior = height
+      if #available(iOS 17.0, *) {
+        (self.visionPoseService as? VisionPoseService)?.setHeightPrior(height)
+      }
+    }
+  }
+
   func configureVisionDualEmit(_ enabled: Bool) {
     guard !isDisposed() else { return }
     processingQueue.async { [weak self] in
@@ -133,9 +182,14 @@ class ExpoPoseDetectionView: ExpoView {
           if self.visionPoseService == nil {
             self.visionPoseService = VisionPoseService(delegate: self)
           }
+          if let height = self.visionHeightPrior {
+            (self.visionPoseService as? VisionPoseService)?.setHeightPrior(height)
+          }
         } else {
-          (self.visionPoseService as? VisionPoseService)?.close()
-          self.visionPoseService = nil
+          if self.poseBackend != .vision3d {
+            (self.visionPoseService as? VisionPoseService)?.close()
+            self.visionPoseService = nil
+          }
         }
       }
     }
@@ -199,12 +253,7 @@ class ExpoPoseDetectionView: ExpoView {
         captureSession.addInput(input)
       }
 
-      // Configure frame rate
-      try camera.lockForConfiguration()
-      let frameDuration = CMTimeMake(value: 1, timescale: Int32(frameLimit))
-      camera.activeVideoMinFrameDuration = frameDuration
-      camera.activeVideoMaxFrameDuration = frameDuration
-      camera.unlockForConfiguration()
+      try applyFrameLimit(to: camera)
     } catch {
       print("[ExpoPoseDetection] Camera input error: \(error)")
     }
@@ -243,6 +292,24 @@ class ExpoPoseDetectionView: ExpoView {
       preview.layer.addSublayer(layer)
       self.previewLayer = layer
     }
+  }
+
+  private func applyFrameLimitToActiveCamera() {
+    guard !isDisposed() else { return }
+    guard let input = captureSession.inputs.compactMap({ $0 as? AVCaptureDeviceInput }).first else { return }
+    do {
+      try applyFrameLimit(to: input.device)
+    } catch {
+      print("[ExpoPoseDetection] Failed to apply frame limit: \(error)")
+    }
+  }
+
+  private func applyFrameLimit(to camera: AVCaptureDevice) throws {
+    try camera.lockForConfiguration()
+    let frameDuration = CMTimeMake(value: 1, timescale: Int32(frameLimit))
+    camera.activeVideoMinFrameDuration = frameDuration
+    camera.activeVideoMaxFrameDuration = frameDuration
+    camera.unlockForConfiguration()
   }
 
   private func initializePoseLandmarker() {
@@ -437,14 +504,15 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
       videoHeight = CGFloat(height)
     }
 
-    // Send to pose detection
-    poseLandmarkerService?.detectAsync(
-      sampleBuffer: sampleBuffer,
-      orientation: .up,
-      timeStamps: timestamp
-    )
+    if poseBackend == .mediapipe {
+      poseLandmarkerService?.detectAsync(
+        sampleBuffer: sampleBuffer,
+        orientation: .up,
+        timeStamps: timestamp
+      )
+    }
 
-    if shouldRunVisionDualEmit(now) {
+    if shouldRunVision(now) {
       if #available(iOS 17.0, *) {
         (visionPoseService as? VisionPoseService)?.detect(
           sampleBuffer: sampleBuffer,
@@ -455,6 +523,11 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
   }
 
+  private func shouldRunVision(_ nowMs: Double) -> Bool {
+    if poseBackend == .vision3d { return true }
+    return shouldRunVisionDualEmit(nowMs)
+  }
+
   private func shouldRunVisionDualEmit(_ nowMs: Double) -> Bool {
     guard enableVisionDualEmit else { return false }
     guard let startedAt = visionDualEmitStartedAtMs else { return false }
@@ -462,8 +535,10 @@ extension ExpoPoseDetectionView: AVCaptureVideoDataOutputSampleBufferDelegate {
       enableVisionDualEmit = false
       visionDualEmitStartedAtMs = nil
       if #available(iOS 17.0, *) {
-        (visionPoseService as? VisionPoseService)?.close()
-        visionPoseService = nil
+        if poseBackend != .vision3d {
+          (visionPoseService as? VisionPoseService)?.close()
+          visionPoseService = nil
+        }
       }
       return false
     }

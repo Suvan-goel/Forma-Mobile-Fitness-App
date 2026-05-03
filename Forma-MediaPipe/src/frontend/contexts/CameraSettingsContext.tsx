@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
 import type { PoseModelName } from 'expo-pose-detection';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
+
+export type PoseBackend = 'mediapipe' | 'vision3d';
 
 export type CameraSettings = {
   showFeedback: boolean;
@@ -15,6 +18,7 @@ export type CameraSettings = {
   autoScreenRecording: boolean;
   poseModel: PoseModelName;
   poseDualEmit: boolean;
+  poseBackend: PoseBackend;
 };
 
 type CameraSettingsContextValue = CameraSettings & {
@@ -28,7 +32,12 @@ type CameraSettingsContextValue = CameraSettings & {
   setAutoScreenRecording: (value: boolean) => void;
   setPoseModel: (model: PoseModelName) => void;
   setPoseDualEmit: (value: boolean) => void;
+  setPoseBackend: (backend: PoseBackend) => void;
 };
+
+function defaultPoseBackend(): PoseBackend {
+  return Platform.OS === 'ios' ? 'vision3d' : 'mediapipe';
+}
 
 const defaultSettings: CameraSettings = {
   showFeedback: true,
@@ -41,6 +50,7 @@ const defaultSettings: CameraSettings = {
   autoScreenRecording: false,
   poseModel: 'pose_landmarker_heavy',
   poseDualEmit: false,
+  poseBackend: defaultPoseBackend(),
 };
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
@@ -56,6 +66,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const [autoScreenRecording, setAutoScreenRecordingRaw] = useState(defaultSettings.autoScreenRecording);
   const [poseModel, setPoseModelRaw] = useState<PoseModelName>(defaultSettings.poseModel);
   const [poseDualEmit, setPoseDualEmitRaw] = useState(defaultSettings.poseDualEmit);
+  const [poseBackend, setPoseBackendRaw] = useState<PoseBackend>(defaultSettings.poseBackend);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -72,6 +83,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         if (typeof saved.autoScreenRecording === 'boolean') setAutoScreenRecordingRaw(saved.autoScreenRecording);
         if (DEV_FEATURES_ENABLED && (saved.poseModel === 'pose_landmarker_full' || saved.poseModel === 'pose_landmarker_heavy')) setPoseModelRaw(saved.poseModel);
         if (DEV_FEATURES_ENABLED && typeof saved.poseDualEmit === 'boolean') setPoseDualEmitRaw(saved.poseDualEmit);
+        if (saved.poseBackend === 'mediapipe' || saved.poseBackend === 'vision3d') setPoseBackendRaw(saved.poseBackend);
       } catch { /* ignore corrupt data */ }
     });
   }, []);
@@ -128,6 +140,11 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     persistSetting('poseDualEmit', value);
   }, [persistSetting]);
 
+  const setPoseBackend = useCallback((backend: PoseBackend) => {
+    setPoseBackendRaw(backend);
+    persistSetting('poseBackend', backend);
+  }, [persistSetting]);
+
   const contextValue = useMemo<CameraSettingsContextValue>(() => ({
     showFeedback,
     isTTSEnabled,
@@ -139,6 +156,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     autoScreenRecording,
     poseModel: DEV_FEATURES_ENABLED ? poseModel : 'pose_landmarker_heavy',
     poseDualEmit: DEV_FEATURES_ENABLED ? poseDualEmit : false,
+    poseBackend: Platform.OS === 'ios' ? poseBackend : 'mediapipe',
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
@@ -149,11 +167,12 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     setAutoScreenRecording,
     setPoseModel,
     setPoseDualEmit,
+    setPoseBackend,
   }), [
     showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode,
-    restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording, poseModel, poseDualEmit,
+    restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording, poseModel, poseDualEmit, poseBackend,
     setShowFeedback, setIsTTSEnabled, setShowSkeletonOverlay, setDebugMode,
-    setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording, setPoseModel, setPoseDualEmit,
+    setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording, setPoseModel, setPoseDualEmit, setPoseBackend,
   ]);
 
   return (

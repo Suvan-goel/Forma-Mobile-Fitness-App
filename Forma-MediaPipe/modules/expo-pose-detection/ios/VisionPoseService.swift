@@ -20,6 +20,7 @@ final class VisionPoseService {
   private let lifecycleLock = NSLock()
   private var closed = false
   private var inFlight = false
+  private var heightPrior: Double?
 
   init(delegate: VisionPoseServiceDelegate? = nil) {
     self.delegate = delegate
@@ -38,6 +39,9 @@ final class VisionPoseService {
       guard !self.isClosed() else { return }
 
       let request = VNDetectHumanBodyPose3DRequest()
+      request.revision = VNDetectHumanBodyPose3DRequestRevision1
+      request.usesCPUOnly = false
+      self.applyHeightPrior(to: request)
       let handler = VNImageRequestHandler(
         cmSampleBuffer: sampleBuffer,
         orientation: orientation,
@@ -77,6 +81,12 @@ final class VisionPoseService {
     lifecycleLock.unlock()
   }
 
+  func setHeightPrior(_ height: Double?) {
+    lifecycleLock.lock()
+    heightPrior = height
+    lifecycleLock.unlock()
+  }
+
   private func reserveRequest() -> Bool {
     lifecycleLock.lock()
     defer { lifecycleLock.unlock() }
@@ -95,5 +105,18 @@ final class VisionPoseService {
     lifecycleLock.lock()
     defer { lifecycleLock.unlock() }
     return closed
+  }
+
+  private func currentHeightPrior() -> Double? {
+    lifecycleLock.lock()
+    defer { lifecycleLock.unlock() }
+    return heightPrior
+  }
+
+  private func applyHeightPrior(to request: VNDetectHumanBodyPose3DRequest) {
+    guard let height = currentHeightPrior(), height > 0 else { return }
+    let selector = NSSelectorFromString("setCustomHumanBodyPose3DHeight:")
+    guard request.responds(to: selector) else { return }
+    request.setValue(height, forKey: "customHumanBodyPose3DHeight")
   }
 }

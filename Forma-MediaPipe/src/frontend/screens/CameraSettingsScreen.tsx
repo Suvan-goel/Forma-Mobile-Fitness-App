@@ -10,6 +10,7 @@ import {
   Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -219,7 +220,7 @@ export const CameraSettingsScreen: React.FC = () => {
     selectedTrainerId,
     autoScreenRecording,
     poseModel,
-    poseDualEmit,
+    poseBackend,
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
@@ -228,7 +229,7 @@ export const CameraSettingsScreen: React.FC = () => {
     setRestTimerDurationSeconds,
     setAutoScreenRecording,
     setPoseModel,
-    setPoseDualEmit,
+    setPoseBackend,
   } = useCameraSettings();
 
   const [infoModal, setInfoModal] = useState<string | null>(null);
@@ -262,9 +263,9 @@ export const CameraSettingsScreen: React.FC = () => {
       title: 'Heavy Model',
       description: 'Uses the heavy (29 MB) pose detection model instead of the default full (9 MB) model. The heavy model may provide more accurate landmark detection but uses more memory and may run slower on older devices.\n\nRequires a brief re-initialization when toggled.',
     },
-    'Vision Dual Emit': {
-      title: 'Vision Dual Emit',
-      description: 'Runs Apple Vision 3D in parallel with MediaPipe on supported iOS devices and logs sampled joint agreement for development validation. MediaPipe still drives rep counting and feedback.',
+    'Pose Backend': {
+      title: 'Pose Backend',
+      description: 'Selects the on-device pose detector used for rep counting and form feedback on iOS. Vision 3D requires iOS 17 or newer; MediaPipe remains available as a fallback.',
     },
   };
 
@@ -484,6 +485,37 @@ export const CameraSettingsScreen: React.FC = () => {
                   thumbColor={autoScreenRecording ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
                 />
               </View>
+              {Platform.OS === 'ios' && (
+                <>
+                  <View style={styles.rowDivider} />
+                  <View style={styles.groupRow}>
+                    <IconBubble icon={SlidersHorizontal} color={poseBackend === 'vision3d' ? COLORS.accent : COLORS.textSecondary} />
+                    <View style={styles.rowLabelCol}>
+                      <Text style={styles.rowLabel}>Pose Backend</Text>
+                      <Text style={styles.rowSubLabel}>{poseBackend === 'vision3d' ? 'Apple Vision 3D' : 'MediaPipe fallback'}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setInfoModal('Pose Backend')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                    </TouchableOpacity>
+                    <View style={styles.segmentedControl}>
+                      <TouchableOpacity
+                        style={[styles.segmentOption, poseBackend === 'vision3d' && styles.segmentOptionActive]}
+                        onPress={() => setPoseBackend('vision3d')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.segmentText, poseBackend === 'vision3d' && styles.segmentTextActive]}>Vision</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.segmentOption, poseBackend === 'mediapipe' && styles.segmentOptionActive]}
+                        onPress={() => setPoseBackend('mediapipe')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.segmentText, poseBackend === 'mediapipe' && styles.segmentTextActive]}>MP</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
           </LinearGradient>
 
@@ -579,23 +611,6 @@ export const CameraSettingsScreen: React.FC = () => {
                       onValueChange={(val) => setPoseModel(val ? 'pose_landmarker_heavy' : 'pose_landmarker_full')}
                       trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(96, 165, 250, 0.4)' }}
                       thumbColor={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : 'rgba(255, 255, 255, 0.3)'}
-                    />
-                  </View>
-                  <View style={styles.rowDivider} />
-                  <View style={styles.groupRow}>
-                    <IconBubble icon={SlidersHorizontal} color={poseDualEmit ? '#A78BFA' : COLORS.textSecondary} />
-                    <View style={styles.rowLabelCol}>
-                      <Text style={[styles.rowLabel, poseDualEmit && { color: '#A78BFA' }]}>Vision Dual Emit</Text>
-                      <Text style={styles.rowSubLabel}>iOS 17+ dark comparison path</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => setInfoModal('Vision Dual Emit')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                    </TouchableOpacity>
-                    <Switch
-                      value={poseDualEmit}
-                      onValueChange={setPoseDualEmit}
-                      trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(167, 139, 250, 0.4)' }}
-                      thumbColor={poseDualEmit ? '#A78BFA' : 'rgba(255, 255, 255, 0.3)'}
                     />
                   </View>
                 </View>
@@ -781,6 +796,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
     lineHeight: 15,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    borderRadius: CARD_RADIUS_SM,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.28)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    overflow: 'hidden',
+  },
+  segmentOption: {
+    minWidth: 48,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  segmentOptionActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.22)',
+  },
+  segmentText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  segmentTextActive: {
+    color: COLORS.accent,
   },
 
   /* Rest Timer Value */

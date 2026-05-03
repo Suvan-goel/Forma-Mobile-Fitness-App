@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Pressable, Dimensions, Platform, InteractionManager, Animated, PermissionsAndroid, NativeModules } from 'react-native';
 import { PoseDetectionView, switchCamera } from 'expo-pose-detection';
+import type { PoseBackendName } from 'expo-pose-detection';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { X, Video, VideoOff } from 'lucide-react-native';
+import Svg, { Circle, Line } from 'react-native-svg';
 import CogIcon from '../components/icons/CogIcon';
 import { COLORS, FONTS, SPACING, getScoreColor ,
   CARD_SHADOW
@@ -19,7 +22,7 @@ import type { Keypoint } from '../../utils/poseAnalysis';
 import '../../utils/exercises/definitions/register';
 import { ExerciseRegistry } from '../../utils/exercises';
 import type { ExerciseState } from '../../utils/exercises';
-import { CANONICAL_JOINTS, CanonicalJoint, createMediaPipeAdapter, createVisionAdapter, ProfileSession } from '../../skeleton';
+import { CANONICAL_JOINT_METADATA, CANONICAL_JOINTS, CanonicalJoint, createMediaPipeAdapter, createVisionAdapter, ProfileSession } from '../../skeleton';
 import type { AnthropometricProfile, SkeletonFrame, VisionBridgePayload } from '../../skeleton';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
@@ -31,6 +34,7 @@ import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
 import { getBottomOverlayPadding, getBottomSafePadding } from '../utils/safeAreaSpacing';
+import { POSE_HEIGHT_PRIOR_KEY } from '../../utils/storageKeys';
 
 const MAX_FEED_ITEMS = 5;
 type FeedbackFeedItem = { id: number; text: string };
@@ -42,6 +46,11 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
+const VISION_IOS_MAJOR_VERSION = 17;
+const FRAME_TIMING_WINDOW = 120;
+const DEBUG_SKELETON_UI_INTERVAL_MS = 100;
+const DEBUG_SKELETON_CONFIDENCE_THRESHOLD = 0.3;
+const DEBUG_SKELETON_MIRROR_X = false; // Native preview/analysis are already mirrored for the front camera.
 const PROFILE_CONFIDENCE_THRESHOLD = 0.5;
 const PROFILE_REQUIRED_JOINTS = [
   CanonicalJoint.HEAD,
@@ -67,6 +76,127 @@ const PROFILE_REQUIRED_JOINTS = [
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
 type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList | RecordStackParamList>;
+type DebugSkeletonRenderState = { frame: SkeletonFrame; version: number };
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
+function formatDebugNumber(value: number | undefined): string {
+  return Number.isFinite(value) ? value!.toFixed(2) : '-';
+}
+
+function formatDebugTiming(stats: { p50: number; p99: number; count: number } | null): string {
+  if (!stats) return 'timing -';
+  return `p50 ${stats.p50.toFixed(1)}ms · p99 ${stats.p99.toFixed(1)}ms`;
+}
+
+function countVisibleDebugJoints(frame: SkeletonFrame): number {
+  let count = 0;
+  for (const joint of CANONICAL_JOINTS) {
+    if (frame.joints2D[joint].confidence >= DEBUG_SKELETON_CONFIDENCE_THRESHOLD) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function isDebugJointRenderable(point: { x: number; y: number }): boolean {
+  return Number.isFinite(point.x) && Number.isFinite(point.y);
+}
+
+function getDebugPoint(
+  frame: SkeletonFrame,
+  joint: CanonicalJoint,
+  width: number,
+  height: number
+): { x: number; y: number; confidence: number } {
+  const point = frame.joints2D[joint];
+  const normalizedX = DEBUG_SKELETON_MIRROR_X ? 1 - clamp01(point.x) : clamp01(point.x);
+  return {
+    x: normalizedX * width,
+    y: clamp01(point.y) * height,
+    confidence: clamp01(point.confidence),
+  };
+}
+
+const CanonicalSkeletonDebugOverlay = React.memo(({
+  renderState,
+  width,
+  height,
+  timingStats,
+}: {
+  renderState: DebugSkeletonRenderState | null;
+  width: number;
+  height: number;
+  timingStats: { p50: number; p99: number; count: number } | null;
+}) => {
+  if (!__DEV__ || !renderState) return null;
+
+  const { frame } = renderState;
+  const visibleJointCount = countVisibleDebugJoints(frame);
+  const label =
+    `${frame.source} · ${frame.sourceQuality} · conf ${formatDebugNumber(frame.globalConfidence)} · ` +
+    `${visibleJointCount}/${CANONICAL_JOINTS.length} joints · ${formatDebugTiming(timingStats)}`;
+
+  return (
+    <View style={styles.debugSkeletonOverlay} pointerEvents="none">
+      <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={styles.debugSkeletonSvg}>
+        {CANONICAL_JOINTS.map((joint) => {
+          const parent = CANONICAL_JOINT_METADATA[joint].parent;
+          if (!parent) return null;
+          const start = getDebugPoint(frame, parent, width, height);
+          const end = getDebugPoint(frame, joint, width, height);
+          if (!isDebugJointRenderable(start) || !isDebugJointRenderable(end)) return null;
+
+          const isConfident =
+            start.confidence >= DEBUG_SKELETON_CONFIDENCE_THRESHOLD &&
+            end.confidence >= DEBUG_SKELETON_CONFIDENCE_THRESHOLD;
+          const weakOpacity = Math.max(0.18, Math.min(0.55, (start.confidence + end.confidence) / 2));
+
+          return (
+            <Line
+              key={`${parent}-${joint}`}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+              stroke={isConfident ? COLORS.green : COLORS.red}
+              strokeWidth={isConfident ? 3 : 2}
+              strokeOpacity={isConfident ? 0.82 : weakOpacity}
+              strokeDasharray={isConfident ? undefined : '5,5'}
+              strokeLinecap="round"
+            />
+          );
+        })}
+        {CANONICAL_JOINTS.map((joint) => {
+          const point = getDebugPoint(frame, joint, width, height);
+          if (!isDebugJointRenderable(point)) return null;
+
+          const isConfident = point.confidence >= DEBUG_SKELETON_CONFIDENCE_THRESHOLD;
+          const metadata = CANONICAL_JOINT_METADATA[joint];
+          return (
+            <Circle
+              key={joint}
+              cx={point.x}
+              cy={point.y}
+              r={metadata.isSynthetic ? 4.5 : 5.5}
+              fill={isConfident ? COLORS.primary : 'transparent'}
+              fillOpacity={metadata.isSynthetic ? 0.5 : 0.78}
+              stroke={isConfident ? COLORS.text : COLORS.red}
+              strokeWidth={metadata.isSynthetic ? 1.5 : 2}
+              strokeOpacity={isConfident ? 0.8 : 0.95}
+            />
+          );
+        })}
+      </Svg>
+      <View style={styles.debugSkeletonLabel}>
+        <Text style={styles.debugSkeletonLabelText} numberOfLines={2}>{label}</Text>
+      </View>
+    </View>
+  );
+});
 
 function isProfileFrameStable(frame: SkeletonFrame): boolean {
   let confidenceSum = 0;
@@ -88,6 +218,72 @@ function formatProfileDebug(profile: AnthropometricProfile): Record<string, unkn
     confidence: profile.confidence,
     sampleFrameCount: profile.sampleFrameCount,
   };
+}
+
+function getIOSMajorVersion(): number {
+  if (Platform.OS !== 'ios') return 0;
+  const version = Platform.Version;
+  if (typeof version === 'number') return Math.floor(version);
+  const major = Number.parseInt(String(version).split('.')[0], 10);
+  return Number.isFinite(major) ? major : 0;
+}
+
+function supportsVision3D(): boolean {
+  return Platform.OS === 'ios' && getIOSMajorVersion() >= VISION_IOS_MAJOR_VERSION;
+}
+
+const MEDIAPIPE_NAME_BY_CANONICAL: Partial<Record<CanonicalJoint, string>> = {
+  [CanonicalJoint.HEAD]: 'nose',
+  [CanonicalJoint.LEFT_SHOULDER]: 'left_shoulder',
+  [CanonicalJoint.RIGHT_SHOULDER]: 'right_shoulder',
+  [CanonicalJoint.LEFT_ELBOW]: 'left_elbow',
+  [CanonicalJoint.RIGHT_ELBOW]: 'right_elbow',
+  [CanonicalJoint.LEFT_WRIST]: 'left_wrist',
+  [CanonicalJoint.RIGHT_WRIST]: 'right_wrist',
+  [CanonicalJoint.LEFT_HIP]: 'left_hip',
+  [CanonicalJoint.RIGHT_HIP]: 'right_hip',
+  [CanonicalJoint.LEFT_KNEE]: 'left_knee',
+  [CanonicalJoint.RIGHT_KNEE]: 'right_knee',
+  [CanonicalJoint.LEFT_ANKLE]: 'left_ankle',
+  [CanonicalJoint.RIGHT_ANKLE]: 'right_ankle',
+  [CanonicalJoint.LEFT_FOOT]: 'left_foot_index',
+  [CanonicalJoint.RIGHT_FOOT]: 'right_foot_index',
+};
+
+function keypointsFromSkeletonFrame(frame: SkeletonFrame): Keypoint[] {
+  const keypoints: Keypoint[] = [];
+  for (const joint of CANONICAL_JOINTS) {
+    const name = MEDIAPIPE_NAME_BY_CANONICAL[joint];
+    if (!name) continue;
+    const point2D = frame.joints2D[joint];
+    const point3D = frame.joints[joint];
+    keypoints.push({
+      name,
+      x: point2D.x,
+      y: point2D.y,
+      z: point3D.z,
+      score: Math.min(point2D.confidence, point3D.confidence),
+    });
+  }
+
+  const leftWrist = keypoints.find((point) => point.name === 'left_wrist');
+  const rightWrist = keypoints.find((point) => point.name === 'right_wrist');
+  const head = keypoints.find((point) => point.name === 'nose');
+  if (leftWrist) keypoints.push({ ...leftWrist, name: 'left_index' });
+  if (rightWrist) keypoints.push({ ...rightWrist, name: 'right_index' });
+  if (head) {
+    keypoints.push({ ...head, name: 'left_ear' });
+    keypoints.push({ ...head, name: 'right_ear' });
+  }
+
+  return keypoints;
+}
+
+function percentile(values: readonly number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[index];
 }
 
 // MediaPipe landmark names (33 landmarks)
@@ -191,7 +387,7 @@ export const CameraScreen: React.FC = () => {
     beginRecordingFinalization,
     endRecordingFinalization,
   } = useCurrentWorkout();
-  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording, poseModel, poseDualEmit } = useCameraSettings();
+  const { showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode, selectedTrainerId, autoScreenRecording, setAutoScreenRecording, poseModel, poseBackend } = useCameraSettings();
   const { isRecordingScreen, isRecordingScreenRef, isAvailable: screenRecAvailable, startRecording: startScreenRec, stopRecording: stopScreenRec, cancelRecording: cancelScreenRec } = useScreenRecording();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -211,6 +407,8 @@ export const CameraScreen: React.FC = () => {
   const feedbackIdRef = useRef(0);
   const [exerciseDebug, setExerciseDebug] = useState<Record<string, unknown> | null>(null);
   const [profileDebug, setProfileDebug] = useState<Record<string, unknown> | null>(null);
+  const [frameTimingStats, setFrameTimingStats] = useState<{ p50: number; p99: number; count: number } | null>(null);
+  const [debugSkeletonRenderState, setDebugSkeletonRenderState] = useState<DebugSkeletonRenderState | null>(null);
   const profileDebugSetRef = useRef(false);
   const currentTrainer = useMemo(
     () => TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ?? TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID)!,
@@ -247,8 +445,19 @@ export const CameraScreen: React.FC = () => {
       if (__DEV__) console.warn(message);
     },
   }));
+  const [visionHeightPrior, setVisionHeightPrior] = useState<number | null>(null);
   const latestMediaPipeFrameRef = useRef<SkeletonFrame | null>(null);
-  const lastVisionTelemetryLogRef = useRef(0);
+  const latestActiveSkeletonFrameRef = useRef<SkeletonFrame | null>(null);
+  const lastDebugSkeletonUIUpdateRef = useRef(0);
+  const debugSkeletonVersionRef = useRef(0);
+  const frameTimingBufferRef = useRef<number[]>([]);
+  const activePoseBackendRef = useRef<PoseBackendName>('mediapipe');
+  const previousPoseBackendRef = useRef<PoseBackendName | null>(null);
+
+  const activePoseBackend: PoseBackendName = useMemo(() => {
+    if (Platform.OS !== 'ios') return 'mediapipe';
+    return poseBackend === 'vision3d' && supportsVision3D() ? 'vision3d' : 'mediapipe';
+  }, [poseBackend]);
 
   // Screen recording pulse animation + attempt tracking
   const screenRecPulseAnim = useRef(new Animated.Value(1)).current;
@@ -376,12 +585,55 @@ export const CameraScreen: React.FC = () => {
   // Sync TTS enabled state to ref (for use in handleLandmark without stale closures). Debug mode overrides TTS off.
   const isTTSEnabledRef = useRef(isTTSEnabled);
   const debugModeRef = useRef(debugMode);
+  const showCanonicalSkeletonRef = useRef(__DEV__ && (debugMode || showSkeletonOverlay));
   useEffect(() => {
     isTTSEnabledRef.current = debugMode ? false : isTTSEnabled;
   }, [isTTSEnabled, debugMode]);
   useEffect(() => {
     debugModeRef.current = debugMode;
   }, [debugMode]);
+  useEffect(() => {
+    showCanonicalSkeletonRef.current = __DEV__ && (debugMode || showSkeletonOverlay);
+    if (!showCanonicalSkeletonRef.current) {
+      setDebugSkeletonRenderState(null);
+    }
+  }, [debugMode, showSkeletonOverlay]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(POSE_HEIGHT_PRIOR_KEY)
+      .then((raw) => {
+        const parsed = raw ? Number(raw) : NaN;
+        if (Number.isFinite(parsed) && parsed > 0) {
+          setVisionHeightPrior(parsed);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    activePoseBackendRef.current = activePoseBackend;
+    const previous = previousPoseBackendRef.current;
+    if (previous === activePoseBackend) return;
+    previousPoseBackendRef.current = activePoseBackend;
+    if (previous !== null) {
+      exerciseStateRef.current = null;
+      const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
+      if (exerciseDef) {
+        exerciseStateRef.current = exerciseDef.createState();
+      }
+      setExerciseDebug(null);
+      setProfileDebug(null);
+      setDebugSkeletonRenderState(null);
+      latestActiveSkeletonFrameRef.current = null;
+      profileDebugSetRef.current = false;
+      profileSessionRef.current.reset();
+      if (__DEV__) {
+        console.log('[pose.backend_switched]', { from: previous, to: activePoseBackend, reason: 'settings' });
+      }
+    } else if (__DEV__) {
+      console.log('[pose.backend_active]', { source: activePoseBackend });
+    }
+  }, [activePoseBackend, exerciseNameFromRoute]);
 
   // Angle variance tracker — ring buffer of per-frame angle snapshots for static hold analysis
   const VARIANCE_WINDOW = 30; // ~1s at 30fps
@@ -397,6 +649,8 @@ export const CameraScreen: React.FC = () => {
   useEffect(() => {
     setExerciseDebug(null);
     setProfileDebug(null);
+    setDebugSkeletonRenderState(null);
+    latestActiveSkeletonFrameRef.current = null;
     profileDebugSetRef.current = false;
     profileSessionRef.current.reset();
     angleBufferRef.current = {};
@@ -531,12 +785,136 @@ export const CameraScreen: React.FC = () => {
     });
   }, []);
 
+  const recordFrameTiming = useCallback((durationMs: number) => {
+    if (!__DEV__ || !debugModeRef.current) return;
+    const buffer = frameTimingBufferRef.current;
+    buffer.push(durationMs);
+    if (buffer.length > FRAME_TIMING_WINDOW) buffer.shift();
+    setFrameTimingStats({
+      p50: percentile(buffer, 50),
+      p99: percentile(buffer, 99),
+      count: buffer.length,
+    });
+  }, []);
+
+  const updateDebugSkeletonFrame = useCallback((frame: SkeletonFrame, now: number) => {
+    latestActiveSkeletonFrameRef.current = frame;
+    if (!__DEV__ || !showCanonicalSkeletonRef.current) return;
+    if (frame.source !== activePoseBackendRef.current) return;
+    if (now - lastDebugSkeletonUIUpdateRef.current < DEBUG_SKELETON_UI_INTERVAL_MS) return;
+
+    lastDebugSkeletonUIUpdateRef.current = now;
+    debugSkeletonVersionRef.current += 1;
+    setDebugSkeletonRenderState({
+      frame,
+      version: debugSkeletonVersionRef.current,
+    });
+  }, []);
+
+  const processExerciseFrame = useCallback((
+    keypoints: Keypoint[],
+    skeletonFrame: SkeletonFrame,
+    now: number
+  ): boolean => {
+    const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
+    if (!exerciseDef || !exerciseStateRef.current) return false;
+
+    const profile = profileSessionRef.current.update(skeletonFrame, isProfileFrameStable(skeletonFrame));
+    if (__DEV__ && profile) {
+      if (!profileSessionRef.current.hasLoggedProfile) {
+        profileSessionRef.current.markLogged(profile);
+        console.log('[AnthropometricProfile]', {
+          sampleFrameCount: profile.sampleFrameCount,
+          confidence: profile.confidence,
+          segments: profile.segments,
+          derived: profile.derived,
+        });
+        const height = profile.derived.standingHeight;
+        if (Number.isFinite(height) && height > 0) {
+          setVisionHeightPrior(height);
+          AsyncStorage.setItem(POSE_HEIGHT_PRIOR_KEY, String(height)).catch(() => {});
+        }
+      }
+      if (debugModeRef.current && !profileDebugSetRef.current) {
+        const nextProfileDebug = formatProfileDebug(profile);
+        setProfileDebug(nextProfileDebug);
+        profileDebugSetRef.current = true;
+        if (skeletonFrame.profile !== profile) {
+          console.warn('[AnthropometricProfile] Runtime invariant failed: frame.profile is not sealed profile');
+        }
+      }
+    }
+
+    const newState = exerciseDef.update(keypoints, exerciseStateRef.current, skeletonFrame);
+    exerciseStateRef.current = newState;
+
+    const repScore = newState.lastRepResult?.score ?? 0;
+    const pending = pendingUIStateRef.current ?? {};
+    pending.repCount = newState.repCount;
+    if (repScore > 0) pending.formScore = repScore;
+    pending.feedback = newState.feedback;
+    pending.exerciseDebug = newState.debugInfo;
+
+    const completedNewTrackedRep = newState.repCount > accumulatedFormScoresRef.current.length;
+    const feedbackTimestamp = newState.feedbackTimestamp;
+
+    if (completedNewTrackedRep) {
+      pending.workoutUpdate = {
+        totalReps: newState.repCount,
+        formScore: repScore,
+        repFeedback: newState.feedback ?? 'Great rep!',
+      };
+      accumulatedFormScoresRef.current.push(repScore);
+      accumulatedRepFeedbackRef.current.push(newState.feedback ?? 'Great rep!');
+
+      if (isTTSEnabledRef.current) {
+        const repMessages = newState.lastRepResult?.messages ?? [];
+        ttsOnRepCompleted(repMessages, repScore).catch(() => {});
+      }
+      lastTTSFeedbackTimestampRef.current = feedbackTimestamp ?? lastTTSFeedbackTimestampRef.current;
+    } else if (
+      isTTSEnabledRef.current &&
+      newState.feedback &&
+      feedbackTimestamp !== null &&
+      feedbackTimestamp !== lastTTSFeedbackTimestampRef.current
+    ) {
+      lastTTSFeedbackTimestampRef.current = feedbackTimestamp;
+      ttsOnFormFeedback([newState.feedback]).catch(() => {});
+    }
+    pendingUIStateRef.current = pending;
+
+    if (debugModeRef.current && newState.debugInfo) {
+      const current = (newState.debugInfo as any).current;
+      if (current && typeof current === 'object') {
+        const buf = angleBufferRef.current;
+        for (const key of Object.keys(current)) {
+          const val = current[key];
+          if (typeof val === 'number' && !isNaN(val)) {
+            if (!buf[key]) buf[key] = [];
+            buf[key].push(val);
+            if (buf[key].length > VARIANCE_WINDOW) buf[key].shift();
+          }
+        }
+      }
+    }
+
+    const repJustCompleted = newState.repCount > repCountRef.current;
+    const throttleElapsed = now - lastUIUpdateTimeRef.current >= UI_UPDATE_INTERVAL_MS;
+    if (repJustCompleted || throttleElapsed) {
+      lastUIUpdateTimeRef.current = now;
+      flushPendingUI();
+    }
+    return true;
+  }, [exerciseNameFromRoute, flushPendingUI]);
+
   // Handle landmark data from MediaPipe - throttle analysis, batch UI updates. Run when recording or when debug mode (to show angles).
   const handleLandmark = useCallback((data: any) => {
-    if (!isRecordingRef.current && !debugModeRef.current) return;
-    if (isPausedRef.current && !debugModeRef.current) return;
+    if (activePoseBackendRef.current === 'vision3d') return;
+    if (!isRecordingRef.current && !debugModeRef.current && !showCanonicalSkeletonRef.current) return;
+    if (isPausedRef.current && !debugModeRef.current && !showCanonicalSkeletonRef.current) return;
 
     const now = Date.now();
+    const processingStartedAt = now;
 
     // Throttle analysis (not every frame - reduces JS thread load)
     if (now - lastDetectionTimeRef.current < ANALYSIS_THROTTLE_MS) {
@@ -555,183 +933,93 @@ export const CameraScreen: React.FC = () => {
       });
     }
 
+    const skeletonFrame = mediaPipeAdapterRef.current.update(keypoints, now);
+    latestMediaPipeFrameRef.current = skeletonFrame;
+    updateDebugSkeletonFrame(skeletonFrame, now);
+
     // Registry-based exercise processing (handles all registered exercises uniformly)
-    const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
-    if (exerciseDef && exerciseStateRef.current) {
-      const skeletonFrame = mediaPipeAdapterRef.current.update(keypoints, now);
-      const profile = profileSessionRef.current.update(skeletonFrame, isProfileFrameStable(skeletonFrame));
-      if (__DEV__ && profile) {
-        if (!profileSessionRef.current.hasLoggedProfile) {
-          profileSessionRef.current.markLogged(profile);
-          console.log('[AnthropometricProfile]', {
-            sampleFrameCount: profile.sampleFrameCount,
-            confidence: profile.confidence,
-            segments: profile.segments,
-            derived: profile.derived,
-          });
-        }
-        if (debugModeRef.current && !profileDebugSetRef.current) {
-          const nextProfileDebug = formatProfileDebug(profile);
-          setProfileDebug(nextProfileDebug);
-          profileDebugSetRef.current = true;
-          if (skeletonFrame.profile !== profile) {
-            console.warn('[AnthropometricProfile] Runtime invariant failed: frame.profile is not sealed profile');
+    const processedByRegistry = processExerciseFrame(keypoints, skeletonFrame, now);
+    if (processedByRegistry) {
+      recordFrameTiming(Date.now() - processingStartedAt);
+    } else {
+      const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
+      if (!exerciseDef) {
+        // Generic exercise detection - also throttled
+        const detection = detectExercise(keypoints);
+
+        if (detection.exercise && detection.angle !== null) {
+          const exerciseName = detection.exercise;
+
+          // Update exercise name if changed
+          if (currentExerciseRef.current !== exerciseName) {
+            setCurrentExercise(exerciseName);
+            setExercisePhase('idle');
+            return;
           }
-        }
-      }
-      latestMediaPipeFrameRef.current = skeletonFrame;
-      const newState = exerciseDef.update(keypoints, exerciseStateRef.current, skeletonFrame);
-      exerciseStateRef.current = newState;
 
-      const repScore = newState.lastRepResult?.score ?? 0;
+          // Count reps based on angle changes
+          const repUpdate = updateRepCount(
+            exerciseName,
+            detection.angle,
+            exercisePhaseRef.current,
+            repCountRef.current
+          );
 
-      // Accumulate UI updates — don't setState here (blocks main thread)
-      const pending = pendingUIStateRef.current ?? {};
-      pending.repCount = newState.repCount;
-      if (repScore > 0) pending.formScore = repScore;
-      pending.feedback = newState.feedback;
-      pending.exerciseDebug = newState.debugInfo;
-
-      const completedNewTrackedRep = newState.repCount > accumulatedFormScoresRef.current.length;
-      const feedbackTimestamp = newState.feedbackTimestamp;
-
-      if (completedNewTrackedRep) {
-        pending.workoutUpdate = {
-          totalReps: newState.repCount,
-          formScore: repScore,
-          repFeedback: newState.feedback ?? 'Great rep!',
-        };
-        // Synchronous accumulation — immune to InteractionManager deferral race
-        accumulatedFormScoresRef.current.push(repScore);
-        accumulatedRepFeedbackRef.current.push(newState.feedback ?? 'Great rep!');
-
-        // TTS coaching — fire-and-forget, does not block landmark processing
-        if (isTTSEnabledRef.current) {
-          const repMessages = newState.lastRepResult?.messages ?? [];
-          ttsOnRepCompleted(repMessages, repScore).catch(() => {});
-        }
-        lastTTSFeedbackTimestampRef.current = feedbackTimestamp ?? lastTTSFeedbackTimestampRef.current;
-      } else if (
-        isTTSEnabledRef.current &&
-        newState.feedback &&
-        feedbackTimestamp !== null &&
-        feedbackTimestamp !== lastTTSFeedbackTimestampRef.current
-      ) {
-        lastTTSFeedbackTimestampRef.current = feedbackTimestamp;
-        ttsOnFormFeedback([newState.feedback]).catch(() => {});
-      }
-      pendingUIStateRef.current = pending;
-
-      // Accumulate angle data for variance tracker (debug mode only, lightweight)
-      if (debugModeRef.current && newState.debugInfo) {
-        const current = (newState.debugInfo as any).current;
-        if (current && typeof current === 'object') {
-          const buf = angleBufferRef.current;
-          for (const key of Object.keys(current)) {
-            const val = current[key];
-            if (typeof val === 'number' && !isNaN(val)) {
-              if (!buf[key]) buf[key] = [];
-              buf[key].push(val);
-              if (buf[key].length > VARIANCE_WINDOW) buf[key].shift();
-            }
+          // Only update state if something changed
+          if (repUpdate.phase !== exercisePhaseRef.current) {
+            setExercisePhase(repUpdate.phase);
           }
-        }
-      }
 
-      // Flush immediately when rep completes; otherwise throttle
-      const repJustCompleted = newState.repCount > repCountRef.current;
-      const throttleElapsed = now - lastUIUpdateTimeRef.current >= UI_UPDATE_INTERVAL_MS;
-      if (repJustCompleted || throttleElapsed) {
-        lastUIUpdateTimeRef.current = now;
-        flushPendingUI();
-      }
-    } else if (!exerciseDef) {
-      // Generic exercise detection - also throttled
-      const detection = detectExercise(keypoints);
+          // Rep completed
+          if (repUpdate.repCount > accumulatedFormScoresRef.current.length) {
+            const formScore = repUpdate.formScore;
+            const feedbackMsg = formScore >= 90 ? 'Great rep!' : 'Good rep.';
 
-      if (detection.exercise && detection.angle !== null) {
-        const exerciseName = detection.exercise;
+            setRepCount(repUpdate.repCount);
+            setCurrentFormScore(formScore);
 
-        // Update exercise name if changed
-        if (currentExerciseRef.current !== exerciseName) {
-          setCurrentExercise(exerciseName);
+            // Update workout data with functional update to avoid stale closures
+            setWorkoutData(prev => ({
+              ...prev,
+              totalReps: prev.totalReps + 1,
+              formScores: [...prev.formScores, formScore],
+              repFeedback: [...prev.repFeedback, feedbackMsg],
+            }));
+            // Synchronous accumulation — immune to InteractionManager deferral race
+            accumulatedFormScoresRef.current.push(formScore);
+            accumulatedRepFeedbackRef.current.push(feedbackMsg);
+          }
+        } else if (currentExerciseRef.current !== null) {
+          // No exercise detected - reset
+          setCurrentExercise(null);
           setExercisePhase('idle');
-          return;
         }
-
-        // Count reps based on angle changes
-        const repUpdate = updateRepCount(
-          exerciseName,
-          detection.angle,
-          exercisePhaseRef.current,
-          repCountRef.current
-        );
-
-        // Only update state if something changed
-        if (repUpdate.phase !== exercisePhaseRef.current) {
-          setExercisePhase(repUpdate.phase);
-        }
-
-        // Rep completed
-        if (repUpdate.repCount > accumulatedFormScoresRef.current.length) {
-          const formScore = repUpdate.formScore;
-          const feedbackMsg = formScore >= 90 ? 'Great rep!' : 'Good rep.';
-
-          setRepCount(repUpdate.repCount);
-          setCurrentFormScore(formScore);
-
-          // Update workout data with functional update to avoid stale closures
-          setWorkoutData(prev => ({
-            ...prev,
-            totalReps: prev.totalReps + 1,
-            formScores: [...prev.formScores, formScore],
-            repFeedback: [...prev.repFeedback, feedbackMsg],
-          }));
-          // Synchronous accumulation — immune to InteractionManager deferral race
-          accumulatedFormScoresRef.current.push(formScore);
-          accumulatedRepFeedbackRef.current.push(feedbackMsg);
-        }
-      } else if (currentExerciseRef.current !== null) {
-        // No exercise detected - reset
-        setCurrentExercise(null);
-        setExercisePhase('idle');
       }
+      recordFrameTiming(Date.now() - processingStartedAt);
     }
-  }, [convertLandmarksToKeypoints, exerciseNameFromRoute, flushPendingUI]);
+  }, [convertLandmarksToKeypoints, exerciseNameFromRoute, processExerciseFrame, recordFrameTiming, updateDebugSkeletonFrame]);
 
   const handleVisionFrame = useCallback((payload: VisionBridgePayload) => {
-    if (!poseDualEmit || Platform.OS !== 'ios') return;
-
-    const visionFrame = visionAdapterRef.current.update(payload);
-    const mediaPipeFrame = latestMediaPipeFrameRef.current;
-    if (!mediaPipeFrame) return;
+    if (Platform.OS !== 'ios') return;
+    if (activePoseBackendRef.current !== 'vision3d') return;
+    if (!isRecordingRef.current && !debugModeRef.current && !showCanonicalSkeletonRef.current) return;
+    if (isPausedRef.current && !debugModeRef.current && !showCanonicalSkeletonRef.current) return;
 
     const now = Date.now();
-    if (now - lastVisionTelemetryLogRef.current < 1000) return;
-    lastVisionTelemetryLogRef.current = now;
+    const processingStartedAt = now;
 
-    let sum = 0;
-    let count = 0;
-    for (const joint of CANONICAL_JOINTS) {
-      const mediaPipeJoint = mediaPipeFrame.joints[joint];
-      const visionJoint = visionFrame.joints[joint];
-      if (mediaPipeJoint.confidence <= 0 || visionJoint.confidence <= 0) continue;
-      const dx = mediaPipeJoint.x - visionJoint.x;
-      const dy = mediaPipeJoint.y - visionJoint.y;
-      const dz = mediaPipeJoint.z - visionJoint.z;
-      sum += Math.sqrt(dx * dx + dy * dy + dz * dz);
-      count += 1;
+    const visionFrame = visionAdapterRef.current.update(payload);
+    updateDebugSkeletonFrame(visionFrame, now);
+    if (now - lastDetectionTimeRef.current < ANALYSIS_THROTTLE_MS) {
+      return;
     }
-
-    if (__DEV__) {
-      console.log('[VisionDualEmit]', {
-        sourceQuality: visionFrame.sourceQuality,
-        timestamp: visionFrame.timestamp,
-        comparedJoints: count,
-        meanJointAgreementMeters: count > 0 ? sum / count : null,
-      });
+    lastDetectionTimeRef.current = now;
+    const keypoints = keypointsFromSkeletonFrame(visionFrame);
+    if (keypoints.length > 0) {
+      processExerciseFrame(keypoints, visionFrame, now);
+      recordFrameTiming(Date.now() - processingStartedAt);
     }
-  }, [poseDualEmit]);
+  }, [processExerciseFrame, recordFrameTiming, updateDebugSkeletonFrame]);
 
   // Memoize button handlers to prevent recreating on every render
   const workoutDataRef = useRef(workoutData);
@@ -1044,12 +1332,15 @@ export const CameraScreen: React.FC = () => {
 
   // Memoize pose detection props
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
+  const showCanonicalSkeletonOverlay = __DEV__ && effectiveShowSkeleton;
   const poseDetectionProps = useMemo(() => ({
-    frameLimit: 30,
-    showSkeleton: effectiveShowSkeleton,
+    frameLimit: activePoseBackend === 'vision3d' ? 60 : 30,
+    showSkeleton: effectiveShowSkeleton && !showCanonicalSkeletonOverlay,
     modelName: poseModel,
-    enableVisionDualEmit: Platform.OS === 'ios' && poseDualEmit,
-  }), [effectiveShowSkeleton, poseModel, poseDualEmit]);
+    poseBackend: activePoseBackend,
+    visionHeightPrior,
+    enableVisionDualEmit: false,
+  }), [activePoseBackend, effectiveShowSkeleton, poseModel, showCanonicalSkeletonOverlay, visionHeightPrior]);
 
   // Memoize display values to avoid recalculation (timer handled by CameraDurationDisplay)
   const displayValues = useMemo(() => {
@@ -1163,6 +1454,14 @@ export const CameraScreen: React.FC = () => {
                   {...poseDetectionProps}
                   onLandmark={handleLandmark}
                   onVisionFrame={handleVisionFrame}
+                />
+              )}
+              {showCanonicalSkeletonOverlay && (
+                <CanonicalSkeletonDebugOverlay
+                  renderState={debugSkeletonRenderState}
+                  width={cameraDisplayWidth}
+                  height={cameraDisplayHeight}
+                  timingStats={frameTimingStats}
                 />
               )}
             </View>
@@ -1327,6 +1626,17 @@ export const CameraScreen: React.FC = () => {
             </View>
           );
         })()}
+
+        {debugMode && frameTimingStats && (
+          <View style={[styles.profileDebugContainer, { bottom: controlStripApproxHeight + 265 }]}>
+            <View style={styles.torsoDebugCard}>
+              <Text style={styles.torsoDebugTitle}>Pose · {activePoseBackend}</Text>
+              <Text style={styles.torsoDebugText}>
+                p50 {frameTimingStats.p50.toFixed(1)}ms · p99 {frameTimingStats.p99.toFixed(1)}ms · n {frameTimingStats.count}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Barbell Curl Debug */}
         {exerciseNameFromRoute === 'Barbell Curl' &&
@@ -1759,6 +2069,36 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     overflow: 'hidden',
+  },
+  debugSkeletonOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 4,
+  },
+  debugSkeletonSvg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  debugSkeletonLabel: {
+    position: 'absolute',
+    top: 96,
+    left: SPACING.screenHorizontal,
+    maxWidth: '76%',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  debugSkeletonLabelText: {
+    fontSize: 10,
+    fontFamily: FONTS.mono.regular,
+    color: COLORS.text,
   },
   controlStrip: {
     position: 'absolute',
