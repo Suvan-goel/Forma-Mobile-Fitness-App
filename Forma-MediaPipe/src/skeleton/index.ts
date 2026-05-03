@@ -33,6 +33,19 @@ export type {
   ProfileBuilderOptions,
 } from './profileBuilder';
 export {
+  asymmetryBaseline,
+  femurDominance,
+  getMorphologyAdjustedPushupHipDevDeadzone,
+  getMorphologyAdjustedSquatTorsoDeadzone,
+  getSquatHipTravelLimit,
+  isCoupledMorphologyEnabled,
+  ratioToFemur,
+  ratioToTibia,
+  ratioToTorso,
+  ratioToUpperArm,
+  setCoupledMorphologyEnabled,
+} from './morphology';
+export {
   createMediaPipeAdapter,
 } from './adapters/MediaPipeAdapter';
 export type {

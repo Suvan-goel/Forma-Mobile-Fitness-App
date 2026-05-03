@@ -18,6 +18,7 @@
     "dataset:evaluate": "FORMA_RUN_DATASET_EVALUATE=1 jest scripts/dataset-evaluate.ts --runInBand --no-coverage --verbose",
     "dataset:optimize": "tsx scripts/dataset-optimize-cli.ts",
     "dataset:optimize:exercise": "tsx scripts/dataset-optimize-cli.ts",
+    "heuristics:audit": "node scripts/audit-definition-coordinate-literals.js",
     "postinstall": "patch-package && node scripts/fix-ios-jsc.js",
     "prebuild:ios": "expo prebuild --platform ios --clean && node scripts/fix-ios-jsc.js && cd ios && pod install",
     "test": "jest",

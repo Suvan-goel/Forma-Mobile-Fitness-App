@@ -35,6 +35,12 @@ import {
 } from '../heuristicConfig';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import tunedConfig from './tuned/squat.json';
+import {
+  CanonicalJoint,
+  getMorphologyAdjustedSquatTorsoDeadzone,
+  getSquatHipTravelLimit,
+} from '../../../skeleton';
+import type { AnthropometricProfile, SkeletonFrame } from '../../../skeleton';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -182,6 +188,8 @@ interface SquatRepWindow {
   tEnd: number;
   /** Frame count */
   frameCount: number;
+  startHipOverAnkleX: number | null;
+  maxHipTravel: number;
 }
 
 interface SquatAngles {
@@ -217,6 +225,13 @@ interface SquatState {
   visibleSide: 'left' | 'right';
   /** Best top-position knee extension seen before the current rep starts */
   standingKneeRatioPeak: number;
+  morphologyDebug?: {
+    torsoDeadzone: number;
+    torsoPenalty: number;
+    hipTravelLimit: number | null;
+    maxHipTravel: number | null;
+    hipTravelPenalty: number;
+  };
 }
 
 /** Debug info for on-screen diagnostics */
@@ -232,6 +247,13 @@ interface SquatDebugInfo {
   kneeRatioMin: number | null;
   kneeRatioMax: number | null;
   maxTorsoLean: number | null;
+  morphology?: {
+    torsoDeadzone: number;
+    torsoPenalty: number;
+    hipTravelLimit: number | null;
+    maxHipTravel: number | null;
+    hipTravelPenalty: number;
+  };
 }
 
 interface FSMUpdateResult {
@@ -266,7 +288,7 @@ function resetFSMToStanding(): SquatFSM {
   };
 }
 
-function initRepWindow(tStart: number, initialKneeRatio?: number): SquatRepWindow {
+function initRepWindow(tStart: number, initialKneeRatio?: number, frame?: SkeletonFrame): SquatRepWindow {
   return {
     minKneeRatio: initialKneeRatio ?? Infinity,
     maxKneeRatio: initialKneeRatio ?? -Infinity,
@@ -275,7 +297,18 @@ function initRepWindow(tStart: number, initialKneeRatio?: number): SquatRepWindo
     tBottom: null,
     tEnd: tStart,
     frameCount: 0,
+    startHipOverAnkleX: frame?.profile ? getHipOverAnkleX(frame) : null,
+    maxHipTravel: 0,
   };
+}
+
+function getHipOverAnkleX(frame: SkeletonFrame): number {
+  const leftAnkle = frame.joints[CanonicalJoint.LEFT_ANKLE];
+  const rightAnkle = frame.joints[CanonicalJoint.RIGHT_ANKLE];
+  const ankleX = leftAnkle.confidence >= rightAnkle.confidence
+    ? leftAnkle.x
+    : rightAnkle.x;
+  return frame.joints[CanonicalJoint.PELVIS_CENTER].x - ankleX;
 }
 
 function initializeSquatState(): SquatState {
@@ -602,7 +635,10 @@ function updateFSM(
 // FORM EVALUATION
 // ============================================================================
 
-function computeSquatRepScore(repWindow: SquatRepWindow): number {
+function computeSquatScoreDetails(
+  repWindow: SquatRepWindow,
+  profile: AnthropometricProfile | null
+): { score: number; torsoDeadzone: number; torsoPenalty: number; hipTravelLimit: number | null; maxHipTravel: number | null; hipTravelPenalty: number } {
   let penalty = 0;
 
   // 1. Depth shortfall -- lower minKneeRatio is better (deeper squat)
@@ -615,8 +651,17 @@ function computeSquatRepScore(repWindow: SquatRepWindow): number {
   penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
 
   // 3. Torso forward lean -- some lean is natural for squats (deadzone 30)
-  const torsoExcess = Math.max(0, repWindow.maxTorsoLean - SCORE_CURVES.TORSO.deadzone);
-  penalty += Math.min(SCORE_CURVES.TORSO.cap, SCORE_CURVES.TORSO.scale * torsoExcess * torsoExcess);
+  const torsoDeadzone = getMorphologyAdjustedSquatTorsoDeadzone(SCORE_CURVES.TORSO.deadzone, profile);
+  const torsoExcess = Math.max(0, repWindow.maxTorsoLean - torsoDeadzone);
+  const torsoPenalty = Math.min(SCORE_CURVES.TORSO.cap, SCORE_CURVES.TORSO.scale * torsoExcess * torsoExcess);
+  penalty += torsoPenalty;
+
+  const hipTravelLimit = getSquatHipTravelLimit(profile);
+  const hipTravelExcess = isFinite(hipTravelLimit)
+    ? Math.max(0, repWindow.maxHipTravel - hipTravelLimit)
+    : 0;
+  const hipTravelPenalty = Math.min(10, 120 * hipTravelExcess * hipTravelExcess);
+  penalty += hipTravelPenalty;
 
   // 4. Tempo
   if (repWindow.tBottom !== null) {
@@ -633,7 +678,18 @@ function computeSquatRepScore(repWindow: SquatRepWindow): number {
     }
   }
 
-  return Math.max(0, Math.min(100, Math.round(100 - penalty)));
+  return {
+    score: Math.max(0, Math.min(100, Math.round(100 - penalty))),
+    torsoDeadzone,
+    torsoPenalty,
+    hipTravelLimit: isFinite(hipTravelLimit) ? hipTravelLimit : null,
+    maxHipTravel: repWindow.startHipOverAnkleX !== null ? repWindow.maxHipTravel : null,
+    hipTravelPenalty,
+  };
+}
+
+function computeSquatRepScore(repWindow: SquatRepWindow, profile: AnthropometricProfile | null = null): number {
+  return computeSquatScoreDetails(repWindow, profile).score;
 }
 
 function generateFormMessages(repWindow: SquatRepWindow): string[] {
@@ -681,11 +737,22 @@ function generateFormMessages(repWindow: SquatRepWindow): string[] {
 }
 
 function evaluateForm(
-  repWindow: SquatRepWindow
-): { score: number; messages: string[] } {
-  const score = computeSquatRepScore(repWindow);
+  repWindow: SquatRepWindow,
+  profile: AnthropometricProfile | null = null
+): { score: number; messages: string[]; morphologyDebug?: SquatState['morphologyDebug'] } {
+  const scoreDetails = computeSquatScoreDetails(repWindow, profile);
   const messages = generateFormMessages(repWindow);
-  return { score, messages };
+  return {
+    score: scoreDetails.score,
+    messages,
+    morphologyDebug: profile ? {
+      torsoDeadzone: scoreDetails.torsoDeadzone,
+      torsoPenalty: scoreDetails.torsoPenalty,
+      hipTravelLimit: scoreDetails.hipTravelLimit,
+      maxHipTravel: scoreDetails.maxHipTravel,
+      hipTravelPenalty: scoreDetails.hipTravelPenalty,
+    } : undefined,
+  };
 }
 
 // ============================================================================
@@ -694,9 +761,11 @@ function evaluateForm(
 
 function updateSquatState(
   keypoints: Keypoint[],
-  currentState: SquatState
+  currentState: SquatState,
+  frame?: SkeletonFrame
 ): SquatState {
   const t = Date.now() / 1000;
+  const profile = frame?.profile ?? null;
 
   // Only update visible side in IDLE/STANDING — lock it during active rep phases
   // to prevent mid-rep side switching that corrupts angle measurements.
@@ -770,7 +839,8 @@ function updateSquatState(
     ) {
       newState.repCount++;
       const tDown = newState.repWindow.tEnd - newState.repWindow.tStart;
-      const { score, messages } = evaluateForm(newState.repWindow);
+      const { score, messages, morphologyDebug } = evaluateForm(newState.repWindow, profile);
+      newState.morphologyDebug = morphologyDebug;
       newState.lastRepResult = {
         repIndex: newState.repCount,
         romRatio: finalPartialROM,
@@ -799,7 +869,8 @@ function updateSquatState(
       : currentState.fast?.kneeRatio;
     newState.repWindow = initRepWindow(
       newState.fsm.tRepStart ?? t,
-      standingRatio !== undefined && !isNaN(standingRatio) ? standingRatio : fast.kneeRatio
+      standingRatio !== undefined && !isNaN(standingRatio) ? standingRatio : fast.kneeRatio,
+      frame
     );
     newState.standingKneeRatioPeak = -Infinity;
   }
@@ -820,6 +891,12 @@ function updateSquatState(
       if (torsoConf >= 0.3) {
         window.maxTorsoLean = Math.max(window.maxTorsoLean, smoothed.torsoLean);
       }
+    }
+    if (profile && frame && window.startHipOverAnkleX !== null) {
+      window.maxHipTravel = Math.max(
+        window.maxHipTravel,
+        Math.abs(getHipOverAnkleX(frame) - window.startHipOverAnkleX)
+      );
     }
 
     // Set tBottom as soon as depth is reached so tempo reflects the full descent
@@ -854,7 +931,8 @@ function updateSquatState(
       ? newState.repWindow.tEnd - newState.repWindow.tBottom
       : 0;
 
-    const { score, messages } = evaluateForm(newState.repWindow);
+    const { score, messages, morphologyDebug } = evaluateForm(newState.repWindow, profile);
+    newState.morphologyDebug = morphologyDebug;
 
     newState.lastRepResult = {
       repIndex: newState.repCount,
@@ -906,6 +984,7 @@ function getSquatDebugInfo(state: SquatState): SquatDebugInfo {
     kneeRatioMin: repWin && repWin.minKneeRatio !== Infinity ? fmt(repWin.minKneeRatio) : null,
     kneeRatioMax: repWin && repWin.maxKneeRatio !== -Infinity ? fmt(repWin.maxKneeRatio) : null,
     maxTorsoLean: repWin && repWin.maxTorsoLean !== -Infinity ? fmt(repWin.maxTorsoLean) : null,
+    ...(state.morphologyDebug ? { morphology: state.morphologyDebug } : null),
   };
 }
 
@@ -929,9 +1008,9 @@ export function createSquatDefinition(
     _internal: withSquatConfig(config, () => initializeSquatState()),
   }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+  update: (keypoints: Keypoint[], state: ExerciseState, frame?: SkeletonFrame): ExerciseState => {
     const internal = state._internal as SquatState;
-    const newInternal = withSquatConfig(config, () => updateSquatState(keypoints, internal));
+    const newInternal = withSquatConfig(config, () => updateSquatState(keypoints, internal, frame));
 
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
       ? {

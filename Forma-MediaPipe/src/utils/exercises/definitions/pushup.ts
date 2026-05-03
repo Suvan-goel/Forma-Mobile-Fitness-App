@@ -28,6 +28,8 @@ import {
 } from '../heuristicConfig';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import tunedConfig from './tuned/pushup.json';
+import { getMorphologyAdjustedPushupHipDevDeadzone } from '../../../skeleton';
+import type { AnthropometricProfile, SkeletonFrame } from '../../../skeleton';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -231,6 +233,10 @@ interface PushupState {
   plankMaxElbowRatio: number;
   /** Last computed torso inclination from vertical (for debug display) */
   lastTorsoInclination: number | null;
+  morphologyDebug?: {
+    hipDevDeadzone: number;
+    hipDevPenalty: number;
+  };
 }
 
 /** Debug info for on-screen pushup diagnostics */
@@ -249,6 +255,10 @@ interface PushupDebugInfo {
   bodyAngleMax: number | null;
   hipDevMin: number | null;
   hipDevMax: number | null;
+  morphology?: {
+    hipDevDeadzone: number;
+    hipDevPenalty: number;
+  };
 }
 
 interface FSMUpdateResult {
@@ -711,7 +721,10 @@ function updateFSM(
  *
  * Each category: min(cap, scale * max(0, x - deadzone)^2)
  */
-function computePushupRepScore(repWindow: PushupRepWindow): number {
+function computePushupScoreDetails(
+  repWindow: PushupRepWindow,
+  profile: AnthropometricProfile | null
+): { score: number; hipDevDeadzone: number; hipDevPenalty: number } {
   let penalty = 0;
 
   // 1. Depth shortfall — lower minRatio is better (closer to 0.60)
@@ -729,8 +742,10 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
   const sagDev = Math.max(0, (SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone) - repWindow.minBodyAngle);
   const pikeDev = Math.max(0, repWindow.maxBodyAngle - (SCORE_CURVES.HIP.neutral + SCORE_CURVES.HIP.deadzone));
   const worstHipAngleDev = Math.max(sagDev, pikeDev);
-  const signedHipDev = Math.max(Math.abs(repWindow.minHipDev), Math.abs(repWindow.maxHipDev));
-  const hipDevExcess = Math.max(0, signedHipDev - SCORE_CURVES.HIP_DEV.deadzone);
+  const hipDevDeadzone = getMorphologyAdjustedPushupHipDevDeadzone(SCORE_CURVES.HIP_DEV.deadzone, profile);
+  const sagHipDevExcess = Math.max(0, repWindow.maxHipDev - hipDevDeadzone);
+  const pikeHipDevExcess = Math.max(0, Math.abs(repWindow.minHipDev) - SCORE_CURVES.HIP_DEV.deadzone);
+  const hipDevExcess = Math.max(sagHipDevExcess, pikeHipDevExcess);
   const hipAnglePenalty = SCORE_CURVES.HIP.scale * worstHipAngleDev * worstHipAngleDev;
   const hipDevPenalty = SCORE_CURVES.HIP_DEV.scale * hipDevExcess * hipDevExcess;
   penalty += Math.min(SCORE_CURVES.HIP.cap, Math.max(hipAnglePenalty, hipDevPenalty));
@@ -756,7 +771,15 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
     }
   }
 
-  return Math.max(0, Math.min(100, Math.round(100 - penalty)));
+  return {
+    score: Math.max(0, Math.min(100, Math.round(100 - penalty))),
+    hipDevDeadzone,
+    hipDevPenalty: Math.min(SCORE_CURVES.HIP.cap, hipDevPenalty),
+  };
+}
+
+function computePushupRepScore(repWindow: PushupRepWindow, profile: AnthropometricProfile | null = null): number {
+  return computePushupScoreDetails(repWindow, profile).score;
 }
 
 // ---- Discrete messages (visual feedback) ----
@@ -766,8 +789,10 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
  * These are independent of the continuous score -- a rep can score 92 and
  * still surface an actionable message.
  */
-function generateFormMessages(repWindow: PushupRepWindow): string[] {
+function generateFormMessages(repWindow: PushupRepWindow, profile: AnthropometricProfile | null = null): string[] {
   const messages: string[] = [];
+  const sagWarn = getMorphologyAdjustedPushupHipDevDeadzone(FORM_THRESHOLDS.HIP_DEV_SAG_WARN, profile);
+  const sagFail = getMorphologyAdjustedPushupHipDevDeadzone(FORM_THRESHOLDS.HIP_DEV_SAG_FAIL, profile);
 
   // 1. Depth (ratio-based)
   if (repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL) {
@@ -791,9 +816,9 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
   const minDev = repWindow.minHipDev;
   const maxDev = repWindow.maxHipDev;
 
-  if (maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
+  if (maxDev > sagFail) {
     messages.push('Hips are sagging \u2014 engage your core to maintain a straight line.');
-  } else if (minBody < FORM_THRESHOLDS.HIP_SAG_WARN && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN) {
+  } else if (minBody < FORM_THRESHOLDS.HIP_SAG_WARN && maxDev > sagWarn) {
     messages.push('Keep your hips up \u2014 your body line is dropping.');
   }
 
@@ -831,11 +856,19 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
  * The two systems are independent per CLAUDE.md section 13.
  */
 function evaluateForm(
-  repWindow: PushupRepWindow
-): { score: number; messages: string[] } {
-  const score = computePushupRepScore(repWindow);
-  const messages = generateFormMessages(repWindow);
-  return { score, messages };
+  repWindow: PushupRepWindow,
+  profile: AnthropometricProfile | null = null
+): { score: number; messages: string[]; morphologyDebug?: PushupState['morphologyDebug'] } {
+  const scoreDetails = computePushupScoreDetails(repWindow, profile);
+  const messages = generateFormMessages(repWindow, profile);
+  return {
+    score: scoreDetails.score,
+    messages,
+    morphologyDebug: profile ? {
+      hipDevDeadzone: scoreDetails.hipDevDeadzone,
+      hipDevPenalty: scoreDetails.hipDevPenalty,
+    } : undefined,
+  };
 }
 
 // ============================================================================
@@ -844,9 +877,11 @@ function evaluateForm(
 
 function updatePushupState(
   keypoints: Keypoint[],
-  currentState: PushupState
+  currentState: PushupState,
+  frame?: SkeletonFrame
 ): PushupState {
   const t = Date.now() / 1000;
+  const profile = frame?.profile ?? null;
 
   const currentInRep = currentState.fsm.phase !== 'PLANK' && currentState.fsm.phase !== 'IDLE';
   const detectedSide = selectVisibleSide(keypoints);
@@ -921,7 +956,8 @@ function updatePushupState(
         minDuration: THRESHOLDS.MIN_DESCENDING_TIME,
       })) {
         newState.repCount++;
-        const { score, messages } = evaluateForm(newState.repWindow);
+        const { score, messages, morphologyDebug } = evaluateForm(newState.repWindow, profile);
+        newState.morphologyDebug = morphologyDebug;
         newState.lastRepResult = {
           repIndex: newState.repCount,
           romRatio,
@@ -995,7 +1031,8 @@ function updatePushupState(
       ? newState.repWindow.tEnd - newState.repWindow.tBottom
       : 0;
 
-    const { score, messages } = evaluateForm(newState.repWindow);
+    const { score, messages, morphologyDebug } = evaluateForm(newState.repWindow, profile);
+    newState.morphologyDebug = morphologyDebug;
 
     newState.lastRepResult = {
       repIndex: newState.repCount,
@@ -1055,6 +1092,7 @@ function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
     bodyAngleMax: repWin ? fmtW(repWin.minBodyAngle, repWin.maxBodyAngle) && fmt(repWin.maxBodyAngle) : null,
     hipDevMin: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.minHipDev) : null,
     hipDevMax: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.maxHipDev) : null,
+    ...(state.morphologyDebug ? { morphology: state.morphologyDebug } : null),
   };
 }
 
@@ -1078,9 +1116,9 @@ export function createPushupDefinition(
     _internal: withPushupConfig(config, () => initializePushupState()),
   }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+  update: (keypoints: Keypoint[], state: ExerciseState, frame?: SkeletonFrame): ExerciseState => {
     const internal = state._internal as PushupState;
-    const newInternal = withPushupConfig(config, () => updatePushupState(keypoints, internal));
+    const newInternal = withPushupConfig(config, () => updatePushupState(keypoints, internal, frame));
 
     // Map internal RepResult to framework RepResult
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult

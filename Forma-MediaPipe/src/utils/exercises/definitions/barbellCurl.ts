@@ -27,6 +27,8 @@ import {
 } from '../heuristicConfig';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import tunedConfig from './tuned/barbellCurl.json';
+import { asymmetryBaseline } from '../../../skeleton';
+import type { AnthropometricProfile, SkeletonFrame } from '../../../skeleton';
 import type {
   ExerciseDefinition,
   ExerciseHeuristicConfig,
@@ -216,7 +218,8 @@ function computeRepScore(
   repWindow: RepWindow,
   leftArm: ArmFSM,
   _rightArm: ArmFSM,
-  viewAngle: ViewAngle = { angleDeg: 0, smoothedAngleDeg: 0, zone: 'frontal', primarySide: 'both' }
+  viewAngle: ViewAngle = { angleDeg: 0, smoothedAngleDeg: 0, zone: 'frontal', primarySide: 'both' },
+  profile: AnthropometricProfile | null = null
 ): number {
   const { minAngles, maxAngles } = repWindow;
   const isFrontal = viewAngle.zone === 'frontal';
@@ -292,7 +295,8 @@ function computeRepScore(
     const romRRatio = repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio;
     const deltaMinRatio = Math.abs(repWindow.ratios.minLeftRatio - repWindow.ratios.minRightRatio);
     const deltaRomRatio = Math.abs(romLRatio - romRRatio);
-    asymmetryP = penaltyAsymmetry(deltaMinRatio, deltaRomRatio);
+    const baseline = asymmetryBaseline(profile, 'both');
+    asymmetryP = penaltyAsymmetry(Math.max(0, deltaMinRatio - baseline), Math.max(0, deltaRomRatio - baseline));
   }
 
   // Elbow flare penalty (frontal only)
@@ -433,6 +437,12 @@ interface BarbellCurlState {
   viewAngle: ViewAngle;
   /** Consecutive stable frames seen — FSM disabled until >= WARMUP_REQUIRED */
   warmupFrames: number;
+  morphologyDebug?: {
+    asymmetryBaseline: number;
+    adjustedDeltaMinRatio: number;
+    adjustedDeltaRomRatio: number;
+    asymmetryPenalty: number;
+  };
 }
 
 // ============================================================================
@@ -995,8 +1005,9 @@ function evaluateForm(
   leftArm: ArmFSM,
   rightArm: ArmFSM,
   viewAngle: ViewAngle,
-  repIndex: number = 0
-): { score: number; messages: string[] } {
+  repIndex: number = 0,
+  profile: AnthropometricProfile | null = null
+): { score: number; messages: string[]; morphologyDebug?: BarbellCurlState['morphologyDebug'] } {
   const { minAngles, maxAngles, ratios } = repWindow;
   const messages: string[] = [];
   const isFrontal = viewAngle.zone === 'frontal';
@@ -1124,7 +1135,10 @@ function evaluateForm(
   if (isFrontal && leftRatioOk && rightRatioOk) {
     const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
     const deltaRomRatio = Math.abs(romLRatio - romRRatio);
-    if (deltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO || deltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO) {
+    const baseline = asymmetryBaseline(profile, 'both');
+    const adjustedDeltaMinRatio = Math.max(0, deltaMinRatio - baseline);
+    const adjustedDeltaRomRatio = Math.max(0, deltaRomRatio - baseline);
+    if (adjustedDeltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO || adjustedDeltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO) {
       messages.push('Arms are uneven — curl both sides together.');
     }
   }
@@ -1144,9 +1158,23 @@ function evaluateForm(
   }
 
   // Score: continuous penalty curves
-  const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle);
+  const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle, profile);
+  let morphologyDebug: BarbellCurlState['morphologyDebug'] | undefined;
+  if (profile && isFrontal && leftRatioOk && rightRatioOk) {
+    const baseline = asymmetryBaseline(profile, 'both');
+    const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
+    const deltaRomRatio = Math.abs(romLRatio - romRRatio);
+    const adjustedDeltaMinRatio = Math.max(0, deltaMinRatio - baseline);
+    const adjustedDeltaRomRatio = Math.max(0, deltaRomRatio - baseline);
+    morphologyDebug = {
+      asymmetryBaseline: baseline,
+      adjustedDeltaMinRatio,
+      adjustedDeltaRomRatio,
+      asymmetryPenalty: penaltyAsymmetry(adjustedDeltaMinRatio, adjustedDeltaRomRatio),
+    };
+  }
 
-  return { score, messages };
+  return { score, messages, morphologyDebug };
 }
 
 // ============================================================================
@@ -1155,9 +1183,11 @@ function evaluateForm(
 
 function updateBarbellCurlState(
   keypoints: Keypoint[],
-  currentState: BarbellCurlState
+  currentState: BarbellCurlState,
+  frame?: SkeletonFrame
 ): BarbellCurlState {
   const t = Date.now() / 1000; // seconds
+  const profile = frame?.profile ?? null;
 
   // Estimate view angle
   const viewAngle = estimateViewAngle(keypoints, currentState.viewAngle.smoothedAngleDeg);
@@ -1299,9 +1329,9 @@ function updateBarbellCurlState(
 
       if (syncDelta <= THRESHOLDS.SYNC_WINDOW) {
         if (leftJustFinished || rightJustFinished) {
-          completeRep(newState, t, viewAngle);
+          completeRep(newState, t, viewAngle, profile);
         } else {
-          completePartialRepIfMeaningful(newState, t, viewAngle);
+          completePartialRepIfMeaningful(newState, t, viewAngle, profile);
         }
       } else {
         // Not synced — reset
@@ -1318,9 +1348,9 @@ function updateBarbellCurlState(
     const partialFinished = prevArmState === 'UP' && armState.partialReturnedToRest;
 
     if (justFinished && newState.repWindow) {
-      completeRep(newState, t, viewAngle);
+      completeRep(newState, t, viewAngle, profile);
     } else if (partialFinished && newState.repWindow) {
-      completePartialRepIfMeaningful(newState, t, viewAngle);
+      completePartialRepIfMeaningful(newState, t, viewAngle, profile);
     }
   }
 
@@ -1366,7 +1396,8 @@ function resetBarbellCurlRepTracking(newState: BarbellCurlState): void {
 function completePartialRepIfMeaningful(
   newState: BarbellCurlState,
   t: number,
-  viewAngle: ViewAngle
+  viewAngle: ViewAngle,
+  profile: AnthropometricProfile | null = null
 ): void {
   const window = newState.repWindow;
   if (!window) return;
@@ -1380,7 +1411,7 @@ function completePartialRepIfMeaningful(
     duration,
     minDuration: THRESHOLDS.MIN_REP_TIME,
   })) {
-    completeRep(newState, t, viewAngle);
+    completeRep(newState, t, viewAngle, profile);
     return;
   }
 
@@ -1393,7 +1424,8 @@ function completePartialRepIfMeaningful(
 function completeRep(
   newState: BarbellCurlState,
   t: number,
-  viewAngle: ViewAngle
+  viewAngle: ViewAngle,
+  profile: AnthropometricProfile | null = null
 ): void {
   newState.repCount++;
 
@@ -1408,13 +1440,15 @@ function completeRep(
   const tUp = getConcentricDuration(tempoArm);
   const tDown = getEccentricDuration(tempoArm);
 
-  const { score, messages } = evaluateForm(
+  const { score, messages, morphologyDebug } = evaluateForm(
     newState.repWindow!,
     newState.leftArm,
     newState.rightArm,
     viewAngle,
-    newState.repCount
+    newState.repCount,
+    profile
   );
+  newState.morphologyDebug = morphologyDebug;
 
   newState.lastRepResult = {
     repIndex: newState.repCount,
@@ -1474,6 +1508,12 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
     rightShoulder: number | null;
     torso: number | null;
   } | null;
+  morphology?: {
+    asymmetryBaseline: number;
+    adjustedDeltaMinRatio: number;
+    adjustedDeltaRomRatio: number;
+    asymmetryPenalty: number;
+  };
 } {
   const angles = state.displayAngles;
   const window = state.repWindow;
@@ -1515,6 +1555,7 @@ function getBarbellCurlDebugInfo(state: BarbellCurlState): {
     current,
     repRatios,
     repDelta,
+    ...(state.morphologyDebug ? { morphology: state.morphologyDebug } : null),
   };
 }
 
@@ -1538,11 +1579,11 @@ export function createBarbellCurlDefinition(
     _internal: withBarbellCurlConfig(config, () => initializeBarbellCurlState()),
   }),
 
-  update: (keypoints, state) => {
+  update: (keypoints, state, frame) => {
     const internal = state._internal as BarbellCurlState;
     const newInternal = withBarbellCurlConfig(
       config,
-      () => updateBarbellCurlState(keypoints, internal),
+      () => updateBarbellCurlState(keypoints, internal, frame),
     );
 
     // Map internal RepResult to framework RepResult
