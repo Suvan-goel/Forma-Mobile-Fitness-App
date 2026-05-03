@@ -1,4 +1,5 @@
 import { CanonicalJoint } from './CanonicalJoint';
+import type { AnthropometricProfile } from './AnthropometricProfile';
 
 export type SkeletonSource = 'mediapipe' | 'vision3d';
 export type SkeletonSourceQuality = 'lidar' | 'estimated_height' | 'image_only';
@@ -21,7 +22,7 @@ export interface Joint2D {
 export interface SkeletonFrame {
   joints: Record<CanonicalJoint, Joint3D>;
   joints2D: Record<CanonicalJoint, Joint2D>;
-  profile: null;
+  profile: AnthropometricProfile | null;
   source: SkeletonSource;
   sourceQuality: SkeletonSourceQuality;
   timestamp: number;

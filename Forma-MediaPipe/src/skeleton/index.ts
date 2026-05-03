@@ -19,6 +19,20 @@ export type {
   SkeletonViewHint,
 } from './SkeletonFrame';
 export {
+  ANTHROPOMETRIC_PROFILE_MIN_FRAMES,
+  computeAnthropometricProfile,
+} from './AnthropometricProfile';
+export type {
+  AnthropometricProfile,
+} from './AnthropometricProfile';
+export {
+  ProfileBuilder,
+  ProfileSession,
+} from './profileBuilder';
+export type {
+  ProfileBuilderOptions,
+} from './profileBuilder';
+export {
   createMediaPipeAdapter,
 } from './adapters/MediaPipeAdapter';
 export type {

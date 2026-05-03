@@ -23,6 +23,8 @@ export interface ExerciseState {
   feedbackTimestamp: number | null;
   /** Debug info for on-screen overlay (exercise-specific shape, opaque to CameraScreen) */
   debugInfo: Record<string, unknown>;
+  /** Session anthropometric profile, when available; heuristics may ignore it. */
+  profile?: SkeletonFrame['profile'];
   /** Opaque internal state — only the exercise's own update() reads/writes this */
   _internal: unknown;
 }

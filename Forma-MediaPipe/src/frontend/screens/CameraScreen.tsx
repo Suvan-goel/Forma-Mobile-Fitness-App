@@ -19,8 +19,8 @@ import type { Keypoint } from '../../utils/poseAnalysis';
 import '../../utils/exercises/definitions/register';
 import { ExerciseRegistry } from '../../utils/exercises';
 import type { ExerciseState } from '../../utils/exercises';
-import { CANONICAL_JOINTS, createMediaPipeAdapter, createVisionAdapter } from '../../skeleton';
-import type { SkeletonFrame, VisionBridgePayload } from '../../skeleton';
+import { CANONICAL_JOINTS, CanonicalJoint, createMediaPipeAdapter, createVisionAdapter, ProfileSession } from '../../skeleton';
+import type { AnthropometricProfile, SkeletonFrame, VisionBridgePayload } from '../../skeleton';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -42,10 +42,53 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
+const PROFILE_CONFIDENCE_THRESHOLD = 0.5;
+const PROFILE_REQUIRED_JOINTS = [
+  CanonicalJoint.HEAD,
+  CanonicalJoint.NECK,
+  CanonicalJoint.CHEST_CENTER,
+  CanonicalJoint.PELVIS_CENTER,
+  CanonicalJoint.LEFT_SHOULDER,
+  CanonicalJoint.RIGHT_SHOULDER,
+  CanonicalJoint.LEFT_ELBOW,
+  CanonicalJoint.RIGHT_ELBOW,
+  CanonicalJoint.LEFT_WRIST,
+  CanonicalJoint.RIGHT_WRIST,
+  CanonicalJoint.LEFT_HIP,
+  CanonicalJoint.RIGHT_HIP,
+  CanonicalJoint.LEFT_KNEE,
+  CanonicalJoint.RIGHT_KNEE,
+  CanonicalJoint.LEFT_ANKLE,
+  CanonicalJoint.RIGHT_ANKLE,
+  CanonicalJoint.LEFT_FOOT,
+  CanonicalJoint.RIGHT_FOOT,
+] as const;
 
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
 type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList | RecordStackParamList>;
+
+function isProfileFrameStable(frame: SkeletonFrame): boolean {
+  let confidenceSum = 0;
+  for (const joint of PROFILE_REQUIRED_JOINTS) {
+    const confidence = frame.joints[joint].confidence;
+    if (confidence < PROFILE_CONFIDENCE_THRESHOLD) return false;
+    confidenceSum += confidence;
+  }
+  return confidenceSum / PROFILE_REQUIRED_JOINTS.length >= PROFILE_CONFIDENCE_THRESHOLD;
+}
+
+function formatProfileDebug(profile: AnthropometricProfile): Record<string, unknown> {
+  return {
+    femur: profile.segments.femur,
+    tibia: profile.segments.tibia,
+    torso: profile.segments.torso,
+    standingHeight: profile.derived.standingHeight,
+    femurToTibia: profile.derived.femurToTibia,
+    confidence: profile.confidence,
+    sampleFrameCount: profile.sampleFrameCount,
+  };
+}
 
 // MediaPipe landmark names (33 landmarks)
 const MEDIAPIPE_LANDMARK_NAMES = [
@@ -167,6 +210,8 @@ export const CameraScreen: React.FC = () => {
   const [feedbackFeed, setFeedbackFeed] = useState<FeedbackFeedItem[]>([]);
   const feedbackIdRef = useRef(0);
   const [exerciseDebug, setExerciseDebug] = useState<Record<string, unknown> | null>(null);
+  const [profileDebug, setProfileDebug] = useState<Record<string, unknown> | null>(null);
+  const profileDebugSetRef = useRef(false);
   const currentTrainer = useMemo(
     () => TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ?? TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID)!,
     [selectedTrainerId]
@@ -197,6 +242,11 @@ export const CameraScreen: React.FC = () => {
   const exerciseStateRef = useRef<ExerciseState | null>(null);
   const mediaPipeAdapterRef = useRef(createMediaPipeAdapter());
   const visionAdapterRef = useRef(createVisionAdapter());
+  const profileSessionRef = useRef(new ProfileSession({
+    warn: (message) => {
+      if (__DEV__) console.warn(message);
+    },
+  }));
   const latestMediaPipeFrameRef = useRef<SkeletonFrame | null>(null);
   const lastVisionTelemetryLogRef = useRef(0);
 
@@ -346,6 +396,9 @@ export const CameraScreen: React.FC = () => {
   // Clear debug info and initialize exercise state when route exercise changes
   useEffect(() => {
     setExerciseDebug(null);
+    setProfileDebug(null);
+    profileDebugSetRef.current = false;
+    profileSessionRef.current.reset();
     angleBufferRef.current = {};
     setVarianceStats(null);
     lastTTSFeedbackTimestampRef.current = null;
@@ -506,6 +559,26 @@ export const CameraScreen: React.FC = () => {
     const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (exerciseDef && exerciseStateRef.current) {
       const skeletonFrame = mediaPipeAdapterRef.current.update(keypoints, now);
+      const profile = profileSessionRef.current.update(skeletonFrame, isProfileFrameStable(skeletonFrame));
+      if (__DEV__ && profile) {
+        if (!profileSessionRef.current.hasLoggedProfile) {
+          profileSessionRef.current.markLogged(profile);
+          console.log('[AnthropometricProfile]', {
+            sampleFrameCount: profile.sampleFrameCount,
+            confidence: profile.confidence,
+            segments: profile.segments,
+            derived: profile.derived,
+          });
+        }
+        if (debugModeRef.current && !profileDebugSetRef.current) {
+          const nextProfileDebug = formatProfileDebug(profile);
+          setProfileDebug(nextProfileDebug);
+          profileDebugSetRef.current = true;
+          if (skeletonFrame.profile !== profile) {
+            console.warn('[AnthropometricProfile] Runtime invariant failed: frame.profile is not sealed profile');
+          }
+        }
+      }
       latestMediaPipeFrameRef.current = skeletonFrame;
       const newState = exerciseDef.update(keypoints, exerciseStateRef.current, skeletonFrame);
       exerciseStateRef.current = newState;
@@ -674,6 +747,9 @@ export const CameraScreen: React.FC = () => {
 
       setIsRecording(false);
       setExerciseDebug(null);
+      setProfileDebug(null);
+      profileDebugSetRef.current = false;
+      profileSessionRef.current.reset();
 
       // Save landmark recording when debug mode was on
       if (isRecordingLandmarksRef.current || landmarkBufferRef.current.length > 0) {
@@ -820,6 +896,9 @@ export const CameraScreen: React.FC = () => {
       setIsPaused(false);
       setFeedbackFeed([]);
       setExerciseDebug(null);
+      setProfileDebug(null);
+      profileDebugSetRef.current = false;
+      profileSessionRef.current.reset();
       // Reset exercise state via registry
       const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
       if (exerciseDef) {
@@ -1227,6 +1306,23 @@ export const CameraScreen: React.FC = () => {
                   );
                 })}
                 <Text style={styles.torsoDebugHint}>σ &lt;1.5° good | 1.5–3° ok | &gt;3° noisy</Text>
+              </View>
+            </View>
+          );
+        })()}
+
+        {debugMode && profileDebug && (() => {
+          const p = profileDebug as any;
+          return (
+            <View style={[styles.profileDebugContainer, { bottom: controlStripApproxHeight + 185 }]}>
+              <View style={styles.torsoDebugCard}>
+                <Text style={styles.torsoDebugTitle}>Profile · {p.sampleFrameCount ?? '–'}f · c {p.confidence != null ? p.confidence.toFixed(2) : '–'}</Text>
+                <Text style={styles.torsoDebugText}>
+                  H {p.standingHeight != null ? p.standingHeight.toFixed(2) + 'm' : '–'} · F {p.femur != null ? p.femur.toFixed(2) + 'm' : '–'} · T {p.tibia != null ? p.tibia.toFixed(2) + 'm' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Torso {p.torso != null ? p.torso.toFixed(2) + 'm' : '–'} · F:T {p.femurToTibia != null ? p.femurToTibia.toFixed(2) : '–'}
+                </Text>
               </View>
             </View>
           );
@@ -1931,6 +2027,12 @@ const styles = StyleSheet.create({
     bottom: SPACING.lg + 80,
     maxWidth: '50%',
     zIndex: 11,
+  },
+  profileDebugContainer: {
+    position: 'absolute',
+    left: SPACING.screenHorizontal,
+    maxWidth: '62%',
+    zIndex: 12,
   },
   torsoDebugContainer: {
     position: 'absolute',

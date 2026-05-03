@@ -30,6 +30,10 @@ function registerExercise(definition: ExerciseDefinition): void {
   const normalizedDefinition: ExerciseDefinition = {
     ...definition,
     feedbackToIssueId: getFeedbackIssueIdMap(definition),
+    update: (keypoints, state, skeletonFrame) => {
+      const nextState = definition.update(keypoints, state, skeletonFrame);
+      return skeletonFrame ? { ...nextState, profile: skeletonFrame.profile } : nextState;
+    },
   };
 
   ExerciseRegistry.register(normalizedDefinition);
