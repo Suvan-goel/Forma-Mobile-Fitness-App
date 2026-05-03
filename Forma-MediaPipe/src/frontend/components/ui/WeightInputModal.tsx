@@ -7,9 +7,12 @@ import {
   StyleSheet,
   TextInput,
   Keyboard,
+  KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Video, Download, Check, Dumbbell } from 'lucide-react-native';
 import {
   COLORS,
@@ -50,6 +53,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
   initialSaveToCameraRoll = false,
   onSaveRecording,
 }) => {
+  const insets = useSafeAreaInsets();
   const [weight, setWeight] = useState('');
   const [unit, setUnit] = useState<'kg' | 'lbs'>(initialUnit);
   const [saveToLibrary, setSaveToLibrary] = useState(true);
@@ -133,19 +137,24 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
         hasRecording ? handleSubmit() : handleSkip();
       }}
     >
-      <TouchableOpacity
+      <KeyboardAvoidingView
         style={[styles.backdrop, !isModalReady && styles.backdropHidden]}
-        activeOpacity={1}
-        onPress={() => {
-          Keyboard.dismiss();
-          hasRecording ? handleSubmit() : handleSkip();
-        }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <TouchableOpacity
-          style={styles.cardOuter}
-          activeOpacity={1}
-          onPress={() => {}}
+        <ScrollView
+          style={styles.modalScroll}
+          contentContainerStyle={[
+            styles.modalScrollContent,
+            {
+              paddingTop: insets.top + 24,
+              paddingBottom: insets.bottom + 32,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentInsetAdjustmentBehavior="automatic"
         >
+          <View style={styles.cardOuter}>
           <LinearGradient
             colors={CARD_GRADIENT_COLORS as any}
             start={CARD_GRADIENT_START}
@@ -315,8 +324,9 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
             </View>
             </View>
           </LinearGradient>
-        </TouchableOpacity>
-      </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -325,12 +335,20 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.76)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal + 4,
   },
   backdropHidden: {
     opacity: 0,
+  },
+  modalScroll: {
+    flex: 1,
+    width: '100%',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.screenHorizontal + 4,
+    paddingVertical: 42,
   },
   cardOuter: {
     width: '100%',

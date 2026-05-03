@@ -32,7 +32,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_VERTICAL_GAP, getScoreColor,
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_RADIUS_LG, CARD_VERTICAL_GAP, getScoreColor,
   SCREEN_GRADIENT_COLORS, SCREEN_GRADIENT_START, SCREEN_GRADIENT_END,
   CARD_SHADOW
 } from '../constants/theme';
@@ -184,16 +184,53 @@ const ManualSetModal = React.memo(({
   onClose,
   onSubmit,
 }: ManualSetModalProps) => {
+  const modalInsets = useSafeAreaInsets();
   const [repsInput, setRepsInput] = useState('');
   const [weightInput, setWeightInput] = useState('');
   const [unit, setUnit] = useState<'kg' | 'lbs'>(initialUnit);
+  const [isModalReady, setIsModalReady] = useState(false);
+  const repsInputRef = useRef<TextInput>(null);
+  const revealFrameRef = useRef<number | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setIsModalReady(false);
+      if (revealFrameRef.current !== null) {
+        cancelAnimationFrame(revealFrameRef.current);
+        revealFrameRef.current = null;
+      }
+      if (focusTimerRef.current) {
+        clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = null;
+      }
+      return;
+    }
+
     setRepsInput(initialReps ? String(initialReps) : '');
     setWeightInput(initialWeight && initialWeight > 0 ? String(initialWeight) : '');
     setUnit(initialUnit);
   }, [visible, initialReps, initialWeight, initialUnit]);
+
+  useEffect(() => {
+    return () => {
+      if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
+  }, []);
+
+  const handleModalShow = useCallback(() => {
+    if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+
+    revealFrameRef.current = requestAnimationFrame(() => {
+      revealFrameRef.current = null;
+      setIsModalReady(true);
+      focusTimerRef.current = setTimeout(() => {
+        repsInputRef.current?.focus();
+      }, Platform.OS === 'ios' ? 80 : 120);
+    });
+  }, []);
 
   const reps = Number.parseInt(repsInput, 10);
   const weight = weightInput.trim().length > 0 ? Number.parseFloat(weightInput) : 0;
@@ -213,18 +250,31 @@ const ManualSetModal = React.memo(({
       visible={visible}
       transparent
       animationType="fade"
+      onShow={handleModalShow}
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        style={styles.manualModalBackdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.manualModalBackdrop, !isModalReady && styles.manualModalBackdropHidden]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <TouchableOpacity style={styles.manualModalBackdropPressable} activeOpacity={1} onPress={onClose}>
-          <TouchableOpacity style={styles.manualModalCardOuter} activeOpacity={1} onPress={() => {}}>
+        <ScrollView
+          style={styles.manualModalScroll}
+          contentContainerStyle={[
+            styles.manualModalScrollContent,
+            {
+              paddingTop: modalInsets.top + 24,
+              paddingBottom: modalInsets.bottom + 32,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentInsetAdjustmentBehavior="automatic"
+        >
+          <View style={styles.manualModalCardOuter}>
             <LinearGradient
-              colors={SCREEN_GRADIENT_COLORS as any}
-              start={SCREEN_GRADIENT_START}
-              end={SCREEN_GRADIENT_END}
+              colors={CARD_GRADIENT_COLORS as any}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
               style={styles.manualModalGradient}
             >
               <View style={styles.manualModalEdge}>
@@ -247,79 +297,90 @@ const ManualSetModal = React.memo(({
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.manualInfoRow}>
-                  <FileText size={13} color={COLORS.accent} strokeWidth={1.7} />
-                  <Text style={styles.manualInfoText}>
-                    Tracks reps and weight only. No form feedback or recording will be attached.
-                  </Text>
-                </View>
-
-                <View style={styles.manualInputsRow}>
-                  <View style={styles.manualInputGroup}>
-                    <Text style={styles.manualInputLabel}>REPS</Text>
-                    <TextInput
-                      style={styles.manualInput}
-                      value={repsInput}
-                      onChangeText={(value) => setRepsInput(value.replace(/[^0-9]/g, ''))}
-                      keyboardType="number-pad"
-                      returnKeyType="next"
-                      placeholder="0"
-                      placeholderTextColor="rgba(255, 255, 255, 0.22)"
-                      autoFocus
-                      selectTextOnFocus
-                    />
+                <View style={styles.manualModalBody}>
+                  <View style={styles.manualInfoRow}>
+                    <View style={styles.manualInfoIcon}>
+                      <FileText size={13} color={COLORS.accent} strokeWidth={1.7} />
+                    </View>
+                    <Text style={styles.manualInfoText}>
+                      Tracks reps and weight only. No form feedback or recording will be attached.
+                    </Text>
                   </View>
-                  <View style={styles.manualInputGroup}>
-                    <Text style={styles.manualInputLabel}>WEIGHT</Text>
-                    <View style={styles.manualWeightInputWrap}>
+
+                  <View style={styles.manualInputsRow}>
+                    <View style={styles.manualInputGroup}>
+                      <Text style={styles.manualInputLabel}>REPS</Text>
                       <TextInput
-                        style={[styles.manualInput, styles.manualWeightInput]}
-                        value={weightInput}
-                        onChangeText={(value) => setWeightInput(cleanDecimalInput(value))}
-                        keyboardType="decimal-pad"
-                        returnKeyType="done"
-                        onSubmitEditing={handleSubmit}
+                        ref={repsInputRef}
+                        style={styles.manualInput}
+                        value={repsInput}
+                        onChangeText={(value) => setRepsInput(value.replace(/[^0-9]/g, ''))}
+                        keyboardType="number-pad"
+                        returnKeyType="next"
                         placeholder="0"
                         placeholderTextColor="rgba(255, 255, 255, 0.22)"
                         selectTextOnFocus
                       />
-                      <Text style={styles.manualWeightUnit}>{unit}</Text>
+                    </View>
+                    <View style={styles.manualInputGroup}>
+                      <Text style={styles.manualInputLabel}>WEIGHT</Text>
+                      <View style={styles.manualWeightInputWrap}>
+                        <TextInput
+                          style={[styles.manualInput, styles.manualWeightInput]}
+                          value={weightInput}
+                          onChangeText={(value) => setWeightInput(cleanDecimalInput(value))}
+                          keyboardType="decimal-pad"
+                          returnKeyType="done"
+                          onSubmitEditing={handleSubmit}
+                          placeholder="0"
+                          placeholderTextColor="rgba(255, 255, 255, 0.22)"
+                          selectTextOnFocus
+                        />
+                        <Text style={styles.manualWeightUnit}>{unit}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
 
-                <View style={styles.manualUnitRow}>
+                  <View style={styles.manualUnitRow}>
+                    <TouchableOpacity
+                      style={[styles.manualUnitButton, unit === 'kg' && styles.manualUnitButtonActive]}
+                      onPress={() => setUnit('kg')}
+                      activeOpacity={0.72}
+                    >
+                      <Text style={[styles.manualUnitText, unit === 'kg' && styles.manualUnitTextActive]}>kg</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.manualUnitButton, unit === 'lbs' && styles.manualUnitButtonActive]}
+                      onPress={() => setUnit('lbs')}
+                      activeOpacity={0.72}
+                    >
+                      <Text style={[styles.manualUnitText, unit === 'lbs' && styles.manualUnitTextActive]}>lbs</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <TouchableOpacity
-                    style={[styles.manualUnitButton, unit === 'kg' && styles.manualUnitButtonActive]}
-                    onPress={() => setUnit('kg')}
-                    activeOpacity={0.72}
+                    style={[styles.manualSubmitButton, !canSubmit && styles.manualSubmitButtonDisabled]}
+                    onPress={handleSubmit}
+                    disabled={!canSubmit}
+                    activeOpacity={0.82}
+                    accessibilityRole="button"
+                    accessibilityLabel={submitLabel}
                   >
-                    <Text style={[styles.manualUnitText, unit === 'kg' && styles.manualUnitTextActive]}>kg</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.manualUnitButton, unit === 'lbs' && styles.manualUnitButtonActive]}
-                    onPress={() => setUnit('lbs')}
-                    activeOpacity={0.72}
-                  >
-                    <Text style={[styles.manualUnitText, unit === 'lbs' && styles.manualUnitTextActive]}>lbs</Text>
+                    <LinearGradient
+                      colors={[COLORS.primary, COLORS.primaryDark]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.manualSubmitGradient}
+                    >
+                      <Check size={16} color={COLORS.text} strokeWidth={2.4} />
+                      <Text style={styles.manualSubmitText}>{submitLabel}</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity
-                  style={[styles.manualSubmitButton, !canSubmit && styles.manualSubmitButtonDisabled]}
-                  onPress={handleSubmit}
-                  disabled={!canSubmit}
-                  activeOpacity={0.82}
-                  accessibilityRole="button"
-                  accessibilityLabel={submitLabel}
-                >
-                  <Check size={16} color={COLORS.text} strokeWidth={2.4} />
-                  <Text style={styles.manualSubmitText}>{submitLabel}</Text>
-                </TouchableOpacity>
               </View>
             </LinearGradient>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -1479,158 +1540,218 @@ const styles = StyleSheet.create({
   /* ── Manual Set Modal ───────────────────── */
   manualModalBackdrop: {
     flex: 1,
-    justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.72)',
   },
-  manualModalBackdropPressable: {
+  manualModalBackdropHidden: {
+    opacity: 0,
+  },
+  manualModalScroll: {
     flex: 1,
+    width: '100%',
+  },
+  manualModalScrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
+    paddingVertical: 42,
   },
   manualModalCardOuter: {
-    borderRadius: CARD_RADIUS,
+    width: '100%',
+    maxWidth: 388,
+    borderRadius: CARD_RADIUS_LG,
     ...CARD_SHADOW,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 18 },
+        shadowOpacity: 0.32,
+        shadowRadius: 26,
+      },
+      android: { elevation: 8 },
+    }),
   },
   manualModalGradient: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: CARD_RADIUS_LG,
     overflow: 'hidden',
   },
   manualModalEdge: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.11)',
-    padding: 18,
-    gap: 16,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    overflow: 'hidden',
   },
   manualModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.045)',
     gap: 16,
   },
+  manualModalBody: {
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    paddingBottom: 22,
+    gap: 15,
+  },
   manualModalTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 18,
-    lineHeight: 23,
+    fontFamily: FONTS.display.bold,
+    fontSize: 22,
+    lineHeight: 27,
     color: COLORS.text,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   manualModalSubtitle: {
-    marginTop: 3,
+    marginTop: 4,
     fontFamily: FONTS.ui.regular,
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
     color: COLORS.textSecondary,
   },
   manualModalClose: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   manualInfoRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 9,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: 'rgba(122, 85, 255, 0.08)',
+    alignItems: 'center',
+    gap: 11,
+    minHeight: 74,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: 'rgba(122, 85, 255, 0.075)',
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.16)',
+    borderColor: 'rgba(122, 85, 255, 0.20)',
+  },
+  manualInfoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(122, 85, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   manualInfoText: {
     flex: 1,
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
     color: COLORS.textSecondary,
   },
   manualInputsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   manualInputGroup: {
     flex: 1,
-    gap: 7,
+    minHeight: 88,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: 'rgba(122, 85, 255, 0.075)',
+    borderWidth: 1,
+    borderColor: 'rgba(122, 85, 255, 0.20)',
+    gap: 8,
   },
   manualInputLabel: {
     fontFamily: FONTS.display.semibold,
     fontSize: 10,
     color: COLORS.textSecondary,
-    letterSpacing: 0.8,
+    letterSpacing: 1.2,
   },
   manualInput: {
-    minHeight: 58,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontFamily: FONTS.mono.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    flex: 1,
+    minHeight: 40,
+    padding: 0,
+    fontFamily: FONTS.display.bold,
+    fontSize: 34,
+    lineHeight: 42,
+    color: COLORS.accent,
+    letterSpacing: 0,
   },
   manualWeightInputWrap: {
-    position: 'relative',
-    justifyContent: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
   },
   manualWeightInput: {
-    paddingRight: 48,
+    minWidth: 0,
   },
   manualWeightUnit: {
-    position: 'absolute',
-    right: 14,
+    minWidth: 28,
+    paddingBottom: 5,
     fontFamily: FONTS.display.semibold,
-    fontSize: 12,
-    color: COLORS.textTertiary,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: 'right',
   },
   manualUnitRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   manualUnitButton: {
     flex: 1,
-    height: 38,
-    borderRadius: 9,
+    minHeight: 52,
+    borderRadius: CARD_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.065)',
   },
   manualUnitButtonActive: {
-    backgroundColor: 'rgba(122, 85, 255, 0.16)',
-    borderColor: 'rgba(122, 85, 255, 0.34)',
+    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    borderColor: 'rgba(122, 85, 255, 0.42)',
   },
   manualUnitText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.textSecondary,
+    fontSize: 16,
+    lineHeight: 20,
+    color: COLORS.textTertiary,
   },
   manualUnitTextActive: {
     color: COLORS.accent,
   },
   manualSubmitButton: {
-    minHeight: 48,
-    borderRadius: 11,
+    minHeight: 56,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  manualSubmitGradient: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: CARD_RADIUS,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   manualSubmitButtonDisabled: {
     opacity: 0.45,
   },
   manualSubmitText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.text,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
   },
 
   /* ── Bottom Panel ─────────────────────── */
