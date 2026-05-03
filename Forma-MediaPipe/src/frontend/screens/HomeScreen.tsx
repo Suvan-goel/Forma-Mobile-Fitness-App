@@ -52,12 +52,14 @@ import { useScroll } from '../contexts/ScrollContext';
 import { useHomeData } from '../../backend/hooks/useHomeData';
 import { useUser } from '../../backend/hooks/useUser';
 import { ErrorState } from '../components/ui/ErrorState';
+import { AppHeader } from '../components/ui/AppHeader';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import type { RootStackParamList } from '../app/RootNavigator';
 import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 const RING_SIZE = 78;
 const RING_STROKE = 7;
+const formaHeaderMark = require('../assets/forma_f_mark.png');
 
 const ScoreRing: React.FC<{
   score: number;
@@ -269,21 +271,31 @@ export const HomeScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── HEADER: FORMA wordmark + settings ─────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <Text style={styles.brand}>FORMA</Text>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => navigation.navigate('Settings')}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <SettingsIcon
-            size={20}
-            color={COLORS.textSecondary}
-            strokeWidth={1.6}
+      <AppHeader
+        title="ORMA"
+        topInset={insets.top}
+        titlePrefix={
+          <Image
+            source={formaHeaderMark}
+            resizeMode="contain"
+            style={styles.homeHeaderMark}
           />
-        </TouchableOpacity>
-      </View>
+        }
+        rightSlot={
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Settings')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <SettingsIcon
+              size={20}
+              color={COLORS.textSecondary}
+              strokeWidth={1.6}
+            />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -628,27 +640,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
   },
-
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 12,
-  },
-  brand: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: 4,
-  },
   iconBtn: {
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  homeHeaderMark: {
+    width: 28,
+    height: 28,
+    transform: [{ translateY: 2 }],
   },
 
   /* Greeting */

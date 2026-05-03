@@ -28,6 +28,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
+import { AppHeader } from '../components/ui/AppHeader';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_RADIUS_SM, CARD_VERTICAL_GAP, getScoreColor ,
   CARD_SHADOW
 } from '../constants/theme';
@@ -800,19 +801,22 @@ export const LogbookScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── LOGBOOK HEADER ─────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 5 }]}>
-        <Text style={styles.headerName}>LOGBOOK</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Settings')}
-            activeOpacity={0.7}
-            style={styles.headerIconBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader
+        title="LOGBOOK"
+        topInset={insets.top}
+        rightSlot={
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Settings')}
+              activeOpacity={0.7}
+              style={styles.headerIconBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {/* Calendar Modal */}
@@ -958,29 +962,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.screenHorizontal,
     justifyContent: 'center',
-  },
-
-  /* ── Header ────────────── */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 5,
-    paddingBottom: 10,
-  },
-  headerSubtitleText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    letterSpacing: 0,
-    marginTop: 1,
-  },
-  headerName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: 4,
   },
   headerActions: {
     flexDirection: 'row',

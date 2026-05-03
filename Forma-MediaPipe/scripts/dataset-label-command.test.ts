@@ -5,6 +5,7 @@ import * as path from 'path';
 import {
   assertCanWriteFile,
   assertFileExists,
+  datasetSplitFolder,
   deriveDatasetOutputPaths,
   parseDraftLabelCommandArgs,
   parsePrepareCommandArgs,
@@ -30,15 +31,27 @@ describe('dataset label commands', () => {
 
   it('derives default output paths from exercise slug and video basename', () => {
     const definition = resolveExerciseDefinition('Barbell Squat');
-    const videoPath = path.join(root, 'videos/barbell-squat/squat_001.mp4');
+    const videoPath = path.join(root, 'videos/training/barbell-squat/squat_001.mp4');
 
-    const paths = deriveDatasetOutputPaths({ definition, video: videoPath, datasetRoot: root });
+    const paths = deriveDatasetOutputPaths({
+      definition,
+      video: videoPath,
+      split: 'train',
+      datasetRoot: root,
+    });
 
     expect(paths.exerciseSlug).toBe('barbell-squat');
-    expect(paths.landmarkPath).toBe(path.join(root, 'landmarks/barbell-squat/squat_001.json'));
-    expect(paths.labelPath).toBe(path.join(root, 'labels/barbell-squat/squat_001.json'));
-    expect(paths.sourceVideo).toBe('videos/barbell-squat/squat_001.mp4');
-    expect(paths.landmarkFile).toBe('landmarks/barbell-squat/squat_001.json');
+    expect(paths.splitFolder).toBe('training');
+    expect(paths.landmarkPath).toBe(path.join(root, 'landmarks/training/barbell-squat/squat_001.json'));
+    expect(paths.labelPath).toBe(path.join(root, 'labels/training/barbell-squat/squat_001.json'));
+    expect(paths.sourceVideo).toBe('videos/training/barbell-squat/squat_001.mp4');
+    expect(paths.landmarkFile).toBe('landmarks/training/barbell-squat/squat_001.json');
+  });
+
+  it('maps dataset split values to readable folder names', () => {
+    expect(datasetSplitFolder('train')).toBe('training');
+    expect(datasetSplitFolder('validation')).toBe('validation');
+    expect(datasetSplitFolder('test')).toBe('testing');
   });
 
   it('refuses existing outputs unless force is enabled', () => {
@@ -79,8 +92,8 @@ describe('dataset label commands', () => {
   });
 
   it('creates a draft label from landmarks and protects it from accidental overwrite', () => {
-    const videoPath = path.join(root, 'videos/barbell-squat/squat_001.mp4');
-    const landmarkPath = path.join(root, 'landmarks/barbell-squat/squat_001.json');
+    const videoPath = path.join(root, 'videos/training/barbell-squat/squat_001.mp4');
+    const landmarkPath = path.join(root, 'landmarks/training/barbell-squat/squat_001.json');
     fs.mkdirSync(path.dirname(videoPath), { recursive: true });
     fs.writeFileSync(videoPath, '');
     writeJson(landmarkPath, {
@@ -104,8 +117,8 @@ describe('dataset label commands', () => {
       reviewStatus: 'draft',
       expectedReps: 0,
       reps: [],
-      sourceVideo: 'videos/barbell-squat/squat_001.mp4',
-      landmarkFile: 'landmarks/barbell-squat/squat_001.json',
+      sourceVideo: 'videos/training/barbell-squat/squat_001.mp4',
+      landmarkFile: 'landmarks/training/barbell-squat/squat_001.json',
     });
 
     expect(() =>

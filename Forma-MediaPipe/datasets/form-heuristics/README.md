@@ -8,14 +8,21 @@ not train model weights.
 
 ## Folder Layout
 
-- `videos/<exercise-slug>/` raw source videos. Ignored by Git.
-- `landmarks/<exercise-slug>/` generated MediaPipe landmark JSON. Ignored by Git.
-- `labels/<exercise-slug>/` reviewed label JSON and `_template.json` files.
+- `videos/<split>/<exercise-slug>/` raw source videos. Ignored by Git.
+- `landmarks/<split>/<exercise-slug>/` generated MediaPipe landmark JSON. Ignored by Git.
+- `labels/<split>/<exercise-slug>/` reviewed label JSON files.
+- `labels/<exercise-slug>/` `_template.json` files.
 - `reports/` generated evaluation/optimisation reports. Ignored by Git.
 - `candidates/` optional local scratch space. Ignored by Git.
 
-Each label folder has a `_template.json` with the exact exercise name and
-copyable issue ids/messages for that exercise.
+Each `labels/<exercise-slug>/` template folder has a `_template.json` with the
+exact exercise name and copyable issue ids/messages for that exercise.
+
+The split folder names are:
+
+- `training` for label split value `"train"`
+- `validation` for label split value `"validation"`
+- `testing` for label split value `"test"`
 
 ## One-Time Setup
 
@@ -32,7 +39,7 @@ Example for Barbell Squat:
 1. Put the video in the matching exercise folder.
 
 ```text
-datasets/form-heuristics/videos/barbell-squat/squat_001.mp4
+datasets/form-heuristics/videos/training/barbell-squat/squat_001.mp4
 ```
 
 2. Generate landmarks and a draft label.
@@ -40,15 +47,15 @@ datasets/form-heuristics/videos/barbell-squat/squat_001.mp4
 ```sh
 npm run dataset:prepare -- \
   --exercise "Barbell Squat" \
-  --video datasets/form-heuristics/videos/barbell-squat/squat_001.mp4 \
+  --video datasets/form-heuristics/videos/training/barbell-squat/squat_001.mp4 \
   --split train
 ```
 
 This writes:
 
 ```text
-datasets/form-heuristics/landmarks/barbell-squat/squat_001.json
-datasets/form-heuristics/labels/barbell-squat/squat_001.json
+datasets/form-heuristics/landmarks/training/barbell-squat/squat_001.json
+datasets/form-heuristics/labels/training/barbell-squat/squat_001.json
 ```
 
 Use `--force` only when you intentionally want to overwrite existing generated
@@ -59,8 +66,8 @@ If landmarks already exist, generate only the draft label:
 ```sh
 npm run dataset:draft-label -- \
   --exercise "Barbell Squat" \
-  --video datasets/form-heuristics/videos/barbell-squat/squat_001.mp4 \
-  --landmarks datasets/form-heuristics/landmarks/barbell-squat/squat_001.json \
+  --video datasets/form-heuristics/videos/training/barbell-squat/squat_001.mp4 \
+  --landmarks datasets/form-heuristics/landmarks/training/barbell-squat/squat_001.json \
   --split train
 ```
 
@@ -109,9 +116,9 @@ compatibility, but new labels should set it explicitly.
 
 Use all three splits for each exercise:
 
-- `train`: used to discover candidate thresholds.
-- `validation`: used to choose the winning config.
-- `test`: held back for final regression checks.
+- `train` labels live under `training/` and are used to discover candidate thresholds.
+- `validation` labels live under `validation/` and are used to choose the winning config.
+- `test` labels live under `testing/` and are held back for final regression checks.
 
 Most videos should be `train`, but keep enough independent `validation` and
 `test` clips for every exercise you want to auto-tune.
@@ -208,8 +215,8 @@ Minimal reviewed label example:
 {
   "schemaVersion": 1,
   "exerciseName": "Barbell Squat",
-  "sourceVideo": "videos/barbell-squat/squat_001.mp4",
-  "landmarkFile": "landmarks/barbell-squat/squat_001.json",
+  "sourceVideo": "videos/training/barbell-squat/squat_001.mp4",
+  "landmarkFile": "landmarks/training/barbell-squat/squat_001.json",
   "split": "train",
   "reviewStatus": "reviewed",
   "expectedReps": 2,

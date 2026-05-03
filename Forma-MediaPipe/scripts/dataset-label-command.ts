@@ -19,6 +19,7 @@ import {
 
 export interface DatasetOutputPaths {
   exerciseSlug: string;
+  splitFolder: string;
   videoPath: string;
   landmarkPath: string;
   labelPath: string;
@@ -93,6 +94,12 @@ function splitArg(args: ParsedArgs): DatasetSplit {
   return value;
 }
 
+export function datasetSplitFolder(split: DatasetSplit): string {
+  if (split === 'train') return 'training';
+  if (split === 'test') return 'testing';
+  return 'validation';
+}
+
 function resolveDatasetRoot(datasetRoot?: string): string {
   return path.resolve(process.cwd(), datasetRoot ?? DATASET_ROOT);
 }
@@ -161,6 +168,7 @@ export function resolveExerciseDefinition(exerciseName: string): ExerciseDefinit
 export function deriveDatasetOutputPaths(args: {
   definition: ExerciseDefinition;
   video: string;
+  split?: DatasetSplit;
   landmarks?: string;
   labelOut?: string;
   datasetRoot?: string;
@@ -168,16 +176,18 @@ export function deriveDatasetOutputPaths(args: {
   const datasetRoot = resolveDatasetRoot(args.datasetRoot);
   const videoPath = resolveUserPath(args.video);
   const exerciseSlug = slugifyExerciseName(args.definition.name);
+  const splitFolder = datasetSplitFolder(args.split ?? 'train');
   const basename = path.basename(videoPath, path.extname(videoPath));
   const landmarkPath = args.landmarks
     ? resolveUserPath(args.landmarks)
-    : path.join(datasetRoot, 'landmarks', exerciseSlug, `${basename}.json`);
+    : path.join(datasetRoot, 'landmarks', splitFolder, exerciseSlug, `${basename}.json`);
   const labelPath = args.labelOut
     ? resolveUserPath(args.labelOut)
-    : path.join(datasetRoot, 'labels', exerciseSlug, `${basename}.json`);
+    : path.join(datasetRoot, 'labels', splitFolder, exerciseSlug, `${basename}.json`);
 
   return {
     exerciseSlug,
+    splitFolder,
     videoPath,
     landmarkPath,
     labelPath,
@@ -205,6 +215,7 @@ export function runDraftLabelCommand(
   const paths = deriveDatasetOutputPaths({
     definition,
     video: options.video,
+    split: options.split,
     landmarks: options.landmarks,
     labelOut: options.labelOut,
     datasetRoot: options.datasetRoot,
@@ -266,6 +277,7 @@ export function runPrepareCommand(options: PrepareDatasetCommandOptions): DraftL
   const paths = deriveDatasetOutputPaths({
     definition,
     video: options.video,
+    split: options.split,
     landmarks: options.landmarksOut,
     labelOut: options.labelOut,
     datasetRoot: options.datasetRoot,

@@ -39,6 +39,7 @@ import { useScroll } from '../contexts/ScrollContext';
 import { useAnalytics } from '../../backend/hooks/useAnalytics';
 import { useExercises } from '../../backend/hooks/useExercises';
 import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences';
+import { AppHeader } from '../components/ui/AppHeader';
 import { ErrorState } from '../components/ui/ErrorState';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { TimeRangeSelector, TIME_RANGE_OPTIONS } from '../components/ui/TimeRangeSelector';
@@ -119,9 +120,7 @@ export const AnalyticsScreen: React.FC = () => {
   if (isLoading || !analytics) {
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-          <Text style={styles.headerTitle}>Progress</Text>
-        </View>
+        <AppHeader title="Progress" topInset={insets.top} />
         <View style={styles.loadingWrap}>
           <LoadingSkeleton variant="card" height={200} style={{ marginBottom: SPACING.md }} />
           <LoadingSkeleton variant="card" height={40} style={{ marginBottom: SPACING.md }} />
@@ -135,9 +134,7 @@ export const AnalyticsScreen: React.FC = () => {
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-          <Text style={styles.headerTitle}>Progress</Text>
-        </View>
+        <AppHeader title="Progress" topInset={insets.top} />
         <View style={styles.errorWrap}>
           <ErrorState message={error} onRetry={() => refetch()} />
         </View>
@@ -206,19 +203,22 @@ export const AnalyticsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* ── HEADER ──────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <Text style={styles.headerTitle}>PROGRESS</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader
+        title="PROGRESS"
+        topInset={insets.top}
+        rightSlot={
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       <View style={styles.tabsWrap}>
         <View style={styles.topTabs}>
@@ -499,21 +499,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
-  },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingTop: 4,
-    paddingBottom: 8,
-  },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: 4,
   },
   headerActions: { flexDirection: 'row', gap: 5 },
   iconBtn: {

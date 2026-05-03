@@ -54,6 +54,7 @@ import {
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
+import { AppHeader } from '../components/ui/AppHeader';
 import { CameraSetupGuide } from './CameraSetupGuide';
 import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
@@ -358,23 +359,26 @@ export const RecordLandingScreen: React.FC = () => {
       style={styles.container}
     >
       {/* ── HEADER ──────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <Text style={styles.headerTitle}>CAPTURE</Text>
-        <View style={styles.headerSide}>
-          <TouchableOpacity
-            onPress={() => rootNavigation.navigate('Settings')}
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <SettingsIcon
-              size={20}
-              color={COLORS.textSecondary}
-              strokeWidth={1.6}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader
+        title="CAPTURE"
+        topInset={insets.top}
+        rightSlot={
+          <View style={styles.headerSide}>
+            <TouchableOpacity
+              onPress={() => rootNavigation.navigate('Settings')}
+              style={styles.iconBtn}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <SettingsIcon
+                size={20}
+                color={COLORS.textSecondary}
+                strokeWidth={1.6}
+              />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       <ScrollView
         style={styles.captureScroll}
@@ -771,22 +775,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 8,
-  },
   headerSide: { alignItems: 'flex-end' },
-  headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: 4,
-  },
   iconBtn: {
     width: 36,
     height: 36,
