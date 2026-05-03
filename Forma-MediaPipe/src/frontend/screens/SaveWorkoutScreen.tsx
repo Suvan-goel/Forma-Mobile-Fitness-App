@@ -580,22 +580,23 @@ const styles = StyleSheet.create({
   },
   completeTitle: {
     fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: 23,
+    lineHeight: 28,
     color: COLORS.text,
     letterSpacing: 0,
     marginTop: 2,
   },
   completeSubtitle: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 13,
-    lineHeight: 17,
+    fontFamily: FONTS.display.medium,
+    fontSize: 14,
+    lineHeight: 19,
     color: COLORS.textSecondary,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.semibold,
+    fontFamily: FONTS.display.bold,
     fontSize: 10,
-    letterSpacing: 1.2,
+    lineHeight: 13,
+    letterSpacing: 0.9,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
@@ -622,7 +623,7 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
   summaryTileValue: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.medium,
     fontSize: 21,
     lineHeight: 25,
     color: COLORS.text,
@@ -657,7 +658,7 @@ const styles = StyleSheet.create({
   },
   bestSetExercise: {
     maxWidth: '100%',
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.medium,
     fontSize: 12,
     lineHeight: 16,
     color: COLORS.textSecondary,
@@ -701,7 +702,7 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 56,
     padding: 0,
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.medium,
     fontSize: 13,
     lineHeight: 20,
     color: COLORS.text,
@@ -748,7 +749,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   settingTitle: {
-    fontFamily: FONTS.display.semibold,
+    fontFamily: FONTS.display.bold,
     fontSize: 13,
     lineHeight: 17,
     color: COLORS.text,
@@ -760,7 +761,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   settingDescription: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.medium,
     fontSize: 12,
     lineHeight: 16,
     color: COLORS.textTertiary,
@@ -777,7 +778,7 @@ const styles = StyleSheet.create({
   },
   statusNoticeText: {
     flex: 1,
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.medium,
     fontSize: 12,
     lineHeight: 17,
     color: COLORS.textSecondary,
@@ -793,7 +794,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveButtonText: {
-    fontFamily: FONTS.display.semibold,
+    fontFamily: FONTS.display.bold,
     fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
@@ -806,7 +807,8 @@ const styles = StyleSheet.create({
   },
   discardText: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 20,
     color: COLORS.textTertiary,
   },
   modalOverlay: {
@@ -836,7 +838,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   modalSubtitle: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.medium,
     fontSize: 13,
     lineHeight: 18,
     color: COLORS.textSecondary,
@@ -877,7 +879,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   privacyOptionHelper: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.medium,
     fontSize: 12,
     lineHeight: 17,
     color: COLORS.textTertiary,
