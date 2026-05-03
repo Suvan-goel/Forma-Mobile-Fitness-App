@@ -41,7 +41,6 @@ import { MonoText } from '../components/typography/MonoText';
 import { useCurrentWorkout, LoggedSet } from '../contexts/CurrentWorkoutContext';
 import { SetNotesModal } from '../components/ui/SetNotesModal';
 import { WeightInputModal } from '../components/ui/WeightInputModal';
-import { RecordingOptionsModal } from '../components/ui/RecordingOptionsModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { cleanupTempRecording } from '../../backend/services/screenRecording';
@@ -161,6 +160,9 @@ type ManualSetModalProps = {
   exerciseName: string;
   setNumber: number;
   initialUnit: 'kg' | 'lbs';
+  initialReps?: number;
+  initialWeight?: number;
+  submitLabel?: string;
   onClose: () => void;
   onSubmit: (values: ManualSetValues) => void;
 };
@@ -176,6 +178,9 @@ const ManualSetModal = React.memo(({
   exerciseName,
   setNumber,
   initialUnit,
+  initialReps,
+  initialWeight,
+  submitLabel = 'Add Manual Set',
   onClose,
   onSubmit,
 }: ManualSetModalProps) => {
@@ -185,10 +190,10 @@ const ManualSetModal = React.memo(({
 
   useEffect(() => {
     if (!visible) return;
-    setRepsInput('');
-    setWeightInput('');
+    setRepsInput(initialReps ? String(initialReps) : '');
+    setWeightInput(initialWeight && initialWeight > 0 ? String(initialWeight) : '');
     setUnit(initialUnit);
-  }, [visible, initialUnit]);
+  }, [visible, initialReps, initialWeight, initialUnit]);
 
   const reps = Number.parseInt(repsInput, 10);
   const weight = weightInput.trim().length > 0 ? Number.parseFloat(weightInput) : 0;
@@ -306,10 +311,10 @@ const ManualSetModal = React.memo(({
                   disabled={!canSubmit}
                   activeOpacity={0.82}
                   accessibilityRole="button"
-                  accessibilityLabel="Add manual set"
+                  accessibilityLabel={submitLabel}
                 >
                   <Check size={16} color={COLORS.text} strokeWidth={2.4} />
-                  <Text style={styles.manualSubmitText}>Add Manual Set</Text>
+                  <Text style={styles.manualSubmitText}>{submitLabel}</Text>
                 </TouchableOpacity>
               </View>
             </LinearGradient>
@@ -343,6 +348,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     addSetToExercise,
     clearSets,
     updateSetWeight,
+    updateManualSet,
     updateSetRecordingFlags,
     removeExercise,
     removeSetFromExercise,
@@ -365,11 +371,6 @@ export const CurrentWorkoutScreen: React.FC = () => {
     currentWeight?: number;
     currentUnit?: 'kg' | 'lbs';
     showRecordingOptions?: boolean;
-  } | null>(null);
-  const [recordingOptionsModal, setRecordingOptionsModal] = useState<{
-    exerciseId: string;
-    exerciseName: string;
-    setIndex: number;
     saveToLibrary: boolean;
     saveToCameraRoll: boolean;
   } | null>(null);
@@ -378,6 +379,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
     exerciseName: string;
     setNumber: number;
     initialUnit: 'kg' | 'lbs';
+    initialReps?: number;
+    initialWeight?: number;
+    setIndex?: number;
+    mode: 'add' | 'edit';
   } | null>(null);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const [restTimerPaused, setRestTimerPaused] = useState(false);
@@ -487,7 +492,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
             setIndex: lastSetIndex,
             currentWeight: lastSet?.weight,
             currentUnit: lastSet?.weightUnit || 'kg',
-            showRecordingOptions: !!showWeightFor.hasRecording,
+            showRecordingOptions: !!showWeightFor.hasRecording || !!lastSet?.tempRecordingUrl,
+            saveToLibrary: lastSet?.saveRecordingToLibrary !== false,
+            saveToCameraRoll: lastSet?.saveToCameraRoll === true,
           });
         }
         navigation.setParams({ showWeightFor: undefined });
@@ -541,11 +548,36 @@ export const CurrentWorkoutScreen: React.FC = () => {
       exerciseName: exercise.name,
       setNumber: exercise.sets.length + 1,
       initialUnit: mostRecentUnit,
+      mode: 'add',
+    });
+  }, []);
+
+  const handleEditManualSet = useCallback((
+    exerciseId: string,
+    exerciseName: string,
+    setIndex: number,
+    set: LoggedSet
+  ) => {
+    setManualSetModal({
+      exerciseId,
+      exerciseName,
+      setNumber: setIndex + 1,
+      initialUnit: set.weightUnit || 'kg',
+      initialReps: set.reps,
+      initialWeight: set.weight,
+      setIndex,
+      mode: 'edit',
     });
   }, []);
 
   const handleManualSetSubmit = useCallback((values: ManualSetValues) => {
     if (!manualSetModal) return;
+    if (manualSetModal.mode === 'edit' && manualSetModal.setIndex != null) {
+      updateManualSet(manualSetModal.exerciseId, manualSetModal.setIndex, values);
+      setManualSetModal(null);
+      return;
+    }
+
     addSetToExercise(manualSetModal.exerciseId, {
       exerciseName: manualSetModal.exerciseName,
       reps: values.reps,
@@ -559,7 +591,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
     setExpandedExerciseIds((prev) => new Set(prev).add(manualSetModal.exerciseId));
     setManualSetModal(null);
     startRestTimer();
-  }, [addSetToExercise, manualSetModal, startRestTimer]);
+  }, [addSetToExercise, manualSetModal, startRestTimer, updateManualSet]);
 
   const handleEndWorkout = useCallback(() => {
     const currentExercises = exercisesRef.current;
@@ -606,7 +638,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
     exerciseName: string,
     setIndex: number,
     currentWeight?: number,
-    currentUnit?: 'kg' | 'lbs'
+    currentUnit?: 'kg' | 'lbs',
+    hasRecording = false,
+    saveToLibrary = true,
+    saveToCameraRoll = false
   ) => {
     setWeightModalData({
       exerciseId,
@@ -614,6 +649,9 @@ export const CurrentWorkoutScreen: React.FC = () => {
       setIndex,
       currentWeight,
       currentUnit: currentUnit || 'kg',
+      showRecordingOptions: hasRecording,
+      saveToLibrary,
+      saveToCameraRoll,
     });
   }, []);
 
@@ -812,13 +850,18 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                 style={[styles.setRow, isCurrentSet && styles.setRowCurrent]}
                                 activeOpacity={0.76}
                                 onPress={() =>
-                                  handleEditWeight(
-                                    exercise.id,
-                                    exercise.name,
-                                    setIndex,
-                                    set.weight,
-                                    set.weightUnit
-                                  )
+                                  isManualSet
+                                    ? handleEditManualSet(exercise.id, exercise.name, setIndex, set)
+                                    : handleEditWeight(
+                                      exercise.id,
+                                      exercise.name,
+                                      setIndex,
+                                      set.weight,
+                                      set.weightUnit,
+                                      !!set.tempRecordingUrl,
+                                      set.saveRecordingToLibrary !== false,
+                                      set.saveToCameraRoll === true
+                                    )
                                 }
                                 onLongPress={() => handleDeleteSet(exercise.id, exercise.name, setIndex)}
                               >
@@ -861,29 +904,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                     <FileText size={13} color={COLORS.accent} strokeWidth={1.8} />
                                   </TouchableOpacity>
                                 )}
-                                {set.tempRecordingUrl ? (
-                                  <TouchableOpacity
-                                    style={styles.setCompactIcon}
-                                    onPress={() =>
-                                      setRecordingOptionsModal({
-                                        exerciseId: exercise.id,
-                                        exerciseName: exercise.name,
-                                        setIndex,
-                                        saveToLibrary: set.saveRecordingToLibrary !== false,
-                                        saveToCameraRoll: set.saveToCameraRoll === true,
-                                      })
-                                    }
-                                    activeOpacity={0.7}
-                                  >
-                                    <Video
-                                      size={12}
-                                      color={set.saveRecordingToLibrary !== false ? COLORS.accent : COLORS.textTertiary}
-                                      strokeWidth={1.5}
-                                    />
-                                  </TouchableOpacity>
-                                ) : (
-                                  <ChevronRight size={13} color={COLORS.textTertiary} strokeWidth={1.5} />
-                                )}
+                                <ChevronRight size={13} color={COLORS.textTertiary} strokeWidth={1.5} />
                               </TouchableOpacity>
                             );
                           })}
@@ -988,6 +1009,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
           exerciseName={weightModalData.exerciseName}
           setNumber={weightModalData.setIndex + 1}
           hasRecording={!!weightModalData.showRecordingOptions}
+          initialSaveToLibrary={weightModalData.saveToLibrary}
+          initialSaveToCameraRoll={weightModalData.saveToCameraRoll}
           onSaveRecording={handleSaveRecordingPrefs}
         />
       )}
@@ -997,28 +1020,13 @@ export const CurrentWorkoutScreen: React.FC = () => {
           exerciseName={manualSetModal.exerciseName}
           setNumber={manualSetModal.setNumber}
           initialUnit={manualSetModal.initialUnit}
+          initialReps={manualSetModal.initialReps}
+          initialWeight={manualSetModal.initialWeight}
+          submitLabel={manualSetModal.mode === 'edit' ? 'Save Manual Set' : 'Add Manual Set'}
           onClose={() => setManualSetModal(null)}
           onSubmit={handleManualSetSubmit}
         />
       )}
-      {recordingOptionsModal && (
-        <RecordingOptionsModal
-          visible={!!recordingOptionsModal}
-          onClose={() => setRecordingOptionsModal(null)}
-          saveToLibrary={recordingOptionsModal.saveToLibrary}
-          saveToCameraRoll={recordingOptionsModal.saveToCameraRoll}
-          onUpdate={(saveToLibrary, saveToCameraRoll) => {
-            updateSetRecordingFlags(recordingOptionsModal.exerciseId, recordingOptionsModal.setIndex, {
-              saveToLibrary,
-              saveToCameraRoll,
-            });
-            setRecordingOptionsModal((prev) => prev ? { ...prev, saveToLibrary, saveToCameraRoll } : null);
-          }}
-          exerciseName={recordingOptionsModal.exerciseName}
-          setNumber={recordingOptionsModal.setIndex + 1}
-        />
-      )}
-
       {/* ── BOTTOM PANEL ── */}
       <View style={[styles.bottomPanel, { paddingBottom: getBottomOverlayPadding(insets.bottom, 12) }]}>
         {/* Add Exercise — Gradient CTA */}
@@ -1326,11 +1334,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.bold,
     fontSize: 11,
     lineHeight: 14,
-  },
-  setCompactIcon: {
-    width: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   setNotesButton: {
     width: 30,

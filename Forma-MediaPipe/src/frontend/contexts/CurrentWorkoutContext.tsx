@@ -51,6 +51,7 @@ type CurrentWorkoutContextValue = {
   addSetToExercise: (exerciseId: string, set: LoggedSet) => void;
   addSet: (set: LoggedSet) => void; // Deprecated but kept for compatibility
   updateSetWeight: (exerciseId: string, setIndex: number, weight: number, unit: 'kg' | 'lbs') => void;
+  updateManualSet: (exerciseId: string, setIndex: number, values: { reps: number; weight?: number; unit: 'kg' | 'lbs' }) => void;
   attachRecordingToSet: (exerciseId: string, setIndex: number, tempUrl: string) => void;
   updateSetRecordingFlags: (exerciseId: string, setIndex: number, flags: { saveToLibrary?: boolean; saveToCameraRoll?: boolean }) => void;
   removeExercise: (exerciseId: string) => void;
@@ -77,6 +78,7 @@ const defaultValue: CurrentWorkoutContextValue = {
   addSetToExercise: () => {},
   addSet: () => {},
   updateSetWeight: () => {},
+  updateManualSet: () => {},
   attachRecordingToSet: () => {},
   updateSetRecordingFlags: () => {},
   removeExercise: () => {},
@@ -148,6 +150,30 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
               ...updatedSets[setIndex],
               weight,
               weightUnit: unit,
+            };
+          }
+          return { ...ex, sets: updatedSets };
+        }
+        return ex;
+      })
+    );
+  }, []);
+
+  const updateManualSet = useCallback((
+    exerciseId: string,
+    setIndex: number,
+    values: { reps: number; weight?: number; unit: 'kg' | 'lbs' }
+  ) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id === exerciseId) {
+          const updatedSets = [...ex.sets];
+          if (updatedSets[setIndex]?.isManual) {
+            updatedSets[setIndex] = {
+              ...updatedSets[setIndex],
+              reps: values.reps,
+              weight: values.weight,
+              weightUnit: values.unit,
             };
           }
           return { ...ex, sets: updatedSets };
@@ -284,6 +310,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     addSetToExercise,
     addSet,
     updateSetWeight,
+    updateManualSet,
     attachRecordingToSet,
     updateSetRecordingFlags,
     removeExercise,
@@ -297,7 +324,7 @@ export const CurrentWorkoutProvider: React.FC<{ children: React.ReactNode }> = (
     endRecordingFinalization,
   }), [
     exercises, sets, workoutInProgress, workoutElapsedSeconds, workoutPaused, pendingRecording, recordingFinalizationCount,
-    addExercise, addSetToExercise, addSet, updateSetWeight, attachRecordingToSet,
+    addExercise, addSetToExercise, addSet, updateSetWeight, updateManualSet, attachRecordingToSet,
     updateSetRecordingFlags, removeExercise, removeSetFromExercise, clearSets, beginRecordingFinalization, endRecordingFinalization,
   ]);
 

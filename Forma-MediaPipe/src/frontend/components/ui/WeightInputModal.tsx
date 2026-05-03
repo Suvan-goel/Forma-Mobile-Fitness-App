@@ -32,6 +32,8 @@ interface WeightInputModalProps {
   exerciseName?: string;
   setNumber?: number;
   hasRecording?: boolean;
+  initialSaveToLibrary?: boolean;
+  initialSaveToCameraRoll?: boolean;
   onSaveRecording?: (saveToLibrary: boolean, saveToCameraRoll: boolean) => void;
 }
 
@@ -44,6 +46,8 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
   exerciseName,
   setNumber,
   hasRecording,
+  initialSaveToLibrary = true,
+  initialSaveToCameraRoll = false,
   onSaveRecording,
 }) => {
   const [weight, setWeight] = useState('');
@@ -72,10 +76,10 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
     if (visible) {
       setWeight(initialWeight ? String(initialWeight) : '');
       setUnit(initialUnit);
-      setSaveToLibrary(true);
-      setSaveToCameraRoll(false);
+      setSaveToLibrary(initialSaveToLibrary);
+      setSaveToCameraRoll(initialSaveToCameraRoll);
     }
-  }, [visible, initialWeight, initialUnit]);
+  }, [visible, initialWeight, initialUnit, initialSaveToLibrary, initialSaveToCameraRoll]);
 
   useEffect(() => {
     return () => {
@@ -124,7 +128,10 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
       transparent
       animationType="fade"
       onShow={handleModalShow}
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        Keyboard.dismiss();
+        hasRecording ? handleSubmit() : handleSkip();
+      }}
     >
       <TouchableOpacity
         style={[styles.backdrop, !isModalReady && styles.backdropHidden]}
@@ -150,7 +157,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
                   <Text style={styles.title}>
-                    {hasRecording ? 'Log Set' : (initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Log Weight')}
+                    {initialWeight !== undefined && initialWeight > 0 ? 'Edit Weight' : 'Log Weight'}
                   </Text>
                   {exerciseName && setNumber != null && (
                     <Text style={styles.subtitle}>{exerciseName} · Set {setNumber}</Text>
