@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { workoutsService, WorkoutSession, WorkoutDetails } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { deleteRecordingsForWorkout } from '../services/videoLibrary';
 
 interface UseWorkoutsReturn {
   workouts: WorkoutSession[];
@@ -102,6 +103,13 @@ export const useDeleteWorkout = (): UseDeleteWorkoutReturn => {
     setIsDeleting(true);
     try {
       const response = await workoutsService.delete(id);
+      if (response.success) {
+        try {
+          await deleteRecordingsForWorkout(id);
+        } catch (err) {
+          if (__DEV__) console.warn('[useDeleteWorkout] Failed to delete workout recordings', err);
+        }
+      }
       return response.success;
     } catch {
       return false;

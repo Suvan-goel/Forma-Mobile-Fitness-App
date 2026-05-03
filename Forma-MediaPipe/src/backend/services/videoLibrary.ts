@@ -237,8 +237,6 @@ export async function linkWorkoutId(
  * Delete a recording and its associated files.
  */
 export async function deleteRecording(id: string): Promise<void> {
-  if (!FileSystem) return;
-
   // Remove from index inside the lock; capture file paths for cleanup outside it.
   const filePaths = await withWriteLock(async () => {
     const records = await readRecords();
@@ -254,24 +252,48 @@ export async function deleteRecording(id: string): Promise<void> {
   if (!filePaths) return;
 
   // Delete files outside the lock (best-effort, idempotent)
+  await deleteFileIfExists(filePaths.videoPath);
+  await deleteFileIfExists(filePaths.thumbnailPath);
+}
+
+/**
+ * Delete all recordings linked to a workout and their associated files.
+ */
+export async function deleteRecordingsForWorkout(workoutId: string): Promise<number> {
+  const filePaths = await withWriteLock(async () => {
+    const records = await readRecords();
+    const recordsToDelete = records.filter((r) => r.workoutId === workoutId);
+    if (recordsToDelete.length === 0) return [];
+
+    const updated = records.filter((r) => r.workoutId !== workoutId);
+    await writeRecords(updated);
+
+    return recordsToDelete.map((record) => ({
+      videoPath: record.videoPath,
+      thumbnailPath: record.thumbnailPath,
+    }));
+  });
+
+  await Promise.all(
+    filePaths.flatMap(({ videoPath, thumbnailPath }) => [
+      deleteFileIfExists(videoPath),
+      deleteFileIfExists(thumbnailPath),
+    ])
+  );
+
+  return filePaths.length;
+}
+
+async function deleteFileIfExists(path?: string): Promise<void> {
+  if (!FileSystem || !path) return;
+
   try {
-    const videoInfo = await FileSystem.getInfoAsync(filePaths.videoPath);
-    if (videoInfo.exists) {
-      await FileSystem.deleteAsync(filePaths.videoPath, { idempotent: true });
+    const info = await FileSystem.getInfoAsync(path);
+    if (info.exists) {
+      await FileSystem.deleteAsync(path, { idempotent: true });
     }
   } catch {
     // Best-effort
-  }
-
-  if (filePaths.thumbnailPath) {
-    try {
-      const thumbInfo = await FileSystem.getInfoAsync(filePaths.thumbnailPath);
-      if (thumbInfo.exists) {
-        await FileSystem.deleteAsync(filePaths.thumbnailPath, { idempotent: true });
-      }
-    } catch {
-      // Best-effort
-    }
   }
 }
 
