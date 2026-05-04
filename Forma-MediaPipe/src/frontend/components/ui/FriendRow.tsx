@@ -6,7 +6,7 @@ import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, getScoreColor ,
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, getScoreColor ,
 } from '../../constants/theme';
 import { Friend } from '../../../backend/services/api/types';
 
@@ -33,7 +33,7 @@ export const FriendRow: React.FC<FriendRowProps> = memo(({
       activeOpacity={0.7}
     >
       <LinearGradient
-        colors={isCurrentUser ? ['rgba(122, 85, 255, 0.42)', 'rgba(122, 85, 255, 0.24)'] : [...CARD_GRADIENT_COLORS]}
+        colors={[...CARD_GRADIENT_COLORS]}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
         style={[
@@ -83,19 +83,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   rowTop: {
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
+    borderTopLeftRadius: CARD_RADIUS,
+    borderTopRightRadius: CARD_RADIUS,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.085)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
   },
   rowBottom: {
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 14,
+    borderBottomLeftRadius: CARD_RADIUS,
+    borderBottomRightRadius: CARD_RADIUS,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
     marginBottom: 10,
   },
   rowEdge: {
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
   },
   avatar: {
     width: 34,
@@ -120,8 +120,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   avatarText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
   },
   info: {
@@ -129,8 +129,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   name: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12.5,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13.5,
     color: COLORS.text,
   },
   subtitleRow: {

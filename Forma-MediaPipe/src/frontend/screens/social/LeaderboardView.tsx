@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   timeSegment: {
     flex: 1,
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: '#0E151A',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
     gap: SPACING.md,
   },
   stickyRankBadge: {
@@ -292,8 +292,8 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   stickyName: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 14,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15,
     color: COLORS.text,
     flex: 1,
   },

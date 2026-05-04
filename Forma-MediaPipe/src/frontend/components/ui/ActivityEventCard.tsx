@@ -244,8 +244,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.085)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.10)',
   },
   header: {
     flexDirection: 'row',
@@ -259,15 +259,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   headerText: {
     flex: 1,
     marginLeft: 10,
   },
   name: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 14.5,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 15.5,
     color: COLORS.text,
   },
   timestamp: {
@@ -328,8 +328,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   workoutName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: 0,
   },

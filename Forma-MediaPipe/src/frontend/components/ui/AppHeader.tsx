@@ -10,7 +10,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, PAGE_TITLE_TEXT, SPACING } from '../../constants/theme';
 
 interface AppHeaderProps extends Pick<TextProps, 'adjustsFontSizeToFit' | 'numberOfLines'> {
   title: string;
@@ -54,11 +54,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     <View style={styles.titleRow}>
       {titlePrefix ? <View style={styles.titlePrefix}>{titlePrefix}</View> : null}
       <Text
-        style={[styles.title, titlePrefix ? styles.brandTitle : null, titleStyle]}
+        style={[styles.title, titleStyle]}
         numberOfLines={numberOfLines}
         adjustsFontSizeToFit={adjustsFontSizeToFit}
       >
-        {title}
+        {title.toUpperCase()}
       </Text>
     </View>
 
@@ -94,16 +94,8 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     minWidth: 0,
-    fontFamily: FONTS.display.semibold,
-    fontSize: 20,
-    color: COLORS.text,
-    letterSpacing: 0.2,
+    ...PAGE_TITLE_TEXT,
     textAlign: 'left',
-  },
-  brandTitle: {
-    fontFamily: FONTS.brand.semibold,
-    fontSize: 22,
-    letterSpacing: 4.4,
   },
   rightSlot: {
     minWidth: 28,

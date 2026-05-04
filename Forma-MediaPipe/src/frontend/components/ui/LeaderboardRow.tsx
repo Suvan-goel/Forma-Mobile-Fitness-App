@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   cardEdgeFirst: {
     borderTopWidth: 1,
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 10,
   },
   cardEdgeHighlight: {
-    borderColor: 'rgba(255, 255, 255, 0.075)',
+    borderColor: 'rgba(255, 255, 255, 0.085)',
   },
   rank: {
     fontFamily: FONTS.ui.bold,
@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   avatarText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
   },
   nameContainer: {
@@ -165,12 +165,12 @@ const styles = StyleSheet.create({
     marginLeft: 9,
   },
   name: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
     color: COLORS.text,
   },
   nameHighlight: {
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
   scoreContainer: {
@@ -179,8 +179,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   score: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13,
     color: COLORS.text,
   },
   scoreHighlight: {

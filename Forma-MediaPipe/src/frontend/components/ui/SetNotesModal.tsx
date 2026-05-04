@@ -285,7 +285,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    backgroundColor: COLORS.overlayBackground,
     justifyContent: 'flex-end',
   },
   sheetOuter: {
@@ -309,10 +309,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     borderColor: COLORS.borderStrong,
     overflow: 'hidden',
-    backgroundColor: COLORS.background,
+    backgroundColor: 'rgba(21, 26, 29, 0.98)',
   },
   header: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'rgba(34, 39, 43, 0.86)',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     paddingHorizontal: 11,
     paddingVertical: 10,
     justifyContent: 'space-between',
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   scrollView: {
-    backgroundColor: COLORS.background,
+    backgroundColor: 'rgba(21, 26, 29, 0.98)',
   },
   scrollContent: {
     paddingHorizontal: SPACING.lg,
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'rgba(34, 39, 43, 0.78)',
     overflow: 'hidden',
   },
   repRow: {
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(122, 85, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
     borderColor: 'rgba(122, 85, 255, 0.22)',
     alignItems: 'center',
@@ -480,8 +480,8 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   repTitle: {
-    fontSize: 13,
-    fontFamily: FONTS.display.semibold,
+    fontSize: 14,
+    fontFamily: FONTS.display.regular,
     color: COLORS.text,
     letterSpacing: -0.1,
   },
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'rgba(34, 39, 43, 0.78)',
     padding: SPACING.md,
   },
   summaryText: {
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'rgba(34, 39, 43, 0.78)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,

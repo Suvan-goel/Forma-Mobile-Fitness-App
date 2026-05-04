@@ -748,14 +748,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.105)',
   },
   secondaryButton: {
     borderColor: COLORS.borderStrong,
   },
   ctaText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: '#FFFFFF',
     letterSpacing: 0.1,
   },

@@ -334,7 +334,7 @@ export const WeightInputModal: React.FC<WeightInputModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.76)',
+    backgroundColor: COLORS.overlayBackground,
   },
   backdropHidden: {
     opacity: 0,
@@ -372,8 +372,8 @@ const styles = StyleSheet.create({
   cardGlassEdge: {
     borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     overflow: 'hidden',
   },
   headerRow: {
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -429,9 +429,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 15,
     borderRadius: CARD_RADIUS,
-    backgroundColor: 'rgba(122, 85, 255, 0.075)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.20)',
+    borderColor: 'rgba(255, 255, 255, 0.075)',
     gap: 12,
   },
   weightHeroHeader: {
@@ -443,9 +443,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(122, 85, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
     fontSize: 34,
     lineHeight: 42,
     fontFamily: FONTS.display.bold,
-    color: COLORS.accent,
+    color: COLORS.text,
     letterSpacing: 0,
     padding: 0,
   },
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   recordingSection: {
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
     gap: 11,
   },
   sectionLabelRow: {
@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.115)',
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     minHeight: 62,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     flexDirection: 'row',
     alignItems: 'center',
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.075)',
+    borderColor: 'rgba(255, 255, 255, 0.085)',
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -681,8 +681,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveButtonText: {
-    fontSize: 15.5,
-    fontFamily: FONTS.display.semibold,
+    fontSize: 16.5,
+    fontFamily: FONTS.display.regular,
     color: '#FFFFFF',
   },
 });

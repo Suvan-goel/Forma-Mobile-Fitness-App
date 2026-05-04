@@ -167,8 +167,8 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   avatarText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 19,
+    fontFamily: FONTS.display.medium,
+    fontSize: 20,
     color: COLORS.text,
   },
   avatarTextFirst: {
@@ -196,8 +196,8 @@ const styles = StyleSheet.create({
     color: '#1E2225',
   },
   name: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 11,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
     color: COLORS.text,
     textAlign: 'center',
     marginBottom: 5,
@@ -206,8 +206,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   score: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 18,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 19,
     color: COLORS.text,
     textAlign: 'center',
     marginBottom: 1,

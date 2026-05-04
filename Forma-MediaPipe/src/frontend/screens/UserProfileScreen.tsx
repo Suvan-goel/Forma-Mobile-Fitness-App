@@ -39,6 +39,7 @@ import {
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
+  CARD_RADIUS,
   CARD_VERTICAL_GAP,
 } from '../constants/theme';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
@@ -237,11 +238,16 @@ export const UserProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          <View style={styles.statStrip}>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.statStrip}
+          >
             <StatBlock value={workoutCount || 0} label="Total Workouts" />
             <View style={styles.statDivider} />
             <StatBlock value={avgFormScore || 0} label="Avg Form Score" />
-          </View>
+          </LinearGradient>
 
           <VideoLibraryCard
             countLabel={videoCountLabel}
@@ -556,7 +562,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   displayName: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 26,
     color: COLORS.text,
     letterSpacing: 0,
@@ -568,10 +574,10 @@ const styles = StyleSheet.create({
   },
   statStrip: {
     minHeight: 76,
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
@@ -608,13 +614,14 @@ const styles = StyleSheet.create({
     marginBottom: CARD_VERTICAL_GAP,
   },
   videoLibraryGradient: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
   },
   videoLibraryInner: {
     minHeight: 112,
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -665,8 +672,8 @@ const styles = StyleSheet.create({
   },
   videoLibraryTitle: {
     flex: 1,
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontFamily: FONTS.display.regular,
+    fontSize: 18,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -699,13 +706,14 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   card: {
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     marginBottom: CARD_VERTICAL_GAP,
   },
   cardInner: {
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 14,
   },
   sectionHeader: {
@@ -715,8 +723,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -751,8 +759,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   levelTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
   },
   levelSubtitle: {
@@ -822,8 +830,8 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   achievementTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
   },
   achievementSubtitle: {

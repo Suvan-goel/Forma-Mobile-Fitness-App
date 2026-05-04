@@ -32,7 +32,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_RADIUS_LG, CARD_VERTICAL_GAP, getScoreColor,
+import { COLORS, SPACING, FONTS, PAGE_TITLE_TEXT, CARD_GRADIENT_COLORS, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_RADIUS_LG, CARD_VERTICAL_GAP, getScoreColor,
   SCREEN_GRADIENT_COLORS, SCREEN_GRADIENT_START, SCREEN_GRADIENT_END,
   CARD_SHADOW
 } from '../constants/theme';
@@ -802,7 +802,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Current Workout</Text>
+          <Text style={styles.headerTitle}>CURRENT WORKOUT</Text>
           <View style={styles.headerTimerPill}>
             <WorkoutTimerDisplay
               startTimeRef={startTimeRef}
@@ -1152,15 +1152,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 13,
-    gap: 3,
+    paddingTop: 19,
+    gap: 7,
   },
   headerTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 17,
-    lineHeight: 30,
-    color: COLORS.text,
-    letterSpacing: -0.15,
+    ...PAGE_TITLE_TEXT,
+    fontSize: 15,
+    lineHeight: 18,
+    letterSpacing: 2.4,
   },
   headerTimerPill: {
     minWidth: 92,
@@ -1170,7 +1169,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   timerDisplay: {
     flexDirection: 'row',
@@ -1239,8 +1238,8 @@ const styles = StyleSheet.create({
     minHeight: 88,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 12,
     paddingTop: 13,
     paddingBottom: 15,
@@ -1253,8 +1252,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     lineHeight: 18,
     color: COLORS.text,
     letterSpacing: -0.1,
@@ -1287,8 +1286,8 @@ const styles = StyleSheet.create({
   exerciseCardGlassEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     overflow: 'hidden',
   },
   exerciseCardHeader: {
@@ -1310,8 +1309,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   exerciseCardName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: -0.3,
   },
@@ -1340,7 +1339,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     gap: 9,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
   },
   setRowCurrent: {
     marginHorizontal: 5,
@@ -1438,8 +1437,8 @@ const styles = StyleSheet.create({
     minHeight: 82,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1451,7 +1450,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1461,8 +1460,8 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 4,
-    borderLeftColor: 'rgba(255, 255, 255, 0.08)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.07)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
   },
   restTimerDialText: {
     fontSize: 12,
@@ -1473,8 +1472,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   restTimerTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -1496,7 +1495,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   restTimerPauseButtonActive: {
     backgroundColor: 'rgba(122, 85, 255, 0.18)',
@@ -1516,7 +1515,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
   },
   addSetAction: {
     flex: 1,
@@ -1528,7 +1527,7 @@ const styles = StyleSheet.create({
     gap: 7,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   addSetActionPrimary: {
     backgroundColor: 'rgba(122, 85, 255, 0.10)',
@@ -1544,7 +1543,7 @@ const styles = StyleSheet.create({
   /* ── Manual Set Modal ───────────────────── */
   manualModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    backgroundColor: COLORS.overlayBackground,
   },
   manualModalBackdropHidden: {
     opacity: 0,
@@ -1582,8 +1581,8 @@ const styles = StyleSheet.create({
   manualModalEdge: {
     borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     overflow: 'hidden',
   },
   manualModalHeader: {
@@ -1625,7 +1624,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   manualInfoRow: {
     flexDirection: 'row',
@@ -1635,17 +1634,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderRadius: CARD_RADIUS,
-    backgroundColor: 'rgba(122, 85, 255, 0.075)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.20)',
+    borderColor: 'rgba(255, 255, 255, 0.075)',
   },
   manualInfoIcon: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(122, 85, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1666,9 +1665,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: CARD_RADIUS,
-    backgroundColor: 'rgba(122, 85, 255, 0.075)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.20)',
+    borderColor: 'rgba(255, 255, 255, 0.075)',
     gap: 8,
   },
   manualInputLabel: {
@@ -1684,7 +1683,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display.bold,
     fontSize: 34,
     lineHeight: 42,
-    color: COLORS.accent,
+    color: COLORS.text,
     letterSpacing: 0,
   },
   manualWeightInputWrap: {
@@ -1752,8 +1751,8 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   manualSubmitText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -1815,8 +1814,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   controlFinishLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.2,
   },

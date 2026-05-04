@@ -490,8 +490,8 @@ const styles = StyleSheet.create({
   heroInner: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   displayName: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 23,
     color: COLORS.text,
     letterSpacing: 0,
@@ -608,8 +608,8 @@ const styles = StyleSheet.create({
   groupEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -625,8 +625,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   fieldLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
   },
   fieldHint: {
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   bioCharCount: {
     fontFamily: FONTS.mono.regular,
@@ -720,8 +720,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   saveBtnText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
   },
   saveBtnDisabled: {
@@ -757,8 +757,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   infoLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
   },
   infoValue: {

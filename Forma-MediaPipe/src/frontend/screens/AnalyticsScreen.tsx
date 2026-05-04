@@ -120,7 +120,7 @@ export const AnalyticsScreen: React.FC = () => {
   if (isLoading || !analytics) {
     return (
       <View style={styles.container}>
-        <AppHeader title="Progress" topInset={insets.top} />
+        <AppHeader title="PROGRESS" topInset={insets.top} />
         <View style={styles.loadingWrap}>
           <LoadingSkeleton variant="card" height={200} style={{ marginBottom: SPACING.md }} />
           <LoadingSkeleton variant="card" height={40} style={{ marginBottom: SPACING.md }} />
@@ -134,7 +134,7 @@ export const AnalyticsScreen: React.FC = () => {
   if (error) {
     return (
       <View style={styles.container}>
-        <AppHeader title="Progress" topInset={insets.top} />
+        <AppHeader title="PROGRESS" topInset={insets.top} />
         <View style={styles.errorWrap}>
           <ErrorState message={error} onRetry={() => refetch()} />
         </View>
@@ -535,8 +535,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
     backgroundColor: 'rgba(24, 26, 28, 0.78)',
     padding: 3,
     overflow: 'hidden',
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.04)',
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
   },
   topTabText: {
     fontFamily: FONTS.display.semibold,
@@ -617,8 +617,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: COLORS.border,
+    borderTopColor: COLORS.borderStrong,
     padding: 13,
   },
 
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
   },
   weekdayCircleEmpty: {
     borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
 
   /* Personal Bests */
@@ -693,8 +693,8 @@ const styles = StyleSheet.create({
   },
   pbInfo: { flex: 1, gap: 2 },
   pbName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: -0.1,
   },
@@ -704,8 +704,8 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
   pbWeight: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -729,8 +729,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   bestName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: -0.1,
   },
@@ -739,8 +739,8 @@ const styles = StyleSheet.create({
     minWidth: 58,
   },
   bestValue: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -753,8 +753,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyBestTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
   },
   emptyBestText: {
@@ -792,16 +792,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   leaderInitial: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
   },
   leaderScore: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: -0.3,
   },

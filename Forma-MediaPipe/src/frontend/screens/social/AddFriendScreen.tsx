@@ -19,6 +19,7 @@ import { ChevronLeft, Search, UserPlus, Check, Clock, Heart, X, Users } from 'lu
 import {
   COLORS,
   FONTS,
+  PAGE_TITLE_TEXT,
   SPACING,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
@@ -158,7 +159,7 @@ export const AddFriendScreen: React.FC = memo(() => {
           <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>Add Friends</Text>
+          <Text style={styles.headerTitle}>ADD FRIENDS</Text>
           <Text style={styles.headerSubtitle}>Find people training on Forma</Text>
         </View>
         <View style={{ width: 36 }} />
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -285,10 +286,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 20,
-    color: COLORS.text,
-    letterSpacing: 0,
+    ...PAGE_TITLE_TEXT,
   },
   headerSubtitle: {
     fontFamily: FONTS.ui.regular,
@@ -305,7 +303,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(31, 39, 45, 0.58)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   introIcon: {
     width: 38,
@@ -323,8 +321,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   introTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -352,7 +350,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
   },
   searchInput: {
     flex: 1,
@@ -392,8 +390,8 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
   resultsTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -423,7 +421,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
   },
   avatar: {
     width: 42,
@@ -436,8 +434,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(122, 85, 255, 0.18)',
   },
   avatarText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
   },
   userInfo: {
@@ -446,8 +444,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   userName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -470,7 +468,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   followHeartBtnActive: {
     backgroundColor: 'rgba(244, 114, 182, 0.08)',
@@ -487,8 +485,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addButtonText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -507,7 +505,7 @@ const styles = StyleSheet.create({
   },
   statusBadgeMuted: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   statusText: {
     fontFamily: FONTS.ui.regular,
@@ -522,7 +520,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(31, 39, 45, 0.42)',
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.075)',
+    borderColor: 'rgba(255, 255, 255, 0.085)',
     alignItems: 'center',
     gap: SPACING.sm,
   },
@@ -538,8 +536,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   emptyText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: 0,
   },

@@ -39,10 +39,11 @@ import {
   COLORS,
   SPACING,
   FONTS,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
-  CARD_RADIUS_SM,
+  CARD_VERTICAL_GAP,
   CARD_SHADOW,
   getScoreColor,
 } from '../constants/theme';
@@ -57,13 +58,6 @@ import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 const RING_SIZE = 78;
 const RING_STROKE = 7;
-const HOME_CARD_VERTICAL_GAP = 10;
-const formaHeaderMark = require('../assets/forma_f_mark.png');
-const HOME_CARD_GRADIENT_COLORS: readonly [string, string, string] = [
-  'rgba(34, 39, 43, 0.70)',
-  'rgba(35, 40, 44, 0.70)',
-  'rgba(37, 42, 47, 0.70)',
-];
 
 const ScoreRing: React.FC<{
   score: number;
@@ -276,15 +270,8 @@ export const HomeScreen: React.FC = () => {
     <View style={styles.container}>
       {/* ── HEADER: FORMA wordmark + settings ─────────── */}
       <AppHeader
-        title="ORMA"
+        title="FORMA"
         topInset={insets.top}
-        titlePrefix={
-          <Image
-            source={formaHeaderMark}
-            resizeMode="contain"
-            style={styles.homeHeaderMark}
-          />
-        }
         rightSlot={
           <TouchableOpacity
             style={styles.iconBtn}
@@ -340,7 +327,7 @@ export const HomeScreen: React.FC = () => {
               )}
             </View>
             <View style={styles.greetingTextWrap}>
-              <Text style={styles.greetingHello}>Good day,</Text>
+              <Text style={styles.greetingHello}>Welcome back</Text>
               <Text style={styles.greetingName} numberOfLines={1}>
                 {homeData.displayName}
               </Text>
@@ -405,24 +392,42 @@ export const HomeScreen: React.FC = () => {
           {/* ── QUICK ACTIONS ────────────────────────── */}
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={styles.actionBtn}
+              style={styles.actionBtnOuter}
               activeOpacity={0.7}
               onPress={() => navigateToRecordScreen('WorkoutTemplates')}
             >
-              <BookOpen
-                size={15}
-                color={COLORS.textSecondary}
-                strokeWidth={1.6}
-              />
-              <Text style={styles.actionBtnText}>Choose Template</Text>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_ELEVATED]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.actionBtnGradient}
+              >
+                <View style={styles.actionBtnEdge}>
+                  <BookOpen
+                    size={15}
+                    color={COLORS.textSecondary}
+                    strokeWidth={1.6}
+                  />
+                  <Text style={styles.actionBtnText}>Choose Template</Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.actionBtn}
+              style={styles.actionBtnOuter}
               activeOpacity={0.7}
               onPress={() => navigateToRecordScreen('CreateTemplate')}
             >
-              <Plus size={15} color={COLORS.textSecondary} strokeWidth={2} />
-              <Text style={styles.actionBtnText}>Create New</Text>
+              <LinearGradient
+                colors={[...CARD_GRADIENT_ELEVATED]}
+                start={CARD_GRADIENT_START}
+                end={CARD_GRADIENT_END}
+                style={styles.actionBtnGradient}
+              >
+                <View style={styles.actionBtnEdge}>
+                  <Plus size={15} color={COLORS.textSecondary} strokeWidth={2} />
+                  <Text style={styles.actionBtnText}>Create New</Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
 
@@ -433,7 +438,7 @@ export const HomeScreen: React.FC = () => {
             style={styles.weeklyOuter}
           >
             <LinearGradient
-              colors={[...HOME_CARD_GRADIENT_COLORS]}
+              colors={[...CARD_GRADIENT_ELEVATED]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.weeklyGradient}
@@ -473,7 +478,7 @@ export const HomeScreen: React.FC = () => {
             style={styles.rewardsOuter}
           >
             <LinearGradient
-              colors={[...HOME_CARD_GRADIENT_COLORS]}
+              colors={[...CARD_GRADIENT_ELEVATED]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.rewardsGradient}
@@ -537,7 +542,7 @@ export const HomeScreen: React.FC = () => {
           {homeData.challenges.length > 0 && (
             <View style={styles.challengesOuter}>
               <LinearGradient
-                colors={[...HOME_CARD_GRADIENT_COLORS]}
+                colors={[...CARD_GRADIENT_ELEVATED]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.challengesGradient}
@@ -650,11 +655,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  homeHeaderMark: {
-    width: 28,
-    height: 28,
-    transform: [{ translateY: 2 }],
-  },
 
   /* Greeting */
   greetingRow: {
@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
     borderRadius: 34,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   avatarImage: {
     width: '100%',
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 26,
     color: '#FFFFFF',
   },
@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
   greetingName: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 22,
     color: COLORS.text,
     letterSpacing: -0.4,
@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
 
   /* Form Snapshot */
   readinessOuter: {
-    marginBottom: HOME_CARD_VERTICAL_GAP,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   readinessEdge: {
     padding: 16,
@@ -768,8 +768,8 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   startBtnText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
@@ -778,20 +778,28 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: HOME_CARD_VERTICAL_GAP,
+    marginBottom: CARD_VERTICAL_GAP,
   },
-  actionBtn: {
+  actionBtnOuter: {
     flex: 1,
+    borderRadius: CARD_RADIUS,
+    ...CARD_SHADOW,
+  },
+  actionBtnGradient: {
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  actionBtnEdge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 13,
-    borderRadius: CARD_RADIUS_SM,
+    minHeight: 58,
+    paddingVertical: 16,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    borderTopColor: 'rgba(255, 255, 255, 0.055)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
   },
   actionBtnText: {
     fontFamily: FONTS.ui.regular,
@@ -802,15 +810,15 @@ const styles = StyleSheet.create({
   /* Weekly Target */
   weeklyOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: HOME_CARD_VERTICAL_GAP,
+    marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   weeklyGradient: { borderRadius: CARD_RADIUS, overflow: 'hidden' },
   weeklyEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 16,
     gap: 10,
   },
@@ -820,8 +828,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   weeklyValue: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     marginTop: 4,
     letterSpacing: -0.2,
@@ -841,7 +849,7 @@ const styles = StyleSheet.create({
   /* Next Badge */
   rewardsOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: HOME_CARD_VERTICAL_GAP,
+    marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   rewardsGradient: {
@@ -851,8 +859,8 @@ const styles = StyleSheet.create({
   rewardsEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 16,
     gap: 10,
   },
@@ -867,8 +875,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rewardTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -931,8 +939,8 @@ const styles = StyleSheet.create({
   challengesEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 14,
   },
   challengeCount: {
@@ -955,8 +963,8 @@ const styles = StyleSheet.create({
   },
   challengeTitle: {
     flex: 1,
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: -0.1,
   },

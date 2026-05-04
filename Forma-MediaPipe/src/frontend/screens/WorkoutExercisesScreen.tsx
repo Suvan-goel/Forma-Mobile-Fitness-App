@@ -10,7 +10,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, Video, Lightbulb, Dumbbell, Activity, Move, Award, ChevronLeft } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE } from '../constants/theme';
+import { COLORS, SPACING, FONTS, CARD_STYLE, PAGE_TITLE_TEXT } from '../constants/theme';
 import { RootStackParamList } from '../app/RootNavigator';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
@@ -102,7 +102,7 @@ export const WorkoutExercisesScreen: React.FC = () => {
         {/* Header */}
         <View style={styles.header}>
           <Icon size={32} color={color} />
-          <Text style={styles.headerTitle}>{category}</Text>
+          <Text style={styles.headerTitle}>{category.toUpperCase()}</Text>
         </View>
 
         {/* Supported Exercises Section */}
@@ -187,9 +187,7 @@ const styles = StyleSheet.create({
     paddingRight: SPACING.md,
   },
   headerTitle: {
-    fontSize: 28,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    ...PAGE_TITLE_TEXT,
     flex: 1,
     flexWrap: 'wrap',
   },
@@ -198,7 +196,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.ui.medium,
     color: COLORS.text,
     marginBottom: SPACING.md,
   },
@@ -232,8 +230,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   instructionTitle: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 17,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
   instructionDescription: {
@@ -263,8 +261,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   startButtonText: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 19,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
 });

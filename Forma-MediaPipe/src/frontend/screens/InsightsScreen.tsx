@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Sparkles } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_STYLE ,
+import { COLORS, SPACING, FONTS, PAGE_TITLE_TEXT, CARD_STYLE ,
   CARD_SHADOW
 } from '../constants/theme';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -33,7 +33,7 @@ export const InsightsScreen: React.FC = () => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{metric} Analysis</Text>
+          <Text style={styles.headerTitle}>{`${metric} Analysis`.toUpperCase()}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
@@ -52,7 +52,7 @@ export const InsightsScreen: React.FC = () => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{metric} Analysis</Text>
+          <Text style={styles.headerTitle}>{`${metric} Analysis`.toUpperCase()}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
@@ -69,7 +69,7 @@ export const InsightsScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <ChevronLeft size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{metric} Analysis</Text>
+        <Text style={styles.headerTitle}>{`${metric} Analysis`.toUpperCase()}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -137,9 +137,7 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
   },
   headerTitle: {
-    fontSize: 20,
-    fontFamily: FONTS.ui.bold,
-    color: COLORS.text,
+    ...PAGE_TITLE_TEXT,
   },
   placeholder: {
     width: 24 + SPACING.sm * 2,
@@ -174,7 +172,7 @@ const styles = StyleSheet.create({
   },
   insightsTitle: {
     fontSize: 20,
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.ui.medium,
     color: COLORS.text,
   },
   insightItem: {
@@ -204,8 +202,8 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
 },
   recommendationsTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 19,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
     marginBottom: SPACING.md,
   },

@@ -661,8 +661,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -726,8 +726,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   videoTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -789,8 +789,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   playerCloseText: {
-    fontSize: 15,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 16,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
 });

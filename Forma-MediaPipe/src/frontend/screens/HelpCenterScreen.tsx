@@ -243,9 +243,9 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <LinearGradient
-            colors={['rgba(122, 85, 255, 0.18)', 'rgba(26, 31, 35, 0.92)', 'rgba(17, 22, 26, 0.92)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.heroCard}
           >
             <View style={styles.heroEdge}>
@@ -300,9 +300,9 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
 
           {/* Footer */}
           <LinearGradient
-            colors={['rgba(39, 48, 55, 0.96)', 'rgba(20, 25, 30, 0.96)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.footerCard}
           >
             <View style={styles.footerEdge}>
@@ -347,8 +347,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.075)',
-    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
   },
   heroIconWrap: {
     width: 42,
@@ -399,8 +399,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 14,
   },
   sectionHeader: {
@@ -421,8 +421,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     marginBottom: 2,
   },
@@ -449,8 +449,8 @@ const styles = StyleSheet.create({
   },
   faqQuestionText: {
     flex: 1,
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: 0,
     lineHeight: 20,
@@ -490,8 +490,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.11)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
   },
   footerIconWrap: {
     width: 38,
@@ -507,8 +507,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   footerTitle: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: 0,
     marginBottom: 2,

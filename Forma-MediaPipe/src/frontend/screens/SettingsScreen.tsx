@@ -25,7 +25,7 @@ import {
   COLORS,
   SPACING,
   FONTS,
-  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
@@ -230,7 +230,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             <Text style={styles.sectionLabel}>ACCOUNT</Text>
           </View>
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
+            colors={[...CARD_GRADIENT_ELEVATED]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
@@ -267,7 +267,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             <Text style={styles.sectionLabel}>PREFERENCES</Text>
           </View>
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
+            colors={[...CARD_GRADIENT_ELEVATED]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
@@ -304,7 +304,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             <Text style={styles.sectionLabel}>WORKOUT</Text>
           </View>
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
+            colors={[...CARD_GRADIENT_ELEVATED]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
@@ -369,7 +369,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             <Text style={styles.sectionLabel}>SUPPORT</Text>
           </View>
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
+            colors={[...CARD_GRADIENT_ELEVATED]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.cardGradient}
@@ -491,8 +491,8 @@ const styles = StyleSheet.create({
   groupEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -519,8 +519,8 @@ const styles = StyleSheet.create({
   },
 
   rowLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14.5,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -591,7 +591,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: COLORS.borderStrong,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 22,
     width: '100%',
     maxWidth: 340,

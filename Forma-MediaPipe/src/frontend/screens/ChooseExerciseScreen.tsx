@@ -18,7 +18,7 @@ import { addPendingTemplateExercise } from './CreateTemplateScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Bookmark, Info, Search, X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_VERTICAL_GAP ,
+import { COLORS, SPACING, FONTS, PAGE_TITLE_TEXT, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_VERTICAL_GAP ,
   CARD_SHADOW
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
@@ -422,10 +422,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
-    color: '#FFFFFF',
-    letterSpacing: 2,
+    ...PAGE_TITLE_TEXT,
   },
   headerIconBtn: {
     width: 36,
@@ -539,7 +536,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 8,
   },
   cardHeader: {
@@ -581,8 +578,8 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   cardName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: -0.2,
     marginBottom: 3,

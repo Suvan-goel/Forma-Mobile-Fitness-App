@@ -25,9 +25,9 @@ import {
 } from 'lucide-react-native';
 import {
   CARD_GRADIENT_COLORS,
-  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_END,
   CARD_GRADIENT_START,
+  CARD_RADIUS,
   CARD_VERTICAL_GAP,
   COLORS,
   FONTS,
@@ -143,7 +143,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <LinearGradient
-            colors={[...CARD_GRADIENT_ELEVATED]}
+            colors={[...CARD_GRADIENT_COLORS]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.heroCard}
@@ -175,7 +175,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
                   onPress={() => updateLevel(option.level)}
                 >
                   <LinearGradient
-                    colors={isSelected ? ['rgba(122,85,255,0.24)', 'rgba(122,85,255,0.08)'] : [...CARD_GRADIENT_COLORS]}
+                    colors={[...CARD_GRADIENT_COLORS]}
                     start={CARD_GRADIENT_START}
                     end={CARD_GRADIENT_END}
                     style={styles.optionCard}
@@ -252,7 +252,12 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
 
           <SectionTitle icon={<Trash2 size={14} color={COLORS.red} strokeWidth={1.7} />} title="Account" danger />
           <TouchableOpacity activeOpacity={0.78} onPress={handleDeleteAccount}>
-            <View style={styles.deleteCard}>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.deleteCard}
+            >
               <View style={styles.deleteIcon}>
                 <Trash2 size={18} color={COLORS.red} strokeWidth={1.8} />
               </View>
@@ -261,7 +266,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
                 <Text style={styles.deleteDescription}>Request permanent removal of your account and stored data.</Text>
               </View>
               <ChevronLeft size={16} color="rgba(240,82,82,0.45)" strokeWidth={1.7} style={styles.deleteChevron} />
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
@@ -297,13 +302,14 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   heroCard: {
-    borderRadius: 14,
-    marginBottom: 18,
+    borderRadius: CARD_RADIUS,
+    marginBottom: CARD_VERTICAL_GAP,
   },
   heroInner: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -349,8 +355,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
   },
   sectionTitleDanger: {
@@ -361,13 +367,14 @@ const styles = StyleSheet.create({
     marginBottom: CARD_VERTICAL_GAP,
   },
   optionCard: {
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
   },
   optionInner: {
     minHeight: 84,
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -430,13 +437,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   infoCard: {
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     marginBottom: CARD_VERTICAL_GAP,
   },
   infoInner: {
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
@@ -459,8 +467,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   infoTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
   },
   infoDescription: {
@@ -474,9 +482,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.055)',
   },
   storageInner: {
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 14,
     gap: 12,
   },
@@ -488,10 +497,10 @@ const styles = StyleSheet.create({
   },
   deleteCard: {
     minHeight: 74,
-    borderRadius: 12,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(240,82,82,0.16)',
-    backgroundColor: 'rgba(240,82,82,0.045)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,

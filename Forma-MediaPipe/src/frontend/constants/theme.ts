@@ -6,8 +6,8 @@
 export const COLORS = {
   // Backgrounds — lifted neutral graphite, close to the reference without skewing blue
   background: '#151A1D',
-  cardBackground: '#1A1F23',
-  cardBackgroundLight: '#22282D',
+  cardBackground: 'rgba(34, 39, 43, 0.75)',
+  cardBackgroundLight: 'rgba(37, 42, 47, 0.75)',
 
   // Primary Actions — Forma Violet
   primary: '#7A55FF',
@@ -30,8 +30,8 @@ export const COLORS = {
   textTertiary: '#6B7176',
 
   // UI Elements
-  border: 'rgba(255, 255, 255, 0.07)',
-  borderStrong: 'rgba(255, 255, 255, 0.10)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  borderStrong: 'rgba(255, 255, 255, 0.115)',
   inactive: '#383E43',
 
   // Chart colors
@@ -52,24 +52,29 @@ export const SCREEN_GRADIENT_START = { x: 0.5, y: 0 } as const;
 export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
 /** Glass card surface gradient — matches the homepage card treatment */
-export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#202529', '#21262A', '#22272B'];
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = [
+  'rgba(34, 39, 43, 0.75)',
+  'rgba(37, 42, 47, 0.75)',
+  'rgba(43, 48, 53, 0.75)',
+];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
 
-/** Stronger card gradient for elevated surfaces */
-export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#22272B', '#23282C', '#252A2F'];
+/** Elevated surfaces use the same card treatment for a flatter, unified UI. */
+export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = CARD_GRADIENT_COLORS;
 
 /** Card radius — moderate rounding for compact pro look */
 export const CARD_RADIUS = 14;
 export const CARD_RADIUS_SM = 10;
 export const CARD_RADIUS_LG = 18;
-export const CARD_VERTICAL_GAP = 18;
+export const CARD_VERTICAL_GAP = 10;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: '#1A1F23',
+  backgroundColor: 'rgba(34, 39, 43, 0.75)',
   borderWidth: 1,
   borderColor: 'rgba(255, 255, 255, 0.07)',
+  borderTopColor: 'rgba(255, 255, 255, 0.105)',
   borderRadius: CARD_RADIUS,
 } as const;
 
@@ -110,9 +115,11 @@ export const FONTS = {
   },
   // Display — Geist, close to SF Pro's clean product UI feel
   display: {
+    regular: 'Geist_400Regular',
     medium: 'Geist_500Medium',
     semibold: 'Geist_600SemiBold',
     bold: 'Geist_700Bold',
+    regularFallback: 'System',
     mediumFallback: 'System',
     semiboldFallback: 'System',
     boldFallback: 'System',
@@ -133,4 +140,11 @@ export const FONTS = {
     regularFallback: 'System',
     boldFallback: 'System',
   },
+} as const;
+
+export const PAGE_TITLE_TEXT = {
+  fontFamily: FONTS.brand.semibold,
+  fontSize: 22,
+  letterSpacing: 4.4,
+  color: COLORS.text,
 } as const;

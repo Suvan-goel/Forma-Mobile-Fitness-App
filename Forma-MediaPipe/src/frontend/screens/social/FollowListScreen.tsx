@@ -18,7 +18,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { ChevronLeft, UserPlus, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { COLORS, FONTS, PAGE_TITLE_TEXT, SPACING } from '../../constants/theme';
 import { useFollowing } from '../../../backend/hooks/useFollowing';
 import type { FollowRelation } from '../../../backend/services/api/types';
 import type { RootStackParamList } from '../../app/RootNavigator';
@@ -130,7 +130,7 @@ export const FollowListScreen: React.FC = memo(() => {
         >
           <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{title}</Text>
+        <Text style={styles.headerTitle}>{title.toUpperCase()}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -184,9 +184,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
+    ...PAGE_TITLE_TEXT,
   },
   centerContainer: {
     flex: 1,
@@ -206,7 +204,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   avatar: {
     width: 44,
@@ -226,8 +224,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 17,
+    fontFamily: FONTS.display.regular,
+    fontSize: 18,
     color: COLORS.text,
   },
   userInfo: {
@@ -235,8 +233,8 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.md,
   },
   userName: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 15,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 16,
     color: COLORS.text,
   },
   followBtn: {
@@ -251,11 +249,11 @@ const styles = StyleSheet.create({
   followBtnActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   followBtnText: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 13,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 14,
     color: COLORS.text,
   },
   followBtnTextActive: {
@@ -269,7 +267,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   unfollowBtnText: {
     fontFamily: FONTS.ui.regular,
@@ -289,7 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     marginBottom: SPACING.xs,
   },
   emptyText: {

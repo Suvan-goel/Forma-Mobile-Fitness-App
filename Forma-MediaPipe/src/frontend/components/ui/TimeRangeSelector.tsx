@@ -6,7 +6,16 @@
 import React, { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS } from '../../constants/theme';
+import {
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_END,
+  CARD_GRADIENT_START,
+  CARD_RADIUS,
+  CARD_SHADOW,
+  CARD_VERTICAL_GAP,
+  COLORS,
+  FONTS,
+} from '../../constants/theme';
 
 interface TimeRangeOption {
   label: string;
@@ -56,14 +65,23 @@ export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = memo(({ optio
 
   return (
     <View style={styles.container}>
-      {options.map((opt) => (
-        <Tab
-          key={opt.value}
-          label={opt.label}
-          isActive={selected === opt.value}
-          onPress={() => handleSelect(opt.value)}
-        />
-      ))}
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.gradient}
+      >
+        <View style={styles.edge}>
+          {options.map((opt) => (
+            <Tab
+              key={opt.value}
+              label={opt.label}
+              isActive={selected === opt.value}
+              onPress={() => handleSelect(opt.value)}
+            />
+          ))}
+        </View>
+      </LinearGradient>
     </View>
   );
 });
@@ -72,16 +90,25 @@ export { TIME_RANGE_OPTIONS };
 
 const styles = StyleSheet.create({
   container: {
+    borderRadius: CARD_RADIUS,
+    marginBottom: CARD_VERTICAL_GAP,
+    marginTop: 0,
+    ...CARD_SHADOW,
+  },
+  gradient: {
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  edge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
-    borderRadius: 10,
+    borderColor: COLORS.border,
+    borderTopColor: COLORS.borderStrong,
+    borderRadius: CARD_RADIUS,
     padding: 3,
-    marginBottom: 12,
-    marginTop: 0,
   },
   tab: {
     flex: 1,
@@ -106,8 +133,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tabTextActive: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 10.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 11,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },

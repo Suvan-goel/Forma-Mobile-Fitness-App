@@ -30,6 +30,7 @@ import {
   COLORS,
   SPACING,
   FONTS,
+  PAGE_TITLE_TEXT,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
@@ -408,7 +409,7 @@ export const CreateTemplateScreen: React.FC = () => {
                 strokeWidth={1.7}
               />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Create Template</Text>
+            <Text style={styles.headerTitle}>NEW TEMPLATE</Text>
           </View>
           <TouchableOpacity
             style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
@@ -609,10 +610,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 24,
-    color: COLORS.text,
-    letterSpacing: 0,
+    ...PAGE_TITLE_TEXT,
   },
   saveButton: {
     minHeight: 34,
@@ -623,15 +621,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     paddingHorizontal: 11,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.115)',
   },
   saveButtonDisabled: {
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   saveButtonText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: '#FFFFFF',
     letterSpacing: 0,
   },
@@ -654,7 +652,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.115)',
     padding: 15,
     gap: 14,
   },
@@ -664,8 +662,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: 1.8,
   },
@@ -686,7 +684,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(6, 9, 12, 0.34)',
     borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 14,
     paddingVertical: 11,
     letterSpacing: 0,
@@ -706,7 +704,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     paddingHorizontal: 6,
   },
   summaryItem: {
@@ -744,8 +742,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: 1.8,
   },
@@ -764,7 +762,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     padding: 20,
     gap: 8,
   },
@@ -780,8 +778,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   emptyStateTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontFamily: FONTS.display.regular,
+    fontSize: 18,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -835,8 +833,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -870,8 +868,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   exerciseCardName: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -925,8 +923,8 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   setsCount: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
     textAlign: 'center',
     lineHeight: 18,
@@ -960,8 +958,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addExerciseText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: '#FFFFFF',
     letterSpacing: -0.2,
   },

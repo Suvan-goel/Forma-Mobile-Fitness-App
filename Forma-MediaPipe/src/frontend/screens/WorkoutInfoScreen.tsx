@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.ui.medium,
     color: COLORS.text,
     marginBottom: SPACING.md,
   },
@@ -188,8 +188,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   instructionTitle: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 17,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
   instructionDescription: {

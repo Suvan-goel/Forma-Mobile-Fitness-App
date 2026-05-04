@@ -18,6 +18,7 @@ import {
   CARD_SHADOW,
   COLORS,
   FONTS,
+  PAGE_TITLE_TEXT,
   SCREEN_GRADIENT_COLORS,
   SCREEN_GRADIENT_END,
   SCREEN_GRADIENT_START,
@@ -152,7 +153,7 @@ export const TemplatePreviewScreen: React.FC = () => {
           <TouchableOpacity style={styles.headerIconButton} onPress={handleGoBack} activeOpacity={0.72}>
             <ChevronLeft size={24} color={COLORS.textSecondary} strokeWidth={1.6} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>{templateName}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{templateName.toUpperCase()}</Text>
         </View>
         <Text style={styles.headerMeta}>
           {exercises.length} exercises  ·  {estimatedDuration}
@@ -248,10 +249,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'left',
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
-    color: COLORS.text,
-    letterSpacing: 0,
+    ...PAGE_TITLE_TEXT,
   },
   headerMeta: {
     marginTop: 2,
@@ -272,7 +270,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(31, 39, 45, 0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     overflow: 'hidden',
     ...CARD_SHADOW,
   },
@@ -330,8 +328,8 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     flex: 1,
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     lineHeight: 17,
     color: COLORS.text,
     letterSpacing: 0,
@@ -363,8 +361,8 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
   aboutTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -417,8 +415,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   startButtonText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: 0,
   },

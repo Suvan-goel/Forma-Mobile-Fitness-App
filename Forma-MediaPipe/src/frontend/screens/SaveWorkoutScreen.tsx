@@ -30,6 +30,7 @@ import {
   COLORS,
   SPACING,
   FONTS,
+  PAGE_TITLE_TEXT,
   SCREEN_GRADIENT_COLORS,
   SCREEN_GRADIENT_START,
   SCREEN_GRADIENT_END,
@@ -271,7 +272,7 @@ export const SaveWorkoutScreen: React.FC = () => {
             >
               <X size={22} color={COLORS.textSecondary} strokeWidth={1.8} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Save Workout</Text>
+            <Text style={styles.headerTitle}>SAVE WORKOUT</Text>
             <View style={styles.headerSpacer} />
           </View>
 
@@ -514,7 +515,7 @@ const subtleCardShadow = Platform.select({
 const surfaceBorder = {
   borderWidth: 1,
   borderColor: 'rgba(255, 255, 255, 0.065)',
-  borderTopColor: 'rgba(255, 255, 255, 0.105)',
+  borderTopColor: 'rgba(255, 255, 255, 0.10)',
 } as const;
 
 const violetSurfaceBorder = {
@@ -544,11 +545,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
-    lineHeight: 22,
-    color: COLORS.text,
-    letterSpacing: 0,
+    ...PAGE_TITLE_TEXT,
   },
   headerSpacer: {
     width: 36,
@@ -669,8 +666,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bestSetMetric: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     lineHeight: 16,
     color: COLORS.text,
   },
@@ -685,8 +682,8 @@ const styles = StyleSheet.create({
   titleInput: {
     minHeight: 34,
     padding: 0,
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     lineHeight: 20,
     color: COLORS.text,
   },
@@ -702,7 +699,7 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 56,
     padding: 0,
-    fontFamily: FONTS.display.medium,
+    fontFamily: FONTS.display.regular,
     fontSize: 13,
     lineHeight: 20,
     color: COLORS.text,
@@ -749,8 +746,8 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   settingTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     lineHeight: 17,
     color: COLORS.text,
   },
@@ -794,8 +791,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveButtonText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -874,8 +871,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   privacyOptionLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
   },
   privacyOptionHelper: {
@@ -889,7 +886,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.115)',
     alignItems: 'center',
     justifyContent: 'center',
   },

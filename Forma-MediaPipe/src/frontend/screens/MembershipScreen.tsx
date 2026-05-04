@@ -20,7 +20,6 @@ import {
   COLORS,
   SPACING,
   FONTS,
-  SCREEN_GRADIENT_COLORS,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
@@ -86,12 +85,9 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
 
           {/* Current Plan Card */}
           <LinearGradient
-            colors={isPremium
-              ? ['#2D1B69', '#1A1035', '#0E0A1A'] as const
-              : SCREEN_GRADIENT_COLORS
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.planCard}
           >
             <View style={[styles.planCardEdge, isPremium && styles.planCardEdgePremium]}>
@@ -218,12 +214,12 @@ const styles = StyleSheet.create({
   planCardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 20,
   },
   planCardEdgePremium: {
-    borderColor: 'rgba(245, 166, 35, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   planBadgeRow: {
     flexDirection: 'row',
@@ -242,7 +238,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   planName: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 22,
     color: COLORS.text,
     letterSpacing: -0.4,
@@ -301,8 +297,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -313,8 +309,8 @@ const styles = StyleSheet.create({
   },
   featureName: {
     flex: 1,
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13.5,
     color: COLORS.text,
     letterSpacing: 0.1,
   },
@@ -341,8 +337,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   upgradeBtnText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },

@@ -73,11 +73,9 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <LinearGradient
-            colors={prefs.restTimerEnabled
-              ? ['rgba(122, 85, 255, 0.24)', 'rgba(23, 27, 30, 0.96)', 'rgba(23, 27, 30, 0.96)']
-              : ['rgba(255, 255, 255, 0.075)', 'rgba(23, 27, 30, 0.96)', 'rgba(23, 27, 30, 0.96)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
             style={styles.heroCard}
           >
             <View style={styles.heroInner}>
@@ -203,8 +201,8 @@ const styles = StyleSheet.create({
   heroInner: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -218,7 +216,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   heroIconActive: {
     backgroundColor: 'rgba(122, 85, 255, 0.14)',
@@ -277,8 +275,8 @@ const styles = StyleSheet.create({
   groupEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -312,8 +310,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   toggleLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14.5,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -337,8 +335,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   infoTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14.5,
     color: COLORS.text,
   },
   infoDesc: {

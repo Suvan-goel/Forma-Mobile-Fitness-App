@@ -26,6 +26,7 @@ import {
   CARD_VERTICAL_GAP,
   COLORS,
   FONTS,
+  PAGE_TITLE_TEXT,
   SCREEN_GRADIENT_COLORS,
   SCREEN_GRADIENT_END,
   SCREEN_GRADIENT_START,
@@ -585,7 +586,7 @@ export const WorkoutTemplatesScreen: React.FC = () => {
               strokeWidth={1.7}
             />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Templates</Text>
+          <Text style={styles.headerTitle}>TEMPLATES</Text>
         </View>
         <TouchableOpacity
           style={styles.newButton}
@@ -715,10 +716,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 24,
-    color: COLORS.text,
-    letterSpacing: 0,
+    ...PAGE_TITLE_TEXT,
   },
   newButton: {
     flexDirection: 'row',
@@ -742,7 +740,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(26, 32, 37, 0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   segment: {
     flex: 1,
@@ -818,8 +816,8 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flex: 1,
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -859,8 +857,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   chooseButtonText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -871,7 +869,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     backgroundColor: 'rgba(31, 39, 45, 0.36)',
     paddingHorizontal: 18,
   },

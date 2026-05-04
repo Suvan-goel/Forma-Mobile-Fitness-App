@@ -21,7 +21,7 @@ import {
   COLORS,
   FONTS,
   SPACING,
-  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
@@ -174,7 +174,7 @@ export const FriendsView: React.FC = memo(() => {
       </View>
 
       <LinearGradient
-        colors={[...CARD_GRADIENT_ELEVATED]}
+        colors={[...CARD_GRADIENT_COLORS]}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
         style={styles.statsCard}
@@ -203,7 +203,12 @@ export const FriendsView: React.FC = memo(() => {
               <Text style={styles.requestCountText}>{pendingRequests.length}</Text>
             </View>
           </View>
-          <View style={styles.requestsList}>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.requestsList}
+          >
             {pendingRequests.map(request => (
               <RequestRow
                 key={request.friendshipId}
@@ -212,7 +217,7 @@ export const FriendsView: React.FC = memo(() => {
                 onDecline={handleDeclineRequest}
               />
             ))}
-          </View>
+          </LinearGradient>
         </View>
       )}
 
@@ -225,7 +230,12 @@ export const FriendsView: React.FC = memo(() => {
               <Text style={styles.seeAllText}>See all</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.suggestedList}>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.suggestedList}
+          >
             {suggestedFriends.slice(0, 3).map(s => (
               <SuggestedRow
                 key={s.userId}
@@ -233,7 +243,7 @@ export const FriendsView: React.FC = memo(() => {
                 onAdd={handleAddSuggested}
               />
             ))}
-          </View>
+          </LinearGradient>
         </View>
       )}
 
@@ -341,7 +351,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   searchInput: {
     flex: 1,
@@ -357,8 +367,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingVertical: 12,
     ...CARD_SHADOW,
   },
@@ -368,8 +378,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   statValue: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 17,
+    fontFamily: FONTS.display.regular,
+    fontSize: 18,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -423,8 +433,8 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
   sectionLabelInline: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 11.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 12.5,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -446,9 +456,9 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.085)',
-    backgroundColor: 'rgba(24, 30, 35, 0.62)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    ...CARD_SHADOW,
   },
   requestRow: {
     flexDirection: 'row',
@@ -470,8 +480,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(122, 85, 255, 0.18)',
   },
   requestAvatarText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
   },
   requestInfo: {
@@ -479,8 +489,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   requestName: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12.5,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13.5,
     color: COLORS.text,
   },
   requestSubtitle: {
@@ -504,16 +514,16 @@ const styles = StyleSheet.create({
   },
   requestDecline: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   suggestedList: {
     marginHorizontal: SPACING.screenHorizontal,
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.085)',
-    backgroundColor: 'rgba(24, 30, 35, 0.72)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    ...CARD_SHADOW,
   },
   suggestedRow: {
     flexDirection: 'row',
@@ -534,8 +544,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139, 92, 246, 0.15)',
   },
   suggestedAvatarText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
   },
   suggestedInfo: {
@@ -543,8 +553,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   suggestedName: {
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12.5,
+    fontFamily: FONTS.ui.regular,
+    fontSize: 13.5,
     color: COLORS.text,
     marginBottom: 2,
   },
@@ -563,8 +573,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   followText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 12.5,
     color: COLORS.text,
   },
   emptyContainer: {
@@ -580,7 +590,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     marginBottom: SPACING.md,
   },
   emptyTitle: {

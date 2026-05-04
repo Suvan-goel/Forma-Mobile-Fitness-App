@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import {
   COLORS,
   FONTS,
+  PAGE_TITLE_TEXT,
   SPACING,
   SCREEN_GRADIENT_COLORS,
   SCREEN_GRADIENT_START,
@@ -273,7 +274,7 @@ export const ExerciseGuideScreen: React.FC = () => {
           <View style={styles.headerTextWrap}>
             <Text style={styles.headerEyebrow}>Exercise Tutorial</Text>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {exerciseName}
+              {exerciseName.toUpperCase()}
             </Text>
           </View>
           <View style={styles.headerSpacer} />
@@ -370,9 +371,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
-    color: COLORS.text,
+    ...PAGE_TITLE_TEXT,
     textAlign: 'center',
   },
   headerSpacer: {
@@ -390,8 +389,8 @@ const styles = StyleSheet.create({
     padding: 3,
     borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
   },
   pill: {
@@ -439,8 +438,8 @@ const styles = StyleSheet.create({
   guideCardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 16,
   },
   sectionTitleRow: {
@@ -485,13 +484,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(122, 85, 255, 0.20)',
   },
   viewTypeLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 10,
+    fontFamily: FONTS.display.regular,
+    fontSize: 10.5,
     color: COLORS.text,
     letterSpacing: 1.2,
   },
   keySetup: {
-    fontFamily: FONTS.display.semibold,
+    fontFamily: FONTS.display.medium,
     fontSize: 22,
     color: COLORS.text,
     letterSpacing: -0.3,
@@ -635,8 +634,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 17,
+    fontFamily: FONTS.display.regular,
+    fontSize: 18,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },

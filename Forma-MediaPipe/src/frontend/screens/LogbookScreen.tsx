@@ -1045,7 +1045,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   weekDayNumberTextSelected: {
-    fontFamily: FONTS.ui.bold,
+    fontFamily: FONTS.ui.regular,
     color: '#FFFFFF',
   },
 
@@ -1127,8 +1127,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 11,
     alignItems: 'center',
   },
@@ -1158,8 +1158,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   cardTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: -0.2,
   },
@@ -1207,9 +1207,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16,23,28,0.45)',
   },
   scoreValue: {
-    fontFamily: FONTS.mono.bold,
+    fontFamily: FONTS.mono.regular,
     fontVariant: ['tabular-nums'],
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.text,
     lineHeight: 18,
     textAlign: 'center',
@@ -1259,8 +1259,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyStateTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 18,
+    fontFamily: FONTS.display.regular,
+    fontSize: 19,
     color: '#FFFFFF',
     marginBottom: 6,
     textAlign: 'center',
@@ -1276,7 +1276,7 @@ const styles = StyleSheet.create({
   /* ── Calendar Modal ──────────────────────── */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(4, 8, 12, 0.86)',
+    backgroundColor: COLORS.overlayBackground,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.screenHorizontal,
@@ -1288,13 +1288,14 @@ const styles = StyleSheet.create({
   calendarGradient: {
     borderRadius: 8,
     overflow: 'hidden',
+    backgroundColor: COLORS.cardBackground,
     ...CARD_SHADOW,
   },
   calendarEdge: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.075)',
-    borderTopColor: 'rgba(255, 255, 255, 0.11)',
+    borderColor: COLORS.border,
+    borderTopColor: COLORS.borderStrong,
     paddingHorizontal: 15,
     paddingTop: 15,
     paddingBottom: 14,
@@ -1315,24 +1316,24 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   calendarLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 16,
+    fontFamily: FONTS.display.regular,
+    fontSize: 17,
     color: COLORS.text,
     letterSpacing: 0,
   },
   calendarSelectedLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
     letterSpacing: 0,
   },
   calendarCloseBtn: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1344,9 +1345,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingHorizontal: 2,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.045)',
+    borderColor: COLORS.border,
   },
   calendarNavIconButton: {
     width: 38,
@@ -1355,8 +1356,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   calendarTitle: {
-    fontSize: 15,
-    fontFamily: FONTS.display.semibold,
+    fontSize: 16,
+    fontFamily: FONTS.display.regular,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -1368,7 +1369,7 @@ const styles = StyleSheet.create({
   calendarDayHeader: {
     fontSize: 10.5,
     fontFamily: FONTS.display.semibold,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
     flex: 1,
     textAlign: 'center',
     letterSpacing: 0,
@@ -1395,9 +1396,9 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   calendarDaySelected: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.primary,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.20)',
     ...Platform.select({
       ios: {
         shadowColor: '#7A55FF',
@@ -1410,8 +1411,8 @@ const styles = StyleSheet.create({
   },
   calendarDayToday: {
     borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.42)',
-    backgroundColor: 'rgba(122, 85, 255, 0.08)',
+    borderColor: 'rgba(122, 85, 255, 0.55)',
+    backgroundColor: 'rgba(122, 85, 255, 0.14)',
   },
   calendarDayText: {
     fontSize: 14,
@@ -1420,8 +1421,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   calendarDayTextSelected: {
-    color: COLORS.text,
-    fontFamily: FONTS.display.bold,
+    color: '#FFFFFF',
+    fontFamily: FONTS.display.regular,
   },
   calendarDayTextToday: {
     color: COLORS.accent,
@@ -1434,7 +1435,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: COLORS.border,
   },
   calendarTodayButton: {
     flex: 1,
@@ -1442,14 +1443,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: COLORS.border,
   },
   calendarTodayText: {
     fontFamily: FONTS.display.semibold,
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: COLORS.text,
     letterSpacing: 0,
   },
   calendarDoneButton: {
@@ -1458,12 +1459,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.primary,
   },
   calendarDoneText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
-    color: COLORS.text,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
+    color: '#FFFFFF',
     letterSpacing: 0,
   },
 
@@ -1496,8 +1497,8 @@ const styles = StyleSheet.create({
   selectionEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.075)',
-    borderTopColor: 'rgba(255, 255, 255, 0.11)',
+    borderColor: 'rgba(255, 255, 255, 0.085)',
+    borderTopColor: 'rgba(255, 255, 255, 0.125)',
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 12,
@@ -1526,8 +1527,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectionTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: 1.8,
   },
@@ -1537,7 +1538,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1578,7 +1579,7 @@ const styles = StyleSheet.create({
   },
   selectionItemTextActive: {
     color: '#FFFFFF',
-    fontFamily: FONTS.display.semibold,
+    fontFamily: FONTS.display.regular,
   },
   selectionCheckPlaceholder: {
     width: 24,

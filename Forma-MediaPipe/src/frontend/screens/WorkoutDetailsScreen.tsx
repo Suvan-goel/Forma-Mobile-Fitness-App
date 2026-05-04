@@ -21,6 +21,7 @@ import {
   COLORS,
   SPACING,
   FONTS,
+  PAGE_TITLE_TEXT,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
@@ -284,7 +285,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Loading...</Text>
+          <Text style={styles.headerTitle}>LOADING...</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
@@ -308,7 +309,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Error</Text>
+          <Text style={styles.headerTitle}>ERROR</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
@@ -325,7 +326,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Workout Not Found</Text>
+          <Text style={styles.headerTitle}>WORKOUT NOT FOUND</Text>
           <View style={styles.placeholder} />
         </View>
       </ScreenBackground>
@@ -356,7 +357,7 @@ export const WorkoutDetailsScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
           <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{workout.name}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{workout.name.toUpperCase()}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -532,10 +533,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: FONTS.display.semibold,
-    color: COLORS.text,
-    letterSpacing: -0.2,
+    ...PAGE_TITLE_TEXT,
     textAlign: 'center',
     marginHorizontal: SPACING.sm,
   },
@@ -560,8 +558,8 @@ const styles = StyleSheet.create({
   summaryEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 16,
     gap: 16,
   },
@@ -664,8 +662,8 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   summaryStatValue: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14.5,
     color: COLORS.text,
   },
   summaryStatLabel: {
@@ -690,8 +688,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 10.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 11,
     color: COLORS.text,
     letterSpacing: 2,
   },
@@ -722,7 +720,7 @@ const styles = StyleSheet.create({
   notesEdge: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.055)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     flexDirection: 'row',
     overflow: 'hidden',
   },
@@ -753,8 +751,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 14,
   },
   exerciseHeader: {
@@ -769,8 +767,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   exerciseName: {
-    fontSize: 16,
-    fontFamily: FONTS.display.semibold,
+    fontSize: 17,
+    fontFamily: FONTS.display.regular,
     color: COLORS.text,
   },
   exerciseMeta: {
@@ -926,8 +924,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   playerCloseText: {
-    fontSize: 15,
-    fontFamily: FONTS.ui.bold,
+    fontSize: 16,
+    fontFamily: FONTS.ui.regular,
     color: COLORS.text,
   },
 });

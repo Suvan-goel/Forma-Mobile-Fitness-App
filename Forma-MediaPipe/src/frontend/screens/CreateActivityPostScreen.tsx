@@ -33,6 +33,7 @@ import {
 import {
   COLORS,
   FONTS,
+  PAGE_TITLE_TEXT,
   SPACING,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
@@ -229,7 +230,7 @@ export const CreateActivityPostScreen: React.FC = () => {
             <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>New Post</Text>
+            <Text style={styles.headerTitle}>NEW POST</Text>
             <Text style={styles.headerSubtitle}>Share a workout update</Text>
           </View>
           <TouchableOpacity
@@ -532,7 +533,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -543,10 +544,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 20,
-    color: COLORS.text,
-    letterSpacing: 0,
+    ...PAGE_TITLE_TEXT,
   },
   headerSubtitle: {
     fontFamily: FONTS.ui.regular,
@@ -567,8 +565,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   postBtnText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: '#FFFFFF',
     letterSpacing: 0,
   },
@@ -592,7 +590,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 14,
     paddingTop: 13,
     paddingBottom: 10,
@@ -604,8 +602,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   composerLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -639,7 +637,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 14,
   },
   attachmentRow: {
@@ -659,8 +657,8 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   attachmentTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -703,8 +701,8 @@ const styles = StyleSheet.create({
     paddingBottom: 9,
   },
   sectionLabel: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -792,8 +790,8 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   pickerItemTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: 0,
   },

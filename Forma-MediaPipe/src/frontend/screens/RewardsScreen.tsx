@@ -387,8 +387,8 @@ const styles = StyleSheet.create({
   nextRewardTitle: {
     flex: 1,
     textAlign: 'right',
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
   },
   heroProgressTrack: {
@@ -411,8 +411,8 @@ const styles = StyleSheet.create({
     marginBottom: CARD_VERTICAL_GAP,
   },
   sectionTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
     letterSpacing: 0,
     marginBottom: 10,
@@ -459,8 +459,8 @@ const styles = StyleSheet.create({
   },
   badgeTitle: {
     flex: 1,
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
   },
   badgeTitleLocked: {
@@ -526,8 +526,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   redeemText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 11,
+    fontFamily: FONTS.display.regular,
+    fontSize: 12,
     color: '#FFFFFF',
   },
 });

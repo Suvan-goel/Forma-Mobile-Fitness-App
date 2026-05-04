@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     padding: 8,
   },
   cardHeader: {
@@ -547,8 +547,8 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   cardName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: -0.2,
     marginBottom: 3,

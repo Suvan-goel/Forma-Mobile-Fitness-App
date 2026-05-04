@@ -707,12 +707,12 @@ export const RecordLandingScreen: React.FC = () => {
                       <View style={styles.templateThumbShade} />
                     </View>
                     <View style={styles.templateInfo}>
+                      <Text style={styles.templateName} numberOfLines={2}>
+                        {tmpl.name}
+                      </Text>
                       <Text style={styles.templateMeta}>
                         {tmpl.exercises.length} exercise
                         {tmpl.exercises.length === 1 ? '' : 's'}
-                      </Text>
-                      <Text style={styles.templateName} numberOfLines={2}>
-                        {tmpl.name}
                       </Text>
                     </View>
                   </LinearGradient>
@@ -741,7 +741,7 @@ const ToolRow: React.FC<{
     style={[styles.toolRow, divider && styles.toolRowDivider]}
   >
     <View style={styles.toolIconWrap}>{icon}</View>
-    <View style={{ flex: 1 }}>
+    <View style={styles.toolTextBlock}>
       <Text style={styles.toolTitle}>{title}</Text>
       <Text style={styles.toolSubtitle}>{subtitle}</Text>
     </View>
@@ -851,8 +851,8 @@ const styles = StyleSheet.create({
     height: WORKOUT_CARD_HEIGHT,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 15,
     paddingTop: 14,
     paddingBottom: 14,
@@ -881,7 +881,7 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   idleTitle: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.medium,
     fontSize: 19,
     color: COLORS.text,
     letterSpacing: -0.35,
@@ -894,10 +894,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bodyVisual: {
-    width: 94,
-    height: 130,
-    marginRight: -2,
-    overflow: 'visible',
+    width: 112,
+    height: 146,
+    marginRight: -1,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1051,21 +1051,20 @@ const styles = StyleSheet.create({
     maxWidth: 218,
     borderRadius: CARD_RADIUS_SM,
     overflow: 'hidden',
-    marginTop: 2,
-    transform: [{ translateY: -4 }],
+    marginTop: 6,
   },
   idleStartBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    minHeight: 48,
-    paddingVertical: 12,
+    minHeight: 44,
+    paddingVertical: 10,
     paddingHorizontal: 16,
   },
   startBtnText: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 12.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 13.5,
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
@@ -1100,21 +1099,21 @@ const styles = StyleSheet.create({
   toolsCard: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     overflow: 'hidden',
   },
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 52,
+    minHeight: 64,
     paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingVertical: 13,
   },
   toolRowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.055)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
   },
   toolIconWrap: {
     width: 34,
@@ -1122,16 +1121,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  toolTextBlock: {
+    flex: 1,
+    gap: 5,
+  },
   toolTitle: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 13,
+    fontFamily: FONTS.display.regular,
+    fontSize: 14,
     color: COLORS.text,
   },
   toolSubtitle: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10.5,
     color: COLORS.textSecondary,
-    marginTop: 2,
   },
 
   /* Templates */
@@ -1154,8 +1156,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.105)',
     paddingHorizontal: 0,
     paddingTop: 9,
     paddingBottom: 10,
@@ -1199,8 +1201,8 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   templateName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 10.5,
+    fontFamily: FONTS.display.regular,
+    fontSize: 11,
     color: COLORS.text,
     letterSpacing: -0.1,
     lineHeight: 12,

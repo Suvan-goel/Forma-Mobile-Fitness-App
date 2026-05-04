@@ -19,6 +19,7 @@ import { ChevronLeft, GitCompare } from 'lucide-react-native';
 import {
   COLORS,
   FONTS,
+  PAGE_TITLE_TEXT,
   SPACING,
   CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
@@ -411,10 +412,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
-    color: COLORS.text,
-    letterSpacing: 3,
+    ...PAGE_TITLE_TEXT,
   },
   scrollContent: {
     paddingHorizontal: SPACING.screenHorizontal,
@@ -482,8 +480,8 @@ const styles = StyleSheet.create({
   },
   competitorName: {
     maxWidth: '100%',
-    fontFamily: FONTS.display.semibold,
-    fontSize: 17,
+    fontFamily: FONTS.display.regular,
+    fontSize: 18,
     color: COLORS.text,
     letterSpacing: 0,
   },
@@ -564,8 +562,8 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     flex: 1,
-    fontFamily: FONTS.display.semibold,
-    fontSize: 15,
+    fontFamily: FONTS.display.regular,
+    fontSize: 16,
     color: COLORS.text,
   },
   leaderText: {
@@ -675,8 +673,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryText: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 14,
+    fontFamily: FONTS.display.regular,
+    fontSize: 15,
     color: COLORS.text,
   },
 });

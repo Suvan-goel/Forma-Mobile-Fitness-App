@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
     paddingHorizontal: 24,
     paddingTop: 28,
     paddingBottom: 20,
