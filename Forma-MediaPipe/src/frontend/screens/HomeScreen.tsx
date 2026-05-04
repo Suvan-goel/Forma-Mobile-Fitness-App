@@ -39,12 +39,10 @@ import {
   COLORS,
   SPACING,
   FONTS,
-  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
   CARD_RADIUS_SM,
-  CARD_VERTICAL_GAP,
   CARD_SHADOW,
   getScoreColor,
 } from '../constants/theme';
@@ -59,7 +57,13 @@ import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 const RING_SIZE = 78;
 const RING_STROKE = 7;
+const HOME_CARD_VERTICAL_GAP = 10;
 const formaHeaderMark = require('../assets/forma_f_mark.png');
+const HOME_CARD_GRADIENT_COLORS: readonly [string, string, string] = [
+  'rgba(34, 39, 43, 0.70)',
+  'rgba(35, 40, 44, 0.70)',
+  'rgba(37, 42, 47, 0.70)',
+];
 
 const ScoreRing: React.FC<{
   score: number;
@@ -429,7 +433,7 @@ export const HomeScreen: React.FC = () => {
             style={styles.weeklyOuter}
           >
             <LinearGradient
-              colors={[...CARD_GRADIENT_ELEVATED]}
+              colors={[...HOME_CARD_GRADIENT_COLORS]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.weeklyGradient}
@@ -469,7 +473,7 @@ export const HomeScreen: React.FC = () => {
             style={styles.rewardsOuter}
           >
             <LinearGradient
-              colors={[...CARD_GRADIENT_ELEVATED]}
+              colors={[...HOME_CARD_GRADIENT_COLORS]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.rewardsGradient}
@@ -533,7 +537,7 @@ export const HomeScreen: React.FC = () => {
           {homeData.challenges.length > 0 && (
             <View style={styles.challengesOuter}>
               <LinearGradient
-                colors={[...CARD_GRADIENT_ELEVATED]}
+                colors={[...HOME_CARD_GRADIENT_COLORS]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.challengesGradient}
@@ -722,7 +726,7 @@ const styles = StyleSheet.create({
 
   /* Form Snapshot */
   readinessOuter: {
-    marginBottom: CARD_VERTICAL_GAP,
+    marginBottom: HOME_CARD_VERTICAL_GAP,
   },
   readinessEdge: {
     padding: 16,
@@ -774,7 +778,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: CARD_VERTICAL_GAP,
+    marginBottom: HOME_CARD_VERTICAL_GAP,
   },
   actionBtn: {
     flex: 1,
@@ -798,7 +802,7 @@ const styles = StyleSheet.create({
   /* Weekly Target */
   weeklyOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: CARD_VERTICAL_GAP,
+    marginBottom: HOME_CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   weeklyGradient: { borderRadius: CARD_RADIUS, overflow: 'hidden' },
@@ -837,7 +841,7 @@ const styles = StyleSheet.create({
   /* Next Badge */
   rewardsOuter: {
     borderRadius: CARD_RADIUS,
-    marginBottom: CARD_VERTICAL_GAP,
+    marginBottom: HOME_CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   rewardsGradient: {

@@ -52,12 +52,12 @@ export const SCREEN_GRADIENT_START = { x: 0.5, y: 0 } as const;
 export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
 /** Glass card surface gradient — matches the homepage card treatment */
-export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#1B2024', '#1F2428', '#22272B'];
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#202529', '#21262A', '#22272B'];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
 
 /** Stronger card gradient for elevated surfaces */
-export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#1D2226', '#22272C', '#252A2F'];
+export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#22272B', '#23282C', '#252A2F'];
 
 /** Card radius — moderate rounding for compact pro look */
 export const CARD_RADIUS = 14;
