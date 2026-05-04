@@ -9,7 +9,14 @@ import React, { useMemo, memo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop, Circle, Text as SvgText, ClipPath, Rect, G, Line } from 'react-native-svg';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_ELEVATED, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_VERTICAL_GAP, CARD_SHADOW } from '../../constants/theme';
+import { COLORS, FONTS, SPACING, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_VERTICAL_GAP, CARD_SHADOW } from '../../constants/theme';
+
+const TREND_CHART_CARD_RADIUS = CARD_RADIUS - 2;
+const TREND_CHART_CARD_GRADIENT: readonly [string, string, string] = [
+  'rgba(34, 39, 43, 0.80)',
+  'rgba(40, 45, 49, 0.80)',
+  'rgba(44, 49, 53, 0.80)',
+];
 
 interface TrendChartProps {
   title: string;
@@ -230,7 +237,7 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
   return (
     <View style={styles.cardOuter}>
       <LinearGradient
-        colors={[...CARD_GRADIENT_ELEVATED]}
+        colors={[...TREND_CHART_CARD_GRADIENT]}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
         style={styles.cardGradient}
@@ -382,17 +389,17 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
 
 const styles = StyleSheet.create({
   cardOuter: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: TREND_CHART_CARD_RADIUS,
     marginBottom: CARD_VERTICAL_GAP,
     ...CARD_SHADOW,
   },
   cardGradient: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: CARD_RADIUS,
+    borderRadius: TREND_CHART_CARD_RADIUS,
     overflow: 'hidden',
   },
   cardGlassEdge: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: TREND_CHART_CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',

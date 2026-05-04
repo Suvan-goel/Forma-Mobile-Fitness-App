@@ -21,7 +21,7 @@ import {
   COLORS,
   FONTS,
   SPACING,
-  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
@@ -32,18 +32,22 @@ import { Friend, FriendRequest, SuggestedFriend } from '../../../backend/service
 import { FriendRow } from '../../components/ui/FriendRow';
 import { getTabScreenBottomPadding } from '../../utils/safeAreaSpacing';
 
+const FRIENDS_CARD_RADIUS = CARD_RADIUS - 2;
+
 // ── Friend Request Row ───────────────────────────────────────
 
 const RequestRow = memo(({
   request,
   onAccept,
   onDecline,
+  isLast = false,
 }: {
   request: FriendRequest;
   onAccept: (friendshipId: string) => void;
   onDecline: (friendshipId: string) => void;
+  isLast?: boolean;
 }) => (
-  <View style={styles.requestRow}>
+  <View style={[styles.requestRow, !isLast && styles.cardRowDivider]}>
     <View style={styles.requestAvatar}>
       <Text style={styles.requestAvatarText}>
         {request.fromDisplayName.charAt(0).toUpperCase()}
@@ -77,11 +81,13 @@ const RequestRow = memo(({
 const SuggestedRow = memo(({
   suggestion,
   onAdd,
+  isLast = false,
 }: {
   suggestion: SuggestedFriend;
   onAdd: (userId: string) => void;
+  isLast?: boolean;
 }) => (
-  <View style={styles.suggestedRow}>
+  <View style={[styles.suggestedRow, !isLast && styles.cardRowDivider]}>
     <View style={styles.suggestedAvatar}>
       <Text style={styles.suggestedAvatarText}>
         {suggestion.displayName.charAt(0).toUpperCase()}
@@ -174,7 +180,7 @@ export const FriendsView: React.FC = memo(() => {
       </View>
 
       <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
+        colors={[...CARD_GRADIENT_ELEVATED]}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
         style={styles.statsCard}
@@ -204,17 +210,18 @@ export const FriendsView: React.FC = memo(() => {
             </View>
           </View>
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
+            colors={[...CARD_GRADIENT_ELEVATED]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.requestsList}
           >
-            {pendingRequests.map(request => (
+            {pendingRequests.map((request, index) => (
               <RequestRow
                 key={request.friendshipId}
                 request={request}
                 onAccept={handleAcceptRequest}
                 onDecline={handleDeclineRequest}
+                isLast={index === pendingRequests.length - 1}
               />
             ))}
           </LinearGradient>
@@ -231,16 +238,17 @@ export const FriendsView: React.FC = memo(() => {
             </TouchableOpacity>
           </View>
           <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
+            colors={[...CARD_GRADIENT_ELEVATED]}
             start={CARD_GRADIENT_START}
             end={CARD_GRADIENT_END}
             style={styles.suggestedList}
           >
-            {suggestedFriends.slice(0, 3).map(s => (
+            {suggestedFriends.slice(0, 3).map((s, index) => (
               <SuggestedRow
                 key={s.userId}
                 suggestion={s}
                 onAdd={handleAddSuggested}
+                isLast={index === Math.min(suggestedFriends.length, 3) - 1}
               />
             ))}
           </LinearGradient>
@@ -249,22 +257,49 @@ export const FriendsView: React.FC = memo(() => {
 
       {/* Friends header */}
       {friends.length > 0 && (
-        <View style={styles.friendsHeader}>
-          <Text style={styles.sectionLabelInline}>Your Friends</Text>
-          <View style={{ flex: 1 }} />
-          <Text style={styles.friendsMetricHeader}>This Week</Text>
-          <Text style={styles.friendsMetricHeader}>Avg Form Score</Text>
-        </View>
+        <>
+          <View style={styles.friendsHeader}>
+            <Text style={styles.sectionLabelInline}>Your Friends</Text>
+            <View style={{ flex: 1 }} />
+            <Text style={styles.friendsMetricHeader}>This Week</Text>
+            <Text style={styles.friendsMetricHeader}>Avg Form Score</Text>
+          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_ELEVATED]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.friendsList}
+          >
+            {friends.map((friend, index) => (
+              <FriendRow
+                key={friend.friendshipId}
+                friend={friend}
+                onPress={handleFriendPress}
+                position={
+                  friends.length === 1
+                    ? 'single'
+                    : index === 0
+                      ? 'first'
+                      : index === friends.length - 1
+                        ? 'last'
+                        : 'middle'
+                }
+                isCurrentUser={friend.displayName.toLowerCase() === 'you'}
+              />
+            ))}
+          </LinearGradient>
+        </>
       )}
     </View>
   ), [
     pendingRequests,
     suggestedFriends,
-    friends.length,
+    friends,
     handleAcceptRequest,
     handleDeclineRequest,
     handleAddSuggested,
     handleAddFriend,
+    handleFriendPress,
   ]);
 
   if (isLoading && friends.length === 0) {
@@ -289,11 +324,11 @@ export const FriendsView: React.FC = memo(() => {
   return (
     <View style={styles.container}>
       <FlatList
-        data={friends}
+        data={friends.length > 0 ? [] : friends}
         renderItem={renderFriend}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}
-        ListEmptyComponent={
+        ListEmptyComponent={friends.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconContainer}>
               <Users size={32} color={COLORS.textTertiary} />
@@ -307,7 +342,7 @@ export const FriendsView: React.FC = memo(() => {
               <Text style={styles.addButtonText}>Add Friends</Text>
             </TouchableOpacity>
           </View>
-        }
+        ) : null}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: getTabScreenBottomPadding(insets.bottom) },
@@ -365,11 +400,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: SPACING.screenHorizontal,
     marginBottom: 14,
-    borderRadius: CARD_RADIUS,
+    minHeight: 60,
+    borderRadius: FRIENDS_CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    paddingVertical: 12,
+    paddingVertical: 10,
+    overflow: 'hidden',
     ...CARD_SHADOW,
   },
   statItem: {
@@ -451,9 +488,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textTertiary,
   },
+  friendsList: {
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 10,
+    borderRadius: FRIENDS_CARD_RADIUS,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    ...CARD_SHADOW,
+  },
   requestsList: {
     marginHorizontal: SPACING.screenHorizontal,
-    borderRadius: CARD_RADIUS,
+    borderRadius: FRIENDS_CARD_RADIUS,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
@@ -463,16 +510,18 @@ const styles = StyleSheet.create({
   requestRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 54,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    minHeight: 60,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  cardRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   requestAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122, 85, 255, 0.12)',
@@ -518,7 +567,7 @@ const styles = StyleSheet.create({
   },
   suggestedList: {
     marginHorizontal: SPACING.screenHorizontal,
-    borderRadius: CARD_RADIUS,
+    borderRadius: FRIENDS_CARD_RADIUS,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
@@ -528,15 +577,14 @@ const styles = StyleSheet.create({
   suggestedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    minHeight: 60,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   suggestedAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(139, 92, 246, 0.12)',

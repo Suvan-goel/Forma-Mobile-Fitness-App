@@ -71,10 +71,16 @@ const CAPTURE_HORIZONTAL_PADDING = 14;
 const TEMPLATE_CARD_GAP = 9;
 const WORKOUT_CARD_HEIGHT = 176;
 const ACTIVE_SECONDARY_ACTIONS_WIDTH = 152;
+const CAPTURE_CARD_RADIUS = CARD_RADIUS - 2;
 const START_SESSION_CARD_GRADIENT: readonly [string, string, string] = [
   'rgba(34, 39, 43, 0.80)',
   'rgba(41, 46, 50, 0.80)',
   'rgba(48, 53, 57, 0.80)',
+];
+const TOOLS_CARD_GRADIENT: readonly [string, string, string] = [
+  'rgba(34, 39, 43, 0.80)',
+  'rgba(40, 45, 49, 0.80)',
+  'rgba(44, 49, 53, 0.80)',
 ];
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<
@@ -615,7 +621,7 @@ export const RecordLandingScreen: React.FC = () => {
             <Text style={styles.sectionLabel}>TOOLS</Text>
             <View style={styles.toolsCardOuter}>
               <LinearGradient
-                colors={[...CARD_GRADIENT_ELEVATED]}
+                colors={[...TOOLS_CARD_GRADIENT]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
                 style={styles.toolsCard}
@@ -699,7 +705,7 @@ export const RecordLandingScreen: React.FC = () => {
                   }
                 >
                   <LinearGradient
-                    colors={[...CARD_GRADIENT_COLORS]}
+                    colors={[...TOOLS_CARD_GRADIENT]}
                     start={CARD_GRADIENT_START}
                     end={CARD_GRADIENT_END}
                     style={styles.templateGradient}
@@ -713,6 +719,7 @@ export const RecordLandingScreen: React.FC = () => {
                       <CaptureTemplateCollage template={tmpl} />
                       <View style={styles.templateThumbShade} />
                     </View>
+                    <View style={styles.templateDivider} />
                     <View style={styles.templateInfo}>
                       <Text style={styles.templateName} numberOfLines={2}>
                         {tmpl.name}
@@ -849,16 +856,16 @@ const styles = StyleSheet.create({
 
   /* Active / Idle workout card */
   activeOuter: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: CAPTURE_CARD_RADIUS,
     ...CARD_SHADOW,
   },
   activeGradient: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: CAPTURE_CARD_RADIUS,
     overflow: 'hidden',
   },
   activeEdge: {
     height: WORKOUT_CARD_HEIGHT,
-    borderRadius: CARD_RADIUS,
+    borderRadius: CAPTURE_CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
@@ -1105,11 +1112,11 @@ const styles = StyleSheet.create({
 
   /* Tools */
   toolsCardOuter: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: CAPTURE_CARD_RADIUS,
     ...CARD_SHADOW,
   },
   toolsCard: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: CAPTURE_CARD_RADIUS,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
@@ -1161,25 +1168,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   templateCard: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: CAPTURE_CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.085)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
     overflow: 'hidden',
     ...CARD_SHADOW,
   },
   templateGradient: {
     flex: 1,
-    borderRadius: CARD_RADIUS - 1,
+    borderRadius: CAPTURE_CARD_RADIUS - 1,
     paddingHorizontal: 0,
     paddingTop: 7,
     paddingBottom: 7,
-    gap: 7,
+    gap: 0,
     overflow: 'hidden',
   },
   templateThumb: {
     width: '100%',
-    borderRadius: CARD_RADIUS - 2,
+    borderRadius: CAPTURE_CARD_RADIUS - 2,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1206,11 +1213,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
   },
+  templateDivider: {
+    height: 1,
+    marginTop: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
   templateInfo: {
     gap: 2,
     flexShrink: 0,
     paddingHorizontal: 12,
-    paddingTop: 2,
+    paddingTop: 8,
     paddingBottom: 8,
   },
   templateName: {

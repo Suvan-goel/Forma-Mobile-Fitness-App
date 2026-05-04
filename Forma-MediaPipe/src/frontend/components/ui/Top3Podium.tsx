@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 96,
-    paddingBottom: 6,
+    paddingBottom: 16,
     gap: 5,
   },
   podiumItem: {

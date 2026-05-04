@@ -1,13 +1,11 @@
 /**
- * FriendRow — Card-style row in the friends list
+ * FriendRow — Row inside the grouped friends list card
  */
 
 import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, getScoreColor ,
-} from '../../constants/theme';
+import { COLORS, FONTS, getScoreColor } from '../../constants/theme';
 import { Friend } from '../../../backend/services/api/types';
 
 interface FriendRowProps {
@@ -23,90 +21,52 @@ export const FriendRow: React.FC<FriendRowProps> = memo(({
   position = 'single',
   isCurrentUser = false,
 }) => {
-  const isFirst = position === 'first' || position === 'single';
   const isLast = position === 'last' || position === 'single';
 
   return (
     <TouchableOpacity
-      style={styles.rowOuter}
+      style={[styles.row, !isLast && styles.rowDivider]}
       onPress={() => onPress(friend.userId)}
       activeOpacity={0.7}
     >
-      <LinearGradient
-        colors={[...CARD_GRADIENT_COLORS]}
-        start={CARD_GRADIENT_START}
-        end={CARD_GRADIENT_END}
-        style={[
-          styles.rowGradient,
-          isFirst && styles.rowTop,
-          isLast && styles.rowBottom,
-        ]}
-      >
-        <View style={[styles.rowEdge, !isLast && styles.rowDivider]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {friend.displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>
+          {friend.displayName.charAt(0).toUpperCase()}
+        </Text>
+      </View>
 
-          {/* Info */}
-          <View style={styles.info}>
-            <Text style={styles.name} numberOfLines={1}>
-              {isCurrentUser ? 'You' : friend.displayName}
-            </Text>
-            <View style={styles.subtitleRow}>
-              <Text style={styles.subtitle}>
-                {friend.streakDays > 0 ? `${friend.streakDays} workout${friend.streakDays === 1 ? '' : 's'}` : friend.lastActive ?? 'Active recently'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.stats}>
-            <Text style={[styles.formScore, { color: getScoreColor(friend.avgFormScore) }]}>
-              {Math.round(friend.avgFormScore)}
-            </Text>
-          </View>
-
-          <ChevronRight size={15} color={isCurrentUser ? 'rgba(255,255,255,0.6)' : COLORS.textTertiary} strokeWidth={1.8} />
+      <View style={styles.info}>
+        <Text style={styles.name} numberOfLines={1}>
+          {isCurrentUser ? 'You' : friend.displayName}
+        </Text>
+        <View style={styles.subtitleRow}>
+          <Text style={styles.subtitle}>
+            {friend.streakDays > 0 ? `${friend.streakDays} workout${friend.streakDays === 1 ? '' : 's'}` : friend.lastActive ?? 'Active recently'}
+          </Text>
         </View>
-      </LinearGradient>
+      </View>
+
+      <View style={styles.stats}>
+        <Text style={[styles.formScore, { color: getScoreColor(friend.avgFormScore) }]}>
+          {Math.round(friend.avgFormScore)}
+        </Text>
+      </View>
+
+      <ChevronRight size={15} color={isCurrentUser ? 'rgba(255,255,255,0.6)' : COLORS.textTertiary} strokeWidth={1.8} />
     </TouchableOpacity>
   );
 });
 
 const styles = StyleSheet.create({
-  rowOuter: {
-    marginHorizontal: SPACING.screenHorizontal,
-  },
-  rowGradient: {
-    backgroundColor: COLORS.cardBackground,
-    overflow: 'hidden',
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  rowTop: {
-    borderTopLeftRadius: CARD_RADIUS,
-    borderTopRightRadius: CARD_RADIUS,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
-  },
-  rowBottom: {
-    borderBottomLeftRadius: CARD_RADIUS,
-    borderBottomRightRadius: CARD_RADIUS,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-    marginBottom: 10,
-  },
-  rowEdge: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 58,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    minHeight: 60,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
   rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatar: {

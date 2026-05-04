@@ -13,7 +13,17 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_ELEVATED,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  CARD_SHADOW,
+} from '../../constants/theme';
 import { useLeaderboard } from '../../../backend/hooks/useLeaderboard';
 import { LeaderboardEntry, TimeWindow } from '../../../backend/services/api/types';
 import { Top3Podium } from '../../components/ui/Top3Podium';
@@ -24,6 +34,8 @@ const TIME_WINDOWS: { key: TimeWindow; label: string }[] = [
   { key: '1_week', label: 'This Week' },
   { key: 'all_time', label: 'All Time' },
 ];
+
+const LEADERBOARD_CARD_RADIUS = CARD_RADIUS - 2;
 
 const FilterBar = memo(({
   time, onTime,
@@ -80,7 +92,6 @@ export const LeaderboardView: React.FC = memo(() => {
     <LeaderboardRow
       entry={item}
       isCurrentUser={item.userId === currentUserId}
-      isFirstRow={index === 0}
       isLastRow={index === rest.length - 1}
     />
   ), [currentUserId, rest.length]);
@@ -111,15 +122,32 @@ export const LeaderboardView: React.FC = memo(() => {
         <>
           <Top3Podium entries={top3} />
           <TableHeader timeLabel={timeLabel} />
+          {rest.length > 0 && (
+            <LinearGradient
+              colors={[...CARD_GRADIENT_ELEVATED]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.leaderboardList}
+            >
+              {rest.map((item, index) => (
+                <LeaderboardRow
+                  key={item.userId}
+                  entry={item}
+                  isCurrentUser={item.userId === currentUserId}
+                  isLastRow={index === rest.length - 1}
+                />
+              ))}
+            </LinearGradient>
+          )}
         </>
       )}
     </View>
-  ), [timeWindow, timeLabel, isLoading, error, entries.length, top3, refetch]);
+  ), [timeWindow, timeLabel, isLoading, error, entries.length, top3, rest, currentUserId, refetch]);
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={rest}
+        data={[] as LeaderboardEntry[]}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}
@@ -219,6 +247,16 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
     color: COLORS.textTertiary,
+  },
+  leaderboardList: {
+    marginHorizontal: SPACING.screenHorizontal,
+    marginBottom: 10,
+    borderRadius: LEADERBOARD_CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
   rankColumn: {
     width: 56,

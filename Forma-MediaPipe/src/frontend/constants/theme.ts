@@ -6,8 +6,8 @@
 export const COLORS = {
   // Backgrounds — lifted neutral graphite, close to the reference without skewing blue
   background: '#151A1D',
-  cardBackground: 'rgba(32, 37, 41, 0.85)',
-  cardBackgroundLight: 'rgba(36, 41, 45, 0.85)',
+  cardBackground: 'rgba(29, 34, 38, 0.85)',
+  cardBackgroundLight: 'rgba(33, 38, 42, 0.85)',
 
   // Primary Actions — Forma Violet
   primary: '#7A55FF',
@@ -53,9 +53,9 @@ export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
 /** Glass card surface gradient — matches the homepage card treatment */
 export const CARD_GRADIENT_COLORS: readonly [string, string, string] = [
+  'rgba(29, 34, 38, 0.85)',
   'rgba(32, 37, 41, 0.85)',
   'rgba(35, 40, 44, 0.85)',
-  'rgba(38, 43, 47, 0.85)',
 ];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
@@ -71,7 +71,7 @@ export const CARD_VERTICAL_GAP = 10;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: 'rgba(32, 37, 41, 0.85)',
+  backgroundColor: 'rgba(29, 34, 38, 0.85)',
   borderWidth: 1,
   borderColor: 'rgba(255, 255, 255, 0.07)',
   borderTopColor: 'rgba(255, 255, 255, 0.09)',

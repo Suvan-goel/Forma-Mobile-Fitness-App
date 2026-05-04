@@ -28,7 +28,6 @@ import {
   COLORS,
   SPACING,
   FONTS,
-  CARD_GRADIENT_COLORS,
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
@@ -50,6 +49,12 @@ import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const PROGRESS_CHART_GREEN = '#5FCE7A';
+const PERSONAL_BESTS_CARD_RADIUS = CARD_RADIUS - 2;
+const PERSONAL_BESTS_CARD_GRADIENT: readonly [string, string, string] = [
+  'rgba(34, 39, 43, 0.80)',
+  'rgba(40, 45, 49, 0.80)',
+  'rgba(44, 49, 53, 0.80)',
+];
 type ProgressTab = 'overview' | 'personalBests' | 'leaderboard';
 
 const EXERCISE_THUMBS: Record<string, any> = {
@@ -277,7 +282,7 @@ export const AnalyticsScreen: React.FC = () => {
           {/* ── CONSISTENCY ─────────────────────────── */}
           <View style={styles.cardOuter}>
             <LinearGradient
-              colors={[...CARD_GRADIENT_COLORS]}
+              colors={[...PERSONAL_BESTS_CARD_GRADIENT]}
               start={CARD_GRADIENT_START}
               end={CARD_GRADIENT_END}
               style={styles.cardGradient}
@@ -317,14 +322,14 @@ export const AnalyticsScreen: React.FC = () => {
 
           {/* ── PERSONAL BESTS ──────────────────────── */}
           {(recentPersonalBest || summary.mostTrainedExercise || totalVolume > 0) && (
-            <View style={styles.cardOuter}>
+            <View style={[styles.cardOuter, styles.personalBestsCardOuter]}>
               <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
+                colors={[...PERSONAL_BESTS_CARD_GRADIENT]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
-                style={styles.cardGradient}
+                style={[styles.cardGradient, styles.personalBestsCardGradient]}
               >
-                <View style={styles.cardEdge}>
+                <View style={[styles.cardEdge, styles.personalBestsCardEdge]}>
                   <View style={styles.cardLabelRow}>
                     <Text style={styles.cardLabel}>RECENT PERSONAL BESTS</Text>
                     <TouchableOpacity
@@ -432,14 +437,14 @@ export const AnalyticsScreen: React.FC = () => {
               </>
             ) : (
               <View style={styles.personalBestsPane}>
-                <View style={styles.cardOuter}>
+                <View style={[styles.cardOuter, styles.personalBestsCardOuter]}>
                   <LinearGradient
-                    colors={[...CARD_GRADIENT_COLORS]}
+                    colors={[...PERSONAL_BESTS_CARD_GRADIENT]}
                     start={CARD_GRADIENT_START}
                     end={CARD_GRADIENT_END}
-                    style={styles.cardGradient}
+                    style={[styles.cardGradient, styles.personalBestsCardGradient]}
                   >
-                    <View style={styles.cardEdge}>
+                    <View style={[styles.cardEdge, styles.personalBestsCardEdge]}>
                       <View style={styles.cardLabelRow}>
                         <Text style={styles.cardLabel}>PERSONAL BESTS</Text>
                         <Text style={styles.consistencyCount}>
@@ -604,21 +609,21 @@ const styles = StyleSheet.create({
 
   /* Generic card */
   cardOuter: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: PERSONAL_BESTS_CARD_RADIUS,
     marginBottom: CARD_VERTICAL_GAP,
 
     ...CARD_SHADOW,
 },
   cardGradient: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: CARD_RADIUS,
+    borderRadius: PERSONAL_BESTS_CARD_RADIUS,
     overflow: 'hidden',
   },
   cardEdge: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: PERSONAL_BESTS_CARD_RADIUS,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderTopColor: COLORS.borderStrong,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 13,
   },
 
@@ -711,6 +716,17 @@ const styles = StyleSheet.create({
   },
   personalBestsPane: {
     paddingTop: 2,
+  },
+  personalBestsCardOuter: {
+    borderRadius: PERSONAL_BESTS_CARD_RADIUS,
+  },
+  personalBestsCardGradient: {
+    borderRadius: PERSONAL_BESTS_CARD_RADIUS,
+  },
+  personalBestsCardEdge: {
+    borderRadius: PERSONAL_BESTS_CARD_RADIUS,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   bestListRow: {
     flexDirection: 'row',
