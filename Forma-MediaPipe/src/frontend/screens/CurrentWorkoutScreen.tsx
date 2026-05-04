@@ -1762,7 +1762,7 @@ const styles = StyleSheet.create({
   bottomPanel: {
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: 10,
-    backgroundColor: '#070A0D',
+    backgroundColor: COLORS.background,
     gap: 10,
   },
   addExerciseGradient: {

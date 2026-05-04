@@ -1,13 +1,13 @@
 /**
  * Forma Mobile - Design System Tokens
- * Graphite glass — neutral dark gradient, purple primary, green form accent
+ * Graphite glass — neutral graphite gradient, purple primary, green form accent
  */
 
 export const COLORS = {
-  // Backgrounds — deep graphite, close to black without feeling flat
-  background: '#070A0D',
-  cardBackground: '#171B1E',
-  cardBackgroundLight: '#1E2225',
+  // Backgrounds — lifted neutral graphite, close to the reference without skewing blue
+  background: '#0C1114',
+  cardBackground: '#1A1F23',
+  cardBackgroundLight: '#22282D',
 
   // Primary Actions — Forma Violet
   primary: '#7A55FF',
@@ -30,16 +30,16 @@ export const COLORS = {
   textTertiary: '#6B7176',
 
   // UI Elements
-  border: 'rgba(255, 255, 255, 0.06)',
-  borderStrong: 'rgba(255, 255, 255, 0.085)',
-  inactive: '#33383D',
+  border: 'rgba(255, 255, 255, 0.07)',
+  borderStrong: 'rgba(255, 255, 255, 0.10)',
+  inactive: '#383E43',
 
   // Chart colors
   chartPrimary: '#34E0A6',
-  chartSecondary: 'rgba(255, 255, 255, 0.045)',
+  chartSecondary: 'rgba(255, 255, 255, 0.052)',
 
   // Overlays
-  overlayBackground: 'rgba(4,8,12,0.88)',
+  overlayBackground: 'rgba(6,10,13,0.87)',
 
   // Glow — soft violet
   glowViolet: 'rgba(122, 85, 255, 0.30)',
@@ -47,17 +47,17 @@ export const COLORS = {
 } as const;
 
 /** Standard screen background gradient — graphite vertical */
-export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#202326', '#121619', '#070A0D'];
+export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#2A2E32', '#151A1E', '#0C1114'];
 export const SCREEN_GRADIENT_START = { x: 0.5, y: 0 } as const;
 export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
 /** Glass card surface gradient — matches the homepage card treatment */
-export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#171B1E', '#1C2023', '#202428'];
+export const CARD_GRADIENT_COLORS: readonly [string, string, string] = ['#1B2024', '#1F2428', '#22272B'];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
 
 /** Stronger card gradient for elevated surfaces */
-export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#171B1E', '#1C2023', '#202428'];
+export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = ['#1D2226', '#22272C', '#252A2F'];
 
 /** Card radius — moderate rounding for compact pro look */
 export const CARD_RADIUS = 14;
@@ -67,9 +67,9 @@ export const CARD_VERTICAL_GAP = 18;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: '#171B1E',
+  backgroundColor: '#1A1F23',
   borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.06)',
+  borderColor: 'rgba(255, 255, 255, 0.07)',
   borderRadius: CARD_RADIUS,
 } as const;
 

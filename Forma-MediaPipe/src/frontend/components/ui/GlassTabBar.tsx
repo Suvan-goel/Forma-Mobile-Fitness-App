@@ -110,12 +110,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 100,
-    backgroundColor: '#151A1E',
+    backgroundColor: COLORS.cardBackground,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.075)',
   },
   bar: {
-    backgroundColor: '#151A1E',
+    backgroundColor: COLORS.cardBackground,
   },
   barContent: {
     flexDirection: 'row',
