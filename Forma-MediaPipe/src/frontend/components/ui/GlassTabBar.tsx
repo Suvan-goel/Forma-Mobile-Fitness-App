@@ -21,6 +21,8 @@ const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
   Social:    { icon: Users,      label: 'Social' },
 };
 
+const TAB_BAR_BACKGROUND = '#1D2226';
+
 const GlassTabItem = memo(({ routeName, routeKey, isFocused, navigation }: {
   routeName: string;
   routeKey: string;
@@ -110,12 +112,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 100,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: TAB_BAR_BACKGROUND,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.075)',
   },
   bar: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: TAB_BAR_BACKGROUND,
   },
   barContent: {
     flexDirection: 'row',

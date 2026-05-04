@@ -5,7 +5,7 @@
 
 export const COLORS = {
   // Backgrounds — lifted neutral graphite, close to the reference without skewing blue
-  background: '#0C1114',
+  background: '#151A1D',
   cardBackground: '#1A1F23',
   cardBackgroundLight: '#22282D',
 
@@ -47,7 +47,7 @@ export const COLORS = {
 } as const;
 
 /** Standard screen background gradient — graphite vertical */
-export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#2A2E32', '#151A1E', '#0C1114'];
+export const SCREEN_GRADIENT_COLORS: readonly [string, string, string] = ['#303438', '#1C2125', '#151A1D'];
 export const SCREEN_GRADIENT_START = { x: 0.5, y: 0 } as const;
 export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
