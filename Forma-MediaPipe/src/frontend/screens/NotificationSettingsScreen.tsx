@@ -19,7 +19,6 @@ import {
   CARD_GRADIENT_START,
   CARD_GRADIENT_END,
   CARD_RADIUS,
-  CARD_RADIUS_SM,
   CARD_VERTICAL_GAP,
   CARD_SHADOW
 } from '../constants/theme';
@@ -79,7 +78,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
             style={styles.heroCard}
           >
             <View style={styles.heroInner}>
-              <View style={[styles.heroIcon, prefs.restTimerEnabled && styles.heroIconActive]}>
+              <View style={styles.heroIcon}>
                 {isLoading ? (
                   <ActivityIndicator size="small" color={COLORS.primary} />
                 ) : (
@@ -144,7 +143,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           >
             <View style={styles.groupEdge}>
               <View style={styles.infoRow}>
-                <View style={[styles.iconBubble, styles.greenIconBubble]}>
+                <View style={styles.iconBubble}>
                   <Smartphone size={16} color={COLORS.green} strokeWidth={1.8} />
                 </View>
                 <View style={styles.infoContent}>
@@ -211,16 +210,8 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 52,
     height: 52,
-    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  heroIconActive: {
-    backgroundColor: 'rgba(122, 85, 255, 0.14)',
-    borderColor: 'rgba(122, 85, 255, 0.24)',
   },
   heroCopy: {
     flex: 1,
@@ -283,13 +274,8 @@ const styles = StyleSheet.create({
   iconBubble: {
     width: 30,
     height: 30,
-    borderRadius: CARD_RADIUS_SM,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-  },
-  greenIconBubble: {
-    backgroundColor: 'rgba(52, 224, 166, 0.12)',
   },
   rowDivider: {
     height: 1,

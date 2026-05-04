@@ -181,7 +181,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
                     style={styles.optionCard}
                   >
                     <View style={[styles.optionInner, isSelected && styles.optionInnerSelected]}>
-                      <View style={[styles.optionIcon, isSelected && styles.optionIconSelected]}>
+                      <View style={styles.optionIcon}>
                         <Icon size={18} color={isSelected ? COLORS.primary : COLORS.textSecondary} strokeWidth={1.7} />
                       </View>
                       <View style={styles.optionCopy}>
@@ -217,7 +217,7 @@ export const PrivacySettingsScreen: React.FC<PrivacySettingsScreenProps> = ({ na
                 return (
                   <View key={item.title}>
                     <View style={styles.infoRow}>
-                      <View style={[styles.infoIcon, { backgroundColor: `${item.color}18`, borderColor: `${item.color}2E` }]}>
+                      <View style={styles.infoIcon}>
                         <Icon size={16} color={item.color} strokeWidth={1.7} />
                       </View>
                       <View style={styles.infoCopy}>
@@ -318,12 +318,8 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 50,
     height: 50,
-    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(122,85,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(122,85,255,0.20)',
   },
   heroCopy: {
     flex: 1,
@@ -386,16 +382,8 @@ const styles = StyleSheet.create({
   optionIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.055)',
-  },
-  optionIconSelected: {
-    backgroundColor: 'rgba(122,85,255,0.15)',
-    borderColor: 'rgba(122,85,255,0.26)',
   },
   optionCopy: {
     flex: 1,
@@ -457,8 +445,6 @@ const styles = StyleSheet.create({
   infoIcon: {
     width: 38,
     height: 38,
-    borderRadius: 12,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -509,12 +495,8 @@ const styles = StyleSheet.create({
   deleteIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(240,82,82,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(240,82,82,0.20)',
   },
   deleteCopy: {
     flex: 1,

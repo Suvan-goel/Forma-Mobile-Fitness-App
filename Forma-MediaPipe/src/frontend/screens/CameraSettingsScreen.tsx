@@ -723,12 +723,8 @@ const styles = StyleSheet.create({
   iconBubble: {
     width: 30,
     height: 30,
-    borderRadius: CARD_RADIUS_SM,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
   iconSpacer: {
     width: 30,

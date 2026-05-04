@@ -196,7 +196,6 @@ const AccordionItem: React.FC<{
         <Text style={styles.faqQuestionText}>{item.question}</Text>
         <Animated.View style={[
           styles.chevronWrap,
-          expanded && { backgroundColor: `${accentColor}1F` },
           { transform: [{ rotate }] },
         ]}>
           <ChevronDown size={15} color={expanded ? accentColor : COLORS.textTertiary} strokeWidth={1.8} />
@@ -275,7 +274,7 @@ export const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }
                 >
                   <View style={styles.cardEdge}>
                     <View style={styles.sectionHeader}>
-                      <View style={[styles.sectionIconWrap, { backgroundColor: `${section.iconColor}18` }]}>
+                      <View style={styles.sectionIconWrap}>
                         <SectionIcon size={17} color={section.iconColor} strokeWidth={1.8} />
                       </View>
                       <View style={styles.sectionTitleWrap}>
@@ -353,10 +352,6 @@ const styles = StyleSheet.create({
   heroIconWrap: {
     width: 42,
     height: 42,
-    borderRadius: 12,
-    backgroundColor: 'rgba(122, 85, 255, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.26)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -458,8 +453,6 @@ const styles = StyleSheet.create({
   chevronWrap: {
     width: 28,
     height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -496,10 +489,6 @@ const styles = StyleSheet.create({
   footerIconWrap: {
     width: 38,
     height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(122, 85, 255, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(122, 85, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
