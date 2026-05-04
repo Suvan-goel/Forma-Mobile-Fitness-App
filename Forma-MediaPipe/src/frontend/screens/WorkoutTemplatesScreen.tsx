@@ -869,7 +869,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(31, 39, 45, 0.36)',
     paddingHorizontal: 18,
   },

@@ -28,6 +28,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronRight,
+  Info,
   Settings as SettingsIcon,
   Play,
   BookOpen,
@@ -56,7 +57,7 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import type { RootStackParamList } from '../app/RootNavigator';
 import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
-const RING_SIZE = 78;
+const RING_SIZE = 108;
 const RING_STROKE = 7;
 
 const ScoreRing: React.FC<{
@@ -70,6 +71,8 @@ const ScoreRing: React.FC<{
   const clamped = Math.max(0, Math.min(100, score));
   const offset = circumference - (clamped / 100) * circumference;
   const color = getScoreColor(score);
+  const valueFontSize = small ? 18 : Math.round(size * 0.36);
+  const subFontSize = small ? 10 : Math.round(size * 0.14);
   return (
     <View
       style={{
@@ -108,12 +111,19 @@ const ScoreRing: React.FC<{
           <Text
             style={[
               ringValue,
-              { color: COLORS.text, fontSize: small ? 18 : 22 },
+              { color: COLORS.text, fontSize: valueFontSize },
             ]}
           >
             {score}
           </Text>
-          <Text style={ringSub}>/100</Text>
+          <Text
+            style={[
+              ringSub,
+              { fontSize: subFontSize, marginTop: -Math.round(size * 0.035) },
+            ]}
+          >
+            /100
+          </Text>
         </View>
       </View>
     </View>
@@ -344,8 +354,9 @@ export const HomeScreen: React.FC = () => {
             style={styles.readinessOuter}
           >
             <View style={styles.readinessEdge}>
-              <View style={styles.cardLabelRow}>
-                <Text style={[styles.cardLabel, styles.snapshotLabel]}>FORM SNAPSHOT</Text>
+              <View style={[styles.cardLabelRow, styles.readinessLabelRow]}>
+                <Text style={[styles.cardLabel, styles.snapshotLabel]}>FORM READINESS</Text>
+                <Info size={13} color={COLORS.textTertiary} strokeWidth={1.8} />
               </View>
 
               <View style={styles.readinessBody}>
@@ -618,7 +629,7 @@ export const HomeScreen: React.FC = () => {
 
 // ── Inline text styles for ScoreRing ───────────────
 const ringValue = {
-  fontFamily: FONTS.display.bold,
+  fontFamily: FONTS.display.semibold,
   letterSpacing: -0.5,
 };
 const ringSub = {
@@ -670,7 +681,7 @@ const styles = StyleSheet.create({
     borderRadius: 34,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatarImage: {
     width: '100%',
@@ -720,8 +731,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
   },
   snapshotLabel: {
-    fontSize: 13,
-    letterSpacing: 2.1,
+    fontSize: 12,
+    letterSpacing: 1.5,
+  },
+  readinessLabelRow: {
+    justifyContent: 'flex-start',
+    gap: 5,
   },
 
   /* Form Snapshot */
@@ -734,11 +749,11 @@ const styles = StyleSheet.create({
   readinessBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginTop: 20,
-    marginBottom: 22,
+    gap: 42,
+    marginTop: 18,
+    marginBottom: 20,
   },
-  readinessTextWrap: { flex: 1, gap: 7 },
+  readinessTextWrap: { flex: 1, flexShrink: 1, minWidth: 0, gap: 8 },
   readinessStatus: {
     fontFamily: FONTS.display.semibold,
     fontSize: 16,
@@ -746,13 +761,13 @@ const styles = StyleSheet.create({
   },
   readinessGuidance: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 12.5,
+    fontSize: 13,
     color: COLORS.textSecondary,
-    lineHeight: 17,
+    lineHeight: 19,
   },
 
   startBtnOuter: {
-    borderRadius: 12,
+    borderRadius: 9,
     overflow: 'hidden',
     shadowColor: '#7A55FF',
     shadowOffset: { width: 0, height: 5 },
@@ -794,12 +809,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    minHeight: 58,
-    paddingVertical: 16,
+    minHeight: 50,
+    paddingVertical: 12,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   actionBtnText: {
     fontFamily: FONTS.ui.regular,
@@ -817,8 +832,8 @@ const styles = StyleSheet.create({
   weeklyEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 16,
     gap: 10,
   },
@@ -859,8 +874,8 @@ const styles = StyleSheet.create({
   rewardsEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 16,
     gap: 10,
   },
@@ -939,8 +954,8 @@ const styles = StyleSheet.create({
   challengesEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
   },
   challengeCount: {

@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(31, 39, 45, 0.58)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   introIcon: {
     width: 38,
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   searchInput: {
     flex: 1,
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   avatar: {
     width: 42,
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   followHeartBtnActive: {
     backgroundColor: 'rgba(244, 114, 182, 0.08)',
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   },
   statusBadgeMuted: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   statusText: {
     fontFamily: FONTS.ui.regular,

@@ -83,19 +83,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   rowTop: {
     borderTopLeftRadius: CARD_RADIUS,
     borderTopRightRadius: CARD_RADIUS,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
   rowBottom: {
     borderBottomLeftRadius: CARD_RADIUS,
     borderBottomRightRadius: CARD_RADIUS,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: 10,
   },
   rowEdge: {
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatar: {
     width: 34,

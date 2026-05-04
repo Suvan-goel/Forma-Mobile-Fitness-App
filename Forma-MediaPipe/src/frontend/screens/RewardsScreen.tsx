@@ -92,7 +92,7 @@ const BadgeCard = memo(({
       style={styles.badgeCard}
     >
       <View style={[styles.badgeCardInner, !isUnlocked && styles.badgeCardLocked]}>
-        <View style={[styles.badgeIconWrap, { borderColor: isUnlocked ? `${accent}55` : 'rgba(255,255,255,0.07)' }]}>
+        <View style={[styles.badgeIconWrap, { borderColor: isUnlocked ? `${accent}55` : 'rgba(255,255,255,0.06)' }]}>
           <LinearGradient
             colors={isUnlocked ? [`${accent}33`, 'rgba(255,255,255,0.025)'] : ['rgba(255,255,255,0.045)', 'rgba(255,255,255,0.02)']}
             style={styles.badgeIconGradient}

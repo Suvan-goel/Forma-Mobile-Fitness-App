@@ -71,6 +71,11 @@ const CAPTURE_HORIZONTAL_PADDING = 14;
 const TEMPLATE_CARD_GAP = 9;
 const WORKOUT_CARD_HEIGHT = 176;
 const ACTIVE_SECONDARY_ACTIONS_WIDTH = 152;
+const START_SESSION_CARD_GRADIENT: readonly [string, string, string] = [
+  'rgba(34, 39, 43, 0.80)',
+  'rgba(41, 46, 50, 0.80)',
+  'rgba(48, 53, 57, 0.80)',
+];
 
 type RecordLandingNavigationProp = NativeStackNavigationProp<
   RecordStackParamList,
@@ -226,7 +231,7 @@ export const RecordLandingScreen: React.FC = () => {
   } = useCurrentWorkout();
   const navigationBarHeight = getTabScreenBottomPadding(insets.bottom, 24);
   const compactHeight = windowHeight < 740;
-  const sectionGap = compactHeight ? 8 : 12;
+  const sectionGap = compactHeight ? 12 : 18;
   const templateCardWidth =
     (windowWidth - CAPTURE_HORIZONTAL_PADDING * 2 - TEMPLATE_CARD_GAP * 2) / 3;
   const templateThumbHeight = Math.min(templateCardWidth + 6, compactHeight ? 84 : 112);
@@ -539,7 +544,7 @@ export const RecordLandingScreen: React.FC = () => {
               /* ── QUICK START (idle) CARD ── */
               <View style={styles.activeOuter}>
                 <LinearGradient
-                  colors={[...CARD_GRADIENT_ELEVATED]}
+                  colors={[...START_SESSION_CARD_GRADIENT]}
                   start={CARD_GRADIENT_START}
                   end={CARD_GRADIENT_END}
                   style={styles.activeGradient}
@@ -661,7 +666,9 @@ export const RecordLandingScreen: React.FC = () => {
             ]}
           >
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionLabel}>{templatesLabel}</Text>
+              <Text style={[styles.sectionLabel, styles.sectionHeaderLabel]}>
+                {templatesLabel}
+              </Text>
               <TouchableOpacity
                 onPress={handleChooseTemplate}
                 activeOpacity={0.7}
@@ -807,7 +814,7 @@ const styles = StyleSheet.create({
   },
   contentStack: {
     flexGrow: 1,
-    paddingBottom: 8,
+    paddingBottom: 7,
     justifyContent: 'space-between',
   },
   screenSection: {
@@ -824,10 +831,12 @@ const styles = StyleSheet.create({
   },
 
   dateLine: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.display.semibold,
     fontSize: 11,
     color: COLORS.textSecondary,
-    marginBottom: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 8,
   },
 
   /* Card label */
@@ -851,8 +860,8 @@ const styles = StyleSheet.create({
     height: WORKOUT_CARD_HEIGHT,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 15,
     paddingTop: 14,
     paddingBottom: 14,
@@ -997,7 +1006,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1085,6 +1094,9 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 8,
   },
+  sectionHeaderLabel: {
+    marginBottom: 0,
+  },
   viewAllLink: {
     fontFamily: FONTS.ui.regular,
     fontSize: 10,
@@ -1099,21 +1111,21 @@ const styles = StyleSheet.create({
   toolsCard: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
   },
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 64,
+    minHeight: 60,
     paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingVertical: 10,
   },
   toolRowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   toolIconWrap: {
     width: 34,
@@ -1123,7 +1135,7 @@ const styles = StyleSheet.create({
   },
   toolTextBlock: {
     flex: 1,
-    gap: 5,
+    gap: 3,
   },
   toolTitle: {
     fontFamily: FONTS.display.regular,
@@ -1150,17 +1162,18 @@ const styles = StyleSheet.create({
   },
   templateCard: {
     borderRadius: CARD_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    overflow: 'hidden',
     ...CARD_SHADOW,
   },
   templateGradient: {
     flex: 1,
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderRadius: CARD_RADIUS - 1,
     paddingHorizontal: 0,
-    paddingTop: 9,
-    paddingBottom: 10,
+    paddingTop: 7,
+    paddingBottom: 7,
     gap: 7,
     overflow: 'hidden',
   },
@@ -1202,10 +1215,10 @@ const styles = StyleSheet.create({
   },
   templateName: {
     fontFamily: FONTS.display.regular,
-    fontSize: 11,
+    fontSize: 14,
     color: COLORS.text,
     letterSpacing: -0.1,
-    lineHeight: 12,
+    lineHeight: 16,
   },
   templateMeta: {
     fontFamily: FONTS.ui.regular,

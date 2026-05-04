@@ -490,8 +490,8 @@ const styles = StyleSheet.create({
   heroInner: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -608,8 +608,8 @@ const styles = StyleSheet.create({
   groupEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   bioCharCount: {
     fontFamily: FONTS.mono.regular,

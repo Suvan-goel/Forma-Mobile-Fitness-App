@@ -51,12 +51,13 @@ const FilterBar = memo(({
   );
 });
 
-const TableHeader = memo(() => (
+const TableHeader = memo(({ timeLabel }: { timeLabel: string }) => (
   <View style={styles.tableHeader}>
-    <Text style={[styles.tableHeaderText, styles.rankColumn]}>Rank</Text>
-    <Text style={[styles.tableHeaderText, styles.athleteColumn]}>Athlete</Text>
-    <Text style={[styles.tableHeaderText, styles.scoreColumn]}>Form Score</Text>
-    <Text style={[styles.tableHeaderText, styles.streakColumn]}>Streak</Text>
+    <Text style={styles.sectionLabelInline}>Leaderboard</Text>
+    <View style={styles.tableMetricHeaders}>
+      <Text style={styles.tableMetricHeader}>{timeLabel}</Text>
+      <Text style={styles.tableMetricHeader}>Avg Form Score</Text>
+    </View>
   </View>
 ));
 
@@ -67,6 +68,10 @@ export const LeaderboardView: React.FC = memo(() => {
 
   const top3 = useMemo(() => entries.slice(0, 3), [entries]);
   const rest = useMemo(() => entries.slice(3), [entries]);
+  const timeLabel = useMemo(
+    () => TIME_WINDOWS.find(item => item.key === timeWindow)?.label ?? 'This Week',
+    [timeWindow],
+  );
 
   const currentUserId = currentUser?.userId;
   const showStickyBanner = currentUser && currentUser.rank > 10;
@@ -105,11 +110,11 @@ export const LeaderboardView: React.FC = memo(() => {
       ) : (
         <>
           <Top3Podium entries={top3} />
-          <TableHeader />
+          <TableHeader timeLabel={timeLabel} />
         </>
       )}
     </View>
-  ), [timeWindow, isLoading, error, entries.length, top3, refetch]);
+  ), [timeWindow, timeLabel, isLoading, error, entries.length, top3, refetch]);
 
   return (
     <View style={styles.container}>
@@ -192,14 +197,27 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginHorizontal: SPACING.screenHorizontal,
-    paddingHorizontal: 12,
-    paddingTop: 2,
-    paddingBottom: 7,
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 14,
   },
-  tableHeaderText: {
+  sectionLabelInline: {
+    fontFamily: FONTS.display.regular,
+    fontSize: 12.5,
+    color: COLORS.text,
+    letterSpacing: 0,
+  },
+  tableMetricHeaders: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+    flexShrink: 0,
+  },
+  tableMetricHeader: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.textTertiary,
   },
   rankColumn: {
@@ -276,7 +294,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.screenHorizontal,
     backgroundColor: '#0E151A',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     gap: SPACING.md,
   },
   stickyRankBadge: {

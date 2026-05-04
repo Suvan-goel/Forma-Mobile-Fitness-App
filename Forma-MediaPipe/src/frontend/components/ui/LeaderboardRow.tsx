@@ -5,7 +5,16 @@
 import React, { memo } from 'react';
 import { Image, View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SPACING, CARD_GRADIENT_START, CARD_GRADIENT_END } from '../../constants/theme';
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  CARD_GRADIENT_COLORS,
+  CARD_GRADIENT_START,
+  CARD_GRADIENT_END,
+  CARD_RADIUS,
+  getScoreColor,
+} from '../../constants/theme';
 import { LeaderboardEntry } from '../../../backend/services/api/types';
 
 interface LeaderboardRowProps {
@@ -21,29 +30,27 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({
   isFirstRow = false,
   isLastRow = false,
 }) => {
+  const streakLabel = entry.streakDays && entry.streakDays > 0
+    ? `${entry.streakDays} day${entry.streakDays === 1 ? '' : 's'} streak`
+    : 'No streak yet';
+
   return (
-    <View style={[
-      styles.cardOuter,
-      isFirstRow && styles.cardOuterFirst,
-      isLastRow && styles.cardOuterLast,
-    ]}>
+    <View style={styles.rowOuter}>
       <LinearGradient
-        colors={isCurrentUser ? ['#7B5CFF', '#694AE8', '#5639CA'] : ['rgba(25, 31, 35, 0.92)', 'rgba(13, 20, 24, 0.92)', 'rgba(8, 14, 17, 0.92)']}
+        colors={[...CARD_GRADIENT_COLORS]}
         start={CARD_GRADIENT_START}
         end={CARD_GRADIENT_END}
         style={[
-          styles.card,
-          isFirstRow && styles.cardFirst,
-          isLastRow && styles.cardLast,
+          styles.rowGradient,
+          isFirstRow && styles.rowTop,
+          isLastRow && styles.rowBottom,
         ]}
       >
         <View style={[
-          styles.cardEdge,
-          isCurrentUser && styles.cardEdgeHighlight,
-          isFirstRow && styles.cardEdgeFirst,
-          isLastRow && styles.cardEdgeLast,
+          styles.rowEdge,
+          !isLastRow && styles.rowDivider,
         ]}>
-          <Text style={[styles.rank, isCurrentUser && styles.rankHighlight]}>
+          <Text style={styles.rank}>
             {entry.rank}
           </Text>
 
@@ -57,21 +64,20 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({
             )}
           </View>
 
-          <View style={styles.nameContainer}>
-            <Text style={[styles.name, isCurrentUser && styles.nameHighlight]} numberOfLines={1}>
+          <View style={styles.info}>
+            <Text style={styles.name} numberOfLines={1}>
               {isCurrentUser ? 'You' : entry.displayName}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {streakLabel}
             </Text>
           </View>
 
-          <View style={styles.scoreContainer}>
-            <Text style={[styles.score, isCurrentUser && styles.scoreHighlight]}>
+          <View style={styles.stats}>
+            <Text style={[styles.score, { color: getScoreColor(entry.score) }]}>
               {entry.score.toLocaleString(undefined, { maximumFractionDigits: 1 })}
             </Text>
           </View>
-
-          <Text style={[styles.streakColumn, isCurrentUser && styles.streakColumnHighlight]}>
-            {entry.streakDays ?? '-'}
-          </Text>
         </View>
       </LinearGradient>
     </View>
@@ -79,77 +85,62 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = memo(({
 });
 
 const styles = StyleSheet.create({
-  cardOuter: {
+  rowOuter: {
     marginHorizontal: SPACING.screenHorizontal,
-    borderRadius: 0,
-    overflow: 'hidden',
   },
-  cardOuterFirst: {
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-  },
-  cardOuterLast: {
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
-  },
-  card: {
+  rowGradient: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 0,
-  },
-  cardFirst: {
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-  },
-  cardLast: {
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
-  },
-  cardEdge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 46,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    overflow: 'hidden',
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  cardEdgeFirst: {
+  rowTop: {
+    borderTopLeftRadius: CARD_RADIUS,
+    borderTopRightRadius: CARD_RADIUS,
     borderTopWidth: 1,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
   },
-  cardEdgeLast: {
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
+  rowBottom: {
+    borderBottomLeftRadius: CARD_RADIUS,
+    borderBottomRightRadius: CARD_RADIUS,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 10,
   },
-  cardEdgeHighlight: {
-    borderColor: 'rgba(255, 255, 255, 0.085)',
+  rowEdge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 58,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  rowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   rank: {
     fontFamily: FONTS.ui.bold,
-    fontSize: 12,
+    fontSize: 12.5,
     color: COLORS.textSecondary,
-    width: 28,
+    width: 26,
     textAlign: 'center',
-  },
-  rankHighlight: {
-    color: COLORS.text,
+    marginRight: 8,
   },
   avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   avatarHighlight: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(139, 92, 246, 0.18)',
+    borderColor: 'rgba(139, 92, 246, 0.38)',
   },
   avatarImage: {
     width: '100%',
@@ -157,43 +148,32 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontFamily: FONTS.display.regular,
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.text,
   },
-  nameContainer: {
+  info: {
     flex: 1,
-    marginLeft: 9,
+    marginLeft: 10,
   },
   name: {
     fontFamily: FONTS.ui.regular,
-    fontSize: 13,
+    fontSize: 13.5,
     color: COLORS.text,
   },
-  nameHighlight: {
+  subtitle: {
     fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
+    fontSize: 10.5,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
-  scoreContainer: {
-    marginLeft: SPACING.sm,
-    width: 76,
+  stats: {
     alignItems: 'flex-end',
+    marginLeft: SPACING.sm,
+    minWidth: 40,
   },
   score: {
-    fontFamily: FONTS.ui.regular,
+    fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 13,
-    color: COLORS.text,
-  },
-  scoreHighlight: {
-    color: COLORS.text,
-  },
-  streakColumn: {
-    width: 42,
-    textAlign: 'center',
-    fontFamily: FONTS.ui.bold,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  streakColumnHighlight: {
-    color: COLORS.text,
   },
 });

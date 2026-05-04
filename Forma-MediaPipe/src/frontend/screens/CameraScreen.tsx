@@ -1830,7 +1830,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 26, 32, 0.7)',
     borderRadius: 50,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   metricLabel: {
     fontSize: 12,
@@ -1868,7 +1868,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 26, 32, 0.85)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     alignSelf: 'flex-start',

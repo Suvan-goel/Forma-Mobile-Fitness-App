@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
   },
   ctaText: {
     fontFamily: FONTS.display.regular,

@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
   },
   secondaryButton: {
     borderColor: COLORS.borderStrong,

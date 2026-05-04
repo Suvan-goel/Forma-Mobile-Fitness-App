@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   saveButtonText: {
     fontFamily: FONTS.display.regular,
@@ -704,7 +704,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 6,
   },
   summaryItem: {
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     padding: 20,
     gap: 8,
   },
@@ -833,8 +833,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
     alignItems: 'center',
   },

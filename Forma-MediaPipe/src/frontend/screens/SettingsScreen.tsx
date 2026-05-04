@@ -44,14 +44,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
-const hexToRgba = (hex: string, alpha: number): string => {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
 interface SettingsScreenProps {
   navigation: any;
 }
@@ -162,9 +154,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     showAlert('Send Feedback', 'Feedback sharing is coming soon. For now, please contact support from the Help Center.');
   };
 
-  /* Icon bubble — rounded square w/ tinted background */
+  /* Icon slot — keeps row alignment without drawing a background */
   const IconBubble = ({ icon: Icon, color }: { icon: any; color: string }) => (
-    <View style={[styles.iconBubble, { backgroundColor: hexToRgba(color, 0.14) }]}>
+    <View style={styles.iconBubble}>
       <Icon size={17} color={color} strokeWidth={2} />
     </View>
   );
@@ -491,8 +483,8 @@ const styles = StyleSheet.create({
   groupEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
@@ -509,11 +501,10 @@ const styles = StyleSheet.create({
     marginLeft: 44,
   },
 
-  /* Icon bubble — rounded square containing the row icon */
+  /* Icon slot */
   iconBubble: {
     width: 30,
     height: 30,
-    borderRadius: CARD_RADIUS_SM,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -591,8 +582,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 22,
     width: '100%',
     maxWidth: 340,

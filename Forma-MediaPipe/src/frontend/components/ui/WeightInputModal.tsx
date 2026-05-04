@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS_LG,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderTopColor: 'rgba(255, 255, 255, 0.105)',
+    borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
   },
   headerRow: {
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   recordingSection: {
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     gap: 11,
   },
   sectionLabelRow: {
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     minHeight: 62,
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     flexDirection: 'row',
     alignItems: 'center',

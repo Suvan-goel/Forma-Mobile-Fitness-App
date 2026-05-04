@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: CARD_RADIUS_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255,255,255,0.06)',
     backgroundColor: 'rgba(255,255,255,0.045)',
     alignItems: 'center',
     justifyContent: 'center',

@@ -535,8 +535,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(24, 26, 28, 0.78)',
     padding: 3,
     overflow: 'hidden',
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.04)',
-    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   topTabText: {
     fontFamily: FONTS.display.semibold,
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
   },
   weekdayCircleEmpty: {
     borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
 
   /* Personal Bests */
@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   leaderInitial: {
     fontFamily: FONTS.display.regular,
