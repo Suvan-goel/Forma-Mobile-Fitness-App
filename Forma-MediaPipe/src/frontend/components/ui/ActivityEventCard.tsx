@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
   },
   scoreText: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 14,
   },
   description: {
@@ -353,6 +354,7 @@ const styles = StyleSheet.create({
   },
   formScoreValue: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 27,
     lineHeight: 31,
   },

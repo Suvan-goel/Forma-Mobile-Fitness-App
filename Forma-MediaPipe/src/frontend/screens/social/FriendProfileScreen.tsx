@@ -565,6 +565,7 @@ const styles = StyleSheet.create({
   levelNumber: {
     position: 'absolute',
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 20,
     color: COLORS.text,
   },
@@ -596,6 +597,7 @@ const styles = StyleSheet.create({
   },
   xpText: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 12,
     color: COLORS.textSecondary,
   },

@@ -571,6 +571,7 @@ const styles = StyleSheet.create({
   /* Version */
   versionText: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 10,
     color: COLORS.textTertiary,
     letterSpacing: 2,

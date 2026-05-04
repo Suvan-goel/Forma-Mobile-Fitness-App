@@ -7,31 +7,27 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import {
   useFonts,
-  Inter_400Regular,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+} from '@expo-google-fonts/geist';
 import {
-  JetBrainsMono_400Regular,
-  JetBrainsMono_700Bold,
-} from '@expo-google-fonts/jetbrains-mono';
-import {
-  SpaceGrotesk_500Medium,
-  SpaceGrotesk_600SemiBold,
-  SpaceGrotesk_700Bold,
-} from '@expo-google-fonts/space-grotesk';
+  Urbanist_600SemiBold,
+  Urbanist_700Bold,
+} from '@expo-google-fonts/urbanist';
 import { COLORS } from './src/frontend/constants/theme';
 import { RootNavigator } from './src/frontend/app/RootNavigator';
 import { ScreenBackground } from './src/frontend/components/ui/ScreenBackground';
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_700Bold,
-    JetBrainsMono_400Regular,
-    JetBrainsMono_700Bold,
-    SpaceGrotesk_500Medium,
-    SpaceGrotesk_600SemiBold,
-    SpaceGrotesk_700Bold,
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+    Urbanist_600SemiBold,
+    Urbanist_700Bold,
   });
 
   // Proceed if fonts loaded OR if there's an error (use system fonts as fallback)

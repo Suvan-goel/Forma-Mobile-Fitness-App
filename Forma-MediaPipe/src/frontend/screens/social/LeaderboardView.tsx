@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
   },
   stickyRank: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 14,
     color: COLORS.primary,
   },
@@ -298,6 +299,7 @@ const styles = StyleSheet.create({
   },
   stickyScore: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 16,
     color: COLORS.green,
   },

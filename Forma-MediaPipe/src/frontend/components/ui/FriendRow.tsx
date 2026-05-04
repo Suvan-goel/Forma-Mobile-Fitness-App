@@ -151,6 +151,7 @@ const styles = StyleSheet.create({
   },
   formScore: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 13,
   },
 });

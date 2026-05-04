@@ -101,27 +101,36 @@ export const SPACING = {
 } as const;
 
 export const FONTS = {
-  // Display — Space Grotesk (Modern Geometric Grotesk)
+  // Brand wordmark — Urbanist, wide-tracked geometric sans
+  brand: {
+    semibold: 'Urbanist_600SemiBold',
+    bold: 'Urbanist_700Bold',
+    semiboldFallback: 'System',
+    boldFallback: 'System',
+  },
+  // Display — Geist, close to SF Pro's clean product UI feel
   display: {
-    medium: 'SpaceGrotesk_500Medium',
-    semibold: 'SpaceGrotesk_600SemiBold',
-    bold: 'SpaceGrotesk_700Bold',
+    medium: 'Geist_500Medium',
+    semibold: 'Geist_600SemiBold',
+    bold: 'Geist_700Bold',
     mediumFallback: 'System',
     semiboldFallback: 'System',
     boldFallback: 'System',
   },
-  // UI Font — Inter (Sans-Serif)
+  // UI Font — Geist
   ui: {
-    regular: 'Inter_400Regular',
-    bold: 'Inter_700Bold',
+    regular: 'Geist_400Regular',
+    medium: 'Geist_500Medium',
+    bold: 'Geist_600SemiBold',
     regularFallback: 'System',
+    mediumFallback: 'System',
     boldFallback: 'System',
   },
-  // Numbers/HUD — JetBrains Mono
+  // Numbers/HUD — Geist with tabular numerals where alignment matters
   mono: {
-    regular: 'JetBrainsMono_400Regular',
-    bold: 'JetBrainsMono_700Bold',
-    regularFallback: 'Courier',
-    boldFallback: 'Courier',
+    regular: 'Geist_500Medium',
+    bold: 'Geist_700Bold',
+    regularFallback: 'System',
+    boldFallback: 'System',
   },
 } as const;

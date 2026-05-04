@@ -489,6 +489,7 @@ const styles = StyleSheet.create({
   },
   formScore: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 25,
     marginTop: 8,
   },
@@ -519,6 +520,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 24,
     color: COLORS.text,
     marginBottom: 4,
@@ -593,6 +595,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 22,
     color: COLORS.textSecondary,
   },

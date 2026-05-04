@@ -582,6 +582,7 @@ const styles = StyleSheet.create({
   },
   counterText: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 12,
     color: COLORS.textSecondary,
   },

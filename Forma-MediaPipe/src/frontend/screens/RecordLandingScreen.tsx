@@ -33,6 +33,7 @@ import {
   ArrowRight,
   BookOpen,
   Camera,
+  LayoutTemplate,
   Settings as SettingsIcon,
   Clock,
   Dumbbell,
@@ -616,10 +617,23 @@ export const RecordLandingScreen: React.FC = () => {
               >
                 <ToolRow
                   icon={
+                    <LayoutTemplate
+                      size={25}
+                      color="#FFFFFF"
+                      strokeWidth={1.8}
+                    />
+                  }
+                  title="Choose Template"
+                  subtitle="Start from a saved workout"
+                  onPress={handleChooseTemplate}
+                  divider
+                />
+                <ToolRow
+                  icon={
                     <BookOpen
-                      size={18}
-                      color={COLORS.accent}
-                      strokeWidth={1.7}
+                      size={25}
+                      color="#FFFFFF"
+                      strokeWidth={1.8}
                     />
                   }
                   title="Exercise Guide"
@@ -629,7 +643,7 @@ export const RecordLandingScreen: React.FC = () => {
                 />
                 <ToolRow
                   icon={
-                    <Camera size={18} color={COLORS.accent} strokeWidth={1.7} />
+                    <Camera size={25} color="#FFFFFF" strokeWidth={1.8} />
                   }
                   title="Camera Setup"
                   subtitle="Check angles and positioning"
@@ -731,7 +745,7 @@ const ToolRow: React.FC<{
       <Text style={styles.toolTitle}>{title}</Text>
       <Text style={styles.toolSubtitle}>{subtitle}</Text>
     </View>
-    <ChevronRight size={17} color={COLORS.textTertiary} strokeWidth={1.7} />
+    <ChevronRight size={20} color="#FFFFFF" strokeWidth={1.8} />
   </TouchableOpacity>
 );
 
@@ -968,6 +982,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 26,
     letterSpacing: 1.1,
+    fontVariant: ['tabular-nums'],
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
@@ -975,6 +990,7 @@ const styles = StyleSheet.create({
     color: 'rgba(122, 85, 255, 0.62)',
     lineHeight: 26,
     marginHorizontal: 1,
+    fontVariant: ['tabular-nums'],
   },
   activePauseControl: {
     width: 34,
@@ -1101,10 +1117,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.055)',
   },
   toolIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: 'rgba(124,92,255,0.12)',
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },

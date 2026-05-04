@@ -1208,6 +1208,7 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 15,
     color: COLORS.text,
     lineHeight: 18,

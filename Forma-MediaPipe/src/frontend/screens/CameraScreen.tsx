@@ -1844,6 +1844,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     minWidth: 30,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   recordButtonInnerActive: {
     backgroundColor: '#FF3B30',
@@ -1912,6 +1913,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FONTS.mono.regular,
     color: COLORS.textSecondary,
+    fontVariant: ['tabular-nums'],
   },
   torsoDebugHint: {
     fontSize: 10,

@@ -960,5 +960,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.regular,
     fontSize: 11,
     color: COLORS.textSecondary,
+    fontVariant: ['tabular-nums'],
   },
 });

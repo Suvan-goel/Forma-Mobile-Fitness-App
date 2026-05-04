@@ -561,6 +561,7 @@ const styles = StyleSheet.create({
   },
   imagePlaceholderText: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 13,
     color: COLORS.textTertiary,
     letterSpacing: 1,

@@ -413,6 +413,7 @@ const styles = StyleSheet.create({
   },
   requestCountText: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 10,
     color: COLORS.primary,
   },

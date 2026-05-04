@@ -38,11 +38,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.regular,
     fontSize: 16,
     lineHeight: 24,
+    fontVariant: ['tabular-nums'],
   },
   regular: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
   },
   bold: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
   },
 });

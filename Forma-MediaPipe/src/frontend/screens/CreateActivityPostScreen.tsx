@@ -679,6 +679,7 @@ const styles = StyleSheet.create({
   },
   attachmentScoreText: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 14,
   },
   attachmentRemove: {
@@ -812,6 +813,7 @@ const styles = StyleSheet.create({
   },
   pickerScoreText: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 12,
   },
   pickerCheck: {

@@ -1180,11 +1180,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.bold,
     color: COLORS.textSecondary,
     letterSpacing: 1.4,
+    fontVariant: ['tabular-nums'],
   },
   timerColon: {
     fontFamily: FONTS.mono.regular,
     color: COLORS.textTertiary,
     marginHorizontal: 1,
+    fontVariant: ['tabular-nums'],
   },
 
   /* ── Empty State ─────────────────────────── */
@@ -1356,6 +1358,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     width: 18,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   setIndexTextCurrent: {
     color: COLORS.text,
@@ -1395,6 +1398,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono.bold,
     fontSize: 11,
     lineHeight: 14,
+    fontVariant: ['tabular-nums'],
   },
   setNotesButton: {
     width: 30,

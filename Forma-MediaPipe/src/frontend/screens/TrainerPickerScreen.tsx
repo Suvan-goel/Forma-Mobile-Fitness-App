@@ -306,6 +306,7 @@ const styles = StyleSheet.create({
   },
   trainerAge: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 12,
     color: COLORS.textTertiary,
     lineHeight: 20,

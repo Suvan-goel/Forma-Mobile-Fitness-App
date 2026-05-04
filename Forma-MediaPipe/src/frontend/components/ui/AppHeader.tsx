@@ -54,7 +54,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     <View style={styles.titleRow}>
       {titlePrefix ? <View style={styles.titlePrefix}>{titlePrefix}</View> : null}
       <Text
-        style={[styles.title, titleStyle]}
+        style={[styles.title, titlePrefix ? styles.brandTitle : null, titleStyle]}
         numberOfLines={numberOfLines}
         adjustsFontSizeToFit={adjustsFontSizeToFit}
       >
@@ -94,11 +94,16 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     minWidth: 0,
-    fontFamily: FONTS.display.bold,
-    fontSize: 22,
+    fontFamily: FONTS.display.semibold,
+    fontSize: 20,
     color: COLORS.text,
-    letterSpacing: 4,
+    letterSpacing: 0.2,
     textAlign: 'left',
+  },
+  brandTitle: {
+    fontFamily: FONTS.brand.semibold,
+    fontSize: 22,
+    letterSpacing: 4.4,
   },
   rightSlot: {
     minWidth: 28,

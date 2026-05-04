@@ -616,6 +616,7 @@ const styles = StyleSheet.create({
   },
   scoreRingValue: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 21,
     lineHeight: 25,
   },
@@ -696,6 +697,7 @@ const styles = StyleSheet.create({
   },
   exerciseCount: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 12,
     color: COLORS.textTertiary,
   },
@@ -789,6 +791,7 @@ const styles = StyleSheet.create({
   avgScoreText: {
     fontSize: 13,
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
   },
   setsHeader: {
     flexDirection: 'row',
@@ -845,6 +848,7 @@ const styles = StyleSheet.create({
   setNumText: {
     fontSize: 12,
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     color: COLORS.textSecondary,
   },
   setCell: {
@@ -867,6 +871,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontSize: 13.5,
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     textAlign: 'center',
   },
   setNotesContainer: {

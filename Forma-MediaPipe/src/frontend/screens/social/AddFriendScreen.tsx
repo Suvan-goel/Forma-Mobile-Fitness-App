@@ -399,6 +399,7 @@ const styles = StyleSheet.create({
   },
   resultsCount: {
     fontFamily: FONTS.mono.bold,
+    fontVariant: ['tabular-nums'],
     fontSize: 10,
     color: COLORS.primary,
     paddingHorizontal: 7,

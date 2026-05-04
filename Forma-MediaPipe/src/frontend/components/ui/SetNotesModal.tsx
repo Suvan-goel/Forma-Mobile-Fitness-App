@@ -401,6 +401,7 @@ const styles = StyleSheet.create({
   },
   scoreUnit: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 12,
     color: COLORS.textTertiary,
   },

@@ -695,6 +695,7 @@ const styles = StyleSheet.create({
   },
   bioCharCount: {
     fontFamily: FONTS.mono.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 10,
     color: COLORS.textTertiary,
   },
