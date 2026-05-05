@@ -669,9 +669,12 @@ extension ExpoPoseDetectionView: VisionPoseServiceDelegate {
     didEmitFrame payload: [String: Any],
     timestampMs: Int
   ) {
-    guard !isDisposed(), enableVisionDualEmit else { return }
+    guard !isDisposed() else { return }
+    // Emit when vision3d is the primary backend, or when dual-emit (Phase 2 dark mode) is on.
+    guard poseBackend == .vision3d || enableVisionDualEmit else { return }
     DispatchQueue.main.async { [weak self] in
-      guard let self = self, !self.isDisposed(), self.enableVisionDualEmit else { return }
+      guard let self = self, !self.isDisposed() else { return }
+      guard self.poseBackend == .vision3d || self.enableVisionDualEmit else { return }
       self.onVisionFrame(payload)
     }
   }
