@@ -306,10 +306,50 @@ class ExpoPoseDetectionView: ExpoView {
 
   private func applyFrameLimit(to camera: AVCaptureDevice) throws {
     try camera.lockForConfiguration()
-    let frameDuration = CMTimeMake(value: 1, timescale: Int32(frameLimit))
+    defer { camera.unlockForConfiguration() }
+
+    let desiredFps = Double(frameLimit)
+
+    // The format chosen by sessionPreset .hd1280x720 typically caps at 30 fps.
+    // If the caller wants more, switch to a format that actually supports it,
+    // otherwise AVCaptureDevice raises NSInvalidArgumentException on setActiveVideoMinFrameDuration.
+    if let upgraded = bestFormat(for: camera, desiredFps: desiredFps),
+       camera.activeFormat !== upgraded {
+      camera.activeFormat = upgraded
+    }
+
+    // Clamp to what the active format actually supports — never request beyond the range.
+    let supportedMax = camera.activeFormat.videoSupportedFrameRateRanges
+      .map { $0.maxFrameRate }
+      .max() ?? 30.0
+    let clampedFps = max(1.0, min(desiredFps, supportedMax))
+
+    let frameDuration = CMTime(value: 1, timescale: CMTimeScale(clampedFps))
     camera.activeVideoMinFrameDuration = frameDuration
     camera.activeVideoMaxFrameDuration = frameDuration
-    camera.unlockForConfiguration()
+  }
+
+  // Pick the smallest-area format at >= desiredFps. Prefers 1280x720 when available
+  // to match sessionPreset .hd1280x720; otherwise falls back to the smallest fps-capable format.
+  private func bestFormat(for camera: AVCaptureDevice, desiredFps: Double) -> AVCaptureDevice.Format? {
+    let candidates = camera.formats.filter { format in
+      format.videoSupportedFrameRateRanges.contains { range in
+        desiredFps <= range.maxFrameRate + 0.001
+      }
+    }
+    if candidates.isEmpty { return nil }
+
+    let preferred = candidates.first { format in
+      let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+      return dims.width == 1280 && dims.height == 720
+    }
+    if let preferred = preferred { return preferred }
+
+    return candidates.min { lhs, rhs in
+      let l = CMVideoFormatDescriptionGetDimensions(lhs.formatDescription)
+      let r = CMVideoFormatDescriptionGetDimensions(rhs.formatDescription)
+      return Int(l.width) * Int(l.height) < Int(r.width) * Int(r.height)
+    }
   }
 
   private func initializePoseLandmarker() {
@@ -456,12 +496,7 @@ class ExpoPoseDetectionView: ExpoView {
         captureSession.addInput(input)
       }
 
-      // Update frame rate
-      try camera.lockForConfiguration()
-      let frameDuration = CMTimeMake(value: 1, timescale: Int32(frameLimit))
-      camera.activeVideoMinFrameDuration = frameDuration
-      camera.activeVideoMaxFrameDuration = frameDuration
-      camera.unlockForConfiguration()
+      try applyFrameLimit(to: camera)
     } catch {
       print("[ExpoPoseDetection] Camera switch error: \(error)")
     }
