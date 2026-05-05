@@ -44,6 +44,26 @@ describe('dataset label validation', () => {
   it('accepts a clean per-rep label file with known issue ids', () => {
     expect(validateLabelFile(baseLabel, new Set(['demo-exercise.depth_short']))).toEqual([]);
   });
+
+  it('accepts multiple known issue ids on the same rep', () => {
+    const issues = validateLabelFile(
+      {
+        ...baseLabel,
+        expectedReps: 1,
+        reps: [
+          {
+            index: 1,
+            startMs: 0,
+            endMs: 1000,
+            issueIds: ['demo-exercise.depth_short', 'demo-exercise.tempo_fast'],
+          },
+        ],
+      },
+      new Set(['demo-exercise.depth_short', 'demo-exercise.tempo_fast']),
+    );
+
+    expect(issues).toEqual([]);
+  });
 });
 
 describe('dataset evaluator', () => {
@@ -88,6 +108,90 @@ describe('dataset evaluator', () => {
     expect(evaluation.totals.falsePositives).toBe(1);
     expect(evaluation.totals.falseNegatives).toBe(1);
     expect(evaluation.totals.cleanFalsePositives).toBe(1);
+  });
+
+  it('scores multiple expected issues on the same rep independently when partially predicted', () => {
+    const evaluation = evaluateCase(
+      {
+        label: {
+          ...baseLabel,
+          expectedReps: 1,
+          reps: [
+            {
+              index: 1,
+              startMs: 0,
+              endMs: 1000,
+              issueIds: ['demo-exercise.depth_short', 'demo-exercise.tempo_fast'],
+            },
+          ],
+        },
+        recording: { exerciseName: 'Demo Exercise', metadata: {}, frames: [] },
+      },
+      {
+        finalRepCount: 1,
+        reps: [
+          {
+            repIndex: 1,
+            score: 80,
+            messages: [],
+            issueIds: ['demo-exercise.depth_short'],
+            startedAt: 0,
+            completedAt: 1000,
+          },
+        ],
+      },
+    );
+
+    expect(evaluation.matchedReps[0]).toMatchObject({
+      truePositives: ['demo-exercise.depth_short'],
+      falsePositives: [],
+      falseNegatives: ['demo-exercise.tempo_fast'],
+    });
+    expect(evaluation.totals.truePositives).toBe(1);
+    expect(evaluation.totals.falsePositives).toBe(0);
+    expect(evaluation.totals.falseNegatives).toBe(1);
+  });
+
+  it('scores all matched issues on the same rep as true positives', () => {
+    const evaluation = evaluateCase(
+      {
+        label: {
+          ...baseLabel,
+          expectedReps: 1,
+          reps: [
+            {
+              index: 1,
+              startMs: 0,
+              endMs: 1000,
+              issueIds: ['demo-exercise.depth_short', 'demo-exercise.tempo_fast'],
+            },
+          ],
+        },
+        recording: { exerciseName: 'Demo Exercise', metadata: {}, frames: [] },
+      },
+      {
+        finalRepCount: 1,
+        reps: [
+          {
+            repIndex: 1,
+            score: 70,
+            messages: [],
+            issueIds: ['demo-exercise.tempo_fast', 'demo-exercise.depth_short'],
+            startedAt: 0,
+            completedAt: 1000,
+          },
+        ],
+      },
+    );
+
+    expect(evaluation.matchedReps[0]).toMatchObject({
+      truePositives: ['demo-exercise.depth_short', 'demo-exercise.tempo_fast'],
+      falsePositives: [],
+      falseNegatives: [],
+    });
+    expect(evaluation.totals.truePositives).toBe(2);
+    expect(evaluation.totals.falsePositives).toBe(0);
+    expect(evaluation.totals.falseNegatives).toBe(0);
   });
 
   it('matches issue labels by rep timing instead of array position', () => {

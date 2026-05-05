@@ -99,7 +99,9 @@ Generated feedback appears only as suggestions:
 - `suggestedScore`
 
 Keep `issueIds: []` for clean reps. Copy only correct suggestions into
-`issueIds`, or copy another valid issue id from `availableIssues`.
+`issueIds`, or copy another valid issue id from `availableIssues`. If one rep
+has multiple visible form issues, include every correct issue id in that same
+rep's `issueIds` array.
 
 When the file is correct, change:
 
@@ -231,8 +233,11 @@ Minimal reviewed label example:
       "index": 2,
       "startMs": 3200,
       "endMs": 5200,
-      "issueIds": ["barbell-squat.depth_short"],
-      "notes": "Did not reach depth"
+      "issueIds": [
+        "barbell-squat.depth_short",
+        "barbell-squat.torso_fail"
+      ],
+      "notes": "Did not reach depth and leaned too far forward"
     }
   ]
 }
