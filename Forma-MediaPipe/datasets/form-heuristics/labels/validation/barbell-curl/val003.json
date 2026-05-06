@@ -4,182 +4,57 @@
   "sourceVideo": "videos/validation/barbell-curl/val003.mp4",
   "landmarkFile": "landmarks/validation/barbell-curl/val003.json",
   "split": "validation",
-  "reviewStatus": "draft",
+  "reviewStatus": "reviewed",
   "expectedReps": 8,
   "reps": [
     {
       "index": 1,
-      "startMs": 33,
-      "endMs": 4312,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 90,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 2000,
+      "endMs": 4900,
+      "issueIds": []
     },
     {
       "index": 2,
-      "startMs": 5728,
-      "endMs": 6913,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_extend"
-      ],
-      "suggestedFeedbackMessages": [
-        "Extend fully at the bottom."
-      ],
-      "suggestedScore": 92,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 5450,
+      "endMs": 7850,
+      "issueIds": []
     },
     {
       "index": 3,
-      "startMs": 8888,
-      "endMs": 10303,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_extend"
-      ],
-      "suggestedFeedbackMessages": [
-        "Extend fully at the bottom."
-      ],
-      "suggestedScore": 92,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 8450,
+      "endMs": 11450,
+      "issueIds": []
     },
     {
       "index": 4,
-      "startMs": 12443,
-      "endMs": 14450,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 89,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 12000,
+      "endMs": 14950,
+      "issueIds": []
     },
     {
       "index": 5,
-      "startMs": 15965,
-      "endMs": 17610,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_extend",
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Extend fully at the bottom.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 89,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 15450,
+      "endMs": 18550,
+      "issueIds": []
     },
     {
       "index": 6,
-      "startMs": 19618,
-      "endMs": 21955,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 90,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 19000,
+      "endMs": 22450,
+      "issueIds": []
     },
     {
       "index": 7,
-      "startMs": 23305,
-      "endMs": 25280,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 90,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 22900,
+      "endMs": 25850,
+      "issueIds": []
     },
     {
       "index": 8,
-      "startMs": 26432,
-      "endMs": 28308,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 90,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 26150,
+      "endMs": 28800,
+      "issueIds": []
     }
   ],
-  "notes": "Draft generated from heuristic replay. Review rep count/timing and move approved suggestions into issueIds before marking reviewed.",
-  "availableIssues": [
-    {
-      "issueId": "barbell-curl.incomplete_flex",
-      "feedbackMessage": "Flex more at the top of the curl."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_extend",
-      "feedbackMessage": "Extend fully at the bottom."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_rom",
-      "feedbackMessage": "Incomplete rep — curl all the way up and fully extend."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_fail",
-      "feedbackMessage": "Too much shoulder involvement — reduce the weight."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_warn",
-      "feedbackMessage": "Upper arms moving — keep elbows pinned to your sides."
-    },
-    {
-      "issueId": "barbell-curl.torso_fail",
-      "feedbackMessage": "Excessive body swing — this is cheating the rep."
-    },
-    {
-      "issueId": "barbell-curl.torso_warn",
-      "feedbackMessage": "Don't swing your torso — stay upright and controlled."
-    },
-    {
-      "issueId": "barbell-curl.tempo_up",
-      "feedbackMessage": "Slow down — control the curl."
-    },
-    {
-      "issueId": "barbell-curl.tempo_down",
-      "feedbackMessage": "Control the lowering — don't drop the weight."
-    },
-    {
-      "issueId": "barbell-curl.asymmetry",
-      "feedbackMessage": "Arms are uneven — curl both sides together."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Tuck your elbows in — they're drifting outward."
-    },
-    {
-      "issueId": "barbell-curl.wrist_curl",
-      "feedbackMessage": "Keep your wrists neutral — avoid curling them in."
-    }
-  ],
-  "draftMetadata": {
-    "generatedAt": "2026-05-05T16:19:31.673Z",
-    "generator": "dataset:draft-label",
-    "source": "heuristic-replay"
-  }
+  "notes": "Human-reviewed from video. Eight visible side-angle reps labelled with full bottom-to-bottom windows. Draft wrist-curl and incomplete-extension suggestions were not copied because the wrists are not reliable enough from this footage and the reps visibly return to the bottom position."
 }

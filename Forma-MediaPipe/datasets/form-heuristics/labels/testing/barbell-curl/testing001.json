@@ -4,182 +4,64 @@
   "sourceVideo": "videos/testing/barbell-curl/testing001.mp4",
   "landmarkFile": "landmarks/testing/barbell-curl/testing001.json",
   "split": "test",
-  "reviewStatus": "draft",
+  "reviewStatus": "reviewed",
   "expectedReps": 6,
   "reps": [
     {
       "index": 1,
-      "startMs": 0,
-      "endMs": 2672,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_rom",
-        "barbell-curl.shoulder_warn",
-        "barbell-curl.torso_warn",
-        "barbell-curl.wrist_curl"
+      "startMs": 1250,
+      "endMs": 2750,
+      "issueIds": [
+        "barbell-curl.torso_warn"
       ],
-      "suggestedFeedbackMessages": [
-        "Incomplete rep — curl all the way up and fully extend.",
-        "Upper arms moving — keep elbows pinned to your sides.",
-        "Don't swing your torso — stay upright and controlled.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 28,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "notes": "Forward torso dip before curling, then leans back into the top."
     },
     {
       "index": 2,
-      "startMs": 3574,
-      "endMs": 4543,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.torso_warn",
-        "barbell-curl.wrist_curl"
+      "startMs": 3000,
+      "endMs": 4750,
+      "issueIds": [
+          "barbell-curl.torso_fail"
       ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Don't swing your torso — stay upright and controlled.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 49,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "notes": "Uses a forward dip and body swing to start the curl."
     },
     {
       "index": 3,
-      "startMs": 5412,
-      "endMs": 6514,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.torso_warn",
-        "barbell-curl.wrist_curl"
+      "startMs": 5000,
+      "endMs": 6750,
+      "issueIds": [
+          "barbell-curl.torso_fail"
       ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Don't swing your torso — stay upright and controlled.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 48,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "notes": "Torso rocks forward at the bottom and rises through the curl."
     },
     {
       "index": 4,
-      "startMs": 7382,
-      "endMs": 8451,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.shoulder_fail",
+      "startMs": 7200,
+      "endMs": 8500,
+      "issueIds": [
         "barbell-curl.torso_warn",
-        "barbell-curl.wrist_curl"
+        "barbell-curl.shoulder_warn"
       ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Too much shoulder involvement — reduce the weight.",
-        "Don't swing your torso — stay upright and controlled.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 23,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "notes": "Small forward dip and lean-back through the top of the rep."
     },
     {
       "index": 5,
-      "startMs": 10188,
-      "endMs": 11257,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.torso_warn",
-        "barbell-curl.wrist_curl"
+      "startMs": 9900,
+      "endMs": 11300,
+      "issueIds": [
+        "barbell-curl.torso_warn"
       ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Don't swing your torso — stay upright and controlled.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 42,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "notes": "Clear forward body dip before curling, then leans back at the top."
     },
     {
       "index": 6,
-      "startMs": 12259,
-      "endMs": 13328,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.shoulder_fail",
-        "barbell-curl.torso_warn",
-        "barbell-curl.wrist_curl"
+      "startMs": 12000,
+      "endMs": 13500,
+      "issueIds": [
+        "barbell-curl.torso_warn"
       ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Too much shoulder involvement — reduce the weight.",
-        "Don't swing your torso — stay upright and controlled.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 26,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "notes": "Uses torso momentum through the curl."
     }
   ],
-  "notes": "Draft generated from heuristic replay. Review rep count/timing and move approved suggestions into issueIds before marking reviewed.",
-  "availableIssues": [
-    {
-      "issueId": "barbell-curl.incomplete_flex",
-      "feedbackMessage": "Flex more at the top of the curl."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_extend",
-      "feedbackMessage": "Extend fully at the bottom."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_rom",
-      "feedbackMessage": "Incomplete rep — curl all the way up and fully extend."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_fail",
-      "feedbackMessage": "Too much shoulder involvement — reduce the weight."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_warn",
-      "feedbackMessage": "Upper arms moving — keep elbows pinned to your sides."
-    },
-    {
-      "issueId": "barbell-curl.torso_fail",
-      "feedbackMessage": "Excessive body swing — this is cheating the rep."
-    },
-    {
-      "issueId": "barbell-curl.torso_warn",
-      "feedbackMessage": "Don't swing your torso — stay upright and controlled."
-    },
-    {
-      "issueId": "barbell-curl.tempo_up",
-      "feedbackMessage": "Slow down — control the curl."
-    },
-    {
-      "issueId": "barbell-curl.tempo_down",
-      "feedbackMessage": "Control the lowering — don't drop the weight."
-    },
-    {
-      "issueId": "barbell-curl.asymmetry",
-      "feedbackMessage": "Arms are uneven — curl both sides together."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Tuck your elbows in — they're drifting outward."
-    },
-    {
-      "issueId": "barbell-curl.wrist_curl",
-      "feedbackMessage": "Keep your wrists neutral — avoid curling them in."
-    }
-  ],
-  "draftMetadata": {
-    "generatedAt": "2026-05-05T16:19:43.689Z",
-    "generator": "dataset:draft-label",
-    "source": "heuristic-replay"
-  }
+  "notes": "Human-reviewed from video. Six visible reps labelled with setup time removed from the first draft window. All reps show visible torso swing, but not enough to label as excessive torso fail. Wrist and shoulder draft suggestions were not copied because those issues are not reliably visible enough in this footage."
 }

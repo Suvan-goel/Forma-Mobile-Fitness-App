@@ -4,144 +4,39 @@
   "sourceVideo": "videos/training/barbell-curl/train009.mp4",
   "landmarkFile": "landmarks/training/barbell-curl/train009.json",
   "split": "train",
-  "reviewStatus": "draft",
+  "reviewStatus": "reviewed",
   "expectedReps": 5,
   "reps": [
     {
       "index": 1,
-      "startMs": 0,
-      "endMs": 2674,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 88,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 1250,
+      "endMs": 2850,
+      "issueIds": ["barbell-curl.shoulder_warn"]
     },
     {
       "index": 2,
-      "startMs": 3477,
-      "endMs": 4446,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 88,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 3250,
+      "endMs": 4750,
+      "issueIds": ["barbell-curl.shoulder_fail"]
     },
     {
       "index": 3,
-      "startMs": 5516,
-      "endMs": 6719,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 86,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 5250,
+      "endMs": 7000,
+      "issueIds": ["barbell-curl.shoulder_fail"]
     },
     {
       "index": 4,
-      "startMs": 7689,
-      "endMs": 8759,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 88,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 7250,
+      "endMs": 9000,
+      "issueIds": ["barbell-curl.shoulder_warn"]
     },
     {
       "index": 5,
-      "startMs": 9628,
-      "endMs": 10798,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.incomplete_flex",
-        "barbell-curl.wrist_curl"
-      ],
-      "suggestedFeedbackMessages": [
-        "Flex more at the top of the curl.",
-        "Keep your wrists neutral — avoid curling them in."
-      ],
-      "suggestedScore": 85,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 9250,
+      "endMs": 11000,
+      "issueIds": ["barbell-curl.shoulder_warn"]
     }
   ],
-  "notes": "Draft generated from heuristic replay. Review rep count/timing and move approved suggestions into issueIds before marking reviewed.",
-  "availableIssues": [
-    {
-      "issueId": "barbell-curl.incomplete_flex",
-      "feedbackMessage": "Flex more at the top of the curl."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_extend",
-      "feedbackMessage": "Extend fully at the bottom."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_rom",
-      "feedbackMessage": "Incomplete rep — curl all the way up and fully extend."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_fail",
-      "feedbackMessage": "Too much shoulder involvement — reduce the weight."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_warn",
-      "feedbackMessage": "Upper arms moving — keep elbows pinned to your sides."
-    },
-    {
-      "issueId": "barbell-curl.torso_fail",
-      "feedbackMessage": "Excessive body swing — this is cheating the rep."
-    },
-    {
-      "issueId": "barbell-curl.torso_warn",
-      "feedbackMessage": "Don't swing your torso — stay upright and controlled."
-    },
-    {
-      "issueId": "barbell-curl.tempo_up",
-      "feedbackMessage": "Slow down — control the curl."
-    },
-    {
-      "issueId": "barbell-curl.tempo_down",
-      "feedbackMessage": "Control the lowering — don't drop the weight."
-    },
-    {
-      "issueId": "barbell-curl.asymmetry",
-      "feedbackMessage": "Arms are uneven — curl both sides together."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Tuck your elbows in — they're drifting outward."
-    },
-    {
-      "issueId": "barbell-curl.wrist_curl",
-      "feedbackMessage": "Keep your wrists neutral — avoid curling them in."
-    }
-  ],
-  "draftMetadata": {
-    "generatedAt": "2026-05-05T16:18:32.203Z",
-    "generator": "dataset:draft-label",
-    "source": "heuristic-replay"
-  }
+  "notes": "Human-reviewed from video. Five visible reps labelled from curl start through return to extension. Heuristic wrist-curl and incomplete-flex suggestions were not approved because wrist position is not reliably visible and the visible top positions reach adequate curl depth."
 }

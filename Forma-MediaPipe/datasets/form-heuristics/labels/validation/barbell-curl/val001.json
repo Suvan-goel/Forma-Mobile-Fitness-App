@@ -4,156 +4,57 @@
   "sourceVideo": "videos/validation/barbell-curl/val001.mp4",
   "landmarkFile": "landmarks/validation/barbell-curl/val001.json",
   "split": "validation",
-  "reviewStatus": "draft",
+  "reviewStatus": "reviewed",
   "expectedReps": 8,
   "reps": [
     {
       "index": 1,
-      "startMs": 0,
-      "endMs": 2956,
-      "issueIds": [],
-      "suggestedIssueIds": [],
-      "suggestedFeedbackMessages": [],
-      "suggestedScore": 88,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 1250,
+      "endMs": 3000,
+      "issueIds": []
     },
     {
       "index": 2,
-      "startMs": 4467,
-      "endMs": 5452,
-      "issueIds": [],
-      "suggestedIssueIds": [],
-      "suggestedFeedbackMessages": [],
-      "suggestedScore": 85,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 3750,
+      "endMs": 5750,
+      "issueIds": []
     },
     {
       "index": 3,
-      "startMs": 6963,
-      "endMs": 7981,
-      "issueIds": [],
-      "suggestedIssueIds": [],
-      "suggestedFeedbackMessages": [],
-      "suggestedScore": 86,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 6250,
+      "endMs": 8500,
+      "issueIds": []
     },
     {
       "index": 4,
-      "startMs": 9361,
-      "endMs": 10543,
-      "issueIds": [],
-      "suggestedIssueIds": [],
-      "suggestedFeedbackMessages": [],
-      "suggestedScore": 83,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 8750,
+      "endMs": 11000,
+      "issueIds": []
     },
     {
       "index": 5,
-      "startMs": 11758,
-      "endMs": 12711,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.asymmetry"
-      ],
-      "suggestedFeedbackMessages": [
-        "Arms are uneven — curl both sides together."
-      ],
-      "suggestedScore": 74,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 11250,
+      "endMs": 13625,
+      "issueIds": []
     },
     {
       "index": 6,
-      "startMs": 14156,
-      "endMs": 15207,
-      "issueIds": [],
-      "suggestedIssueIds": [
-        "barbell-curl.asymmetry"
-      ],
-      "suggestedFeedbackMessages": [
-        "Arms are uneven — curl both sides together."
-      ],
-      "suggestedScore": 75,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 13750,
+      "endMs": 15625,
+      "issueIds": []
     },
     {
       "index": 7,
-      "startMs": 16652,
-      "endMs": 17867,
-      "issueIds": [],
-      "suggestedIssueIds": [],
-      "suggestedFeedbackMessages": [],
-      "suggestedScore": 87,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 16250,
+      "endMs": 18500,
+      "issueIds": []
     },
     {
       "index": 8,
-      "startMs": 19116,
-      "endMs": 20199,
-      "issueIds": [],
-      "suggestedIssueIds": [],
-      "suggestedFeedbackMessages": [],
-      "suggestedScore": 85,
-      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+      "startMs": 18750,
+      "endMs": 20750,
+      "issueIds": []
     }
   ],
-  "notes": "Draft generated from heuristic replay. Review rep count/timing and move approved suggestions into issueIds before marking reviewed.",
-  "availableIssues": [
-    {
-      "issueId": "barbell-curl.incomplete_flex",
-      "feedbackMessage": "Flex more at the top of the curl."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_extend",
-      "feedbackMessage": "Extend fully at the bottom."
-    },
-    {
-      "issueId": "barbell-curl.incomplete_rom",
-      "feedbackMessage": "Incomplete rep — curl all the way up and fully extend."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_fail",
-      "feedbackMessage": "Too much shoulder involvement — reduce the weight."
-    },
-    {
-      "issueId": "barbell-curl.shoulder_warn",
-      "feedbackMessage": "Upper arms moving — keep elbows pinned to your sides."
-    },
-    {
-      "issueId": "barbell-curl.torso_fail",
-      "feedbackMessage": "Excessive body swing — this is cheating the rep."
-    },
-    {
-      "issueId": "barbell-curl.torso_warn",
-      "feedbackMessage": "Don't swing your torso — stay upright and controlled."
-    },
-    {
-      "issueId": "barbell-curl.tempo_up",
-      "feedbackMessage": "Slow down — control the curl."
-    },
-    {
-      "issueId": "barbell-curl.tempo_down",
-      "feedbackMessage": "Control the lowering — don't drop the weight."
-    },
-    {
-      "issueId": "barbell-curl.asymmetry",
-      "feedbackMessage": "Arms are uneven — curl both sides together."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
-    },
-    {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Tuck your elbows in — they're drifting outward."
-    },
-    {
-      "issueId": "barbell-curl.wrist_curl",
-      "feedbackMessage": "Keep your wrists neutral — avoid curling them in."
-    }
-  ],
-  "draftMetadata": {
-    "generatedAt": "2026-05-05T16:18:49.096Z",
-    "generator": "dataset:draft-label",
-    "source": "heuristic-replay"
-  }
+  "notes": "Human-reviewed from video. Eight visible reps labelled from curl start through return to extension. Heuristic asymmetry suggestions on reps 5 and 6 were not approved because both arms move together within normal visible variation."
 }
