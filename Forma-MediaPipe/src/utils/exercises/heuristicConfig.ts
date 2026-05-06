@@ -165,9 +165,9 @@ export function createDefaultTunableSpec(
     exerciseName,
     tunables,
     search: {
-      randomCandidates: 500,
-      survivorCount: 12,
-      refinementRounds: 2,
+      randomCandidates: 10000,
+      survivorCount: 32,
+      refinementRounds: 3,
       seed: 1337,
       ...search,
       applyGates: {

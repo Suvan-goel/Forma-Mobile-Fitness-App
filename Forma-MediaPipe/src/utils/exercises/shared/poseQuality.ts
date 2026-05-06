@@ -90,7 +90,7 @@ export interface RepQualityWindowState {
   repQualityWindowActive?: boolean;
 }
 
-export const UNSCORED_REP_FEEDBACK = 'Rep counted, but form was not scored because tracking was unreliable.';
+export const UNSCORED_REP_FEEDBACK = "Your form wasn't scored because I couldn't see the key joints clearly.";
 
 const DEFAULT_MIN_REQUIRED_VISIBILITY = 0.22;
 const DEFAULT_MIN_IMPORTANT_VISIBILITY = 0.16;

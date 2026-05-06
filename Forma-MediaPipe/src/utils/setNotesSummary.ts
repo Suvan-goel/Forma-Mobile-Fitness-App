@@ -52,7 +52,7 @@ export function generateSetSummary(
 
   if (totalReps > 0 && scoredRepCount === 0 && unscoredRepCount > 0) {
     const trackingNote = options.trackingQualityMessage ? ` ${options.trackingQualityMessage}` : '';
-    return `Set counted ${totalReps} ${totalReps === 1 ? 'rep' : 'reps'}, but form was not scored because tracking was unreliable.${trackingNote}`;
+    return `Set counted ${totalReps} ${totalReps === 1 ? 'rep' : 'reps'}, but tracking was too low to score form.${trackingNote}`;
   }
 
   if (repFeedback.length === 0) {
@@ -97,7 +97,7 @@ export function generateSetSummary(
   }
 
   if (unscoredRepCount > 0) {
-    summary += ` ${unscoredRepCount} ${unscoredRepCount === 1 ? 'rep was' : 'reps were'} unscored because tracking was unreliable.`;
+    summary += ` ${unscoredRepCount} ${unscoredRepCount === 1 ? 'rep was' : 'reps were'} unscored because tracking was too low.`;
   }
 
   summary += unscoredRepCount > 0

@@ -14,7 +14,7 @@ describe('generateSetSummary', () => {
       },
     );
 
-    expect(summary).toContain('form was not scored because tracking was unreliable');
+    expect(summary).toContain('tracking was too low to score form');
     expect(summary).toContain('Set counted 1 rep');
     expect(summary).not.toContain('0/100');
   });
@@ -35,7 +35,7 @@ describe('generateSetSummary', () => {
     );
 
     expect(summary).toContain('2 scored reps');
-    expect(summary).toContain('1 rep was unscored because tracking was unreliable');
+    expect(summary).toContain('1 rep was unscored because tracking was too low');
     expect(summary).toContain('Overall form score based on scored reps: 82/100');
     expect(summary).not.toContain(UNSCORED_REP_FEEDBACK);
   });

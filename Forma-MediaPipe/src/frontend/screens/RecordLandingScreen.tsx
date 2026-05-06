@@ -1126,9 +1126,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 60,
+    minHeight: 54,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 7,
   },
   toolRowDivider: {
     borderBottomWidth: 1,
@@ -1146,7 +1146,7 @@ const styles = StyleSheet.create({
   },
   toolTitle: {
     fontFamily: FONTS.display.regular,
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.text,
   },
   toolSubtitle: {
@@ -1228,10 +1228,10 @@ const styles = StyleSheet.create({
   },
   templateName: {
     fontFamily: FONTS.display.regular,
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.text,
     letterSpacing: -0.1,
-    lineHeight: 16,
+    lineHeight: 15,
   },
   templateMeta: {
     fontFamily: FONTS.ui.regular,
