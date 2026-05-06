@@ -69,6 +69,8 @@ export interface ExerciseTTSConfig {
   feedbackToIssue: Record<string, string>;
   /** Optional exact feedback-string TTS pools for more exercise-specific voice cues */
   feedbackMessages?: Record<string, string[]>;
+  /** Optional exact feedback-string priorities. Higher values are spoken first. */
+  feedbackPriorities?: Record<string, number>;
   /** New IssueType definitions with priority and message pools (only for types not already registered) */
   issueDefinitions?: Array<{
     issueType: string;

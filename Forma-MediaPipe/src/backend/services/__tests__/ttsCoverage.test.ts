@@ -139,6 +139,29 @@ describe('exercise TTS coverage', () => {
     expect(topFeedback?.pool.messages).toContain('Chest up.');
   });
 
+  it('uses the barbell curl feedback priority order for spoken cues', () => {
+    expect(getTopFeedbackIssueCandidate([
+      'Flex more at the top of the curl.',
+      "Don't swing your torso — stay upright and controlled.",
+      'Keep your wrists neutral — avoid curling them in.',
+    ])?.feedback).toBe("Don't swing your torso — stay upright and controlled.");
+
+    expect(getTopFeedbackIssueCandidate([
+      "Keep your elbows in — don't flare them out to the sides.",
+      'Extend fully at the bottom.',
+    ])?.feedback).toBe('Extend fully at the bottom.');
+
+    expect(getTopFeedbackIssueCandidate([
+      'Keep your wrists neutral — avoid curling them in.',
+      'Arms are uneven — curl both sides together.',
+    ])?.feedback).toBe('Arms are uneven — curl both sides together.');
+
+    expect(getTopFeedbackIssueCandidate([
+      'Upper arms moving — keep elbows pinned to your sides.',
+      'Excessive body swing — this is cheating the rep.',
+    ])?.feedback).toBe('Excessive body swing — this is cheating the rep.');
+  });
+
   it('varies set summaries while keeping rep counts natural', () => {
     expect(pickSetSummaryMessage(1, 95)).toContain('1 rep');
     expect(pickSetSummaryMessage(8, 75)).toContain('8 reps');

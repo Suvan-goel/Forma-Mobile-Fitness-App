@@ -310,6 +310,8 @@ export const FEEDBACK_TO_ISSUE: Record<string, string> = {
   'Use more range for this rep to count.': 'incomplete_rom',
 };
 
+export const FEEDBACK_PRIORITY: Record<string, number> = {};
+
 /**
  * Exact feedback-string voice pools.
  *
@@ -343,12 +345,14 @@ export interface FeedbackIssueCandidate {
  * Called once per exercise at registration time (module load).
  *
  * - feedbackToIssue entries are added to FEEDBACK_TO_ISSUE
+ * - feedbackPriorities entries override priority for exact feedback strings
  * - issueDefinitions (if any) are added to ISSUE_POOLS and ISSUE_PRIORITY
  *   only if the issue type doesn't already exist (no overwrites)
  */
 export function mergeTTSConfig(config: {
   feedbackToIssue: Record<string, string>;
   feedbackMessages?: Record<string, string[]>;
+  feedbackPriorities?: Record<string, number>;
   issueDefinitions?: Array<{ issueType: string; priority: number; messages: string[] }>;
 }): void {
   for (const [feedback, issueType] of Object.entries(config.feedbackToIssue)) {
@@ -357,6 +361,11 @@ export function mergeTTSConfig(config: {
   if (config.feedbackMessages) {
     for (const [feedback, messages] of Object.entries(config.feedbackMessages)) {
       FEEDBACK_TTS_POOLS[feedback] = { messages };
+    }
+  }
+  if (config.feedbackPriorities) {
+    for (const [feedback, priority] of Object.entries(config.feedbackPriorities)) {
+      FEEDBACK_PRIORITY[feedback] = priority;
     }
   }
   if (config.issueDefinitions) {
@@ -405,7 +414,7 @@ export function getFeedbackIssueCandidates(
       return {
         feedback,
         issueType,
-        priority: ISSUE_PRIORITY[issueType] ?? 0,
+        priority: FEEDBACK_PRIORITY[feedback] ?? ISSUE_PRIORITY[issueType] ?? 0,
         pool,
       };
     })

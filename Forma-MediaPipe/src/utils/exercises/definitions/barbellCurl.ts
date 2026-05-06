@@ -1027,32 +1027,20 @@ function evaluateForm(
       : (rightRatioOk ? ratios.maxRightRatio : -Infinity);
   }
 
-  // 1. Flex depth — ratio-based (no foreshortening compensation needed)
-  if (isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN) {
-    messages.push('Flex more at the top of the curl.');
-  }
+  const severeMessages: string[] = [];
+  const warningMessages: string[] = [];
+  const romMessages: string[] = [];
+  const elbowMessages: string[] = [];
+  const tempoAsymmetryMessages: string[] = [];
+  const wristMessages: string[] = [];
 
-  // 2. Extension — ratio-based
-  if (isFinite(maxRatio) && maxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN) {
-    messages.push('Extend fully at the bottom.');
-  }
-
-  // 3. ROM — ratio-based
+  // ROM metrics — ratio-based
   const romLRatio = leftRatioOk ? ratios.maxLeftRatio - ratios.minLeftRatio : 0;
   const romRRatio = rightRatioOk ? ratios.maxRightRatio - ratios.minRightRatio : 0;
   const primaryRomRatio = primaryIsLeft ? romLRatio : romRRatio;
 
-  if (isFrontal) {
-    if ((romLRatio < THRESHOLDS.ROM_MIN || romRRatio < THRESHOLDS.ROM_MIN) && messages.length === 0) {
-      messages.push('Incomplete rep — curl all the way up and fully extend.');
-    }
-  } else {
-    if (primaryRomRatio < THRESHOLDS.ROM_MIN && messages.length === 0) {
-      messages.push('Incomplete rep — curl all the way up and fully extend.');
-    }
-  }
-
-  // 4. Shoulder takeover (delta-based, already camera-invariant; skip at side angles)
+  // 1. Severe shoulder involvement / severe torso swing
+  // 2. Shoulder warning / torso warning
   const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
   const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
   if (!isSide) {
@@ -1062,13 +1050,42 @@ function evaluateForm(
     const maxDeltaSh = shValues.length > 0 ? Math.max(...shValues) : 0;
 
     if (maxDeltaSh > FORM_THRESHOLDS.SHOULDER_FAIL) {
-      messages.push('Too much shoulder involvement — reduce the weight.');
+      severeMessages.push('Too much shoulder involvement — reduce the weight.');
     } else if (maxDeltaSh > FORM_THRESHOLDS.SHOULDER_WARN) {
-      messages.push('Upper arms moving — keep elbows pinned to your sides.');
+      warningMessages.push('Upper arms moving — keep elbows pinned to your sides.');
     }
   }
 
-  // 4b. Elbow flare (frontal only)
+  const deltaTorso = maxAngles.torso - minAngles.torso;
+  const torsoWarnThreshold = repIndex === 0
+    ? FORM_THRESHOLDS.TORSO_FAIL
+    : FORM_THRESHOLDS.TORSO_WARN;
+  if (isFinite(deltaTorso)) {
+    if (deltaTorso > FORM_THRESHOLDS.TORSO_FAIL) {
+      severeMessages.push('Excessive body swing — this is cheating the rep.');
+    } else if (deltaTorso > torsoWarnThreshold) {
+      warningMessages.push("Don't swing your torso — stay upright and controlled.");
+    }
+  }
+
+  // 3. ROM feedback
+  if (isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN) {
+    romMessages.push('Flex more at the top of the curl.');
+  }
+  if (isFinite(maxRatio) && maxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN) {
+    romMessages.push('Extend fully at the bottom.');
+  }
+  if (isFrontal) {
+    if ((romLRatio < THRESHOLDS.ROM_MIN || romRRatio < THRESHOLDS.ROM_MIN) && romMessages.length === 0) {
+      romMessages.push('Incomplete rep — curl all the way up and fully extend.');
+    }
+  } else {
+    if (primaryRomRatio < THRESHOLDS.ROM_MIN && romMessages.length === 0) {
+      romMessages.push('Incomplete rep — curl all the way up and fully extend.');
+    }
+  }
+
+  // 4. Elbow flare (frontal only)
   if (isFrontal) {
     const leftFlareOk = isFinite(repWindow.elbowFlare.maxLeftFlareDeg);
     const rightFlareOk = isFinite(repWindow.elbowFlare.maxRightFlareDeg);
@@ -1077,26 +1094,13 @@ function evaluateForm(
       rightFlareOk ? repWindow.elbowFlare.maxRightFlareDeg : 0,
     );
     if (maxFlare > FORM_THRESHOLDS.ELBOW_FLARE_FAIL) {
-      messages.push("Keep your elbows in — don't flare them out to the sides.");
+      elbowMessages.push("Keep your elbows in — don't flare them out to the sides.");
     } else if (maxFlare > FORM_THRESHOLDS.ELBOW_FLARE_WARN) {
-      messages.push('Tuck your elbows in — they\'re drifting outward.');
+      elbowMessages.push('Tuck your elbows in — they\'re drifting outward.');
     }
   }
 
-  // 5. Torso swing (delta-based, already camera-invariant)
-  const deltaTorso = maxAngles.torso - minAngles.torso;
-  const torsoWarnThreshold = repIndex === 0
-    ? FORM_THRESHOLDS.TORSO_FAIL
-    : FORM_THRESHOLDS.TORSO_WARN;
-  if (isFinite(deltaTorso)) {
-    if (deltaTorso > FORM_THRESHOLDS.TORSO_FAIL) {
-      messages.push('Excessive body swing — this is cheating the rep.');
-    } else if (deltaTorso > torsoWarnThreshold) {
-      messages.push("Don't swing your torso — stay upright and controlled.");
-    }
-  }
-
-  // 6. Tempo — average across both arms in frontal mode
+  // 5. Tempo and asymmetry
   const tUpL = getConcentricDuration(leftArm);
   const tUpR = getConcentricDuration(rightArm);
   const tDownL = getEccentricDuration(leftArm);
@@ -1114,22 +1118,21 @@ function evaluateForm(
   }
 
   if (tUp < FORM_THRESHOLDS.TEMPO_UP_MIN && tUp > 0) {
-    messages.push('Slow down — control the curl.');
+    tempoAsymmetryMessages.push('Slow down — control the curl.');
   }
   if (tDown >= 0.05 && tDown < FORM_THRESHOLDS.TEMPO_DOWN_MIN) {
-    messages.push("Control the lowering — don't drop the weight.");
+    tempoAsymmetryMessages.push("Control the lowering — don't drop the weight.");
   }
 
-  // 7. Symmetry — ratio-based (only frontal)
   if (isFrontal && leftRatioOk && rightRatioOk) {
     const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
     const deltaRomRatio = Math.abs(romLRatio - romRRatio);
     if (deltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO || deltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO) {
-      messages.push('Arms are uneven — curl both sides together.');
+      tempoAsymmetryMessages.push('Arms are uneven — curl both sides together.');
     }
   }
 
-  // 8. Wrist neutrality — only after sustained deviation to avoid hand-keypoint flicker.
+  // 6. Wrist neutrality — only after sustained deviation to avoid hand-keypoint flicker.
   const wristDenominator = Math.max(1, repWindow.frameCount);
   const wristDeviationFrameRatio = isFrontal
     ? Math.max(
@@ -1140,8 +1143,17 @@ function evaluateForm(
       ? repWindow.wristDevFrames.left / wristDenominator
       : repWindow.wristDevFrames.right / wristDenominator;
   if (wristDeviationFrameRatio >= FORM_THRESHOLDS.WRIST_DEV_DURATION) {
-    messages.push('Keep your wrists neutral \u2014 avoid curling them in.');
+    wristMessages.push('Keep your wrists neutral \u2014 avoid curling them in.');
   }
+
+  messages.push(
+    ...severeMessages,
+    ...warningMessages,
+    ...romMessages,
+    ...elbowMessages,
+    ...tempoAsymmetryMessages,
+    ...wristMessages,
+  );
 
   // Score: continuous penalty curves
   const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle);
@@ -1588,10 +1600,25 @@ export function createBarbellCurlDefinition(
       "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
       'Keep your wrists neutral \u2014 avoid curling them in.': 'wrist_curl',
     },
+    feedbackPriorities: {
+      'Too much shoulder involvement — reduce the weight.': 60,
+      'Excessive body swing — this is cheating the rep.': 60,
+      'Upper arms moving — keep elbows pinned to your sides.': 50,
+      "Don't swing your torso — stay upright and controlled.": 50,
+      'Flex more at the top of the curl.': 40,
+      'Extend fully at the bottom.': 40,
+      'Incomplete rep — curl all the way up and fully extend.': 40,
+      "Keep your elbows in — don't flare them out to the sides.": 30,
+      "Tuck your elbows in — they're drifting outward.": 30,
+      'Slow down — control the curl.': 20,
+      "Control the lowering — don't drop the weight.": 20,
+      'Arms are uneven — curl both sides together.': 20,
+      'Keep your wrists neutral \u2014 avoid curling them in.': 10,
+    },
     issueDefinitions: [
       {
         issueType: 'elbow_flare',
-        priority: 18,
+        priority: 30,
         messages: [
           'Keep your elbows tucked.',
           'Elbows in. Keep the curl strict.',
@@ -1600,7 +1627,7 @@ export function createBarbellCurlDefinition(
       },
       {
         issueType: 'wrist_curl',
-        priority: 12,
+        priority: 10,
         messages: [
           'Keep your wrists straight.',
           "Don't curl your wrists in.",
