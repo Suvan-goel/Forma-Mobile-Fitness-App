@@ -8,6 +8,13 @@
 
 import type { Keypoint } from '../../poseAnalysis';
 import type { ExerciseHeuristicConfig } from '../types';
+import type {
+  PoseQualitySnapshot,
+  PoseQualityStatus,
+  PoseQualityWarning,
+  RepTrackingQuality,
+  SetTrackingQualitySummary,
+} from '../shared/poseQuality';
 
 export interface LandmarkRecording {
   exerciseName: string;
@@ -27,6 +34,7 @@ export interface LandmarkRecording {
   frames: Array<{
     timestamp: number;
     keypoints: Keypoint[];
+    imageKeypoints?: Keypoint[];
   }>;
 }
 
@@ -37,6 +45,10 @@ export interface ReplayRepPrediction {
   issueIds: string[];
   completedAt: number;
   startedAt: number | null;
+  confidence?: number;
+  qualityStatus?: PoseQualityStatus;
+  qualityWarnings?: PoseQualityWarning[];
+  scorable?: boolean;
 }
 
 export interface ReplayResult {
@@ -44,10 +56,12 @@ export interface ReplayResult {
   repScores: number[];
   feedbackMessages: string[];
   reps: ReplayRepPrediction[];
+  qualitySummary?: SetTrackingQualitySummary;
 }
 
 export interface ReplayOptions {
   heuristicConfig?: ExerciseHeuristicConfig;
+  confidenceGating?: boolean;
 }
 
 /** Per-frame debug sample captured during verbose replay. */
@@ -58,6 +72,7 @@ export interface FrameTrace {
   repCount: number;
   feedback: string | null;
   debugInfo: Record<string, unknown>;
+  quality?: PoseQualitySnapshot;
 }
 
 /** One entry in the FSM trace, emitted each time the FSM phase changes. */
@@ -84,3 +99,6 @@ export interface ReplayResultVerbose extends ReplayResult {
   /** Per-rep breakdown. */
   repTraces: RepTrace[];
 }
+
+export type QualityCoverage = SetTrackingQualitySummary;
+export type ReplayRepQuality = RepTrackingQuality;

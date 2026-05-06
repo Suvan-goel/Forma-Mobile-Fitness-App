@@ -6,6 +6,12 @@
  */
 
 import type { Keypoint } from '../poseAnalysis';
+import type {
+  ExerciseQualityProfile,
+  PoseQualitySnapshot,
+  PoseQualityStatus,
+  PoseQualityWarning,
+} from './shared/poseQuality';
 
 // ============================================================================
 // ExerciseState — the standard external state every exercise exposes
@@ -22,6 +28,8 @@ export interface ExerciseState {
   feedbackTimestamp: number | null;
   /** Debug info for on-screen overlay (exercise-specific shape, opaque to CameraScreen) */
   debugInfo: Record<string, unknown>;
+  /** Rolling tracking quality for the current frame/window. */
+  quality?: PoseQualitySnapshot;
   /** Opaque internal state — only the exercise's own update() reads/writes this */
   _internal: unknown;
 }
@@ -39,6 +47,12 @@ export interface RepResult {
    * Runtime UI/TTS still uses messages; dataset tooling derives this when absent.
    */
   issueIds?: string[];
+  /** 0-1 tracking confidence over the rep window. */
+  confidence?: number;
+  /** Tracking quality over the rep window. */
+  qualityStatus?: PoseQualityStatus;
+  /** Actionable tracking warnings that affected this rep. */
+  qualityWarnings?: PoseQualityWarning[];
 }
 
 // ============================================================================
@@ -111,6 +125,9 @@ export interface ExerciseDefinition {
 
   /** Required camera view for this exercise */
   requiredView: 'front' | 'side' | 'any';
+
+  /** Optional profile for confidence-aware pose quality checks. */
+  qualityProfile?: ExerciseQualityProfile;
 
   /** Create a fresh state object for this exercise */
   createState: () => ExerciseState;

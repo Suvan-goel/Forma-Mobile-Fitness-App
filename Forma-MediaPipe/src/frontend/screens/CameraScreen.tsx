@@ -17,13 +17,25 @@ import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount } from '../../utils/poseAnalysis';
 import type { Keypoint } from '../../utils/poseAnalysis';
 import '../../utils/exercises/definitions/register';
-import { ExerciseRegistry } from '../../utils/exercises';
-import type { ExerciseState } from '../../utils/exercises';
+import {
+  ExerciseRegistry,
+  PoseQualityTracker,
+  RepQualityAccumulator,
+  getPoseQualityMessage,
+  resolveExerciseQualityProfile,
+  summarizeSetTrackingQuality,
+} from '../../utils/exercises';
+import type {
+  ExerciseState,
+  PoseQualitySnapshot,
+  RepTrackingQuality,
+  SetTrackingQualitySummary,
+} from '../../utils/exercises';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
-import { onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
+import { onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, onTrackingQualityWarning as ttsOnTrackingQualityWarning, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
@@ -33,6 +45,33 @@ import { getBottomOverlayPadding, getBottomSafePadding } from '../utils/safeArea
 const MAX_FEED_ITEMS = 5;
 type FeedbackFeedItem = { id: number; text: string };
 
+type PendingWorkoutUpdate = {
+  totalReps: number;
+  repFormScore?: number;
+  repFeedback?: string;
+  repQuality?: RepTrackingQuality;
+};
+
+type PendingUIState = {
+  repCount?: number;
+  formScore?: number;
+  feedback?: string | null;
+  exerciseDebug?: Record<string, unknown> | null;
+  quality?: PoseQualitySnapshot;
+  workoutUpdate?: PendingWorkoutUpdate;
+};
+
+type ConvertedLandmarks = {
+  keypoints: Keypoint[];
+  imageKeypoints?: Keypoint[];
+};
+
+type LandmarkRecordingFrame = {
+  timestamp: number;
+  keypoints: Keypoint[];
+  imageKeypoints?: Keypoint[];
+};
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Use 'screen' height to include the Android navigation bar area (avoids black bar at bottom)
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
@@ -40,6 +79,21 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
+const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
+
+function getUnscoredRepFeedback(repQuality: RepTrackingQuality): string {
+  return repQuality.message || 'Tracking uncertain - form not scored.';
+}
+
+function getTrackingQualityTone(status: PoseQualitySnapshot['status'] | RepTrackingQuality['status'] | SetTrackingQualitySummary['status']) {
+  if (status === 'high') {
+    return { color: '#34E0A6', backgroundColor: 'rgba(52, 224, 166, 0.14)', borderColor: 'rgba(52, 224, 166, 0.34)' };
+  }
+  if (status === 'medium') {
+    return { color: '#FBBF24', backgroundColor: 'rgba(251, 191, 36, 0.14)', borderColor: 'rgba(251, 191, 36, 0.32)' };
+  }
+  return { color: '#F87171', backgroundColor: 'rgba(248, 113, 113, 0.15)', borderColor: 'rgba(248, 113, 113, 0.34)' };
+}
 
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
@@ -160,9 +214,11 @@ export const CameraScreen: React.FC = () => {
     totalReps: 0,
     formScores: [] as number[],
     repFeedback: [] as string[],
+    repTrackingQualities: [] as RepTrackingQuality[],
   });
   const durationRef = useRef(0);
   const [feedbackFeed, setFeedbackFeed] = useState<FeedbackFeedItem[]>([]);
+  const [trackingQuality, setTrackingQuality] = useState<PoseQualitySnapshot | null>(null);
   const feedbackIdRef = useRef(0);
   const [exerciseDebug, setExerciseDebug] = useState<Record<string, unknown> | null>(null);
   const currentTrainer = useMemo(
@@ -205,7 +261,7 @@ export const CameraScreen: React.FC = () => {
 
   // __DEV__-only: landmark recording refs (auto-record when set recording starts/stops)
   const isRecordingLandmarksRef = useRef(false);
-  const landmarkBufferRef = useRef<Array<{ timestamp: number; keypoints: Keypoint[] }>>([]);
+  const landmarkBufferRef = useRef<LandmarkRecordingFrame[]>([]);
   const landmarkRecordingStartRef = useRef(0);
 
   const category = route.params?.category ?? 'Weightlifting';
@@ -282,19 +338,18 @@ export const CameraScreen: React.FC = () => {
   const lastDetectionTimeRef = useRef(0);
   const lastUIUpdateTimeRef = useRef(0);
   const lastTTSFeedbackTimestampRef = useRef<number | null>(null);
-  const pendingUIStateRef = useRef<{
-    repCount?: number;
-    formScore?: number;
-    feedback?: string | null;
-    exerciseDebug?: Record<string, unknown> | null;
-    workoutUpdate?: { totalReps: number; formScore: number; repFeedback?: string };
-  } | null>(null);
+  const pendingUIStateRef = useRef<PendingUIState | null>(null);
   const isRecordingRef = useRef(isRecording);
   const isPausedRef = useRef(isPaused);
   const lastCameraTapRef = useRef(0);
   // Synchronous accumulator for per-rep data — immune to InteractionManager deferral
   const accumulatedFormScoresRef = useRef<number[]>([]);
+  const accumulatedRepFormScoresRef = useRef<number[]>([]);
   const accumulatedRepFeedbackRef = useRef<string[]>([]);
+  const accumulatedRepQualitiesRef = useRef<RepTrackingQuality[]>([]);
+  const completedRepCountRef = useRef(0);
+  const poseQualityTrackerRef = useRef(new PoseQualityTracker());
+  const repQualityAccumulatorRef = useRef(new RepQualityAccumulator());
 
   // Sync refs with state
   useEffect(() => {
@@ -342,7 +397,10 @@ export const CameraScreen: React.FC = () => {
     setExerciseDebug(null);
     angleBufferRef.current = {};
     setVarianceStats(null);
+    setTrackingQuality(null);
     lastTTSFeedbackTimestampRef.current = null;
+    poseQualityTrackerRef.current.reset();
+    repQualityAccumulatorRef.current.reset();
     const def = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (def) {
       exerciseStateRef.current = def.createState();
@@ -355,7 +413,7 @@ export const CameraScreen: React.FC = () => {
 
   // Convert MediaPipe landmark data to our Keypoint format.
   // Prefer worldLandmarks (3D body-centric coords) for view-angle-robust angle calculations.
-  const convertLandmarksToKeypoints = useCallback((landmarkData: any): Keypoint[] | null => {
+  const convertLandmarksToKeypoints = useCallback((landmarkData: any): ConvertedLandmarks | null => {
     try {
       let parsedData = landmarkData;
       if (typeof landmarkData === 'string') {
@@ -370,29 +428,27 @@ export const CameraScreen: React.FC = () => {
         worldLandmarksArray.length >= 33 &&
         typeof worldLandmarksArray[0]?.x === 'number';
       const hasImage = Array.isArray(imageLandmarksArray) && imageLandmarksArray.length >= 33;
-
-      const useImage = !hasWorld && hasImage;
-      const landmarksArray = useImage
-        ? imageLandmarksArray.slice(0, 33)
-        : hasWorld
-          ? worldLandmarksArray.slice(0, 33)
-          : hasImage
-            ? imageLandmarksArray.slice(0, 33)
-            : null;
-
-      if (!landmarksArray) {
-        return null;
-      }
-
-      const keypoints: Keypoint[] = landmarksArray.map((landmark: any, index: number) => ({
+      const landmarkToKeypoint = (landmark: any, index: number): Keypoint => ({
         name: MEDIAPIPE_LANDMARK_NAMES[index] || `landmark_${index}`,
         x: landmark.x ?? 0,
         y: landmark.y ?? 0,
         z: typeof landmark.z === 'number' ? landmark.z : 0,
         score: landmark.visibility !== undefined ? landmark.visibility : 1.0,
-      }));
+      });
 
-      return keypoints;
+      const worldKeypoints = hasWorld
+        ? worldLandmarksArray.slice(0, 33).map(landmarkToKeypoint)
+        : null;
+      const imageKeypoints = hasImage
+        ? imageLandmarksArray.slice(0, 33).map(landmarkToKeypoint)
+        : null;
+      const keypoints = worldKeypoints ?? imageKeypoints;
+
+      if (!keypoints) {
+        return null;
+      }
+
+      return imageKeypoints ? { keypoints, imageKeypoints } : { keypoints };
     } catch {
       return null;
     }
@@ -412,6 +468,7 @@ export const CameraScreen: React.FC = () => {
       if (pending.repCount !== undefined) setRepCount(pending.repCount);
       if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
       if (pending.exerciseDebug !== undefined) setExerciseDebug(pending.exerciseDebug);
+      if (pending.quality !== undefined) setTrackingQuality(pending.quality);
       if (pending.workoutUpdate) {
         const repFeedback = pending.workoutUpdate.repFeedback?.trim() ?? '';
         if (repFeedback !== '') {
@@ -423,10 +480,15 @@ export const CameraScreen: React.FC = () => {
         setWorkoutData(prev => ({
           ...prev,
           totalReps: pending.workoutUpdate!.totalReps,
-          formScores: [...prev.formScores, pending.workoutUpdate!.formScore],
+          formScores: pending.workoutUpdate!.repFormScore !== undefined
+            ? [...prev.formScores, pending.workoutUpdate!.repFormScore]
+            : prev.formScores,
           repFeedback: pending.workoutUpdate!.repFeedback
             ? [...prev.repFeedback, pending.workoutUpdate!.repFeedback]
             : prev.repFeedback,
+          repTrackingQualities: pending.workoutUpdate!.repQuality
+            ? [...prev.repTrackingQualities, pending.workoutUpdate!.repQuality]
+            : prev.repTrackingQualities,
         }));
       }
 
@@ -485,21 +547,30 @@ export const CameraScreen: React.FC = () => {
     }
     lastDetectionTimeRef.current = now;
 
-    const keypoints = convertLandmarksToKeypoints(data);
-    if (!keypoints || keypoints.length === 0) return;
+    const converted = convertLandmarksToKeypoints(data);
+    if (!converted || converted.keypoints.length === 0) return;
+    const { keypoints, imageKeypoints } = converted;
 
     // __DEV__-only: buffer keypoints for landmark recording
     if (debugModeRef.current && isRecordingLandmarksRef.current) {
-      landmarkBufferRef.current.push({
+      const frame: LandmarkRecordingFrame = {
         timestamp: Date.now() - landmarkRecordingStartRef.current,
         keypoints,
-      });
+      };
+      if (imageKeypoints) frame.imageKeypoints = imageKeypoints;
+      landmarkBufferRef.current.push(frame);
     }
 
     // Registry-based exercise processing (handles all registered exercises uniformly)
     const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (exerciseDef && exerciseStateRef.current) {
+      const qualityProfile = resolveExerciseQualityProfile(exerciseDef);
+      const quality = poseQualityTrackerRef.current.update(keypoints, qualityProfile, {
+        frameBoundsKeypoints: imageKeypoints,
+      });
+      repQualityAccumulatorRef.current.record(quality);
       const newState = exerciseDef.update(keypoints, exerciseStateRef.current);
+      newState.quality = quality;
       exerciseStateRef.current = newState;
 
       const repScore = newState.lastRepResult?.score ?? 0;
@@ -507,37 +578,64 @@ export const CameraScreen: React.FC = () => {
       // Accumulate UI updates — don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
       pending.repCount = newState.repCount;
-      if (repScore > 0) pending.formScore = repScore;
+      if (repScore > 0 && quality.canScoreRep) pending.formScore = repScore;
       pending.feedback = newState.feedback;
       pending.exerciseDebug = newState.debugInfo;
+      pending.quality = quality;
 
-      const completedNewTrackedRep = newState.repCount > accumulatedFormScoresRef.current.length;
+      const completedNewTrackedRep = newState.repCount > completedRepCountRef.current;
       const feedbackTimestamp = newState.feedbackTimestamp;
 
       if (completedNewTrackedRep) {
+        const repQuality = repQualityAccumulatorRef.current.consume();
+        const repIsScorable = repQuality.scorable && repScore > 0;
+        const repFeedback = repIsScorable
+          ? (newState.feedback ?? 'Great rep!')
+          : getUnscoredRepFeedback(repQuality);
+        completedRepCountRef.current = newState.repCount;
+        accumulatedRepQualitiesRef.current.push(repQuality);
+        accumulatedRepFormScoresRef.current.push(repIsScorable ? repScore : 0);
+        accumulatedRepFeedbackRef.current.push(repFeedback);
+        if (repIsScorable) {
+          accumulatedFormScoresRef.current.push(repScore);
+        }
+        if (newState.lastRepResult) {
+          newState.lastRepResult = {
+            ...newState.lastRepResult,
+            confidence: repQuality.confidence,
+            qualityStatus: repQuality.status,
+            qualityWarnings: repQuality.warnings,
+          };
+        }
         pending.workoutUpdate = {
           totalReps: newState.repCount,
-          formScore: repScore,
-          repFeedback: newState.feedback ?? 'Great rep!',
+          repFormScore: repIsScorable ? repScore : 0,
+          repFeedback,
+          repQuality,
         };
-        // Synchronous accumulation — immune to InteractionManager deferral race
-        accumulatedFormScoresRef.current.push(repScore);
-        accumulatedRepFeedbackRef.current.push(newState.feedback ?? 'Great rep!');
 
         // TTS coaching — fire-and-forget, does not block landmark processing
-        if (isTTSEnabledRef.current) {
+        if (isTTSEnabledRef.current && repIsScorable) {
           const repMessages = newState.lastRepResult?.messages ?? [];
           ttsOnRepCompleted(repMessages, repScore).catch(() => {});
         }
         lastTTSFeedbackTimestampRef.current = feedbackTimestamp ?? lastTTSFeedbackTimestampRef.current;
       } else if (
         isTTSEnabledRef.current &&
+        quality.canJudgeForm &&
         newState.feedback &&
         feedbackTimestamp !== null &&
         feedbackTimestamp !== lastTTSFeedbackTimestampRef.current
       ) {
         lastTTSFeedbackTimestampRef.current = feedbackTimestamp;
         ttsOnFormFeedback([newState.feedback]).catch(() => {});
+      } else if (
+        isTTSEnabledRef.current &&
+        isRecordingRef.current &&
+        !quality.canJudgeForm &&
+        quality.lowConfidenceFrameCount >= TRACKING_TTS_LOW_FRAME_THRESHOLD
+      ) {
+        ttsOnTrackingQualityWarning(quality.message).catch(() => {});
       }
       pendingUIStateRef.current = pending;
 
@@ -592,9 +690,10 @@ export const CameraScreen: React.FC = () => {
         }
 
         // Rep completed
-        if (repUpdate.repCount > accumulatedFormScoresRef.current.length) {
+        if (repUpdate.repCount > completedRepCountRef.current) {
           const formScore = repUpdate.formScore;
           const feedbackMsg = formScore >= 90 ? 'Great rep!' : 'Good rep.';
+          completedRepCountRef.current = repUpdate.repCount;
 
           setRepCount(repUpdate.repCount);
           setCurrentFormScore(formScore);
@@ -608,6 +707,7 @@ export const CameraScreen: React.FC = () => {
           }));
           // Synchronous accumulation — immune to InteractionManager deferral race
           accumulatedFormScoresRef.current.push(formScore);
+          accumulatedRepFormScoresRef.current.push(formScore);
           accumulatedRepFeedbackRef.current.push(feedbackMsg);
         }
       } else if (currentExerciseRef.current !== null) {
@@ -628,7 +728,7 @@ export const CameraScreen: React.FC = () => {
     if (isRecording) {
       // Read per-rep data from synchronous refs (immune to InteractionManager deferral)
       pendingUIStateRef.current = null;
-      const totalReps = accumulatedFormScoresRef.current.length;
+      const totalReps = Math.max(completedRepCountRef.current, exerciseStateRef.current?.repCount ?? 0, repCountRef.current);
 
       setIsRecording(false);
       setExerciseDebug(null);
@@ -682,7 +782,10 @@ export const CameraScreen: React.FC = () => {
       }
 
       const formScores = accumulatedFormScoresRef.current;
+      const repFormScores = accumulatedRepFormScoresRef.current;
       const repFeedback = accumulatedRepFeedbackRef.current;
+      const repQualities = accumulatedRepQualitiesRef.current;
+      const trackingQualitySummary = summarizeSetTrackingQuality(repQualities);
       // Weighted average: bad reps weigh up to 3× more than perfect reps
       let avgFormScore = 0;
       if (formScores.length > 0) {
@@ -706,11 +809,15 @@ export const CameraScreen: React.FC = () => {
           formScore: avgFormScore,
           durationSeconds: durationSeconds > 0 ? durationSeconds : undefined,
           repFeedback: repFeedback.length > 0 ? repFeedback : undefined,
-          repFormScores: formScores.length > 0 ? formScores : undefined,
+          repFormScores: repFormScores.length > 0 ? repFormScores : undefined,
+          repTrackingQualities: repQualities.length > 0 ? repQualities : undefined,
+          trackingQuality: repQualities.length > 0 ? trackingQualitySummary : undefined,
+          scoredRepCount: trackingQualitySummary.scoredReps,
+          unscoredRepCount: trackingQualitySummary.unscoredReps,
         };
         addSetToExercise(exerciseId, newSet);
         // TTS: speak brief set summary
-        if (isTTSEnabledRef.current) {
+        if (isTTSEnabledRef.current && formScores.length > 0) {
           ttsOnSetEnded(totalReps, avgFormScore).catch(() => {});
         }
 
@@ -788,10 +895,17 @@ export const CameraScreen: React.FC = () => {
         totalReps: 0,
         formScores: [],
         repFeedback: [],
+        repTrackingQualities: [],
       });
       durationRef.current = 0;
       accumulatedFormScoresRef.current = [];
+      accumulatedRepFormScoresRef.current = [];
       accumulatedRepFeedbackRef.current = [];
+      accumulatedRepQualitiesRef.current = [];
+      completedRepCountRef.current = 0;
+      poseQualityTrackerRef.current.reset();
+      repQualityAccumulatorRef.current.reset();
+      setTrackingQuality(null);
       ttsResetCoach();
 
       // Start landmark recording when debug mode is on (works in Release builds too)
@@ -940,6 +1054,18 @@ export const CameraScreen: React.FC = () => {
       exerciseDisplayName: (exerciseNameFromRoute || currentExercise || 'NO EXERCISE DETECTED').toUpperCase(),
     };
   }, [repCount, currentFormScore, currentExercise, exerciseNameFromRoute]);
+
+  const trackingQualityCue = useMemo(() => {
+    if (!trackingQuality || (!isRecording && !debugMode)) return null;
+    const tone = getTrackingQualityTone(trackingQuality.status);
+    const pct = Math.round(trackingQuality.confidence * 100);
+    return {
+      text: debugMode
+        ? `${getPoseQualityMessage(trackingQuality)} · ${pct}%`
+        : getPoseQualityMessage(trackingQuality),
+      tone,
+    };
+  }, [trackingQuality, isRecording, debugMode]);
 
   // Dynamic positioning for the setup guide ("?") button so it stays centered
   // between the discard "X" button and the exercise title text,
@@ -1134,6 +1260,24 @@ export const CameraScreen: React.FC = () => {
           <Animated.View style={[styles.autoRecToast, { opacity: autoRecToastAnim, top: topBarHeight + 8 }]} pointerEvents="none">
             <Text style={styles.autoRecToastText}>{autoRecToastText}</Text>
           </Animated.View>
+        )}
+
+        {trackingQualityCue && (
+          <View
+            style={[
+              styles.trackingQualityPill,
+              {
+                top: topBarHeight + 8,
+                backgroundColor: trackingQualityCue.tone.backgroundColor,
+                borderColor: trackingQualityCue.tone.borderColor,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <Text style={[styles.trackingQualityText, { color: trackingQualityCue.tone.color }]} numberOfLines={1}>
+              {trackingQualityCue.text}
+            </Text>
+          </View>
         )}
 
         {/* Feedback Display - Speech bubble below exercise name. Debug: only last message. */}
@@ -1714,6 +1858,21 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontFamily: FONTS.ui.regular,
+  },
+  trackingQualityPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    maxWidth: '76%',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+    borderWidth: 1,
+    zIndex: 10,
+  },
+  trackingQualityText: {
+    fontSize: 12,
+    fontFamily: FONTS.display.semibold,
+    letterSpacing: 0.2,
   },
   recordButtonContainer: {
     alignItems: 'center',

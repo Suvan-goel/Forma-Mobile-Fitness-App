@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train004.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train004.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 9,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 1050,
+      "endMs": 2670,
+      "issueIds": [
+          "barbell-curl.torso_warn"
+      ]
+    },
+    {
+      "index": 2,
+      "startMs": 2800,
+      "endMs": 4300,
+      "issueIds": []
+    },
+    {
+      "index": 3,
+      "startMs": 4300,
+      "endMs": 6050,
+      "issueIds": ["barbell-curl.shoulder_fail"]
+    },
+    {
+      "index": 4,
+      "startMs": 6080,
+      "endMs": 7500,
+      "issueIds": []
+    },
+    {
+      "index": 5,
+      "startMs": 7500,
+      "endMs": 9080,
+      "issueIds": [],
+      "notes": "Curls while folded forward instead of staying upright."
+    },
+    {
+      "index": 6,
+      "startMs": 10080,
+      "endMs": 11500,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "notes": "Starts the curl while rising from a forward lean."
+    },
+    {
+      "index": 7,
+      "startMs": 11580,
+      "endMs": 13000,
+      "issueIds": []
+    },
+    {
+      "index": 8,
+      "startMs": 13330,
+      "endMs": 14500,
+      "issueIds": []
+    },
+    {
+      "index": 9,
+      "startMs": 14500,
+      "endMs": 16080,
+      "issueIds": []
+    }
+  ],
+  "notes": "Human-reviewed from video. Draft timing corrected; wrist-curl suggestions left out because the wrists are not reliably visible enough to label. Torso-control labels are only applied to the two visibly forward-leaning reps."
+}

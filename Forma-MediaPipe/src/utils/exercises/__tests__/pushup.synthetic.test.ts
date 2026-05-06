@@ -293,6 +293,34 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(dropped.feedbackMessages).toContain('Keep your head neutral — align your neck with your spine.');
   });
 
+  it('does not create hip or head feedback from low-confidence body landmarks', () => {
+    const noisy = buildRecordingWithPostureDuringRep(
+      'synthetic low-confidence sagging dropped-head pushup',
+      fullRepPath(),
+      'sag',
+      'facing-right',
+    );
+    const droppedNose = nosePoint(bodyPoints('facing-right', 'sag').shoulder, 'facing-right', 'dropped');
+    noisy.frames = noisy.frames.map((frame, index) => index >= 22 && index < 94
+      ? {
+          ...frame,
+          keypoints: frame.keypoints.map(point => (
+            point.name === 'nose'
+              ? { ...point, x: droppedNose.x, y: droppedNose.y, score: 0.25 }
+              : point.name.includes('_hip') || point.name.includes('_ankle')
+              ? { ...point, score: 0.25 }
+              : point
+          )),
+        }
+      : frame);
+
+    const result = replayRecording(pushupDefinition, noisy);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages.join('\n')).not.toContain('Hips are sagging');
+    expect(result.feedbackMessages).not.toContain('Keep your head neutral — align your neck with your spine.');
+  });
+
   it('keeps the active side locked through a rep even if visibility flips', () => {
     const result = replayRecordingVerbose(
       pushupDefinition,

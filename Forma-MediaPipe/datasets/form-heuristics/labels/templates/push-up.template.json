@@ -27,11 +27,7 @@
   "availableIssues": [
     {
       "issueId": "push-up.depth_short",
-      "feedbackMessage": "Go deeper \u2014 try to hit 90 degrees."
-    },
-    {
-      "issueId": "push-up.depth_short",
-      "feedbackMessage": "Go deeper \u2014 aim for elbows at 90 degrees."
+      "feedbackMessage": "Go deeper — try to hit 90 degrees."
     },
     {
       "issueId": "push-up.lockout_short",
@@ -39,31 +35,27 @@
     },
     {
       "issueId": "push-up.incomplete_rom",
-      "feedbackMessage": "Incomplete rep \u2014 full range of motion from lockout to 90 degrees."
+      "feedbackMessage": "Incomplete rep — full range of motion from lockout to 90 degrees."
     },
     {
       "issueId": "push-up.hip_sag",
-      "feedbackMessage": "Hips are sagging \u2014 engage your core to maintain a straight line."
-    },
-    {
-      "issueId": "push-up.hip_sag",
-      "feedbackMessage": "Keep your hips up \u2014 your body line is dropping."
+      "feedbackMessage": "Hips are sagging — engage your core to maintain a straight line."
     },
     {
       "issueId": "push-up.hip_pike",
-      "feedbackMessage": "Hips are piking up \u2014 lower them to maintain a straight plank."
+      "feedbackMessage": "Hips are piking up — lower them to maintain a straight plank."
     },
     {
-      "issueId": "push-up.hip_pike",
-      "feedbackMessage": "Hips are riding high \u2014 aim for a straight body line."
+      "issueId": "push-up.head_position",
+      "feedbackMessage": "Keep your head neutral — align your neck with your spine."
     },
     {
       "issueId": "push-up.tempo_up",
-      "feedbackMessage": "Slow down the push \u2014 control the movement."
+      "feedbackMessage": "Slow down the push — control the movement."
     },
     {
       "issueId": "push-up.tempo_down",
-      "feedbackMessage": "Control the descent \u2014 don't drop into the pushup."
+      "feedbackMessage": "Control the descent — don't drop into the pushup."
     }
   ],
   "draftMetadata": {

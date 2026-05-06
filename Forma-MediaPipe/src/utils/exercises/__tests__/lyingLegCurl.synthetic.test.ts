@@ -247,6 +247,20 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(hipLift.feedbackMessages).toContain('Keep your hips down — avoid lifting off the pad.');
   });
 
+  it('does not create hip-lift feedback from low-confidence hip-chain frames', () => {
+    const noisy = buildRecording('synthetic low-confidence hip lift lying leg curl', fullRepPath(), {
+      posture: index => (index >= 24 && index < 68 ? 'hip-lift' : 'flat'),
+    });
+    noisy.frames = noisy.frames.map((frame, index) => index >= 20 && index < 76
+      ? { ...frame, keypoints: frame.keypoints.map(point => ({ ...point, score: 0.25 })) }
+      : frame);
+
+    const result = replayRecording(lyingLegCurlDefinition, noisy);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Keep your hips down — avoid lifting off the pad.');
+  });
+
   it('still flags a true fast lower', () => {
     const result = replayRecording(
       lyingLegCurlDefinition,

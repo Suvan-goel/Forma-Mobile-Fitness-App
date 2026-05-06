@@ -27,27 +27,27 @@
   "availableIssues": [
     {
       "issueId": "leg-extensions.lockout_short",
-      "feedbackMessage": "Extend fully \u2014 straighten your legs completely at the top."
+      "feedbackMessage": "Extend fully — straighten your legs completely at the top."
     },
     {
       "issueId": "leg-extensions.rom_short_leg_ext",
-      "feedbackMessage": "Lower the weight more \u2014 start from a deeper bend."
+      "feedbackMessage": "Lower the weight more — start from a deeper bend."
     },
     {
       "issueId": "leg-extensions.torso_warn",
-      "feedbackMessage": "Keep your back against the pad \u2014 avoid leaning forward."
+      "feedbackMessage": "Keep your back against the pad — avoid leaning forward."
     },
     {
       "issueId": "leg-extensions.hip_lift",
-      "feedbackMessage": "Keep your hips on the seat \u2014 don't lift off the pad."
+      "feedbackMessage": "Keep your hips on the seat — don't lift off the pad."
     },
     {
       "issueId": "leg-extensions.tempo_up",
-      "feedbackMessage": "Slow down the extension \u2014 control the lift."
+      "feedbackMessage": "Slow down the extension — control the lift."
     },
     {
       "issueId": "leg-extensions.tempo_down",
-      "feedbackMessage": "Control the return \u2014 don't let the weight drop."
+      "feedbackMessage": "Control the return — don't let the weight drop."
     }
   ],
   "draftMetadata": {

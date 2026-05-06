@@ -267,7 +267,7 @@ export function evaluateBaseline(cases: DatasetCase[]): DatasetEvaluation {
     if (!definition) {
       throw new Error(`No registered exercise definition for "${datasetCase.label.exerciseName}"`);
     }
-    const prediction = replayRecording(definition, datasetCase.recording);
+    const prediction = replayRecording(definition, datasetCase.recording, { confidenceGating: true });
     caseEvaluations.push(evaluateCase(datasetCase, prediction));
   }
   return summarizeEvaluations(caseEvaluations);
@@ -298,6 +298,12 @@ export function formatEvaluationSummary(evaluation: DatasetEvaluation): string {
     `Issue F1: ${formatMetricPercent(evaluation.metrics.issueF1)}`,
     `Clean-rep false-positive rate: ${formatMetricPercent(evaluation.metrics.cleanRepFalsePositiveRate)}`,
   ];
+  if (evaluation.qualityCoverage) {
+    lines.push(
+      `Quality scorable reps: ${evaluation.qualityCoverage.scoredReps}/${evaluation.qualityCoverage.totalReps} (${formatMetricPercent(evaluation.qualityCoverage.scorableRate)})`,
+      `Average tracking confidence: ${formatMetricPercent(evaluation.qualityCoverage.averageConfidence)}`,
+    );
+  }
   return lines.join('\n');
 }
 

@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/testing/barbell-curl/testing002.mp4",
+  "landmarkFile": "landmarks/testing/barbell-curl/testing002.json",
+  "split": "test",
+  "reviewStatus": "draft",
+  "expectedReps": 10,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 0,
+      "endMs": 2372,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 87,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 2,
+      "startMs": 3107,
+      "endMs": 4209,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 89,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 3,
+      "startMs": 4810,
+      "endMs": 6013,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 90,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 4,
+      "startMs": 6714,
+      "endMs": 7783,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 89,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 5,
+      "startMs": 8518,
+      "endMs": 9587,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 89,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 6,
+      "startMs": 10322,
+      "endMs": 11525,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 90,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 7,
+      "startMs": 12861,
+      "endMs": 14865,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 87,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 8,
+      "startMs": 16068,
+      "endMs": 17136,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.incomplete_extend",
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Extend fully at the bottom.",
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 83,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 9,
+      "startMs": 19174,
+      "endMs": 20978,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 90,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    },
+    {
+      "index": 10,
+      "startMs": 21947,
+      "endMs": 23583,
+      "issueIds": [],
+      "suggestedIssueIds": [
+        "barbell-curl.wrist_curl"
+      ],
+      "suggestedFeedbackMessages": [
+        "Keep your wrists neutral — avoid curling them in."
+      ],
+      "suggestedScore": 90,
+      "notes": "Review timing and copy approved suggestedIssueIds into issueIds."
+    }
+  ],
+  "notes": "Draft generated from heuristic replay. Review rep count/timing and move approved suggestions into issueIds before marking reviewed.",
+  "availableIssues": [
+    {
+      "issueId": "barbell-curl.incomplete_flex",
+      "feedbackMessage": "Flex more at the top of the curl."
+    },
+    {
+      "issueId": "barbell-curl.incomplete_extend",
+      "feedbackMessage": "Extend fully at the bottom."
+    },
+    {
+      "issueId": "barbell-curl.incomplete_rom",
+      "feedbackMessage": "Incomplete rep — curl all the way up and fully extend."
+    },
+    {
+      "issueId": "barbell-curl.shoulder_fail",
+      "feedbackMessage": "Too much shoulder involvement — reduce the weight."
+    },
+    {
+      "issueId": "barbell-curl.shoulder_warn",
+      "feedbackMessage": "Upper arms moving — keep elbows pinned to your sides."
+    },
+    {
+      "issueId": "barbell-curl.torso_fail",
+      "feedbackMessage": "Excessive body swing — this is cheating the rep."
+    },
+    {
+      "issueId": "barbell-curl.torso_warn",
+      "feedbackMessage": "Don't swing your torso — stay upright and controlled."
+    },
+    {
+      "issueId": "barbell-curl.tempo_up",
+      "feedbackMessage": "Slow down — control the curl."
+    },
+    {
+      "issueId": "barbell-curl.tempo_down",
+      "feedbackMessage": "Control the lowering — don't drop the weight."
+    },
+    {
+      "issueId": "barbell-curl.asymmetry",
+      "feedbackMessage": "Arms are uneven — curl both sides together."
+    },
+    {
+      "issueId": "barbell-curl.elbow_flare",
+      "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
+    },
+    {
+      "issueId": "barbell-curl.elbow_flare",
+      "feedbackMessage": "Tuck your elbows in — they're drifting outward."
+    },
+    {
+      "issueId": "barbell-curl.wrist_curl",
+      "feedbackMessage": "Keep your wrists neutral — avoid curling them in."
+    }
+  ],
+  "draftMetadata": {
+    "generatedAt": "2026-05-05T16:20:02.220Z",
+    "generator": "dataset:draft-label",
+    "source": "heuristic-replay"
+  }
+}

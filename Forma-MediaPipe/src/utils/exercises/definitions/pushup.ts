@@ -13,6 +13,7 @@ import {
   calculateAngle2D,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import type {
@@ -71,6 +72,8 @@ const THRESHOLDS = {
   IDLE_ARMS_EXTENDED: 0.92,
   /** Minimum ratio ROM for a returned partial rep to count */
   MIN_PARTIAL_ROM: 0.11,
+  /** Minimum analyzed frames for a completed full rep to be trusted */
+  MIN_REP_FRAMES: 8,
 } as const;
 
 /** Form heuristic thresholds — ratio-based for elbow, angle-based for hip/body */
@@ -123,6 +126,7 @@ const SCORE_CURVES = {
 const MEDIAN_WINDOW = 5;
 const EMA_ALPHA = 0.3;
 const VISIBILITY_THRESHOLD = 0.2;
+const FORM_CONFIDENCE_MIN = 0.3;
 
 const DEFAULT_PUSHUP_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -515,8 +519,8 @@ function calculatePushupAngles(
   );
 
   // Body alignment (shoulder-hip-ankle)
-  let bodyAlignmentAngle = 180; // default: straight
-  let hipDeviation = 0;
+  let bodyAlignmentAngle = NaN;
+  let hipDeviation = NaN;
   const hasBody =
     hip && ankle &&
     isVisible(hip, VISIBILITY_THRESHOLD) &&
@@ -536,7 +540,7 @@ function calculatePushupAngles(
   }
 
   // Head-spine angle (hip -> shoulder -> nose)
-  let headSpineAngle = 165; // default neutral
+  let headSpineAngle = NaN;
   if (hip && nose &&
       isVisible(hip, VISIBILITY_THRESHOLD) &&
       isVisible(nose, VISIBILITY_THRESHOLD)) {
@@ -630,6 +634,7 @@ function updateFSM(
     case 'IDLE': {
       const armsExtended = elbowRatio > THRESHOLDS.IDLE_ARMS_EXTENDED;
       const bodyAligned =
+        Number.isFinite(bodyAlignment) &&
         bodyAlignment >= THRESHOLDS.PLANK_BODY_MIN &&
         bodyAlignment <= THRESHOLDS.PLANK_BODY_MAX;
 
@@ -726,17 +731,27 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
   //    Deadzone: +/-8 from 180 (172-188 is fine)
   //    Sag (minBodyAngle < 172) and pike (maxBodyAngle > 188) measured independently;
   //    worst direction drives the penalty.
-  const sagDev = Math.max(0, (SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone) - repWindow.minBodyAngle);
-  const pikeDev = Math.max(0, repWindow.maxBodyAngle - (SCORE_CURVES.HIP.neutral + SCORE_CURVES.HIP.deadzone));
+  const hasBodyAngles = Number.isFinite(repWindow.minBodyAngle) && Number.isFinite(repWindow.maxBodyAngle);
+  const hasHipDeviation = Number.isFinite(repWindow.minHipDev) && Number.isFinite(repWindow.maxHipDev);
+  const sagDev = hasBodyAngles
+    ? Math.max(0, (SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone) - repWindow.minBodyAngle)
+    : 0;
+  const pikeDev = hasBodyAngles
+    ? Math.max(0, repWindow.maxBodyAngle - (SCORE_CURVES.HIP.neutral + SCORE_CURVES.HIP.deadzone))
+    : 0;
   const worstHipAngleDev = Math.max(sagDev, pikeDev);
-  const signedHipDev = Math.max(Math.abs(repWindow.minHipDev), Math.abs(repWindow.maxHipDev));
+  const signedHipDev = hasHipDeviation
+    ? Math.max(Math.abs(repWindow.minHipDev), Math.abs(repWindow.maxHipDev))
+    : 0;
   const hipDevExcess = Math.max(0, signedHipDev - SCORE_CURVES.HIP_DEV.deadzone);
   const hipAnglePenalty = SCORE_CURVES.HIP.scale * worstHipAngleDev * worstHipAngleDev;
   const hipDevPenalty = SCORE_CURVES.HIP_DEV.scale * hipDevExcess * hipDevExcess;
   penalty += Math.min(SCORE_CURVES.HIP.cap, Math.max(hipAnglePenalty, hipDevPenalty));
 
   // 4. Head/neck alignment -- obvious head drop/crane out of plank line
-  const headShortfall = Math.max(0, SCORE_CURVES.HEAD.min - repWindow.minHeadSpine);
+  const headShortfall = Number.isFinite(repWindow.minHeadSpine)
+    ? Math.max(0, SCORE_CURVES.HEAD.min - repWindow.minHeadSpine)
+    : 0;
   penalty += Math.min(SCORE_CURVES.HEAD.cap, SCORE_CURVES.HEAD.scale * headShortfall * headShortfall);
 
   // 5. Tempo -- too fast in either direction
@@ -791,20 +806,33 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
   const minDev = repWindow.minHipDev;
   const maxDev = repWindow.maxHipDev;
 
-  if (maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
+  const hasBodyAngles = Number.isFinite(minBody) && Number.isFinite(maxBody);
+  const hasHipDeviation = Number.isFinite(minDev) && Number.isFinite(maxDev);
+
+  if (hasHipDeviation && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
     messages.push('Hips are sagging \u2014 engage your core to maintain a straight line.');
-  } else if (minBody < FORM_THRESHOLDS.HIP_SAG_WARN && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN) {
+  } else if (
+    hasBodyAngles &&
+    hasHipDeviation &&
+    minBody < FORM_THRESHOLDS.HIP_SAG_WARN &&
+    maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN
+  ) {
     messages.push('Keep your hips up \u2014 your body line is dropping.');
   }
 
-  if (minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL) {
+  if (hasHipDeviation && minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL) {
     messages.push('Hips are piking up \u2014 lower them to maintain a straight plank.');
-  } else if (maxBody > FORM_THRESHOLDS.HIP_PIKE_WARN && minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_WARN) {
+  } else if (
+    hasBodyAngles &&
+    hasHipDeviation &&
+    maxBody > FORM_THRESHOLDS.HIP_PIKE_WARN &&
+    minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_WARN
+  ) {
     messages.push('Hips are riding high \u2014 aim for a straight body line.');
   }
 
   // 5. Head/neck alignment
-  if (repWindow.minHeadSpine < FORM_THRESHOLDS.HEAD_SPINE_WARN) {
+  if (Number.isFinite(repWindow.minHeadSpine) && repWindow.minHeadSpine < FORM_THRESHOLDS.HEAD_SPINE_WARN) {
     messages.push('Keep your head neutral \u2014 align your neck with your spine.');
   }
 
@@ -868,6 +896,12 @@ function updatePushupState(
     displayAngles: smoothed,
     visibleSide,
   };
+  const bodyConf = minKeypointConfidence(keypoints, [
+    `${visibleSide}_shoulder`, `${visibleSide}_hip`, `${visibleSide}_ankle`,
+  ]);
+  const headConf = minKeypointConfidence(keypoints, [
+    `${visibleSide}_hip`, `${visibleSide}_shoulder`, 'nose',
+  ]);
 
   // Use fast (median-only) ratio for FSM: avoids EMA lag that prevents reaching extremes
   if (isNaN(fast.elbowRatio)) {
@@ -899,15 +933,15 @@ function updatePushupState(
         newState.repWindow.minElbowRatio = Math.min(newState.repWindow.minElbowRatio, fast.elbowRatio);
         newState.repWindow.maxElbowRatio = Math.max(newState.repWindow.maxElbowRatio, fast.elbowRatio);
       }
-      if (!isNaN(smoothed.bodyAlignment)) {
+      if (!isNaN(smoothed.bodyAlignment) && bodyConf >= FORM_CONFIDENCE_MIN) {
         newState.repWindow.minBodyAngle = Math.min(newState.repWindow.minBodyAngle, smoothed.bodyAlignment);
         newState.repWindow.maxBodyAngle = Math.max(newState.repWindow.maxBodyAngle, smoothed.bodyAlignment);
       }
-      if (!isNaN(smoothed.hipDeviation)) {
+      if (!isNaN(smoothed.hipDeviation) && bodyConf >= FORM_CONFIDENCE_MIN) {
         newState.repWindow.minHipDev = Math.min(newState.repWindow.minHipDev, smoothed.hipDeviation);
         newState.repWindow.maxHipDev = Math.max(newState.repWindow.maxHipDev, smoothed.hipDeviation);
       }
-      if (!isNaN(smoothed.headSpine)) {
+      if (!isNaN(smoothed.headSpine) && headConf >= FORM_CONFIDENCE_MIN) {
         newState.repWindow.minHeadSpine = Math.min(newState.repWindow.minHeadSpine, smoothed.headSpine);
         newState.repWindow.maxHeadSpine = Math.max(newState.repWindow.maxHeadSpine, smoothed.headSpine);
       }
@@ -964,15 +998,15 @@ function updatePushupState(
       window.minElbowRatio = Math.min(window.minElbowRatio, fast.elbowRatio);
       window.maxElbowRatio = Math.max(window.maxElbowRatio, fast.elbowRatio);
     }
-    if (!isNaN(smoothed.bodyAlignment)) {
+    if (!isNaN(smoothed.bodyAlignment) && bodyConf >= FORM_CONFIDENCE_MIN) {
       window.minBodyAngle = Math.min(window.minBodyAngle, smoothed.bodyAlignment);
       window.maxBodyAngle = Math.max(window.maxBodyAngle, smoothed.bodyAlignment);
     }
-    if (!isNaN(smoothed.hipDeviation)) {
+    if (!isNaN(smoothed.hipDeviation) && bodyConf >= FORM_CONFIDENCE_MIN) {
       window.minHipDev = Math.min(window.minHipDev, smoothed.hipDeviation);
       window.maxHipDev = Math.max(window.maxHipDev, smoothed.hipDeviation);
     }
-    if (!isNaN(smoothed.headSpine)) {
+    if (!isNaN(smoothed.headSpine) && headConf >= FORM_CONFIDENCE_MIN) {
       window.minHeadSpine = Math.min(window.minHeadSpine, smoothed.headSpine);
       window.maxHeadSpine = Math.max(window.maxHeadSpine, smoothed.headSpine);
     }
@@ -985,9 +1019,29 @@ function updatePushupState(
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
+    const duration = newState.repWindow.tEnd - newState.repWindow.tStart;
+    const meaningfulFullRep = isMeaningfulPartialRep({
+      actualRom: romRatio,
+      minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+      duration,
+      minDuration: THRESHOLDS.MIN_REP_TIME,
+      frameCount: newState.repWindow.frameCount,
+      minFrames: THRESHOLDS.MIN_REP_FRAMES,
+    });
+
+    if (!meaningfulFullRep) {
+      newState.feedback = LOW_ROM_FEEDBACK;
+      newState.lastFeedbackTime = t;
+      newState.repWindow = null;
+      newState.fsm = resetFSMToPlank();
+      newState.activeSide = null;
+      newState.plankMaxElbowRatio = -Infinity;
+      return newState;
+    }
+
     newState.repCount++;
 
-    const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
     const tDown = newState.repWindow.tBottom
       ? newState.repWindow.tBottom - newState.repWindow.tStart
       : 0;

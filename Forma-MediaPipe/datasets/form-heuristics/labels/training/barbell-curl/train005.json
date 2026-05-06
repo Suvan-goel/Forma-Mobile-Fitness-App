@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train005.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train005.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 7,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 1900,
+      "endMs": 3330,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "notes": "Torso leans back at the top."
+    },
+    {
+      "index": 2,
+      "startMs": 3500,
+      "endMs": 5500,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "notes": "Forward torso dip before curling, then rises into the rep."
+    },
+    {
+      "index": 3,
+      "startMs": 6200,
+      "endMs": 7500,
+      "issueIds": [
+        "barbell-curl.elbow_flare"
+      ],
+      "notes": "Elbows flare outward during the curl."
+    },
+    {
+      "index": 4,
+      "startMs": 8000,
+      "endMs": 9500,
+      "issueIds": [],
+      "notes": "One arm leads slightly during the ascent."
+    },
+    {
+      "index": 5,
+      "startMs": 9700,
+      "endMs": 11370,
+      "issueIds": []
+    },
+    {
+      "index": 6,
+      "startMs": 11700,
+      "endMs": 13200,
+      "issueIds": [],
+      "notes": "Arms are visibly uneven through the top and return."
+    },
+    {
+      "index": 7,
+      "startMs": 13500,
+      "endMs": 15330,
+      "issueIds": [
+        "barbell-curl.torso_fail",
+        "barbell-curl.shoulder_warn",
+        "barbell-curl.tempo_up"
+      ],
+      "notes": "Large forward body swing into a fast curl with upper-arm drift."
+    }
+  ],
+  "notes": "Human-reviewed from video. Seven visible reps labelled; draft timing corrected to include visible cheat motion when it contributes to the rep. Wrist suggestions were not copied because wrist position is not reliable enough from this footage."
+}

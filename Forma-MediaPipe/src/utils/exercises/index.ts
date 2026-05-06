@@ -48,6 +48,7 @@ export type {
 } from './types';
 export type {
   LandmarkRecording,
+  QualityCoverage,
   ReplayRepPrediction,
   ReplayResult,
   ReplayResultVerbose,
@@ -63,8 +64,28 @@ export type {
   EvaluationTotals,
   ExerciseLabelFile,
   LabelReviewStatus,
+  QualityCoverageMetrics,
   RepEvaluation,
   RepMatchStatus,
   RepLabel,
   ValidationIssue,
 } from './dataset';
+export {
+  POSE_QUALITY_LATENCY_TARGET_MS,
+  PoseQualityTracker,
+  RepQualityAccumulator,
+  getPoseQualityMessage,
+  getPoseQualityStatusLabel,
+  resolveExerciseQualityProfile,
+  summarizeRepQuality,
+  summarizeSetTrackingQuality,
+} from './shared/poseQuality';
+export type {
+  ExerciseQualityProfile,
+  PoseQualitySnapshot,
+  PoseQualityStatus,
+  PoseQualityTrackerOptions,
+  PoseQualityWarning,
+  RepTrackingQuality,
+  SetTrackingQualitySummary,
+} from './shared/poseQuality';

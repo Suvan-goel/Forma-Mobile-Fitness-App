@@ -17,6 +17,7 @@ import {
   Keypoint,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
@@ -151,6 +152,7 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+const FORM_CONFIDENCE_MIN = 0.3;
 
 const DEFAULT_CABLE_PUSHDOWN_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -613,6 +615,15 @@ function updateCablePushdownState(
   const rawRatio = computeReachRatio(keypoints, visibleSide);
   const rawShoulder = calculateShoulderAngle(keypoints, visibleSide);
   const rawTorsoDev = calculateTorsoDeviation(keypoints, visibleSide);
+  const ratioConf = minKeypointConfidence(keypoints, [
+    `${visibleSide}_shoulder`, `${visibleSide}_elbow`, `${visibleSide}_wrist`,
+  ]);
+  const shoulderConf = minKeypointConfidence(keypoints, [
+    `${visibleSide}_hip`, `${visibleSide}_shoulder`, `${visibleSide}_elbow`,
+  ]);
+  const torsoConf = minKeypointConfidence(keypoints, [
+    `${visibleSide}_shoulder`, `${visibleSide}_hip`,
+  ]);
 
   // If we can't compute the ratio, bail out
   if (isNaN(rawRatio)) {
@@ -627,13 +638,13 @@ function updateCablePushdownState(
   }
 
   // Smooth values
-  const smoothedRatio = currentState.ratioTracker.push(rawRatio);
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio, ratioConf);
   const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedShoulder = rawShoulder !== null
-    ? currentState.shoulderTracker.push(rawShoulder)
+    ? currentState.shoulderTracker.push(rawShoulder, shoulderConf)
     : currentState.shoulderTracker.value;
   const smoothedTorso = rawTorsoDev !== null
-    ? currentState.torsoTracker.push(rawTorsoDev)
+    ? currentState.torsoTracker.push(rawTorsoDev, torsoConf)
     : currentState.torsoTracker.value;
 
   const newState: CablePushdownState = {
@@ -722,17 +733,18 @@ function updateCablePushdownState(
       window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
     }
 
-    // Track shoulder angle delta from baseline
-    if (!isNaN(smoothedShoulder)) {
+    // Track shoulder angle delta from baseline. Use raw angle for peak capture;
+    // the tracker remains useful for debug display, but EMA can dampen elbow drift.
+    if (rawShoulder !== null && shoulderConf >= FORM_CONFIDENCE_MIN) {
       if (window.shoulderAngleBaseline === null) {
-        window.shoulderAngleBaseline = smoothedShoulder;
+        window.shoulderAngleBaseline = rawShoulder;
       }
-      const delta = Math.abs(smoothedShoulder - window.shoulderAngleBaseline);
+      const delta = Math.abs(rawShoulder - window.shoulderAngleBaseline);
       window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
     }
 
     // Track torso deviation
-    if (!isNaN(smoothedTorso)) {
+    if (!isNaN(smoothedTorso) && torsoConf >= FORM_CONFIDENCE_MIN) {
       window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
     }
 

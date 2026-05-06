@@ -15,10 +15,15 @@ export interface SmoothedAngleTrackerConfig {
   maxDegPerFrame?: number;     // Velocity clamp: max allowed change per frame (default: undefined = disabled)
 }
 
+const EMA_BASELINE_FRAME_MS = 1000 / 30;
+const MIN_EMA_DT_MS = 16;
+const MAX_EMA_DT_MS = 100;
+
 export class SmoothedAngleTracker {
   private buffer: number[];
   private sortedBuffer: number[];
   private smoothedValue: number | null;
+  private lastTimestampMs: number | null;
   private readonly medianWindow: number;
   private readonly emaAlpha: number;
   private readonly maxDegPerFrame: number | undefined;
@@ -30,6 +35,7 @@ export class SmoothedAngleTracker {
     this.buffer = [];
     this.sortedBuffer = [];
     this.smoothedValue = null;
+    this.lastTimestampMs = null;
   }
 
   /**
@@ -37,8 +43,9 @@ export class SmoothedAngleTracker {
    * Returns the smoothed result.
    * If rawAngle is NaN, returns the previous smoothed value (or NaN if none).
    * Optional confidence (0-1) scales the EMA alpha — low confidence trusts previous value more.
+   * Optional timestamp makes EMA time-aware; omitted timestamps use Date.now().
    */
-  push(rawAngle: number, confidence?: number): number {
+  push(rawAngle: number, confidence?: number, timestampMs = Date.now()): number {
     if (isNaN(rawAngle)) {
       return this.smoothedValue ?? NaN;
     }
@@ -74,10 +81,7 @@ export class SmoothedAngleTracker {
       ? (this.sortedBuffer[mid - 1] + this.sortedBuffer[mid]) * 0.5
       : this.sortedBuffer[mid];
 
-    // Confidence-weighted EMA
-    const effectiveAlpha = confidence !== undefined
-      ? this.emaAlpha * Math.min(1, confidence / 0.5)
-      : this.emaAlpha;
+    const effectiveAlpha = this.getEffectiveAlpha(confidence, timestampMs);
 
     if (this.smoothedValue !== null && !isNaN(this.smoothedValue)) {
       this.smoothedValue = effectiveAlpha * medianValue + (1 - effectiveAlpha) * this.smoothedValue;
@@ -113,6 +117,22 @@ export class SmoothedAngleTracker {
     this.buffer = [];
     this.sortedBuffer = [];
     this.smoothedValue = null;
+    this.lastTimestampMs = null;
+  }
+
+  private getEffectiveAlpha(confidence: number | undefined, timestampMs: number): number {
+    const safeTimestamp = Number.isFinite(timestampMs) ? timestampMs : Date.now();
+    const rawDt = this.lastTimestampMs === null
+      ? EMA_BASELINE_FRAME_MS
+      : safeTimestamp - this.lastTimestampMs;
+    this.lastTimestampMs = safeTimestamp;
+
+    const dt = Math.max(MIN_EMA_DT_MS, Math.min(MAX_EMA_DT_MS, rawDt));
+    const timeAdjustedAlpha = 1 - Math.pow(1 - this.emaAlpha, dt / EMA_BASELINE_FRAME_MS);
+    const confidenceScale = confidence !== undefined
+      ? Math.min(1, Math.max(0, confidence) / 0.5)
+      : 1;
+    return Math.max(0, Math.min(1, timeAdjustedAlpha * confidenceScale));
   }
 }
 

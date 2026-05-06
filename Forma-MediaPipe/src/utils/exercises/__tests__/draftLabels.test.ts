@@ -17,6 +17,8 @@ const definition: ExerciseDefinition = {
   ttsConfig: {
     feedbackToIssue: {
       'Go deeper.': 'depth_short',
+      'Try to go deeper.': 'depth_short',
+      'Stay upright.': 'torso_warn',
     },
   },
   summaryConfig: {},
@@ -98,6 +100,7 @@ describe('draft label generation', () => {
     });
     expect(label.availableIssues).toEqual([
       { issueId: 'demo-exercise.depth_short', feedbackMessage: 'Go deeper.' },
+      { issueId: 'demo-exercise.torso_warn', feedbackMessage: 'Stay upright.' },
     ]);
     expect(label.draftMetadata).toEqual({
       generatedAt: '2026-01-01T00:00:00.000Z',
@@ -106,9 +109,10 @@ describe('draft label generation', () => {
     });
   });
 
-  it('lists available issue ids and feedback messages from the exercise definition', () => {
+  it('lists each available issue id once with a representative feedback message', () => {
     expect(getAvailableIssues(definition)).toEqual([
       { issueId: 'demo-exercise.depth_short', feedbackMessage: 'Go deeper.' },
+      { issueId: 'demo-exercise.torso_warn', feedbackMessage: 'Stay upright.' },
     ]);
   });
 });

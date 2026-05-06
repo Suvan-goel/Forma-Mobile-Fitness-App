@@ -27,23 +27,23 @@
   "availableIssues": [
     {
       "issueId": "cable-lat-pulldowns.rom_short",
-      "feedbackMessage": "Pull deeper \u2014 bring the bar to your upper chest."
+      "feedbackMessage": "Pull deeper — bring the bar to your upper chest."
     },
     {
       "issueId": "cable-lat-pulldowns.lockout_short",
-      "feedbackMessage": "Extend fully \u2014 reach all the way up at the top."
+      "feedbackMessage": "Extend fully — reach all the way up at the top."
     },
     {
       "issueId": "cable-lat-pulldowns.torso_warn",
-      "feedbackMessage": "Stay upright \u2014 avoid leaning back excessively."
+      "feedbackMessage": "Stay upright — avoid leaning back excessively."
     },
     {
       "issueId": "cable-lat-pulldowns.tempo_down",
-      "feedbackMessage": "Slow down the pull \u2014 control the descent."
+      "feedbackMessage": "Slow down the pull — control the descent."
     },
     {
       "issueId": "cable-lat-pulldowns.tempo_up",
-      "feedbackMessage": "Control the return \u2014 resist the weight on the way up."
+      "feedbackMessage": "Control the return — resist the weight on the way up."
     }
   ],
   "draftMetadata": {

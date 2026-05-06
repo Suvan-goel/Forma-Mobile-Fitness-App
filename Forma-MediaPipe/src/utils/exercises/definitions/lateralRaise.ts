@@ -17,6 +17,7 @@ import {
   Keypoint,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import type {
@@ -118,6 +119,7 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+const FORM_CONFIDENCE_MIN = 0.3;
 
 const DEFAULT_LATERAL_RAISE_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -558,22 +560,24 @@ function updateLateralRaiseState(
   // -- Compute raw ratios --
   // Arm height ratio: wrist height relative to torso (0 = hip, 1.0 = shoulder)
   // Uses elbow as fallback for wrist if wrist not visible (arms still track via elbow height)
-  const leftWristPoint = isVisible(lw, VISIBILITY_THRESHOLD) ? lw! : le!;
-  const rightWristPoint = isVisible(rw, VISIBILITY_THRESHOLD) ? rw! : re!;
+  const leftWristVisible = isVisible(lw, VISIBILITY_THRESHOLD);
+  const rightWristVisible = isVisible(rw, VISIBILITY_THRESHOLD);
+  const leftWristPoint = leftWristVisible ? lw! : le!;
+  const rightWristPoint = rightWristVisible ? rw! : re!;
   const rawLeftHeightRatio = computeArmHeightRatio(leftWristPoint, lh!, rh!, ls!, rs!);
   const rawRightHeightRatio = computeArmHeightRatio(rightWristPoint, lh!, rh!, ls!, rs!);
 
   // Arm straightness ratio (only when wrist visible)
-  let rawLeftStraightness = 1.0;
-  let rawRightStraightness = 1.0;
-  if (isVisible(lw, VISIBILITY_THRESHOLD)) {
+  let rawLeftStraightness = NaN;
+  let rawRightStraightness = NaN;
+  if (leftWristVisible) {
     rawLeftStraightness = computeArmStraightnessRatio(ls!, le!, lw!);
   }
-  if (isVisible(rw, VISIBILITY_THRESHOLD)) {
+  if (rightWristVisible) {
     rawRightStraightness = computeArmStraightnessRatio(rs!, re!, rw!);
   }
 
-  let rawTorsoLean = 0;
+  let rawTorsoLean: number | null = null;
   const allTorsoVisible =
     isVisible(ls, VISIBILITY_THRESHOLD) &&
     isVisible(rs, VISIBILITY_THRESHOLD) &&
@@ -582,32 +586,61 @@ function updateLateralRaiseState(
   if (allTorsoVisible) {
     rawTorsoLean = computeTorsoLean(ls!, rs!, lh!, rh!);
   }
+  const leftHeightConf = minKeypointConfidence(keypoints, [
+    'left_shoulder', 'left_elbow', leftWristVisible ? 'left_wrist' : 'left_elbow', 'left_hip', 'right_hip',
+  ]);
+  const rightHeightConf = minKeypointConfidence(keypoints, [
+    'right_shoulder', 'right_elbow', rightWristVisible ? 'right_wrist' : 'right_elbow', 'left_hip', 'right_hip',
+  ]);
+  const leftStraightnessConf = leftWristVisible
+    ? minKeypointConfidence(keypoints, ['left_shoulder', 'left_elbow', 'left_wrist'])
+    : 0;
+  const rightStraightnessConf = rightWristVisible
+    ? minKeypointConfidence(keypoints, ['right_shoulder', 'right_elbow', 'right_wrist'])
+    : 0;
+  const torsoConf = minKeypointConfidence(keypoints, [
+    'left_shoulder', 'right_shoulder', 'left_hip', 'right_hip',
+  ]);
 
   // -- Smooth ratios --
-  const smoothedLeftHeightRatio = state.leftHeightRatioTracker.push(rawLeftHeightRatio);
-  const smoothedRightHeightRatio = state.rightHeightRatioTracker.push(rawRightHeightRatio);
+  const smoothedLeftHeightRatio = state.leftHeightRatioTracker.push(rawLeftHeightRatio, leftHeightConf);
+  const smoothedRightHeightRatio = state.rightHeightRatioTracker.push(rawRightHeightRatio, rightHeightConf);
   const smoothedAvgHeightRatio = (smoothedLeftHeightRatio + smoothedRightHeightRatio) / 2;
-  const smoothedLeftStraightness = state.leftStraightnessTracker.push(rawLeftStraightness);
-  const smoothedRightStraightness = state.rightStraightnessTracker.push(rawRightStraightness);
-  const smoothedTorsoLean = state.torsoLeanTracker.push(rawTorsoLean);
+  const fastLeftHeightRatio = state.leftHeightRatioTracker.medianValue;
+  const fastRightHeightRatio = state.rightHeightRatioTracker.medianValue;
+  const fastAvgHeightRatio = (fastLeftHeightRatio + fastRightHeightRatio) / 2;
+  const smoothedLeftStraightness = leftWristVisible
+    ? state.leftStraightnessTracker.push(rawLeftStraightness, leftStraightnessConf)
+    : state.leftStraightnessTracker.value;
+  const smoothedRightStraightness = rightWristVisible
+    ? state.rightStraightnessTracker.push(rawRightStraightness, rightStraightnessConf)
+    : state.rightStraightnessTracker.value;
+  const smoothedTorsoLean = rawTorsoLean !== null
+    ? state.torsoLeanTracker.push(rawTorsoLean, torsoConf)
+    : state.torsoLeanTracker.value;
 
   // Update display values (mutate in place for perf)
   state.smoothedLeftHeightRatio = smoothedLeftHeightRatio;
   state.smoothedRightHeightRatio = smoothedRightHeightRatio;
   state.smoothedAvgHeightRatio = smoothedAvgHeightRatio;
-  state.smoothedLeftStraightness = smoothedLeftStraightness;
-  state.smoothedRightStraightness = smoothedRightStraightness;
-  state.smoothedTorsoLean = smoothedTorsoLean;
+  state.smoothedLeftStraightness = isNaN(smoothedLeftStraightness) ? state.smoothedLeftStraightness : smoothedLeftStraightness;
+  state.smoothedRightStraightness = isNaN(smoothedRightStraightness) ? state.smoothedRightStraightness : smoothedRightStraightness;
+  state.smoothedTorsoLean = isNaN(smoothedTorsoLean) ? state.smoothedTorsoLean : smoothedTorsoLean;
 
   // -- FSM update (ratio-based) --
-  const fsmResult = updateFSM(state.phase, smoothedAvgHeightRatio, t, state.tRepStart);
+  const fsmResult = updateFSM(state.phase, fastAvgHeightRatio, t, state.tRepStart);
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
   // -- Capture rest-state torso height baseline (used for shrug detection) --
   // Updated only when the arms are genuinely down so early shrugging or a
   // low-amplitude raise cannot overwrite the relaxed shoulder baseline.
-  if (state.phase === 'REST' && smoothedAvgHeightRatio < THRESHOLDS.REST_ENTER * 0.5 && allTorsoVisible) {
+  if (
+    state.phase === 'REST' &&
+    fastAvgHeightRatio < THRESHOLDS.REST_ENTER * 0.5 &&
+    allTorsoVisible &&
+    torsoConf >= FORM_CONFIDENCE_MIN
+  ) {
     const midShoulderY = (ls!.y + rs!.y) / 2;
     const midHipY = (lh!.y + rh!.y) / 2;
     const torsoH = midHipY - midShoulderY;
@@ -637,18 +670,29 @@ function updateLateralRaiseState(
     w.frameCount++;
 
     // Max height ratio (average)
-    w.maxHeightRatio = Math.max(w.maxHeightRatio, smoothedAvgHeightRatio);
+    w.maxHeightRatio = Math.max(w.maxHeightRatio, fastAvgHeightRatio);
     // Per-arm max height ratio
-    w.maxLeftHeightRatio = Math.max(w.maxLeftHeightRatio, smoothedLeftHeightRatio);
-    w.maxRightHeightRatio = Math.max(w.maxRightHeightRatio, smoothedRightHeightRatio);
+    w.maxLeftHeightRatio = Math.max(w.maxLeftHeightRatio, fastLeftHeightRatio);
+    w.maxRightHeightRatio = Math.max(w.maxRightHeightRatio, fastRightHeightRatio);
     // Max height ratio difference between arms at this frame
-    const heightRatioDiff = Math.abs(smoothedLeftHeightRatio - smoothedRightHeightRatio);
-    w.maxHeightRatioDiff = Math.max(w.maxHeightRatioDiff, heightRatioDiff);
+    if (leftHeightConf >= FORM_CONFIDENCE_MIN && rightHeightConf >= FORM_CONFIDENCE_MIN) {
+      const heightRatioDiff = Math.abs(smoothedLeftHeightRatio - smoothedRightHeightRatio);
+      w.maxHeightRatioDiff = Math.max(w.maxHeightRatioDiff, heightRatioDiff);
+    }
     // Min arm straightness ratio (worst bend)
-    const minStraightness = Math.min(smoothedLeftStraightness, smoothedRightStraightness);
-    w.minStraightnessRatio = Math.min(w.minStraightnessRatio, minStraightness);
+    if (
+      leftStraightnessConf >= FORM_CONFIDENCE_MIN &&
+      rightStraightnessConf >= FORM_CONFIDENCE_MIN &&
+      !isNaN(smoothedLeftStraightness) &&
+      !isNaN(smoothedRightStraightness)
+    ) {
+      const minStraightness = Math.min(smoothedLeftStraightness, smoothedRightStraightness);
+      w.minStraightnessRatio = Math.min(w.minStraightnessRatio, minStraightness);
+    }
     // Max torso lean
-    w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+    if (torsoConf >= FORM_CONFIDENCE_MIN && !isNaN(smoothedTorsoLean)) {
+      w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+    }
 
     // Shoulder shrug detection via shoulder ELEVATION above rest baseline.
     //
@@ -659,7 +703,7 @@ function updateLateralRaiseState(
     //
     // The old formula used (baseline − current), which produced a NEGATIVE value for
     // shrugging and fired spuriously on noise/sway instead.
-    if (allTorsoVisible) {
+    if (allTorsoVisible && torsoConf >= FORM_CONFIDENCE_MIN) {
       const midShoulderY = (ls!.y + rs!.y) / 2;
       const midHipY = (lh!.y + rh!.y) / 2;
       const torsoHeight = midHipY - midShoulderY; // increases when shoulders rise
@@ -711,19 +755,30 @@ function updateLateralRaiseState(
     if (state.repWindow) {
       const w = state.repWindow;
       w.tEnd = t;
-      w.maxHeightRatio = Math.max(w.maxHeightRatio, smoothedAvgHeightRatio);
-      w.maxLeftHeightRatio = Math.max(w.maxLeftHeightRatio, smoothedLeftHeightRatio);
-      w.maxRightHeightRatio = Math.max(w.maxRightHeightRatio, smoothedRightHeightRatio);
-      w.maxHeightRatioDiff = Math.max(
-        w.maxHeightRatioDiff,
-        Math.abs(smoothedLeftHeightRatio - smoothedRightHeightRatio),
-      );
-      w.minStraightnessRatio = Math.min(
-        w.minStraightnessRatio,
-        smoothedLeftStraightness,
-        smoothedRightStraightness,
-      );
-      w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+      w.maxHeightRatio = Math.max(w.maxHeightRatio, fastAvgHeightRatio);
+      w.maxLeftHeightRatio = Math.max(w.maxLeftHeightRatio, fastLeftHeightRatio);
+      w.maxRightHeightRatio = Math.max(w.maxRightHeightRatio, fastRightHeightRatio);
+      if (leftHeightConf >= FORM_CONFIDENCE_MIN && rightHeightConf >= FORM_CONFIDENCE_MIN) {
+        w.maxHeightRatioDiff = Math.max(
+          w.maxHeightRatioDiff,
+          Math.abs(smoothedLeftHeightRatio - smoothedRightHeightRatio),
+        );
+      }
+      if (
+        leftStraightnessConf >= FORM_CONFIDENCE_MIN &&
+        rightStraightnessConf >= FORM_CONFIDENCE_MIN &&
+        !isNaN(smoothedLeftStraightness) &&
+        !isNaN(smoothedRightStraightness)
+      ) {
+        w.minStraightnessRatio = Math.min(
+          w.minStraightnessRatio,
+          smoothedLeftStraightness,
+          smoothedRightStraightness,
+        );
+      }
+      if (torsoConf >= FORM_CONFIDENCE_MIN && !isNaN(smoothedTorsoLean)) {
+        w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+      }
 
       const duration = w.tEnd - w.tStart;
       if (isMeaningfulPartialRep({

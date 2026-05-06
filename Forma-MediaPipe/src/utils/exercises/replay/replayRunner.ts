@@ -7,10 +7,17 @@
 
 import type { ExerciseDefinition } from '../types';
 import { mapFeedbackMessagesToIssueIds } from './issueIds';
+import {
+  PoseQualityTracker,
+  RepQualityAccumulator,
+  resolveExerciseQualityProfile,
+  summarizeSetTrackingQuality,
+} from '../shared/poseQuality';
 import type {
   FrameTrace,
   FsmTransition,
   LandmarkRecording,
+  ReplayRepQuality,
   RepTrace,
   ReplayOptions,
   ReplayRepPrediction,
@@ -29,14 +36,22 @@ function buildRepPrediction(
   messages: string[],
   completedAt: number,
   startedAt: number | null,
+  quality?: ReplayRepQuality,
+  confidenceGating = false,
 ): ReplayRepPrediction {
+  const shouldGate = confidenceGating && quality && !quality.scorable;
+  const gatedMessages = shouldGate ? [quality.message] : messages;
   return {
     repIndex,
     score,
-    messages,
-    issueIds: mapFeedbackMessagesToIssueIds(definition, messages),
+    messages: gatedMessages,
+    issueIds: shouldGate ? [] : mapFeedbackMessagesToIssueIds(definition, messages),
     completedAt,
     startedAt,
+    confidence: quality?.confidence,
+    qualityStatus: quality?.status,
+    qualityWarnings: quality?.warnings,
+    scorable: quality?.scorable,
   };
 }
 
@@ -61,6 +76,10 @@ export function replayRecording(
 ): ReplayResult {
   const activeDefinition = resolveDefinition(definition, options);
   let state = activeDefinition.createState();
+  const qualityProfile = resolveExerciseQualityProfile(activeDefinition);
+  const qualityTracker = new PoseQualityTracker();
+  const repQualityAccumulator = new RepQualityAccumulator();
+  const repQualities: ReplayRepQuality[] = [];
   const repScores: number[] = [];
   const feedbackMessages: string[] = [];
   const reps: ReplayRepPrediction[] = [];
@@ -74,21 +93,32 @@ export function replayRecording(
   try {
     for (const frame of recording.frames) {
       Date.now = () => timestampToDateNow(baseTimeMs, frame.timestamp);
+      const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
+        frameBoundsKeypoints: frame.imageKeypoints,
+      });
+      repQualityAccumulator.record(quality);
       state = activeDefinition.update(frame.keypoints, state);
+      state.quality = quality;
 
       if (state.repCount > lastRepCount) {
+        const repQuality = repQualityAccumulator.consume();
+        repQualities.push(repQuality);
         if (state.lastRepResult) {
           const score = state.lastRepResult.score;
-          const messages = state.lastRepResult.messages;
+          const messages = options?.confidenceGating && !repQuality.scorable
+            ? [repQuality.message]
+            : state.lastRepResult.messages;
           repScores.push(score);
           feedbackMessages.push(...messages);
           reps.push(buildRepPrediction(
             activeDefinition,
             state.lastRepResult.repIndex,
             score,
-            messages,
+            state.lastRepResult.messages,
             frame.timestamp,
             repStartedAt,
+            repQuality,
+            options?.confidenceGating ?? false,
           ));
         }
         repStartedAt = frame.timestamp;
@@ -99,7 +129,7 @@ export function replayRecording(
     Date.now = originalDateNow;
   }
 
-  return { finalRepCount: state.repCount, repScores, feedbackMessages, reps };
+  return { finalRepCount: state.repCount, repScores, feedbackMessages, reps, qualitySummary: summarizeSetTrackingQuality(repQualities) };
 }
 
 /**
@@ -141,6 +171,10 @@ export function replayRecordingVerbose(
 ): ReplayResultVerbose {
   const activeDefinition = resolveDefinition(definition, options);
   let state = activeDefinition.createState();
+  const qualityProfile = resolveExerciseQualityProfile(activeDefinition);
+  const qualityTracker = new PoseQualityTracker();
+  const repQualityAccumulator = new RepQualityAccumulator();
+  const repQualities: ReplayRepQuality[] = [];
   const repScores: number[] = [];
   const feedbackMessages: string[] = [];
   const reps: ReplayRepPrediction[] = [];
@@ -159,7 +193,12 @@ export function replayRecordingVerbose(
     for (let i = 0; i < recording.frames.length; i++) {
       const frame = recording.frames[i];
       Date.now = () => timestampToDateNow(baseTimeMs, frame.timestamp);
+      const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
+        frameBoundsKeypoints: frame.imageKeypoints,
+      });
+      repQualityAccumulator.record(quality);
       state = activeDefinition.update(frame.keypoints, state);
+      state.quality = quality;
 
       const currentPhase = extractPhase(state.debugInfo);
       frameTraces.push({
@@ -169,6 +208,7 @@ export function replayRecordingVerbose(
         repCount: state.repCount,
         feedback: state.feedback,
         debugInfo: state.debugInfo,
+        quality,
       });
 
       if (currentPhase !== lastPhase) {
@@ -185,16 +225,22 @@ export function replayRecordingVerbose(
       }
 
       if (state.repCount > lastRepCount) {
+        const repQuality = repQualityAccumulator.consume();
+        repQualities.push(repQuality);
         if (state.lastRepResult) {
           const score = state.lastRepResult.score;
-          const messages = state.lastRepResult.messages;
+          const messages = options?.confidenceGating && !repQuality.scorable
+            ? [repQuality.message]
+            : state.lastRepResult.messages;
           const prediction = buildRepPrediction(
             activeDefinition,
             state.lastRepResult.repIndex,
             score,
-            messages,
+            state.lastRepResult.messages,
             frame.timestamp,
             repStartedAt,
+            repQuality,
+            options?.confidenceGating ?? false,
           );
           repScores.push(score);
           feedbackMessages.push(...messages);
@@ -215,6 +261,7 @@ export function replayRecordingVerbose(
     repScores,
     feedbackMessages,
     reps,
+    qualitySummary: summarizeSetTrackingQuality(repQualities),
     frameTraces,
     fsmTransitions,
     repTraces,

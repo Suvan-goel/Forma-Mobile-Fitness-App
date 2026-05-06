@@ -27,27 +27,31 @@
   "availableIssues": [
     {
       "issueId": "standing-dumbbell-lateral-raises.rom_height",
-      "feedbackMessage": "Raise higher \u2014 aim for shoulder level."
+      "feedbackMessage": "Raise higher — aim for shoulder level."
+    },
+    {
+      "issueId": "standing-dumbbell-lateral-raises.over_raise",
+      "feedbackMessage": "Stop around shoulder height — avoid lifting too high."
     },
     {
       "issueId": "standing-dumbbell-lateral-raises.elbow_bend",
-      "feedbackMessage": "Keep your arms straighter \u2014 avoid excessive elbow bend."
+      "feedbackMessage": "Keep your arms straighter — avoid excessive elbow bend."
     },
     {
       "issueId": "standing-dumbbell-lateral-raises.torso_warn",
-      "feedbackMessage": "Stay upright \u2014 avoid swaying or leaning."
+      "feedbackMessage": "Stay upright — avoid swaying or leaning."
     },
     {
       "issueId": "standing-dumbbell-lateral-raises.asymmetry",
-      "feedbackMessage": "Even it out \u2014 raise both arms to the same height."
+      "feedbackMessage": "Even it out — raise both arms to the same height."
     },
     {
       "issueId": "standing-dumbbell-lateral-raises.tempo_down",
-      "feedbackMessage": "Control the descent \u2014 lower the weights slowly."
+      "feedbackMessage": "Control the descent — lower the weights slowly."
     },
     {
       "issueId": "standing-dumbbell-lateral-raises.shoulder_shrug",
-      "feedbackMessage": "Relax your traps \u2014 don't shrug the weight up."
+      "feedbackMessage": "Relax your traps — don't shrug the weight up."
     }
   ],
   "draftMetadata": {

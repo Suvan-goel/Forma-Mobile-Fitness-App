@@ -487,27 +487,38 @@ function updateLatPulldownState(
 
   // -- Compute raw values --
   const rawRatio = computeReachRatio(shoulder!, elbow!, wrist!);
+  const armConf = minKeypointConfidence(keypoints, [
+    `${side}_shoulder`, `${side}_elbow`, `${side}_wrist`,
+  ]);
+  const torsoConf = minKeypointConfidence(keypoints, [
+    `${side}_shoulder`, `${side}_hip`,
+  ]);
 
-  let rawTorsoLean = 0;
+  let rawTorsoLean: number | null = null;
   if (isVisible(shoulder, VISIBILITY_THRESHOLD) && isVisible(hip, VISIBILITY_THRESHOLD)) {
     rawTorsoLean = computeTorsoLean(shoulder!, hip!);
   }
 
   // -- Smooth values --
-  const smoothedRatio = state.ratioTracker.push(rawRatio);
-  const smoothedTorsoLean = state.torsoLeanTracker.push(rawTorsoLean);
+  const smoothedRatio = state.ratioTracker.push(rawRatio, armConf);
+  const fastRatio = state.ratioTracker.medianValue;
+  const smoothedTorsoLean = rawTorsoLean !== null
+    ? state.torsoLeanTracker.push(rawTorsoLean, torsoConf)
+    : state.torsoLeanTracker.value;
+
+  if (isNaN(fastRatio)) return state;
 
   state.smoothedRatio = smoothedRatio;
-  state.smoothedTorsoLean = smoothedTorsoLean;
+  state.smoothedTorsoLean = isNaN(smoothedTorsoLean) ? state.smoothedTorsoLean : smoothedTorsoLean;
 
   // -- Track max ratio during REST (pre-pull extension) --
   if (state.phase === 'REST') {
-    if (smoothedRatio >= state.restMaxRatio) {
-      state.restMaxRatio = smoothedRatio;
+    if (rawRatio >= state.restMaxRatio) {
+      state.restMaxRatio = rawRatio;
       state.tRestPeakRatio = t;
     }
     if (state.requireExtensionBeforeNextRep) {
-      const extensionReached = smoothedRatio >= THRESHOLDS.PULLING_ENTER;
+      const extensionReached = fastRatio >= THRESHOLDS.PULLING_ENTER;
       const timedOut = state.tRepCompleted !== null && (t - state.tRepCompleted) > 1.5;
       if (extensionReached || timedOut) {
         state.requireExtensionBeforeNextRep = false;
@@ -517,7 +528,7 @@ function updateLatPulldownState(
   }
 
   // -- FSM update --
-  const fsmResult = updateFSM(state.phase, smoothedRatio, t, state.tRepStart, state.requireExtensionBeforeNextRep);
+  const fsmResult = updateFSM(state.phase, fastRatio, t, state.tRepStart, state.requireExtensionBeforeNextRep);
   const prevPhase = state.phase;
   state.phase = fsmResult.phase;
 
@@ -541,24 +552,21 @@ function updateLatPulldownState(
     const w = state.repWindow;
     w.tEnd = t;
     w.frameCount++;
-    w.minRatio = Math.min(w.minRatio, smoothedRatio);
-    w.maxRatio = Math.max(w.maxRatio, smoothedRatio);
+    w.minRatio = Math.min(w.minRatio, fastRatio);
+    w.maxRatio = Math.max(w.maxRatio, fastRatio);
     // Only update torso lean max when shoulder + hip have sufficient confidence.
-    const torsoConf = minKeypointConfidence(keypoints, [
-      `${side}_shoulder`, `${side}_hip`,
-    ]);
-    if (torsoConf >= 0.3) {
+    if (torsoConf >= 0.3 && !isNaN(smoothedTorsoLean)) {
       w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
     }
 
-    if (state.phase === 'BOTTOM' && w.tBottom === null) {
+    if (state.phase === 'BOTTOM' && w.tBottom === null && smoothedRatio <= THRESHOLDS.BOTTOM_ENTER) {
       w.tBottom = t;
     }
   }
 
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
-    state.repWindow.maxRatio = Math.max(state.repWindow.maxRatio, smoothedRatio);
+    state.repWindow.maxRatio = Math.max(state.repWindow.maxRatio, fastRatio);
 
     state.repCount++;
     state.requireExtensionBeforeNextRep = true;
@@ -583,8 +591,8 @@ function updateLatPulldownState(
     if (state.repWindow) {
       const w = state.repWindow;
       w.tEnd = t;
-      w.minRatio = Math.min(w.minRatio, smoothedRatio);
-      w.maxRatio = Math.max(w.maxRatio, smoothedRatio);
+      w.minRatio = Math.min(w.minRatio, fastRatio);
+      w.maxRatio = Math.max(w.maxRatio, fastRatio);
       const actualRom = w.maxRatio - w.minRatio;
       const duration = w.tEnd - w.tStart;
 

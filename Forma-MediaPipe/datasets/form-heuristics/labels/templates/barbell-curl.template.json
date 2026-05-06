@@ -35,43 +35,43 @@
     },
     {
       "issueId": "barbell-curl.incomplete_rom",
-      "feedbackMessage": "Incomplete rep \u2014 curl all the way up and fully extend."
+      "feedbackMessage": "Incomplete rep — curl all the way up and fully extend."
     },
     {
       "issueId": "barbell-curl.shoulder_fail",
-      "feedbackMessage": "Too much shoulder involvement \u2014 reduce the weight."
+      "feedbackMessage": "Too much shoulder involvement — reduce the weight."
     },
     {
       "issueId": "barbell-curl.shoulder_warn",
-      "feedbackMessage": "Upper arms moving \u2014 keep elbows pinned to your sides."
+      "feedbackMessage": "Upper arms moving — keep elbows pinned to your sides."
     },
     {
       "issueId": "barbell-curl.torso_fail",
-      "feedbackMessage": "Excessive body swing \u2014 this is cheating the rep."
+      "feedbackMessage": "Excessive body swing — this is cheating the rep."
     },
     {
       "issueId": "barbell-curl.torso_warn",
-      "feedbackMessage": "Don't swing your torso \u2014 stay upright and controlled."
+      "feedbackMessage": "Don't swing your torso — stay upright and controlled."
     },
     {
       "issueId": "barbell-curl.tempo_up",
-      "feedbackMessage": "Slow down \u2014 control the curl."
+      "feedbackMessage": "Slow down — control the curl."
     },
     {
       "issueId": "barbell-curl.tempo_down",
-      "feedbackMessage": "Control the lowering \u2014 don't drop the weight."
+      "feedbackMessage": "Control the lowering — don't drop the weight."
     },
     {
       "issueId": "barbell-curl.asymmetry",
-      "feedbackMessage": "Arms are uneven \u2014 curl both sides together."
+      "feedbackMessage": "Arms are uneven — curl both sides together."
     },
     {
       "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Keep your elbows in \u2014 don't flare them out to the sides."
+      "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
     },
     {
-      "issueId": "barbell-curl.elbow_flare",
-      "feedbackMessage": "Tuck your elbows in \u2014 they're drifting outward."
+      "issueId": "barbell-curl.wrist_curl",
+      "feedbackMessage": "Keep your wrists neutral — avoid curling them in."
     }
   ],
   "draftMetadata": {

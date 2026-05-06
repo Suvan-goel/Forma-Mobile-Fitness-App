@@ -281,6 +281,22 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     expect(leaned.feedbackMessages).toContain('Stay upright — avoid leaning into the pushdown.');
   });
 
+  it('does not create elbow-drift or torso-lean feedback from low-confidence active frames', () => {
+    const noisy = buildRecording('synthetic low-confidence cable pushdown form metrics', fullRepPath(), {
+      posture: index => (index < 16 ? 'upright' : 'leaned'),
+      elbowPosition: index => (index >= 20 && index < 50 ? 'drifted' : 'pinned'),
+    });
+    noisy.frames = noisy.frames.map((frame, index) => index >= 16
+      ? { ...frame, keypoints: frame.keypoints.map(point => ({ ...point, score: 0.25 })) }
+      : frame);
+
+    const result = replayRecording(cablePushdownDefinition, noisy);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Keep your elbows pinned to your sides — avoid letting them drift.');
+    expect(result.feedbackMessages).not.toContain('Stay upright — avoid leaning into the pushdown.');
+  });
+
   it('still flags a true fast return', () => {
     const result = replayRecording(
       cablePushdownDefinition,

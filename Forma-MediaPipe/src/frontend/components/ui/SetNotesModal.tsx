@@ -17,9 +17,16 @@ import { COLORS, FONTS, SPACING, CARD_RADIUS_LG, getScoreColor } from '../../con
 import { LoggedSet } from '../../contexts/CurrentWorkoutContext';
 import { MonoText } from '../typography/MonoText';
 import { generateSetSummary } from '../../../utils/setNotesSummary';
+import { getPoseQualityStatusLabel } from '../../../utils/exercises';
 import { getBottomSafePadding } from '../../utils/safeAreaSpacing';
 
 const MAX_FEEDBACK_LINES = 2;
+
+function getTrackingQualityTone(status: NonNullable<LoggedSet['trackingQuality']>['status']) {
+  if (status === 'high') return COLORS.green;
+  if (status === 'medium') return '#FBBF24';
+  return '#F87171';
+}
 
 interface SetNotesModalProps {
   visible: boolean;
@@ -40,6 +47,8 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
   const { height: windowHeight } = useWindowDimensions();
   const repFeedback = set.repFeedback ?? [];
   const repFormScores = set.repFormScores ?? [];
+  const repTrackingQualities = set.repTrackingQualities ?? [];
+  const trackingQuality = set.trackingQuality;
   const summary = generateSetSummary(repFeedback, set.formScore, exerciseName);
 
   const repCount = Math.max(repFeedback.length, repFormScores.length, set.reps);
@@ -79,6 +88,7 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
   const getRepDetails = (idx: number) => ({
     formScore: repFormScores[idx] ?? set.formScore,
     feedback: repFeedback[idx] ?? '-',
+    quality: repTrackingQualities[idx],
   });
 
   const durationLabel = set.durationSeconds != null && set.durationSeconds > 0
@@ -162,6 +172,18 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                     </MonoText>
                   </View>
                 )}
+
+                {trackingQuality && (
+                  <View style={styles.metricTile}>
+                    <View style={styles.metricLabelRow}>
+                      <Target size={13} color={getTrackingQualityTone(trackingQuality.status)} strokeWidth={1.6} />
+                      <Text style={styles.metricLabel}>Tracking</Text>
+                    </View>
+                    <Text style={[styles.qualityMetricValue, { color: getTrackingQualityTone(trackingQuality.status) }]} numberOfLines={1}>
+                      {getPoseQualityStatusLabel(trackingQuality.status)}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -181,10 +203,11 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 
                     <View style={styles.repList}>
                       {Array.from({ length: repCount }, (_, idx) => {
-                        const { formScore, feedback } = getRepDetails(idx);
+                        const { formScore, feedback, quality } = getRepDetails(idx);
                         const isExpanded = expandedReps.has(idx);
                         const showExpand = overflowedReps.has(idx) || isExpanded;
                         const isGoodRep = feedback === 'Great rep!' || feedback === 'Good rep.';
+                        const isUnscored = quality?.scorable === false;
                         const repScoreColor = getScoreColor(formScore);
 
                         return (
@@ -202,9 +225,17 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                             <View style={styles.repContent}>
                               <View style={styles.repHeader}>
                                 <Text style={styles.repTitle}>Rep {idx + 1}</Text>
-                                <View style={[styles.scoreBadge, { borderColor: `${repScoreColor}55` }]}>
-                                  <MonoText bold style={[styles.scoreBadgeText, { color: repScoreColor }]}>
-                                    {formScore}
+                                <View style={[
+                                  styles.scoreBadge,
+                                  isUnscored
+                                    ? styles.unscoredBadge
+                                    : { borderColor: `${repScoreColor}55` },
+                                ]}>
+                                  <MonoText bold style={[
+                                    styles.scoreBadgeText,
+                                    isUnscored ? styles.unscoredBadgeText : { color: repScoreColor },
+                                  ]}>
+                                    {isUnscored ? '-' : formScore}
                                   </MonoText>
                                 </View>
                               </View>
@@ -258,6 +289,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
 
                     <View style={styles.summaryCard}>
                       <Text style={styles.summaryText}>{summary}</Text>
+                      {trackingQuality && (
+                        <Text style={styles.trackingSummaryText}>{trackingQuality.message}</Text>
+                      )}
                     </View>
                   </View>
                 </>
@@ -410,6 +444,11 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     color: COLORS.text,
   },
+  qualityMetricValue: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontFamily: FONTS.display.semibold,
+  },
   scrollView: {
     backgroundColor: 'rgba(21, 26, 29, 0.98)',
   },
@@ -498,6 +537,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
   },
+  unscoredBadge: {
+    borderColor: 'rgba(248, 113, 113, 0.35)',
+    backgroundColor: 'rgba(248, 113, 113, 0.08)',
+  },
+  unscoredBadgeText: {
+    color: '#F87171',
+  },
   repFeedbackContainer: {
     position: 'relative',
   },
@@ -536,6 +582,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.ui.regular,
     color: COLORS.textSecondary,
     lineHeight: 20,
+  },
+  trackingSummaryText: {
+    fontSize: 12,
+    fontFamily: FONTS.ui.regular,
+    color: COLORS.textTertiary,
+    lineHeight: 18,
+    marginTop: SPACING.sm,
   },
   emptyState: {
     alignItems: 'center',

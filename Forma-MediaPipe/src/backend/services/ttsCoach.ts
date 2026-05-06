@@ -39,6 +39,8 @@ interface CoachState {
   totalRepsInSet: number;
   /** Last issue type spoken (for variety tracking) */
   lastSpokenIssue: string | null;
+  /** Last time a tracking-quality warning was spoken. */
+  lastTrackingWarningAt: number | null;
 }
 
 const DEFAULT_STATE: CoachState = {
@@ -48,6 +50,7 @@ const DEFAULT_STATE: CoachState = {
   praiseInterval: 2,
   totalRepsInSet: 0,
   lastSpokenIssue: null,
+  lastTrackingWarningAt: null,
 };
 
 let state: CoachState = { ...DEFAULT_STATE };
@@ -128,6 +131,23 @@ export async function onFormFeedback(feedbackMessages: string[]): Promise<void> 
 
   markBadFeedback();
   await speakFeedback(topFeedback);
+}
+
+/**
+ * Call when pose tracking has been unreliable for long enough to guide setup.
+ * This is intentionally rate-limited so it cannot chatter during a set.
+ */
+export async function onTrackingQualityWarning(message: string): Promise<void> {
+  if (!isElevenLabsAvailable()) return;
+  const trimmed = message.trim();
+  if (!trimmed) return;
+
+  const now = Date.now();
+  if (state.lastTrackingWarningAt !== null && now - state.lastTrackingWarningAt < 10000) {
+    return;
+  }
+  state.lastTrackingWarningAt = now;
+  await trySpeak(trimmed);
 }
 
 /**

@@ -9,6 +9,7 @@ import { generateSetSummary } from '../../utils/setNotesSummary';
 import { calculateWorkoutPoints } from '../../utils/pointsCalculator';
 import { saveRecording, linkWorkoutId } from '../services/videoLibrary';
 import { cleanupTempRecording } from '../services/screenRecording';
+import type { RepTrackingQuality, SetTrackingQualitySummary } from '../../utils/exercises';
 
 let MediaLibrary: any = null;
 try {
@@ -25,6 +26,10 @@ interface WorkoutExerciseInput {
     formScore: number;
     repFeedback?: string[];
     repFormScores?: number[];
+    repTrackingQualities?: RepTrackingQuality[];
+    trackingQuality?: SetTrackingQualitySummary;
+    scoredRepCount?: number;
+    unscoredRepCount?: number;
     durationSeconds?: number;
     tempRecordingUrl?: string;
     saveRecordingToLibrary?: boolean;
@@ -78,16 +83,18 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
           orderIndex: i,
           sets: ex.sets.map((s, j) => {
             const formScore = s.isManual ? recordedAvgFormScore : s.formScore;
+            const generatedNotes = s.isManual
+              ? 'Manual set - no form feedback or recording.'
+              : s.repFeedback && s.repFeedback.length > 0
+                ? generateSetSummary(s.repFeedback, s.formScore, ex.name)
+                : undefined;
+            const trackingNotes = s.trackingQuality?.message;
             return {
               setNumber: j + 1,
               reps: s.reps,
               weight: s.weight ?? 0,
               formScore,
-              notes: s.isManual
-                ? 'Manual set - no form feedback or recording.'
-                : s.repFeedback && s.repFeedback.length > 0
-                  ? generateSetSummary(s.repFeedback, s.formScore, ex.name)
-                  : undefined,
+              notes: [generatedNotes, trackingNotes].filter(Boolean).join('\n') || undefined,
               isManual: s.isManual,
             };
           }),

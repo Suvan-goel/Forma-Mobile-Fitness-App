@@ -176,19 +176,19 @@ describe('dataset optimiser scaling helpers', () => {
   });
 
   it('blocks auto-apply when minimum split counts are below thresholds', () => {
-    expect(minimumSplitGate({ train: 19, validation: 5, test: 5 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
+    expect(minimumSplitGate({ train: 0, validation: 1, test: 1 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
       passed: false,
-      reason: expect.stringContaining('train 19/20'),
+      reason: expect.stringContaining('train 0/1'),
     });
-    expect(minimumSplitGate({ train: 20, validation: 4, test: 5 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
+    expect(minimumSplitGate({ train: 1, validation: 0, test: 1 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
       passed: false,
-      reason: expect.stringContaining('validation 4/5'),
+      reason: expect.stringContaining('validation 0/1'),
     });
-    expect(minimumSplitGate({ train: 20, validation: 5, test: 4 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
+    expect(minimumSplitGate({ train: 1, validation: 1, test: 0 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
       passed: false,
-      reason: expect.stringContaining('test 4/5'),
+      reason: expect.stringContaining('test 0/1'),
     });
-    expect(minimumSplitGate({ train: 20, validation: 5, test: 5 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
+    expect(minimumSplitGate({ train: 1, validation: 1, test: 1 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
       passed: true,
     });
   });
@@ -223,7 +223,7 @@ describe('dataset optimiser scaling helpers', () => {
         silent: true,
         reportPath: null,
         search: { randomCandidates: 1, refinementRounds: 0, survivorCount: 1, seed: 1 },
-        minCases: DEFAULT_MIN_SPLIT_CASES,
+        minCases: { train: 2, validation: 2, test: 2 },
       },
     );
 

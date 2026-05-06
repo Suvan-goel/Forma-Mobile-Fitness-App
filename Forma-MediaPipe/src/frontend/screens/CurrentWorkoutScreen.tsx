@@ -905,6 +905,8 @@ export const CurrentWorkoutScreen: React.FC = () => {
                           {exercise.sets.map((set, setIndex) => {
                             const isCurrentSet = setIndex === exercise.sets.length - 1;
                             const isManualSet = set.isManual === true;
+                            const isUnscoredSet = !isManualSet && set.scoredRepCount === 0 && set.reps > 0;
+                            const setScoreColor = isUnscoredSet ? COLORS.textTertiary : getScoreColor(set.formScore);
                             return (
                               <TouchableOpacity
                                 key={setIndex}
@@ -941,10 +943,10 @@ export const CurrentWorkoutScreen: React.FC = () => {
                                   </View>
                                 ) : !isCurrentSet && (
                                   <View
-                                    style={[styles.setScoreRing, { borderColor: getScoreColor(set.formScore) }]}
+                                    style={[styles.setScoreRing, { borderColor: setScoreColor }]}
                                   >
-                                    <MonoText bold style={[styles.setScoreText, { color: getScoreColor(set.formScore) }]}>
-                                      {set.formScore}
+                                    <MonoText bold style={[styles.setScoreText, { color: setScoreColor }]}>
+                                      {isUnscoredSet ? '-' : set.formScore}
                                     </MonoText>
                                   </View>
                                 )}

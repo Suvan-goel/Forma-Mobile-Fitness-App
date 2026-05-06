@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import type { RepTrackingQuality, SetTrackingQualitySummary } from '../../utils/exercises';
 
 export interface LoggedSet {
   exerciseName: string;
@@ -12,6 +13,14 @@ export interface LoggedSet {
   repFeedback?: string[];
   /** Per-rep form scores (parallel to repFeedback, one per rep) */
   repFormScores?: number[];
+  /** Per-rep tracking quality, parallel to repFeedback when available. */
+  repTrackingQualities?: RepTrackingQuality[];
+  /** Set-level tracking confidence summary. */
+  trackingQuality?: SetTrackingQualitySummary;
+  /** Reps included in form-score average. */
+  scoredRepCount?: number;
+  /** Reps counted but not scored because tracking was uncertain. */
+  unscoredRepCount?: number;
   /** Manual sets track volume without camera analysis, form feedback, or recordings. */
   isManual?: boolean;
   /** Temp recording file URL — persisted to video library only at workout save time. */

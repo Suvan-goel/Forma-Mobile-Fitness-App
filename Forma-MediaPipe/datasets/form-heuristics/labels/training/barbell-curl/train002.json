@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train002.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train002.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 8,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 1300,
+      "endMs": 2500,
+      "issueIds": []
+    },
+    {
+      "index": 2,
+      "startMs": 2650,
+      "endMs": 3750,
+      "issueIds": []
+    },
+    {
+      "index": 3,
+      "startMs": 4000,
+      "endMs": 5000,
+      "issueIds": []
+    },
+    {
+      "index": 4,
+      "startMs": 5250,
+      "endMs": 6250,
+      "issueIds": []
+    },
+    {
+      "index": 5,
+      "startMs": 6500,
+      "endMs": 7500,
+      "issueIds": []
+    },
+    {
+      "index": 6,
+      "startMs": 7750,
+      "endMs": 8900,
+      "issueIds": []
+    },
+    {
+      "index": 7,
+      "startMs": 9250,
+      "endMs": 10500,
+      "issueIds": []
+    },
+    {
+      "index": 8,
+      "startMs": 10900,
+      "endMs": 12250,
+      "issueIds": []
+    }
+  ],
+  "notes": "Human-reviewed from video. Fixed malformed draft JSON and corrected rep windows; clear visible form issues only."
+}

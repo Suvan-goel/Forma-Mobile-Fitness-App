@@ -28,10 +28,17 @@ function roundTimestamp(value: number | null | undefined): number {
 
 export function getAvailableIssues(definition: ExerciseDefinition): AvailableIssue[] {
   const issueIdMap = getFeedbackIssueIdMap(definition);
-  return Object.keys(definition.ttsConfig.feedbackToIssue).map((feedbackMessage) => ({
-    issueId: issueIdMap[feedbackMessage],
-    feedbackMessage,
-  }));
+  const availableIssues: AvailableIssue[] = [];
+  const seenIssueIds = new Set<string>();
+
+  for (const feedbackMessage of Object.keys(definition.ttsConfig.feedbackToIssue)) {
+    const issueId = issueIdMap[feedbackMessage];
+    if (!issueId || seenIssueIds.has(issueId)) continue;
+    seenIssueIds.add(issueId);
+    availableIssues.push({ issueId, feedbackMessage });
+  }
+
+  return availableIssues;
 }
 
 function createRepLabel(

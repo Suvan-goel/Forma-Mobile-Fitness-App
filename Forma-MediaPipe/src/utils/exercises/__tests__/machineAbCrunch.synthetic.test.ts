@@ -192,6 +192,20 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     expect(forward.feedbackMessages).toContain('Keep your neck neutral — avoid pulling with your head.');
   });
 
+  it('does not create neck-forward feedback from low-confidence ear frames', () => {
+    const noisy = buildRecording('synthetic low-confidence neck machine ab crunch', fullRepPath(), {
+      neck: index => (index < 16 ? 'neutral' : 'forward'),
+    });
+    noisy.frames = noisy.frames.map((frame, index) => index >= 16 && index < 90
+      ? { ...frame, keypoints: frame.keypoints.map(point => ({ ...point, score: 0.25 })) }
+      : frame);
+
+    const result = replayRecording(machineAbCrunchDefinition, noisy);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Keep your neck neutral — avoid pulling with your head.');
+  });
+
   it('still flags a true fast return', () => {
     const result = replayRecording(
       machineAbCrunchDefinition,

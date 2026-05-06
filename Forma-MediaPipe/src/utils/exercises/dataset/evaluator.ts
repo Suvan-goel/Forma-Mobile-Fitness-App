@@ -5,6 +5,7 @@ import type {
   EvaluationMetrics,
   EvaluationTotals,
   PredictionLike,
+  QualityCoverageMetrics,
   RepLabel,
   RepEvaluation,
 } from './types';
@@ -161,6 +162,43 @@ function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
   };
 }
 
+function qualityCoverageFromPrediction(prediction: PredictionLike): QualityCoverageMetrics | undefined {
+  const summary = prediction.qualitySummary;
+  if (!summary) return undefined;
+  return {
+    totalReps: summary.totalReps,
+    scoredReps: summary.scoredReps,
+    unscoredReps: summary.unscoredReps,
+    scorableRate: summary.totalReps === 0 ? 1 : summary.scoredReps / summary.totalReps,
+    averageConfidence: summary.confidence,
+  };
+}
+
+function combineQualityCoverage(cases: CaseEvaluation[]): QualityCoverageMetrics | undefined {
+  let totalReps = 0;
+  let scoredReps = 0;
+  let unscoredReps = 0;
+  let weightedConfidence = 0;
+
+  for (const caseEvaluation of cases) {
+    const coverage = caseEvaluation.qualityCoverage;
+    if (!coverage) continue;
+    totalReps += coverage.totalReps;
+    scoredReps += coverage.scoredReps;
+    unscoredReps += coverage.unscoredReps;
+    weightedConfidence += coverage.averageConfidence * coverage.totalReps;
+  }
+
+  if (totalReps === 0) return undefined;
+  return {
+    totalReps,
+    scoredReps,
+    unscoredReps,
+    scorableRate: scoredReps / totalReps,
+    averageConfidence: weightedConfidence / totalReps,
+  };
+}
+
 export function evaluateCase(
   datasetCase: DatasetCase,
   prediction: PredictionLike,
@@ -241,6 +279,7 @@ export function evaluateCase(
     missingExpectedReps: reps.filter((rep) => rep.matchStatus === 'missing_expected'),
     extraPredictedReps: reps.filter((rep) => rep.matchStatus === 'extra_predicted'),
     totals,
+    qualityCoverage: qualityCoverageFromPrediction(prediction),
   };
 }
 
@@ -261,7 +300,7 @@ export function summarizeEvaluations(cases: CaseEvaluation[]): DatasetEvaluation
   for (const caseEvaluation of cases) {
     addCaseTotals(totals, caseEvaluation);
   }
-  return { cases, totals, metrics: metricsFromTotals(totals) };
+  return { cases, totals, metrics: metricsFromTotals(totals), qualityCoverage: combineQualityCoverage(cases) };
 }
 
 export function evaluateDataset(

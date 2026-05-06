@@ -38,6 +38,7 @@ export type {
   EvaluationTotals,
   ExerciseLabelFile,
   LabelReviewStatus,
+  QualityCoverageMetrics,
   RepMatchStatus,
   RepEvaluation,
   RepLabel,

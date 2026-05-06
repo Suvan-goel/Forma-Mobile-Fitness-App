@@ -135,9 +135,9 @@ export interface DatasetOptimisationReport {
 }
 
 export const DEFAULT_MIN_SPLIT_CASES: MinimumSplitCases = {
-  train: 20,
-  validation: 5,
-  test: 5,
+  train: 1,
+  validation: 1,
+  test: 1,
 };
 
 function emptyTotals(): EvaluationTotals {

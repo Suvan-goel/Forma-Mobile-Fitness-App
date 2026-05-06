@@ -1,4 +1,5 @@
 import type { LandmarkRecording, ReplayRepPrediction } from '../replay';
+import type { SetTrackingQualitySummary } from '../shared/poseQuality';
 
 export type DatasetSplit = 'train' | 'validation' | 'test';
 export type LabelReviewStatus = 'draft' | 'reviewed';
@@ -85,6 +86,7 @@ export interface CaseEvaluation {
   missingExpectedReps: RepEvaluation[];
   extraPredictedReps: RepEvaluation[];
   totals: EvaluationTotals;
+  qualityCoverage?: QualityCoverageMetrics;
 }
 
 export interface EvaluationTotals {
@@ -111,9 +113,19 @@ export interface DatasetEvaluation {
   cases: CaseEvaluation[];
   totals: EvaluationTotals;
   metrics: EvaluationMetrics;
+  qualityCoverage?: QualityCoverageMetrics;
 }
 
 export interface PredictionLike {
   finalRepCount: number;
   reps: ReplayRepPrediction[];
+  qualitySummary?: SetTrackingQualitySummary;
+}
+
+export interface QualityCoverageMetrics {
+  totalReps: number;
+  scoredReps: number;
+  unscoredReps: number;
+  scorableRate: number;
+  averageConfidence: number;
 }

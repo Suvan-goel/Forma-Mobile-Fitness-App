@@ -27,23 +27,23 @@
   "availableIssues": [
     {
       "issueId": "lying-leg-curl.rom_curl_short",
-      "feedbackMessage": "Curl higher \u2014 bring your heels closer to your glutes."
+      "feedbackMessage": "Curl higher — bring your heels closer to your glutes."
     },
     {
       "issueId": "lying-leg-curl.rom_extend_short",
-      "feedbackMessage": "Extend fully \u2014 straighten your legs at the bottom."
+      "feedbackMessage": "Extend fully — straighten your legs at the bottom."
     },
     {
       "issueId": "lying-leg-curl.hip_lift",
-      "feedbackMessage": "Keep your hips down \u2014 avoid lifting off the pad."
+      "feedbackMessage": "Keep your hips down — avoid lifting off the pad."
     },
     {
       "issueId": "lying-leg-curl.tempo_up",
-      "feedbackMessage": "Slow down the curl \u2014 control the contraction."
+      "feedbackMessage": "Slow down the curl — control the contraction."
     },
     {
       "issueId": "lying-leg-curl.tempo_down",
-      "feedbackMessage": "Control the descent \u2014 lower the weight slowly."
+      "feedbackMessage": "Control the descent — lower the weight slowly."
     }
   ],
   "draftMetadata": {

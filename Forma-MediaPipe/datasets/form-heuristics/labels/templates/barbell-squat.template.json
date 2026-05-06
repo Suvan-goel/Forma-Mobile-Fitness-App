@@ -27,35 +27,31 @@
   "availableIssues": [
     {
       "issueId": "barbell-squat.depth_short",
-      "feedbackMessage": "Squat deeper \u2014 aim to get your thighs parallel."
-    },
-    {
-      "issueId": "barbell-squat.depth_short",
-      "feedbackMessage": "Try to go a little deeper for full range of motion."
+      "feedbackMessage": "Squat deeper — aim to get your thighs parallel."
     },
     {
       "issueId": "barbell-squat.lockout_short",
-      "feedbackMessage": "Stand all the way up \u2014 fully extend your knees."
+      "feedbackMessage": "Stand all the way up — fully extend your knees."
     },
     {
       "issueId": "barbell-squat.incomplete_rom",
-      "feedbackMessage": "Incomplete rep \u2014 use a full range of motion."
+      "feedbackMessage": "Incomplete rep — use a full range of motion."
     },
     {
       "issueId": "barbell-squat.torso_fail",
-      "feedbackMessage": "Too much forward lean \u2014 keep your chest up."
+      "feedbackMessage": "Too much forward lean — keep your chest up."
     },
     {
       "issueId": "barbell-squat.torso_warn",
-      "feedbackMessage": "Stay more upright \u2014 brace your core."
+      "feedbackMessage": "Stay more upright — brace your core."
     },
     {
       "issueId": "barbell-squat.tempo_up",
-      "feedbackMessage": "Control the ascent \u2014 don't bounce out of the hole."
+      "feedbackMessage": "Control the ascent — don't bounce out of the hole."
     },
     {
       "issueId": "barbell-squat.tempo_down",
-      "feedbackMessage": "Slow the descent \u2014 control the weight down."
+      "feedbackMessage": "Slow the descent — control the weight down."
     }
   ],
   "draftMetadata": {

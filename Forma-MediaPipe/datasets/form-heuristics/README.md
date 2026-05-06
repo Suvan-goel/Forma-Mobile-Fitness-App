@@ -11,12 +11,12 @@ not train model weights.
 - `videos/<split>/<exercise-slug>/` raw source videos. Ignored by Git.
 - `landmarks/<split>/<exercise-slug>/` generated MediaPipe landmark JSON. Ignored by Git.
 - `labels/<split>/<exercise-slug>/` reviewed label JSON files.
-- `labels/<exercise-slug>/` `_template.json` files.
+- `labels/templates/` exercise label templates named `<exercise-slug>.template.json`.
 - `reports/` generated evaluation/optimisation reports. Ignored by Git.
 - `candidates/` optional local scratch space. Ignored by Git.
 
-Each `labels/<exercise-slug>/` template folder has a `_template.json` with the
-exact exercise name and copyable issue ids/messages for that exercise.
+Each `labels/templates/<exercise-slug>.template.json` file has the exact
+exercise name and copyable issue ids/messages for that exercise.
 
 The split folder names are:
 
@@ -127,9 +127,9 @@ Most videos should be `train`, but keep enough independent `validation` and
 
 Default auto-apply minimums are:
 
-- train: 20 reviewed cases
-- validation: 5 reviewed cases
-- test: 5 reviewed cases
+- train: 1 reviewed case
+- validation: 1 reviewed case
+- test: 1 reviewed case
 
 The optimiser can still write reports below these counts, but it will not write
 production tuned configs.

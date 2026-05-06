@@ -253,6 +253,24 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Even it out — raise both arms to the same height.');
   });
 
+  it('does not create bend, asymmetry, or torso feedback from low-confidence active frames', () => {
+    const noisy = buildRecording('synthetic low-confidence lateral raise form metrics', fullRepPath(), {
+      armStyle: index => (index < 18 ? 'straight' : 'bent'),
+      posture: index => (index < 18 ? 'upright' : 'leaned'),
+      rightScale: 0.78,
+    });
+    noisy.frames = noisy.frames.map((frame, index) => index >= 18
+      ? { ...frame, keypoints: frame.keypoints.map(point => ({ ...point, score: 0.25 })) }
+      : frame);
+
+    const result = replayRecording(lateralRaiseDefinition, noisy);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Keep your arms straighter — avoid excessive elbow bend.');
+    expect(result.feedbackMessages).not.toContain('Even it out — raise both arms to the same height.');
+    expect(result.feedbackMessages).not.toContain('Stay upright — avoid swaying or leaning.');
+  });
+
   it('flags shrugging without punishing relaxed shoulders', () => {
     const clean = replayRecording(
       lateralRaiseDefinition,

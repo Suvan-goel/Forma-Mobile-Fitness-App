@@ -27,23 +27,23 @@
   "availableIssues": [
     {
       "issueId": "machine-ab-crunches.depth_short",
-      "feedbackMessage": "Crunch deeper \u2014 bring your chest closer to your knees."
+      "feedbackMessage": "Crunch deeper — bring your chest closer to your knees."
     },
     {
       "issueId": "machine-ab-crunches.lockout_short",
-      "feedbackMessage": "Extend fully \u2014 return to the upright position."
+      "feedbackMessage": "Extend fully — return to the upright position."
     },
     {
       "issueId": "machine-ab-crunches.neck_forward",
-      "feedbackMessage": "Keep your neck neutral \u2014 avoid pulling with your head."
+      "feedbackMessage": "Keep your neck neutral — avoid pulling with your head."
     },
     {
       "issueId": "machine-ab-crunches.tempo_down",
-      "feedbackMessage": "Slow down the crunch \u2014 control the movement."
+      "feedbackMessage": "Slow down the crunch — control the movement."
     },
     {
       "issueId": "machine-ab-crunches.tempo_up",
-      "feedbackMessage": "Control the return \u2014 resist on the way back."
+      "feedbackMessage": "Control the return — resist on the way back."
     }
   ],
   "draftMetadata": {

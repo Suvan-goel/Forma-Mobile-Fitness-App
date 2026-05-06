@@ -20,6 +20,7 @@ import {
   calculateAngle2D,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
@@ -77,6 +78,8 @@ const FORM_THRESHOLDS = {
   /** Neck forward deviation threshold (degrees) — neck shouldn't jut forward */
   NECK_FORWARD_WARN: 45,
 } as const;
+
+const FORM_CONFIDENCE_MIN = 0.3;
 
 /**
  * Continuous penalty curve parameters for scoring.
@@ -245,6 +248,17 @@ type Point2D = { x: number; y: number };
 
 function getPoint(kp: Keypoint): Point2D {
   return { x: kp.x, y: kp.y };
+}
+
+function bestSideConfidence(
+  keypoints: Keypoint[],
+  leftNames: string[],
+  rightNames: string[],
+): number {
+  return Math.max(
+    minKeypointConfidence(keypoints, leftNames),
+    minKeypointConfidence(keypoints, rightNames),
+  );
 }
 
 /**
@@ -486,12 +500,22 @@ function updateAbCrunchState(
   if (rawHipAngle === null) return state;
 
   const rawNeckAngle = computeNeckForwardAngle(keypoints);
+  const hipConf = bestSideConfidence(
+    keypoints,
+    ['left_shoulder', 'left_hip', 'left_knee'],
+    ['right_shoulder', 'right_hip', 'right_knee'],
+  );
+  const neckConf = bestSideConfidence(
+    keypoints,
+    ['left_ear', 'left_shoulder', 'left_hip'],
+    ['right_ear', 'right_shoulder', 'right_hip'],
+  );
 
   // -- Smooth angles --
-  const smoothedHipAngle = state.hipAngleTracker.push(rawHipAngle);
+  const smoothedHipAngle = state.hipAngleTracker.push(rawHipAngle, hipConf);
   const fastHipAngle = state.hipAngleTracker.medianValue;
   const smoothedNeckAngle = rawNeckAngle !== null
-    ? state.neckAngleTracker.push(rawNeckAngle)
+    ? state.neckAngleTracker.push(rawNeckAngle, neckConf)
     : state.neckAngleTracker.value;
 
   state.smoothedHipAngle = smoothedHipAngle;
@@ -547,7 +571,7 @@ function updateAbCrunchState(
     w.minHipAngle = Math.min(w.minHipAngle, smoothedHipAngle);
     w.maxHipAngle = Math.max(w.maxHipAngle, smoothedHipAngle);
 
-    if (!isNaN(smoothedNeckAngle) && isFinite(smoothedNeckAngle)) {
+    if (!isNaN(smoothedNeckAngle) && isFinite(smoothedNeckAngle) && neckConf >= FORM_CONFIDENCE_MIN) {
       w.maxNeckForward = Math.max(w.maxNeckForward, smoothedNeckAngle);
     }
 

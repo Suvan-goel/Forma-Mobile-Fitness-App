@@ -190,6 +190,21 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.repTraces).toEqual([]);
   });
 
+  it('does not overcount jitter around the extended position', () => {
+    const jitterPath = [
+      ...Array(14).fill(EXTENDED_ELBOW_Y),
+      ...Array.from({ length: 40 }, (_, index) => index % 2 === 0 ? EXTENDED_ELBOW_Y : TINY_ELBOW_Y),
+      ...Array(8).fill(EXTENDED_ELBOW_Y),
+    ];
+    const result = replayRecordingVerbose(
+      latPulldownDefinition,
+      buildRecording('synthetic jitter-only lat pulldown', jitterPath),
+    );
+
+    expect(result.finalRepCount).toBe(0);
+    expect(result.repTraces).toEqual([]);
+  });
+
   it('counts a meaningful partial pulldown and records ROM feedback', () => {
     const clean = replayRecording(latPulldownDefinition, buildRecording('synthetic clean lat pulldown', fullRepPath()));
     const result = replayRecording(latPulldownDefinition, buildRecording('synthetic half lat pulldown', halfRepPath()));

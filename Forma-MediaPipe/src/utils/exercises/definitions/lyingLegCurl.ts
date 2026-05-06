@@ -24,6 +24,7 @@ import {
   calculateAngle2D,
   getKeypoint,
   isVisible,
+  minKeypointConfidence,
 } from '../../poseAnalysis';
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
@@ -134,6 +135,7 @@ const PENALTY_CONFIGS = {
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+const FORM_CONFIDENCE_MIN = 0.3;
 
 const DEFAULT_LYING_LEG_CURL_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -560,6 +562,12 @@ function updateLyingLegCurlState(
   // Calculate raw ratio and hip angle
   const rawRatio = calculateKneeRatio(keypoints, visibleSide);
   const rawHip = calculateHipAngle(keypoints, visibleSide);
+  const ratioConf = minKeypointConfidence(keypoints, [
+    `${visibleSide}_hip`, `${visibleSide}_knee`, `${visibleSide}_ankle`,
+  ]);
+  const hipConf = minKeypointConfidence(keypoints, [
+    `${visibleSide}_shoulder`, `${visibleSide}_hip`, `${visibleSide}_knee`,
+  ]);
 
   // If we can't even compute the ratio, bail out
   if (rawRatio === null) {
@@ -573,10 +581,10 @@ function updateLyingLegCurlState(
   }
 
   // Smooth values through tracker pipeline
-  const smoothedRatio = currentState.ratioTracker.push(rawRatio);
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio, ratioConf);
   const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedHip = rawHip !== null
-    ? currentState.hipTracker.push(rawHip)
+    ? currentState.hipTracker.push(rawHip, hipConf)
     : currentState.hipTracker.value;
 
   const newState: LyingLegCurlState = {
@@ -663,7 +671,7 @@ function updateLyingLegCurlState(
     }
 
     // Track hip angle delta from baseline
-    if (!isNaN(smoothedHip)) {
+    if (!isNaN(smoothedHip) && hipConf >= FORM_CONFIDENCE_MIN) {
       if (window.hipAngleBaseline === null) {
         window.hipAngleBaseline = smoothedHip;
       }
