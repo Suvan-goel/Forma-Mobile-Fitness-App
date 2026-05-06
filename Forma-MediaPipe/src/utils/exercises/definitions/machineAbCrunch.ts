@@ -739,6 +739,7 @@ export function createMachineAbCrunchDefinition(
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
+    repQualityWindowActive: false,
     _internal: withMachineAbCrunchConfig(config, () => initializeState()),
   }),
 
@@ -760,6 +761,7 @@ export function createMachineAbCrunchDefinition(
       feedback: internal.feedback,
       feedbackTimestamp: internal.lastFeedbackTime > 0 ? internal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
+      repQualityWindowActive: internal.repWindow !== null,
       _internal: internal,
     };
   },

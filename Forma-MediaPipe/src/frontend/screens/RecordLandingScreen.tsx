@@ -237,11 +237,10 @@ export const RecordLandingScreen: React.FC = () => {
   } = useCurrentWorkout();
   const navigationBarHeight = getTabScreenBottomPadding(insets.bottom, 24);
   const compactHeight = windowHeight < 740;
-  const sectionGap = compactHeight ? 12 : 18;
+  const sectionGap = compactHeight ? 20 : 30;
   const templateCardWidth =
     (windowWidth - CAPTURE_HORIZONTAL_PADDING * 2 - TEMPLATE_CARD_GAP * 2) / 3;
   const templateThumbHeight = Math.min(templateCardWidth + 6, compactHeight ? 84 : 112);
-  const templateCardHeight = templateThumbHeight + (compactHeight ? 70 : 80);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -422,7 +421,7 @@ export const RecordLandingScreen: React.FC = () => {
               /* ── ACTIVE WORKOUT CARD ── */
               <View style={styles.activeOuter}>
                 <LinearGradient
-                  colors={[...CARD_GRADIENT_ELEVATED]}
+                  colors={[...START_SESSION_CARD_GRADIENT]}
                   start={CARD_GRADIENT_START}
                   end={CARD_GRADIENT_END}
                   style={styles.activeGradient}
@@ -689,7 +688,7 @@ export const RecordLandingScreen: React.FC = () => {
                   key={tmpl.id}
                   style={[
                     styles.templateCard,
-                    { width: templateCardWidth, height: templateCardHeight },
+                    { width: templateCardWidth },
                   ]}
                   activeOpacity={0.85}
                   onPress={() =>
@@ -875,8 +874,8 @@ const styles = StyleSheet.create({
   },
   activeWorkoutEdge: {
     justifyContent: 'space-between',
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingTop: 15,
+    paddingBottom: 15,
   },
 
   /* Idle body */
@@ -936,19 +935,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   activeTitleBlock: {
-    gap: 2,
+    gap: 4,
   },
   activeEyebrow: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 9.5,
+    fontSize: 11,
     color: COLORS.textSecondary,
     letterSpacing: 1,
   },
   activeWorkoutTitle: {
-    fontFamily: FONTS.display.bold,
-    fontSize: 18,
+    fontFamily: FONTS.display.medium,
+    fontSize: 19,
     color: COLORS.text,
-    letterSpacing: -0.25,
+    letterSpacing: -0.35,
   },
   activeDashboardMiddle: {
     flexDirection: 'row',
@@ -1009,12 +1008,12 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   activePauseControl: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1039,8 +1038,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    minHeight: 38,
+    minHeight: 44,
     paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   activeSecondaryActions: {
     width: ACTIVE_SECONDARY_ACTIONS_WIDTH,
@@ -1050,7 +1050,7 @@ const styles = StyleSheet.create({
   },
   activeSecondaryButton: {
     flex: 1,
-    minHeight: 34,
+    minHeight: 38,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
@@ -1075,7 +1075,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     minHeight: 44,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 16,
   },
   startBtnText: {
@@ -1177,10 +1177,11 @@ const styles = StyleSheet.create({
   },
   templateGradient: {
     flex: 1,
+    width: '100%',
     borderRadius: CAPTURE_CARD_RADIUS - 1,
     paddingHorizontal: 0,
-    paddingTop: 7,
-    paddingBottom: 7,
+    paddingTop: 6,
+    paddingBottom: 6,
     gap: 0,
     overflow: 'hidden',
   },

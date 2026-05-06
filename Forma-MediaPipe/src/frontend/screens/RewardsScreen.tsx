@@ -31,6 +31,7 @@ import {
   CARD_GRADIENT_ELEVATED,
   CARD_GRADIENT_END,
   CARD_GRADIENT_START,
+  CARD_RADIUS,
   CARD_VERTICAL_GAP,
   COLORS,
   FONTS,
@@ -186,6 +187,7 @@ export const RewardsScreen: React.FC = () => {
   const nextReward = sortedRewards.find(reward => !earnedBadgeIds.includes(reward.id));
   const earnedBadges = sortedRewards.filter(reward => earnedBadgeIds.includes(reward.id));
   const lockedBadges = sortedRewards.filter(reward => !earnedBadgeIds.includes(reward.id));
+  const nextRewardAccent = nextReward?.color ?? COLORS.primary;
   const nextProgress = nextReward
     ? Math.min((userPoints / nextReward.pointsRequired) * 100, 100)
     : 100;
@@ -241,13 +243,33 @@ export const RewardsScreen: React.FC = () => {
           style={styles.heroCard}
         >
           <View style={styles.heroCardInner}>
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.055)', 'rgba(122, 85, 255, 0.055)', 'rgba(255, 255, 255, 0)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroAccentWash}
+              pointerEvents="none"
+            />
+            <View style={[styles.heroAccentRail, { backgroundColor: nextRewardAccent }]} />
             <View style={styles.heroTopRow}>
-              <View>
-                <Text style={styles.heroLabel}>TOTAL POINTS</Text>
+              <View style={styles.heroCopyBlock}>
+                <View style={styles.heroLabelPill}>
+                  <Award size={12} color={nextRewardAccent} strokeWidth={1.8} />
+                  <Text style={styles.heroLabel}>TOTAL POINTS</Text>
+                </View>
                 <Text style={styles.heroValue}>{userPoints.toLocaleString()}</Text>
+                <Text style={styles.heroSubline}>Lifetime reward balance</Text>
               </View>
-              <View style={styles.heroBadge}>
-                <Award size={22} color={COLORS.primary} strokeWidth={1.8} />
+              <View style={[styles.heroBadge, { borderColor: `${nextRewardAccent}40` }]}>
+                <LinearGradient
+                  colors={[`${nextRewardAccent}30`, 'rgba(255, 255, 255, 0.035)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.heroBadgeGradient}
+                >
+                  <Crown size={21} color={nextRewardAccent} strokeWidth={1.8} />
+                  <Text style={[styles.heroBadgeText, { color: nextRewardAccent }]}>PTS</Text>
+                </LinearGradient>
               </View>
             </View>
 
@@ -259,13 +281,21 @@ export const RewardsScreen: React.FC = () => {
                 </Text>
               </View>
               <View style={styles.heroProgressTrack}>
-                <View style={[styles.heroProgressFill, { width: `${Math.max(6, nextProgress)}%` }]} />
+                <LinearGradient
+                  colors={[nextRewardAccent, COLORS.primaryDark]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.heroProgressFill, { width: `${Math.max(6, nextProgress)}%` }]}
+                />
               </View>
-              <Text style={styles.nextRewardMeta}>
-                {nextReward
-                  ? `${Math.max(0, nextReward.pointsRequired - userPoints).toLocaleString()} points remaining`
-                  : 'You have completed the current rewards track.'}
-              </Text>
+              <View style={styles.nextRewardMetaRow}>
+                <Text style={styles.nextRewardMeta}>
+                  {nextReward
+                    ? `${Math.max(0, nextReward.pointsRequired - userPoints).toLocaleString()} points remaining`
+                    : 'You have completed the current rewards track.'}
+                </Text>
+                <Text style={styles.nextRewardPercent}>{Math.round(nextProgress)}%</Text>
+              </View>
             </View>
           </View>
         </LinearGradient>
@@ -332,46 +362,102 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   heroCard: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     marginBottom: CARD_VERTICAL_GAP,
+    overflow: 'hidden',
   },
   heroCardInner: {
-    borderRadius: 14,
+    position: 'relative',
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: COLORS.border,
+    borderTopColor: COLORS.borderStrong,
     padding: 16,
+    overflow: 'hidden',
+  },
+  heroAccentWash: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroAccentRail: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 2,
+    opacity: 0.62,
   },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 18,
+    gap: 14,
+  },
+  heroCopyBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  heroLabelPill: {
+    alignSelf: 'flex-start',
+    minHeight: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
+    paddingHorizontal: 9,
   },
   heroLabel: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 11,
-    color: COLORS.textTertiary,
+    fontSize: 10,
+    color: COLORS.textSecondary,
     letterSpacing: 1.6,
   },
   heroValue: {
     fontFamily: FONTS.mono.bold,
-    fontSize: 42,
+    fontSize: 46,
+    lineHeight: 51,
     color: COLORS.text,
     fontVariant: ['tabular-nums'],
-    marginTop: 4,
+    marginTop: 9,
+    letterSpacing: -1.2,
+  },
+  heroSubline: {
+    fontFamily: FONTS.ui.regular,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
   },
   heroBadge: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 62,
+    height: 62,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 1,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  heroBadgeGradient: {
+    flex: 1,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(122,85,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(122,85,255,0.20)',
+    gap: 2,
+  },
+  heroBadgeText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 9,
+    letterSpacing: 1.1,
   },
   nextRewardBlock: {
-    gap: 8,
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    padding: 12,
   },
   nextRewardHeader: {
     flexDirection: 'row',
@@ -382,7 +468,7 @@ const styles = StyleSheet.create({
   nextRewardLabel: {
     fontFamily: FONTS.ui.regular,
     fontSize: 12,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
   },
   nextRewardTitle: {
     flex: 1,
@@ -392,20 +478,32 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   heroProgressTrack: {
-    height: 6,
-    borderRadius: 3,
+    height: 7,
+    borderRadius: 999,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.085)',
   },
   heroProgressFill: {
     height: '100%',
-    borderRadius: 3,
-    backgroundColor: COLORS.primary,
+    borderRadius: 999,
+  },
+  nextRewardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   nextRewardMeta: {
+    flex: 1,
     fontFamily: FONTS.ui.regular,
     fontSize: 11,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
+  },
+  nextRewardPercent: {
+    fontFamily: FONTS.mono.bold,
+    fontSize: 11,
+    color: COLORS.text,
+    fontVariant: ['tabular-nums'],
   },
   section: {
     marginBottom: CARD_VERTICAL_GAP,

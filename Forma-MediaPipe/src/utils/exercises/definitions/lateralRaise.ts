@@ -857,6 +857,7 @@ export function createLateralRaiseDefinition(
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
+    repQualityWindowActive: false,
     _internal: withLateralRaiseConfig(config, () => initializeState()),
   }),
 
@@ -879,6 +880,7 @@ export function createLateralRaiseDefinition(
       feedback: internal.feedback,
       feedbackTimestamp: internal.lastFeedbackTime > 0 ? internal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
+      repQualityWindowActive: internal.repWindow !== null,
       _internal: internal,
     };
   },

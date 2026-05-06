@@ -30,6 +30,11 @@ export interface ExerciseState {
   debugInfo: Record<string, unknown>;
   /** Rolling tracking quality for the current frame/window. */
   quality?: PoseQualitySnapshot;
+  /**
+   * True while this frame belongs to an active rep-quality scoring window.
+   * Omitted by legacy definitions to preserve whole-window accumulation.
+   */
+  repQualityWindowActive?: boolean;
   /** Opaque internal state — only the exercise's own update() reads/writes this */
   _internal: unknown;
 }

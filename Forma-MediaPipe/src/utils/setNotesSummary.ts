@@ -8,12 +8,20 @@
  * universal across all exercises.
  */
 
+import { UNSCORED_REP_FEEDBACK } from './exercises/shared/poseQuality';
+
 const FEEDBACK_TO_IMPROVEMENT: Record<string, string> = {
   // Good reps (no improvement needed) — universal across exercises
   'Great rep!': '',
   'Good rep.': '',
   'Use more range for this rep to count.': 'Use a larger range of motion before returning to the start position.',
 };
+
+export interface GenerateSetSummaryOptions {
+  scoredRepCount?: number;
+  unscoredRepCount?: number;
+  trackingQualityMessage?: string;
+}
 
 /**
  * Merge exercise-specific summary configuration into the global map.
@@ -31,28 +39,45 @@ export function mergeSummaryConfig(config: Record<string, string>): void {
 export function generateSetSummary(
   repFeedback: string[],
   formScore: number,
-  _exerciseName: string
+  _exerciseName: string,
+  options: GenerateSetSummaryOptions = {},
 ): string {
+  // Split multi-line feedback (heuristics join issues with \n) into individual messages
+  const allMessages = repFeedback.flatMap((f) => f.split('\n').map((s) => s.trim()).filter(Boolean));
+  const unscoredFeedback = repFeedback.filter(isUnscoredRepFeedback);
+  const inferredUnscoredRepCount = unscoredFeedback.length;
+  const unscoredRepCount = options.unscoredRepCount ?? inferredUnscoredRepCount;
+  const totalReps = Math.max(repFeedback.length, (options.scoredRepCount ?? 0) + unscoredRepCount);
+  const scoredRepCount = options.scoredRepCount ?? Math.max(0, totalReps - unscoredRepCount);
+
+  if (totalReps > 0 && scoredRepCount === 0 && unscoredRepCount > 0) {
+    const trackingNote = options.trackingQualityMessage ? ` ${options.trackingQualityMessage}` : '';
+    return `Set counted ${totalReps} ${totalReps === 1 ? 'rep' : 'reps'}, but form was not scored because tracking was unreliable.${trackingNote}`;
+  }
+
   if (repFeedback.length === 0) {
     return `No rep-by-rep feedback was recorded for this set. Your form score was ${formScore}/100.`;
   }
 
-  // Split multi-line feedback (heuristics join issues with \n) into individual messages
-  const allMessages = repFeedback.flatMap((f) => f.split('\n').map((s) => s.trim()).filter(Boolean));
-  const goodReps = repFeedback.filter((f) => f === 'Great rep!' || f === 'Good rep.');
+  const scoredFeedback = repFeedback.filter((feedback) => !isUnscoredRepFeedback(feedback));
+  const goodReps = scoredFeedback.filter((f) => f === 'Great rep!' || f === 'Good rep.');
   const greatRepCount = goodReps.length;
-  const totalReps = repFeedback.length;
-  const errorMessages = allMessages.filter((m) => m !== 'Great rep!' && m !== 'Good rep.');
+  const scoredFeedbackCount = Math.max(scoredFeedback.length, scoredRepCount);
+  const errorMessages = allMessages.filter((m) => (
+    m !== 'Great rep!' &&
+    m !== 'Good rep.' &&
+    !isUnscoredRepFeedback(m)
+  ));
   const uniqueErrors = [...new Set(errorMessages)];
 
   // All great reps
-  if (greatRepCount === totalReps) {
-    return `Excellent form throughout! All ${totalReps} reps showed controlled movement with no form issues detected. Your form score of ${formScore}/100 reflects solid technique. Keep up the consistency!`;
+  if (greatRepCount === scoredFeedbackCount && unscoredRepCount === 0) {
+    return `Excellent form throughout! All ${scoredFeedbackCount} reps showed controlled movement with no form issues detected. Your form score of ${formScore}/100 reflects solid technique. Keep up the consistency!`;
   }
 
   // Mixed performance
-  const greatPct = Math.round((greatRepCount / totalReps) * 100);
-  let summary = `Form varied across the set. ${greatRepCount} of ${totalReps} reps (${greatPct}%) had good form. `;
+  const greatPct = scoredFeedbackCount > 0 ? Math.round((greatRepCount / scoredFeedbackCount) * 100) : 0;
+  let summary = `Form varied across the scored reps. ${greatRepCount} of ${scoredFeedbackCount} scored reps (${greatPct}%) had good form. `;
 
   if (uniqueErrors.length === 1) {
     const err = uniqueErrors[0];
@@ -71,6 +96,16 @@ export function generateSetSummary(
       : uniqueErrors.map((e) => `"${e}"`).join(', ');
   }
 
-  summary += ` Overall form score: ${formScore}/100.`;
+  if (unscoredRepCount > 0) {
+    summary += ` ${unscoredRepCount} ${unscoredRepCount === 1 ? 'rep was' : 'reps were'} unscored because tracking was unreliable.`;
+  }
+
+  summary += unscoredRepCount > 0
+    ? ` Overall form score based on scored reps: ${formScore}/100.`
+    : ` Overall form score: ${formScore}/100.`;
   return summary;
+}
+
+function isUnscoredRepFeedback(message: string): boolean {
+  return message.startsWith(UNSCORED_REP_FEEDBACK);
 }

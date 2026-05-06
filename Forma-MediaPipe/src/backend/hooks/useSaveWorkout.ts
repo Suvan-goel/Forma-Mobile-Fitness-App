@@ -86,7 +86,11 @@ export const useSaveWorkout = (): UseSaveWorkoutReturn => {
             const generatedNotes = s.isManual
               ? 'Manual set - no form feedback or recording.'
               : s.repFeedback && s.repFeedback.length > 0
-                ? generateSetSummary(s.repFeedback, s.formScore, ex.name)
+                ? generateSetSummary(s.repFeedback, s.formScore, ex.name, {
+                    scoredRepCount: s.scoredRepCount,
+                    unscoredRepCount: s.unscoredRepCount,
+                    trackingQualityMessage: s.trackingQuality?.message,
+                  })
                 : undefined;
             const trackingNotes = s.trackingQuality?.message;
             return {

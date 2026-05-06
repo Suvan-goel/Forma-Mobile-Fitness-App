@@ -49,11 +49,16 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
   const repFormScores = set.repFormScores ?? [];
   const repTrackingQualities = set.repTrackingQualities ?? [];
   const trackingQuality = set.trackingQuality;
-  const summary = generateSetSummary(repFeedback, set.formScore, exerciseName);
+  const isFullyUnscored = !set.isManual && set.scoredRepCount === 0 && set.reps > 0;
+  const summary = generateSetSummary(repFeedback, set.formScore, exerciseName, {
+    scoredRepCount: set.scoredRepCount,
+    unscoredRepCount: set.unscoredRepCount,
+    trackingQualityMessage: trackingQuality?.message,
+  });
 
   const repCount = Math.max(repFeedback.length, repFormScores.length, set.reps);
   const hasNotes = repCount > 0;
-  const scoreColor = getScoreColor(set.formScore);
+  const scoreColor = isFullyUnscored ? COLORS.textTertiary : getScoreColor(set.formScore);
 
   const [expandedReps, setExpandedReps] = useState<Set<number>>(new Set());
   const [overflowedReps, setOverflowedReps] = useState<Set<number>>(new Set());
@@ -145,9 +150,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                   </View>
                   <View style={styles.metricValueRow}>
                     <MonoText bold style={[styles.scoreValue, { color: scoreColor }]}>
-                      {set.formScore}
+                      {isFullyUnscored ? '-' : set.formScore}
                     </MonoText>
-                    <Text style={styles.scoreUnit}>/100</Text>
+                    {!isFullyUnscored && <Text style={styles.scoreUnit}>/100</Text>}
                   </View>
                 </View>
 
@@ -304,7 +309,9 @@ export const SetNotesModal: React.FC<SetNotesModalProps> = ({
                     No rep-by-rep feedback for this set.
                   </Text>
                   <Text style={styles.emptySubtext}>
-                    Feedback is captured for exercises with form analysis. Form score: {set.formScore}/100
+                    {isFullyUnscored
+                      ? 'Form was not scored because tracking was unreliable.'
+                      : `Feedback is captured for exercises with form analysis. Form score: ${set.formScore}/100`}
                   </Text>
                 </View>
               )}

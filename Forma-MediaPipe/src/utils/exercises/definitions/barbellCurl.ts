@@ -1535,6 +1535,7 @@ export function createBarbellCurlDefinition(
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
+    repQualityWindowActive: false,
     _internal: withBarbellCurlConfig(config, () => initializeBarbellCurlState()),
   }),
 
@@ -1560,6 +1561,7 @@ export function createBarbellCurlDefinition(
       feedback: newInternal.feedback,
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getBarbellCurlDebugInfo(newInternal) as Record<string, unknown>,
+      repQualityWindowActive: newInternal.repWindow !== null,
       _internal: newInternal,
     };
   },

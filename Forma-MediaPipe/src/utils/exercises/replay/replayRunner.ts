@@ -9,7 +9,8 @@ import type { ExerciseDefinition } from '../types';
 import { mapFeedbackMessagesToIssueIds } from './issueIds';
 import {
   PoseQualityTracker,
-  RepQualityAccumulator,
+  RepQualityWindowAccumulator,
+  getUnscoredRepFeedback,
   resolveExerciseQualityProfile,
   summarizeSetTrackingQuality,
 } from '../shared/poseQuality';
@@ -40,7 +41,7 @@ function buildRepPrediction(
   confidenceGating = false,
 ): ReplayRepPrediction {
   const shouldGate = confidenceGating && quality && !quality.scorable;
-  const gatedMessages = shouldGate ? [quality.message] : messages;
+  const gatedMessages = shouldGate ? [getUnscoredRepFeedback(quality)] : messages;
   return {
     repIndex,
     score,
@@ -78,13 +79,16 @@ export function replayRecording(
   let state = activeDefinition.createState();
   const qualityProfile = resolveExerciseQualityProfile(activeDefinition);
   const qualityTracker = new PoseQualityTracker();
-  const repQualityAccumulator = new RepQualityAccumulator();
+  const repQualityAccumulator = new RepQualityWindowAccumulator();
   const repQualities: ReplayRepQuality[] = [];
   const repScores: number[] = [];
   const feedbackMessages: string[] = [];
   const reps: ReplayRepPrediction[] = [];
   let lastRepCount = 0;
-  let repStartedAt: number | null = recording.frames[0]?.timestamp ?? null;
+  let repStartedAt: number | null = state.repQualityWindowActive === undefined
+    ? recording.frames[0]?.timestamp ?? null
+    : null;
+  let previousQualityWindowActive = false;
   const originalDateNow = Date.now;
   // Keep replay deterministic and compatible with existing synthetic fixtures:
   // frame timestamps are elapsed milliseconds from the start of the recording.
@@ -96,17 +100,30 @@ export function replayRecording(
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
         frameBoundsKeypoints: frame.imageKeypoints,
       });
-      repQualityAccumulator.record(quality);
       state = activeDefinition.update(frame.keypoints, state);
       state.quality = quality;
+      const qualityWindowActive = state.repQualityWindowActive ?? true;
+      if (state.repQualityWindowActive !== undefined && qualityWindowActive && !previousQualityWindowActive) {
+        repStartedAt = frame.timestamp;
+      }
+      previousQualityWindowActive = state.repQualityWindowActive !== undefined ? qualityWindowActive : false;
+      const repQuality = repQualityAccumulator.recordFrame(quality, state);
 
       if (state.repCount > lastRepCount) {
-        const repQuality = repQualityAccumulator.consume();
-        repQualities.push(repQuality);
+        const completedRepQuality = repQuality ?? {
+          status: quality.status,
+          confidence: quality.confidence,
+          scorable: quality.canScoreRep,
+          totalFrames: 1,
+          lowConfidenceFrames: quality.status === 'low' || quality.status === 'lost' ? 1 : 0,
+          warnings: quality.warnings,
+          message: quality.message,
+        };
+        repQualities.push(completedRepQuality);
         if (state.lastRepResult) {
           const score = state.lastRepResult.score;
-          const messages = options?.confidenceGating && !repQuality.scorable
-            ? [repQuality.message]
+          const messages = options?.confidenceGating && !completedRepQuality.scorable
+            ? [getUnscoredRepFeedback(completedRepQuality)]
             : state.lastRepResult.messages;
           repScores.push(score);
           feedbackMessages.push(...messages);
@@ -117,11 +134,11 @@ export function replayRecording(
             state.lastRepResult.messages,
             frame.timestamp,
             repStartedAt,
-            repQuality,
+            completedRepQuality,
             options?.confidenceGating ?? false,
           ));
         }
-        repStartedAt = frame.timestamp;
+        repStartedAt = state.repQualityWindowActive === undefined ? frame.timestamp : null;
         lastRepCount = state.repCount;
       }
     }
@@ -173,7 +190,7 @@ export function replayRecordingVerbose(
   let state = activeDefinition.createState();
   const qualityProfile = resolveExerciseQualityProfile(activeDefinition);
   const qualityTracker = new PoseQualityTracker();
-  const repQualityAccumulator = new RepQualityAccumulator();
+  const repQualityAccumulator = new RepQualityWindowAccumulator();
   const repQualities: ReplayRepQuality[] = [];
   const repScores: number[] = [];
   const feedbackMessages: string[] = [];
@@ -186,7 +203,10 @@ export function replayRecordingVerbose(
   let lastRepCount = 0;
   let lastPhase = extractPhase(state.debugInfo);
   let pendingTransitions: FsmTransition[] = [];
-  let repStartedAt: number | null = recording.frames[0]?.timestamp ?? null;
+  let repStartedAt: number | null = state.repQualityWindowActive === undefined
+    ? recording.frames[0]?.timestamp ?? null
+    : null;
+  let previousQualityWindowActive = false;
   const baseTimeMs = 0;
 
   try {
@@ -196,9 +216,14 @@ export function replayRecordingVerbose(
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
         frameBoundsKeypoints: frame.imageKeypoints,
       });
-      repQualityAccumulator.record(quality);
       state = activeDefinition.update(frame.keypoints, state);
       state.quality = quality;
+      const qualityWindowActive = state.repQualityWindowActive ?? true;
+      if (state.repQualityWindowActive !== undefined && qualityWindowActive && !previousQualityWindowActive) {
+        repStartedAt = frame.timestamp;
+      }
+      previousQualityWindowActive = state.repQualityWindowActive !== undefined ? qualityWindowActive : false;
+      const repQuality = repQualityAccumulator.recordFrame(quality, state);
 
       const currentPhase = extractPhase(state.debugInfo);
       frameTraces.push({
@@ -225,12 +250,20 @@ export function replayRecordingVerbose(
       }
 
       if (state.repCount > lastRepCount) {
-        const repQuality = repQualityAccumulator.consume();
-        repQualities.push(repQuality);
+        const completedRepQuality = repQuality ?? {
+          status: quality.status,
+          confidence: quality.confidence,
+          scorable: quality.canScoreRep,
+          totalFrames: 1,
+          lowConfidenceFrames: quality.status === 'low' || quality.status === 'lost' ? 1 : 0,
+          warnings: quality.warnings,
+          message: quality.message,
+        };
+        repQualities.push(completedRepQuality);
         if (state.lastRepResult) {
           const score = state.lastRepResult.score;
-          const messages = options?.confidenceGating && !repQuality.scorable
-            ? [repQuality.message]
+          const messages = options?.confidenceGating && !completedRepQuality.scorable
+            ? [getUnscoredRepFeedback(completedRepQuality)]
             : state.lastRepResult.messages;
           const prediction = buildRepPrediction(
             activeDefinition,
@@ -239,7 +272,7 @@ export function replayRecordingVerbose(
             state.lastRepResult.messages,
             frame.timestamp,
             repStartedAt,
-            repQuality,
+            completedRepQuality,
             options?.confidenceGating ?? false,
           );
           repScores.push(score);
@@ -248,7 +281,7 @@ export function replayRecordingVerbose(
           repTraces.push({ ...prediction, transitions: pendingTransitions });
         }
         pendingTransitions = [];
-        repStartedAt = frame.timestamp;
+        repStartedAt = state.repQualityWindowActive === undefined ? frame.timestamp : null;
         lastRepCount = state.repCount;
       }
     }

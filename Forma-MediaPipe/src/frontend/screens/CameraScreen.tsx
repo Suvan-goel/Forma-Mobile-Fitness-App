@@ -20,7 +20,8 @@ import '../../utils/exercises/definitions/register';
 import {
   ExerciseRegistry,
   PoseQualityTracker,
-  RepQualityAccumulator,
+  RepQualityWindowAccumulator,
+  getUnscoredRepFeedback,
   getPoseQualityMessage,
   resolveExerciseQualityProfile,
   summarizeSetTrackingQuality,
@@ -35,7 +36,7 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
-import { onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, onTrackingQualityWarning as ttsOnTrackingQualityWarning, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
+import { onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, onTrackingQualityWarning as ttsOnTrackingQualityWarning, onUnscoredRep as ttsOnUnscoredRep, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
@@ -54,7 +55,7 @@ type PendingWorkoutUpdate = {
 
 type PendingUIState = {
   repCount?: number;
-  formScore?: number;
+  formScore?: number | null;
   feedback?: string | null;
   exerciseDebug?: Record<string, unknown> | null;
   quality?: PoseQualitySnapshot;
@@ -80,10 +81,6 @@ const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
 const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
-
-function getUnscoredRepFeedback(repQuality: RepTrackingQuality): string {
-  return repQuality.message || 'Tracking uncertain - form not scored.';
-}
 
 function getTrackingQualityTone(status: PoseQualitySnapshot['status'] | RepTrackingQuality['status'] | SetTrackingQualitySummary['status']) {
   if (status === 'high') {
@@ -349,7 +346,7 @@ export const CameraScreen: React.FC = () => {
   const accumulatedRepQualitiesRef = useRef<RepTrackingQuality[]>([]);
   const completedRepCountRef = useRef(0);
   const poseQualityTrackerRef = useRef(new PoseQualityTracker());
-  const repQualityAccumulatorRef = useRef(new RepQualityAccumulator());
+  const repQualityAccumulatorRef = useRef(new RepQualityWindowAccumulator());
 
   // Sync refs with state
   useEffect(() => {
@@ -568,56 +565,66 @@ export const CameraScreen: React.FC = () => {
       const quality = poseQualityTrackerRef.current.update(keypoints, qualityProfile, {
         frameBoundsKeypoints: imageKeypoints,
       });
-      repQualityAccumulatorRef.current.record(quality);
       const newState = exerciseDef.update(keypoints, exerciseStateRef.current);
       newState.quality = quality;
       exerciseStateRef.current = newState;
 
       const repScore = newState.lastRepResult?.score ?? 0;
+      const completedNewTrackedRep = newState.repCount > completedRepCountRef.current;
+      const repQuality = repQualityAccumulatorRef.current.recordFrame(quality, newState);
 
       // Accumulate UI updates — don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
       pending.repCount = newState.repCount;
-      if (repScore > 0 && quality.canScoreRep) pending.formScore = repScore;
       pending.feedback = newState.feedback;
       pending.exerciseDebug = newState.debugInfo;
       pending.quality = quality;
 
-      const completedNewTrackedRep = newState.repCount > completedRepCountRef.current;
       const feedbackTimestamp = newState.feedbackTimestamp;
 
       if (completedNewTrackedRep) {
-        const repQuality = repQualityAccumulatorRef.current.consume();
-        const repIsScorable = repQuality.scorable && repScore > 0;
+        const completedRepQuality = repQuality ?? {
+          status: quality.status,
+          confidence: quality.confidence,
+          scorable: quality.canScoreRep,
+          totalFrames: 1,
+          lowConfidenceFrames: quality.status === 'low' || quality.status === 'lost' ? 1 : 0,
+          warnings: quality.warnings,
+          message: quality.message,
+        };
+        const repIsScorable = completedRepQuality.scorable && repScore > 0;
         const repFeedback = repIsScorable
           ? (newState.feedback ?? 'Great rep!')
-          : getUnscoredRepFeedback(repQuality);
+          : getUnscoredRepFeedback(completedRepQuality);
         completedRepCountRef.current = newState.repCount;
-        accumulatedRepQualitiesRef.current.push(repQuality);
+        accumulatedRepQualitiesRef.current.push(completedRepQuality);
         accumulatedRepFormScoresRef.current.push(repIsScorable ? repScore : 0);
         accumulatedRepFeedbackRef.current.push(repFeedback);
+        pending.formScore = repIsScorable ? repScore : null;
         if (repIsScorable) {
           accumulatedFormScoresRef.current.push(repScore);
         }
         if (newState.lastRepResult) {
           newState.lastRepResult = {
             ...newState.lastRepResult,
-            confidence: repQuality.confidence,
-            qualityStatus: repQuality.status,
-            qualityWarnings: repQuality.warnings,
+            confidence: completedRepQuality.confidence,
+            qualityStatus: completedRepQuality.status,
+            qualityWarnings: completedRepQuality.warnings,
           };
         }
         pending.workoutUpdate = {
           totalReps: newState.repCount,
           repFormScore: repIsScorable ? repScore : 0,
           repFeedback,
-          repQuality,
+          repQuality: completedRepQuality,
         };
 
         // TTS coaching — fire-and-forget, does not block landmark processing
         if (isTTSEnabledRef.current && repIsScorable) {
           const repMessages = newState.lastRepResult?.messages ?? [];
           ttsOnRepCompleted(repMessages, repScore).catch(() => {});
+        } else if (isTTSEnabledRef.current) {
+          ttsOnUnscoredRep(repFeedback).catch(() => {});
         }
         lastTTSFeedbackTimestampRef.current = feedbackTimestamp ?? lastTTSFeedbackTimestampRef.current;
       } else if (

@@ -4,9 +4,12 @@ import {
   POSE_QUALITY_LATENCY_TARGET_MS,
   PoseQualityTracker,
   RepQualityAccumulator,
+  RepQualityWindowAccumulator,
+  getPoseQualityMessage,
   resolveExerciseQualityProfile,
   summarizeSetTrackingQuality,
 } from '../shared/poseQuality';
+import type { PoseQualitySnapshot, PoseQualityWarning } from '../shared/poseQuality';
 
 const JOINTS = [
   'left_shoulder',
@@ -53,6 +56,29 @@ function definition(name: string, requiredView: ExerciseDefinition['requiredView
     update: (_keypoints, state) => state,
     ttsConfig: { feedbackToIssue: {} },
     summaryConfig: {},
+  };
+}
+
+function qualitySnapshot(
+  status: PoseQualitySnapshot['status'],
+  confidence: number,
+  warnings: PoseQualityWarning[] = [],
+): PoseQualitySnapshot {
+  return {
+    status,
+    confidence,
+    rawConfidence: confidence,
+    visibilityConfidence: confidence,
+    stabilityConfidence: confidence,
+    dropoutRate: status === 'lost' ? 1 : 0,
+    jitter: 0,
+    missingRequiredJoints: [],
+    warnings,
+    message: '',
+    canJudgeForm: status === 'high' || status === 'medium',
+    canScoreRep: status === 'high' || status === 'medium',
+    sampleCount: 1,
+    lowConfidenceFrameCount: status === 'low' || status === 'lost' ? 1 : 0,
   };
 }
 
@@ -153,6 +179,15 @@ describe('PoseQualityTracker', () => {
     expect(snapshot.warnings).toContain('move_camera_back');
   });
 
+  it('surfaces actionable warnings before generic high-confidence messaging', () => {
+    const message = getPoseQualityMessage({
+      status: 'high',
+      warnings: ['move_camera_back'],
+    });
+
+    expect(message).toBe('Move camera back');
+  });
+
   it('recovers confidence after the user re-enters frame', () => {
     const tracker = new PoseQualityTracker();
     settleTracker(tracker, Array.from({ length: 18 }, () => []));
@@ -178,6 +213,53 @@ describe('PoseQualityTracker', () => {
 
     expect(summary.scorable).toBe(false);
     expect(summary.message).toContain('Tracking uncertain');
+  });
+
+  it('accumulates rep quality only while the explicit active window is open', () => {
+    const accumulator = new RepQualityWindowAccumulator();
+    const low = qualitySnapshot('low', 0.25, ['keep_full_body_in_frame']);
+    const high = qualitySnapshot('high', 0.95);
+
+    accumulator.recordFrame(low, { repCount: 0, repQualityWindowActive: false });
+    accumulator.recordFrame(low, { repCount: 0, repQualityWindowActive: false });
+    accumulator.recordFrame(high, { repCount: 0, repQualityWindowActive: true });
+    accumulator.recordFrame(high, { repCount: 0, repQualityWindowActive: true });
+    const summary = accumulator.recordFrame(high, { repCount: 1, repQualityWindowActive: false });
+
+    expect(summary?.scorable).toBe(true);
+    expect(summary?.totalFrames).toBe(3);
+    expect(summary?.lowConfidenceFrames).toBe(0);
+  });
+
+  it('resets an aborted active quality window before the next counted rep', () => {
+    const accumulator = new RepQualityWindowAccumulator();
+    const low = qualitySnapshot('low', 0.25, ['arms_hidden']);
+    const high = qualitySnapshot('high', 0.95);
+
+    accumulator.recordFrame(low, { repCount: 0, repQualityWindowActive: true });
+    accumulator.recordFrame(low, { repCount: 0, repQualityWindowActive: true });
+    accumulator.recordFrame(high, { repCount: 0, repQualityWindowActive: false });
+    accumulator.recordFrame(high, { repCount: 0, repQualityWindowActive: true });
+    const summary = accumulator.recordFrame(high, { repCount: 1, repQualityWindowActive: false });
+
+    expect(summary?.scorable).toBe(true);
+    expect(summary?.totalFrames).toBe(2);
+    expect(summary?.warnings).not.toContain('arms_hidden');
+  });
+
+  it('preserves whole-window accumulation when no active flag is provided', () => {
+    const accumulator = new RepQualityWindowAccumulator();
+    const low = qualitySnapshot('low', 0.25, ['feet_hidden']);
+    const high = qualitySnapshot('high', 0.95);
+
+    accumulator.recordFrame(low, { repCount: 0 });
+    accumulator.recordFrame(low, { repCount: 0 });
+    accumulator.recordFrame(high, { repCount: 0 });
+    const summary = accumulator.recordFrame(high, { repCount: 1 });
+
+    expect(summary?.totalFrames).toBe(4);
+    expect(summary?.lowConfidenceFrames).toBe(2);
+    expect(summary?.scorable).toBe(false);
   });
 
   it('summarizes set-level scorable and unscored reps', () => {

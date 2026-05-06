@@ -60,6 +60,7 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
   }, [fadeAnim, slideAnim]);
 
   const isPremium = subscription?.plan === 'premium';
+  const planAccent = isPremium ? COLORS.yellow : COLORS.primary;
 
   const handleUpgrade = () => {
     showAlert(
@@ -91,16 +92,40 @@ export const MembershipScreen: React.FC<MembershipScreenProps> = ({ navigation }
             style={styles.planCard}
           >
             <View style={[styles.planCardEdge, isPremium && styles.planCardEdgePremium]}>
+              <LinearGradient
+                colors={isPremium
+                  ? ['rgba(236, 161, 58, 0.12)', 'rgba(255, 255, 255, 0.035)', 'rgba(255, 255, 255, 0)']
+                  : ['rgba(122, 85, 255, 0.13)', 'rgba(255, 255, 255, 0.035)', 'rgba(255, 255, 255, 0)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.planAccentWash}
+                pointerEvents="none"
+              />
+              <View style={[styles.planAccentRail, { backgroundColor: planAccent }]} />
               <View style={styles.planBadgeRow}>
-                {isPremium ? (
-                  <Crown size={20} color="#F5A623" strokeWidth={1.5} />
-                ) : (
-                  <Star size={20} color="#A78BFA" strokeWidth={1.5} />
-                )}
+                <View style={[styles.planIconFrame, { borderColor: `${planAccent}40` }]}>
+                  <LinearGradient
+                    colors={[`${planAccent}26`, 'rgba(255, 255, 255, 0.035)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.planIconGradient}
+                  >
+                    {isPremium ? (
+                      <Crown size={21} color={planAccent} strokeWidth={1.7} />
+                    ) : (
+                      <Star size={21} color={planAccent} strokeWidth={1.7} />
+                    )}
+                  </LinearGradient>
+                </View>
                 <View style={styles.planInfo}>
                   <Text style={styles.planBadgeLabel}>CURRENT PLAN</Text>
                   <Text style={styles.planName}>
                     {subscription?.planLabel ?? 'Free'}
+                  </Text>
+                </View>
+                <View style={[styles.planStatusPill, { borderColor: `${planAccent}38`, backgroundColor: `${planAccent}16` }]}>
+                  <Text style={[styles.planStatusText, { color: planAccent }]}>
+                    {isPremium ? 'ACTIVE' : 'STARTER'}
                   </Text>
                 </View>
               </View>
@@ -208,40 +233,83 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     marginTop: 18,
     marginBottom: CARD_VERTICAL_GAP,
+    overflow: 'hidden',
 
     ...CARD_SHADOW,
 },
   planCardEdge: {
+    position: 'relative',
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
-    padding: 20,
+    borderColor: COLORS.border,
+    borderTopColor: COLORS.borderStrong,
+    padding: 16,
+    overflow: 'hidden',
   },
   planCardEdgePremium: {
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(236, 161, 58, 0.18)',
+  },
+  planAccentWash: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  planAccentRail: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 2,
+    opacity: 0.7,
   },
   planBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     marginBottom: 12,
+  },
+  planIconFrame: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    overflow: 'hidden',
+  },
+  planIconGradient: {
+    flex: 1,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   planInfo: {
     flex: 1,
+    minWidth: 0,
   },
   planBadgeLabel: {
-    fontFamily: FONTS.display.bold,
+    fontFamily: FONTS.display.semibold,
     fontSize: 10,
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
     letterSpacing: 2,
     marginBottom: 2,
   },
   planName: {
-    fontFamily: FONTS.display.semibold,
-    fontSize: 22,
+    fontFamily: FONTS.display.regular,
+    fontSize: 24,
     color: COLORS.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.6,
+  },
+  planStatusPill: {
+    minHeight: 26,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 9,
+  },
+  planStatusText: {
+    fontFamily: FONTS.display.semibold,
+    fontSize: 9,
+    letterSpacing: 1.2,
   },
   planHint: {
     fontFamily: FONTS.ui.regular,

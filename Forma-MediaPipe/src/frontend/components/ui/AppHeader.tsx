@@ -5,7 +5,7 @@ import {
   Text,
   TextProps,
   TextStyle,
-  TouchableOpacity,
+  Pressable,
   View,
   ViewStyle,
 } from 'react-native';
@@ -20,6 +20,7 @@ interface AppHeaderProps extends Pick<TextProps, 'adjustsFontSizeToFit' | 'numbe
   topInset?: number;
   style?: StyleProp<ViewStyle>;
   titleStyle?: StyleProp<TextStyle>;
+  backButtonStyle?: StyleProp<ViewStyle>;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -30,6 +31,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   topInset,
   style,
   titleStyle,
+  backButtonStyle,
   adjustsFontSizeToFit,
   numberOfLines = 1,
 }) => (
@@ -41,14 +43,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     ]}
   >
     {onBack ? (
-      <TouchableOpacity
+      <Pressable
         onPress={onBack}
-        activeOpacity={0.7}
-        style={styles.backBtn}
+        android_ripple={null}
+        style={({ pressed }) => [
+          styles.backBtn,
+          pressed && styles.headerIconPressed,
+          backButtonStyle,
+        ]}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
         <ChevronLeft size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-      </TouchableOpacity>
+      </Pressable>
     ) : null}
 
     <View style={styles.titleRow}>
@@ -80,6 +86,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -6,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  headerIconPressed: {
+    opacity: 0.7,
   },
   titleRow: {
     flex: 1,

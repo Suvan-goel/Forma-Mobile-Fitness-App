@@ -778,6 +778,7 @@ export function createLyingLegCurlDefinition(
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
+    repQualityWindowActive: false,
     _internal: withLyingLegCurlConfig(config, () => initializeLyingLegCurlState()),
   }),
 
@@ -803,6 +804,7 @@ export function createLyingLegCurlDefinition(
       feedback: newInternal.feedback,
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
+      repQualityWindowActive: newInternal.repWindow !== null,
       _internal: newInternal,
     };
   },

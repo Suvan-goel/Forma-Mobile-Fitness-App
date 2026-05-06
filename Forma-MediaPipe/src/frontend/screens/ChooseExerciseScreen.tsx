@@ -11,14 +11,15 @@ import {
   TextInput,
   useWindowDimensions,
   Platform,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { addPendingTemplateExercise } from './CreateTemplateScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Bookmark, Info, Search, X } from 'lucide-react-native';
-import { COLORS, SPACING, FONTS, PAGE_TITLE_TEXT, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_VERTICAL_GAP ,
+import { Bookmark, Info, Search, X } from 'lucide-react-native';
+import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_VERTICAL_GAP ,
   CARD_SHADOW
 } from '../constants/theme';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
@@ -26,6 +27,7 @@ import { useExercises } from '../../backend/hooks/useExercises';
 import { useFavouriteExercises } from '../../backend/hooks/useFavouriteExercises';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
+import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { Exercise } from '../../backend/services/api';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { ExerciseRegistry } from '../../utils/exercises';
@@ -277,16 +279,17 @@ export const ChooseExerciseScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <ScreenBackground>
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-            <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>EXERCISE LIBRARY</Text>
-          <TouchableOpacity style={styles.headerIconBtn}>
-            <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
+      <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+        <SettingsHeader
+          title="EXERCISE LIBRARY"
+          onBack={handleGoBack}
+          titleStyle={styles.libraryTitle}
+          rightSlot={(
+            <Pressable style={styles.headerIconBtn} android_ripple={null}>
+              <Search size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+            </Pressable>
+          )}
+        />
         <View style={styles.loadingWrap}>
           <View style={styles.pillSkeletons}>
             {[1, 2, 3, 4, 5].map(i => (
@@ -305,20 +308,20 @@ export const ChooseExerciseScreen: React.FC = () => {
   }
 
   return (
-    <ScreenBackground>
-      {/* ── Header ─────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-          <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>EXERCISE LIBRARY</Text>
-        <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleSearch}>
-          {showSearch
-            ? <X size={20} color="#FFFFFF" strokeWidth={1.5} />
-            : <Search size={20} color="#FFFFFF" strokeWidth={1.5} />
-          }
-        </TouchableOpacity>
-      </View>
+    <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
+      <SettingsHeader
+        title="EXERCISE LIBRARY"
+        onBack={handleGoBack}
+        titleStyle={styles.libraryTitle}
+        rightSlot={(
+          <Pressable style={styles.headerIconBtn} onPress={handleToggleSearch} android_ripple={null}>
+            {showSearch
+              ? <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+              : <Search size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
+            }
+          </Pressable>
+        )}
+      />
 
       {/* ── Search Bar (shown when active) ─────── */}
       {showSearch && (
@@ -405,33 +408,19 @@ const styles = StyleSheet.create({
   },
 
   /* ── Header ──────────────────────────────── */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.screenHorizontal,
-    paddingBottom: 10,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#27272A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    ...PAGE_TITLE_TEXT,
-  },
   headerIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#27272A',
+    width: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  libraryTitle: {
+    fontSize: 19,
+    letterSpacing: 3.8,
   },
 
   /* ── Search Bar ──────────────────────────── */

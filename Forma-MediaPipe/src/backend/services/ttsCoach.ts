@@ -142,12 +142,28 @@ export async function onTrackingQualityWarning(message: string): Promise<void> {
   const trimmed = message.trim();
   if (!trimmed) return;
 
+  await speakTrackingReliabilityWarning(trimmed);
+}
+
+/**
+ * Call when a completed rep was counted but not form-scored because tracking
+ * quality was unreliable. Shares the live tracking warning cooldown.
+ */
+export async function onUnscoredRep(message: string): Promise<void> {
+  if (!isElevenLabsAvailable()) return;
+  const trimmed = message.trim();
+  if (!trimmed) return;
+
+  await speakTrackingReliabilityWarning(trimmed);
+}
+
+async function speakTrackingReliabilityWarning(message: string): Promise<void> {
   const now = Date.now();
   if (state.lastTrackingWarningAt !== null && now - state.lastTrackingWarningAt < 10000) {
     return;
   }
   state.lastTrackingWarningAt = now;
-  await trySpeak(trimmed);
+  await trySpeak(message);
 }
 
 /**

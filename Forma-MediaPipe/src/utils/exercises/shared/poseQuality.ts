@@ -85,6 +85,13 @@ export interface PoseQualityTrackerOptions {
   frameBoundsKeypoints?: Keypoint[];
 }
 
+export interface RepQualityWindowState {
+  repCount: number;
+  repQualityWindowActive?: boolean;
+}
+
+export const UNSCORED_REP_FEEDBACK = 'Rep counted, but form was not scored because tracking was unreliable.';
+
 const DEFAULT_MIN_REQUIRED_VISIBILITY = 0.22;
 const DEFAULT_MIN_IMPORTANT_VISIBILITY = 0.16;
 const DEFAULT_WINDOW_SIZE = 15;
@@ -200,6 +207,18 @@ const WARNING_MESSAGES: Record<PoseQualityWarning, string> = {
   keep_full_body_in_frame: 'Keep full body in frame',
   unstable_tracking: 'Hold steady',
 };
+
+const ACTIONABLE_WARNING_PRIORITY: PoseQualityWarning[] = [
+  'tracking_lost',
+  'move_camera_back',
+  'keep_full_body_in_frame',
+  'missing_required_joints',
+  'knees_hidden',
+  'feet_hidden',
+  'arms_hidden',
+  'torso_hidden',
+  'unstable_tracking',
+];
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -407,12 +426,21 @@ function frameQuality(
 }
 
 export function getPoseQualityMessage(snapshot: Pick<PoseQualitySnapshot | RepTrackingQuality | SetTrackingQualitySummary, 'status' | 'warnings'>): string {
+  for (const warning of ACTIONABLE_WARNING_PRIORITY) {
+    if (snapshot.warnings.includes(warning)) return WARNING_MESSAGES[warning];
+  }
   if (snapshot.status === 'high') return 'Tracking good';
   const firstWarning = snapshot.warnings[0];
   if (firstWarning) return WARNING_MESSAGES[firstWarning];
   if (snapshot.status === 'medium') return 'Tracking okay';
   if (snapshot.status === 'low') return 'Tracking uncertain';
   return 'Tracking lost';
+}
+
+export function getUnscoredRepFeedback(repQuality: Pick<RepTrackingQuality, 'status' | 'warnings'>): string {
+  const reason = getPoseQualityMessage(repQuality);
+  if (!reason || reason === 'Tracking good') return UNSCORED_REP_FEEDBACK;
+  return `${UNSCORED_REP_FEEDBACK} ${reason}.`;
 }
 
 export function getPoseQualityStatusLabel(status: PoseQualityStatus): string {
@@ -542,6 +570,39 @@ export class RepQualityAccumulator {
     const summary = summarizeRepQuality(this.samples);
     this.reset();
     return summary;
+  }
+}
+
+export class RepQualityWindowAccumulator {
+  private readonly accumulator = new RepQualityAccumulator();
+  private previousActive = false;
+  private previousRepCount = 0;
+
+  reset(repCount = 0): void {
+    this.accumulator.reset();
+    this.previousActive = false;
+    this.previousRepCount = repCount;
+  }
+
+  recordFrame(snapshot: PoseQualitySnapshot, state: RepQualityWindowState): RepTrackingQuality | null {
+    const completedRep = state.repCount > this.previousRepCount;
+    const hasExplicitWindow = state.repQualityWindowActive !== undefined;
+    const active = state.repQualityWindowActive ?? true;
+
+    if (!hasExplicitWindow || active || completedRep) {
+      this.accumulator.record(snapshot);
+    }
+
+    let completedQuality: RepTrackingQuality | null = null;
+    if (completedRep) {
+      completedQuality = this.accumulator.consume();
+    } else if (hasExplicitWindow && this.previousActive && !active) {
+      this.accumulator.reset();
+    }
+
+    this.previousActive = hasExplicitWindow ? active : false;
+    this.previousRepCount = state.repCount;
+    return completedQuality;
   }
 }
 

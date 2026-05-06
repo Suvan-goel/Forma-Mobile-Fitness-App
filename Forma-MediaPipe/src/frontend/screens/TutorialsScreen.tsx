@@ -17,6 +17,7 @@ import {
   TextInput,
   useWindowDimensions,
   Platform,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -262,10 +263,11 @@ export const TutorialsScreen: React.FC = () => {
         <SettingsHeader
           title="TUTORIALS"
           onBack={handleGoBack}
+          titleStyle={styles.libraryTitle}
           rightSlot={(
-            <TouchableOpacity style={styles.headerIconBtn}>
+            <Pressable style={styles.headerIconBtn} android_ripple={null}>
               <Search size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
-            </TouchableOpacity>
+            </Pressable>
           )}
         />
         <View style={styles.loadingWrap}>
@@ -290,13 +292,14 @@ export const TutorialsScreen: React.FC = () => {
       <SettingsHeader
         title="TUTORIALS"
         onBack={handleGoBack}
+        titleStyle={styles.libraryTitle}
         rightSlot={(
-          <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleSearch}>
+          <Pressable style={styles.headerIconBtn} onPress={handleToggleSearch} android_ripple={null}>
             {showSearch
               ? <X size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
               : <Search size={20} color={COLORS.textSecondary} strokeWidth={1.5} />
             }
-          </TouchableOpacity>
+          </Pressable>
         )}
       />
 
@@ -395,6 +398,14 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  libraryTitle: {
+    fontSize: 19,
+    letterSpacing: 3.8,
   },
 
   /* Subtitle */
@@ -403,9 +414,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
     letterSpacing: 2,
-    paddingHorizontal: SPACING.screenHorizontal,
+    paddingLeft: SPACING.screenHorizontal + 22,
+    paddingRight: SPACING.screenHorizontal,
     paddingBottom: 4,
-    textAlign: 'center',
+    textAlign: 'left',
   },
 
   /* Search */

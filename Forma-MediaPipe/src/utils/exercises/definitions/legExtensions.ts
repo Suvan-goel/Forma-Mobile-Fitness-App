@@ -827,6 +827,7 @@ export function createLegExtensionsDefinition(
     feedback: null,
     feedbackTimestamp: null,
     debugInfo: {},
+    repQualityWindowActive: false,
     _internal: withLegExtensionsConfig(config, () => initializeLegExtensionState()),
   }),
 
@@ -852,6 +853,7 @@ export function createLegExtensionsDefinition(
       feedback: newInternal.feedback,
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
+      repQualityWindowActive: newInternal.repWindow !== null,
       _internal: newInternal,
     };
   },

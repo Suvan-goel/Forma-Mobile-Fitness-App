@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
   readinessBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 42,
+    gap: 28,
     marginTop: 18,
     marginBottom: 20,
   },
