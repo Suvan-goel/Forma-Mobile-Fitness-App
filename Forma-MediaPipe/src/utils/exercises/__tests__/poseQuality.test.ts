@@ -185,7 +185,7 @@ describe('PoseQualityTracker', () => {
       warnings: ['move_camera_back'],
     });
 
-    expect(message).toBe('Move camera back');
+    expect(message).toBe('Move the camera back.');
   });
 
   it('recovers confidence after the user re-enters frame', () => {
@@ -265,7 +265,7 @@ describe('PoseQualityTracker', () => {
   it('summarizes set-level scorable and unscored reps', () => {
     const summary = summarizeSetTrackingQuality([
       { status: 'high', confidence: 0.95, scorable: true, totalFrames: 20, lowConfidenceFrames: 0, warnings: [], message: 'Tracking good' },
-      { status: 'low', confidence: 0.35, scorable: false, totalFrames: 20, lowConfidenceFrames: 18, warnings: ['knees_hidden'], message: 'Tracking uncertain - keep knees visible' },
+      { status: 'low', confidence: 0.35, scorable: false, totalFrames: 20, lowConfidenceFrames: 18, warnings: ['knees_hidden'], message: 'Tracking uncertain - keep your knees visible.' },
     ]);
 
     expect(summary.scoredReps).toBe(1);

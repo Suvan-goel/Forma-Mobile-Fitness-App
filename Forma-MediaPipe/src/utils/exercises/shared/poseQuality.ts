@@ -90,7 +90,7 @@ export interface RepQualityWindowState {
   repQualityWindowActive?: boolean;
 }
 
-export const UNSCORED_REP_FEEDBACK = "Your form wasn't scored because I couldn't see the key joints clearly.";
+export const UNSCORED_REP_FEEDBACK = "I couldn't judge your form there.";
 
 const DEFAULT_MIN_REQUIRED_VISIBILITY = 0.22;
 const DEFAULT_MIN_IMPORTANT_VISIBILITY = 0.16;
@@ -197,15 +197,15 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
 };
 
 const WARNING_MESSAGES: Record<PoseQualityWarning, string> = {
-  tracking_lost: 'Tracking lost',
-  missing_required_joints: 'Keep required joints visible',
-  knees_hidden: 'Keep knees visible',
-  feet_hidden: 'Keep feet in frame',
-  arms_hidden: 'Keep arms visible',
-  torso_hidden: 'Keep torso visible',
-  move_camera_back: 'Move camera back',
-  keep_full_body_in_frame: 'Keep full body in frame',
-  unstable_tracking: 'Hold steady',
+  tracking_lost: 'Tracking was lost.',
+  missing_required_joints: 'Ensure your key joints are clearly visible.',
+  knees_hidden: 'Keep your knees visible.',
+  feet_hidden: 'Keep your feet inside the frame.',
+  arms_hidden: 'Keep your arms visible.',
+  torso_hidden: 'Keep your torso visible.',
+  move_camera_back: 'Move the camera back.',
+  keep_full_body_in_frame: 'Keep your full body inside the frame.',
+  unstable_tracking: 'Hold steady.',
 };
 
 const ACTIONABLE_WARNING_PRIORITY: PoseQualityWarning[] = [
@@ -434,13 +434,15 @@ export function getPoseQualityMessage(snapshot: Pick<PoseQualitySnapshot | RepTr
   if (firstWarning) return WARNING_MESSAGES[firstWarning];
   if (snapshot.status === 'medium') return 'Tracking okay';
   if (snapshot.status === 'low') return 'Tracking uncertain';
-  return 'Tracking lost';
+  return 'Tracking was lost.';
 }
 
 export function getUnscoredRepFeedback(repQuality: Pick<RepTrackingQuality, 'status' | 'warnings'>): string {
   const reason = getPoseQualityMessage(repQuality);
-  if (!reason || reason === 'Tracking good') return UNSCORED_REP_FEEDBACK;
-  return `${UNSCORED_REP_FEEDBACK} ${reason}.`;
+  const detail = (!reason || reason === 'Tracking good' || reason === 'Tracking okay' || reason === 'Tracking uncertain')
+    ? WARNING_MESSAGES.missing_required_joints
+    : reason;
+  return `${UNSCORED_REP_FEEDBACK} ${detail}`;
 }
 
 export function getPoseQualityStatusLabel(status: PoseQualityStatus): string {

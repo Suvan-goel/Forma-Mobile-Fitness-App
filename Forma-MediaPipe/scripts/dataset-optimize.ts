@@ -130,9 +130,12 @@ export interface DatasetOptimisationReport {
   options: OptimizerCommandOptions;
   datasetRoot: string;
   discoveredExercises: string[];
+  confidenceGating: boolean;
   baseline: EvaluationSummary | null;
   exercises: ExerciseOptimisationReport[];
 }
+
+const OPTIMIZER_CONFIDENCE_GATING = true;
 
 export const DEFAULT_MIN_SPLIT_CASES: MinimumSplitCases = {
   train: 1,
@@ -193,6 +196,17 @@ function scoreEvaluationSummary(evaluation: EvaluationSummary): number {
     evaluation.metrics.issueF1 * 100 -
     evaluation.metrics.cleanRepFalsePositiveRate
   );
+}
+
+function replayCaseForOptimizer(
+  definition: ExerciseDefinition,
+  datasetCase: DatasetCase,
+  config?: ExerciseHeuristicConfig,
+) {
+  return replayRecording(definition, datasetCase.recording, {
+    ...(config ? { heuristicConfig: config } : {}),
+    confidenceGating: OPTIMIZER_CONFIDENCE_GATING,
+  });
 }
 
 function combineSummaries(summaries: Array<EvaluationSummary | null>): EvaluationSummary | null {
@@ -277,11 +291,7 @@ export function evaluateCasesCompact(
   if (cases.length === 0) return null;
   const totals = emptyTotals();
   for (const datasetCase of cases) {
-    const prediction = replayRecording(
-      definition,
-      datasetCase.recording,
-      config ? { heuristicConfig: config } : undefined,
-    );
+    const prediction = replayCaseForOptimizer(definition, datasetCase, config);
     const evaluation = evaluateCase(datasetCase, prediction);
     addTotals(totals, evaluation.totals);
   }
@@ -298,7 +308,7 @@ export function evaluateCasesDetailed(
     cases.map((datasetCase) =>
       evaluateCase(
         datasetCase,
-        replayRecording(definition, datasetCase.recording, config ? { heuristicConfig: config } : undefined),
+        replayCaseForOptimizer(definition, datasetCase, config),
       ),
     ),
   );
@@ -769,6 +779,7 @@ export function runDatasetOptimize(options: OptimizerCommandOptions): {
     options,
     datasetRoot,
     discoveredExercises: exercises,
+    confidenceGating: OPTIMIZER_CONFIDENCE_GATING,
     baseline: combineSummaries(exerciseReports.map((exercise) => exercise.baseline.all)),
     exercises: exerciseReports,
   };

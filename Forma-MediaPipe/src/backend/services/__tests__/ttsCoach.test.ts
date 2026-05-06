@@ -27,16 +27,16 @@ describe('ttsCoach reliability warnings', () => {
   });
 
   it('rate-limits unscored rep TTS with live tracking warnings', async () => {
-    await onTrackingQualityWarning('Move camera back');
-    await onUnscoredRep(`${UNSCORED_REP_FEEDBACK} Keep full body in frame.`);
+    await onTrackingQualityWarning('Move the camera back.');
+    await onUnscoredRep(`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`);
 
     expect(speakMock).toHaveBeenCalledTimes(1);
-    expect(speakMock).toHaveBeenCalledWith('Move camera back');
+    expect(speakMock).toHaveBeenCalledWith('Move the camera back.');
 
     nowSpy.mockReturnValue(11050);
-    await onUnscoredRep(`${UNSCORED_REP_FEEDBACK} Keep full body in frame.`);
+    await onUnscoredRep(`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`);
 
     expect(speakMock).toHaveBeenCalledTimes(2);
-    expect(speakMock).toHaveBeenLastCalledWith(`${UNSCORED_REP_FEEDBACK} Keep full body in frame.`);
+    expect(speakMock).toHaveBeenLastCalledWith(`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`);
   });
 });

@@ -4,6 +4,7 @@ import * as path from 'path';
 
 import type { Keypoint } from '../src/utils/poseAnalysis';
 import { ExerciseRegistry } from '../src/utils/exercises/ExerciseRegistry';
+import { evaluateCase } from '../src/utils/exercises/dataset';
 import type {
   ExerciseDefinition,
   ExerciseHeuristicConfig,
@@ -12,6 +13,7 @@ import type {
 } from '../src/utils/exercises/types';
 import type { DatasetCase, ExerciseLabelFile } from '../src/utils/exercises/dataset';
 import { getConfigValue } from '../src/utils/exercises/heuristicConfig';
+import { replayRecording } from '../src/utils/exercises/replay';
 import {
   DEFAULT_MIN_SPLIT_CASES,
   evaluateCasesCompact,
@@ -43,15 +45,20 @@ const syntheticSpec: TunableSpec = {
 function makeSyntheticExercise(
   name: string,
   config: ExerciseHeuristicConfig,
+  options: {
+    feedbackMessages?: string[];
+    qualityProfile?: ExerciseDefinition['qualityProfile'];
+  } = {},
 ): ExerciseDefinition {
   const threshold = Number(getConfigValue(config, 'thresholds.COMPLETE_AT'));
   return {
     name,
     requiredView: 'any',
+    qualityProfile: options.qualityProfile,
     heuristicConfig: config,
     tunableSpec: { ...syntheticSpec, exerciseName: name },
     tunedConfigPath: `src/utils/exercises/definitions/tuned/${name}.json`,
-    createVariant: (variantConfig) => makeSyntheticExercise(name, variantConfig),
+    createVariant: (variantConfig) => makeSyntheticExercise(name, variantConfig, options),
     createState: (): ExerciseState => ({
       repCount: 0,
       lastRepResult: null,
@@ -68,16 +75,24 @@ function makeSyntheticExercise(
       return {
         ...state,
         repCount: 1,
-        lastRepResult: { repIndex: 1, score: 100, messages: [] },
+        lastRepResult: { repIndex: 1, score: 100, messages: options.feedbackMessages ?? [] },
         _internal: internal,
       };
     },
-    ttsConfig: { feedbackToIssue: {} },
+    ttsConfig: {
+      feedbackToIssue: Object.fromEntries(
+        (options.feedbackMessages ?? []).map((message) => [message, 'synthetic_issue']),
+      ),
+    },
     summaryConfig: {},
   };
 }
 
-function syntheticCase(exerciseName: string, split: ExerciseLabelFile['split']): DatasetCase {
+function syntheticCase(
+  exerciseName: string,
+  split: ExerciseLabelFile['split'],
+  score = 1,
+): DatasetCase {
   return {
     label: {
       schemaVersion: 1,
@@ -92,8 +107,8 @@ function syntheticCase(exerciseName: string, split: ExerciseLabelFile['split']):
       exerciseName,
       metadata: {},
       frames: [
-        { timestamp: 0, keypoints: [{ name: 'demo', x: 0.2, y: 0, score: 1 } as Keypoint] },
-        { timestamp: 500, keypoints: [{ name: 'demo', x: 0.6, y: 0, score: 1 } as Keypoint] },
+        { timestamp: 0, keypoints: [{ name: 'demo', x: 0.2, y: 0, score } as Keypoint] },
+        { timestamp: 500, keypoints: [{ name: 'demo', x: 0.6, y: 0, score } as Keypoint] },
       ],
     },
   };
@@ -156,6 +171,35 @@ describe('dataset optimiser scaling helpers', () => {
       totals: detailed?.totals,
       metrics: detailed?.metrics,
     });
+  });
+
+  it('evaluates optimizer cases with confidence gating enabled by default', () => {
+    const feedbackMessage = 'Synthetic form warning';
+    const definition = makeSyntheticExercise(
+      'Scaling Synthetic Gated',
+      { thresholds: { COMPLETE_AT: 0.5 } },
+      {
+        feedbackMessages: [feedbackMessage],
+        qualityProfile: {
+          exerciseName: 'Scaling Synthetic Gated',
+          requiredView: 'any',
+          requiredJoints: ['demo'],
+          importantJoints: [],
+          windowSize: 3,
+        },
+      },
+    );
+    const cleanLowConfidenceCase = syntheticCase(definition.name, 'train', 0);
+
+    const rawEvaluation = evaluateCase(
+      cleanLowConfidenceCase,
+      replayRecording(definition, cleanLowConfidenceCase.recording),
+    );
+    const optimizerEvaluation = evaluateCasesCompact(definition, [cleanLowConfidenceCase]);
+
+    expect(rawEvaluation.totals.falsePositives).toBe(1);
+    expect(optimizerEvaluation?.totals.falsePositives).toBe(0);
+    expect(optimizerEvaluation?.metrics.cleanRepFalsePositiveRate).toBe(0);
   });
 
   it('candidate search keeps compact summaries without per-case arrays', () => {

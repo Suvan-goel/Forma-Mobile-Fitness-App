@@ -4,7 +4,7 @@ import { UNSCORED_REP_FEEDBACK } from '../exercises/shared/poseQuality';
 describe('generateSetSummary', () => {
   it('describes fully unscored sets as tracking-limited, not zero-score form', () => {
     const summary = generateSetSummary(
-      [`${UNSCORED_REP_FEEDBACK} Keep full body in frame.`],
+      [`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`],
       0,
       'Push-Up',
       {
@@ -23,7 +23,7 @@ describe('generateSetSummary', () => {
     const summary = generateSetSummary(
       [
         'Great rep!',
-        `${UNSCORED_REP_FEEDBACK} Move camera back.`,
+        `${UNSCORED_REP_FEEDBACK} Move the camera back.`,
         'Slow down the push — control the extension.',
       ],
       82,
