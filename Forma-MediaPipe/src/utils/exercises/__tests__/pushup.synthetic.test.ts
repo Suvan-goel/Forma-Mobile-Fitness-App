@@ -13,6 +13,7 @@ const EXTENDED_ELBOW_X = 0;
 const BOTTOM_ELBOW_X = 0.58;
 const PULSE_ELBOW_X = 0.04;
 const HALF_ELBOW_X = 0.12;
+const BORDERLINE_ELBOW_X = 0.16;
 
 function kp(name: string, x: number, y: number, score = 0.99): Keypoint {
   return { name, x, y, z: 0, score };
@@ -53,6 +54,16 @@ function halfRepPath(): number[] {
   ];
 }
 
+function borderlineRepPath(): number[] {
+  return [
+    ...Array(22).fill(EXTENDED_ELBOW_X),
+    ...interpolate(EXTENDED_ELBOW_X, BORDERLINE_ELBOW_X, 22),
+    ...Array(4).fill(BORDERLINE_ELBOW_X),
+    ...interpolate(BORDERLINE_ELBOW_X, EXTENDED_ELBOW_X, 18),
+    ...Array(8).fill(EXTENDED_ELBOW_X),
+  ];
+}
+
 function fastDescentPath(): number[] {
   return [
     ...Array(22).fill(EXTENDED_ELBOW_X),
@@ -86,16 +97,18 @@ function sideKeypoints(
   orientation: PushupOrientation,
   posture: PushupPosture,
   score: number,
+  sideOffset = 0.02,
+  wristShiftX = 0,
 ): Keypoint[] {
   const { shoulder, hip, ankle } = bodyPoints(orientation, posture);
   const elbowDirection = orientation === 'facing-right' ? -1 : 1;
-  const xOffset = side === 'left' ? -0.02 : 0.02;
+  const xOffset = side === 'left' ? -sideOffset : sideOffset;
   const elbow = {
     x: shoulder.x + xOffset + elbowDirection * elbowOffsetX,
     y: 0.63,
   };
   const wrist = {
-    x: shoulder.x + xOffset,
+    x: shoulder.x + xOffset + wristShiftX,
     y: 0.78,
   };
   const prefix = side;
@@ -128,18 +141,20 @@ function makeFrameWithScores(
   headPosture: PushupHeadPosture,
   leftScore: number,
   rightScore: number,
+  sideOffset = 0.02,
+  wristShiftX = 0,
 ): LandmarkRecording['frames'][number] {
   const { shoulder } = bodyPoints(orientation, posture);
   const nose = nosePoint(shoulder, orientation, headPosture);
   return {
     timestamp,
     keypoints: [
-      kp('nose', nose.x, nose.y),
-      ...sideKeypoints('left', elbowOffsetX, orientation, posture, leftScore),
-      ...sideKeypoints('right', elbowOffsetX, orientation, posture, rightScore),
-    ],
-  };
-}
+        kp('nose', nose.x, nose.y),
+        ...sideKeypoints('left', elbowOffsetX, orientation, posture, leftScore, sideOffset, wristShiftX),
+        ...sideKeypoints('right', elbowOffsetX, orientation, posture, rightScore, sideOffset, wristShiftX),
+      ],
+    };
+  }
 
 function makeFrame(
   timestamp: number,
@@ -149,6 +164,8 @@ function makeFrame(
   posture: PushupPosture,
   headPosture: PushupHeadPosture,
   hiddenSideScore = 0.05,
+  sideOffset = 0.02,
+  wristShiftX = 0,
 ): LandmarkRecording['frames'][number] {
   const otherSide: PushupSide = side === 'left' ? 'right' : 'left';
   const { shoulder } = bodyPoints(orientation, posture);
@@ -156,12 +173,12 @@ function makeFrame(
   return {
     timestamp,
     keypoints: [
-      kp('nose', nose.x, nose.y),
-      ...sideKeypoints(side, elbowOffsetX, orientation, posture, 0.99),
-      ...sideKeypoints(otherSide, elbowOffsetX, orientation, posture, hiddenSideScore),
-    ],
-  };
-}
+        kp('nose', nose.x, nose.y),
+        ...sideKeypoints(side, elbowOffsetX, orientation, posture, 0.99, sideOffset, wristShiftX),
+        ...sideKeypoints(otherSide, elbowOffsetX, orientation, posture, hiddenSideScore, sideOffset, wristShiftX),
+      ],
+    };
+  }
 
 function buildRecording(
   description: string,
@@ -170,17 +187,23 @@ function buildRecording(
     side?: PushupSide;
     orientation?: PushupOrientation;
     posture?: PushupPosture;
-    headPosture?: PushupHeadPosture;
-    sideSwitchFrame?: number;
-  } = {},
-): LandmarkRecording {
+      headPosture?: PushupHeadPosture;
+      sideSwitchFrame?: number;
+      hiddenSideScore?: number;
+      sideOffset?: number;
+      wristShiftX?: number;
+    } = {},
+  ): LandmarkRecording {
   const {
     side = 'left',
     orientation = 'facing-right',
     posture = 'neutral',
-    headPosture = 'neutral',
-    sideSwitchFrame,
-  } = options;
+      headPosture = 'neutral',
+      sideSwitchFrame,
+      hiddenSideScore = 0.05,
+      sideOffset = 0.02,
+      wristShiftX = 0,
+    } = options;
 
   return {
     exerciseName: 'Push-Up',
@@ -192,15 +215,15 @@ function buildRecording(
       expectedScoreRange: [0, 100],
     },
     frames: elbowPath.map((elbowOffsetX, index) => {
-      if (sideSwitchFrame !== undefined && index >= sideSwitchFrame) {
-        return side === 'left'
-          ? makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, headPosture, 0.7, 0.99)
-          : makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, headPosture, 0.99, 0.7);
-      }
-      return makeFrame(index * FRAME_MS, elbowOffsetX, side, orientation, posture, headPosture);
-    }),
-  };
-}
+        if (sideSwitchFrame !== undefined && index >= sideSwitchFrame) {
+          return side === 'left'
+            ? makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, headPosture, 0.7, 0.99, sideOffset, wristShiftX)
+            : makeFrameWithScores(index * FRAME_MS, elbowOffsetX, orientation, posture, headPosture, 0.99, 0.7, sideOffset, wristShiftX);
+        }
+        return makeFrame(index * FRAME_MS, elbowOffsetX, side, orientation, posture, headPosture, hiddenSideScore, sideOffset, wristShiftX);
+      }),
+    };
+  }
 
 function buildRecordingWithPostureDuringRep(
   description: string,
@@ -215,6 +238,26 @@ function buildRecordingWithPostureDuringRep(
       return makeFrame(index * FRAME_MS, elbowOffsetX, 'left', orientation, activePosture, 'neutral');
     }),
   };
+}
+
+function withKeypointUpdates(
+  recording: LandmarkRecording,
+  update: (point: Keypoint, frameIndex: number) => Keypoint,
+): LandmarkRecording {
+  return {
+    ...recording,
+    frames: recording.frames.map((frame, frameIndex) => ({
+      ...frame,
+      keypoints: frame.keypoints.map(point => update(point, frameIndex)),
+    })),
+  };
+}
+
+function expectStaysIdle(recording: LandmarkRecording) {
+  const result = replayRecordingVerbose(pushupDefinition, recording);
+  expect(result.finalRepCount).toBe(0);
+  expect(result.frameTraces.every(trace => trace.phase === 'IDLE')).toBe(true);
+  return result;
 }
 
 describe('Push-Up synthetic replay coverage', () => {
@@ -242,6 +285,45 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.repTraces).toEqual([]);
   });
 
+  it('does not leave idle when setup is not side-on enough', () => {
+    const result = expectStaysIdle(buildRecording('synthetic front-ish pushup setup', fullRepPath(), {
+      hiddenSideScore: 0.99,
+      sideOffset: 0.14,
+    }));
+
+    expect(result.frameTraces.some(trace => (
+      Array.isArray(trace.debugInfo.setupWarnings) &&
+      trace.debugInfo.setupWarnings.includes('not_side_view')
+    ))).toBe(true);
+  });
+
+  it('does not leave idle when the arm or lower-body chain is hidden', () => {
+    const hiddenWrist = withKeypointUpdates(
+      buildRecording('synthetic hidden wrist pushup setup', fullRepPath()),
+      point => point.name === 'left_wrist' ? { ...point, score: 0.05 } : point,
+    );
+    const hiddenAnkle = withKeypointUpdates(
+      buildRecording('synthetic hidden ankle pushup setup', fullRepPath()),
+      point => point.name === 'left_ankle' ? { ...point, score: 0.05 } : point,
+    );
+
+    expectStaysIdle(hiddenWrist);
+    expectStaysIdle(hiddenAnkle);
+  });
+
+  it('does not leave idle when the full body is cropped at the frame edge', () => {
+    const cropped = withKeypointUpdates(
+      buildRecording('synthetic cropped pushup setup', fullRepPath()),
+      point => point.name === 'left_ankle' ? { ...point, x: 0.99 } : point,
+    );
+
+    const result = expectStaysIdle(cropped);
+    expect(result.frameTraces.some(trace => (
+      Array.isArray(trace.debugInfo.setupWarnings) &&
+      trace.debugInfo.setupWarnings.includes('full_body_not_visible')
+    ))).toBe(true);
+  });
+
   it('counts a meaningful partial push-up and records depth feedback', () => {
     const clean = replayRecording(pushupDefinition, buildRecording('synthetic clean pushup', fullRepPath()));
     const result = replayRecording(pushupDefinition, buildRecording('synthetic half pushup', halfRepPath()));
@@ -249,6 +331,38 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(result.feedbackMessages).toContain('Go deeper — aim for elbows at 90 degrees.');
+  });
+
+  it('uses shoulder drop as a secondary depth proxy for borderline shallow reps', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildRecording('synthetic borderline shallow pushup', borderlineRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Go deeper — aim for elbows at 90 degrees.');
+  });
+
+  it('does not let the secondary depth proxy false-positive when elbow depth is clearly good', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildRecording('synthetic clean pushup with poor shoulder-drop proxy', fullRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Go deeper — aim for elbows at 90 degrees.');
+  });
+
+  it('flags persistent shoulder and wrist misalignment as low-priority form feedback', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildRecording('synthetic shoulder wrist offset pushup', fullRepPath(), {
+        wristShiftX: 0.09,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Stack your shoulders over your hands.');
   });
 
   it.each<PushupOrientation>(['facing-right', 'facing-left'])(
@@ -319,6 +433,21 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages.join('\n')).not.toContain('Hips are sagging');
     expect(result.feedbackMessages).not.toContain('Keep your head neutral — align your neck with your spine.');
+  });
+
+  it('counts reps with hidden head tracking but marks them unscored under confidence gating', () => {
+    const hiddenHead = withKeypointUpdates(
+      buildRecording('synthetic hidden head during pushup', fullRepPath()),
+      (point, index) => index >= 22 && index < 94 && point.name === 'nose'
+        ? { ...point, score: 0.05 }
+        : point,
+    );
+
+    const result = replayRecording(pushupDefinition, hiddenHead, { confidenceGating: true });
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.feedbackMessages[0]).toContain("I couldn't judge your form there.");
   });
 
   it('keeps the active side locked through a rep even if visibility flips', () => {

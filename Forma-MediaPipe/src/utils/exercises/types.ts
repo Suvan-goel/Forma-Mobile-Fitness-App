@@ -39,14 +39,20 @@ export interface ExerciseState {
   _internal: unknown;
 }
 
+export interface ExerciseFrameContext {
+  worldKeypoints?: Keypoint[];
+  imageKeypoints?: Keypoint[];
+  primarySource: 'world' | 'image';
+}
+
 // ============================================================================
 // RepResult — per-rep scoring and feedback
 // ============================================================================
 
 export interface RepResult {
   repIndex: number;
-  score: number;         // 0-100
-  messages: string[];    // Visual feedback strings (may be empty for perfect rep)
+  score: number; // 0-100
+  messages: string[]; // Visual feedback strings (may be empty for perfect rep)
   /**
    * Stable issue identifiers for dataset evaluation.
    * Runtime UI/TTS still uses messages; dataset tooling derives this when absent.
@@ -58,6 +64,13 @@ export interface RepResult {
   qualityStatus?: PoseQualityStatus;
   /** Actionable tracking warnings that affected this rep. */
   qualityWarnings?: PoseQualityWarning[];
+  /**
+   * Exercise-specific scoring gate. A rep can be countable but unscorable when
+   * the movement signal is visible and form-critical landmarks are not.
+   */
+  scorable?: boolean;
+  /** Compact per-rep diagnostics for replay, dataset review, and optimisation. */
+  diagnostics?: RepDiagnostics;
 }
 
 // ============================================================================
@@ -79,12 +92,7 @@ export interface ExerciseTTSConfig {
   }>;
 }
 
-export type ExerciseHeuristicConfigValue =
-  | number
-  | string
-  | boolean
-  | null
-  | object;
+export type ExerciseHeuristicConfigValue = number | string | boolean | null | object;
 
 export interface ExerciseHeuristicConfig {
   [key: string]: ExerciseHeuristicConfigValue;
@@ -98,9 +106,77 @@ export interface NumericTunable {
   kind: 'fsm' | 'feedback' | 'scoring';
 }
 
+export type DiagnosticDirection = 'above' | 'below' | 'range' | 'outside_range';
+
+export type DiagnosticUnit =
+  | 'ratio'
+  | 'degrees'
+  | 'seconds'
+  | 'milliseconds'
+  | 'count'
+  | 'pixels';
+
+export interface RepMetricDiagnostic {
+  key: string;
+  value: number | null;
+  unit?: DiagnosticUnit;
+  eligible: boolean;
+  label?: string;
+  confidence?: number;
+  sampleCount?: number;
+  skippedReason?: string;
+}
+
+export interface RepCueDiagnostic {
+  issueId: string;
+  metricKeys: string[];
+  triggered: boolean;
+  eligible: boolean;
+  direction: DiagnosticDirection;
+  thresholdPath?: string | string[];
+  thresholdValue?: number | Record<string, number>;
+  margin?: number | null;
+  support?: number;
+  skippedReason?: string;
+}
+
+export type ViewQualityStatus = 'side_confirmed' | 'frontish_confirmed' | 'view_unknown';
+
+export interface RepViewQualityDiagnostic {
+  status: ViewQualityStatus;
+  sideConfirmed: boolean;
+  frontishConfirmed: boolean;
+  viewUnknown: boolean;
+  averageSideViewConfidence?: number | null;
+  minSideViewConfidence?: number | null;
+  sampleCount: number;
+}
+
+export interface RepDiagnostics {
+  exerciseName: string;
+  repIndex: number;
+  view?: 'front' | 'side' | 'oblique' | 'unknown';
+  selectedSide?: 'left' | 'right' | 'both' | 'unknown';
+  scorable: boolean;
+  viewQuality?: RepViewQualityDiagnostic;
+  metrics: Record<string, RepMetricDiagnostic>;
+  cues: Record<string, RepCueDiagnostic>;
+}
+
+export interface DiagnosticTuningEntry {
+  issueId: string;
+  metricKey: string;
+  thresholdPath: string;
+  direction: DiagnosticDirection;
+  minPositiveCases?: number;
+  minNegativeCases?: number;
+  minEligibleSamples?: number;
+}
+
 export interface TunableSpec {
   exerciseName: string;
   tunables: NumericTunable[];
+  diagnosticTuning?: DiagnosticTuningEntry[];
   search?: {
     randomCandidates?: number;
     survivorCount?: number;
@@ -140,7 +216,7 @@ export interface ExerciseDefinition {
   createState: () => ExerciseState;
 
   /** Process one frame of landmarks. Returns updated state (may mutate _internal). */
-  update: (keypoints: Keypoint[], currentState: ExerciseState) => ExerciseState;
+  update: (keypoints: Keypoint[], currentState: ExerciseState, frameContext?: ExerciseFrameContext) => ExerciseState;
 
   /**
    * Default deterministic heuristic config for this exercise.

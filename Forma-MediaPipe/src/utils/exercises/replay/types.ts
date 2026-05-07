@@ -7,7 +7,7 @@
  */
 
 import type { Keypoint } from '../../poseAnalysis';
-import type { ExerciseHeuristicConfig } from '../types';
+import type { ExerciseFrameContext, ExerciseHeuristicConfig, RepDiagnostics } from '../types';
 import type {
   PoseQualitySnapshot,
   PoseQualityStatus,
@@ -34,6 +34,7 @@ export interface LandmarkRecording {
   frames: Array<{
     timestamp: number;
     keypoints: Keypoint[];
+    worldKeypoints?: Keypoint[];
     imageKeypoints?: Keypoint[];
   }>;
 }
@@ -43,6 +44,7 @@ export interface ReplayRepPrediction {
   score: number;
   messages: string[];
   issueIds: string[];
+  diagnostics?: RepDiagnostics;
   completedAt: number;
   startedAt: number | null;
   confidence?: number;
@@ -63,6 +65,8 @@ export interface ReplayOptions {
   heuristicConfig?: ExerciseHeuristicConfig;
   confidenceGating?: boolean;
 }
+
+export interface ReplayFrameContext extends ExerciseFrameContext {}
 
 /** Per-frame debug sample captured during verbose replay. */
 export interface FrameTrace {

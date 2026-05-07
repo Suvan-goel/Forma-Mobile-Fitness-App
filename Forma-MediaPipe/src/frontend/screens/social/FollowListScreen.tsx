@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   avatar: {
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   },
   followBtnActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   followBtnText: {
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   unfollowBtnText: {
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: SPACING.xs,
   },

@@ -15,6 +15,8 @@
 
 import {
   Keypoint,
+  calculateAngle,
+  calculateSignedVerticalAngleSagittal,
   calculateVerticalAngle,
   getKeypoint,
   isVisible,
@@ -30,12 +32,19 @@ import {
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import {
+  buildRepDiagnostics,
+  diagnosticCue,
+  diagnosticMetric,
+} from '../shared/diagnostics';
 import tunedConfig from './tuned/latPulldown.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
+  RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
 
@@ -68,11 +77,19 @@ const FORM_THRESHOLDS = {
   /** Min ratio above which pull is insufficient (didn't pull deep enough) */
   PULL_ROM_FAIL: 0.60,
   /** Max ratio below which extension is insufficient */
-  EXTENSION_ROM_FAIL: 0.86,
-  /** Torso lean above which there is excessive lean (degrees from vertical, 0-90) */
-  TORSO_LEAN_WARN: 30,
+  EXTENSION_ROM_FAIL: 0.90,
+  /** Upper-arm drive delta below which the pull is too arm-dominant */
+  ELBOW_DRIVE_FAIL: 30,
+  /** Backward torso lean delta above which there is excessive lean */
+  TORSO_LEAN_WARN: 18,
+  /** Absolute torso lean above which the setup is too leaned back */
+  TORSO_ABSOLUTE_WARN: 32,
+  /** Total torso swing above which the rep is too momentum-driven */
+  TORSO_ROCK_WARN: 24,
+  /** Shoulder elevation ratio above which the user is shrugging */
+  SHOULDER_SHRUG_WARN: 0.06,
   /** Concentric (pull down) too fast threshold (seconds). */
-  TEMPO_PULL_MIN: 0.20,
+  TEMPO_PULL_MIN: 0.45,
   /** Eccentric (return) too fast threshold (seconds). */
   TEMPO_RETURN_MIN: 0.8,
 } as const;
@@ -91,14 +108,23 @@ const FORM_THRESHOLDS = {
  * Max total penalty: 100 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  PULL_ROM:      { cap: 30, deadzone: 0, scale: 400 } as PenaltyConfig,
-  EXTENSION_ROM: { cap: 25, deadzone: 0, scale: 300 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 25, deadzone: 20, scale: 0.10 } as PenaltyConfig,
-  TEMPO_PULL:    { cap: 10, deadzone: 0.35, scale: 50 } as PenaltyConfig,
-  TEMPO_RETURN:  { cap: 25, deadzone: 0.8, scale: 800 } as PenaltyConfig,
+  PULL_ROM:       { cap: 30, deadzone: 0, scale: 900 } as PenaltyConfig,
+  EXTENSION_ROM:  { cap: 18, deadzone: 0, scale: 600 } as PenaltyConfig,
+  ELBOW_DRIVE:    { cap: 15, deadzone: 0, scale: 0.02 } as PenaltyConfig,
+  TORSO_LEAN:     { cap: 16, deadzone: 8, scale: 0.08 } as PenaltyConfig,
+  TORSO_ABSOLUTE: { cap: 10, deadzone: 25, scale: 0.05 } as PenaltyConfig,
+  TORSO_ROCK:     { cap: 12, deadzone: 18, scale: 0.15 } as PenaltyConfig,
+  SHOULDER_SHRUG: { cap: 10, deadzone: 0.04, scale: 10000 } as PenaltyConfig,
+  TEMPO_PULL:     { cap: 8,  deadzone: 0.45, scale: 40 } as PenaltyConfig,
+  TEMPO_RETURN:   { cap: 12, deadzone: 0.8, scale: 80 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+const FORM_CONFIDENCE_MIN = 0.3;
+const SIDE_VIEW_AVG_CONFIDENCE_MIN = 0.45;
+const SIDE_VIEW_MIN_CONFIDENCE_MIN = 0.25;
+const SIDE_VIEW_MIN_SAMPLES = 5;
+const BILATERAL_MIN_SAMPLES = 5;
 
 const DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -115,6 +141,17 @@ const LAT_PULLDOWN_TUNABLE_SPEC = createDefaultTunableSpec(
   'Cable Lat Pulldowns',
   DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG,
 );
+LAT_PULLDOWN_TUNABLE_SPEC.diagnosticTuning = [
+  { issueId: 'cable-lat-pulldowns.rom_short', metricKey: 'pullDepthRatio', thresholdPath: 'formThresholds.PULL_ROM_FAIL', direction: 'above' },
+  { issueId: 'cable-lat-pulldowns.lockout_short', metricKey: 'extensionRatio', thresholdPath: 'formThresholds.EXTENSION_ROM_FAIL', direction: 'below' },
+  { issueId: 'cable-lat-pulldowns.elbow_drive', metricKey: 'upperArmDriveDelta', thresholdPath: 'formThresholds.ELBOW_DRIVE_FAIL', direction: 'below' },
+  { issueId: 'cable-lat-pulldowns.torso_warn', metricKey: 'torsoLeanBackDelta', thresholdPath: 'formThresholds.TORSO_LEAN_WARN', direction: 'above' },
+  { issueId: 'cable-lat-pulldowns.torso_warn', metricKey: 'torsoAbsoluteBackLean', thresholdPath: 'formThresholds.TORSO_ABSOLUTE_WARN', direction: 'above' },
+  { issueId: 'cable-lat-pulldowns.torso_rocking', metricKey: 'torsoRockDelta', thresholdPath: 'formThresholds.TORSO_ROCK_WARN', direction: 'above' },
+  { issueId: 'cable-lat-pulldowns.shoulder_shrug', metricKey: 'shoulderShrugRatio', thresholdPath: 'formThresholds.SHOULDER_SHRUG_WARN', direction: 'above' },
+  { issueId: 'cable-lat-pulldowns.tempo_down', metricKey: 'tPull', thresholdPath: 'formThresholds.TEMPO_PULL_MIN', direction: 'below' },
+  { issueId: 'cable-lat-pulldowns.tempo_up', metricKey: 'tReturn', thresholdPath: 'formThresholds.TEMPO_RETURN_MIN', direction: 'below' },
+];
 
 const LAT_PULLDOWN_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
@@ -146,6 +183,34 @@ interface RepWindow {
   maxRatio: number;
   /** Max torso lean during the rep */
   maxTorsoLean: number;
+  /** Upper-arm drive angle at rep start */
+  upperArmDriveBaseline: number | null;
+  /** Max upper-arm drive from baseline */
+  maxUpperArmDriveDelta: number;
+  /** Signed torso angle baseline */
+  torsoDevBaseline: number | null;
+  /** Max backward torso lean delta from baseline */
+  maxTorsoLeanBackDelta: number;
+  /** Max forward torso lean delta from baseline */
+  maxTorsoForwardDelta: number;
+  /** Max absolute torso movement from baseline */
+  maxTorsoDev: number;
+  /** Max absolute torso lean from vertical */
+  maxTorsoAbsoluteBackLean: number;
+  /** Image-space shoulder Y baseline */
+  shoulderYBaseline: number | null;
+  /** Max shoulder elevation normalized by torso height */
+  maxShoulderShrugRatio: number;
+  /** Side-view confidence accumulation */
+  sideViewConfidenceSum: number;
+  sideViewConfidenceMin: number;
+  sideViewConfidenceSamples: number;
+  /** Passive bilateral diagnostics, used only when both arms are visible. */
+  bilateralSamples: number;
+  leftMinRatio: number;
+  leftMaxRatio: number;
+  rightMinRatio: number;
+  rightMaxRatio: number;
   /** Frame count */
   frameCount: number;
 }
@@ -154,6 +219,9 @@ interface RepResult {
   repIndex: number;
   score: number;
   messages: string[];
+  scorable?: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
+  diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
 interface LatPulldownState {
@@ -170,6 +238,8 @@ interface LatPulldownState {
   /** Smoothed tracker for the active arm's reach ratio */
   ratioTracker: SmoothedAngleTracker;
   torsoLeanTracker: SmoothedAngleTracker;
+  upperArmDriveTracker: SmoothedAngleTracker;
+  torsoDevTracker: SmoothedAngleTracker;
   /** Warmup gate */
   warmupGate: WarmupGate;
   warmedUp: boolean;
@@ -182,9 +252,15 @@ interface LatPulldownState {
    *  actually transitions to PULLING (which can be delayed by the extension gate
    *  timeout when the smoothed ratio doesn't reach PULLING_ENTER). */
   tRestPeakRatio: number | null;
+  /** Mechanics baselines captured at the best top-position frame before a pull. */
+  restUpperArmDriveBaseline: number | null;
+  restTorsoDevBaseline: number | null;
+  restShoulderYBaseline: number | null;
   /** Current smoothed values (for debug) */
   smoothedRatio: number;
   smoothedTorsoLean: number;
+  smoothedUpperArmDrive: number | null;
+  smoothedTorsoDev: number | null;
   /** After a rep completes, gate next rep start until user re-extends */
   requireExtensionBeforeNextRep: boolean;
   /** Timestamp when the last rep completed, for timeout fallback */
@@ -203,6 +279,30 @@ interface LatPulldownDebugInfo {
   minRatio: number | null;
   maxRatio: number | null;
   maxTorsoLean: number | null;
+  upperArmDrive: number | null;
+  upperArmDriveDelta: number | null;
+  torsoLeanBackDelta: number | null;
+  torsoForwardDelta: number | null;
+  torsoRockDelta: number | null;
+  torsoAbsoluteBackLean: number | null;
+  shoulderShrugRatio: number | null;
+  sideViewConfidence: number | null;
+  viewQualityStatus: string | null;
+  scorable: boolean | null;
+}
+
+type LandmarkSourceName = 'world' | 'image' | 'fallback';
+
+interface LandmarkSource {
+  name: LandmarkSourceName;
+  keypoints: Keypoint[];
+}
+
+interface MetricSample {
+  value: number;
+  source: LandmarkSourceName;
+  keypoints: Keypoint[];
+  method?: 'sagittal' | 'selected_side';
 }
 
 // ============================================================================
@@ -219,6 +319,8 @@ function initializeState(): LatPulldownState {
     lastRepResult: null,
     ratioTracker: new SmoothedAngleTracker(),
     torsoLeanTracker: new SmoothedAngleTracker(),
+    upperArmDriveTracker: new SmoothedAngleTracker(),
+    torsoDevTracker: new SmoothedAngleTracker(),
     warmupGate: new WarmupGate({
       requiredJoints: [
         'left_shoulder', 'right_shoulder',
@@ -231,10 +333,15 @@ function initializeState(): LatPulldownState {
     activeSide: 'right',
     restMaxRatio: -Infinity,
     tRestPeakRatio: null,
+    restUpperArmDriveBaseline: null,
+    restTorsoDevBaseline: null,
+    restShoulderYBaseline: null,
     requireExtensionBeforeNextRep: false,
     tRepCompleted: null,
     smoothedRatio: 1.0,
     smoothedTorsoLean: 0,
+    smoothedUpperArmDrive: null,
+    smoothedTorsoDev: null,
     feedback: null,
     lastFeedbackTime: 0,
   };
@@ -248,6 +355,23 @@ function initRepWindow(tStart: number): RepWindow {
     minRatio: Infinity,
     maxRatio: -Infinity,
     maxTorsoLean: 0,
+    upperArmDriveBaseline: null,
+    maxUpperArmDriveDelta: 0,
+    torsoDevBaseline: null,
+    maxTorsoLeanBackDelta: 0,
+    maxTorsoForwardDelta: 0,
+    maxTorsoDev: 0,
+    maxTorsoAbsoluteBackLean: 0,
+    shoulderYBaseline: null,
+    maxShoulderShrugRatio: 0,
+    sideViewConfidenceSum: 0,
+    sideViewConfidenceMin: 1,
+    sideViewConfidenceSamples: 0,
+    bilateralSamples: 0,
+    leftMinRatio: Infinity,
+    leftMaxRatio: -Infinity,
+    rightMinRatio: Infinity,
+    rightMaxRatio: -Infinity,
     frameCount: 0,
   };
 }
@@ -283,17 +407,27 @@ function computeReachRatio(
   return dist2D(shoulder, wrist) / segmentSum;
 }
 
-/**
- * Returns which arm is more visible this frame.
- * Uses shoulder visibility as the primary signal.
- */
-function pickBetterSide(
-  ls: Keypoint | undefined,
-  rs: Keypoint | undefined,
-): 'left' | 'right' {
-  const lVis = ls?.score ?? 0;
-  const rVis = rs?.score ?? 0;
-  return lVis >= rVis ? 'left' : 'right';
+function calculateArmReachRatio(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+  threshold = VISIBILITY_THRESHOLD,
+): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, threshold);
+  const elbow = visibleKeypoint(keypoints, `${side}_elbow`, threshold);
+  const wrist = visibleKeypoint(keypoints, `${side}_wrist`, threshold);
+  if (!shoulder || !elbow || !wrist) return null;
+  return computeReachRatio(shoulder, elbow, wrist);
+}
+
+function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
+  const leftParts = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip'];
+  const rightParts = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip'];
+
+  let leftScore = 0;
+  let rightScore = 0;
+  for (const name of leftParts) leftScore += getKeypoint(keypoints, name)?.score ?? 0;
+  for (const name of rightParts) rightScore += getKeypoint(keypoints, name)?.score ?? 0;
+  return leftScore >= rightScore ? 'left' : 'right';
 }
 
 /**
@@ -304,6 +438,299 @@ function pickBetterSide(
  */
 function computeTorsoLean(shoulder: Keypoint, hip: Keypoint): number {
   return calculateVerticalAngle(hip, shoulder);
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function isFiniteMetric(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function midpoint(a: Keypoint, b: Keypoint): Keypoint {
+  return {
+    name: `${a.name}_${b.name}_mid`,
+    x: (a.x + b.x) * 0.5,
+    y: (a.y + b.y) * 0.5,
+    z: ((a.z ?? 0) + (b.z ?? 0)) * 0.5,
+    score: Math.min(a.score, b.score),
+  };
+}
+
+function distance3D(a: Keypoint, b: Keypoint): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = (a.z ?? 0) - (b.z ?? 0);
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function landmarkSources(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+): LandmarkSource[] {
+  const sources: LandmarkSource[] = [];
+  const pushUnique = (name: LandmarkSourceName, keypoints: Keypoint[] | undefined) => {
+    if (!keypoints || keypoints.length === 0) return;
+    if (sources.some((source) => source.keypoints === keypoints)) return;
+    sources.push({ name, keypoints });
+  };
+
+  pushUnique('world', frameContext?.worldKeypoints);
+  pushUnique('image', frameContext?.imageKeypoints);
+  pushUnique('fallback', fallbackKeypoints);
+  return sources;
+}
+
+function signalSourceKeypoints(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+): Keypoint[] {
+  return frameContext?.imageKeypoints ?? fallbackKeypoints;
+}
+
+function visibleKeypoint(
+  keypoints: Keypoint[],
+  name: string,
+  threshold = VISIBILITY_THRESHOLD,
+): Keypoint | null {
+  const keypoint = getKeypoint(keypoints, name);
+  return isVisible(keypoint, threshold) ? keypoint : null;
+}
+
+function calculateUpperArmDriveAngle(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const hip = visibleKeypoint(keypoints, `${side}_hip`, FORM_CONFIDENCE_MIN);
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+  const elbow = visibleKeypoint(keypoints, `${side}_elbow`, FORM_CONFIDENCE_MIN);
+  if (!hip || !shoulder || !elbow) return null;
+
+  // At the top the upper arm points overhead (near 0). At the bottom the elbow
+  // has driven down beside the torso (larger value).
+  return 180 - calculateAngle(hip, shoulder, elbow);
+}
+
+function calculateUpperArmDriveSample(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+  side: 'left' | 'right',
+): MetricSample | null {
+  const signalKeypoints = frameContext?.imageKeypoints;
+  const signalReachRatio = signalKeypoints
+    ? calculateArmReachRatio(signalKeypoints, side)
+    : null;
+
+  for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    if (minKeypointConfidence(source.keypoints, [`${side}_hip`, `${side}_shoulder`, `${side}_elbow`]) < FORM_CONFIDENCE_MIN) {
+      continue;
+    }
+    if (source.name === 'world' && signalReachRatio !== null) {
+      const sourceReachRatio = calculateArmReachRatio(source.keypoints, side);
+      if (sourceReachRatio !== null && Math.abs(sourceReachRatio - signalReachRatio) > 0.2) {
+        continue;
+      }
+    }
+    const value = calculateUpperArmDriveAngle(source.keypoints, side);
+    if (isFiniteMetric(value) && value >= 0 && value <= 180) {
+      return { value, source: source.name, keypoints: source.keypoints };
+    }
+  }
+  return null;
+}
+
+function calculateSagittalTorsoDeviation(keypoints: Keypoint[]): number | null {
+  const leftHip = visibleKeypoint(keypoints, 'left_hip', FORM_CONFIDENCE_MIN);
+  const rightHip = visibleKeypoint(keypoints, 'right_hip', FORM_CONFIDENCE_MIN);
+  const leftShoulder = visibleKeypoint(keypoints, 'left_shoulder', FORM_CONFIDENCE_MIN);
+  const rightShoulder = visibleKeypoint(keypoints, 'right_shoulder', FORM_CONFIDENCE_MIN);
+  if (!leftHip || !rightHip || !leftShoulder || !rightShoulder) return null;
+
+  const hipCenter = midpoint(leftHip, rightHip);
+  const shoulderCenter = midpoint(leftShoulder, rightShoulder);
+  const torsoMag = distance3D(hipCenter, shoulderCenter);
+  const coronalMag = distance3D(
+    midpoint(leftHip, leftShoulder),
+    midpoint(rightHip, rightShoulder),
+  );
+  if (torsoMag < 1e-6 || coronalMag < 1e-6) return null;
+
+  const value = calculateSignedVerticalAngleSagittal(
+    hipCenter,
+    shoulderCenter,
+    leftHip,
+    rightHip,
+    leftShoulder,
+    rightShoulder,
+  );
+  return isFiniteMetric(value) ? value : null;
+}
+
+function calculateSelectedSideTorsoDeviation(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`, FORM_CONFIDENCE_MIN);
+  if (!shoulder || !hip) return null;
+
+  const vy = shoulder.y - hip.y;
+  const vz = (shoulder.z ?? 0) - (hip.z ?? 0);
+  const mag = Math.sqrt(vy * vy + vz * vz);
+  if (mag < 1e-6) return null;
+  return Math.atan2(vz, Math.abs(vy)) * 57.29577951308232;
+}
+
+function calculateTorsoDeviationSample(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+  side: 'left' | 'right',
+): MetricSample | null {
+  const sources = landmarkSources(frameContext, fallbackKeypoints);
+  for (const source of sources) {
+    const value = calculateSagittalTorsoDeviation(source.keypoints);
+    if (isFiniteMetric(value)) {
+      return { value, source: source.name, keypoints: source.keypoints, method: 'sagittal' };
+    }
+  }
+
+  for (const source of sources) {
+    const value = calculateSelectedSideTorsoDeviation(source.keypoints, side);
+    if (isFiniteMetric(value)) {
+      return { value, source: source.name, keypoints: source.keypoints, method: 'selected_side' };
+    }
+  }
+  return null;
+}
+
+function calculateTorsoHeight(keypoints: Keypoint[], side: 'left' | 'right'): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  if (!shoulder || !hip) return null;
+  const height = Math.abs(hip.y - shoulder.y);
+  return height > 1e-6 ? height : null;
+}
+
+function calculateShoulderShrugRatio(
+  currentShoulderY: number,
+  baselineShoulderY: number,
+  torsoHeight: number | null,
+): number | null {
+  if (torsoHeight === null) return null;
+  return Math.max(0, baselineShoulderY - currentShoulderY) / torsoHeight;
+}
+
+function calculateSideViewConfidence(keypoints: Keypoint[]): number | null {
+  const leftShoulder = visibleKeypoint(keypoints, 'left_shoulder');
+  const rightShoulder = visibleKeypoint(keypoints, 'right_shoulder');
+  const leftHip = visibleKeypoint(keypoints, 'left_hip');
+  const rightHip = visibleKeypoint(keypoints, 'right_hip');
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+
+  const leftTorso = Math.abs(leftHip.y - leftShoulder.y);
+  const rightTorso = Math.abs(rightHip.y - rightShoulder.y);
+  const torsoHeight = (leftTorso + rightTorso) * 0.5;
+  if (torsoHeight <= 1e-6) return null;
+
+  const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+  const hipWidth = Math.abs(leftHip.x - rightHip.x);
+  const widthRatio = ((shoulderWidth + hipWidth) * 0.5) / torsoHeight;
+  return 1 - clamp01((widthRatio - 0.30) / (0.55 - 0.30));
+}
+
+function averageSideViewConfidence(repWindow: RepWindow): number | null {
+  if (repWindow.sideViewConfidenceSamples === 0) return null;
+  return repWindow.sideViewConfidenceSum / repWindow.sideViewConfidenceSamples;
+}
+
+function buildLatPulldownViewQuality(repWindow: RepWindow): RepViewQualityDiagnostic {
+  const averageConfidence = averageSideViewConfidence(repWindow);
+  const hasEnoughSamples =
+    repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES &&
+    averageConfidence !== null;
+  const sideConfirmed = Boolean(
+    hasEnoughSamples &&
+    averageConfidence! >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN,
+  );
+  const frontishConfirmed = Boolean(hasEnoughSamples && !sideConfirmed);
+  return {
+    status: sideConfirmed
+      ? 'side_confirmed'
+      : frontishConfirmed
+        ? 'frontish_confirmed'
+        : 'view_unknown',
+    sideConfirmed,
+    frontishConfirmed,
+    viewUnknown: !sideConfirmed && !frontishConfirmed,
+    averageSideViewConfidence: averageConfidence,
+    minSideViewConfidence: repWindow.sideViewConfidenceSamples > 0
+      ? repWindow.sideViewConfidenceMin
+      : null,
+    sampleCount: repWindow.sideViewConfidenceSamples,
+  };
+}
+
+function isLatPulldownRepScorable(repWindow: RepWindow): boolean {
+  return !buildLatPulldownViewQuality(repWindow).frontishConfirmed;
+}
+
+function latPulldownQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
+  return isLatPulldownRepScorable(repWindow) ? [] : ['side_view_uncertain'];
+}
+
+function diagnosticsViewFor(viewQuality: RepViewQualityDiagnostic): NonNullable<FrameworkRepResult['diagnostics']>['view'] {
+  if (viewQuality.sideConfirmed) return 'side';
+  if (viewQuality.frontishConfirmed) return 'front';
+  return 'unknown';
+}
+
+function updateBilateralRatios(repWindow: RepWindow, keypoints: Keypoint[]): void {
+  const leftRatio = calculateArmReachRatio(keypoints, 'left', FORM_CONFIDENCE_MIN);
+  const rightRatio = calculateArmReachRatio(keypoints, 'right', FORM_CONFIDENCE_MIN);
+  if (leftRatio === null || rightRatio === null) return;
+
+  repWindow.bilateralSamples++;
+  repWindow.leftMinRatio = Math.min(repWindow.leftMinRatio, leftRatio);
+  repWindow.leftMaxRatio = Math.max(repWindow.leftMaxRatio, leftRatio);
+  repWindow.rightMinRatio = Math.min(repWindow.rightMinRatio, rightRatio);
+  repWindow.rightMaxRatio = Math.max(repWindow.rightMaxRatio, rightRatio);
+}
+
+function hasBilateralDiagnostics(repWindow: RepWindow): boolean {
+  return (
+    repWindow.bilateralSamples >= BILATERAL_MIN_SAMPLES &&
+    repWindow.leftMinRatio < Infinity &&
+    repWindow.rightMinRatio < Infinity &&
+    repWindow.leftMaxRatio > -Infinity &&
+    repWindow.rightMaxRatio > -Infinity
+  );
+}
+
+function bilateralRomAsymmetry(repWindow: RepWindow): number | null {
+  if (!hasBilateralDiagnostics(repWindow)) return null;
+  const leftRom = repWindow.leftMaxRatio - repWindow.leftMinRatio;
+  const rightRom = repWindow.rightMaxRatio - repWindow.rightMinRatio;
+  return Math.abs(leftRom - rightRom);
+}
+
+function bilateralPullDepthAsymmetry(repWindow: RepWindow): number | null {
+  if (!hasBilateralDiagnostics(repWindow)) return null;
+  return Math.abs(repWindow.leftMinRatio - repWindow.rightMinRatio);
+}
+
+function bilateralExtensionAsymmetry(repWindow: RepWindow): number | null {
+  if (!hasBilateralDiagnostics(repWindow)) return null;
+  return Math.abs(repWindow.leftMaxRatio - repWindow.rightMaxRatio);
+}
+
+function torsoWarnTriggered(repWindow: RepWindow): boolean {
+  return (
+    repWindow.maxTorsoLeanBackDelta > FORM_THRESHOLDS.TORSO_LEAN_WARN ||
+    repWindow.maxTorsoAbsoluteBackLean > FORM_THRESHOLDS.TORSO_ABSOLUTE_WARN
+  );
 }
 
 // ============================================================================
@@ -384,10 +811,17 @@ function computeLatPulldownScore(repWindow: RepWindow): number {
   const extensionShortfall = Math.max(0, 0.97 - repWindow.maxRatio);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
-  // 3. Torso lean
-  penalties.push({ value: repWindow.maxTorsoLean, config: PENALTY_CONFIGS.TORSO_LEAN });
+  // 3. Upper-arm drive: elbows should travel down instead of only bending the arms.
+  const upperArmDriveShortfall = Math.max(0, FORM_THRESHOLDS.ELBOW_DRIVE_FAIL - repWindow.maxUpperArmDriveDelta);
+  penalties.push({ value: upperArmDriveShortfall, config: PENALTY_CONFIGS.ELBOW_DRIVE });
 
-  // 4. Tempo
+  // 4. Torso and shoulder mechanics.
+  penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
+  penalties.push({ value: repWindow.maxTorsoAbsoluteBackLean, config: PENALTY_CONFIGS.TORSO_ABSOLUTE });
+  penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_ROCK });
+  penalties.push({ value: repWindow.maxShoulderShrugRatio, config: PENALTY_CONFIGS.SHOULDER_SHRUG });
+
+  // 5. Tempo
   if (repWindow.tBottom !== null) {
     const tPull = repWindow.tBottom - repWindow.tStart;
     const tReturn = repWindow.tEnd - repWindow.tBottom;
@@ -420,8 +854,20 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Extend fully \u2014 reach all the way up at the top.');
   }
 
-  if (repWindow.maxTorsoLean > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
+  if (repWindow.maxUpperArmDriveDelta < FORM_THRESHOLDS.ELBOW_DRIVE_FAIL) {
+    messages.push('Drive your elbows down \u2014 pull with your lats, not just your arms.');
+  }
+
+  if (torsoWarnTriggered(repWindow)) {
     messages.push('Stay upright \u2014 avoid leaning back excessively.');
+  }
+
+  if (repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
+    messages.push('Keep your torso steady through the pulldown.');
+  }
+
+  if (repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN) {
+    messages.push('Keep your shoulders down as you pull.');
   }
 
   if (repWindow.tBottom !== null) {
@@ -439,6 +885,213 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   return messages;
 }
 
+function buildLatPulldownDiagnostics(
+  repWindow: RepWindow,
+  repIndex: number,
+  activeSide: 'left' | 'right',
+): FrameworkRepResult['diagnostics'] {
+  const hasTempo = repWindow.tBottom !== null;
+  const tPull = repWindow.tBottom !== null ? repWindow.tBottom - repWindow.tStart : null;
+  const tReturn = repWindow.tBottom !== null ? repWindow.tEnd - repWindow.tBottom : null;
+  const sideViewConfidence = averageSideViewConfidence(repWindow);
+  const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES;
+  const viewQuality = buildLatPulldownViewQuality(repWindow);
+  const hasBilateral = hasBilateralDiagnostics(repWindow);
+  const leftRomRatio = hasBilateral ? repWindow.leftMaxRatio - repWindow.leftMinRatio : null;
+  const rightRomRatio = hasBilateral ? repWindow.rightMaxRatio - repWindow.rightMinRatio : null;
+  return buildRepDiagnostics({
+    exerciseName: 'Cable Lat Pulldowns',
+    repIndex,
+    view: diagnosticsViewFor(viewQuality),
+    selectedSide: activeSide,
+    scorable: isLatPulldownRepScorable(repWindow),
+    viewQuality,
+    metrics: [
+      diagnosticMetric('pullDepthRatio', repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
+      diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('upperArmDriveDelta', repWindow.maxUpperArmDriveDelta, { unit: 'degrees' }),
+      diagnosticMetric('torsoLeanBackDelta', repWindow.maxTorsoLeanBackDelta, { unit: 'degrees' }),
+      diagnosticMetric('torsoForwardDelta', repWindow.maxTorsoForwardDelta, { unit: 'degrees' }),
+      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoDev, { unit: 'degrees' }),
+      diagnosticMetric('torsoAbsoluteBackLean', repWindow.maxTorsoAbsoluteBackLean, { unit: 'degrees' }),
+      diagnosticMetric('shoulderShrugRatio', repWindow.maxShoulderShrugRatio, { unit: 'ratio' }),
+      diagnosticMetric('sideViewConfidence', sideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('sideViewConfidenceMin', viewQuality.minSideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('sideViewConfirmed', viewQuality.sideConfirmed ? 1 : 0, { unit: 'count' }),
+      diagnosticMetric('frontishViewConfirmed', viewQuality.frontishConfirmed ? 1 : 0, { unit: 'count' }),
+      diagnosticMetric('viewUnknown', viewQuality.viewUnknown ? 1 : 0, { unit: 'count' }),
+      diagnosticMetric('bilateralSampleCount', repWindow.bilateralSamples, { unit: 'count' }),
+      diagnosticMetric('leftPullDepthRatio', hasBilateral ? repWindow.leftMinRatio : null, {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('rightPullDepthRatio', hasBilateral ? repWindow.rightMinRatio : null, {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('leftExtensionRatio', hasBilateral ? repWindow.leftMaxRatio : null, {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('rightExtensionRatio', hasBilateral ? repWindow.rightMaxRatio : null, {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('leftRomRatio', leftRomRatio, {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('rightRomRatio', rightRomRatio, {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('bilateralRomAsymmetry', bilateralRomAsymmetry(repWindow), {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('bilateralPullDepthAsymmetry', bilateralPullDepthAsymmetry(repWindow), {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('bilateralExtensionAsymmetry', bilateralExtensionAsymmetry(repWindow), {
+        unit: 'ratio',
+        eligible: hasBilateral,
+        sampleCount: repWindow.bilateralSamples,
+        skippedReason: 'bilateral_landmarks_unavailable',
+      }),
+      diagnosticMetric('tPull', tPull, { unit: 'seconds', eligible: hasTempo, skippedReason: 'bottom_not_detected' }),
+      diagnosticMetric('tReturn', tReturn, { unit: 'seconds', eligible: hasTempo, skippedReason: 'bottom_not_detected' }),
+    ],
+    cues: [
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.rom_short',
+        metricKeys: ['pullDepthRatio'],
+        direction: 'above',
+        value: repWindow.minRatio,
+        thresholdPath: 'formThresholds.PULL_ROM_FAIL',
+        thresholdValue: FORM_THRESHOLDS.PULL_ROM_FAIL,
+        triggered: repWindow.minRatio > FORM_THRESHOLDS.PULL_ROM_FAIL,
+      }),
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.lockout_short',
+        metricKeys: ['extensionRatio'],
+        direction: 'below',
+        value: repWindow.maxRatio,
+        thresholdPath: 'formThresholds.EXTENSION_ROM_FAIL',
+        thresholdValue: FORM_THRESHOLDS.EXTENSION_ROM_FAIL,
+        triggered: repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_ROM_FAIL,
+      }),
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.elbow_drive',
+        metricKeys: ['upperArmDriveDelta'],
+        direction: 'below',
+        value: repWindow.maxUpperArmDriveDelta,
+        thresholdPath: 'formThresholds.ELBOW_DRIVE_FAIL',
+        thresholdValue: FORM_THRESHOLDS.ELBOW_DRIVE_FAIL,
+        triggered: repWindow.maxUpperArmDriveDelta < FORM_THRESHOLDS.ELBOW_DRIVE_FAIL,
+      }),
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.torso_warn',
+        metricKeys: ['torsoLeanBackDelta', 'torsoAbsoluteBackLean'],
+        direction: 'above',
+        value: Math.max(repWindow.maxTorsoLeanBackDelta, repWindow.maxTorsoAbsoluteBackLean),
+        thresholdPath: ['formThresholds.TORSO_LEAN_WARN', 'formThresholds.TORSO_ABSOLUTE_WARN'],
+        thresholdValue: {
+          torsoLeanBackDelta: FORM_THRESHOLDS.TORSO_LEAN_WARN,
+          torsoAbsoluteBackLean: FORM_THRESHOLDS.TORSO_ABSOLUTE_WARN,
+        },
+        triggered: torsoWarnTriggered(repWindow),
+      }),
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.torso_rocking',
+        metricKeys: ['torsoRockDelta'],
+        direction: 'above',
+        value: repWindow.maxTorsoDev,
+        thresholdPath: 'formThresholds.TORSO_ROCK_WARN',
+        thresholdValue: FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        triggered: repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.shoulder_shrug',
+        metricKeys: ['shoulderShrugRatio'],
+        direction: 'above',
+        value: repWindow.maxShoulderShrugRatio,
+        thresholdPath: 'formThresholds.SHOULDER_SHRUG_WARN',
+        thresholdValue: FORM_THRESHOLDS.SHOULDER_SHRUG_WARN,
+        triggered: repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.tempo_down',
+        metricKeys: ['tPull'],
+        direction: 'below',
+        value: tPull,
+        thresholdPath: 'formThresholds.TEMPO_PULL_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_PULL_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tPull !== null && tPull > 0 && tPull < FORM_THRESHOLDS.TEMPO_PULL_MIN,
+        skippedReason: 'bottom_not_detected',
+      }),
+      diagnosticCue({
+        issueId: 'cable-lat-pulldowns.tempo_up',
+        metricKeys: ['tReturn'],
+        direction: 'below',
+        value: tReturn,
+        thresholdPath: 'formThresholds.TEMPO_RETURN_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_RETURN_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tReturn !== null && tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN,
+        skippedReason: 'bottom_not_detected',
+      }),
+    ],
+  });
+}
+
+function buildLatPulldownRepResult(
+  repWindow: RepWindow,
+  repIndex: number,
+  activeSide: 'left' | 'right',
+): RepResult {
+  const score = computeLatPulldownScore(repWindow);
+  const messages = generateFormMessages(repWindow);
+  const scorable = isLatPulldownRepScorable(repWindow);
+  const qualityWarnings = latPulldownQualityWarnings(repWindow);
+  return {
+    repIndex,
+    score,
+    messages,
+    scorable,
+    qualityWarnings,
+    diagnostics: buildLatPulldownDiagnostics(repWindow, repIndex, activeSide),
+  };
+}
+
 // ============================================================================
 // MAIN UPDATE LOGIC
 // ============================================================================
@@ -446,29 +1099,31 @@ function generateFormMessages(repWindow: RepWindow): string[] {
 function updateLatPulldownState(
   keypoints: Keypoint[],
   state: LatPulldownState,
+  frameContext?: ExerciseFrameContext,
 ): LatPulldownState {
   const t = Date.now() / 1000;
+  const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // -- Warmup gate --
   if (!state.warmedUp) {
-    const stable = state.warmupGate.update(keypoints);
+    const stable = state.warmupGate.update(signalKeypoints);
     if (!stable) return state;
     state.warmedUp = true;
   }
 
   // -- Fetch keypoints --
-  const ls = getKeypoint(keypoints, 'left_shoulder');
-  const rs = getKeypoint(keypoints, 'right_shoulder');
-  const le = getKeypoint(keypoints, 'left_elbow');
-  const re = getKeypoint(keypoints, 'right_elbow');
-  const lw = getKeypoint(keypoints, 'left_wrist');
-  const rw = getKeypoint(keypoints, 'right_wrist');
-  const lh = getKeypoint(keypoints, 'left_hip');
-  const rh = getKeypoint(keypoints, 'right_hip');
+  const ls = getKeypoint(signalKeypoints, 'left_shoulder');
+  const rs = getKeypoint(signalKeypoints, 'right_shoulder');
+  const le = getKeypoint(signalKeypoints, 'left_elbow');
+  const re = getKeypoint(signalKeypoints, 'right_elbow');
+  const lw = getKeypoint(signalKeypoints, 'left_wrist');
+  const rw = getKeypoint(signalKeypoints, 'right_wrist');
+  const lh = getKeypoint(signalKeypoints, 'left_hip');
+  const rh = getKeypoint(signalKeypoints, 'right_hip');
 
   // -- Pick active side during REST; lock it during a rep --
   if (state.phase === 'REST' && !state.repWindow) {
-    state.activeSide = pickBetterSide(ls ?? undefined, rs ?? undefined);
+    state.activeSide = selectVisibleSide(signalKeypoints);
   }
 
   const side = state.activeSide;
@@ -487,12 +1142,17 @@ function updateLatPulldownState(
 
   // -- Compute raw values --
   const rawRatio = computeReachRatio(shoulder!, elbow!, wrist!);
-  const armConf = minKeypointConfidence(keypoints, [
+  const armConf = minKeypointConfidence(signalKeypoints, [
     `${side}_shoulder`, `${side}_elbow`, `${side}_wrist`,
   ]);
-  const torsoConf = minKeypointConfidence(keypoints, [
+  const torsoConf = minKeypointConfidence(signalKeypoints, [
     `${side}_shoulder`, `${side}_hip`,
   ]);
+  const upperArmSample = calculateUpperArmDriveSample(frameContext, keypoints, side);
+  const torsoSample = calculateTorsoDeviationSample(frameContext, keypoints, side);
+  const rawUpperArmDrive = upperArmSample?.value ?? null;
+  const rawTorsoDev = torsoSample?.value ?? null;
+  const sideViewConfidence = calculateSideViewConfidence(signalKeypoints);
 
   let rawTorsoLean: number | null = null;
   if (isVisible(shoulder, VISIBILITY_THRESHOLD) && isVisible(hip, VISIBILITY_THRESHOLD)) {
@@ -505,17 +1165,28 @@ function updateLatPulldownState(
   const smoothedTorsoLean = rawTorsoLean !== null
     ? state.torsoLeanTracker.push(rawTorsoLean, torsoConf)
     : state.torsoLeanTracker.value;
+  const smoothedUpperArmDrive = rawUpperArmDrive !== null
+    ? state.upperArmDriveTracker.push(rawUpperArmDrive)
+    : state.upperArmDriveTracker.value;
+  const smoothedTorsoDev = rawTorsoDev !== null
+    ? state.torsoDevTracker.push(rawTorsoDev)
+    : state.torsoDevTracker.value;
 
   if (isNaN(fastRatio)) return state;
 
   state.smoothedRatio = smoothedRatio;
   state.smoothedTorsoLean = isNaN(smoothedTorsoLean) ? state.smoothedTorsoLean : smoothedTorsoLean;
+  state.smoothedUpperArmDrive = isNaN(smoothedUpperArmDrive) ? state.smoothedUpperArmDrive : smoothedUpperArmDrive;
+  state.smoothedTorsoDev = isNaN(smoothedTorsoDev) ? state.smoothedTorsoDev : smoothedTorsoDev;
 
   // -- Track max ratio during REST (pre-pull extension) --
   if (state.phase === 'REST') {
     if (rawRatio >= state.restMaxRatio) {
       state.restMaxRatio = rawRatio;
       state.tRestPeakRatio = t;
+      state.restUpperArmDriveBaseline = rawUpperArmDrive;
+      state.restTorsoDevBaseline = rawTorsoDev;
+      state.restShoulderYBaseline = isVisible(shoulder, FORM_CONFIDENCE_MIN) ? shoulder!.y : null;
     }
     if (state.requireExtensionBeforeNextRep) {
       const extensionReached = fastRatio >= THRESHOLDS.PULLING_ENTER;
@@ -541,9 +1212,17 @@ function updateLatPulldownState(
     // smoothed ratio already well below PULLING_ENTER).
     const pullStartTime = state.tRestPeakRatio ?? t;
     state.repWindow = initRepWindow(pullStartTime);
-    state.repWindow.maxRatio = state.restMaxRatio;
+    state.repWindow.maxRatio = Number.isFinite(state.restMaxRatio) ? state.restMaxRatio : rawRatio;
+    state.repWindow.upperArmDriveBaseline = state.restUpperArmDriveBaseline ?? rawUpperArmDrive;
+    state.repWindow.torsoDevBaseline = state.restTorsoDevBaseline ?? rawTorsoDev;
+    state.repWindow.shoulderYBaseline = state.restShoulderYBaseline ?? (
+      isVisible(shoulder, FORM_CONFIDENCE_MIN) ? shoulder!.y : null
+    );
     state.restMaxRatio = -Infinity;
     state.tRestPeakRatio = null;
+    state.restUpperArmDriveBaseline = null;
+    state.restTorsoDevBaseline = null;
+    state.restShoulderYBaseline = null;
   }
 
   // -- Accumulate rep window while in a rep --
@@ -553,29 +1232,79 @@ function updateLatPulldownState(
     w.tEnd = t;
     w.frameCount++;
     w.minRatio = Math.min(w.minRatio, fastRatio);
-    w.maxRatio = Math.max(w.maxRatio, fastRatio);
+    w.maxRatio = Math.max(w.maxRatio, rawRatio, fastRatio);
+    if (sideViewConfidence !== null) {
+      w.sideViewConfidenceSum += sideViewConfidence;
+      w.sideViewConfidenceMin = Math.min(w.sideViewConfidenceMin, sideViewConfidence);
+      w.sideViewConfidenceSamples++;
+    }
+    updateBilateralRatios(w, signalKeypoints);
     // Only update torso lean max when shoulder + hip have sufficient confidence.
     if (torsoConf >= 0.3 && !isNaN(smoothedTorsoLean)) {
       w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
+      w.maxTorsoAbsoluteBackLean = Math.max(w.maxTorsoAbsoluteBackLean, smoothedTorsoLean);
     }
 
-    if (state.phase === 'BOTTOM' && w.tBottom === null && smoothedRatio <= THRESHOLDS.BOTTOM_ENTER) {
+    if (rawUpperArmDrive !== null) {
+      if (w.upperArmDriveBaseline === null) {
+        w.upperArmDriveBaseline = rawUpperArmDrive;
+      }
+      const driveDelta = rawUpperArmDrive - w.upperArmDriveBaseline;
+      w.maxUpperArmDriveDelta = Math.max(w.maxUpperArmDriveDelta, Math.max(0, driveDelta));
+    }
+
+    if (rawTorsoDev !== null) {
+      if (w.torsoDevBaseline === null) {
+        w.torsoDevBaseline = rawTorsoDev;
+      }
+      const signedTorsoDelta = rawTorsoDev - w.torsoDevBaseline;
+      const torsoDelta = Math.abs(signedTorsoDelta);
+      w.maxTorsoLeanBackDelta = Math.max(w.maxTorsoLeanBackDelta, Math.max(0, -signedTorsoDelta));
+      w.maxTorsoForwardDelta = Math.max(w.maxTorsoForwardDelta, Math.max(0, signedTorsoDelta));
+      w.maxTorsoDev = Math.max(w.maxTorsoDev, torsoDelta);
+    }
+
+    const signalShoulder = visibleKeypoint(signalKeypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+    const torsoHeight = calculateTorsoHeight(signalKeypoints, side);
+    if (signalShoulder) {
+      if (w.shoulderYBaseline === null) {
+        w.shoulderYBaseline = signalShoulder.y;
+      }
+      const shoulderShrugRatio = calculateShoulderShrugRatio(
+        signalShoulder.y,
+        w.shoulderYBaseline,
+        torsoHeight,
+      );
+      if (shoulderShrugRatio !== null) {
+        w.maxShoulderShrugRatio = Math.max(w.maxShoulderShrugRatio, shoulderShrugRatio);
+      }
+    }
+
+    if (state.phase === 'BOTTOM' && w.tBottom === null && fastRatio <= THRESHOLDS.BOTTOM_ENTER) {
       w.tBottom = t;
     }
   }
 
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
-    state.repWindow.maxRatio = Math.max(state.repWindow.maxRatio, fastRatio);
+    state.repWindow.maxRatio = Math.max(state.repWindow.maxRatio, rawRatio, fastRatio);
+    if (sideViewConfidence !== null) {
+      state.repWindow.sideViewConfidenceSum += sideViewConfidence;
+      state.repWindow.sideViewConfidenceMin = Math.min(
+        state.repWindow.sideViewConfidenceMin,
+        sideViewConfidence,
+      );
+      state.repWindow.sideViewConfidenceSamples++;
+    }
+    updateBilateralRatios(state.repWindow, signalKeypoints);
 
     state.repCount++;
     state.requireExtensionBeforeNextRep = true;
     state.tRepCompleted = t;
 
-    const score = computeLatPulldownScore(state.repWindow);
-    const messages = generateFormMessages(state.repWindow);
-
-    state.lastRepResult = { repIndex: state.repCount, score, messages };
+    const repResult = buildLatPulldownRepResult(state.repWindow, state.repCount, state.activeSide);
+    const messages = repResult.messages;
+    state.lastRepResult = repResult;
 
     state.feedback = messages.length > 0 ? messages.join('\n') : 'Great rep!';
     state.lastFeedbackTime = t;
@@ -592,7 +1321,13 @@ function updateLatPulldownState(
       const w = state.repWindow;
       w.tEnd = t;
       w.minRatio = Math.min(w.minRatio, fastRatio);
-      w.maxRatio = Math.max(w.maxRatio, fastRatio);
+      w.maxRatio = Math.max(w.maxRatio, rawRatio, fastRatio);
+      if (sideViewConfidence !== null) {
+        w.sideViewConfidenceSum += sideViewConfidence;
+        w.sideViewConfidenceMin = Math.min(w.sideViewConfidenceMin, sideViewConfidence);
+        w.sideViewConfidenceSamples++;
+      }
+      updateBilateralRatios(w, signalKeypoints);
       const actualRom = w.maxRatio - w.minRatio;
       const duration = w.tEnd - w.tStart;
 
@@ -606,9 +1341,9 @@ function updateLatPulldownState(
         countedPartial = true;
         state.requireExtensionBeforeNextRep = true;
         state.tRepCompleted = t;
-        const score = computeLatPulldownScore(w);
-        const messages = generateFormMessages(w);
-        state.lastRepResult = { repIndex: state.repCount, score, messages };
+        const repResult = buildLatPulldownRepResult(w, state.repCount, state.activeSide);
+        const messages = repResult.messages;
+        state.lastRepResult = repResult;
         state.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
         state.lastFeedbackTime = t;
       } else if (actualRom > 0) {
@@ -623,6 +1358,9 @@ function updateLatPulldownState(
       state.tRepCompleted = null;
     }
     state.tRestPeakRatio = null;
+    state.restUpperArmDriveBaseline = null;
+    state.restTorsoDevBaseline = null;
+    state.restShoulderYBaseline = null;
   }
 
   // -- Clear feedback after 2 seconds --
@@ -638,8 +1376,8 @@ function updateLatPulldownState(
 // ============================================================================
 
 function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
-  const fmt = (v: number): number | null =>
-    !isNaN(v) && isFinite(v) ? v : null;
+  const fmt = (v: number | null | undefined): number | null =>
+    v !== null && v !== undefined && !isNaN(v) && isFinite(v) ? v : null;
 
   const w = state.repWindow;
   return {
@@ -651,6 +1389,16 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
     minRatio: w ? (w.minRatio < Infinity ? fmt(w.minRatio) : null) : null,
     maxRatio: w ? (w.maxRatio > -Infinity ? fmt(w.maxRatio) : null) : null,
     maxTorsoLean: w ? fmt(w.maxTorsoLean) : null,
+    upperArmDrive: fmt(state.smoothedUpperArmDrive),
+    upperArmDriveDelta: w ? fmt(w.maxUpperArmDriveDelta) : null,
+    torsoLeanBackDelta: w ? fmt(w.maxTorsoLeanBackDelta) : null,
+    torsoForwardDelta: w ? fmt(w.maxTorsoForwardDelta) : null,
+    torsoRockDelta: w ? fmt(w.maxTorsoDev) : null,
+    torsoAbsoluteBackLean: w ? fmt(w.maxTorsoAbsoluteBackLean) : null,
+    shoulderShrugRatio: w ? fmt(w.maxShoulderShrugRatio) : null,
+    sideViewConfidence: w ? fmt(averageSideViewConfidence(w)) : null,
+    viewQualityStatus: w ? buildLatPulldownViewQuality(w).status : null,
+    scorable: w ? isLatPulldownRepScorable(w) : null,
   };
 }
 
@@ -675,15 +1423,18 @@ export function createLatPulldownDefinition(
     _internal: withLatPulldownConfig(config, () => initializeState()),
   }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+  update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
     const internal = state._internal as LatPulldownState;
-    withLatPulldownConfig(config, () => updateLatPulldownState(keypoints, internal));
+    withLatPulldownConfig(config, () => updateLatPulldownState(keypoints, internal, frameContext));
 
     const lastRepResult: FrameworkRepResult | null = internal.lastRepResult
       ? {
           repIndex: internal.lastRepResult.repIndex,
           score: internal.lastRepResult.score,
           messages: internal.lastRepResult.messages,
+          scorable: internal.lastRepResult.scorable,
+          qualityWarnings: internal.lastRepResult.qualityWarnings,
+          diagnostics: internal.lastRepResult.diagnostics,
         }
       : null;
 
@@ -708,7 +1459,10 @@ export function createLatPulldownDefinition(
     feedbackToIssue: {
       'Pull deeper \u2014 bring the bar to your upper chest.': 'rom_short',
       'Extend fully \u2014 reach all the way up at the top.': 'lockout_short',
+      'Drive your elbows down \u2014 pull with your lats, not just your arms.': 'elbow_drive',
       'Stay upright \u2014 avoid leaning back excessively.': 'torso_warn',
+      'Keep your torso steady through the pulldown.': 'torso_rocking',
+      'Keep your shoulders down as you pull.': 'shoulder_shrug',
       'Slow down the pull \u2014 control the descent.': 'tempo_down',
       'Control the return \u2014 resist the weight on the way up.': 'tempo_up',
     },
@@ -723,10 +1477,25 @@ export function createLatPulldownDefinition(
         'Full stretch at the top.',
         'Let your arms extend before the next pull.',
       ],
+      'Drive your elbows down \u2014 pull with your lats, not just your arms.': [
+        'Drive your elbows down.',
+        'Lead with your elbows.',
+        'Pull with your lats, not just your arms.',
+      ],
       'Stay upright \u2014 avoid leaning back excessively.': [
         'Stay tall through the pull.',
         'Only a slight lean back.',
         'Less lean. Pull with your lats.',
+      ],
+      'Keep your torso steady through the pulldown.': [
+        'Keep your torso steady.',
+        'Brace and pull without rocking.',
+        'Less body swing on the pulldown.',
+      ],
+      'Keep your shoulders down as you pull.': [
+        'Keep your shoulders down.',
+        'Pull down without shrugging.',
+        'Relax your traps as you pull.',
       ],
       'Slow down the pull \u2014 control the descent.': [
         'Slow the pull down.',
@@ -746,8 +1515,14 @@ export function createLatPulldownDefinition(
       'Focus on pulling the bar all the way down to your upper chest for full lat activation.',
     'Extend fully \u2014 reach all the way up at the top.':
       'Allow your arms to extend fully at the top of each rep to get a full stretch in your lats.',
+    'Drive your elbows down \u2014 pull with your lats, not just your arms.':
+      'Lead the pulldown by driving your elbows down and in, rather than only bending your arms.',
     'Stay upright \u2014 avoid leaning back excessively.':
       'A slight lean back is fine, but excessive lean shifts the load away from your lats to your lower back.',
+    'Keep your torso steady through the pulldown.':
+      'Brace your torso and avoid rocking through the rep so the lats do the work.',
+    'Keep your shoulders down as you pull.':
+      'Keep your shoulders depressed and avoid shrugging so the movement stays lat-focused.',
     'Slow down the pull \u2014 control the descent.':
       'Control the concentric phase \u2014 aim for 1-2 seconds on the pull down.',
     'Control the return \u2014 resist the weight on the way up.':

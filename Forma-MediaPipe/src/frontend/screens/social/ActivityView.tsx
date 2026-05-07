@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 18,
     backgroundColor: 'rgba(122, 85, 255, 0.18)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.38)',
     ...Platform.select({
       ios: {
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: SPACING.md,
   },
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 20,
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(139, 92, 246, 0.25)',
   },
   retryText: {

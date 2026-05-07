@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   cardEdge: {
     padding: 14,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.10)',
   },
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   headerText: {
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
   },
   scoreText: {
     fontFamily: FONTS.mono.bold,
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 14,
     borderRadius: 13,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.045)',
     backgroundColor: 'rgba(7, 10, 13, 0.18)',
     paddingHorizontal: 14,

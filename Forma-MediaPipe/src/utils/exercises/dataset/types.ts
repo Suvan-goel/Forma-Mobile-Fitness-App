@@ -1,5 +1,6 @@
 import type { LandmarkRecording, ReplayRepPrediction } from '../replay';
 import type { SetTrackingQualitySummary } from '../shared/poseQuality';
+import type { RepDiagnostics } from '../types';
 
 export type DatasetSplit = 'train' | 'validation' | 'test';
 export type LabelReviewStatus = 'draft' | 'reviewed';
@@ -13,6 +14,18 @@ export interface DraftLabelMetadata {
   generatedAt: string;
   generator: string;
   source: 'heuristic-replay';
+}
+
+export type CaptureCameraSide = 'left' | 'right' | 'oblique' | 'frontish' | 'unknown';
+export type CaptureMachineStyle = 'seated_selectorized' | 'kneeling' | 'plate_loaded' | 'unknown';
+export type CaptureVisibleHandles = 'yes' | 'no' | 'partial' | 'unknown';
+export type ReviewerViewConfidence = 'good' | 'usable' | 'poor';
+
+export interface ExerciseCaptureMetadata {
+  cameraSide?: CaptureCameraSide;
+  machineStyle?: CaptureMachineStyle;
+  visibleHandles?: CaptureVisibleHandles;
+  reviewerViewConfidence?: ReviewerViewConfidence;
 }
 
 export interface RepLabel {
@@ -36,6 +49,8 @@ export interface ExerciseLabelFile {
   expectedReps: number;
   reps: RepLabel[];
   notes?: string;
+  captureMetadata?: ExerciseCaptureMetadata;
+  labelingGuidance?: string[];
   availableIssues?: AvailableIssue[];
   draftMetadata?: DraftLabelMetadata;
 }
@@ -67,6 +82,7 @@ export interface RepEvaluation {
   completionDeltaMs: number | null;
   expectedIssueIds: string[];
   predictedIssueIds: string[];
+  predictedDiagnostics?: RepDiagnostics;
   truePositives: string[];
   falsePositives: string[];
   falseNegatives: string[];
@@ -87,6 +103,7 @@ export interface CaseEvaluation {
   extraPredictedReps: RepEvaluation[];
   totals: EvaluationTotals;
   qualityCoverage?: QualityCoverageMetrics;
+  diagnosticSummary?: DiagnosticEvaluationSummary;
 }
 
 export interface EvaluationTotals {
@@ -114,6 +131,7 @@ export interface DatasetEvaluation {
   totals: EvaluationTotals;
   metrics: EvaluationMetrics;
   qualityCoverage?: QualityCoverageMetrics;
+  diagnosticSummary?: DiagnosticEvaluationSummary;
 }
 
 export interface PredictionLike {
@@ -128,4 +146,39 @@ export interface QualityCoverageMetrics {
   unscoredReps: number;
   scorableRate: number;
   averageConfidence: number;
+}
+
+export interface DiagnosticMetricDistribution {
+  count: number;
+  min: number | null;
+  max: number | null;
+  mean: number | null;
+}
+
+export interface DiagnosticIssueSummary {
+  issueId: string;
+  eligiblePositiveCount: number;
+  eligibleNegativeCount: number;
+  truePositiveCount: number;
+  falsePositiveCount: number;
+  falseNegativeCount: number;
+  skippedCount: number;
+  ineligibleCount: number;
+  expectedPositiveMetric: DiagnosticMetricDistribution;
+  expectedNegativeMetric: DiagnosticMetricDistribution;
+  nearThresholdMismatchCount: number;
+  averageConfidence: number | null;
+  averageSampleCount: number | null;
+  weightedTruePositive: number;
+  weightedFalsePositive: number;
+  weightedFalseNegative: number;
+}
+
+export interface DiagnosticEvaluationSummary {
+  issueSummaries: Record<string, DiagnosticIssueSummary>;
+  weightedIssuePrecision: number;
+  weightedIssueRecall: number;
+  weightedIssueF1: number;
+  nearThresholdMismatchCount: number;
+  diagnosticRepCount: number;
 }

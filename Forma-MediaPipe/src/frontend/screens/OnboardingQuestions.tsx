@@ -159,7 +159,7 @@ const cardStyles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.115)',
     overflow: 'hidden',
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   },
   questionCardEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.115)',
     padding: 18,

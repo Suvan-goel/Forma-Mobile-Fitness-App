@@ -513,13 +513,13 @@ const subtleCardShadow = Platform.select({
 }) ?? {};
 
 const surfaceBorder = {
-  borderWidth: 1,
+  borderWidth: 0.5,
   borderColor: 'rgba(255, 255, 255, 0.065)',
   borderTopColor: 'rgba(255, 255, 255, 0.10)',
 } as const;
 
 const violetSurfaceBorder = {
-  borderWidth: 1,
+  borderWidth: 0.5,
   borderColor: 'rgba(122, 85, 255, 0.22)',
 } as const;
 
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(232, 178, 70, 0.35)',
     ...subtleCardShadow,
   },
@@ -786,7 +786,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(139, 92, 246, 0.35)',
     marginTop: 4,
   },
@@ -848,7 +848,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'transparent',
   },
   privacyOptionSelected: {
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.115)',
     alignItems: 'center',
     justifyContent: 'center',

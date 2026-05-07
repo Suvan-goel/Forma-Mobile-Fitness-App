@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   },
   heroInner: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   optionInner: {
     minHeight: 84,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   },
   infoInner: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 12,
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
   },
   storageInner: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   deleteCard: {
     minHeight: 74,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',

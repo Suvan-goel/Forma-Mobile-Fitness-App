@@ -1170,7 +1170,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 9,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   timerDisplay: {
@@ -1239,7 +1239,7 @@ const styles = StyleSheet.create({
   summaryCardEdge: {
     minHeight: 88,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 12,
@@ -1287,7 +1287,7 @@ const styles = StyleSheet.create({
   },
   exerciseCardGlassEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
@@ -1346,7 +1346,7 @@ const styles = StyleSheet.create({
   setRowCurrent: {
     marginHorizontal: 5,
     marginVertical: 5,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.86)',
     borderBottomWidth: 1,
     borderRadius: 8,
@@ -1408,7 +1408,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122, 85, 255, 0.10)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.24)',
   },
   manualSetBadge: {
@@ -1421,7 +1421,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     backgroundColor: 'rgba(122, 85, 255, 0.10)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.24)',
   },
   manualSetBadgeText: {
@@ -1438,7 +1438,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     minHeight: 82,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
@@ -1496,7 +1496,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   restTimerPauseButtonActive: {
@@ -1528,7 +1528,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   addSetActionPrimary: {
@@ -1582,7 +1582,7 @@ const styles = StyleSheet.create({
   },
   manualModalEdge: {
     borderRadius: CARD_RADIUS_LG,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
@@ -1625,7 +1625,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   manualInfoRow: {
@@ -1637,7 +1637,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: CARD_RADIUS,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.075)',
   },
   manualInfoIcon: {
@@ -1645,7 +1645,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1668,7 +1668,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: CARD_RADIUS,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.075)',
     gap: 8,
   },
@@ -1717,7 +1717,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
   },
   manualUnitButtonActive: {
@@ -1746,7 +1746,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   manualSubmitButtonDisabled: {
@@ -1775,7 +1775,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
     gap: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(124, 92, 255, 0.65)',
   },
   addExerciseIconWrap: {
@@ -1812,7 +1812,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 11,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   controlFinishLabel: {

@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   planCardEdge: {
     position: 'relative',
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderTopColor: COLORS.borderStrong,
     padding: 16,
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.5,
     padding: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     overflow: 'hidden',
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   planStatusPill: {
     minHeight: 26,
     borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: 0.5,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 9,
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
 },
   cardEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     marginTop: 28,
     borderRadius: 16,
     backgroundColor: 'rgba(52, 211, 153, 0.06)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(52, 211, 153, 0.12)',
   },
   currentPlanText: {

@@ -21,7 +21,7 @@
 import {
   Keypoint,
   calculateAngle,
-  calculateSignedVerticalAngle,
+  calculateSignedVerticalAngleSagittal,
   getKeypoint,
   isVisible,
   minKeypointConfidence,
@@ -33,13 +33,20 @@ import { computeScore, type PenaltyConfig } from '../shared/scoring';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
+  getConfigValue,
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import {
+  buildRepDiagnostics,
+  diagnosticCue,
+  diagnosticMetric,
+} from '../shared/diagnostics';
 import tunedConfig from './tuned/cableRow.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
@@ -81,8 +88,6 @@ function computeReachRatio(
 
 /** FSM thresholds (reach ratio) */
 const THRESHOLDS = {
-  /** Ratio below which the pull clock starts before the FSM commits */
-  PULL_CLOCK_START: 0.985,
   /** Ratio below which we transition REST -> PULLING (arms starting to bend) */
   PULLING_ENTER: 0.90,
   /** Ratio below which we consider peak contraction (PULLING -> CONTRACTED) */
@@ -105,8 +110,16 @@ const FORM_THRESHOLDS = {
   EXTENSION_FAIL: 0.92,
   /** Shoulder retraction angle delta below which retraction is insufficient */
   RETRACTION_FAIL: 15,
-  /** Torso deviation delta from baseline above which there is excessive lean */
+  /** Backward torso delta from baseline above which there is excessive lean */
   TORSO_LEAN_WARN: 20,
+  /** Total forward/back torso swing above which the rep is too momentum-driven */
+  TORSO_ROCK_WARN: 24,
+  /** Elbow-above-shoulder ratio above which the row path is too high */
+  HIGH_ROW_WARN: 0.08,
+  /** Handle/wrist height above a lower-rib target line above which the row path is too high */
+  ROW_TARGET_HIGH_WARN: 0.10,
+  /** Shoulder elevation ratio above which the user is shrugging */
+  SHOULDER_SHRUG_WARN: 0.06,
   /** Concentric (pull) too fast threshold (seconds) */
   TEMPO_PULL_MIN: 0.3,
   /** Eccentric (return) too fast threshold (seconds) */
@@ -132,11 +145,21 @@ const PENALTY_CONFIGS = {
   EXTENSION_ROM:     { cap: 20, deadzone: 0, scale: 400 } as PenaltyConfig,
   SHOULDER_RETRACT:  { cap: 25, deadzone: 10, scale: 0.04 } as PenaltyConfig,
   TORSO_LEAN:        { cap: 25, deadzone: 8, scale: 0.10 } as PenaltyConfig,
+  TORSO_ROCK:        { cap: 10, deadzone: 24, scale: 0.03 } as PenaltyConfig,
+  HIGH_ROW:          { cap: 10, deadzone: 0.08, scale: 1000 } as PenaltyConfig,
+  SHOULDER_SHRUG:    { cap: 8,  deadzone: 0.06, scale: 1000 } as PenaltyConfig,
   TEMPO_PULL:        { cap: 12, deadzone: 0.3, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:      { cap: 8,  deadzone: 0.4, scale: 40 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+const FORM_CONFIDENCE_MIN = 0.3;
+const SIDE_VIEW_AVG_CONFIDENCE_MIN = 0.45;
+const SIDE_VIEW_MIN_CONFIDENCE_MIN = 0.25;
+const SIDE_VIEW_MIN_SAMPLES = 5;
+const SETUP_SIDE_VIEW_MIN_SAMPLES = 8;
+const FEEDBACK_COOLDOWN_SECONDS = 2.0;
+const SIDE_VIEW_SETUP_FEEDBACK = 'Turn side-on so I can judge your row.';
 
 const DEFAULT_CABLE_ROW_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -153,6 +176,18 @@ const CABLE_ROW_TUNABLE_SPEC = createDefaultTunableSpec(
   'Cable Row',
   DEFAULT_CABLE_ROW_HEURISTIC_CONFIG,
 );
+CABLE_ROW_TUNABLE_SPEC.diagnosticTuning = [
+  { issueId: 'cable-row.row_depth', metricKey: 'pullDepthRatio', thresholdPath: 'formThresholds.PULL_DEPTH_FAIL', direction: 'above' },
+  { issueId: 'cable-row.row_extension', metricKey: 'extensionRatio', thresholdPath: 'formThresholds.EXTENSION_FAIL', direction: 'below' },
+  { issueId: 'cable-row.shoulder_retraction', metricKey: 'shoulderRetractionDelta', thresholdPath: 'formThresholds.RETRACTION_FAIL', direction: 'below' },
+  { issueId: 'cable-row.torso_warn', metricKey: 'torsoLeanBackDelta', thresholdPath: 'formThresholds.TORSO_LEAN_WARN', direction: 'above' },
+  { issueId: 'cable-row.torso_rocking', metricKey: 'torsoRockDelta', thresholdPath: 'formThresholds.TORSO_ROCK_WARN', direction: 'above' },
+  { issueId: 'cable-row.high_row', metricKey: 'elbowAboveShoulderRatio', thresholdPath: 'formThresholds.HIGH_ROW_WARN', direction: 'above' },
+  { issueId: 'cable-row.high_row', metricKey: 'rowTargetHighRatio', thresholdPath: 'formThresholds.ROW_TARGET_HIGH_WARN', direction: 'above' },
+  { issueId: 'cable-row.shoulder_shrug', metricKey: 'shoulderShrugRatio', thresholdPath: 'formThresholds.SHOULDER_SHRUG_WARN', direction: 'above' },
+  { issueId: 'cable-row.tempo_down', metricKey: 'tPull', thresholdPath: 'formThresholds.TEMPO_PULL_MIN', direction: 'below' },
+  { issueId: 'cable-row.tempo_up', metricKey: 'tReturn', thresholdPath: 'formThresholds.TEMPO_RETURN_MIN', direction: 'below' },
+];
 
 const CABLE_ROW_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
@@ -172,13 +207,25 @@ function withCableRowConfig<T>(
 // ============================================================================
 
 type CableRowPhase = 'REST' | 'PULLING' | 'CONTRACTED' | 'RETURNING';
+type LandmarkSourceName = 'world' | 'image' | 'fallback';
+type TorsoMetricMethod = 'sagittal' | 'selected_side';
+
+interface LandmarkSource {
+  name: LandmarkSourceName;
+  keypoints: Keypoint[];
+}
+
+interface MetricSample {
+  value: number;
+  source: LandmarkSourceName;
+  keypoints: Keypoint[];
+  method?: TorsoMetricMethod;
+}
 
 interface CableRowFSM {
   phase: CableRowPhase;
   /** Timestamp when pull began (REST -> PULLING) */
   tRepStart: number | null;
-  /** Timestamp when the user first moved out of full extension */
-  tPullStart: number | null;
   /** Timestamp when peak contraction was reached */
   tContracted: number | null;
   /** Timestamp when rep completed (RETURNING -> REST) */
@@ -194,10 +241,34 @@ interface RepWindow {
   shoulderAngleBaseline: number | null;
   /** Max change in raw shoulder angle from baseline (measures retraction amplitude) */
   maxShoulderDelta: number;
+  /** Max wrong-direction shoulder movement from baseline */
+  maxShoulderProtractionDelta: number;
   /** Raw torso deviation at rep start (baseline for dynamic lean measurement) */
   torsoDevBaseline: number | null;
-  /** Max increase in torso deviation from baseline during rep */
+  /** Max backward torso delta from baseline during rep */
+  maxTorsoLeanBackDelta: number;
+  /** Max forward torso delta from baseline during rep */
+  maxTorsoForwardDelta: number;
+  /** Max total torso movement from baseline during rep */
   maxTorsoDev: number;
+  /** Image-space shoulder Y baseline for shoulder elevation checks */
+  shoulderYBaseline: number | null;
+  /** Max elbow height above shoulder, normalized by torso height */
+  maxElbowAboveShoulderRatio: number;
+  /** Max handle/wrist height above lower-rib target line, normalized by torso height */
+  maxRowTargetHighRatio: number;
+  /** Max shoulder elevation, normalized by torso height */
+  maxShoulderShrugRatio: number;
+  /** Pull velocity diagnostics */
+  lastVelocityRatio: number | null;
+  lastVelocityTimestamp: number | null;
+  maxPullVelocityRatioPerSec: number;
+  pullVelocitySum: number;
+  pullVelocitySamples: number;
+  /** Side-view confidence accumulation */
+  sideViewConfidenceSum: number;
+  sideViewConfidenceMin: number;
+  sideViewConfidenceSamples: number;
   /** Timestamps */
   tStart: number;
   tContracted: number | null;
@@ -211,6 +282,9 @@ interface RepResult {
   repIndex: number;
   score: number;
   messages: string[];
+  scorable?: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
+  diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
 interface CableRowState {
@@ -234,6 +308,7 @@ interface CableRowState {
   /** Feedback */
   feedback: string | null;
   lastFeedbackTime: number;
+  setupSideViewConfidences: number[];
   /** Which side of the body is more visible */
   visibleSide: 'left' | 'right';
 }
@@ -249,7 +324,14 @@ interface CableRowDebugInfo {
   ratioMin: number | null;
   ratioMax: number | null;
   shoulderDelta: number | null;
-  torsoDevMax: number | null;
+  shoulderProtractionDelta: number | null;
+  torsoLeanBackDelta: number | null;
+  torsoForwardDelta: number | null;
+  torsoRockDelta: number | null;
+  elbowAboveShoulderRatio: number | null;
+  rowTargetHighRatio: number | null;
+  shoulderShrugRatio: number | null;
+  sideViewConfidence: number | null;
 }
 
 // ============================================================================
@@ -260,7 +342,6 @@ function initFSM(): CableRowFSM {
   return {
     phase: 'REST',
     tRepStart: null,
-    tPullStart: null,
     tContracted: null,
     tRepEnd: null,
   };
@@ -272,8 +353,23 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
     maxRatio: initialRatio ?? -Infinity,
     shoulderAngleBaseline: null,
     maxShoulderDelta: 0,
+    maxShoulderProtractionDelta: 0,
     torsoDevBaseline: null,
+    maxTorsoLeanBackDelta: 0,
+    maxTorsoForwardDelta: 0,
     maxTorsoDev: 0,
+    shoulderYBaseline: null,
+    maxElbowAboveShoulderRatio: 0,
+    maxRowTargetHighRatio: 0,
+    maxShoulderShrugRatio: 0,
+    lastVelocityRatio: initialRatio ?? null,
+    lastVelocityTimestamp: tStart,
+    maxPullVelocityRatioPerSec: 0,
+    pullVelocitySum: 0,
+    pullVelocitySamples: 0,
+    sideViewConfidenceSum: 0,
+    sideViewConfidenceMin: 1,
+    sideViewConfidenceSamples: 0,
     tStart,
     tContracted: null,
     tReturnStart: null,
@@ -306,6 +402,7 @@ function initializeCableRowState(): CableRowState {
     smoothedTorso: null,
     feedback: null,
     lastFeedbackTime: 0,
+    setupSideViewConfidences: [],
     visibleSide: 'left',
   };
 }
@@ -385,35 +482,269 @@ function calculateShoulderAngle(
     return null;
   }
 
-  return calculateAngle(hip, shoulder, elbow);
+  return 180 - calculateAngle(hip, shoulder, elbow);
 }
 
-/**
- * Calculate signed torso angle from vertical using the shoulder-hip line.
- * Returns a signed angle in degrees: positive = forward lean, negative = backward lean,
- * 0 = perfectly upright. Uses the YZ plane (sagittal), ignoring the X-axis so that
- * lateral body rotation doesn't inflate the measurement.
- *
- * A signed angle is essential for delta-from-baseline tracking: the unsigned version
- * folds at vertical (0deg), causing lean-back past vertical to produce a SHRINKING delta
- * instead of a growing one.
- */
-function calculateTorsoDeviation(
-  keypoints: Keypoint[],
-  side: 'left' | 'right'
-): number | null {
-  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
-  const hip = getKeypoint(keypoints, `${side}_hip`);
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
 
-  if (
-    !shoulder || !hip ||
-    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
-    !isVisible(hip, VISIBILITY_THRESHOLD)
-  ) {
-    return null;
+function isFiniteMetric(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function midpoint(a: Keypoint, b: Keypoint): Keypoint {
+  return {
+    name: `${a.name}_${b.name}_mid`,
+    x: (a.x + b.x) * 0.5,
+    y: (a.y + b.y) * 0.5,
+    z: ((a.z ?? 0) + (b.z ?? 0)) * 0.5,
+    score: Math.min(a.score, b.score),
+  };
+}
+
+function distance3D(a: Keypoint, b: Keypoint): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = (a.z ?? 0) - (b.z ?? 0);
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function landmarkSources(frameContext: ExerciseFrameContext | undefined, fallbackKeypoints: Keypoint[]): LandmarkSource[] {
+  const sources: LandmarkSource[] = [];
+  const pushUnique = (name: LandmarkSourceName, keypoints: Keypoint[] | undefined) => {
+    if (!keypoints || keypoints.length === 0) return;
+    if (sources.some((source) => source.keypoints === keypoints)) return;
+    sources.push({ name, keypoints });
+  };
+
+  pushUnique('world', frameContext?.worldKeypoints);
+  pushUnique('image', frameContext?.imageKeypoints);
+  pushUnique('fallback', fallbackKeypoints);
+  return sources;
+}
+
+function signalSourceKeypoints(frameContext: ExerciseFrameContext | undefined, fallbackKeypoints: Keypoint[]): Keypoint[] {
+  return frameContext?.imageKeypoints ?? fallbackKeypoints;
+}
+
+function calculateShoulderAngleSample(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+  side: 'left' | 'right',
+): MetricSample | null {
+  for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    if (minKeypointConfidence(source.keypoints, [`${side}_hip`, `${side}_shoulder`, `${side}_elbow`]) < FORM_CONFIDENCE_MIN) {
+      continue;
+    }
+    const value = calculateShoulderAngle(source.keypoints, side);
+    if (isFiniteMetric(value) && value > 1 && value < 179) {
+      return { value, source: source.name, keypoints: source.keypoints };
+    }
+  }
+  return null;
+}
+
+function calculateSagittalTorsoDeviation(keypoints: Keypoint[]): number | null {
+  const leftHip = visibleKeypoint(keypoints, 'left_hip', FORM_CONFIDENCE_MIN);
+  const rightHip = visibleKeypoint(keypoints, 'right_hip', FORM_CONFIDENCE_MIN);
+  const leftShoulder = visibleKeypoint(keypoints, 'left_shoulder', FORM_CONFIDENCE_MIN);
+  const rightShoulder = visibleKeypoint(keypoints, 'right_shoulder', FORM_CONFIDENCE_MIN);
+  if (!leftHip || !rightHip || !leftShoulder || !rightShoulder) return null;
+
+  const hipCenter = midpoint(leftHip, rightHip);
+  const shoulderCenter = midpoint(leftShoulder, rightShoulder);
+  const torsoMag = distance3D(hipCenter, shoulderCenter);
+  const coronalMag = distance3D(
+    midpoint(leftHip, leftShoulder),
+    midpoint(rightHip, rightShoulder),
+  );
+  if (torsoMag < 1e-6 || coronalMag < 1e-6) return null;
+
+  const value = calculateSignedVerticalAngleSagittal(
+    hipCenter,
+    shoulderCenter,
+    leftHip,
+    rightHip,
+    leftShoulder,
+    rightShoulder,
+  );
+  return isFiniteMetric(value) ? value : null;
+}
+
+function calculateSelectedSideTorsoDeviation(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`, FORM_CONFIDENCE_MIN);
+  if (!shoulder || !hip) return null;
+
+  const vy = shoulder.y - hip.y;
+  const vz = (shoulder.z ?? 0) - (hip.z ?? 0);
+  const mag = Math.sqrt(vy * vy + vz * vz);
+  if (mag < 1e-6) return null;
+  return Math.atan2(vz, Math.abs(vy)) * 57.29577951308232;
+}
+
+function calculateTorsoDeviationSample(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+  side: 'left' | 'right',
+): MetricSample | null {
+  const sources = landmarkSources(frameContext, fallbackKeypoints);
+  for (const source of sources) {
+    const value = calculateSagittalTorsoDeviation(source.keypoints);
+    if (isFiniteMetric(value)) {
+      return { value, source: source.name, keypoints: source.keypoints, method: 'sagittal' };
+    }
   }
 
-  return calculateSignedVerticalAngle(hip, shoulder);
+  for (const source of sources) {
+    const value = calculateSelectedSideTorsoDeviation(source.keypoints, side);
+    if (isFiniteMetric(value)) {
+      return { value, source: source.name, keypoints: source.keypoints, method: 'selected_side' };
+    }
+  }
+  return null;
+}
+
+function visibleKeypoint(
+  keypoints: Keypoint[],
+  name: string,
+  threshold = VISIBILITY_THRESHOLD,
+): Keypoint | null {
+  const keypoint = getKeypoint(keypoints, name);
+  return isVisible(keypoint, threshold) ? keypoint : null;
+}
+
+function calculateTorsoHeight(keypoints: Keypoint[], side: 'left' | 'right'): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  if (!shoulder || !hip) return null;
+  const height = Math.abs(hip.y - shoulder.y);
+  return height > 1e-6 ? height : null;
+}
+
+function calculateElbowAboveShoulderRatio(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+  const elbow = visibleKeypoint(keypoints, `${side}_elbow`, FORM_CONFIDENCE_MIN);
+  const torsoHeight = calculateTorsoHeight(keypoints, side);
+  if (!shoulder || !elbow || torsoHeight === null) return null;
+  return Math.max(0, shoulder.y - elbow.y) / torsoHeight;
+}
+
+function calculateRowTargetHighRatio(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+  const wrist = visibleKeypoint(keypoints, `${side}_wrist`, FORM_CONFIDENCE_MIN);
+  const torsoHeight = calculateTorsoHeight(keypoints, side);
+  if (!shoulder || !wrist || torsoHeight === null) return null;
+
+  const lowerRibTargetY = shoulder.y + 0.35 * torsoHeight;
+  return Math.max(0, lowerRibTargetY - wrist.y) / torsoHeight;
+}
+
+function calculateShoulderShrugRatio(
+  currentShoulderY: number,
+  baselineShoulderY: number,
+  torsoHeight: number | null,
+): number | null {
+  if (torsoHeight === null) return null;
+  return Math.max(0, baselineShoulderY - currentShoulderY) / torsoHeight;
+}
+
+function calculateSideViewConfidence(keypoints: Keypoint[]): number | null {
+  const leftShoulder = visibleKeypoint(keypoints, 'left_shoulder');
+  const rightShoulder = visibleKeypoint(keypoints, 'right_shoulder');
+  const leftHip = visibleKeypoint(keypoints, 'left_hip');
+  const rightHip = visibleKeypoint(keypoints, 'right_hip');
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+
+  const leftTorso = Math.abs(leftHip.y - leftShoulder.y);
+  const rightTorso = Math.abs(rightHip.y - rightShoulder.y);
+  const torsoHeight = (leftTorso + rightTorso) * 0.5;
+  if (torsoHeight <= 1e-6) return null;
+
+  const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+  const hipWidth = Math.abs(leftHip.x - rightHip.x);
+  const widthRatio = ((shoulderWidth + hipWidth) * 0.5) / torsoHeight;
+  return 1 - clamp01((widthRatio - 0.30) / (0.55 - 0.30));
+}
+
+function averageSideViewConfidence(repWindow: RepWindow): number | null {
+  if (repWindow.sideViewConfidenceSamples === 0) return null;
+  return repWindow.sideViewConfidenceSum / repWindow.sideViewConfidenceSamples;
+}
+
+function isCableRowRepScorable(repWindow: RepWindow): boolean {
+  if (repWindow.sideViewConfidenceSamples < SIDE_VIEW_MIN_SAMPLES) return true;
+  const averageConfidence = averageSideViewConfidence(repWindow);
+  if (averageConfidence === null) return true;
+  return (
+    averageConfidence >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN
+  );
+}
+
+function cableRowQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
+  return isCableRowRepScorable(repWindow) ? [] : ['side_view_uncertain'];
+}
+
+function averageSetupSideViewConfidence(state: CableRowState): number | null {
+  const samples = state.setupSideViewConfidences;
+  if (samples.length === 0) return null;
+  return samples.reduce((sum, value) => sum + value, 0) / samples.length;
+}
+
+function minSetupSideViewConfidence(state: CableRowState): number | null {
+  if (state.setupSideViewConfidences.length === 0) return null;
+  return Math.min(...state.setupSideViewConfidences);
+}
+
+function shouldShowSetupSideViewFeedback(state: CableRowState, t: number): boolean {
+  if (state.setupSideViewConfidences.length < SETUP_SIDE_VIEW_MIN_SAMPLES) return false;
+  if (state.lastFeedbackTime > 0 && t - state.lastFeedbackTime <= FEEDBACK_COOLDOWN_SECONDS) return false;
+  const averageConfidence = averageSetupSideViewConfidence(state);
+  const minConfidence = minSetupSideViewConfidence(state);
+  return (
+    averageConfidence !== null &&
+    minConfidence !== null &&
+    (averageConfidence < SIDE_VIEW_AVG_CONFIDENCE_MIN || minConfidence < SIDE_VIEW_MIN_CONFIDENCE_MIN)
+  );
+}
+
+function highRowTriggered(repWindow: RepWindow): boolean {
+  return (
+    repWindow.maxElbowAboveShoulderRatio > FORM_THRESHOLDS.HIGH_ROW_WARN ||
+    repWindow.maxRowTargetHighRatio > FORM_THRESHOLDS.ROW_TARGET_HIGH_WARN
+  );
+}
+
+function highRowPenaltyValue(repWindow: RepWindow): number {
+  const shiftedRowTargetHighRatio = Math.max(
+    0,
+    repWindow.maxRowTargetHighRatio - (FORM_THRESHOLDS.ROW_TARGET_HIGH_WARN - FORM_THRESHOLDS.HIGH_ROW_WARN),
+  );
+  return Math.max(repWindow.maxElbowAboveShoulderRatio, shiftedRowTargetHighRatio);
+}
+
+function contractedHoldMs(repWindow: RepWindow): number | null {
+  if (repWindow.tContracted === null || repWindow.tReturnStart === null) return null;
+  return Math.max(0, (repWindow.tReturnStart - repWindow.tContracted) * 1000);
+}
+
+function pullVelocitySpikeRatio(repWindow: RepWindow): number | null {
+  if (repWindow.pullVelocitySamples === 0) return null;
+  const mean = repWindow.pullVelocitySum / repWindow.pullVelocitySamples;
+  if (mean <= 1e-6) return null;
+  return repWindow.maxPullVelocityRatioPerSec / mean;
 }
 
 // ============================================================================
@@ -437,15 +768,9 @@ function updateFSM(
     case 'REST':
       // Waiting for pull to begin. When ratio drops below threshold,
       // transition to PULLING.
-      if (ratio < THRESHOLDS.PULL_CLOCK_START) {
-        fsm.tPullStart ??= t;
-      } else {
-        fsm.tPullStart = null;
-      }
-
       if (ratio < THRESHOLDS.PULLING_ENTER) {
         fsm.phase = 'PULLING';
-        fsm.tRepStart = fsm.tPullStart ?? t;
+        fsm.tRepStart = t;
         fsm.tContracted = null;
         fsm.tRepEnd = null;
       }
@@ -460,7 +785,6 @@ function updateFSM(
         // Went back to extended without contracting -- abort
         fsm.phase = 'REST';
         fsm.tRepStart = null;
-        fsm.tPullStart = null;
       }
       break;
 
@@ -511,8 +835,11 @@ function computeCableRowScore(repWindow: RepWindow): number {
   const retractionShortfall = Math.max(0, 20 - repWindow.maxShoulderDelta);
   penalties.push({ value: retractionShortfall, config: PENALTY_CONFIGS.SHOULDER_RETRACT });
 
-  // 4. Torso lean
-  penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_LEAN });
+  // 4. Torso mechanics
+  penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
+  penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_ROCK });
+  penalties.push({ value: highRowPenaltyValue(repWindow), config: PENALTY_CONFIGS.HIGH_ROW });
+  penalties.push({ value: repWindow.maxShoulderShrugRatio, config: PENALTY_CONFIGS.SHOULDER_SHRUG });
 
   // 5. Tempo
   if (repWindow.tContracted !== null) {
@@ -556,8 +883,20 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   }
 
   // 4. Torso lean
-  if (repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
+  if (repWindow.maxTorsoLeanBackDelta > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
     messages.push('Stay upright \u2014 avoid leaning back during the pull.');
+  }
+
+  if (repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
+    messages.push('Keep your torso steady through the row.');
+  }
+
+  if (highRowTriggered(repWindow)) {
+    messages.push('Keep your elbows lower \u2014 row toward your ribs.');
+  }
+
+  if (repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN) {
+    messages.push('Keep your shoulders down as you pull.');
   }
 
   // 5. Tempo
@@ -576,19 +915,185 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   return messages;
 }
 
+function buildCableRowDiagnostics(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+): FrameworkRepResult['diagnostics'] {
+  const hasTempo = repWindow.tContracted !== null;
+  const tPull = repWindow.tContracted !== null ? repWindow.tContracted - repWindow.tStart : null;
+  const tReturn = repWindow.tContracted !== null
+    ? repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tContracted)
+    : null;
+  const sideViewConfidence = averageSideViewConfidence(repWindow);
+  const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES;
+  const holdMs = contractedHoldMs(repWindow);
+  const spikeRatio = pullVelocitySpikeRatio(repWindow);
+  return buildRepDiagnostics({
+    exerciseName: 'Cable Row',
+    repIndex,
+    view: 'side',
+    selectedSide: visibleSide,
+    scorable: isCableRowRepScorable(repWindow),
+    metrics: [
+      diagnosticMetric('pullDepthRatio', repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
+      diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('shoulderRetractionDelta', repWindow.maxShoulderDelta, { unit: 'degrees' }),
+      diagnosticMetric('shoulderProtractionDelta', repWindow.maxShoulderProtractionDelta, { unit: 'degrees' }),
+      diagnosticMetric('torsoLeanBackDelta', repWindow.maxTorsoLeanBackDelta, { unit: 'degrees' }),
+      diagnosticMetric('torsoForwardDelta', repWindow.maxTorsoForwardDelta, { unit: 'degrees' }),
+      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoDev, { unit: 'degrees' }),
+      diagnosticMetric('elbowAboveShoulderRatio', repWindow.maxElbowAboveShoulderRatio, { unit: 'ratio' }),
+      diagnosticMetric('rowTargetHighRatio', repWindow.maxRowTargetHighRatio, { unit: 'ratio' }),
+      diagnosticMetric('shoulderShrugRatio', repWindow.maxShoulderShrugRatio, { unit: 'ratio' }),
+      diagnosticMetric('contractedHoldMs', holdMs, {
+        unit: 'milliseconds',
+        eligible: holdMs !== null,
+        skippedReason: 'contracted_hold_unavailable',
+      }),
+      diagnosticMetric('maxPullVelocityRatioPerSec', repWindow.maxPullVelocityRatioPerSec, { unit: 'ratio' }),
+      diagnosticMetric('pullVelocitySpikeRatio', spikeRatio, {
+        unit: 'ratio',
+        eligible: spikeRatio !== null,
+        skippedReason: 'pull_velocity_unavailable',
+      }),
+      diagnosticMetric('sideViewConfidence', sideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('tPull', tPull, { unit: 'seconds', eligible: hasTempo, skippedReason: 'contracted_position_not_detected' }),
+      diagnosticMetric('tReturn', tReturn, { unit: 'seconds', eligible: hasTempo, skippedReason: 'contracted_position_not_detected' }),
+    ],
+    cues: [
+      diagnosticCue({
+        issueId: 'cable-row.row_depth',
+        metricKeys: ['pullDepthRatio'],
+        direction: 'above',
+        value: repWindow.minRatio,
+        thresholdPath: 'formThresholds.PULL_DEPTH_FAIL',
+        thresholdValue: FORM_THRESHOLDS.PULL_DEPTH_FAIL,
+        triggered: repWindow.minRatio > FORM_THRESHOLDS.PULL_DEPTH_FAIL,
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.row_extension',
+        metricKeys: ['extensionRatio'],
+        direction: 'below',
+        value: repWindow.maxRatio,
+        thresholdPath: 'formThresholds.EXTENSION_FAIL',
+        thresholdValue: FORM_THRESHOLDS.EXTENSION_FAIL,
+        triggered: repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL,
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.shoulder_retraction',
+        metricKeys: ['shoulderRetractionDelta'],
+        direction: 'below',
+        value: repWindow.maxShoulderDelta,
+        thresholdPath: 'formThresholds.RETRACTION_FAIL',
+        thresholdValue: FORM_THRESHOLDS.RETRACTION_FAIL,
+        triggered: repWindow.maxShoulderDelta < FORM_THRESHOLDS.RETRACTION_FAIL,
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.torso_warn',
+        metricKeys: ['torsoLeanBackDelta'],
+        direction: 'above',
+        value: repWindow.maxTorsoLeanBackDelta,
+        thresholdPath: 'formThresholds.TORSO_LEAN_WARN',
+        thresholdValue: FORM_THRESHOLDS.TORSO_LEAN_WARN,
+        triggered: repWindow.maxTorsoLeanBackDelta > FORM_THRESHOLDS.TORSO_LEAN_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.torso_rocking',
+        metricKeys: ['torsoRockDelta'],
+        direction: 'above',
+        value: repWindow.maxTorsoDev,
+        thresholdPath: 'formThresholds.TORSO_ROCK_WARN',
+        thresholdValue: FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        triggered: repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.high_row',
+        metricKeys: ['elbowAboveShoulderRatio', 'rowTargetHighRatio'],
+        direction: 'above',
+        value: Math.max(repWindow.maxElbowAboveShoulderRatio, repWindow.maxRowTargetHighRatio),
+        thresholdPath: ['formThresholds.HIGH_ROW_WARN', 'formThresholds.ROW_TARGET_HIGH_WARN'],
+        thresholdValue: {
+          elbowAboveShoulderRatio: FORM_THRESHOLDS.HIGH_ROW_WARN,
+          rowTargetHighRatio: FORM_THRESHOLDS.ROW_TARGET_HIGH_WARN,
+        },
+        triggered: highRowTriggered(repWindow),
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.shoulder_shrug',
+        metricKeys: ['shoulderShrugRatio'],
+        direction: 'above',
+        value: repWindow.maxShoulderShrugRatio,
+        thresholdPath: 'formThresholds.SHOULDER_SHRUG_WARN',
+        thresholdValue: FORM_THRESHOLDS.SHOULDER_SHRUG_WARN,
+        triggered: repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.tempo_down',
+        metricKeys: ['tPull'],
+        direction: 'below',
+        value: tPull,
+        thresholdPath: 'formThresholds.TEMPO_PULL_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_PULL_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tPull !== null && tPull > 0 && tPull < FORM_THRESHOLDS.TEMPO_PULL_MIN,
+        skippedReason: 'contracted_position_not_detected',
+      }),
+      diagnosticCue({
+        issueId: 'cable-row.tempo_up',
+        metricKeys: ['tReturn'],
+        direction: 'below',
+        value: tReturn,
+        thresholdPath: 'formThresholds.TEMPO_RETURN_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_RETURN_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tReturn !== null && tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN,
+        skippedReason: 'contracted_position_not_detected',
+      }),
+    ],
+  });
+}
+
+function buildCableRowRepResult(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+): RepResult {
+  const score = computeCableRowScore(repWindow);
+  const messages = generateFormMessages(repWindow);
+  const scorable = isCableRowRepScorable(repWindow);
+  const qualityWarnings = cableRowQualityWarnings(repWindow);
+  return {
+    repIndex,
+    score,
+    messages,
+    scorable,
+    qualityWarnings,
+    diagnostics: buildCableRowDiagnostics(repWindow, repIndex, visibleSide),
+  };
+}
+
 // ============================================================================
 // UPDATE LOGIC
 // ============================================================================
 
 function updateCableRowState(
   keypoints: Keypoint[],
-  currentState: CableRowState
+  currentState: CableRowState,
+  frameContext?: ExerciseFrameContext,
 ): CableRowState {
   const t = Date.now() / 1000;
+  const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate
   if (!currentState.warmedUp) {
-    const ready = currentState.warmupGate.update(keypoints);
+    const ready = currentState.warmupGate.update(signalKeypoints);
     if (!ready) {
       return currentState;
     }
@@ -598,12 +1103,15 @@ function updateCableRowState(
   // Only update visible side in REST — lock it during active rep phases
   // to prevent mid-rep side switching that corrupts angle measurements.
   const inActiveRep = currentState.fsm.phase !== 'REST';
-  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(signalKeypoints);
 
   // Calculate raw values
-  const rawRatio = calculateArmReachRatio(keypoints, visibleSide);
-  const rawShoulder = calculateShoulderAngle(keypoints, visibleSide);
-  const rawTorsoDev = calculateTorsoDeviation(keypoints, visibleSide);
+  const rawRatio = calculateArmReachRatio(signalKeypoints, visibleSide);
+  const shoulderSample = calculateShoulderAngleSample(frameContext, keypoints, visibleSide);
+  const torsoSample = calculateTorsoDeviationSample(frameContext, keypoints, visibleSide);
+  const rawShoulder = shoulderSample?.value ?? null;
+  const rawTorsoDev = torsoSample?.value ?? null;
+  const sideViewConfidence = calculateSideViewConfidence(signalKeypoints);
 
   // If we can't even compute the ratio, bail out
   if (rawRatio === null) {
@@ -640,6 +1148,17 @@ function updateCableRowState(
     return newState;
   }
 
+  if (currentState.fsm.phase === 'REST' && currentState.repWindow === null && sideViewConfidence !== null) {
+    const setupSamples = [...currentState.setupSideViewConfidences, sideViewConfidence].slice(-SETUP_SIDE_VIEW_MIN_SAMPLES);
+    newState.setupSideViewConfidences = setupSamples;
+    if (shouldShowSetupSideViewFeedback(newState, t)) {
+      newState.feedback = SIDE_VIEW_SETUP_FEEDBACK;
+      newState.lastFeedbackTime = t;
+    }
+  } else if (currentState.fsm.phase !== 'REST') {
+    newState.setupSideViewConfidences = [];
+  }
+
   // Update FSM
   const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
@@ -659,6 +1178,11 @@ function updateCableRowState(
     if (rawRatio !== null) {
       window.maxRatio = Math.max(window.maxRatio, rawRatio);
     }
+    if (sideViewConfidence !== null) {
+      window.sideViewConfidenceSum += sideViewConfidence;
+      window.sideViewConfidenceMin = Math.min(window.sideViewConfidenceMin, sideViewConfidence);
+      window.sideViewConfidenceSamples++;
+    }
     const actualRom = window.maxRatio - window.minRatio;
     const duration = window.tEnd - window.tStart;
 
@@ -669,13 +1193,9 @@ function updateCableRowState(
       minDuration: THRESHOLDS.MIN_REP_TIME,
     })) {
       newState.repCount++;
-      const score = computeCableRowScore(window);
-      const messages = generateFormMessages(window);
-      newState.lastRepResult = {
-        repIndex: newState.repCount,
-        score,
-        messages,
-      };
+      const repResult = buildCableRowRepResult(window, newState.repCount, visibleSide);
+      const messages = repResult.messages;
+      newState.lastRepResult = repResult;
       newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
       newState.lastFeedbackTime = t;
     } else if (actualRom > 0) {
@@ -707,6 +1227,11 @@ function updateCableRowState(
     if (rawRatio !== null) {
       window.maxRatio = Math.max(window.maxRatio, rawRatio);
     }
+    if (sideViewConfidence !== null) {
+      window.sideViewConfidenceSum += sideViewConfidence;
+      window.sideViewConfidenceMin = Math.min(window.sideViewConfidenceMin, sideViewConfidence);
+      window.sideViewConfidenceSamples++;
+    }
 
     // Track shoulder angle delta from baseline (measures retraction).
     // Uses RAW shoulder angle — EMA smoothing dampens the peak delta,
@@ -714,16 +1239,15 @@ function updateCableRowState(
     // Only update when the three keypoints used by calculateShoulderAngle
     // (hip, shoulder, elbow) all have sufficient confidence.
     if (rawShoulder !== null) {
-      const shoulderConf = minKeypointConfidence(keypoints, [
-        `${visibleSide}_hip`, `${visibleSide}_shoulder`, `${visibleSide}_elbow`,
-      ]);
-      if (shoulderConf >= 0.3) {
-        if (window.shoulderAngleBaseline === null) {
-          window.shoulderAngleBaseline = rawShoulder;
-        }
-        const delta = Math.abs(rawShoulder - window.shoulderAngleBaseline);
-        window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
+      if (window.shoulderAngleBaseline === null) {
+        window.shoulderAngleBaseline = rawShoulder;
       }
+      const shoulderDelta = rawShoulder - window.shoulderAngleBaseline;
+      window.maxShoulderDelta = Math.max(window.maxShoulderDelta, Math.max(0, shoulderDelta));
+      window.maxShoulderProtractionDelta = Math.max(
+        window.maxShoulderProtractionDelta,
+        Math.max(0, -shoulderDelta),
+      );
     }
 
     // Track torso deviation as delta from baseline — the absolute angle from
@@ -732,17 +1256,75 @@ function updateCableRowState(
     // from baseline captures dynamic lean during the pull (the actual concern).
     // Only update when shoulder + hip have sufficient confidence.
     if (rawTorsoDev !== null) {
-      const torsoConf = minKeypointConfidence(keypoints, [
-        `${visibleSide}_shoulder`, `${visibleSide}_hip`,
-      ]);
-      if (torsoConf >= 0.3) {
-        if (window.torsoDevBaseline === null) {
-          window.torsoDevBaseline = rawTorsoDev;
-        }
-        const torsoDelta = Math.abs(rawTorsoDev - window.torsoDevBaseline);
-        window.maxTorsoDev = Math.max(window.maxTorsoDev, torsoDelta);
+      if (window.torsoDevBaseline === null) {
+        window.torsoDevBaseline = rawTorsoDev;
+      }
+      const signedTorsoDelta = rawTorsoDev - window.torsoDevBaseline;
+      const torsoDelta = Math.abs(signedTorsoDelta);
+      window.maxTorsoLeanBackDelta = Math.max(
+        window.maxTorsoLeanBackDelta,
+        Math.max(0, -signedTorsoDelta),
+      );
+      window.maxTorsoForwardDelta = Math.max(
+        window.maxTorsoForwardDelta,
+        Math.max(0, signedTorsoDelta),
+      );
+      window.maxTorsoDev = Math.max(window.maxTorsoDev, torsoDelta);
+    }
+
+    const shoulder = visibleKeypoint(signalKeypoints, `${visibleSide}_shoulder`, FORM_CONFIDENCE_MIN);
+    const torsoHeight = calculateTorsoHeight(signalKeypoints, visibleSide);
+    if (shoulder) {
+      if (window.shoulderYBaseline === null) {
+        window.shoulderYBaseline = shoulder.y;
+      }
+      const shoulderShrugRatio = calculateShoulderShrugRatio(
+        shoulder.y,
+        window.shoulderYBaseline,
+        torsoHeight,
+      );
+      if (shoulderShrugRatio !== null) {
+        window.maxShoulderShrugRatio = Math.max(
+          window.maxShoulderShrugRatio,
+          shoulderShrugRatio,
+        );
       }
     }
+
+    if (fastRatio <= THRESHOLDS.CONTRACTED_EXIT) {
+      const highRowRatio = calculateElbowAboveShoulderRatio(signalKeypoints, visibleSide);
+      if (highRowRatio !== null) {
+        window.maxElbowAboveShoulderRatio = Math.max(
+          window.maxElbowAboveShoulderRatio,
+          highRowRatio,
+        );
+      }
+      const rowTargetHighRatio = calculateRowTargetHighRatio(signalKeypoints, visibleSide);
+      if (rowTargetHighRatio !== null) {
+        window.maxRowTargetHighRatio = Math.max(
+          window.maxRowTargetHighRatio,
+          rowTargetHighRatio,
+        );
+      }
+    }
+
+    const previousVelocityRatio = window.lastVelocityRatio;
+    const previousVelocityTimestamp = window.lastVelocityTimestamp;
+    const velocityEligible =
+      previousVelocityRatio !== null &&
+      previousVelocityTimestamp !== null &&
+      t > previousVelocityTimestamp &&
+      (currentState.fsm.phase === 'PULLING' || newState.fsm.phase === 'PULLING');
+    if (velocityEligible) {
+      const velocity = Math.max(0, (previousVelocityRatio - rawRatio) / (t - previousVelocityTimestamp));
+      if (Number.isFinite(velocity)) {
+        window.maxPullVelocityRatioPerSec = Math.max(window.maxPullVelocityRatioPerSec, velocity);
+        window.pullVelocitySum += velocity;
+        window.pullVelocitySamples++;
+      }
+    }
+    window.lastVelocityRatio = rawRatio;
+    window.lastVelocityTimestamp = t;
 
     // Record contracted timestamp
     if (newState.fsm.phase === 'CONTRACTED' && window.tContracted === null) {
@@ -766,18 +1348,21 @@ function updateCableRowState(
     if (rawRatio !== null) {
       newState.repWindow.maxRatio = Math.max(newState.repWindow.maxRatio, rawRatio);
     }
+    if (sideViewConfidence !== null) {
+      newState.repWindow.sideViewConfidenceSum += sideViewConfidence;
+      newState.repWindow.sideViewConfidenceMin = Math.min(
+        newState.repWindow.sideViewConfidenceMin,
+        sideViewConfidence,
+      );
+      newState.repWindow.sideViewConfidenceSamples++;
+    }
     newState.repWindow.tEnd = t;
 
     newState.repCount++;
 
-    const score = computeCableRowScore(newState.repWindow);
-    const messages = generateFormMessages(newState.repWindow);
-
-    newState.lastRepResult = {
-      repIndex: newState.repCount,
-      score,
-      messages,
-    };
+    const repResult = buildCableRowRepResult(newState.repWindow, newState.repCount, visibleSide);
+    const messages = repResult.messages;
+    newState.lastRepResult = repResult;
 
     if (messages.length > 0) {
       newState.feedback = messages.join('\n');
@@ -820,8 +1405,129 @@ function getDebugInfo(state: CableRowState): CableRowDebugInfo {
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,
     ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmt(repWin.maxRatio) : null,
     shoulderDelta: repWin ? fmt(repWin.maxShoulderDelta) : null,
-    torsoDevMax: repWin ? fmt(repWin.maxTorsoDev) : null,
+    shoulderProtractionDelta: repWin ? fmt(repWin.maxShoulderProtractionDelta) : null,
+    torsoLeanBackDelta: repWin ? fmt(repWin.maxTorsoLeanBackDelta) : null,
+    torsoForwardDelta: repWin ? fmt(repWin.maxTorsoForwardDelta) : null,
+    torsoRockDelta: repWin ? fmt(repWin.maxTorsoDev) : null,
+    elbowAboveShoulderRatio: repWin ? fmt(repWin.maxElbowAboveShoulderRatio) : null,
+    rowTargetHighRatio: repWin ? fmt(repWin.maxRowTargetHighRatio) : null,
+    shoulderShrugRatio: repWin ? fmt(repWin.maxShoulderShrugRatio) : null,
+    sideViewConfidence: repWin ? fmt(averageSideViewConfidence(repWin)) : null,
   };
+}
+
+// ============================================================================
+// CONFIG VALIDATION
+// ============================================================================
+
+function configNumber(config: ExerciseHeuristicConfig, path: string, issues: string[]): number | null {
+  const value = getConfigValue(config, path);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    issues.push(`Cable Row config "${path}" must be a finite number.`);
+    return null;
+  }
+  return value;
+}
+
+function requireOrdered(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  firstPath: string,
+  secondPath: string,
+  allowEqual = false,
+): void {
+  const first = configNumber(config, firstPath, issues);
+  const second = configNumber(config, secondPath, issues);
+  if (first === null || second === null) return;
+  const valid = allowEqual ? first <= second : first < second;
+  if (!valid) {
+    issues.push(
+      `Cable Row config ordering invalid: "${firstPath}" (${first}) must be ${allowEqual ? '<=' : '<'} "${secondPath}" (${second}).`,
+    );
+  }
+}
+
+function validatePenaltyConfigs(config: ExerciseHeuristicConfig, issues: string[]): void {
+  const penaltyConfigs = getConfigValue(config, 'penaltyConfigs');
+  if (penaltyConfigs === null || typeof penaltyConfigs !== 'object' || Array.isArray(penaltyConfigs)) {
+    issues.push('Cable Row config "penaltyConfigs" must be an object.');
+    return;
+  }
+
+  for (const [penaltyName, penaltyConfig] of Object.entries(penaltyConfigs)) {
+    if (penaltyConfig === null || typeof penaltyConfig !== 'object' || Array.isArray(penaltyConfig)) {
+      issues.push(`Cable Row penalty config "${penaltyName}" must be an object.`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(penaltyConfig)) {
+      const path = `penaltyConfigs.${penaltyName}.${key}`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        issues.push(`Cable Row config "${path}" must be a finite number.`);
+        continue;
+      }
+      if (key === 'scale' && value <= 0) {
+        issues.push(`Cable Row config "${path}" must be greater than 0.`);
+      }
+      if (key === 'cap' && value < 0) {
+        issues.push(`Cable Row config "${path}" must be greater than or equal to 0.`);
+      }
+      if (key === 'deadzone' && value < 0) {
+        issues.push(`Cable Row config "${path}" must be greater than or equal to 0.`);
+      }
+    }
+  }
+}
+
+function validateCableRowHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const issues: string[] = [];
+
+  requireOrdered(config, issues, 'thresholds.CONTRACTED_ENTER', 'thresholds.CONTRACTED_EXIT');
+  requireOrdered(config, issues, 'thresholds.CONTRACTED_EXIT', 'thresholds.PULLING_ENTER');
+  requireOrdered(config, issues, 'thresholds.PULLING_ENTER', 'thresholds.REST_REENTER', true);
+  requireOrdered(config, issues, 'thresholds.MIN_PARTIAL_ROM', 'thresholds.PULLING_ENTER');
+
+  for (const path of [
+    'thresholds.PULLING_ENTER',
+    'thresholds.CONTRACTED_ENTER',
+    'thresholds.CONTRACTED_EXIT',
+    'thresholds.REST_REENTER',
+    'thresholds.MIN_PARTIAL_ROM',
+    'formThresholds.PULL_DEPTH_FAIL',
+    'formThresholds.EXTENSION_FAIL',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1.2)) {
+      issues.push(`Cable Row config "${path}" must be greater than 0 and at most 1.2.`);
+    }
+  }
+
+  for (const path of [
+    'thresholds.MIN_REP_TIME',
+    'formThresholds.RETRACTION_FAIL',
+    'formThresholds.TORSO_LEAN_WARN',
+    'formThresholds.TORSO_ROCK_WARN',
+    'formThresholds.TEMPO_PULL_MIN',
+    'formThresholds.TEMPO_RETURN_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && value <= 0) {
+      issues.push(`Cable Row config "${path}" must be greater than 0.`);
+    }
+  }
+
+  for (const path of [
+    'formThresholds.HIGH_ROW_WARN',
+    'formThresholds.ROW_TARGET_HIGH_WARN',
+    'formThresholds.SHOULDER_SHRUG_WARN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value >= 0.5)) {
+      issues.push(`Cable Row config "${path}" must be greater than 0 and less than 0.5.`);
+    }
+  }
+
+  validatePenaltyConfigs(config, issues);
+  return issues;
 }
 
 // ============================================================================
@@ -845,11 +1551,11 @@ export function createCableRowDefinition(
     _internal: withCableRowConfig(config, () => initializeCableRowState()),
   }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+  update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
     const internal = state._internal as CableRowState;
     const newInternal = withCableRowConfig(
       config,
-      () => updateCableRowState(keypoints, internal),
+      () => updateCableRowState(keypoints, internal, frameContext),
     );
 
     // Map internal RepResult to framework RepResult
@@ -858,6 +1564,9 @@ export function createCableRowDefinition(
           repIndex: newInternal.lastRepResult.repIndex,
           score: newInternal.lastRepResult.score,
           messages: newInternal.lastRepResult.messages,
+          scorable: newInternal.lastRepResult.scorable,
+          qualityWarnings: newInternal.lastRepResult.qualityWarnings,
+          diagnostics: newInternal.lastRepResult.diagnostics,
         }
       : null;
 
@@ -877,6 +1586,7 @@ export function createCableRowDefinition(
   tunedConfigPath: 'src/utils/exercises/definitions/tuned/cableRow.json',
   createVariant: (variantConfig) =>
     createCableRowDefinition(mergeHeuristicConfig(config, variantConfig)),
+  validateHeuristicConfig: validateCableRowHeuristicConfig,
 
   ttsConfig: {
     feedbackToIssue: {
@@ -884,6 +1594,9 @@ export function createCableRowDefinition(
       'Extend your arms fully \u2014 get a full stretch at the front.': 'row_extension',
       'Drive your elbows back \u2014 focus on shoulder retraction.': 'shoulder_retraction',
       'Stay upright \u2014 avoid leaning back during the pull.': 'torso_warn',
+      'Keep your torso steady through the row.': 'torso_rocking',
+      'Keep your elbows lower \u2014 row toward your ribs.': 'high_row',
+      'Keep your shoulders down as you pull.': 'shoulder_shrug',
       'Slow down the pull \u2014 control the contraction.': 'tempo_down',
       "Control the return \u2014 don't let the weight pull you forward.": 'tempo_up',
     },
@@ -892,6 +1605,21 @@ export function createCableRowDefinition(
         'Stay upright as you pull.',
         'Less lean back. Keep the row strict.',
         'Brace tall and pull with your back.',
+      ],
+      'Keep your torso steady through the row.': [
+        'Keep your torso steady.',
+        'Brace and row without rocking.',
+        'Less body swing. Keep it strict.',
+      ],
+      'Keep your elbows lower \u2014 row toward your ribs.': [
+        'Row toward your ribs.',
+        'Keep the elbows lower.',
+        'Pull lower, not up toward the chest.',
+      ],
+      'Keep your shoulders down as you pull.': [
+        'Keep your shoulders down.',
+        'Relax the traps as you row.',
+        'Pull back without shrugging.',
       ],
       'Slow down the pull \u2014 control the contraction.': [
         'Slow the pull.',
@@ -930,6 +1658,33 @@ export function createCableRowDefinition(
           'Elbows back. Squeeze your shoulder blades.',
           'Squeeze your shoulder blades.',
           'Drive those elbows behind you.',
+          ],
+      },
+      {
+        issueType: 'torso_rocking',
+        priority: 18,
+        messages: [
+          'Keep your torso steady.',
+          'Brace and stop the body swing.',
+          'Row without rocking your torso.',
+        ],
+      },
+      {
+        issueType: 'high_row',
+        priority: 18,
+        messages: [
+          'Row toward your ribs.',
+          'Keep your elbows lower.',
+          'Pull lower with your elbows.',
+        ],
+      },
+      {
+        issueType: 'shoulder_shrug',
+        priority: 16,
+        messages: [
+          'Keep your shoulders down.',
+          'No shrug at the top.',
+          'Pull without lifting your shoulders.',
         ],
       },
     ],
@@ -944,6 +1699,12 @@ export function createCableRowDefinition(
       'Initiate the pull by driving your elbows back rather than curling with your arms. Think about squeezing a pencil between your shoulder blades.',
     'Stay upright \u2014 avoid leaning back during the pull.':
       'Maintain an upright torso throughout the movement. Leaning back uses momentum rather than back muscles.',
+    'Keep your torso steady through the row.':
+      'Brace your midsection and keep your torso quiet so the pull comes from your back rather than body swing.',
+    'Keep your elbows lower \u2014 row toward your ribs.':
+      'Pull the handle toward your lower ribs with elbows tracking back instead of rowing high toward your upper chest.',
+    'Keep your shoulders down as you pull.':
+      'Keep your shoulders relaxed and down so the row targets your back rather than turning into a shrug.',
     'Slow down the pull \u2014 control the contraction.':
       'Control the concentric phase \u2014 aim for 1-2 seconds on the pull to maximize muscle engagement.',
     "Control the return \u2014 don't let the weight pull you forward.":

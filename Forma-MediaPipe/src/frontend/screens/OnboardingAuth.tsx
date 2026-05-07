@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   blueprintCardEdge: {
     flex: 1,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.115)',
     alignItems: 'center',
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122, 85, 255, 0.10)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.20)',
   },
   blueprintStatusRow: {
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 8,
     backgroundColor: 'rgba(52, 224, 166, 0.10)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(52, 224, 166, 0.20)',
   },
   statusDot: {
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   appleButtonInner: {
     height: 54,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.10)',
   },
   buttonText: {

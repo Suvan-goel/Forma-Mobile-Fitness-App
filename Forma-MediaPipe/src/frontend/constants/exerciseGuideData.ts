@@ -16,7 +16,7 @@ export const EXERCISE_SETUP_DATA: Record<string, ExerciseSetupData> = {
   },
   'Barbell Squat': {
     keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks knee depth, hip hinge angle, and torso forward lean from the side.',
+    reasonText: 'Tracks depth, lockout, torso lean, heel lift, and tempo from the side.',
     cameraTips: [
       'Set the phone roughly at hip height, perpendicular to your body.',
       'Stand 6–8 feet away so your whole body and the barbell are in frame.',

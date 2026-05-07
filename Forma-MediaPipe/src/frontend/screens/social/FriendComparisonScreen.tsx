@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   heroEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.borderStrong,
     padding: 16,
   },
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122,85,255,0.12)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122,85,255,0.24)',
   },
   summaryRow: {
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 78,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   },
   metricEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     padding: 14,
   },
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
   emptyCard: {
     width: '100%',
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     backgroundColor: 'rgba(23,27,30,0.9)',
     padding: 18,

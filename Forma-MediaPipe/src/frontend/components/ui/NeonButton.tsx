@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   },
   ghost: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: '#333',
   },
   text: {

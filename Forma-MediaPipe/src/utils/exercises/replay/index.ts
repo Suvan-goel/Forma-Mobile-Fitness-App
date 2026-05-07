@@ -11,6 +11,7 @@ export type {
   LandmarkRecording,
   QualityCoverage,
   ReplayOptions,
+  ReplayFrameContext,
   ReplayRepQuality,
   ReplayRepPrediction,
   ReplayResult,

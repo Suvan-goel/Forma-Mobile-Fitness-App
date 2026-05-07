@@ -28,7 +28,9 @@ import {
 } from '../../utils/exercises';
 import type {
   ExerciseState,
+  ExerciseFrameContext,
   PoseQualitySnapshot,
+  PoseQualityWarning,
   RepTrackingQuality,
   SetTrackingQualitySummary,
 } from '../../utils/exercises';
@@ -64,12 +66,15 @@ type PendingUIState = {
 
 type ConvertedLandmarks = {
   keypoints: Keypoint[];
+  worldKeypoints?: Keypoint[];
   imageKeypoints?: Keypoint[];
+  primarySource: ExerciseFrameContext['primarySource'];
 };
 
 type LandmarkRecordingFrame = {
   timestamp: number;
   keypoints: Keypoint[];
+  worldKeypoints?: Keypoint[];
   imageKeypoints?: Keypoint[];
 };
 
@@ -90,6 +95,13 @@ function getTrackingQualityTone(status: PoseQualitySnapshot['status'] | RepTrack
     return { color: '#FBBF24', backgroundColor: 'rgba(251, 191, 36, 0.14)', borderColor: 'rgba(251, 191, 36, 0.32)' };
   }
   return { color: '#F87171', backgroundColor: 'rgba(248, 113, 113, 0.15)', borderColor: 'rgba(248, 113, 113, 0.34)' };
+}
+
+function mergeTrackingWarnings(
+  baseWarnings: PoseQualityWarning[],
+  exerciseWarnings: PoseQualityWarning[] = [],
+): PoseQualityWarning[] {
+  return Array.from(new Set([...baseWarnings, ...exerciseWarnings]));
 }
 
 // Camera can be called from either the root stack or the record stack
@@ -445,7 +457,12 @@ export const CameraScreen: React.FC = () => {
         return null;
       }
 
-      return imageKeypoints ? { keypoints, imageKeypoints } : { keypoints };
+      return {
+        keypoints,
+        worldKeypoints: worldKeypoints ?? undefined,
+        imageKeypoints: imageKeypoints ?? undefined,
+        primarySource: worldKeypoints ? 'world' : 'image',
+      };
     } catch {
       return null;
     }
@@ -546,7 +563,12 @@ export const CameraScreen: React.FC = () => {
 
     const converted = convertLandmarksToKeypoints(data);
     if (!converted || converted.keypoints.length === 0) return;
-    const { keypoints, imageKeypoints } = converted;
+    const { keypoints, worldKeypoints, imageKeypoints, primarySource } = converted;
+    const frameContext: ExerciseFrameContext = {
+      worldKeypoints,
+      imageKeypoints,
+      primarySource,
+    };
 
     // __DEV__-only: buffer keypoints for landmark recording
     if (debugModeRef.current && isRecordingLandmarksRef.current) {
@@ -554,6 +576,7 @@ export const CameraScreen: React.FC = () => {
         timestamp: Date.now() - landmarkRecordingStartRef.current,
         keypoints,
       };
+      if (worldKeypoints) frame.worldKeypoints = worldKeypoints;
       if (imageKeypoints) frame.imageKeypoints = imageKeypoints;
       landmarkBufferRef.current.push(frame);
     }
@@ -565,7 +588,7 @@ export const CameraScreen: React.FC = () => {
       const quality = poseQualityTrackerRef.current.update(keypoints, qualityProfile, {
         frameBoundsKeypoints: imageKeypoints,
       });
-      const newState = exerciseDef.update(keypoints, exerciseStateRef.current);
+      const newState = exerciseDef.update(keypoints, exerciseStateRef.current, frameContext);
       newState.quality = quality;
       exerciseStateRef.current = newState;
 
@@ -592,12 +615,28 @@ export const CameraScreen: React.FC = () => {
           warnings: quality.warnings,
           message: quality.message,
         };
-        const repIsScorable = completedRepQuality.scorable && repScore > 0;
+        const exerciseAllowsScoring = newState.lastRepResult?.scorable !== false;
+        const exerciseWarnings = newState.lastRepResult?.qualityWarnings ?? [];
+        const mergedWarnings = mergeTrackingWarnings(completedRepQuality.warnings, exerciseWarnings);
+        const adjustedRepQuality = exerciseAllowsScoring
+          ? { ...completedRepQuality, warnings: mergedWarnings }
+          : (() => {
+              const warnings = mergedWarnings.length > 0
+                ? mergedWarnings
+                : ['missing_required_joints' as PoseQualityWarning];
+              return {
+                ...completedRepQuality,
+                scorable: false,
+                warnings,
+                message: getPoseQualityMessage({ status: completedRepQuality.status, warnings }),
+              };
+            })();
+        const repIsScorable = adjustedRepQuality.scorable && repScore > 0;
         const repFeedback = repIsScorable
           ? (newState.feedback ?? 'Great rep!')
-          : getUnscoredRepFeedback(completedRepQuality);
+          : getUnscoredRepFeedback(adjustedRepQuality);
         completedRepCountRef.current = newState.repCount;
-        accumulatedRepQualitiesRef.current.push(completedRepQuality);
+        accumulatedRepQualitiesRef.current.push(adjustedRepQuality);
         accumulatedRepFormScoresRef.current.push(repIsScorable ? repScore : 0);
         accumulatedRepFeedbackRef.current.push(repFeedback);
         pending.formScore = repIsScorable ? repScore : null;
@@ -607,16 +646,17 @@ export const CameraScreen: React.FC = () => {
         if (newState.lastRepResult) {
           newState.lastRepResult = {
             ...newState.lastRepResult,
-            confidence: completedRepQuality.confidence,
-            qualityStatus: completedRepQuality.status,
-            qualityWarnings: completedRepQuality.warnings,
+            confidence: adjustedRepQuality.confidence,
+            qualityStatus: adjustedRepQuality.status,
+            qualityWarnings: adjustedRepQuality.warnings,
+            scorable: adjustedRepQuality.scorable,
           };
         }
         pending.workoutUpdate = {
           totalReps: newState.repCount,
           repFormScore: repIsScorable ? repScore : 0,
           repFeedback,
-          repQuality: completedRepQuality,
+          repQuality: adjustedRepQuality,
         };
 
         // TTS coaching — fire-and-forget, does not block landmark processing
@@ -1527,16 +1567,28 @@ export const CameraScreen: React.FC = () => {
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'} | {d.activeSide ?? '–'} arm
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
-                  {'  '}Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
+                  Ratio: {d.ratio != null ? d.ratio.toFixed(3) : '–'}
+                  {'  '}Side view: {d.sideViewConfidence != null ? d.sideViewConfidence.toFixed(2) : '–'}
+                  {'  '}View: {d.viewQualityStatus ?? '–'}
                 </Text>
-                {d.minElbow != null && (
+                <Text style={styles.torsoDebugText}>
+                  Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
+                  {'  '}Drive: {d.upperArmDriveDelta != null ? d.upperArmDriveDelta.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.minRatio != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep: {d.minElbow.toFixed(1)}°–{d.maxElbow != null ? d.maxElbow.toFixed(1) : '–'}°
-                    {'  '}Max lean: {d.maxTorsoLean != null ? d.maxTorsoLean.toFixed(1) + '°' : '–'}
+                    Rep ratio: {d.minRatio.toFixed(3)}–{d.maxRatio != null ? d.maxRatio.toFixed(3) : '–'}
+                    {'  '}Scorable: {d.scorable === null || d.scorable === undefined ? '–' : d.scorable ? 'yes' : 'no'}
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Pull &lt;85° | Enter &lt;150° | Extend &gt;135° | Torso warn 20°</Text>
+                {(d.torsoLeanBackDelta != null || d.shoulderShrugRatio != null) && (
+                  <Text style={styles.torsoDebugText}>
+                    Back Δ: {d.torsoLeanBackDelta != null ? d.torsoLeanBackDelta.toFixed(1) + '°' : '–'}
+                    {'  '}Rock: {d.torsoRockDelta != null ? d.torsoRockDelta.toFixed(1) + '°' : '–'}
+                    {'  '}Shrug: {d.shoulderShrugRatio != null ? (d.shoulderShrugRatio * 100).toFixed(1) + '%' : '–'}
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Pull ≤0.60 | Extend ≥0.90 | Elbow drive ≥30° | Shrug ≤6%</Text>
               </View>
             </View>
             );
@@ -1648,14 +1700,25 @@ export const CameraScreen: React.FC = () => {
                 <Text style={styles.torsoDebugText}>
                   Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
                   {'  '}Neck: {d.neckAngle != null ? d.neckAngle.toFixed(1) + '°' : '–'}
+                  {'  '}Side: {d.sideViewConfidence != null ? Math.round(d.sideViewConfidence * 100) + '%' : '–'}
                 </Text>
-                {d.minHipAngle != null && (
+                {d.crunchDepthAngle != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Hip: {d.minHipAngle.toFixed(1)}°–{d.maxHipAngle != null ? d.maxHipAngle.toFixed(1) : '–'}°
+                    Rep: {d.startExtensionAngle != null ? d.startExtensionAngle.toFixed(1) : '–'}°
+                    {' → '}{d.crunchDepthAngle.toFixed(1)}°
+                    {' → '}{d.returnExtensionAngle != null ? d.returnExtensionAngle.toFixed(1) : '–'}°
+                    {'  '}ROM: {d.romAngle != null ? d.romAngle.toFixed(1) : '–'}°
                     {'  '}Max Neck: {d.maxNeckForward != null ? d.maxNeckForward.toFixed(1) : '–'}°
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Crunch &lt;115° | Extend &gt;145° | Neck warn 30°</Text>
+                {(d.velocitySpikeRatio != null || d.armPullRatio != null || d.hipShiftRatio != null) && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Spike: {d.velocitySpikeRatio != null ? d.velocitySpikeRatio.toFixed(1) + 'x' : '–'}
+                    {'  '}Arm: {d.armPullRatio != null ? d.armPullRatio.toFixed(2) : '–'}
+                    {'  '}Hip shift: {d.hipShiftRatio != null ? d.hipShiftRatio.toFixed(2) : '–'}
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Depth warn &gt;112° | Return warn &lt;122° | Neck warn &gt;45°</Text>
               </View>
             </View>
             );
@@ -1833,7 +1896,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     backgroundColor: 'rgba(239, 68, 68, 0.18)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(239, 68, 68, 0.45)',
     borderRadius: 10,
     paddingHorizontal: 8,
@@ -1873,7 +1936,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: 0.5,
     zIndex: 10,
   },
   trackingQualityText: {
@@ -1995,7 +2058,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: 'rgba(20, 26, 32, 0.7)',
     borderRadius: 50,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   metricLabel: {
@@ -2033,7 +2096,7 @@ const styles = StyleSheet.create({
   feedbackFeedItem: {
     backgroundColor: 'rgba(20, 26, 32, 0.85)',
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,

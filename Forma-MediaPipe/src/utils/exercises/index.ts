@@ -37,6 +37,7 @@ export {
 } from './heuristicConfig';
 export type {
   ExerciseState,
+  ExerciseFrameContext,
   ExerciseDefinition,
   ExerciseHeuristicConfig,
   ExerciseHeuristicConfigValue,

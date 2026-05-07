@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
   },
   cardEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
@@ -702,7 +702,7 @@ const styles = StyleSheet.create({
   /* Grouped card (multiple rows) */
   groupEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: CARD_RADIUS_SM,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(139, 92, 246, 0.35)',
     backgroundColor: 'rgba(122, 85, 255, 0.1)',
   },
@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
     width: 260,
     backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingTop: 24,
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
   infoModalContent: {
     backgroundColor: COLORS.cardBackground,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 22,

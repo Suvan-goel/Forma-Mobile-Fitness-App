@@ -38,8 +38,16 @@
       "feedbackMessage": "Keep your elbows pinned to your sides — avoid letting them drift."
     },
     {
+      "issueId": "cable-pushdowns.elbow_forward",
+      "feedbackMessage": "Start with your elbows tucked by your sides."
+    },
+    {
       "issueId": "cable-pushdowns.torso_warn",
       "feedbackMessage": "Stay upright — avoid leaning into the pushdown."
+    },
+    {
+      "issueId": "cable-pushdowns.torso_rocking",
+      "feedbackMessage": "Keep your torso steady through the pushdown."
     },
     {
       "issueId": "cable-pushdowns.tempo_down",

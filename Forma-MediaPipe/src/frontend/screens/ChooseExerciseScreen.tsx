@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 12,
     height: 42,
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
   cardGlassEdge: {
     flex: 1,
     borderRadius: 19,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 8,

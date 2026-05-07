@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   },
   summaryEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 16,
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   summaryDatePillText: {
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.032)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   summaryStatTextWrap: {
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
   },
   notesEdge: {
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     flexDirection: 'row',
     overflow: 'hidden',
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   },
   cardEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   avgScoreText: {

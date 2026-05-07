@@ -5,7 +5,8 @@ import type { Keypoint } from '../../poseAnalysis';
 
 type Side = 'left' | 'right';
 type Orientation = 'facing-right' | 'facing-left';
-type TorsoPosture = 'upright' | 'leaned';
+type TorsoPosture = 'upright' | 'leaned' | 'forward';
+type ArmPath = 'normal' | 'highRow' | 'upperChest' | 'shrug' | 'protract';
 
 type Point = { x: number; y: number; z?: number };
 
@@ -21,7 +22,7 @@ const EXTENDED = {
 const CONTRACTED = {
   shoulder: { x: 0, y: 0.5, z: 0 },
   elbow: { x: -0.18, y: 0.75, z: 0 },
-  wrist: { x: 0.02, y: 0.64, z: 0 },
+  wrist: { x: 0.02, y: 0.72, z: 0 },
   hip: { x: 0, y: 1.1, z: 0 },
 };
 
@@ -39,7 +40,7 @@ function interpolate(from: number, to: number, frames: number): number[] {
 function fullRepPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 1, 24),
+    ...interpolate(0, 1, 40),
     ...Array(4).fill(1),
     ...interpolate(1, 0, 50),
     ...Array(8).fill(0),
@@ -58,8 +59,8 @@ function partialPath(): number[] {
 function halfRepPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 0.62, 16),
-    ...interpolate(0.62, 0, 20),
+    ...interpolate(0, 0.72, 16),
+    ...interpolate(0.72, 0, 20),
     ...Array(8).fill(0),
   ];
 }
@@ -67,9 +68,19 @@ function halfRepPath(): number[] {
 function fastReturnPath(): number[] {
   return [
     ...Array(16).fill(0),
-    ...interpolate(0, 1, 24),
+    ...interpolate(0, 1, 40),
     ...Array(4).fill(1),
     ...interpolate(1, 0, 4),
+    ...Array(8).fill(0),
+  ];
+}
+
+function fastPullPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 1, 4),
+    ...Array(6).fill(1),
+    ...interpolate(1, 0, 50),
     ...Array(8).fill(0),
   ];
 }
@@ -82,7 +93,7 @@ function lerpPoint(a: Point, b: Point, t: number, mirror: number): Point {
   };
 }
 
-function poseAt(progress: number, orientation: Orientation, posture: TorsoPosture) {
+function poseAt(progress: number, orientation: Orientation, posture: TorsoPosture, armPath: ArmPath) {
   const mirror = orientation === 'facing-left' ? -1 : 1;
   const shoulder = lerpPoint(EXTENDED.shoulder, CONTRACTED.shoulder, progress, mirror);
   const elbow = lerpPoint(EXTENDED.elbow, CONTRACTED.elbow, progress, mirror);
@@ -91,6 +102,28 @@ function poseAt(progress: number, orientation: Orientation, posture: TorsoPostur
 
   if (posture === 'leaned') {
     shoulder.z = -0.34;
+  } else if (posture === 'forward') {
+    shoulder.z = 0.34;
+  }
+
+  if (armPath === 'highRow') {
+    const lift = progress * 0.42;
+    elbow.y -= lift;
+    wrist.y -= lift * 0.55;
+  } else if (armPath === 'upperChest') {
+    const lift = progress * 0.22;
+    elbow.y -= progress * 0.08;
+    wrist.y -= lift;
+  } else if (armPath === 'shrug') {
+    const lift = progress * 0.16;
+    shoulder.y -= lift;
+    elbow.y -= lift;
+    wrist.y -= lift;
+  } else if (armPath === 'protract') {
+    const protractedElbow = { x: 0.25 * mirror, y: 0.48, z: 0 };
+    elbow.x += (protractedElbow.x - elbow.x) * progress;
+    elbow.y += (protractedElbow.y - elbow.y) * progress;
+    elbow.z = (elbow.z ?? 0) + ((protractedElbow.z ?? 0) - (elbow.z ?? 0)) * progress;
   }
 
   return { shoulder, elbow, wrist, hip };
@@ -102,9 +135,11 @@ function sideKeypoints(
   orientation: Orientation,
   posture: TorsoPosture,
   score: number,
+  armPath: ArmPath,
+  sideGap: number,
 ): Keypoint[] {
-  const pose = poseAt(progress, orientation, posture);
-  const offset = side === 'left' ? -0.015 : 0.015;
+  const pose = poseAt(progress, orientation, posture, armPath);
+  const offset = side === 'left' ? -sideGap / 2 : sideGap / 2;
   const withOffset = (point: Point) => ({ ...point, x: point.x + offset });
 
   return [
@@ -122,12 +157,14 @@ function makeFrameWithScores(
   posture: TorsoPosture,
   leftScore: number,
   rightScore: number,
+  armPath: ArmPath,
+  sideGap: number,
 ): LandmarkRecording['frames'][number] {
   return {
     timestamp,
     keypoints: [
-      ...sideKeypoints('left', progress, orientation, posture, leftScore),
-      ...sideKeypoints('right', progress, orientation, posture, rightScore),
+      ...sideKeypoints('left', progress, orientation, posture, leftScore, armPath, sideGap),
+      ...sideKeypoints('right', progress, orientation, posture, rightScore, armPath, sideGap),
     ],
   };
 }
@@ -139,10 +176,12 @@ function makeFrame(
   orientation: Orientation,
   posture: TorsoPosture,
   hiddenSideScore = 0.3,
+  armPath: ArmPath,
+  sideGap: number,
 ): LandmarkRecording['frames'][number] {
   return side === 'left'
-    ? makeFrameWithScores(timestamp, progress, orientation, posture, 0.99, hiddenSideScore)
-    : makeFrameWithScores(timestamp, progress, orientation, posture, hiddenSideScore, 0.99);
+    ? makeFrameWithScores(timestamp, progress, orientation, posture, 0.99, hiddenSideScore, armPath, sideGap)
+    : makeFrameWithScores(timestamp, progress, orientation, posture, hiddenSideScore, 0.99, armPath, sideGap);
 }
 
 function buildRecording(
@@ -152,6 +191,8 @@ function buildRecording(
     side?: Side;
     orientation?: Orientation;
     posture?: TorsoPosture | ((index: number) => TorsoPosture);
+    armPath?: ArmPath;
+    sideGap?: number;
     sideSwitchFrame?: number;
   } = {},
 ): LandmarkRecording {
@@ -159,6 +200,8 @@ function buildRecording(
     side = 'left',
     orientation = 'facing-right',
     posture = 'upright',
+    armPath = 'normal',
+    sideGap = 0.03,
     sideSwitchFrame,
   } = options;
 
@@ -175,11 +218,65 @@ function buildRecording(
       const framePosture = typeof posture === 'function' ? posture(index) : posture;
       if (sideSwitchFrame !== undefined && index >= sideSwitchFrame) {
         return side === 'left'
-          ? makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.7, 0.99)
-          : makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.99, 0.7);
+          ? makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.7, 0.99, armPath, sideGap)
+          : makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.99, 0.7, armPath, sideGap);
       }
-      return makeFrame(index * FRAME_MS, progress, side, orientation, framePosture);
+      return makeFrame(index * FRAME_MS, progress, side, orientation, framePosture, 0.3, armPath, sideGap);
     }),
+  };
+}
+
+function buildWorldStaticImageRecording(description: string, path: number[]): LandmarkRecording {
+  const imageRecording = buildRecording(description, path);
+  const staticWorldRecording = buildRecording(`${description} static world`, Array(path.length).fill(0));
+  return {
+    ...imageRecording,
+    frames: imageRecording.frames.map((frame, index) => ({
+      timestamp: frame.timestamp,
+      keypoints: staticWorldRecording.frames[index].keypoints,
+      worldKeypoints: staticWorldRecording.frames[index].keypoints,
+      imageKeypoints: frame.keypoints,
+    })),
+  };
+}
+
+function buildInvalidWorldImageRecording(
+  description: string,
+  path: number[],
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
+  const imageRecording = buildRecording(description, path, options);
+  const invalidWorldRecording = buildRecording(`${description} invalid world`, Array(path.length).fill(0));
+  return {
+    ...imageRecording,
+    frames: imageRecording.frames.map((frame, index) => {
+      const worldKeypoints = invalidWorldRecording.frames[index].keypoints.map((keypoint) => ({
+        ...keypoint,
+        score: 0.05,
+      }));
+      return {
+        timestamp: frame.timestamp,
+        keypoints: worldKeypoints,
+        worldKeypoints,
+        imageKeypoints: frame.keypoints,
+      };
+    }),
+  };
+}
+
+function buildYawArtifactRecording(description: string, path: number[]): LandmarkRecording {
+  const recording = buildRecording(description, path);
+  return {
+    ...recording,
+    frames: recording.frames.map((frame, index) => ({
+      ...frame,
+      keypoints: frame.keypoints.map((keypoint) => {
+        if (index < 45) return keypoint;
+        if (keypoint.name === 'left_shoulder' || keypoint.name === 'left_hip') return { ...keypoint, z: -0.34 };
+        if (keypoint.name === 'right_shoulder' || keypoint.name === 'right_hip') return { ...keypoint, z: 0.34 };
+        return keypoint;
+      }),
+    })),
   };
 }
 
@@ -222,7 +319,7 @@ describe('Cable Row synthetic replay coverage', () => {
       cableRowDefinition,
       buildRecording('synthetic cable row side visibility flip', fullRepPath(), {
         side: 'left',
-        sideSwitchFrame: 34,
+        sideSwitchFrame: 48,
       }),
     );
 
@@ -239,13 +336,137 @@ describe('Cable Row synthetic replay coverage', () => {
     const leaned = replayRecording(
       cableRowDefinition,
       buildRecording('synthetic leaned cable row', fullRepPath(), {
-        posture: index => (index < 32 ? 'upright' : 'leaned'),
+        posture: index => (index < 45 ? 'upright' : 'leaned'),
       }),
     );
 
     expect(clean.feedbackMessages).not.toContain('Stay upright — avoid leaning back during the pull.');
     expect(leaned.finalRepCount).toBe(1);
     expect(leaned.feedbackMessages).toContain('Stay upright — avoid leaning back during the pull.');
+  });
+
+  it.each<Orientation>(['facing-right', 'facing-left'])(
+    'keeps torso lean direction consistent when %s',
+    orientation => {
+      const leaned = replayRecording(
+        cableRowDefinition,
+        buildRecording(`synthetic directional torso cable row ${orientation}`, fullRepPath(), {
+          orientation,
+          posture: index => (index < 45 ? 'upright' : 'leaned'),
+        }),
+      );
+      const forward = replayRecording(
+        cableRowDefinition,
+        buildRecording(`synthetic forward torso cable row ${orientation}`, fullRepPath(), {
+          orientation,
+          posture: index => (index < 45 ? 'upright' : 'forward'),
+        }),
+      );
+
+      expect(leaned.feedbackMessages).toContain('Stay upright — avoid leaning back during the pull.');
+      expect(forward.feedbackMessages).not.toContain('Stay upright — avoid leaning back during the pull.');
+    },
+  );
+
+  it('uses two-sided sagittal torso tracking instead of selected-side yaw artifacts', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildYawArtifactRecording('synthetic yaw artifact cable row', fullRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Stay upright — avoid leaning back during the pull.');
+  });
+
+  it('does not treat forward-only torso movement as lean-back cheating', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic forward torso drift cable row', fullRepPath(), {
+        posture: index => (index < 32 ? 'upright' : 'forward'),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Stay upright — avoid leaning back during the pull.');
+  });
+
+  it('flags torso rocking separately from lean-back', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic rocking cable row', fullRepPath(), {
+        posture: index => (index < 30 ? 'upright' : index < 54 ? 'leaned' : 'forward'),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your torso steady through the row.');
+  });
+
+  it('flags a high row path without punishing a clean rib-level row', () => {
+    const clean = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic clean rib-level cable row', fullRepPath()),
+    );
+    const highRow = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic high cable row', fullRepPath(), { armPath: 'highRow' }),
+    );
+
+    expect(clean.feedbackMessages).not.toContain('Keep your elbows lower — row toward your ribs.');
+    expect(highRow.finalRepCount).toBe(1);
+    expect(highRow.feedbackMessages).toContain('Keep your elbows lower — row toward your ribs.');
+  });
+
+  it('flags an upper-chest row via target height even when the elbow stays below the shoulder', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic upper chest cable row', fullRepPath(), { armPath: 'upperChest' }),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your elbows lower — row toward your ribs.');
+    expect(diagnostics.metrics.elbowAboveShoulderRatio.value ?? 0).toBeLessThanOrEqual(0.08);
+    expect(diagnostics.metrics.rowTargetHighRatio.value ?? 0).toBeGreaterThan(0.10);
+    expect(diagnostics.cues['cable-row.high_row'].triggered).toBe(true);
+  });
+
+  it('flags shoulder shrug without punishing a clean row', () => {
+    const clean = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic clean no-shrug cable row', fullRepPath()),
+    );
+    const shrug = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic shrugging cable row', fullRepPath(), { armPath: 'shrug' }),
+    );
+
+    expect(clean.feedbackMessages).not.toContain('Keep your shoulders down as you pull.');
+    expect(shrug.finalRepCount).toBe(1);
+    expect(shrug.feedbackMessages).toContain('Keep your shoulders down as you pull.');
+  });
+
+  it('does not count wrong-direction shoulder movement as shoulder retraction', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic protracted shoulder cable row', fullRepPath(), { armPath: 'protract' }),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Drive your elbows back — focus on shoulder retraction.');
+    expect(diagnostics.metrics.shoulderRetractionDelta.value ?? 0).toBeLessThan(15);
+    expect(diagnostics.metrics.shoulderProtractionDelta.value ?? 0).toBeGreaterThan(0);
+  });
+
+  it('flags a fast pull from a naturally sub-maximal extended rest', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic fast pull cable row', fastPullPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Slow down the pull — control the contraction.');
   });
 
   it('still flags a true fast return', () => {
@@ -256,5 +477,70 @@ describe('Cable Row synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain("Control the return — don't let the weight pull you forward.");
+  });
+
+  it('counts but marks front-ish rows unscorable when side-view confidence is too low', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic poor side view cable row', fullRepPath(), { sideGap: 0.42 }),
+      { confidenceGating: true },
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
+  });
+
+  it('shows cable-row setup guidance while resting in a poor side view', () => {
+    const poor = replayRecordingVerbose(
+      cableRowDefinition,
+      buildRecording('synthetic poor side-view setup cable row', Array(30).fill(0), { sideGap: 0.42 }),
+    );
+    const good = replayRecordingVerbose(
+      cableRowDefinition,
+      buildRecording('synthetic good side-view setup cable row', Array(30).fill(0), { sideGap: 0.03 }),
+    );
+
+    expect(poor.finalRepCount).toBe(0);
+    expect(poor.frameTraces.some(trace => trace.feedback === 'Turn side-on so I can judge your row.')).toBe(true);
+    expect(good.frameTraces.some(trace => trace.feedback === 'Turn side-on so I can judge your row.')).toBe(false);
+  });
+
+  it('uses image landmarks for row FSM when world x/y are not useful', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildWorldStaticImageRecording('synthetic image-driven cable row', fullRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Pull further back — squeeze your shoulder blades together.');
+  });
+
+  it('falls back to image landmarks for form metrics when world landmarks are invalid', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildInvalidWorldImageRecording('synthetic image fallback torso cable row', fullRepPath(), {
+        posture: index => (index < 45 ? 'upright' : 'leaned'),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Stay upright — avoid leaning back during the pull.');
+  });
+
+  it('records smoothness and hold diagnostics for normal reps', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic diagnostic cable row', fullRepPath()),
+    );
+    const metrics = result.reps[0].diagnostics!.metrics;
+
+    expect(metrics.contractedHoldMs.value).not.toBeNull();
+    expect(metrics.maxPullVelocityRatioPerSec.value).not.toBeNull();
+    expect(metrics.pullVelocitySpikeRatio.value).not.toBeNull();
+    expect(metrics.contractedHoldMs.value ?? 0).toBeGreaterThanOrEqual(0);
+    expect(metrics.maxPullVelocityRatioPerSec.value ?? 0).toBeGreaterThan(0);
+    expect(metrics.pullVelocitySpikeRatio.value ?? 0).toBeGreaterThan(0);
   });
 });

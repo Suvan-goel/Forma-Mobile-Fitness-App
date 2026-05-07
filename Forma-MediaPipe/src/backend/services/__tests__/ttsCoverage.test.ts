@@ -41,6 +41,12 @@ function findProperty(
   );
 }
 
+function isFeedbackMessagePush(node: ts.CallExpression): boolean {
+  if (!ts.isPropertyAccessExpression(node.expression)) return false;
+  if (node.expression.name.text !== 'push') return false;
+  return ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'messages';
+}
+
 function collectExerciseFeedbackLiterals(): {
   visualFeedback: Set<string>;
   exactVoicePoolKeys: Set<string>;
@@ -59,11 +65,7 @@ function collectExerciseFeedbackLiterals(): {
     const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
 
     const visit = (node: ts.Node): void => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === 'push'
-      ) {
+      if (ts.isCallExpression(node) && isFeedbackMessagePush(node)) {
         const [firstArg] = node.arguments;
         if (firstArg && ts.isStringLiteralLike(firstArg)) {
           visualFeedback.add(firstArg.text);

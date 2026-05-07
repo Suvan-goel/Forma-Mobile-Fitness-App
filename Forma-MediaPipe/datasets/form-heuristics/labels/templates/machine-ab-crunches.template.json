@@ -10,6 +10,17 @@
   "landmarkFile": "landmarks/machine-ab-crunches/<video-file>.json",
   "split": "train",
   "reviewStatus": "draft",
+  "captureMetadata": {
+    "cameraSide": "unknown",
+    "machineStyle": "unknown",
+    "visibleHandles": "unknown",
+    "reviewerViewConfidence": "usable"
+  },
+  "labelingGuidance": [
+    "Count a rep when the crunch movement is clear, even if the side view is too poor to judge form.",
+    "Use machine-ab-crunches.side_view_uncertain when the rep is countable but form-critical side-view geometry is not reliable.",
+    "Use issueIds from availableIssues only for visible form faults; leave issueIds empty for clean reps."
+  ],
   "expectedReps": 1,
   "reps": [
     {
@@ -44,6 +55,22 @@
     {
       "issueId": "machine-ab-crunches.tempo_up",
       "feedbackMessage": "Control the return — resist on the way back."
+    },
+    {
+      "issueId": "machine-ab-crunches.side_view_uncertain",
+      "feedbackMessage": "Turn fully side-on so I can judge your crunch."
+    },
+    {
+      "issueId": "machine-ab-crunches.tempo_jerk",
+      "feedbackMessage": "Move smoothly — avoid jerking the weight."
+    },
+    {
+      "issueId": "machine-ab-crunches.arm_pull",
+      "feedbackMessage": "Use your abs, not your arms — keep the handles light."
+    },
+    {
+      "issueId": "machine-ab-crunches.hips_moving",
+      "feedbackMessage": "Keep your hips planted — flex from your waist."
     }
   ],
   "draftMetadata": {

@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderTopColor: COLORS.borderStrong,
     borderRadius: CARD_RADIUS,

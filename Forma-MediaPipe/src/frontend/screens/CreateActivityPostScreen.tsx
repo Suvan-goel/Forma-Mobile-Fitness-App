@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   },
   composerEdge: {
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
   },
   attachmentEdge: {
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
   },
   attachmentScoreText: {
     fontFamily: FONTS.mono.bold,
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingVertical: 10,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     backgroundColor: 'rgba(31, 39, 45, 0.72)',
   },
@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
   /* ── Picker list ── */
   pickerList: {
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     backgroundColor: 'rgba(31, 39, 45, 0.72)',
     overflow: 'hidden',
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 7,
-    borderWidth: 1,
+    borderWidth: 0.5,
     marginRight: SPACING.sm,
   },
   pickerScoreText: {

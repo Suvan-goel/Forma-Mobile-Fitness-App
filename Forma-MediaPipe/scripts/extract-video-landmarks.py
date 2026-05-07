@@ -125,18 +125,26 @@ def main() -> int:
                 frame_index += 1
                 continue
 
-            landmarks = (
-                result.pose_world_landmarks[0]
-                if result.pose_world_landmarks
-                else result.pose_landmarks[0]
-            )
-            frames.append({
+            image_landmarks = result.pose_landmarks[0]
+            world_landmarks = result.pose_world_landmarks[0] if result.pose_world_landmarks else None
+            primary_landmarks = world_landmarks if world_landmarks else image_landmarks
+            frame = {
                 "timestamp": timestamp_ms,
                 "keypoints": [
                     landmark_to_keypoint(landmark, index)
-                    for index, landmark in enumerate(landmarks)
+                    for index, landmark in enumerate(primary_landmarks)
                 ],
-            })
+                "imageKeypoints": [
+                    landmark_to_keypoint(landmark, index)
+                    for index, landmark in enumerate(image_landmarks)
+                ],
+            }
+            if world_landmarks:
+                frame["worldKeypoints"] = [
+                    landmark_to_keypoint(landmark, index)
+                    for index, landmark in enumerate(world_landmarks)
+                ]
+            frames.append(frame)
             frame_index += 1
 
     capture.release()

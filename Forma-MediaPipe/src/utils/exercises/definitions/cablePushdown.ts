@@ -15,6 +15,8 @@
 
 import {
   Keypoint,
+  calculateAngle,
+  calculateSignedVerticalAngleSagittal,
   getKeypoint,
   isVisible,
   minKeypointConfidence,
@@ -26,15 +28,23 @@ import { computeScore, type PenaltyConfig } from '../shared/scoring';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
+  getConfigValue,
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import {
+  buildRepDiagnostics,
+  diagnosticCue,
+  diagnosticMetric,
+} from '../shared/diagnostics';
 import tunedConfig from './tuned/cablePushdown.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
+  NumericTunable,
   RepResult as FrameworkRepResult,
 } from '../types';
 
@@ -43,6 +53,13 @@ import type {
 // ============================================================================
 
 type Point2D = { x: number; y: number };
+type LandmarkSourceName = 'world' | 'image' | 'fallback';
+
+interface MetricSample {
+  value: number;
+  source: LandmarkSourceName;
+  keypoints: Keypoint[];
+}
 
 function getPoint(kp: Keypoint | null): Point2D | null {
   if (!kp) return null;
@@ -98,14 +115,20 @@ function computeReachRatio(
 const THRESHOLDS = {
   /** Ratio above which the push clock starts before the FSM commits */
   PUSH_CLOCK_START: 0.62,
+  /** Minimum movement above resting top ratio before the push clock starts */
+  PUSH_CLOCK_DELTA: 0.04,
   /** Ratio above which we transition REST -> EXTENDING (arm starting to straighten) */
   EXTENDING_ENTER: 0.65,
+  /** Minimum movement above resting top ratio before a rep can start */
+  MOVEMENT_START_DELTA: 0.08,
   /** Ratio above which we consider near-full extension (EXTENDING -> EXTENDED) */
   EXTENDED_ENTER: 0.95,
   /** Ratio below which we leave EXTENDED (hysteresis) (EXTENDED -> RETURNING) */
   EXTENDED_EXIT: 0.93,
   /** Ratio below which the return is complete (RETURNING -> REST) */
   REST_REENTER: 0.65,
+  /** Extra buffer above the observed top position for dynamic return completion */
+  RETURN_COMPLETE_BUFFER: 0.03,
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.5,
   /** Minimum ratio ROM for a returned partial rep to count */
@@ -120,12 +143,24 @@ const FORM_THRESHOLDS = {
   FLEXION_FAIL: 0.68,
   /** Shoulder angle delta above which elbows are drifting */
   ELBOW_DRIFT_WARN: 20,
-  /** Torso deviation from vertical above which there is excessive lean */
-  TORSO_LEAN_WARN: 12,
+  /** Starting shoulder angle above which elbows begin too far forward */
+  ELBOW_FORWARD_WARN: 18,
+  /** Absolute torso deviation from vertical above which there is excessive lean */
+  TORSO_LEAN_WARN: 14,
+  /** Torso change from baseline above which the user is rocking */
+  TORSO_ROCK_WARN: 12,
+  /** Minimum support at full lockout before the rep is considered stable */
+  LOCKOUT_HOLD_MIN_MS: 300,
+  /** Maximum brief gap still treated as the same lockout hold segment */
+  LOCKOUT_GAP_TOLERANCE_MS: 80,
   /** Concentric (push down) too fast threshold (seconds) */
-  TEMPO_PUSH_MIN: 0.2,
+  TEMPO_PUSH_MIN: 0.25,
   /** Eccentric (return) too fast threshold (seconds) */
-  TEMPO_RETURN_MIN: 0.3,
+  TEMPO_RETURN_MIN: 0.4,
+  /** Velocity spike ratio above which the push was rushed */
+  TEMPO_PUSH_SPIKE_WARN: 2.8,
+  /** Velocity spike ratio above which the return snapped back */
+  TEMPO_RETURN_SPIKE_WARN: 2.8,
 } as const;
 
 /**
@@ -136,9 +171,13 @@ const FORM_THRESHOLDS = {
  * | ROM extension        | 30  | 0 (ratio shortfall)| 300   | ideal ratio - max ratio           |
  * | ROM flexion          | 20  | 0 (ratio excess)   | 200   | min ratio - ideal start ratio     |
  * | Elbow drift          | 25  | 15                 | 0.03  | max shoulder angle delta          |
- * | Torso lean           | 25  | 5                  | 0.15  | max torso deviation from vertical |
+ * | Elbow forward        | 12  | 12                 | 0.03  | starting shoulder angle           |
+ * | Torso lean           | 25  | 8                  | 0.10  | max torso deviation from vertical |
+ * | Torso rock           | 15  | 8                  | 0.08  | torso movement from baseline      |
+ * | Lockout hold         | 8   | 0ms deficit        | 0.001 | lockout hold deficit              |
  * | Tempo push           | 12  | 0.3s               | 60    | concentric time deficit           |
  * | Tempo return         | 8   | 0.4s               | 40    | eccentric time deficit            |
+ * | Push/return spike    | 8/10| 2.8x               | 2     | robust velocity spike ratio       |
  *
  * Max total penalty: 120 -> worst possible rep = 0.
  */
@@ -146,13 +185,25 @@ const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 300 } as PenaltyConfig,
   FLEXION_ROM:   { cap: 20, deadzone: 0, scale: 200 } as PenaltyConfig,
   ELBOW_DRIFT:   { cap: 25, deadzone: 15, scale: 0.03 } as PenaltyConfig,
-  TORSO_LEAN:    { cap: 40, deadzone: 5, scale: 0.15 } as PenaltyConfig,
+  ELBOW_FORWARD: { cap: 12, deadzone: 12, scale: 0.03 } as PenaltyConfig,
+  TORSO_LEAN:    { cap: 25, deadzone: 8, scale: 0.10 } as PenaltyConfig,
+  TORSO_ROCK:    { cap: 15, deadzone: 8, scale: 0.08 } as PenaltyConfig,
+  LOCKOUT_HOLD:  { cap: 8,  deadzone: 0, scale: 0.001 } as PenaltyConfig,
   TEMPO_PUSH:    { cap: 12, deadzone: 0.3, scale: 60 } as PenaltyConfig,
   TEMPO_RETURN:  { cap: 8,  deadzone: 0.4, scale: 40 } as PenaltyConfig,
+  PUSH_SPIKE:    { cap: 8,  deadzone: 2.8, scale: 2 } as PenaltyConfig,
+  RETURN_SPIKE:  { cap: 10, deadzone: 2.8, scale: 2 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
 const FORM_CONFIDENCE_MIN = 0.3;
+const SIDE_VIEW_AVG_CONFIDENCE_MIN = 0.45;
+const SIDE_VIEW_MIN_CONFIDENCE_MIN = 0.25;
+const SIDE_VIEW_MIN_SAMPLES = 5;
+const SETUP_SIDE_VIEW_MIN_SAMPLES = 8;
+const FEEDBACK_COOLDOWN_SECONDS = 2.0;
+const VELOCITY_SPIKE_MIN_SAMPLES = 4;
+const SIDE_VIEW_SETUP_FEEDBACK = 'Turn side-on so I can judge your pushdown.';
 
 const DEFAULT_CABLE_PUSHDOWN_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -169,6 +220,66 @@ const CABLE_PUSHDOWN_TUNABLE_SPEC = createDefaultTunableSpec(
   'Cable Pushdowns',
   DEFAULT_CABLE_PUSHDOWN_HEURISTIC_CONFIG,
 );
+
+function upsertCablePushdownTunable(tunable: NumericTunable): void {
+  const index = CABLE_PUSHDOWN_TUNABLE_SPEC.tunables.findIndex(existing => existing.path === tunable.path);
+  if (index >= 0) {
+    CABLE_PUSHDOWN_TUNABLE_SPEC.tunables[index] = tunable;
+  } else {
+    CABLE_PUSHDOWN_TUNABLE_SPEC.tunables.push(tunable);
+  }
+}
+
+([
+  { path: 'formThresholds.LOCKOUT_GAP_TOLERANCE_MS', min: 0, max: 180, step: 10, kind: 'feedback' },
+  { path: 'penaltyConfigs.EXTENSION_ROM.cap', min: 0, max: 50, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.EXTENSION_ROM.deadzone', min: 0, max: 0.08, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.EXTENSION_ROM.scale', min: 50, max: 700, step: 25, kind: 'scoring' },
+  { path: 'penaltyConfigs.FLEXION_ROM.cap', min: 0, max: 40, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.FLEXION_ROM.deadzone', min: 0, max: 0.15, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.FLEXION_ROM.scale', min: 50, max: 500, step: 25, kind: 'scoring' },
+  { path: 'penaltyConfigs.ELBOW_DRIFT.cap', min: 0, max: 40, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.ELBOW_DRIFT.deadzone', min: 0, max: 35, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.ELBOW_DRIFT.scale', min: 0.005, max: 0.10, step: 0.005, kind: 'scoring' },
+  { path: 'penaltyConfigs.ELBOW_FORWARD.cap', min: 0, max: 30, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.ELBOW_FORWARD.deadzone', min: 0, max: 35, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.ELBOW_FORWARD.scale', min: 0.005, max: 0.10, step: 0.005, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_LEAN.cap', min: 0, max: 40, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_LEAN.deadzone', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_LEAN.scale', min: 0.02, max: 0.25, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_ROCK.cap', min: 0, max: 30, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_ROCK.deadzone', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_ROCK.scale', min: 0.02, max: 0.20, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.LOCKOUT_HOLD.cap', min: 0, max: 20, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.LOCKOUT_HOLD.deadzone', min: 0, max: 100, step: 10, kind: 'scoring' },
+  { path: 'penaltyConfigs.LOCKOUT_HOLD.scale', min: 0.0002, max: 0.004, step: 0.0002, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_PUSH.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_PUSH.deadzone', min: 0.1, max: 0.8, step: 0.05, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_PUSH.scale', min: 20, max: 140, step: 5, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_RETURN.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_RETURN.deadzone', min: 0.1, max: 1.0, step: 0.05, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_RETURN.scale', min: 20, max: 120, step: 5, kind: 'scoring' },
+  { path: 'penaltyConfigs.PUSH_SPIKE.cap', min: 0, max: 20, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.PUSH_SPIKE.deadzone', min: 1.2, max: 6, step: 0.1, kind: 'scoring' },
+  { path: 'penaltyConfigs.PUSH_SPIKE.scale', min: 0.5, max: 6, step: 0.25, kind: 'scoring' },
+  { path: 'penaltyConfigs.RETURN_SPIKE.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.RETURN_SPIKE.deadzone', min: 1.2, max: 6, step: 0.1, kind: 'scoring' },
+  { path: 'penaltyConfigs.RETURN_SPIKE.scale', min: 0.5, max: 6, step: 0.25, kind: 'scoring' },
+] satisfies NumericTunable[]).forEach(upsertCablePushdownTunable);
+
+CABLE_PUSHDOWN_TUNABLE_SPEC.diagnosticTuning = [
+  { issueId: 'cable-pushdowns.lockout_short', metricKey: 'extensionRatio', thresholdPath: 'formThresholds.EXTENSION_FAIL', direction: 'below' },
+  { issueId: 'cable-pushdowns.lockout_short', metricKey: 'lockoutHoldMs', thresholdPath: 'formThresholds.LOCKOUT_HOLD_MIN_MS', direction: 'below' },
+  { issueId: 'cable-pushdowns.rom_short', metricKey: 'flexionRatio', thresholdPath: 'formThresholds.FLEXION_FAIL', direction: 'above' },
+  { issueId: 'cable-pushdowns.elbow_drift', metricKey: 'elbowDriftDelta', thresholdPath: 'formThresholds.ELBOW_DRIFT_WARN', direction: 'above' },
+  { issueId: 'cable-pushdowns.elbow_forward', metricKey: 'elbowForwardAngle', thresholdPath: 'formThresholds.ELBOW_FORWARD_WARN', direction: 'above' },
+  { issueId: 'cable-pushdowns.torso_warn', metricKey: 'torsoAbsoluteDeviation', thresholdPath: 'formThresholds.TORSO_LEAN_WARN', direction: 'above' },
+  { issueId: 'cable-pushdowns.torso_rocking', metricKey: 'torsoRockDelta', thresholdPath: 'formThresholds.TORSO_ROCK_WARN', direction: 'above' },
+  { issueId: 'cable-pushdowns.tempo_down', metricKey: 'tPush', thresholdPath: 'formThresholds.TEMPO_PUSH_MIN', direction: 'below' },
+  { issueId: 'cable-pushdowns.tempo_down', metricKey: 'pushVelocitySpikeRatio', thresholdPath: 'formThresholds.TEMPO_PUSH_SPIKE_WARN', direction: 'above' },
+  { issueId: 'cable-pushdowns.tempo_up', metricKey: 'tReturn', thresholdPath: 'formThresholds.TEMPO_RETURN_MIN', direction: 'below' },
+  { issueId: 'cable-pushdowns.tempo_up', metricKey: 'returnVelocitySpikeRatio', thresholdPath: 'formThresholds.TEMPO_RETURN_SPIKE_WARN', direction: 'above' },
+];
 
 const CABLE_PUSHDOWN_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
@@ -202,6 +313,8 @@ interface CablePushdownFSM {
 }
 
 interface RepWindow {
+  /** Resting top ratio captured before the push started */
+  startRatio: number;
   /** Min reach ratio during rep (should be low -- bent position at start/end) */
   minRatio: number;
   /** Max reach ratio during rep (should be high -- extended at bottom) */
@@ -210,8 +323,32 @@ interface RepWindow {
   shoulderAngleBaseline: number | null;
   /** Max absolute shoulder angle delta from baseline during rep */
   maxShoulderDelta: number;
+  /** Starting shoulder angle used to catch elbows that begin too far forward */
+  elbowForwardAngleAtStart: number | null;
+  /** Max observed shoulder angle during the rep */
+  maxElbowForwardAngle: number;
+  /** Signed torso deviation baseline */
+  torsoDevBaseline: number | null;
   /** Max absolute torso deviation from vertical during rep */
-  maxTorsoDev: number;
+  maxTorsoAbsoluteDev: number;
+  /** Max torso movement from the starting baseline */
+  maxTorsoDeltaFromBaseline: number;
+  /** Max total torso movement from baseline */
+  maxTorsoRockDelta: number;
+  /** Sum/min/sample count for side-view confidence */
+  sideViewConfidenceSum: number;
+  sideViewConfidenceMin: number;
+  sideViewConfidenceSamples: number;
+  /** Velocity support for rushed push / snap-back return checks */
+  lastVelocityRatio: number | null;
+  lastVelocityTimestamp: number | null;
+  pushVelocityValues: number[];
+  returnVelocityValues: number[];
+  /** Longest continuous raw full-extension support window */
+  currentLockoutStartAt: number | null;
+  currentLockoutLastAt: number | null;
+  lockoutSampleCount: number;
+  bestLockoutHoldMs: number;
   /** Timestamps */
   tStart: number;
   tExtended: number | null;
@@ -225,6 +362,9 @@ interface RepResult {
   repIndex: number;
   score: number;
   messages: string[];
+  diagnostics?: FrameworkRepResult['diagnostics'];
+  scorable?: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
 }
 
 interface CablePushdownState {
@@ -252,6 +392,8 @@ interface CablePushdownState {
   visibleSide: 'left' | 'right';
   /** Minimum smoothed ratio observed during REST phase (pre-seeds rep window) */
   restMinRatio: number;
+  /** Rolling side-view confidence while waiting for the user to begin */
+  setupSideViewConfidences: number[];
 }
 
 interface CablePushdownDebugInfo {
@@ -262,11 +404,16 @@ interface CablePushdownDebugInfo {
   fastRatio: number | null;
   shoulderAngle: number | null;
   torsoDev: number | null;
+  sideViewConfidence: number | null;
   // Rep window
   ratioMin: number | null;
   ratioMax: number | null;
   shoulderDelta: number | null;
+  elbowForwardAngle: number | null;
   torsoDevMax: number | null;
+  torsoRockDelta: number | null;
+  pushVelocitySpikeRatio: number | null;
+  returnVelocitySpikeRatio: number | null;
 }
 
 // ============================================================================
@@ -348,6 +495,236 @@ function calculateTorsoDeviation(
   return angleDeg;
 }
 
+function isFiniteMetric(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function visibleKeypoint(
+  keypoints: Keypoint[],
+  name: string,
+  threshold = VISIBILITY_THRESHOLD,
+): Keypoint | null {
+  const keypoint = getKeypoint(keypoints, name);
+  return isVisible(keypoint, threshold) ? keypoint : null;
+}
+
+function midpoint(a: Keypoint, b: Keypoint): Keypoint {
+  return {
+    name: `${a.name}_${b.name}_mid`,
+    x: (a.x + b.x) * 0.5,
+    y: (a.y + b.y) * 0.5,
+    z: ((a.z ?? 0) + (b.z ?? 0)) * 0.5,
+    score: Math.min(a.score, b.score),
+  };
+}
+
+function distance3D(a: Keypoint, b: Keypoint): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = (a.z ?? 0) - (b.z ?? 0);
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function landmarkSources(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+): Array<{ name: LandmarkSourceName; keypoints: Keypoint[] }> {
+  const sources: Array<{ name: LandmarkSourceName; keypoints: Keypoint[] }> = [];
+  const pushUnique = (name: LandmarkSourceName, keypoints: Keypoint[] | undefined) => {
+    if (!keypoints || keypoints.length === 0) return;
+    if (sources.some(source => source.keypoints === keypoints)) return;
+    sources.push({ name, keypoints });
+  };
+
+  pushUnique('world', frameContext?.worldKeypoints);
+  pushUnique('image', frameContext?.imageKeypoints);
+  pushUnique('fallback', fallbackKeypoints);
+  return sources;
+}
+
+function signalSourceKeypoints(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+): Keypoint[] {
+  return frameContext?.imageKeypoints ?? fallbackKeypoints;
+}
+
+function calculateShoulderAngleSample(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+  side: 'left' | 'right',
+): MetricSample | null {
+  for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    if (minKeypointConfidence(source.keypoints, [`${side}_hip`, `${side}_shoulder`, `${side}_elbow`]) < FORM_CONFIDENCE_MIN) {
+      continue;
+    }
+    const hip = getKeypoint(source.keypoints, `${side}_hip`);
+    const shoulder = getKeypoint(source.keypoints, `${side}_shoulder`);
+    const elbow = getKeypoint(source.keypoints, `${side}_elbow`);
+    if (!hip || !shoulder || !elbow) continue;
+    const value = calculateAngle(hip, shoulder, elbow);
+    if (isFiniteMetric(value) && value >= 0 && value < 179) {
+      return { value, source: source.name, keypoints: source.keypoints };
+    }
+  }
+  return null;
+}
+
+function calculateSagittalTorsoDeviation(keypoints: Keypoint[]): number | null {
+  const leftHip = visibleKeypoint(keypoints, 'left_hip', FORM_CONFIDENCE_MIN);
+  const rightHip = visibleKeypoint(keypoints, 'right_hip', FORM_CONFIDENCE_MIN);
+  const leftShoulder = visibleKeypoint(keypoints, 'left_shoulder', FORM_CONFIDENCE_MIN);
+  const rightShoulder = visibleKeypoint(keypoints, 'right_shoulder', FORM_CONFIDENCE_MIN);
+  if (!leftHip || !rightHip || !leftShoulder || !rightShoulder) return null;
+
+  const hipCenter = midpoint(leftHip, rightHip);
+  const shoulderCenter = midpoint(leftShoulder, rightShoulder);
+  const torsoMag = distance3D(hipCenter, shoulderCenter);
+  const coronalMag = distance3D(
+    midpoint(leftHip, leftShoulder),
+    midpoint(rightHip, rightShoulder),
+  );
+  if (torsoMag < 1e-6 || coronalMag < 1e-6) return null;
+
+  const value = calculateSignedVerticalAngleSagittal(
+    hipCenter,
+    shoulderCenter,
+    leftHip,
+    rightHip,
+    leftShoulder,
+    rightShoulder,
+  );
+  return isFiniteMetric(value) ? value : null;
+}
+
+function calculateSelectedSideTorsoDeviation(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`, FORM_CONFIDENCE_MIN);
+  if (!shoulder || !hip) return null;
+
+  if (keypoints.some(keypoint => Math.abs(keypoint.z ?? 0) > 1e-6)) {
+    const vy = shoulder.y - hip.y;
+    const vz = (shoulder.z ?? 0) - (hip.z ?? 0);
+    const mag = Math.sqrt(vy * vy + vz * vz);
+    if (mag >= 1e-6) return Math.atan2(vz, Math.abs(vy)) * 57.29577951308232;
+  }
+
+  const dx = shoulder.x - hip.x;
+  const dy = shoulder.y - hip.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1e-6) return null;
+  return Math.atan2(dx, Math.abs(dy)) * 57.29577951308232;
+}
+
+function calculateTorsoDeviationSample(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+  side: 'left' | 'right',
+): MetricSample | null {
+  for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    const value = source.name === 'world'
+      ? calculateSagittalTorsoDeviation(source.keypoints) ?? calculateSelectedSideTorsoDeviation(source.keypoints, side)
+      : calculateSelectedSideTorsoDeviation(source.keypoints, side);
+    if (isFiniteMetric(value)) {
+      return { value, source: source.name, keypoints: source.keypoints };
+    }
+  }
+  return null;
+}
+
+function calculateSideViewConfidence(keypoints: Keypoint[]): number | null {
+  const leftShoulder = visibleKeypoint(keypoints, 'left_shoulder');
+  const rightShoulder = visibleKeypoint(keypoints, 'right_shoulder');
+  const leftHip = visibleKeypoint(keypoints, 'left_hip');
+  const rightHip = visibleKeypoint(keypoints, 'right_hip');
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+
+  const leftTorso = Math.abs(leftHip.y - leftShoulder.y);
+  const rightTorso = Math.abs(rightHip.y - rightShoulder.y);
+  const torsoHeight = (leftTorso + rightTorso) * 0.5;
+  if (torsoHeight <= 1e-6) return null;
+
+  const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+  const hipWidth = Math.abs(leftHip.x - rightHip.x);
+  const widthRatio = ((shoulderWidth + hipWidth) * 0.5) / torsoHeight;
+  return 1 - Math.max(0, Math.min(1, (widthRatio - 0.30) / (0.55 - 0.30)));
+}
+
+function averageSideViewConfidence(repWindow: RepWindow): number | null {
+  if (repWindow.sideViewConfidenceSamples === 0) return null;
+  return repWindow.sideViewConfidenceSum / repWindow.sideViewConfidenceSamples;
+}
+
+function isCablePushdownRepScorable(repWindow: RepWindow): boolean {
+  if (repWindow.sideViewConfidenceSamples < SIDE_VIEW_MIN_SAMPLES) return true;
+  const averageConfidence = averageSideViewConfidence(repWindow);
+  if (averageConfidence === null) return true;
+  return (
+    averageConfidence >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN
+  );
+}
+
+function cablePushdownQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
+  return isCablePushdownRepScorable(repWindow) ? [] : ['side_view_uncertain'];
+}
+
+function averageSetupSideViewConfidence(state: CablePushdownState): number | null {
+  const samples = state.setupSideViewConfidences;
+  if (samples.length === 0) return null;
+  return samples.reduce((sum, value) => sum + value, 0) / samples.length;
+}
+
+function minSetupSideViewConfidence(state: CablePushdownState): number | null {
+  if (state.setupSideViewConfidences.length === 0) return null;
+  return Math.min(...state.setupSideViewConfidences);
+}
+
+function shouldShowSetupSideViewFeedback(state: CablePushdownState, t: number): boolean {
+  if (state.setupSideViewConfidences.length < SETUP_SIDE_VIEW_MIN_SAMPLES) return false;
+  if (state.lastFeedbackTime > 0 && t - state.lastFeedbackTime <= FEEDBACK_COOLDOWN_SECONDS) return false;
+  const averageConfidence = averageSetupSideViewConfidence(state);
+  const minConfidence = minSetupSideViewConfidence(state);
+  return (
+    averageConfidence !== null &&
+    minConfidence !== null &&
+    (averageConfidence < SIDE_VIEW_AVG_CONFIDENCE_MIN || minConfidence < SIDE_VIEW_MIN_CONFIDENCE_MIN)
+  );
+}
+
+function lockoutHoldMs(repWindow: RepWindow): number | null {
+  return repWindow.lockoutSampleCount > 0 ? repWindow.bestLockoutHoldMs : null;
+}
+
+function percentile(sortedValues: number[], percentileValue: number): number | null {
+  if (sortedValues.length === 0) return null;
+  const index = Math.max(
+    0,
+    Math.min(sortedValues.length - 1, Math.floor((sortedValues.length - 1) * percentileValue)),
+  );
+  return sortedValues[index];
+}
+
+function velocitySpikeRatio(values: number[]): number | null {
+  if (values.length < VELOCITY_SPIKE_MIN_SAMPLES) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const median = percentile(sorted, 0.5);
+  const high = percentile(sorted, 0.9);
+  if (median === null || high === null || median <= 1e-6) return null;
+  return high / median;
+}
+
+function pushVelocitySpikeRatio(repWindow: RepWindow): number | null {
+  return velocitySpikeRatio(repWindow.pushVelocityValues);
+}
+
+function returnVelocitySpikeRatio(repWindow: RepWindow): number | null {
+  return velocitySpikeRatio(repWindow.returnVelocityValues);
+}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -364,11 +741,28 @@ function initFSM(): CablePushdownFSM {
 
 function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   return {
+    startRatio: initialRatio ?? Infinity,
     minRatio: initialRatio ?? Infinity,
     maxRatio: initialRatio ?? -Infinity,
     shoulderAngleBaseline: null,
     maxShoulderDelta: 0,
-    maxTorsoDev: 0,
+    elbowForwardAngleAtStart: null,
+    maxElbowForwardAngle: 0,
+    torsoDevBaseline: null,
+    maxTorsoAbsoluteDev: 0,
+    maxTorsoDeltaFromBaseline: 0,
+    maxTorsoRockDelta: 0,
+    sideViewConfidenceSum: 0,
+    sideViewConfidenceMin: Infinity,
+    sideViewConfidenceSamples: 0,
+    lastVelocityRatio: null,
+    lastVelocityTimestamp: null,
+    pushVelocityValues: [],
+    returnVelocityValues: [],
+    currentLockoutStartAt: null,
+    currentLockoutLastAt: null,
+    lockoutSampleCount: 0,
+    bestLockoutHoldMs: 0,
     tStart,
     tExtended: null,
     tReturnStart: null,
@@ -403,6 +797,7 @@ function initializeCablePushdownState(): CablePushdownState {
     lastFeedbackTime: 0,
     visibleSide: 'left',
     restMinRatio: Infinity,
+    setupSideViewConfidences: [],
   };
 }
 
@@ -441,22 +836,33 @@ interface FSMUpdateResult {
 function updateFSM(
   currentFSM: CablePushdownFSM,
   ratio: number,
-  t: number
+  t: number,
+  restReferenceRatio: number | null,
+  repStartRatio: number | null,
 ): FSMUpdateResult {
   const fsm = { ...currentFSM };
   let repCompleted = false;
+  const clockStartThreshold = restReferenceRatio !== null && Number.isFinite(restReferenceRatio)
+    ? Math.max(THRESHOLDS.PUSH_CLOCK_START, restReferenceRatio + THRESHOLDS.PUSH_CLOCK_DELTA)
+    : THRESHOLDS.PUSH_CLOCK_START;
+  const extendingEnterThreshold = restReferenceRatio !== null && Number.isFinite(restReferenceRatio)
+    ? Math.max(THRESHOLDS.EXTENDING_ENTER, restReferenceRatio + THRESHOLDS.MOVEMENT_START_DELTA)
+    : THRESHOLDS.EXTENDING_ENTER;
+  const returnCompleteThreshold = repStartRatio !== null && Number.isFinite(repStartRatio)
+    ? Math.max(THRESHOLDS.REST_REENTER, repStartRatio + THRESHOLDS.RETURN_COMPLETE_BUFFER)
+    : THRESHOLDS.REST_REENTER;
 
   switch (fsm.phase) {
     case 'REST':
       // Waiting for push to begin. When ratio rises past threshold (arm straightening),
       // transition to EXTENDING.
-      if (ratio > THRESHOLDS.PUSH_CLOCK_START) {
+      if (ratio > clockStartThreshold) {
         fsm.tPushStart ??= t;
       } else {
         fsm.tPushStart = null;
       }
 
-      if (ratio > THRESHOLDS.EXTENDING_ENTER) {
+      if (ratio > extendingEnterThreshold) {
         fsm.phase = 'EXTENDING';
         fsm.tRepStart = fsm.tPushStart ?? t;
         fsm.tExtended = null;
@@ -469,7 +875,7 @@ function updateFSM(
       if (ratio > THRESHOLDS.EXTENDED_ENTER) {
         fsm.phase = 'EXTENDED';
         fsm.tExtended = t;
-      } else if (ratio < THRESHOLDS.REST_REENTER && fsm.tRepStart !== null) {
+      } else if (ratio < returnCompleteThreshold && fsm.tRepStart !== null) {
         // Went back to bent without extending -- reset
         fsm.phase = 'REST';
         fsm.tRepStart = null;
@@ -487,7 +893,7 @@ function updateFSM(
     case 'RETURNING':
       // Controlled return. When ratio drops to bent position, rep is complete.
       if (
-        ratio < THRESHOLDS.REST_REENTER &&
+        ratio < returnCompleteThreshold &&
         fsm.tRepStart !== null &&
         t - fsm.tRepStart >= THRESHOLDS.MIN_REP_TIME
       ) {
@@ -521,9 +927,20 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
 
   // 3. Elbow drift (shoulder angle delta)
   penalties.push({ value: repWindow.maxShoulderDelta, config: PENALTY_CONFIGS.ELBOW_DRIFT });
+  penalties.push({
+    value: repWindow.elbowForwardAngleAtStart ?? 0,
+    config: PENALTY_CONFIGS.ELBOW_FORWARD,
+  });
 
-  // 4. Torso lean
-  penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_LEAN });
+  // 4. Torso mechanics
+  penalties.push({ value: repWindow.maxTorsoAbsoluteDev, config: PENALTY_CONFIGS.TORSO_LEAN });
+  penalties.push({ value: repWindow.maxTorsoRockDelta, config: PENALTY_CONFIGS.TORSO_ROCK });
+
+  const holdMs = lockoutHoldMs(repWindow);
+  if (holdMs !== null && repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL) {
+    const holdDeficit = Math.max(0, FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS - holdMs);
+    penalties.push({ value: holdDeficit, config: PENALTY_CONFIGS.LOCKOUT_HOLD });
+  }
 
   // 5. Tempo
   if (repWindow.tExtended !== null) {
@@ -540,6 +957,14 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
       penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
     }
   }
+  const pushSpikeRatio = pushVelocitySpikeRatio(repWindow);
+  if (pushSpikeRatio !== null) {
+    penalties.push({ value: pushSpikeRatio, config: PENALTY_CONFIGS.PUSH_SPIKE });
+  }
+  const returnSpikeRatio = returnVelocitySpikeRatio(repWindow);
+  if (returnSpikeRatio !== null) {
+    penalties.push({ value: returnSpikeRatio, config: PENALTY_CONFIGS.RETURN_SPIKE });
+  }
 
   return computeScore(penalties);
 }
@@ -552,7 +977,13 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
   // 1. Extension ROM -- didn't lock out fully (max ratio too low)
-  if (repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL) {
+  const holdMs = lockoutHoldMs(repWindow);
+  if (
+    repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL ||
+    (holdMs !== null &&
+      repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL &&
+      holdMs < FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS)
+  ) {
     messages.push('Extend fully \u2014 lock out at the bottom of each rep.');
   }
 
@@ -565,26 +996,341 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   if (repWindow.maxShoulderDelta > FORM_THRESHOLDS.ELBOW_DRIFT_WARN) {
     messages.push('Keep your elbows pinned to your sides \u2014 avoid letting them drift.');
   }
+  if ((repWindow.elbowForwardAngleAtStart ?? 0) > FORM_THRESHOLDS.ELBOW_FORWARD_WARN) {
+    messages.push('Start with your elbows tucked by your sides.');
+  }
 
   // 4. Torso lean
-  if (repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
+  if (repWindow.maxTorsoAbsoluteDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
     messages.push('Stay upright \u2014 avoid leaning into the pushdown.');
+  }
+  if (repWindow.maxTorsoRockDelta > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
+    messages.push('Keep your torso steady through the pushdown.');
   }
 
   // 5. Tempo
+  const pushSpikeRatio = pushVelocitySpikeRatio(repWindow);
+  const returnSpikeRatio = returnVelocitySpikeRatio(repWindow);
   if (repWindow.tExtended !== null) {
     const tPush = repWindow.tExtended - repWindow.tStart;
     const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended);
 
-    if (tPush > 0 && tPush < FORM_THRESHOLDS.TEMPO_PUSH_MIN) {
+    if (
+      (tPush > 0 && tPush < FORM_THRESHOLDS.TEMPO_PUSH_MIN) ||
+      (pushSpikeRatio !== null && pushSpikeRatio > FORM_THRESHOLDS.TEMPO_PUSH_SPIKE_WARN)
+    ) {
       messages.push('Slow down the push \u2014 control the extension.');
     }
-    if (tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN) {
+    if (
+      (tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN) ||
+      (returnSpikeRatio !== null && returnSpikeRatio > FORM_THRESHOLDS.TEMPO_RETURN_SPIKE_WARN)
+    ) {
       messages.push('Control the return \u2014 don\'t let the weight snap back.');
     }
   }
 
   return messages;
+}
+
+function buildCablePushdownDiagnostics(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+): FrameworkRepResult['diagnostics'] {
+  const hasTempo = repWindow.tExtended !== null;
+  const tPush = repWindow.tExtended !== null ? repWindow.tExtended - repWindow.tStart : null;
+  const tReturn = repWindow.tExtended !== null
+    ? repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended)
+    : null;
+  const sideViewConfidence = averageSideViewConfidence(repWindow);
+  const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES;
+  const sideConfirmed = hasSideViewConfidence &&
+    sideViewConfidence !== null &&
+    sideViewConfidence >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN;
+  const holdMs = lockoutHoldMs(repWindow);
+  const shortLockoutHold = holdMs !== null &&
+    repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL &&
+    holdMs < FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS;
+  const pushSpikeRatio = pushVelocitySpikeRatio(repWindow);
+  const returnSpikeRatio = returnVelocitySpikeRatio(repWindow);
+  return buildRepDiagnostics({
+    exerciseName: 'Cable Pushdowns',
+    repIndex,
+    view: 'side',
+    selectedSide: visibleSide,
+    scorable: isCablePushdownRepScorable(repWindow),
+    viewQuality: {
+      status: hasSideViewConfidence
+        ? sideConfirmed
+          ? 'side_confirmed'
+          : 'frontish_confirmed'
+        : 'view_unknown',
+      sideConfirmed,
+      frontishConfirmed: hasSideViewConfidence && !sideConfirmed,
+      viewUnknown: !hasSideViewConfidence,
+      averageSideViewConfidence: sideViewConfidence,
+      minSideViewConfidence: repWindow.sideViewConfidenceMin === Infinity ? null : repWindow.sideViewConfidenceMin,
+      sampleCount: repWindow.sideViewConfidenceSamples,
+    },
+    metrics: [
+      diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
+      diagnosticMetric('flexionRatio', repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('elbowDriftDelta', repWindow.maxShoulderDelta, { unit: 'degrees' }),
+      diagnosticMetric('elbowForwardAngle', repWindow.elbowForwardAngleAtStart, { unit: 'degrees' }),
+      diagnosticMetric('torsoAbsoluteDeviation', repWindow.maxTorsoAbsoluteDev, { unit: 'degrees' }),
+      diagnosticMetric('torsoDeltaFromBaseline', repWindow.maxTorsoDeltaFromBaseline, { unit: 'degrees' }),
+      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoRockDelta, { unit: 'degrees' }),
+      diagnosticMetric('lockoutHoldMs', holdMs, {
+        unit: 'milliseconds',
+        eligible: holdMs !== null,
+        skippedReason: 'lockout_hold_unavailable',
+      }),
+      diagnosticMetric('pushVelocitySpikeRatio', pushSpikeRatio, {
+        unit: 'ratio',
+        eligible: pushSpikeRatio !== null,
+        sampleCount: repWindow.pushVelocityValues.length,
+        skippedReason: 'push_velocity_unavailable',
+      }),
+      diagnosticMetric('returnVelocitySpikeRatio', returnSpikeRatio, {
+        unit: 'ratio',
+        eligible: returnSpikeRatio !== null,
+        sampleCount: repWindow.returnVelocityValues.length,
+        skippedReason: 'return_velocity_unavailable',
+      }),
+      diagnosticMetric('sideViewConfidence', sideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('tPush', tPush, { unit: 'seconds', eligible: hasTempo, skippedReason: 'extension_not_detected' }),
+      diagnosticMetric('tReturn', tReturn, { unit: 'seconds', eligible: hasTempo, skippedReason: 'extension_not_detected' }),
+    ],
+    cues: [
+      diagnosticCue({
+        issueId: 'cable-pushdowns.lockout_short',
+        metricKeys: ['extensionRatio', 'lockoutHoldMs'],
+        direction: 'below',
+        value: repWindow.maxRatio,
+        thresholdPath: ['formThresholds.EXTENSION_FAIL', 'formThresholds.LOCKOUT_HOLD_MIN_MS'],
+        thresholdValue: {
+          extensionRatio: FORM_THRESHOLDS.EXTENSION_FAIL,
+          lockoutHoldMs: FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS,
+        },
+        triggered: repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL || shortLockoutHold,
+      }),
+      diagnosticCue({
+        issueId: 'cable-pushdowns.rom_short',
+        metricKeys: ['flexionRatio'],
+        direction: 'above',
+        value: repWindow.minRatio,
+        thresholdPath: 'formThresholds.FLEXION_FAIL',
+        thresholdValue: FORM_THRESHOLDS.FLEXION_FAIL,
+        triggered: repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL,
+      }),
+      diagnosticCue({
+        issueId: 'cable-pushdowns.elbow_drift',
+        metricKeys: ['elbowDriftDelta'],
+        direction: 'above',
+        value: repWindow.maxShoulderDelta,
+        thresholdPath: 'formThresholds.ELBOW_DRIFT_WARN',
+        thresholdValue: FORM_THRESHOLDS.ELBOW_DRIFT_WARN,
+        triggered: repWindow.maxShoulderDelta > FORM_THRESHOLDS.ELBOW_DRIFT_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-pushdowns.elbow_forward',
+        metricKeys: ['elbowForwardAngle'],
+        direction: 'above',
+        value: repWindow.elbowForwardAngleAtStart,
+        thresholdPath: 'formThresholds.ELBOW_FORWARD_WARN',
+        thresholdValue: FORM_THRESHOLDS.ELBOW_FORWARD_WARN,
+        triggered: (repWindow.elbowForwardAngleAtStart ?? 0) > FORM_THRESHOLDS.ELBOW_FORWARD_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-pushdowns.torso_warn',
+        metricKeys: ['torsoAbsoluteDeviation'],
+        direction: 'above',
+        value: repWindow.maxTorsoAbsoluteDev,
+        thresholdPath: 'formThresholds.TORSO_LEAN_WARN',
+        thresholdValue: FORM_THRESHOLDS.TORSO_LEAN_WARN,
+        triggered: repWindow.maxTorsoAbsoluteDev > FORM_THRESHOLDS.TORSO_LEAN_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-pushdowns.torso_rocking',
+        metricKeys: ['torsoRockDelta'],
+        direction: 'above',
+        value: repWindow.maxTorsoRockDelta,
+        thresholdPath: 'formThresholds.TORSO_ROCK_WARN',
+        thresholdValue: FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        triggered: repWindow.maxTorsoRockDelta > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+      }),
+      diagnosticCue({
+        issueId: 'cable-pushdowns.tempo_down',
+        metricKeys: ['tPush', 'pushVelocitySpikeRatio'],
+        direction: 'below',
+        value: tPush,
+        thresholdPath: ['formThresholds.TEMPO_PUSH_MIN', 'formThresholds.TEMPO_PUSH_SPIKE_WARN'],
+        thresholdValue: {
+          tPush: FORM_THRESHOLDS.TEMPO_PUSH_MIN,
+          pushVelocitySpikeRatio: FORM_THRESHOLDS.TEMPO_PUSH_SPIKE_WARN,
+        },
+        eligible: hasTempo,
+        triggered: hasTempo && (
+          (tPush !== null && tPush > 0 && tPush < FORM_THRESHOLDS.TEMPO_PUSH_MIN) ||
+          (pushSpikeRatio !== null && pushSpikeRatio > FORM_THRESHOLDS.TEMPO_PUSH_SPIKE_WARN)
+        ),
+        skippedReason: 'extension_not_detected',
+      }),
+      diagnosticCue({
+        issueId: 'cable-pushdowns.tempo_up',
+        metricKeys: ['tReturn', 'returnVelocitySpikeRatio'],
+        direction: 'below',
+        value: tReturn,
+        thresholdPath: ['formThresholds.TEMPO_RETURN_MIN', 'formThresholds.TEMPO_RETURN_SPIKE_WARN'],
+        thresholdValue: {
+          tReturn: FORM_THRESHOLDS.TEMPO_RETURN_MIN,
+          returnVelocitySpikeRatio: FORM_THRESHOLDS.TEMPO_RETURN_SPIKE_WARN,
+        },
+        eligible: hasTempo,
+        triggered: hasTempo && (
+          (tReturn !== null && tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN) ||
+          (returnSpikeRatio !== null && returnSpikeRatio > FORM_THRESHOLDS.TEMPO_RETURN_SPIKE_WARN)
+        ),
+        skippedReason: 'extension_not_detected',
+      }),
+    ],
+  });
+}
+
+function buildCablePushdownRepResult(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+): RepResult {
+  const score = computeCablePushdownScore(repWindow);
+  const messages = generateFormMessages(repWindow);
+  const scorable = isCablePushdownRepScorable(repWindow);
+  return {
+    repIndex,
+    score,
+    messages,
+    scorable,
+    qualityWarnings: cablePushdownQualityWarnings(repWindow),
+    diagnostics: buildCablePushdownDiagnostics(repWindow, repIndex, visibleSide),
+  };
+}
+
+function recordRepWindowFrame(
+  window: RepWindow,
+  options: {
+    t: number;
+    rawRatio: number;
+    smoothedRatio: number;
+    rawShoulder: number | null;
+    rawTorsoDev: number | null;
+    sideViewConfidence: number | null;
+    previousPhase: CablePushdownPhase;
+    nextPhase: CablePushdownPhase;
+  },
+): void {
+  const {
+    t,
+    rawRatio,
+    smoothedRatio,
+    rawShoulder,
+    rawTorsoDev,
+    sideViewConfidence,
+    previousPhase,
+    nextPhase,
+  } = options;
+
+  window.tEnd = t;
+  window.frameCount++;
+
+  if (!isNaN(smoothedRatio)) {
+    window.minRatio = Math.min(window.minRatio, smoothedRatio);
+  }
+  if (!isNaN(rawRatio)) {
+    window.maxRatio = Math.max(window.maxRatio, rawRatio);
+    if (rawRatio >= THRESHOLDS.EXTENDED_ENTER) {
+      window.currentLockoutStartAt ??= t;
+      window.currentLockoutLastAt = t;
+      window.lockoutSampleCount++;
+      window.bestLockoutHoldMs = Math.max(
+        window.bestLockoutHoldMs,
+        (t - window.currentLockoutStartAt) * 1000,
+      );
+    } else if (window.currentLockoutLastAt !== null) {
+      const gapMs = (t - window.currentLockoutLastAt) * 1000;
+      if (gapMs > FORM_THRESHOLDS.LOCKOUT_GAP_TOLERANCE_MS) {
+        window.currentLockoutStartAt = null;
+        window.currentLockoutLastAt = null;
+      }
+    }
+  }
+
+  if (sideViewConfidence !== null) {
+    window.sideViewConfidenceSum += sideViewConfidence;
+    window.sideViewConfidenceMin = Math.min(window.sideViewConfidenceMin, sideViewConfidence);
+    window.sideViewConfidenceSamples++;
+  }
+
+  if (rawShoulder !== null) {
+    if (window.shoulderAngleBaseline === null) {
+      window.shoulderAngleBaseline = rawShoulder;
+      window.elbowForwardAngleAtStart = rawShoulder;
+    }
+    const delta = Math.abs(rawShoulder - window.shoulderAngleBaseline);
+    window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
+    window.maxElbowForwardAngle = Math.max(window.maxElbowForwardAngle, rawShoulder);
+  }
+
+  if (rawTorsoDev !== null) {
+    if (window.torsoDevBaseline === null) {
+      window.torsoDevBaseline = rawTorsoDev;
+    }
+    const torsoDelta = Math.abs(rawTorsoDev - window.torsoDevBaseline);
+    window.maxTorsoAbsoluteDev = Math.max(window.maxTorsoAbsoluteDev, Math.abs(rawTorsoDev));
+    window.maxTorsoDeltaFromBaseline = Math.max(window.maxTorsoDeltaFromBaseline, torsoDelta);
+    window.maxTorsoRockDelta = Math.max(window.maxTorsoRockDelta, torsoDelta);
+  }
+
+  if (nextPhase === 'EXTENDED' && window.tExtended === null) {
+    window.tExtended = t;
+  }
+  if (previousPhase === 'EXTENDED' && nextPhase === 'RETURNING' && window.tReturnStart === null) {
+    window.tReturnStart = t;
+  }
+
+  const previousRatio = window.lastVelocityRatio;
+  const previousTimestamp = window.lastVelocityTimestamp;
+  if (
+    previousRatio !== null &&
+    previousTimestamp !== null &&
+    t > previousTimestamp
+  ) {
+    const dt = t - previousTimestamp;
+    const pushVelocity = Math.max(0, (rawRatio - previousRatio) / dt);
+    const returnVelocity = Math.max(0, (previousRatio - rawRatio) / dt);
+    if (
+      Number.isFinite(pushVelocity) &&
+      pushVelocity > 0 &&
+      (previousPhase === 'EXTENDING' || nextPhase === 'EXTENDING')
+    ) {
+      window.pushVelocityValues.push(pushVelocity);
+    }
+    if (
+      Number.isFinite(returnVelocity) &&
+      returnVelocity > 0 &&
+      (previousPhase === 'RETURNING' || nextPhase === 'RETURNING')
+    ) {
+      window.returnVelocityValues.push(returnVelocity);
+    }
+  }
+  window.lastVelocityRatio = rawRatio;
+  window.lastVelocityTimestamp = t;
 }
 
 // ============================================================================
@@ -593,13 +1339,15 @@ function generateFormMessages(repWindow: RepWindow): string[] {
 
 function updateCablePushdownState(
   keypoints: Keypoint[],
-  currentState: CablePushdownState
+  currentState: CablePushdownState,
+  frameContext?: ExerciseFrameContext,
 ): CablePushdownState {
   const t = Date.now() / 1000;
+  const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate
   if (!currentState.warmedUp) {
-    const ready = currentState.warmupGate.update(keypoints);
+    const ready = currentState.warmupGate.update(signalKeypoints);
     if (!ready) {
       return currentState;
     }
@@ -609,20 +1357,17 @@ function updateCablePushdownState(
   // Select visible side in REST, then lock it through the active rep so
   // transient confidence changes do not splice two arms into one rep.
   const inActiveRep = currentState.fsm.phase !== 'REST';
-  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(signalKeypoints);
 
   // Calculate raw values
-  const rawRatio = computeReachRatio(keypoints, visibleSide);
-  const rawShoulder = calculateShoulderAngle(keypoints, visibleSide);
-  const rawTorsoDev = calculateTorsoDeviation(keypoints, visibleSide);
-  const ratioConf = minKeypointConfidence(keypoints, [
+  const rawRatio = computeReachRatio(signalKeypoints, visibleSide);
+  const shoulderSample = calculateShoulderAngleSample(frameContext, keypoints, visibleSide);
+  const torsoSample = calculateTorsoDeviationSample(frameContext, keypoints, visibleSide);
+  const rawShoulder = shoulderSample?.value ?? null;
+  const rawTorsoDev = torsoSample?.value ?? null;
+  const sideViewConfidence = calculateSideViewConfidence(signalKeypoints);
+  const ratioConf = minKeypointConfidence(signalKeypoints, [
     `${visibleSide}_shoulder`, `${visibleSide}_elbow`, `${visibleSide}_wrist`,
-  ]);
-  const shoulderConf = minKeypointConfidence(keypoints, [
-    `${visibleSide}_hip`, `${visibleSide}_shoulder`, `${visibleSide}_elbow`,
-  ]);
-  const torsoConf = minKeypointConfidence(keypoints, [
-    `${visibleSide}_shoulder`, `${visibleSide}_hip`,
   ]);
 
   // If we can't compute the ratio, bail out
@@ -641,10 +1386,10 @@ function updateCablePushdownState(
   const smoothedRatio = currentState.ratioTracker.push(rawRatio, ratioConf);
   const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedShoulder = rawShoulder !== null
-    ? currentState.shoulderTracker.push(rawShoulder, shoulderConf)
+    ? currentState.shoulderTracker.push(rawShoulder)
     : currentState.shoulderTracker.value;
   const smoothedTorso = rawTorsoDev !== null
-    ? currentState.torsoTracker.push(rawTorsoDev, torsoConf)
+    ? currentState.torsoTracker.push(rawTorsoDev)
     : currentState.torsoTracker.value;
 
   const newState: CablePushdownState = {
@@ -660,8 +1405,29 @@ function updateCablePushdownState(
     return newState;
   }
 
+  if (currentState.fsm.phase === 'REST' && currentState.repWindow === null && sideViewConfidence !== null) {
+    const setupSamples = [...currentState.setupSideViewConfidences, sideViewConfidence].slice(-SETUP_SIDE_VIEW_MIN_SAMPLES);
+    newState.setupSideViewConfidences = setupSamples;
+    if (shouldShowSetupSideViewFeedback(newState, t)) {
+      newState.feedback = SIDE_VIEW_SETUP_FEEDBACK;
+      newState.lastFeedbackTime = t;
+    }
+  } else if (currentState.fsm.phase !== 'REST') {
+    newState.setupSideViewConfidences = [];
+  }
+
+  // Track minimum ratio during REST before the FSM check. This lets the
+  // movement-start gate distinguish a shallow static top from an actual push.
+  if (currentState.fsm.phase === 'REST' && currentState.repWindow === null && !isNaN(smoothedRatio)) {
+    newState.restMinRatio = Math.min(currentState.restMinRatio, smoothedRatio);
+  }
+
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
+  const restReferenceRatio = newState.restMinRatio !== Infinity ? newState.restMinRatio : null;
+  const repStartRatio = currentState.repWindow && currentState.repWindow.startRatio !== Infinity
+    ? currentState.repWindow.startRatio
+    : null;
+  const fsmResult = updateFSM(currentState.fsm, fastRatio, t, restReferenceRatio, repStartRatio);
   newState.fsm = fsmResult.fsm;
 
   const returnedPartial =
@@ -672,11 +1438,16 @@ function updateCablePushdownState(
 
   if (returnedPartial && newState.repWindow) {
     const window = newState.repWindow;
-    window.tEnd = t;
-    if (!isNaN(smoothedRatio)) {
-      window.minRatio = Math.min(window.minRatio, smoothedRatio);
-      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
-    }
+    recordRepWindowFrame(window, {
+      t,
+      rawRatio,
+      smoothedRatio,
+      rawShoulder,
+      rawTorsoDev,
+      sideViewConfidence,
+      previousPhase: currentState.fsm.phase,
+      nextPhase: newState.fsm.phase,
+    });
     const actualRom = window.maxRatio - window.minRatio;
     const duration = window.tEnd - window.tStart;
 
@@ -687,13 +1458,9 @@ function updateCablePushdownState(
       minDuration: THRESHOLDS.MIN_REP_TIME,
     })) {
       newState.repCount++;
-      const score = computeCablePushdownScore(window);
-      const messages = generateFormMessages(window);
-      newState.lastRepResult = {
-        repIndex: newState.repCount,
-        score,
-        messages,
-      };
+      const repResult = buildCablePushdownRepResult(window, newState.repCount, visibleSide);
+      const messages = repResult.messages;
+      newState.lastRepResult = repResult;
       newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
       newState.lastFeedbackTime = t;
     } else if (actualRom > 0) {
@@ -706,11 +1473,6 @@ function updateCablePushdownState(
     return newState;
   }
 
-  // Track minimum ratio during REST (captures true starting bent position)
-  if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
-    newState.restMinRatio = Math.min(newState.restMinRatio, smoothedRatio);
-  }
-
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
@@ -718,68 +1480,42 @@ function updateCablePushdownState(
     // Pre-seed minRatio with the resting bent ratio so flexion ROM is measured correctly
     if (currentState.restMinRatio !== Infinity) {
       newState.repWindow.minRatio = currentState.restMinRatio;
+      newState.repWindow.startRatio = currentState.restMinRatio;
     }
     newState.restMinRatio = Infinity; // Reset for next rep
   }
 
   if (newState.repWindow && inRep) {
-    const window = newState.repWindow;
-    window.tEnd = t;
-    window.frameCount++;
-
-    // Update ratio min/max
-    if (!isNaN(smoothedRatio)) {
-      window.minRatio = Math.min(window.minRatio, smoothedRatio);
-      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
-    }
-
-    // Track shoulder angle delta from baseline. Use raw angle for peak capture;
-    // the tracker remains useful for debug display, but EMA can dampen elbow drift.
-    if (rawShoulder !== null && shoulderConf >= FORM_CONFIDENCE_MIN) {
-      if (window.shoulderAngleBaseline === null) {
-        window.shoulderAngleBaseline = rawShoulder;
-      }
-      const delta = Math.abs(rawShoulder - window.shoulderAngleBaseline);
-      window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
-    }
-
-    // Track torso deviation
-    if (!isNaN(smoothedTorso) && torsoConf >= FORM_CONFIDENCE_MIN) {
-      window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
-    }
-
-    // Record extended timestamp
-    if (newState.fsm.phase === 'EXTENDED' && window.tExtended === null) {
-      window.tExtended = t;
-    }
-
-    if (
-      currentState.fsm.phase === 'EXTENDED' &&
-      newState.fsm.phase === 'RETURNING' &&
-      window.tReturnStart === null
-    ) {
-      window.tReturnStart = t;
-    }
+    recordRepWindowFrame(newState.repWindow, {
+      t,
+      rawRatio,
+      smoothedRatio,
+      rawShoulder,
+      rawTorsoDev,
+      sideViewConfidence,
+      previousPhase: currentState.fsm.phase,
+      nextPhase: newState.fsm.phase,
+    });
   }
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
-    newState.repWindow.tEnd = t;
-    if (!isNaN(smoothedRatio)) {
-      newState.repWindow.minRatio = Math.min(newState.repWindow.minRatio, smoothedRatio);
-      newState.repWindow.maxRatio = Math.max(newState.repWindow.maxRatio, smoothedRatio);
-    }
+    recordRepWindowFrame(newState.repWindow, {
+      t,
+      rawRatio,
+      smoothedRatio,
+      rawShoulder,
+      rawTorsoDev,
+      sideViewConfidence,
+      previousPhase: currentState.fsm.phase,
+      nextPhase: newState.fsm.phase,
+    });
 
     newState.repCount++;
 
-    const score = computeCablePushdownScore(newState.repWindow);
-    const messages = generateFormMessages(newState.repWindow);
-
-    newState.lastRepResult = {
-      repIndex: newState.repCount,
-      score,
-      messages,
-    };
+    const repResult = buildCablePushdownRepResult(newState.repWindow, newState.repCount, visibleSide);
+    const messages = repResult.messages;
+    newState.lastRepResult = repResult;
 
     if (messages.length > 0) {
       newState.feedback = messages.join('\n');
@@ -819,11 +1555,133 @@ function getDebugInfo(state: CablePushdownState): CablePushdownDebugInfo {
     fastRatio: fmt(state.fastRatio),
     shoulderAngle: fmt(state.smoothedShoulder),
     torsoDev: fmt(state.smoothedTorso),
+    sideViewConfidence: repWin ? fmt(averageSideViewConfidence(repWin)) : fmt(averageSetupSideViewConfidence(state)),
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,
     ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmt(repWin.maxRatio) : null,
     shoulderDelta: repWin ? fmt(repWin.maxShoulderDelta) : null,
-    torsoDevMax: repWin ? fmt(repWin.maxTorsoDev) : null,
+    elbowForwardAngle: repWin ? fmt(repWin.elbowForwardAngleAtStart) : null,
+    torsoDevMax: repWin ? fmt(repWin.maxTorsoAbsoluteDev) : null,
+    torsoRockDelta: repWin ? fmt(repWin.maxTorsoRockDelta) : null,
+    pushVelocitySpikeRatio: repWin ? fmt(pushVelocitySpikeRatio(repWin)) : null,
+    returnVelocitySpikeRatio: repWin ? fmt(returnVelocitySpikeRatio(repWin)) : null,
   };
+}
+
+// ============================================================================
+// CONFIG VALIDATION
+// ============================================================================
+
+function configNumber(config: ExerciseHeuristicConfig, path: string, issues: string[]): number | null {
+  const value = getConfigValue(config, path);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    issues.push(`Cable Pushdowns config "${path}" must be a finite number.`);
+    return null;
+  }
+  return value;
+}
+
+function requireOrdered(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  firstPath: string,
+  secondPath: string,
+  allowEqual = false,
+): void {
+  const first = configNumber(config, firstPath, issues);
+  const second = configNumber(config, secondPath, issues);
+  if (first === null || second === null) return;
+  const valid = allowEqual ? first <= second : first < second;
+  if (!valid) {
+    issues.push(
+      `Cable Pushdowns config ordering invalid: "${firstPath}" (${first}) must be ${allowEqual ? '<=' : '<'} "${secondPath}" (${second}).`,
+    );
+  }
+}
+
+function validatePenaltyConfigs(config: ExerciseHeuristicConfig, issues: string[]): void {
+  const penaltyConfigs = getConfigValue(config, 'penaltyConfigs');
+  if (penaltyConfigs === null || typeof penaltyConfigs !== 'object' || Array.isArray(penaltyConfigs)) {
+    issues.push('Cable Pushdowns config "penaltyConfigs" must be an object.');
+    return;
+  }
+
+  for (const [penaltyName, penaltyConfig] of Object.entries(penaltyConfigs)) {
+    if (penaltyConfig === null || typeof penaltyConfig !== 'object' || Array.isArray(penaltyConfig)) {
+      issues.push(`Cable Pushdowns penalty config "${penaltyName}" must be an object.`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(penaltyConfig)) {
+      const path = `penaltyConfigs.${penaltyName}.${key}`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        issues.push(`Cable Pushdowns config "${path}" must be a finite number.`);
+        continue;
+      }
+      if (key === 'scale' && value <= 0) {
+        issues.push(`Cable Pushdowns config "${path}" must be greater than 0.`);
+      }
+      if (key === 'cap' && value < 0) {
+        issues.push(`Cable Pushdowns config "${path}" must be greater than or equal to 0.`);
+      }
+      if (key === 'deadzone' && value < 0) {
+        issues.push(`Cable Pushdowns config "${path}" must be greater than or equal to 0.`);
+      }
+    }
+  }
+}
+
+function validateCablePushdownHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const issues: string[] = [];
+
+  requireOrdered(config, issues, 'thresholds.PUSH_CLOCK_START', 'thresholds.EXTENDING_ENTER', true);
+  requireOrdered(config, issues, 'thresholds.EXTENDING_ENTER', 'thresholds.EXTENDED_EXIT');
+  requireOrdered(config, issues, 'thresholds.EXTENDED_EXIT', 'thresholds.EXTENDED_ENTER');
+  requireOrdered(config, issues, 'thresholds.RETURN_COMPLETE_BUFFER', 'thresholds.EXTENDING_ENTER');
+  requireOrdered(config, issues, 'thresholds.MIN_PARTIAL_ROM', 'thresholds.EXTENDING_ENTER');
+
+  for (const path of [
+    'thresholds.PUSH_CLOCK_START',
+    'thresholds.PUSH_CLOCK_DELTA',
+    'thresholds.EXTENDING_ENTER',
+    'thresholds.MOVEMENT_START_DELTA',
+    'thresholds.EXTENDED_ENTER',
+    'thresholds.EXTENDED_EXIT',
+    'thresholds.REST_REENTER',
+    'thresholds.RETURN_COMPLETE_BUFFER',
+    'thresholds.MIN_PARTIAL_ROM',
+    'formThresholds.EXTENSION_FAIL',
+    'formThresholds.FLEXION_FAIL',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value < 0 || value > 1.2)) {
+      issues.push(`Cable Pushdowns config "${path}" must be between 0 and 1.2.`);
+    }
+  }
+
+  for (const path of [
+    'thresholds.MIN_REP_TIME',
+    'formThresholds.ELBOW_DRIFT_WARN',
+    'formThresholds.ELBOW_FORWARD_WARN',
+    'formThresholds.TORSO_LEAN_WARN',
+    'formThresholds.TORSO_ROCK_WARN',
+    'formThresholds.LOCKOUT_HOLD_MIN_MS',
+    'formThresholds.TEMPO_PUSH_MIN',
+    'formThresholds.TEMPO_RETURN_MIN',
+    'formThresholds.TEMPO_PUSH_SPIKE_WARN',
+    'formThresholds.TEMPO_RETURN_SPIKE_WARN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && value <= 0) {
+      issues.push(`Cable Pushdowns config "${path}" must be greater than 0.`);
+    }
+  }
+
+  const lockoutGap = configNumber(config, 'formThresholds.LOCKOUT_GAP_TOLERANCE_MS', issues);
+  if (lockoutGap !== null && lockoutGap < 0) {
+    issues.push('Cable Pushdowns config "formThresholds.LOCKOUT_GAP_TOLERANCE_MS" must be greater than or equal to 0.');
+  }
+
+  validatePenaltyConfigs(config, issues);
+  return issues;
 }
 
 // ============================================================================
@@ -834,124 +1692,162 @@ export function createCablePushdownDefinition(
   config: ExerciseHeuristicConfig = ACTIVE_CABLE_PUSHDOWN_HEURISTIC_CONFIG,
 ): ExerciseDefinition {
   return {
-  name: 'Cable Pushdowns',
-  requiredView: 'side',
+    name: 'Cable Pushdowns',
+    requiredView: 'side',
 
-  createState: (): ExerciseState => ({
-    repCount: 0,
-    lastRepResult: null,
-    feedback: null,
-    feedbackTimestamp: null,
-    debugInfo: {},
-    repQualityWindowActive: false,
-    _internal: withCablePushdownConfig(config, () => initializeCablePushdownState()),
-  }),
+    createState: (): ExerciseState => ({
+      repCount: 0,
+      lastRepResult: null,
+      feedback: null,
+      feedbackTimestamp: null,
+      debugInfo: {},
+      repQualityWindowActive: false,
+      _internal: withCablePushdownConfig(config, () => initializeCablePushdownState()),
+    }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
-    const internal = state._internal as CablePushdownState;
-    const newInternal = withCablePushdownConfig(
-      config,
-      () => updateCablePushdownState(keypoints, internal),
-    );
+    update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
+      const internal = state._internal as CablePushdownState;
+      const newInternal = withCablePushdownConfig(
+        config,
+        () => updateCablePushdownState(keypoints, internal, frameContext),
+      );
 
-    // Map internal RepResult to framework RepResult
-    const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
-      ? {
-          repIndex: newInternal.lastRepResult.repIndex,
-          score: newInternal.lastRepResult.score,
-          messages: newInternal.lastRepResult.messages,
-        }
-      : null;
+      // Map internal RepResult to framework RepResult
+      const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
+        ? {
+            repIndex: newInternal.lastRepResult.repIndex,
+            score: newInternal.lastRepResult.score,
+            messages: newInternal.lastRepResult.messages,
+            scorable: newInternal.lastRepResult.scorable,
+            qualityWarnings: newInternal.lastRepResult.qualityWarnings,
+            diagnostics: newInternal.lastRepResult.diagnostics,
+          }
+        : null;
 
-    return {
-      repCount: newInternal.repCount,
-      lastRepResult,
-      feedback: newInternal.feedback,
-      feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
-      debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
-      repQualityWindowActive: newInternal.repWindow !== null,
-      _internal: newInternal,
-    };
-  },
-
-  heuristicConfig: config,
-  tunableSpec: CABLE_PUSHDOWN_TUNABLE_SPEC,
-  tunedConfigPath: 'src/utils/exercises/definitions/tuned/cablePushdown.json',
-  createVariant: (variantConfig) =>
-    createCablePushdownDefinition(mergeHeuristicConfig(config, variantConfig)),
-
-  ttsConfig: {
-    feedbackToIssue: {
-      'Extend fully \u2014 lock out at the bottom of each rep.': 'lockout_short',
-      'Start with a deeper bend \u2014 bring your forearms closer to your biceps.': 'rom_short',
-      'Keep your elbows pinned to your sides \u2014 avoid letting them drift.': 'elbow_drift',
-      'Stay upright \u2014 avoid leaning into the pushdown.': 'torso_warn',
-      'Slow down the push \u2014 control the extension.': 'tempo_down',
-      "Control the return \u2014 don't let the weight snap back.": 'tempo_up',
+      return {
+        repCount: newInternal.repCount,
+        lastRepResult,
+        feedback: newInternal.feedback,
+        feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
+        debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
+        repQualityWindowActive: newInternal.repWindow !== null,
+        _internal: newInternal,
+      };
     },
-    feedbackMessages: {
-      'Extend fully \u2014 lock out at the bottom of each rep.': [
-        'Lock out at the bottom.',
-        'Finish the pushdown.',
-        'Full extension at the bottom.',
-      ],
-      'Start with a deeper bend \u2014 bring your forearms closer to your biceps.': [
-        'Start from a deeper bend.',
-        'Let it come up for a fuller stretch.',
-        'More bend at the top before you press.',
-      ],
-      'Stay upright \u2014 avoid leaning into the pushdown.': [
-        'Stay tall through the pushdown.',
-        'Less lean. Let the triceps do it.',
-        'Brace your core and stay upright.',
-      ],
-      'Slow down the push \u2014 control the extension.': [
-        'Press down with control.',
-        'Control the pushdown.',
-        'Press with control, no rushing.',
-      ],
-      "Control the return \u2014 don't let the weight snap back.": [
-        'Control the return.',
-        "Don't let it snap back.",
-        'Resist the weight on the way up.',
-      ],
-    },
-    issueDefinitions: [
-      {
-        issueType: 'rom_short',
-        priority: 20,
-        messages: [
-          'Get a fuller stretch at the top.',
-          'Deeper starting position.',
-          'Bring it up higher.',
+
+    heuristicConfig: config,
+    tunableSpec: CABLE_PUSHDOWN_TUNABLE_SPEC,
+    tunedConfigPath: 'src/utils/exercises/definitions/tuned/cablePushdown.json',
+    createVariant: (variantConfig) =>
+      createCablePushdownDefinition(mergeHeuristicConfig(config, variantConfig)),
+    validateHeuristicConfig: validateCablePushdownHeuristicConfig,
+
+    ttsConfig: {
+      feedbackToIssue: {
+        'Extend fully \u2014 lock out at the bottom of each rep.': 'lockout_short',
+        'Start with a deeper bend \u2014 bring your forearms closer to your biceps.': 'rom_short',
+        'Keep your elbows pinned to your sides \u2014 avoid letting them drift.': 'elbow_drift',
+        'Start with your elbows tucked by your sides.': 'elbow_forward',
+        'Stay upright \u2014 avoid leaning into the pushdown.': 'torso_warn',
+        'Keep your torso steady through the pushdown.': 'torso_rocking',
+        'Slow down the push \u2014 control the extension.': 'tempo_down',
+        "Control the return \u2014 don't let the weight snap back.": 'tempo_up',
+      },
+      feedbackMessages: {
+        'Extend fully \u2014 lock out at the bottom of each rep.': [
+          'Lock out at the bottom.',
+          'Finish the pushdown.',
+          'Full extension at the bottom.',
+        ],
+        'Start with a deeper bend \u2014 bring your forearms closer to your biceps.': [
+          'Start from a deeper bend.',
+          'Let it come up for a fuller stretch.',
+          'More bend at the top before you press.',
+        ],
+        'Stay upright \u2014 avoid leaning into the pushdown.': [
+          'Stay tall through the pushdown.',
+          'Less lean. Let the triceps do it.',
+          'Brace your core and stay upright.',
+        ],
+        'Start with your elbows tucked by your sides.': [
+          'Start with elbows tucked.',
+          'Set your elbows by your sides first.',
+          'Bring your elbows back before you press.',
+        ],
+        'Keep your torso steady through the pushdown.': [
+          'Keep your torso steady.',
+          'Brace and press without rocking.',
+          'No body swing on the pushdown.',
+        ],
+        'Slow down the push \u2014 control the extension.': [
+          'Press down with control.',
+          'Control the pushdown.',
+          'Press with control, no rushing.',
+        ],
+        "Control the return \u2014 don't let the weight snap back.": [
+          'Control the return.',
+          "Don't let it snap back.",
+          'Resist the weight on the way up.',
         ],
       },
-      {
-        issueType: 'elbow_drift',
-        priority: 25,
-        messages: [
-          'Keep your elbows pinned.',
-          'Elbows tight to your sides.',
-          'Lock those elbows in place.',
-        ],
-      },
-    ],
-  },
+      issueDefinitions: [
+        {
+          issueType: 'rom_short',
+          priority: 20,
+          messages: [
+            'Get a fuller stretch at the top.',
+            'Deeper starting position.',
+            'Bring it up higher.',
+          ],
+        },
+        {
+          issueType: 'elbow_drift',
+          priority: 25,
+          messages: [
+            'Keep your elbows pinned.',
+            'Elbows tight to your sides.',
+            'Lock those elbows in place.',
+          ],
+        },
+        {
+          issueType: 'elbow_forward',
+          priority: 24,
+          messages: [
+            'Start with elbows tucked.',
+            'Set your elbows by your sides.',
+            'Pull your elbows back before pressing.',
+          ],
+        },
+        {
+          issueType: 'torso_rocking',
+          priority: 18,
+          messages: [
+            'Keep your torso steady.',
+            'Brace without rocking.',
+            'No body swing.',
+          ],
+        },
+      ],
+    },
 
-  summaryConfig: {
-    'Extend fully \u2014 lock out at the bottom of each rep.':
-      'Focus on achieving full lockout at the bottom of each rep for maximum tricep activation.',
-    'Start with a deeper bend \u2014 bring your forearms closer to your biceps.':
-      'Allow a deeper stretch at the top position to maximize the range of motion.',
-    'Keep your elbows pinned to your sides \u2014 avoid letting them drift.':
-      'Keep your elbows locked to your sides throughout the movement to isolate the triceps.',
-    'Stay upright \u2014 avoid leaning into the pushdown.':
-      'Maintain an upright posture \u2014 leaning forward uses momentum instead of tricep strength.',
-    'Slow down the push \u2014 control the extension.':
-      'Control the concentric phase \u2014 aim for 1-2 seconds on the push down.',
-    "Control the return \u2014 don't let the weight snap back.":
-      'Slow the eccentric phase \u2014 resist the weight on the way up for 2-3 seconds.',
-  },
+    summaryConfig: {
+      'Extend fully \u2014 lock out at the bottom of each rep.':
+        'Focus on achieving full lockout at the bottom of each rep for maximum tricep activation.',
+      'Start with a deeper bend \u2014 bring your forearms closer to your biceps.':
+        'Allow a deeper stretch at the top position to maximize the range of motion.',
+      'Keep your elbows pinned to your sides \u2014 avoid letting them drift.':
+        'Keep your elbows locked to your sides throughout the movement to isolate the triceps.',
+      'Start with your elbows tucked by your sides.':
+        'Begin each rep with your elbows tucked by your sides before pressing down.',
+      'Stay upright \u2014 avoid leaning into the pushdown.':
+        'Maintain an upright posture \u2014 leaning forward uses momentum instead of tricep strength.',
+      'Keep your torso steady through the pushdown.':
+        'Brace your torso and avoid rocking so the triceps drive the movement.',
+      'Slow down the push \u2014 control the extension.':
+        'Control the concentric phase \u2014 aim for 1-2 seconds on the push down.',
+      "Control the return \u2014 don't let the weight snap back.":
+        'Slow the eccentric phase \u2014 resist the weight on the way up for 2-3 seconds.',
+    },
   };
 }
 

@@ -14,6 +14,8 @@ export type PoseQualityWarning =
   | 'torso_hidden'
   | 'move_camera_back'
   | 'keep_full_body_in_frame'
+  | 'side_view_uncertain'
+  | 'front_view_uncertain'
   | 'unstable_tracking';
 
 export interface RequiredJointGroup {
@@ -145,7 +147,7 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
       { id: 'left_side', label: 'left side', joints: ['left_shoulder', ...LOWER_CHAIN_LEFT] },
       { id: 'right_side', label: 'right side', joints: ['right_shoulder', ...LOWER_CHAIN_RIGHT] },
     ],
-    importantJoints: ['left_elbow', 'right_elbow', 'left_wrist', 'right_wrist'],
+    importantJoints: ['left_heel', 'right_heel', 'left_foot_index', 'right_foot_index'],
   },
   'Push-Up': {
     requiredView: 'side',
@@ -159,19 +161,28 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
     requiredView: 'side',
     exerciseName: 'Leg Extensions',
     requiredJointGroups: [
-      { id: 'left_leg', label: 'left leg', joints: LOWER_CHAIN_LEFT },
-      { id: 'right_leg', label: 'right leg', joints: LOWER_CHAIN_RIGHT },
+      { id: 'left_leg', label: 'left leg', joints: ['left_shoulder', ...LOWER_CHAIN_LEFT] },
+      { id: 'right_leg', label: 'right leg', joints: ['right_shoulder', ...LOWER_CHAIN_RIGHT] },
     ],
-    importantJoints: ['left_shoulder', 'right_shoulder'],
+    importantJoints: ['left_ankle', 'right_ankle'],
   },
   'Lying Leg Curl': {
     requiredView: 'side',
     exerciseName: 'Lying Leg Curl',
     requiredJointGroups: [
-      { id: 'left_leg', label: 'left leg', joints: LOWER_CHAIN_LEFT },
-      { id: 'right_leg', label: 'right leg', joints: LOWER_CHAIN_RIGHT },
+      { id: 'left_leg', label: 'left leg', joints: ['left_hip', 'left_knee'] },
+      { id: 'right_leg', label: 'right leg', joints: ['right_hip', 'right_knee'] },
     ],
-    importantJoints: ['left_shoulder', 'right_shoulder'],
+    importantJoints: [
+      'left_shoulder',
+      'right_shoulder',
+      'left_ankle',
+      'right_ankle',
+      'left_heel',
+      'right_heel',
+      'left_foot_index',
+      'right_foot_index',
+    ],
   },
   'Machine Ab Crunches': {
     requiredView: 'side',
@@ -205,6 +216,8 @@ const WARNING_MESSAGES: Record<PoseQualityWarning, string> = {
   torso_hidden: 'Keep your torso visible.',
   move_camera_back: 'Move the camera back.',
   keep_full_body_in_frame: 'Keep your full body inside the frame.',
+  side_view_uncertain: 'Turn side-on so I can judge your form.',
+  front_view_uncertain: 'Face the camera so I can judge your lateral raise.',
   unstable_tracking: 'Hold steady.',
 };
 
@@ -212,6 +225,8 @@ const ACTIONABLE_WARNING_PRIORITY: PoseQualityWarning[] = [
   'tracking_lost',
   'move_camera_back',
   'keep_full_body_in_frame',
+  'side_view_uncertain',
+  'front_view_uncertain',
   'missing_required_joints',
   'knees_hidden',
   'feet_hidden',

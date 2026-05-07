@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
   activeEdge: {
     height: WORKOUT_CARD_HEIGHT,
     borderRadius: CAPTURE_CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 15,
@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
     alignItems: 'center',
@@ -1117,7 +1117,7 @@ const styles = StyleSheet.create({
   },
   toolsCard: {
     borderRadius: CAPTURE_CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
@@ -1169,7 +1169,7 @@ const styles = StyleSheet.create({
   },
   templateCard: {
     borderRadius: CAPTURE_CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.085)',
     borderTopColor: 'rgba(255, 255, 255, 0.13)',
     overflow: 'hidden',

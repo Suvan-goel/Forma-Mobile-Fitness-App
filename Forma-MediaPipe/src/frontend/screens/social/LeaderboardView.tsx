@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     padding: 3,
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   timeSegment: {
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.screenHorizontal,
     marginBottom: 10,
     borderRadius: LEADERBOARD_CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 20,
     backgroundColor: 'rgba(124, 92, 255, 0.14)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(124, 92, 255, 0.28)',
   },
   retryText: {

@@ -5,6 +5,7 @@ import type { Keypoint } from '../../poseAnalysis';
 
 type CurlView = 'front' | 'side-left' | 'side-right';
 type WristStyle = 'neutral' | 'curled';
+type FrameValue<T> = T | ((index: number) => T);
 
 const EXTENDED_WRIST_Y = 0.6;
 const TOP_WRIST_Y = 1.2;
@@ -14,6 +15,11 @@ const FRAME_MS = 50;
 
 function kp(name: string, x: number, y: number, z: number, score = 0.99): Keypoint {
   return { name, x, y, z, score };
+}
+
+function frameValue<T>(value: FrameValue<T> | undefined, index: number, fallback: T): T {
+  if (typeof value === 'function') return (value as (index: number) => T)(index);
+  return value ?? fallback;
 }
 
 function sideGeometry(view: CurlView) {
@@ -53,20 +59,24 @@ function armKeypoints(
   wristY: number,
   visible: boolean,
   wristStyle: WristStyle,
+  elbowOffset: number,
+  indexScore: number,
 ): Keypoint[] {
   const score = visible ? 0.99 : 0.05;
   const shoulderY = 1.4;
   const elbowY = 1.0;
+  const elbowX = x + (side === 'left' ? -elbowOffset : elbowOffset);
   const indexY = wristY + (wristY - elbowY) * 0.2;
   const indexX = wristStyle === 'curled'
     ? x + (side === 'left' ? -0.18 : 0.18)
     : x;
+  const effectiveIndexScore = visible ? indexScore : 0.05;
 
   return [
     kp(`${side}_shoulder`, x, shoulderY, z, 0.99),
-    kp(`${side}_elbow`, x, elbowY, z, score),
+    kp(`${side}_elbow`, elbowX, elbowY, z, score),
     kp(`${side}_wrist`, x, wristY, z, score),
-    kp(`${side}_index`, indexX, indexY, z, score),
+    kp(`${side}_index`, indexX, indexY, z, effectiveIndexScore),
     kp(`${side}_hip`, x, 0.5, z, 0.99),
   ];
 }
@@ -76,17 +86,24 @@ function makeFrame(
   wristY: number,
   view: CurlView,
   wristStyle: WristStyle,
+  index: number,
+  options: {
+    elbowOffset?: FrameValue<number>;
+    indexScore?: FrameValue<number>;
+  } = {},
 ): LandmarkRecording['frames'][number] {
   const geom = sideGeometry(view);
   const leftVisible = geom.visibleArm === 'both' || geom.visibleArm === 'left';
   const rightVisible = geom.visibleArm === 'both' || geom.visibleArm === 'right';
+  const elbowOffset = frameValue(options.elbowOffset, index, 0);
+  const indexScore = frameValue(options.indexScore, index, 0.99);
 
   return {
     timestamp,
     keypoints: [
       kp('nose', 0, 1.72, -0.05, 0.99),
-      ...armKeypoints('left', geom.leftX, geom.leftZ, wristY, leftVisible, wristStyle),
-      ...armKeypoints('right', geom.rightX, geom.rightZ, wristY, rightVisible, wristStyle),
+      ...armKeypoints('left', geom.leftX, geom.leftZ, wristY, leftVisible, wristStyle, elbowOffset, indexScore),
+      ...armKeypoints('right', geom.rightX, geom.rightZ, wristY, rightVisible, wristStyle, elbowOffset, indexScore),
     ],
   };
 }
@@ -97,9 +114,11 @@ function buildRecording(
   view: CurlView = 'front',
   options: {
     wristStyle?: WristStyle | ((index: number) => WristStyle);
+    elbowOffset?: FrameValue<number>;
+    indexScore?: FrameValue<number>;
   } = {},
 ): LandmarkRecording {
-  const { wristStyle = 'neutral' } = options;
+  const { wristStyle = 'neutral', elbowOffset, indexScore } = options;
 
   return {
     exerciseName: 'Barbell Curl',
@@ -112,7 +131,10 @@ function buildRecording(
     },
     frames: wristPath.map((wristY, index) => {
       const frameWristStyle = typeof wristStyle === 'function' ? wristStyle(index) : wristStyle;
-      return makeFrame(index * FRAME_MS, wristY, view, frameWristStyle);
+      return makeFrame(index * FRAME_MS, wristY, view, frameWristStyle, index, {
+        elbowOffset,
+        indexScore,
+      });
     }),
   };
 }
@@ -149,6 +171,16 @@ function fastLoweringPath(): number[] {
     ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 16),
     ...Array(20).fill(TOP_WRIST_Y),
     ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 3),
+    ...Array(8).fill(EXTENDED_WRIST_Y),
+  ];
+}
+
+function fastCurlUpPath(): number[] {
+  return [
+    ...Array(16).fill(EXTENDED_WRIST_Y),
+    ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 2),
+    ...Array(20).fill(TOP_WRIST_Y),
+    ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 18),
     ...Array(8).fill(EXTENDED_WRIST_Y),
   ];
 }
@@ -250,6 +282,54 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(curled.finalRepCount).toBe(1);
     expect(curled.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(curled.feedbackMessages).toContain('Keep your wrists neutral — avoid curling them in.');
+  });
+
+  it('ignores wrist curling when hand landmarks are low-confidence', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic curled wrist with low-confidence index', fullRepPath(), 'front', {
+        wristStyle: index => (index < 16 ? 'neutral' : 'curled'),
+        indexScore: index => (index < 16 ? 0.99 : 0.05),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Keep your wrists neutral — avoid curling them in.');
+  });
+
+  it('does not flag elbow flare from a single noisy frame', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic one-frame elbow flare spike', fullRepPath(), 'front', {
+        elbowOffset: index => (index === 34 ? 0.6 : 0),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain("Keep your elbows in — don't flare them out to the sides.");
+    expect(result.feedbackMessages).not.toContain("Tuck your elbows in — they're drifting outward.");
+  });
+
+  it('flags sustained elbow flare', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic sustained elbow flare', fullRepPath(), 'front', {
+        elbowOffset: index => (index >= 24 && index <= 48 ? 0.28 : 0),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain("Tuck your elbows in — they're drifting outward.");
+  });
+
+  it('still flags a true fast curl up', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic fast curl up', fastCurlUpPath(), 'front'),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Slow down — control the curl.');
   });
 
   it('still flags a true fast lowering after a top pause', () => {

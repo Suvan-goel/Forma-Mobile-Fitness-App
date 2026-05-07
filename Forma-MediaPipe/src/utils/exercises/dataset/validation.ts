@@ -8,6 +8,10 @@ import type {
 
 const VALID_SPLITS: DatasetSplit[] = ['train', 'validation', 'test'];
 const VALID_REVIEW_STATUSES = ['draft', 'reviewed'];
+const VALID_CAPTURE_CAMERA_SIDES = ['left', 'right', 'oblique', 'frontish', 'unknown'];
+const VALID_CAPTURE_MACHINE_STYLES = ['seated_selectorized', 'kneeling', 'plate_loaded', 'unknown'];
+const VALID_CAPTURE_VISIBLE_HANDLES = ['yes', 'no', 'partial', 'unknown'];
+const VALID_REVIEWER_VIEW_CONFIDENCES = ['good', 'usable', 'poor'];
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -55,6 +59,40 @@ export function validateLabelFile(
   }
   if (!Number.isInteger(value.expectedReps) || (value.expectedReps as number) < 0) {
     issues.push({ path: '$.expectedReps', message: 'expectedReps must be a non-negative integer.' });
+  }
+  if (value.labelingGuidance !== undefined && !isStringArray(value.labelingGuidance)) {
+    issues.push({ path: '$.labelingGuidance', message: 'labelingGuidance must be an array of strings.' });
+  }
+  if (value.captureMetadata !== undefined) {
+    if (!isObject(value.captureMetadata)) {
+      issues.push({ path: '$.captureMetadata', message: 'captureMetadata must be an object.' });
+    } else {
+      const metadata = value.captureMetadata;
+      if (
+        metadata.cameraSide !== undefined &&
+        !VALID_CAPTURE_CAMERA_SIDES.includes(metadata.cameraSide as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.cameraSide', message: 'cameraSide must be left, right, oblique, frontish, or unknown.' });
+      }
+      if (
+        metadata.machineStyle !== undefined &&
+        !VALID_CAPTURE_MACHINE_STYLES.includes(metadata.machineStyle as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.machineStyle', message: 'machineStyle must be seated_selectorized, kneeling, plate_loaded, or unknown.' });
+      }
+      if (
+        metadata.visibleHandles !== undefined &&
+        !VALID_CAPTURE_VISIBLE_HANDLES.includes(metadata.visibleHandles as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.visibleHandles', message: 'visibleHandles must be yes, no, partial, or unknown.' });
+      }
+      if (
+        metadata.reviewerViewConfidence !== undefined &&
+        !VALID_REVIEWER_VIEW_CONFIDENCES.includes(metadata.reviewerViewConfidence as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.reviewerViewConfidence', message: 'reviewerViewConfidence must be good, usable, or poor.' });
+      }
+    }
   }
   if (value.availableIssues !== undefined) {
     if (!Array.isArray(value.availableIssues)) {

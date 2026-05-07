@@ -10,6 +10,20 @@
   "landmarkFile": "landmarks/lying-leg-curl/<video-file>.json",
   "split": "train",
   "reviewStatus": "draft",
+  "captureMetadata": {
+    "cameraSide": "unknown",
+    "machineStyle": "unknown",
+    "ankleVisibility": "unknown",
+    "rollerPadVisibility": "unknown",
+    "reviewerViewConfidence": "usable"
+  },
+  "labelingGuidance": [
+    "Count a rep when the leg-curl movement is clear, even if the side view or distal landmarks are too poor to judge form.",
+    "Use lying-leg-curl.side_view_uncertain when the rep is countable but side-view geometry is not reliable enough for form scoring.",
+    "Use lying-leg-curl.thigh_movement when the knee or thigh visibly lifts, slides, or swings instead of staying planted on the pad.",
+    "Note whether the ankle, heel, or foot index is the clearest lower-leg endpoint when the roller pad hides the ankle.",
+    "Use issueIds from availableIssues only for visible form faults; leave issueIds empty for clean reps."
+  ],
   "expectedReps": 1,
   "reps": [
     {
@@ -38,12 +52,28 @@
       "feedbackMessage": "Keep your hips down — avoid lifting off the pad."
     },
     {
+      "issueId": "lying-leg-curl.thigh_movement",
+      "feedbackMessage": "Keep your thighs down — only your lower legs should move."
+    },
+    {
       "issueId": "lying-leg-curl.tempo_up",
       "feedbackMessage": "Slow down the curl — control the contraction."
     },
     {
       "issueId": "lying-leg-curl.tempo_down",
       "feedbackMessage": "Control the descent — lower the weight slowly."
+    },
+    {
+      "issueId": "lying-leg-curl.top_hold_short",
+      "feedbackMessage": "Pause briefly at the top — squeeze your hamstrings."
+    },
+    {
+      "issueId": "lying-leg-curl.tempo_jerk",
+      "feedbackMessage": "Move smoothly — avoid bouncing the weight."
+    },
+    {
+      "issueId": "lying-leg-curl.side_view_uncertain",
+      "feedbackMessage": "Turn fully side-on so I can judge your leg curl."
     }
   ],
   "draftMetadata": {

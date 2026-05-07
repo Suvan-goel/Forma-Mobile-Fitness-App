@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     backgroundColor: COLORS.cardBackgroundLight,
     borderRadius: 24,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 24,
     paddingTop: 28,
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   },
   buttonCancel: {
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   buttonPrimary: {
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   },
   buttonDestructive: {
     backgroundColor: 'rgba(239,68,68,0.1)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(239,68,68,0.35)',
   },
   buttonText: {

@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.045)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
   },
   counterText: {
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
   artCardEdge: {
     flex: 1,
     borderRadius: CARD_RADIUS_LG,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderTopColor: COLORS.borderStrong,
     overflow: 'hidden',
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122, 85, 255, 0.12)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.28)',
   },
   artStage: {
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 10,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.09)',
   },
   secondaryButton: {

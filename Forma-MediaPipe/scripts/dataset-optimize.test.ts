@@ -6,9 +6,11 @@ import type { Keypoint } from '../src/utils/poseAnalysis';
 import { ExerciseRegistry } from '../src/utils/exercises/ExerciseRegistry';
 import { evaluateCase } from '../src/utils/exercises/dataset';
 import type {
+  DiagnosticDirection,
   ExerciseDefinition,
   ExerciseHeuristicConfig,
   ExerciseState,
+  RepDiagnostics,
   TunableSpec,
 } from '../src/utils/exercises/types';
 import type { DatasetCase, ExerciseLabelFile } from '../src/utils/exercises/dataset';
@@ -39,6 +41,32 @@ const syntheticSpec: TunableSpec = {
     survivorCount: 2,
     refinementRounds: 0,
     seed: 3,
+  },
+};
+
+const diagnosticSyntheticIssueId = 'diagnostic-synthetic.too_high';
+
+const diagnosticSyntheticSpec: TunableSpec = {
+  exerciseName: 'Diagnostic Synthetic Threshold',
+  tunables: [
+    { path: 'thresholds.COMPLETE_AT', min: 0.4, max: 0.8, step: 0.1, kind: 'fsm' },
+    { path: 'formThresholds.WARN_AT', min: 0.4, max: 1, step: 0.05, kind: 'feedback' },
+  ],
+  diagnosticTuning: [
+    {
+      issueId: diagnosticSyntheticIssueId,
+      metricKey: 'peakX',
+      thresholdPath: 'formThresholds.WARN_AT',
+      direction: 'above' satisfies DiagnosticDirection,
+      minPositiveCases: 1,
+      minNegativeCases: 1,
+    },
+  ],
+  search: {
+    randomCandidates: 0,
+    survivorCount: 4,
+    refinementRounds: 0,
+    seed: 7,
   },
 };
 
@@ -88,6 +116,92 @@ function makeSyntheticExercise(
   };
 }
 
+function makeDiagnosticSyntheticExercise(
+  name: string,
+  config: ExerciseHeuristicConfig,
+): ExerciseDefinition {
+  const completeAt = Number(getConfigValue(config, 'thresholds.COMPLETE_AT'));
+  const warnAt = Number(getConfigValue(config, 'formThresholds.WARN_AT'));
+  return {
+    name,
+    requiredView: 'any',
+    qualityProfile: {
+      exerciseName: name,
+      requiredView: 'any',
+      requiredJoints: ['demo'],
+      importantJoints: [],
+      windowSize: 1,
+    },
+    heuristicConfig: config,
+    tunableSpec: { ...diagnosticSyntheticSpec, exerciseName: name },
+    tunedConfigPath: `src/utils/exercises/definitions/tuned/${name}.json`,
+    createVariant: (variantConfig) => makeDiagnosticSyntheticExercise(name, variantConfig),
+    createState: (): ExerciseState => ({
+      repCount: 0,
+      lastRepResult: null,
+      feedback: null,
+      feedbackTimestamp: null,
+      debugInfo: {},
+      _internal: { completed: false },
+    }),
+    update: (keypoints, state): ExerciseState => {
+      const internal = state._internal as { completed: boolean };
+      const x = keypoints[0]?.x ?? 0;
+      if (internal.completed || x < completeAt) return state;
+      const triggered = x >= warnAt;
+      const diagnostics: RepDiagnostics = {
+        exerciseName: name,
+        repIndex: 1,
+        view: 'unknown',
+        selectedSide: 'unknown',
+        scorable: true,
+        metrics: {
+          peakX: {
+            key: 'peakX',
+            value: x,
+            unit: 'ratio',
+            eligible: true,
+            confidence: keypoints[0]?.score,
+            sampleCount: 1,
+          },
+        },
+        cues: {
+          [diagnosticSyntheticIssueId]: {
+            issueId: diagnosticSyntheticIssueId,
+            metricKeys: ['peakX'],
+            triggered,
+            eligible: true,
+            direction: 'above',
+            thresholdPath: 'formThresholds.WARN_AT',
+            thresholdValue: warnAt,
+            margin: x - warnAt,
+            support: 1,
+          },
+        },
+      };
+      internal.completed = true;
+      return {
+        ...state,
+        repCount: 1,
+        lastRepResult: {
+          repIndex: 1,
+          score: triggered ? 70 : 100,
+          messages: triggered ? ['Synthetic diagnostic warning'] : [],
+          issueIds: triggered ? [diagnosticSyntheticIssueId] : [],
+          diagnostics,
+        },
+        _internal: internal,
+      };
+    },
+    ttsConfig: {
+      feedbackToIssue: {
+        'Synthetic diagnostic warning': diagnosticSyntheticIssueId,
+      },
+    },
+    summaryConfig: {},
+  };
+}
+
 function syntheticCase(
   exerciseName: string,
   split: ExerciseLabelFile['split'],
@@ -109,6 +223,32 @@ function syntheticCase(
       frames: [
         { timestamp: 0, keypoints: [{ name: 'demo', x: 0.2, y: 0, score } as Keypoint] },
         { timestamp: 500, keypoints: [{ name: 'demo', x: 0.6, y: 0, score } as Keypoint] },
+      ],
+    },
+  };
+}
+
+function diagnosticSyntheticCase(
+  exerciseName: string,
+  peakX: number,
+  issueIds: string[],
+): DatasetCase {
+  return {
+    label: {
+      schemaVersion: 1,
+      exerciseName,
+      sourceVideo: `videos/${exerciseName}/${peakX}.mp4`,
+      split: 'train',
+      reviewStatus: 'reviewed',
+      expectedReps: 1,
+      reps: [{ index: 1, startMs: 0, endMs: 1000, issueIds }],
+    },
+    recording: {
+      exerciseName,
+      metadata: {},
+      frames: [
+        { timestamp: 0, keypoints: [{ name: 'demo', x: 0.2, y: 0, score: 1 } as Keypoint] },
+        { timestamp: 500, keypoints: [{ name: 'demo', x: peakX, y: 0, score: 1 } as Keypoint] },
       ],
     },
   };
@@ -147,6 +287,9 @@ describe('dataset optimiser scaling helpers', () => {
       datasetRoot: '/tmp/dataset',
       dryRun: true,
       includeCaseDetails: true,
+      includeDiagnostics: true,
+      selectionMode: 'diagnostic',
+      apply: false,
       silent: true,
       reportPath: '/tmp/report.json',
       search: {
@@ -156,6 +299,19 @@ describe('dataset optimiser scaling helpers', () => {
         seed: 99,
       },
       minCases: { train: 30, validation: 8, test: 7 },
+    });
+  });
+
+  it('parses explicit apply and diagnostic report flags', () => {
+    expect(parseOptimizerCommandOptions(['--apply', '--selection-mode', 'current', '--no-diagnostics'])).toMatchObject({
+      dryRun: false,
+      apply: true,
+      selectionMode: 'current',
+      includeDiagnostics: false,
+    });
+    expect(parseOptimizerCommandOptions(['--apply', '--dry-run'])).toMatchObject({
+      dryRun: true,
+      apply: false,
     });
   });
 
@@ -170,6 +326,8 @@ describe('dataset optimiser scaling helpers', () => {
     expect(compact).toEqual({
       totals: detailed?.totals,
       metrics: detailed?.metrics,
+      qualityCoverage: detailed?.qualityCoverage,
+      diagnosticSummary: detailed?.diagnosticSummary,
     });
   });
 
@@ -219,6 +377,42 @@ describe('dataset optimiser scaling helpers', () => {
     expect(result.candidates[0].evaluation).toHaveProperty('metrics');
   });
 
+  it('generates diagnostic-derived threshold candidates from labelled metric distributions', () => {
+    const definition = makeDiagnosticSyntheticExercise('Diagnostic Synthetic Threshold', {
+      thresholds: { COMPLETE_AT: 0.5 },
+      formThresholds: { WARN_AT: 0.9 },
+    });
+    const result = searchExercise(
+      definition,
+      [
+        diagnosticSyntheticCase(definition.name, 0.8, [diagnosticSyntheticIssueId]),
+        diagnosticSyntheticCase(definition.name, 0.55, []),
+      ],
+      { randomCandidates: 0, refinementRounds: 0, survivorCount: 4, seed: 1 },
+      'diagnostic',
+    );
+
+    expect(result.candidates.length).toBeGreaterThan(0);
+    expect(result.sourceBreakdown.diagnostic).toBeGreaterThan(0);
+    expect(result.candidates[0].source).toBe('diagnostic');
+    expect(getConfigValue(result.candidates[0].config, 'formThresholds.WARN_AT')).toBeLessThan(0.9);
+    expect(result.candidates[0].evaluation.metrics.issueF1).toBe(1);
+  });
+
+  it('reports diagnostic fallback reasons when an exercise has no diagnostic metadata', () => {
+    const definition = makeSyntheticExercise('Scaling Synthetic No Diagnostics', {
+      thresholds: { COMPLETE_AT: 0.5 },
+    });
+    const result = searchExercise(
+      definition,
+      [syntheticCase(definition.name, 'train')],
+      { randomCandidates: 0, refinementRounds: 0, survivorCount: 2, seed: 1 },
+      'diagnostic',
+    );
+
+    expect(result.diagnosticFallbackReason).toContain('no diagnosticTuning metadata');
+  });
+
   it('blocks auto-apply when minimum split counts are below thresholds', () => {
     expect(minimumSplitGate({ train: 0, validation: 1, test: 1 }, DEFAULT_MIN_SPLIT_CASES)).toMatchObject({
       passed: false,
@@ -264,6 +458,9 @@ describe('dataset optimiser scaling helpers', () => {
         exerciseFilter: name,
         dryRun: false,
         includeCaseDetails: false,
+        includeDiagnostics: true,
+        selectionMode: 'diagnostic',
+        apply: false,
         silent: true,
         reportPath: null,
         search: { randomCandidates: 1, refinementRounds: 0, survivorCount: 1, seed: 1 },
@@ -330,6 +527,9 @@ describe('dataset optimiser exercise discovery', () => {
       exerciseFilter: null,
       dryRun: true,
       includeCaseDetails: false,
+      includeDiagnostics: true,
+      selectionMode: 'diagnostic',
+      apply: false,
       silent: true,
       reportPath: path.join(root, 'reports/optimization.json'),
       search: { randomCandidates: 0, refinementRounds: 0, survivorCount: 1, seed: 1 },

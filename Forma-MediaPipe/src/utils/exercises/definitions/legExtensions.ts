@@ -31,15 +31,25 @@ import { computeScore, type PenaltyConfig } from '../shared/scoring';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
+  getConfigValue,
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import {
+  buildRepDiagnostics,
+  diagnosticCue,
+  diagnosticLabelMetric,
+  diagnosticMetric,
+} from '../shared/diagnostics';
 import tunedConfig from './tuned/legExtensions.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
+  NumericTunable,
+  RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
 
@@ -48,6 +58,14 @@ import type {
 // ============================================================================
 
 type Point2D = { x: number; y: number };
+type LandmarkSourceName = 'image' | 'world' | 'fallback';
+
+interface MetricSample {
+  value: number;
+  confidence: number;
+  keypoints: Keypoint[];
+  source: LandmarkSourceName;
+}
 
 function getPoint(kp: Keypoint | null): Point2D | null {
   if (!kp) return null;
@@ -59,6 +77,56 @@ function dist2D(a: Point2D, b: Point2D): number {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+function finiteMetric(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function sortedFinite(values: number[]): number[] {
+  return values
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+}
+
+function median(values: number[]): number | null {
+  const sorted = sortedFinite(values);
+  if (sorted.length === 0) return null;
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function robustHigh(values: number[]): number | null {
+  const sorted = sortedFinite(values);
+  if (sorted.length === 0) return null;
+  if (sorted.length < THRESHOLDS.ROBUST_EXTREMA_MIN_SAMPLES) return sorted[sorted.length - 1];
+  const index = Math.max(0, Math.floor((sorted.length - 1) * 0.9));
+  return sorted[index];
+}
+
+function robustLow(values: number[]): number | null {
+  const sorted = sortedFinite(values);
+  if (sorted.length === 0) return null;
+  if (sorted.length < THRESHOLDS.ROBUST_EXTREMA_MIN_SAMPLES) return sorted[0];
+  const index = Math.min(sorted.length - 1, Math.ceil((sorted.length - 1) * 0.1));
+  return sorted[index];
+}
+
+function pushRolling(values: number[], value: number | null | undefined, maxLength: number): void {
+  if (!finiteMetric(value)) return;
+  values.push(value);
+  while (values.length > maxLength) values.shift();
 }
 
 /**
@@ -114,7 +182,19 @@ const THRESHOLDS = {
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
   /** Minimum ratio ROM for a returned partial rep to count */
-  MIN_PARTIAL_ROM: 0.14,
+  MIN_PARTIAL_ROM: 0.13,
+  /** Minimum knee-angle ROM for a returned partial rep to count when knee angles are available */
+  MIN_PARTIAL_KNEE_ROM: 18,
+  /** Minimum samples before robust extrema replace raw extrema */
+  ROBUST_EXTREMA_MIN_SAMPLES: 3,
+  /** Sustained lockout duration required before true lockout is confirmed */
+  LOCKOUT_CONFIRM_MS: 80,
+  /** Sustained non-lockout duration required before return timing starts */
+  RETURN_CONFIRM_MS: 80,
+  /** Rolling REST samples retained for baseline capture */
+  BASELINE_WINDOW_FRAMES: 15,
+  /** Minimum REST samples needed before baseline uses REST instead of first in-rep sample */
+  BASELINE_MIN_SAMPLES: 5,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
@@ -123,14 +203,38 @@ const FORM_THRESHOLDS = {
   EXTENSION_FAIL: 0.93,
   /** Min ratio above which starting flexion is insufficient */
   FLEXION_FAIL: 0.65,
-  /** Torso deviation from vertical above which there is excessive lean */
+  /** Max knee angle below which top extension is insufficient */
+  KNEE_EXTENSION_FAIL: 160,
+  /** Ideal lockout angle for conservative knee-angle score support */
+  KNEE_EXTENSION_IDEAL: 170,
+  /** Min knee angle above which bottom flexion is insufficient */
+  KNEE_FLEXION_FAIL: 105,
+  /** Torso movement from baseline above which there is excessive lean */
   TORSO_LEAN_WARN: 30,
   /** Hip angle change that indicates lifting hips off the seat */
   HIP_LIFT_WARN: 7,
+  /** Normalized upward hip movement that indicates lifting off the seat */
+  HIP_RISE_RATIO_WARN: 0.04,
+  /** Minimum lockout pause before returning (seconds) */
+  TOP_HOLD_MIN: 0.12,
+  /** Near-peak ratio band for top-hold detection */
+  TOP_HOLD_RATIO_BAND: 0.015,
+  /** Near-peak knee-angle band for top-hold detection */
+  TOP_HOLD_KNEE_BAND: 4,
+  /** Maximum near-peak ratio velocity considered a stable hold */
+  TOP_HOLD_MAX_RATIO_VELOCITY: 0.18,
+  /** Maximum near-peak knee velocity considered a stable hold */
+  TOP_HOLD_MAX_KNEE_VELOCITY: 60,
+  /** Average side-view confidence below which the rep is marked unscorable */
+  SIDE_VIEW_AVG_CONFIDENCE_MIN: 0.45,
+  /** Minimum side-view confidence below which the rep is marked unscorable */
+  SIDE_VIEW_MIN_CONFIDENCE_MIN: 0.25,
+  /** Minimum side-view samples required before view quality can mark a rep unscorable */
+  SIDE_VIEW_MIN_SAMPLES: 5,
   /** Concentric (extend) too fast threshold (seconds) */
-  TEMPO_EXTEND_MIN: 0.1,
+  TEMPO_EXTEND_MIN: 0.35,
   /** Eccentric (return) too fast threshold (seconds) */
-  TEMPO_RETURN_MIN: 0.4,
+  TEMPO_RETURN_MIN: 0.55,
 } as const;
 
 /**
@@ -140,23 +244,33 @@ const FORM_THRESHOLDS = {
  * |----------------------|-----|-----------------|-------|---------------------------------------|
  * | ROM extension        | 45  | 0 (shortfall)   | 800   | ideal ratio (0.97) - maxRatio         |
  * | ROM flexion          | 20  | 0.10            | 400   | minRatio - ideal start ratio (0.58)   |
- * | Torso lean           | 25  | 25              | 0.04  | max torso deviation from vertical     |
+ * | Knee extension ROM   | 8   | 0               | 0.03  | ideal knee angle - max knee angle     |
+ * | Knee flexion ROM     | 6   | 0               | 0.02  | min knee angle - bottom target        |
+ * | Torso lean           | 25  | 25              | 0.04  | max torso movement from baseline      |
  * | Hip lift             | 30  | 5               | 0.15  | max hip angle delta from baseline     |
- * | Tempo extend         | 8   | 0.15s           | 60    | concentric time deficit               |
- * | Tempo return         | 10  | 0.5s            | 40    | eccentric time deficit                |
+ * | Hip rise             | 10  | 0.03            | 3500  | normalized upward hip movement        |
+ * | Top hold             | 4   | 0s              | 120   | top-hold time deficit                 |
+ * | Tempo extend         | 8   | 0               | 60    | concentric time deficit               |
+ * | Tempo return         | 10  | 0               | 40    | eccentric time deficit                |
  *
  * Max total penalty: 128 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 45, deadzone: 0, scale: 800 } as PenaltyConfig,
   FLEXION_ROM:   { cap: 20, deadzone: 0.10, scale: 400 } as PenaltyConfig,
+  KNEE_EXTENSION_ROM: { cap: 8, deadzone: 0, scale: 0.03 } as PenaltyConfig,
+  KNEE_FLEXION_ROM:   { cap: 6, deadzone: 0, scale: 0.02 } as PenaltyConfig,
   TORSO_LEAN:    { cap: 25, deadzone: 25, scale: 0.04 } as PenaltyConfig,
   HIP_LIFT:      { cap: 30, deadzone: 5, scale: 0.15 } as PenaltyConfig,
-  TEMPO_EXTEND:  { cap: 8, deadzone: 0.15, scale: 60 } as PenaltyConfig,
-  TEMPO_RETURN:  { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
+  HIP_RISE:      { cap: 10, deadzone: 0.03, scale: 3500 } as PenaltyConfig,
+  TOP_HOLD:      { cap: 4, deadzone: 0, scale: 120 } as PenaltyConfig,
+  TEMPO_EXTEND:  { cap: 8, deadzone: 0, scale: 60 } as PenaltyConfig,
+  TEMPO_RETURN:  { cap: 10, deadzone: 0, scale: 40 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
+const FORM_CONFIDENCE_MIN = 0.3;
+const KNEE_FLEXION_IDEAL = 95;
 
 const DEFAULT_LEG_EXTENSIONS_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -173,6 +287,56 @@ const LEG_EXTENSIONS_TUNABLE_SPEC = createDefaultTunableSpec(
   'Leg Extensions',
   DEFAULT_LEG_EXTENSIONS_HEURISTIC_CONFIG,
 );
+
+function upsertLegExtensionTunable(tunable: NumericTunable): void {
+  const index = LEG_EXTENSIONS_TUNABLE_SPEC.tunables.findIndex(existing => existing.path === tunable.path);
+  if (index >= 0) {
+    LEG_EXTENSIONS_TUNABLE_SPEC.tunables[index] = tunable;
+  } else {
+    LEG_EXTENSIONS_TUNABLE_SPEC.tunables.push(tunable);
+  }
+}
+
+([
+  { path: 'formThresholds.TEMPO_EXTEND_MIN', min: 0.1, max: 1.2, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.TEMPO_RETURN_MIN', min: 0.1, max: 1.5, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.TOP_HOLD_MIN', min: 0.02, max: 0.5, step: 0.02, kind: 'feedback' },
+  { path: 'formThresholds.HIP_RISE_RATIO_WARN', min: 0.01, max: 0.12, step: 0.01, kind: 'feedback' },
+  { path: 'formThresholds.TOP_HOLD_RATIO_BAND', min: 0.005, max: 0.05, step: 0.005, kind: 'feedback' },
+  { path: 'formThresholds.TOP_HOLD_KNEE_BAND', min: 1, max: 10, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.TOP_HOLD_MAX_RATIO_VELOCITY', min: 0.05, max: 0.6, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.TOP_HOLD_MAX_KNEE_VELOCITY', min: 20, max: 160, step: 10, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_EXTENSION_FAIL', min: 140, max: 175, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_EXTENSION_IDEAL', min: 150, max: 180, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_FLEXION_FAIL', min: 80, max: 130, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', min: 0.2, max: 0.75, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', min: 0.1, max: 0.5, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_MIN_SAMPLES', min: 3, max: 12, step: 1, kind: 'feedback' },
+  { path: 'thresholds.MIN_PARTIAL_KNEE_ROM', min: 8, max: 45, step: 1, kind: 'fsm' },
+  { path: 'thresholds.LOCKOUT_CONFIRM_MS', min: 30, max: 200, step: 10, kind: 'fsm' },
+  { path: 'thresholds.RETURN_CONFIRM_MS', min: 30, max: 200, step: 10, kind: 'fsm' },
+  { path: 'thresholds.BASELINE_MIN_SAMPLES', min: 1, max: 12, step: 1, kind: 'fsm' },
+  { path: 'penaltyConfigs.KNEE_EXTENSION_ROM.cap', min: 0, max: 15, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_EXTENSION_ROM.scale', min: 0.005, max: 0.08, step: 0.005, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_FLEXION_ROM.cap', min: 0, max: 12, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_RISE.cap', min: 0, max: 18, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_RISE.deadzone', min: 0, max: 0.08, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.TOP_HOLD.cap', min: 0, max: 8, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TOP_HOLD.scale', min: 20, max: 220, step: 10, kind: 'scoring' },
+] satisfies NumericTunable[]).forEach(upsertLegExtensionTunable);
+
+LEG_EXTENSIONS_TUNABLE_SPEC.diagnosticTuning = [
+  { issueId: 'leg-extensions.lockout_short', metricKey: 'extensionRatio', thresholdPath: 'formThresholds.EXTENSION_FAIL', direction: 'below' },
+  { issueId: 'leg-extensions.lockout_short', metricKey: 'kneeExtensionAngle', thresholdPath: 'formThresholds.KNEE_EXTENSION_FAIL', direction: 'below' },
+  { issueId: 'leg-extensions.rom_short_leg_ext', metricKey: 'flexionRatio', thresholdPath: 'formThresholds.FLEXION_FAIL', direction: 'above' },
+  { issueId: 'leg-extensions.rom_short_leg_ext', metricKey: 'kneeFlexionAngle', thresholdPath: 'formThresholds.KNEE_FLEXION_FAIL', direction: 'above' },
+  { issueId: 'leg-extensions.torso_warn', metricKey: 'torsoDeviation', thresholdPath: 'formThresholds.TORSO_LEAN_WARN', direction: 'above' },
+  { issueId: 'leg-extensions.hip_lift', metricKey: 'hipDelta', thresholdPath: 'formThresholds.HIP_LIFT_WARN', direction: 'above' },
+  { issueId: 'leg-extensions.hip_lift', metricKey: 'hipRiseRatio', thresholdPath: 'formThresholds.HIP_RISE_RATIO_WARN', direction: 'above' },
+  { issueId: 'leg-extensions.tempo_up', metricKey: 'tExtend', thresholdPath: 'formThresholds.TEMPO_EXTEND_MIN', direction: 'below' },
+  { issueId: 'leg-extensions.tempo_down', metricKey: 'tReturn', thresholdPath: 'formThresholds.TEMPO_RETURN_MIN', direction: 'below' },
+  { issueId: 'leg-extensions.top_hold_short', metricKey: 'topHoldSeconds', thresholdPath: 'formThresholds.TOP_HOLD_MIN', direction: 'below' },
+];
 
 const LEG_EXTENSIONS_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
@@ -192,6 +356,19 @@ function withLegExtensionsConfig<T>(
 // ============================================================================
 
 type LegExtensionPhase = 'REST' | 'EXTENDING' | 'EXTENDED' | 'RETURNING';
+type LegExtensionBaselineSource = 'rest' | 'rep_start';
+
+interface BaselineSamples {
+  torsoDev: number[];
+  hipAngle: number[];
+  hipY: number[];
+}
+
+interface RepFrameSample {
+  t: number;
+  ratio: number;
+  kneeAngle: number | null;
+}
 
 interface LegExtensionFSM {
   phase: LegExtensionPhase;
@@ -210,25 +387,70 @@ interface RepWindow {
   minRatio: number;
   /** Max ratio during rep (should be high -- extended) */
   maxRatio: number;
+  rawMinRatio: number;
+  rawMaxRatio: number;
+  ratioSamples: number[];
+  /** Min knee angle during rep (should be low -- bent position) */
+  minKneeAngle: number;
+  /** Max knee angle during rep (should be high -- extended) */
+  maxKneeAngle: number;
+  rawMinKneeAngle: number;
+  rawMaxKneeAngle: number;
+  kneeAngleSamples: number[];
+  kneeAngleSampleCount: number;
+  kneeAngleConfidenceSum: number;
   /** Hip angle at rep start (baseline) */
   hipAngleBaseline: number | null;
+  hipBaselineSource: LegExtensionBaselineSource | null;
   /** Max absolute hip angle delta from baseline during rep */
   maxHipDelta: number;
-  /** Max absolute torso deviation from vertical during rep */
+  rawMaxHipDelta: number;
+  hipDeltaSamples: number[];
+  hipYBaseline: number | null;
+  maxHipRiseRatio: number;
+  rawMaxHipRiseRatio: number;
+  hipRiseRatioSamples: number[];
+  hipRiseSampleCount: number;
+  /** Torso angle baseline at rep start */
+  torsoDevBaseline: number | null;
+  torsoBaselineSource: LegExtensionBaselineSource | null;
+  baselineSampleCount: number;
+  /** Max torso movement from baseline during rep */
   maxTorsoDev: number;
+  rawMaxTorsoDev: number;
+  torsoDevSamples: number[];
+  /** Max absolute torso deviation from vertical during rep (diagnostic only) */
+  maxTorsoAbsDev: number;
+  torsoSampleCount: number;
+  torsoConfidenceSum: number;
   /** Timestamps */
   tStart: number;
+  /** FSM extension timestamp (early top phase for counting stability) */
   tExtended: number | null;
+  /** True lockout timestamp used for tempo and top-hold cues */
+  tLockout: number | null;
   tReturnStart: number | null;
+  topHoldMs: number | null;
+  lockoutStreakCount: number;
+  lockoutStreakStart: number | null;
+  returnStreakCount: number;
+  returnStreakStart: number | null;
+  sideViewConfidenceSamples: number;
+  sideViewConfidenceSum: number;
+  sideViewConfidenceMin: number;
   tEnd: number;
   /** Frame count */
   frameCount: number;
+  frameSamples: RepFrameSample[];
 }
 
 interface RepResult {
   repIndex: number;
   score: number;
   messages: string[];
+  scorable?: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
+  diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
 interface LegExtensionState {
@@ -247,6 +469,8 @@ interface LegExtensionState {
   smoothedRatio: number | null;
   /** Median-only ratio used for responsive FSM transitions */
   fastRatio: number | null;
+  currentKneeAngle: number | null;
+  currentHipRiseRatio: number | null;
   smoothedHip: number | null;
   smoothedTorso: number | null;
   /** Feedback */
@@ -256,6 +480,9 @@ interface LegExtensionState {
   visibleSide: 'left' | 'right';
   /** Minimum smoothed ratio observed in REST before the current rep starts */
   restMinRatio: number;
+  preWindowLockoutStreakCount: number;
+  preWindowLockoutStreakStart: number | null;
+  baselineSamples: Record<'left' | 'right', BaselineSamples>;
 }
 
 interface LegExtensionDebugInfo {
@@ -264,13 +491,19 @@ interface LegExtensionDebugInfo {
   warmedUp: boolean;
   ratio: number | null;
   fastRatio: number | null;
+  kneeAngle: number | null;
   hipAngle: number | null;
+  hipRiseRatio: number | null;
   torsoDev: number | null;
   // Rep window
   ratioMin: number | null;
   ratioMax: number | null;
+  kneeAngleMin: number | null;
+  kneeAngleMax: number | null;
   hipDelta: number | null;
+  hipRiseMax: number | null;
   torsoDevMax: number | null;
+  topHoldMs: number | null;
 }
 
 // ============================================================================
@@ -288,17 +521,54 @@ function initFSM(): LegExtensionFSM {
 }
 
 function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
+  const hasInitialRatio = finiteMetric(initialRatio);
   return {
-    minRatio: initialRatio ?? Infinity,
-    maxRatio: initialRatio ?? -Infinity,
+    minRatio: hasInitialRatio ? initialRatio : Infinity,
+    maxRatio: hasInitialRatio ? initialRatio : -Infinity,
+    rawMinRatio: hasInitialRatio ? initialRatio : Infinity,
+    rawMaxRatio: hasInitialRatio ? initialRatio : -Infinity,
+    ratioSamples: hasInitialRatio ? [initialRatio] : [],
+    minKneeAngle: Infinity,
+    maxKneeAngle: -Infinity,
+    rawMinKneeAngle: Infinity,
+    rawMaxKneeAngle: -Infinity,
+    kneeAngleSamples: [],
+    kneeAngleSampleCount: 0,
+    kneeAngleConfidenceSum: 0,
     hipAngleBaseline: null,
+    hipBaselineSource: null,
     maxHipDelta: 0,
+    rawMaxHipDelta: 0,
+    hipDeltaSamples: [],
+    hipYBaseline: null,
+    maxHipRiseRatio: 0,
+    rawMaxHipRiseRatio: 0,
+    hipRiseRatioSamples: [],
+    hipRiseSampleCount: 0,
+    torsoDevBaseline: null,
+    torsoBaselineSource: null,
+    baselineSampleCount: 0,
     maxTorsoDev: 0,
+    rawMaxTorsoDev: 0,
+    torsoDevSamples: [],
+    maxTorsoAbsDev: -Infinity,
+    torsoSampleCount: 0,
+    torsoConfidenceSum: 0,
     tStart,
     tExtended: null,
+    tLockout: null,
     tReturnStart: null,
+    topHoldMs: null,
+    lockoutStreakCount: 0,
+    lockoutStreakStart: null,
+    returnStreakCount: 0,
+    returnStreakStart: null,
+    sideViewConfidenceSamples: 0,
+    sideViewConfidenceSum: 0,
+    sideViewConfidenceMin: Infinity,
     tEnd: tStart,
     frameCount: 0,
+    frameSamples: [],
   };
 }
 
@@ -323,13 +593,71 @@ function initializeLegExtensionState(): LegExtensionState {
     warmedUp: false,
     smoothedRatio: null,
     fastRatio: null,
+    currentKneeAngle: null,
+    currentHipRiseRatio: null,
     smoothedHip: null,
     smoothedTorso: null,
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
     restMinRatio: Infinity,
+    preWindowLockoutStreakCount: 0,
+    preWindowLockoutStreakStart: null,
+    baselineSamples: {
+      left: { torsoDev: [], hipAngle: [], hipY: [] },
+      right: { torsoDev: [], hipAngle: [], hipY: [] },
+    },
   };
+}
+
+function recordRestBaselineSample(
+  state: LegExtensionState,
+  side: 'left' | 'right',
+  rawTorsoDev: number | null,
+  rawHipAngle: number | null,
+  hipY: number | null,
+): void {
+  const samples = state.baselineSamples[side];
+  pushRolling(samples.torsoDev, rawTorsoDev, THRESHOLDS.BASELINE_WINDOW_FRAMES);
+  pushRolling(samples.hipAngle, rawHipAngle, THRESHOLDS.BASELINE_WINDOW_FRAMES);
+  pushRolling(samples.hipY, hipY, THRESHOLDS.BASELINE_WINDOW_FRAMES);
+}
+
+function applyRestBaselines(window: RepWindow, samples: BaselineSamples): void {
+  const torsoBaseline = samples.torsoDev.length >= THRESHOLDS.BASELINE_MIN_SAMPLES
+    ? median(samples.torsoDev)
+    : null;
+  if (torsoBaseline !== null) {
+    window.torsoDevBaseline = torsoBaseline;
+    window.torsoBaselineSource = 'rest';
+    window.baselineSampleCount = Math.max(window.baselineSampleCount, samples.torsoDev.length);
+  }
+
+  const hipAngleBaseline = samples.hipAngle.length >= THRESHOLDS.BASELINE_MIN_SAMPLES
+    ? median(samples.hipAngle)
+    : null;
+  if (hipAngleBaseline !== null) {
+    window.hipAngleBaseline = hipAngleBaseline;
+    window.hipBaselineSource = 'rest';
+    window.baselineSampleCount = Math.max(window.baselineSampleCount, samples.hipAngle.length);
+  }
+
+  const hipYBaseline = samples.hipY.length >= THRESHOLDS.BASELINE_MIN_SAMPLES
+    ? median(samples.hipY)
+    : null;
+  if (hipYBaseline !== null) {
+    window.hipYBaseline = hipYBaseline;
+    window.hipBaselineSource = 'rest';
+    window.baselineSampleCount = Math.max(window.baselineSampleCount, samples.hipY.length);
+  }
+}
+
+function seedRatioSample(window: RepWindow, ratio: number, t: number): void {
+  if (!finiteMetric(ratio)) return;
+  window.rawMinRatio = Math.min(window.rawMinRatio, ratio);
+  window.rawMaxRatio = Math.max(window.rawMaxRatio, ratio);
+  window.ratioSamples.push(ratio);
+  window.frameSamples.push({ t, ratio, kneeAngle: null });
 }
 
 // ============================================================================
@@ -358,6 +686,135 @@ function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
 // ============================================================================
 // ANGLE CALCULATION (hip angle + torso deviation kept as-is)
 // ============================================================================
+
+function visibleKeypoint(
+  keypoints: Keypoint[],
+  name: string,
+  threshold = VISIBILITY_THRESHOLD,
+): Keypoint | null {
+  const keypoint = getKeypoint(keypoints, name);
+  return isVisible(keypoint, threshold) ? keypoint : null;
+}
+
+function landmarkSources(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+): Array<{ name: LandmarkSourceName; keypoints: Keypoint[] }> {
+  const sources: Array<{ name: LandmarkSourceName; keypoints: Keypoint[] }> = [];
+  const pushUnique = (name: LandmarkSourceName, keypoints: Keypoint[] | undefined) => {
+    if (!keypoints || keypoints.length === 0) return;
+    if (sources.some(source => source.keypoints === keypoints)) return;
+    sources.push({ name, keypoints });
+  };
+
+  pushUnique('image', frameContext?.imageKeypoints);
+  pushUnique('world', frameContext?.worldKeypoints);
+  pushUnique('fallback', fallbackKeypoints);
+  return sources;
+}
+
+function signalSourceKeypoints(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+): Keypoint[] {
+  return frameContext?.imageKeypoints ?? fallbackKeypoints;
+}
+
+function calculateKneeAngle(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  const ankle = visibleKeypoint(keypoints, `${side}_ankle`);
+  if (!hip || !knee || !ankle) return null;
+
+  const value = calculateAngle2D(
+    getPoint(hip)!,
+    getPoint(knee)!,
+    getPoint(ankle)!,
+  );
+  return finiteMetric(value) && value > 0 && value <= 180 ? value : null;
+}
+
+function calculateLegChainLength(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  const ankle = visibleKeypoint(keypoints, `${side}_ankle`);
+  if (!hip || !knee || !ankle) return null;
+
+  const length = dist2D(getPoint(hip)!, getPoint(knee)!) + dist2D(getPoint(knee)!, getPoint(ankle)!);
+  return length > 1e-6 ? length : null;
+}
+
+function sideBodyLength(keypoints: Keypoint[], side: 'left' | 'right'): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  const ankle = visibleKeypoint(keypoints, `${side}_ankle`);
+  if (!shoulder || !hip || !knee || !ankle) return null;
+
+  const length =
+    dist2D(getPoint(shoulder)!, getPoint(hip)!) +
+    dist2D(getPoint(hip)!, getPoint(knee)!) +
+    dist2D(getPoint(knee)!, getPoint(ankle)!);
+  return length > 1e-6 ? length : null;
+}
+
+function calculateSideViewConfidence(keypoints: Keypoint[]): number | null {
+  const widths: number[] = [];
+  for (const joint of ['shoulder', 'hip', 'knee', 'ankle']) {
+    const left = visibleKeypoint(keypoints, `left_${joint}`);
+    const right = visibleKeypoint(keypoints, `right_${joint}`);
+    if (left && right) {
+      widths.push(dist2D(getPoint(left)!, getPoint(right)!));
+    }
+  }
+  if (widths.length < 2) return null;
+
+  const bodyLengths = [
+    sideBodyLength(keypoints, 'left'),
+    sideBodyLength(keypoints, 'right'),
+  ].filter(finiteMetric);
+  if (bodyLengths.length === 0) return null;
+
+  const widthRatio = average(widths) / average(bodyLengths);
+  return 1 - clamp01((widthRatio - 0.08) / (0.24 - 0.08));
+}
+
+function calculateHipRiseRatio(
+  currentHipY: number,
+  baselineHipY: number,
+  legChainLength: number | null,
+): number | null {
+  if (!legChainLength || legChainLength <= 1e-6) return null;
+  return Math.max(0, (baselineHipY - currentHipY) / legChainLength);
+}
+
+function calculateTorsoDeviationSample(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+  side: 'left' | 'right',
+): MetricSample | null {
+  for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    const shoulder = visibleKeypoint(source.keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
+    const hip = visibleKeypoint(source.keypoints, `${side}_hip`, FORM_CONFIDENCE_MIN);
+    if (!shoulder || !hip) continue;
+
+    const value = calculateVerticalAngle(hip, shoulder);
+    if (!finiteMetric(value)) continue;
+    return {
+      value,
+      confidence: minKeypointConfidence(source.keypoints, [`${side}_shoulder`, `${side}_hip`]),
+      keypoints: source.keypoints,
+      source: source.name,
+    };
+  }
+  return null;
+}
 
 /**
  * Calculate the hip angle (shoulder-hip-knee) in 2D.
@@ -491,36 +948,187 @@ function updateFSM(
 // SCORING (continuous penalty curves)
 // ============================================================================
 
+function hasKneeExtensionMetric(repWindow: RepWindow): boolean {
+  return repWindow.kneeAngleSampleCount > 0 && repWindow.maxKneeAngle !== -Infinity;
+}
+
+function hasKneeFlexionMetric(repWindow: RepWindow): boolean {
+  return repWindow.kneeAngleSampleCount > 0 && repWindow.minKneeAngle !== Infinity;
+}
+
+function hasTorsoMetric(repWindow: RepWindow): boolean {
+  return repWindow.torsoSampleCount > 0;
+}
+
+function hasHipRiseMetric(repWindow: RepWindow): boolean {
+  return repWindow.hipRiseSampleCount > 0;
+}
+
+function averageSideViewConfidence(repWindow: RepWindow): number | null {
+  if (repWindow.sideViewConfidenceSamples === 0) return null;
+  return repWindow.sideViewConfidenceSum / repWindow.sideViewConfidenceSamples;
+}
+
+function buildLegExtensionViewQuality(repWindow: RepWindow): RepViewQualityDiagnostic {
+  const averageConfidence = averageSideViewConfidence(repWindow);
+  const hasEnoughSamples =
+    repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES &&
+    averageConfidence !== null;
+  const sideConfirmed = Boolean(
+    hasEnoughSamples &&
+    averageConfidence! >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN,
+  );
+  const frontishConfirmed = Boolean(hasEnoughSamples && !sideConfirmed);
+  return {
+    status: sideConfirmed
+      ? 'side_confirmed'
+      : frontishConfirmed
+        ? 'frontish_confirmed'
+        : 'view_unknown',
+    sideConfirmed,
+    frontishConfirmed,
+    viewUnknown: !sideConfirmed && !frontishConfirmed,
+    averageSideViewConfidence: averageConfidence,
+    minSideViewConfidence: repWindow.sideViewConfidenceSamples > 0
+      ? repWindow.sideViewConfidenceMin
+      : null,
+    sampleCount: repWindow.sideViewConfidenceSamples,
+  };
+}
+
+function diagnosticsViewFor(viewQuality: RepViewQualityDiagnostic): NonNullable<FrameworkRepResult['diagnostics']>['view'] {
+  if (viewQuality.sideConfirmed) return 'side';
+  if (viewQuality.frontishConfirmed) return 'front';
+  return 'unknown';
+}
+
+function sideViewIsScorable(repWindow: RepWindow): boolean {
+  return !buildLegExtensionViewQuality(repWindow).frontishConfirmed;
+}
+
+function legExtensionQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
+  return sideViewIsScorable(repWindow) ? [] : ['side_view_uncertain'];
+}
+
+function isLockoutShort(repWindow: RepWindow): boolean {
+  if (repWindow.tLockout !== null) return false;
+  const ratioShort = repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL;
+  const kneeShortOrUnavailable =
+    !hasKneeExtensionMetric(repWindow) ||
+    repWindow.maxKneeAngle < FORM_THRESHOLDS.KNEE_EXTENSION_FAIL;
+  return ratioShort && kneeShortOrUnavailable;
+}
+
+function isFlexionShort(repWindow: RepWindow): boolean {
+  const ratioShort = repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL;
+  const kneeShortOrUnavailable =
+    !hasKneeFlexionMetric(repWindow) ||
+    repWindow.minKneeAngle > FORM_THRESHOLDS.KNEE_FLEXION_FAIL;
+  return ratioShort && kneeShortOrUnavailable;
+}
+
+function isHipLift(repWindow: RepWindow): boolean {
+  return (
+    repWindow.maxHipDelta > FORM_THRESHOLDS.HIP_LIFT_WARN ||
+    repWindow.maxHipRiseRatio > FORM_THRESHOLDS.HIP_RISE_RATIO_WARN
+  );
+}
+
+function topHoldSeconds(repWindow: RepWindow): number | null {
+  if (repWindow.topHoldMs !== null) return repWindow.topHoldMs / 1000;
+  if (repWindow.tLockout === null || repWindow.tReturnStart === null) return null;
+  return Math.max(0, repWindow.tReturnStart - repWindow.tLockout);
+}
+
+function topHoldMilliseconds(repWindow: RepWindow): number | null {
+  const seconds = topHoldSeconds(repWindow);
+  return seconds === null ? null : seconds * 1000;
+}
+
+function lockoutTempo(repWindow: RepWindow): { tExtend: number | null; tReturn: number | null } {
+  if (repWindow.tLockout === null) {
+    return { tExtend: null, tReturn: null };
+  }
+  return {
+    tExtend: repWindow.tLockout - repWindow.tStart,
+    tReturn: repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tLockout),
+  };
+}
+
+function isTopHoldShort(repWindow: RepWindow): boolean {
+  const hold = topHoldSeconds(repWindow);
+  return (
+    repWindow.tLockout !== null &&
+    hold !== null &&
+    !isLockoutShort(repWindow) &&
+    hold < FORM_THRESHOLDS.TOP_HOLD_MIN
+  );
+}
+
+function isMeaningfulLegExtensionPartialRep(repWindow: RepWindow, duration: number): boolean {
+  if (!Number.isFinite(duration) || duration < THRESHOLDS.MIN_REP_TIME) return false;
+  if (hasKneeExtensionMetric(repWindow) && hasKneeFlexionMetric(repWindow)) {
+    const kneeRom = repWindow.maxKneeAngle - repWindow.minKneeAngle;
+    return Number.isFinite(kneeRom) && kneeRom >= THRESHOLDS.MIN_PARTIAL_KNEE_ROM;
+  }
+
+  return isMeaningfulPartialRep({
+    actualRom: repWindow.maxRatio - repWindow.minRatio,
+    minRom: THRESHOLDS.MIN_PARTIAL_ROM,
+    duration,
+    minDuration: THRESHOLDS.MIN_REP_TIME,
+  });
+}
+
 function computeLegExtensionScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
   // 1. ROM -- extension: ideal maxRatio is 0.97+. Shortfall = max(0, 0.97 - maxRatio)
   const extensionShortfall = Math.max(0, 0.97 - repWindow.maxRatio);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  if (hasKneeExtensionMetric(repWindow)) {
+    const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.maxKneeAngle);
+    penalties.push({ value: kneeExtensionShortfall, config: PENALTY_CONFIGS.KNEE_EXTENSION_ROM });
+  }
 
   // 2. ROM -- flexion: ideal minRatio is 0.58 or below. Excess = max(0, minRatio - 0.58)
   const flexionExcess = Math.max(0, repWindow.minRatio - 0.58);
   penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
+  if (hasKneeFlexionMetric(repWindow)) {
+    const kneeFlexionExcess = Math.max(0, repWindow.minKneeAngle - KNEE_FLEXION_IDEAL);
+    penalties.push({ value: kneeFlexionExcess, config: PENALTY_CONFIGS.KNEE_FLEXION_ROM });
+  }
 
   // 3. Torso lean
-  penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_LEAN });
+  if (hasTorsoMetric(repWindow)) {
+    penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_LEAN });
+  }
 
   // 4. Hip lift (hip angle delta from baseline)
   penalties.push({ value: repWindow.maxHipDelta, config: PENALTY_CONFIGS.HIP_LIFT });
+  if (hasHipRiseMetric(repWindow)) {
+    penalties.push({ value: repWindow.maxHipRiseRatio, config: PENALTY_CONFIGS.HIP_RISE });
+  }
+
+  const hold = topHoldSeconds(repWindow);
+  if (hold !== null && hold < FORM_THRESHOLDS.TOP_HOLD_MIN) {
+    const deficit = FORM_THRESHOLDS.TOP_HOLD_MIN - hold;
+    penalties.push({ value: deficit, config: PENALTY_CONFIGS.TOP_HOLD });
+  }
 
   // 5. Tempo
-  if (repWindow.tExtended !== null) {
-    const tExtend = repWindow.tExtended - repWindow.tStart;  // concentric (extend)
-    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended); // eccentric (return)
+  const { tExtend, tReturn } = lockoutTempo(repWindow);
+  if (tExtend !== null && tReturn !== null) {
 
-    // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
-    if (tExtend > 0 && tExtend < PENALTY_CONFIGS.TEMPO_EXTEND.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_EXTEND.deadzone - tExtend;
-      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_EXTEND, deadzone: 0 } });
+    // Penalize if too fast using the same thresholds that drive feedback.
+    if (tExtend > 0 && tExtend < FORM_THRESHOLDS.TEMPO_EXTEND_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_EXTEND_MIN - tExtend;
+      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_EXTEND });
     }
-    if (tReturn > 0 && tReturn < PENALTY_CONFIGS.TEMPO_RETURN.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_RETURN.deadzone - tReturn;
-      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
+    if (tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_RETURN_MIN - tReturn;
+      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_RETURN });
     }
   }
 
@@ -535,29 +1143,32 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
   // 1. Extension ROM -- didn't reach full extension
-  if (repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL) {
+  if (isLockoutShort(repWindow)) {
     messages.push('Extend fully \u2014 straighten your legs completely at the top.');
   }
 
   // 2. Flexion ROM -- didn't bend enough at the bottom
-  if (repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL) {
+  if (isFlexionShort(repWindow)) {
     messages.push('Lower the weight more \u2014 start from a deeper bend.');
   }
 
   // 3. Torso lean
-  if (repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
+  if (hasTorsoMetric(repWindow) && repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
     messages.push('Keep your back against the pad \u2014 avoid leaning forward.');
   }
 
   // 4. Hip lift
-  if (repWindow.maxHipDelta > FORM_THRESHOLDS.HIP_LIFT_WARN) {
+  if (isHipLift(repWindow)) {
     messages.push('Keep your hips on the seat \u2014 don\'t lift off the pad.');
   }
 
-  // 5. Tempo
-  if (repWindow.tExtended !== null) {
-    const tExtend = repWindow.tExtended - repWindow.tStart;
-    const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended);
+  if (isTopHoldShort(repWindow)) {
+    messages.push('Pause briefly at full extension.');
+  }
+
+  // 5. Tempo (measured to true lockout, not the early FSM EXTENDED phase)
+  const { tExtend, tReturn } = lockoutTempo(repWindow);
+  if (tExtend !== null && tReturn !== null) {
 
     if (tExtend > 0 && tExtend < FORM_THRESHOLDS.TEMPO_EXTEND_MIN) {
       messages.push('Slow down the extension \u2014 control the lift.');
@@ -570,19 +1181,471 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   return messages;
 }
 
+function buildLegExtensionDiagnostics(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+  scorable: boolean,
+): FrameworkRepResult['diagnostics'] {
+  const hasTempo = repWindow.tLockout !== null;
+  const { tExtend, tReturn } = lockoutTempo(repWindow);
+  const hasKnee = hasKneeExtensionMetric(repWindow) && hasKneeFlexionMetric(repWindow);
+  const hasTorso = hasTorsoMetric(repWindow);
+  const hasHipRise = hasHipRiseMetric(repWindow);
+  const sideViewConfidence = averageSideViewConfidence(repWindow);
+  const viewQuality = buildLegExtensionViewQuality(repWindow);
+  const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES;
+  const holdSeconds = topHoldSeconds(repWindow);
+  const holdMs = topHoldMilliseconds(repWindow);
+  const lockoutShort = isLockoutShort(repWindow);
+  const flexionShort = isFlexionShort(repWindow);
+  const hipLift = isHipLift(repWindow);
+  const topHoldShort = isTopHoldShort(repWindow);
+  const torsoConfidence = hasTorso ? repWindow.torsoConfidenceSum / repWindow.torsoSampleCount : undefined;
+  const kneeConfidence = repWindow.kneeAngleSampleCount > 0
+    ? repWindow.kneeAngleConfidenceSum / repWindow.kneeAngleSampleCount
+    : undefined;
+  const hipLiftSupport = Math.max(
+    repWindow.maxHipDelta / FORM_THRESHOLDS.HIP_LIFT_WARN,
+    repWindow.maxHipRiseRatio / FORM_THRESHOLDS.HIP_RISE_RATIO_WARN,
+  );
+  return buildRepDiagnostics({
+    exerciseName: 'Leg Extensions',
+    repIndex,
+    view: diagnosticsViewFor(viewQuality),
+    selectedSide: visibleSide,
+    scorable,
+    viewQuality,
+    metrics: [
+      diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
+      diagnosticMetric('flexionRatio', repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('extensionRatioRaw', repWindow.rawMaxRatio !== -Infinity ? repWindow.rawMaxRatio : null, { unit: 'ratio' }),
+      diagnosticMetric('flexionRatioRaw', repWindow.rawMinRatio !== Infinity ? repWindow.rawMinRatio : null, { unit: 'ratio' }),
+      diagnosticMetric('kneeExtensionAngle', hasKneeExtensionMetric(repWindow) ? repWindow.maxKneeAngle : null, {
+        unit: 'degrees',
+        eligible: hasKneeExtensionMetric(repWindow),
+        confidence: kneeConfidence,
+        sampleCount: repWindow.kneeAngleSampleCount,
+        skippedReason: 'knee_angle_unavailable',
+      }),
+      diagnosticMetric('kneeFlexionAngle', hasKneeFlexionMetric(repWindow) ? repWindow.minKneeAngle : null, {
+        unit: 'degrees',
+        eligible: hasKneeFlexionMetric(repWindow),
+        confidence: kneeConfidence,
+        sampleCount: repWindow.kneeAngleSampleCount,
+        skippedReason: 'knee_angle_unavailable',
+      }),
+      diagnosticMetric('kneeAngleRom', hasKnee ? repWindow.maxKneeAngle - repWindow.minKneeAngle : null, {
+        unit: 'degrees',
+        eligible: hasKnee,
+        confidence: kneeConfidence,
+        sampleCount: repWindow.kneeAngleSampleCount,
+        skippedReason: 'knee_angle_unavailable',
+      }),
+      diagnosticMetric('kneeExtensionAngleRaw', repWindow.rawMaxKneeAngle !== -Infinity ? repWindow.rawMaxKneeAngle : null, {
+        unit: 'degrees',
+        eligible: hasKneeExtensionMetric(repWindow),
+        confidence: kneeConfidence,
+        sampleCount: repWindow.kneeAngleSampleCount,
+        skippedReason: 'knee_angle_unavailable',
+      }),
+      diagnosticMetric('kneeFlexionAngleRaw', repWindow.rawMinKneeAngle !== Infinity ? repWindow.rawMinKneeAngle : null, {
+        unit: 'degrees',
+        eligible: hasKneeFlexionMetric(repWindow),
+        confidence: kneeConfidence,
+        sampleCount: repWindow.kneeAngleSampleCount,
+        skippedReason: 'knee_angle_unavailable',
+      }),
+      diagnosticMetric('torsoDeviation', hasTorso ? repWindow.maxTorsoDev : null, {
+        unit: 'degrees',
+        eligible: hasTorso,
+        confidence: torsoConfidence,
+        sampleCount: repWindow.torsoSampleCount,
+        skippedReason: 'torso_chain_unavailable',
+      }),
+      diagnosticMetric('torsoDeviationRaw', hasTorso ? repWindow.rawMaxTorsoDev : null, {
+        unit: 'degrees',
+        eligible: hasTorso,
+        confidence: torsoConfidence,
+        sampleCount: repWindow.torsoSampleCount,
+        skippedReason: 'torso_chain_unavailable',
+      }),
+      diagnosticMetric('torsoAbsoluteDeviation', repWindow.maxTorsoAbsDev !== -Infinity ? repWindow.maxTorsoAbsDev : null, {
+        unit: 'degrees',
+        eligible: repWindow.maxTorsoAbsDev !== -Infinity,
+        confidence: torsoConfidence,
+        sampleCount: repWindow.torsoSampleCount,
+        skippedReason: 'torso_chain_unavailable',
+      }),
+      diagnosticMetric('hipDelta', repWindow.maxHipDelta, { unit: 'degrees' }),
+      diagnosticMetric('hipRiseRatio', hasHipRise ? repWindow.maxHipRiseRatio : null, {
+        unit: 'ratio',
+        eligible: hasHipRise,
+        sampleCount: repWindow.hipRiseSampleCount,
+        skippedReason: 'hip_position_unavailable',
+      }),
+      diagnosticMetric('hipRiseRatioRaw', hasHipRise ? repWindow.rawMaxHipRiseRatio : null, {
+        unit: 'ratio',
+        eligible: hasHipRise,
+        sampleCount: repWindow.hipRiseSampleCount,
+        skippedReason: 'hip_position_unavailable',
+      }),
+      diagnosticMetric('baselineSampleCount', repWindow.baselineSampleCount, { unit: 'count' }),
+      diagnosticLabelMetric('torsoBaselineSource', repWindow.torsoBaselineSource, {
+        sampleCount: repWindow.baselineSampleCount,
+        skippedReason: 'torso_baseline_unavailable',
+      }),
+      diagnosticLabelMetric('hipBaselineSource', repWindow.hipBaselineSource, {
+        sampleCount: repWindow.baselineSampleCount,
+        skippedReason: 'hip_baseline_unavailable',
+      }),
+      diagnosticMetric('sideViewConfidence', sideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('sideViewConfidenceMin', viewQuality.minSideViewConfidence ?? null, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('sideViewConfirmed', viewQuality.sideConfirmed ? 1 : 0, { unit: 'count' }),
+      diagnosticMetric('frontishViewConfirmed', viewQuality.frontishConfirmed ? 1 : 0, { unit: 'count' }),
+      diagnosticMetric('viewUnknown', viewQuality.viewUnknown ? 1 : 0, { unit: 'count' }),
+      diagnosticMetric('topHoldSeconds', holdSeconds, { unit: 'seconds', eligible: holdSeconds !== null, skippedReason: 'lockout_hold_unavailable' }),
+      diagnosticMetric('topHoldMs', holdMs, { unit: 'milliseconds', eligible: holdMs !== null, skippedReason: 'lockout_hold_unavailable' }),
+      diagnosticMetric('tExtend', tExtend, { unit: 'seconds', eligible: hasTempo, skippedReason: 'lockout_not_detected' }),
+      diagnosticMetric('tReturn', tReturn, { unit: 'seconds', eligible: hasTempo, skippedReason: 'lockout_not_detected' }),
+    ],
+    cues: [
+      diagnosticCue({
+        issueId: 'leg-extensions.lockout_short',
+        metricKeys: ['extensionRatio', 'kneeExtensionAngle'],
+        direction: 'below',
+        value: repWindow.maxRatio,
+        thresholdPath: 'formThresholds.EXTENSION_FAIL',
+        thresholdValue: FORM_THRESHOLDS.EXTENSION_FAIL,
+        triggered: lockoutShort,
+      }),
+      diagnosticCue({
+        issueId: 'leg-extensions.rom_short_leg_ext',
+        metricKeys: ['flexionRatio', 'kneeFlexionAngle'],
+        direction: 'above',
+        value: repWindow.minRatio,
+        thresholdPath: 'formThresholds.FLEXION_FAIL',
+        thresholdValue: FORM_THRESHOLDS.FLEXION_FAIL,
+        triggered: flexionShort,
+      }),
+      diagnosticCue({
+        issueId: 'leg-extensions.torso_warn',
+        metricKeys: ['torsoDeviation'],
+        direction: 'above',
+        value: hasTorso ? repWindow.maxTorsoDev : null,
+        thresholdPath: 'formThresholds.TORSO_LEAN_WARN',
+        thresholdValue: FORM_THRESHOLDS.TORSO_LEAN_WARN,
+        eligible: hasTorso,
+        triggered: hasTorso && repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_LEAN_WARN,
+        skippedReason: 'torso_chain_unavailable',
+      }),
+      diagnosticCue({
+        issueId: 'leg-extensions.hip_lift',
+        metricKeys: ['hipDelta', 'hipRiseRatio'],
+        direction: 'above',
+        value: null,
+        thresholdPath: ['formThresholds.HIP_LIFT_WARN', 'formThresholds.HIP_RISE_RATIO_WARN'],
+        thresholdValue: {
+          hipDelta: FORM_THRESHOLDS.HIP_LIFT_WARN,
+          hipRiseRatio: FORM_THRESHOLDS.HIP_RISE_RATIO_WARN,
+        },
+        support: hipLiftSupport,
+        triggered: hipLift,
+      }),
+      diagnosticCue({
+        issueId: 'leg-extensions.top_hold_short',
+        metricKeys: ['topHoldSeconds'],
+        direction: 'below',
+        value: holdSeconds,
+        thresholdPath: 'formThresholds.TOP_HOLD_MIN',
+        thresholdValue: FORM_THRESHOLDS.TOP_HOLD_MIN,
+        eligible: holdSeconds !== null,
+        triggered: topHoldShort,
+        skippedReason: 'lockout_hold_unavailable',
+      }),
+      diagnosticCue({
+        issueId: 'leg-extensions.tempo_up',
+        metricKeys: ['tExtend'],
+        direction: 'below',
+        value: tExtend,
+        thresholdPath: 'formThresholds.TEMPO_EXTEND_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_EXTEND_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tExtend !== null && tExtend > 0 && tExtend < FORM_THRESHOLDS.TEMPO_EXTEND_MIN,
+        skippedReason: 'lockout_not_detected',
+      }),
+      diagnosticCue({
+        issueId: 'leg-extensions.tempo_down',
+        metricKeys: ['tReturn'],
+        direction: 'below',
+        value: tReturn,
+        thresholdPath: 'formThresholds.TEMPO_RETURN_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_RETURN_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tReturn !== null && tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN,
+        skippedReason: 'lockout_not_detected',
+      }),
+    ],
+  });
+}
+
 // ============================================================================
 // UPDATE LOGIC
 // ============================================================================
 
+function frameReachedLockout(rawRatio: number, rawKneeAngle: number | null): boolean {
+  return (
+    rawRatio >= FORM_THRESHOLDS.EXTENSION_FAIL ||
+    (rawKneeAngle !== null && rawKneeAngle >= FORM_THRESHOLDS.KNEE_EXTENSION_FAIL)
+  );
+}
+
+function durationMsSince(start: number | null, t: number): number {
+  if (start === null) return 0;
+  return Math.max(0, (t - start) * 1000);
+}
+
+function hasPersistedFor(start: number | null, t: number, requiredMs: number): boolean {
+  return start !== null && durationMsSince(start, t) + 1e-6 >= requiredMs;
+}
+
+function sampleNearPeak(sample: RepFrameSample, window: RepWindow): boolean {
+  const ratioNearPeak =
+    finiteMetric(sample.ratio) &&
+    window.maxRatio !== -Infinity &&
+    sample.ratio >= window.maxRatio - FORM_THRESHOLDS.TOP_HOLD_RATIO_BAND;
+  const kneeNearPeak =
+    sample.kneeAngle !== null &&
+    window.maxKneeAngle !== -Infinity &&
+    sample.kneeAngle >= window.maxKneeAngle - FORM_THRESHOLDS.TOP_HOLD_KNEE_BAND;
+  return ratioNearPeak || kneeNearPeak;
+}
+
+function computeTopHoldFromSamples(window: RepWindow): number | null {
+  if (window.tLockout === null) return null;
+  const lockout = window.tLockout;
+  const cutoff = window.tReturnStart ?? window.tEnd;
+  const peakSample = window.frameSamples.find((sample) => (
+    sample.t >= lockout &&
+    (
+      sample.ratio >= window.rawMaxRatio - 1e-6 ||
+      (sample.kneeAngle !== null && sample.kneeAngle >= window.rawMaxKneeAngle - 1e-6)
+    )
+  ));
+  const holdStart = peakSample?.t ?? lockout;
+  const samples = window.frameSamples
+    .filter((sample) => sample.t >= holdStart && sample.t <= cutoff)
+    .sort((a, b) => a.t - b.t);
+
+  let currentHoldSeconds = 0;
+  let maxHoldSeconds = 0;
+  for (let index = 1; index < samples.length; index++) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const dt = current.t - previous.t;
+    if (!Number.isFinite(dt) || dt <= 0) continue;
+
+    const ratioVelocity = Math.abs(current.ratio - previous.ratio) / dt;
+    const ratioStable = ratioVelocity <= FORM_THRESHOLDS.TOP_HOLD_MAX_RATIO_VELOCITY;
+    const kneeVelocity = previous.kneeAngle !== null && current.kneeAngle !== null
+      ? Math.abs(current.kneeAngle - previous.kneeAngle) / dt
+      : Infinity;
+    const kneeStable = kneeVelocity <= FORM_THRESHOLDS.TOP_HOLD_MAX_KNEE_VELOCITY;
+    const ratioNotDropping = current.ratio >= previous.ratio - 1e-4;
+    const kneeNotDropping = previous.kneeAngle !== null && current.kneeAngle !== null
+      ? current.kneeAngle >= previous.kneeAngle - 0.5
+      : false;
+    const segmentHeld =
+      sampleNearPeak(previous, window) &&
+      sampleNearPeak(current, window) &&
+      (ratioNotDropping || kneeNotDropping) &&
+      (ratioStable || kneeStable);
+
+    if (segmentHeld) {
+      currentHoldSeconds += dt;
+      maxHoldSeconds = Math.max(maxHoldSeconds, currentHoldSeconds);
+    } else {
+      currentHoldSeconds = 0;
+    }
+  }
+
+  return maxHoldSeconds * 1000;
+}
+
+function refreshRepWindowMetrics(window: RepWindow): void {
+  const minRatio = robustLow(window.ratioSamples);
+  const maxRatio = robustHigh(window.ratioSamples);
+  if (minRatio !== null) window.minRatio = minRatio;
+  if (maxRatio !== null) window.maxRatio = maxRatio;
+
+  const minKneeAngle = robustLow(window.kneeAngleSamples);
+  const maxKneeAngle = robustHigh(window.kneeAngleSamples);
+  if (minKneeAngle !== null) window.minKneeAngle = minKneeAngle;
+  if (maxKneeAngle !== null) window.maxKneeAngle = maxKneeAngle;
+
+  const maxHipDelta = robustHigh(window.hipDeltaSamples);
+  if (maxHipDelta !== null) window.maxHipDelta = maxHipDelta;
+
+  const maxHipRiseRatio = robustHigh(window.hipRiseRatioSamples);
+  if (maxHipRiseRatio !== null) window.maxHipRiseRatio = maxHipRiseRatio;
+
+  const maxTorsoDev = robustHigh(window.torsoDevSamples);
+  if (maxTorsoDev !== null) window.maxTorsoDev = maxTorsoDev;
+
+  window.topHoldMs = computeTopHoldFromSamples(window);
+}
+
+function recordFrameInWindow(args: {
+  window: RepWindow;
+  signalKeypoints: Keypoint[];
+  visibleSide: 'left' | 'right';
+  rawRatio: number;
+  smoothedRatio: number;
+  rawKneeAngle: number | null;
+  rawHipAngle: number | null;
+  rawTorsoDev: number | null;
+  torsoConfidence: number | null;
+  sideViewConfidence: number | null;
+  t: number;
+  incrementFrame?: boolean;
+}): void {
+  const {
+    window,
+    signalKeypoints,
+    visibleSide,
+    rawRatio,
+    smoothedRatio,
+    rawKneeAngle,
+    rawHipAngle,
+    rawTorsoDev,
+    torsoConfidence,
+    sideViewConfidence,
+    t,
+    incrementFrame = false,
+  } = args;
+
+  window.tEnd = t;
+  if (incrementFrame) window.frameCount++;
+
+  if (finiteMetric(rawRatio)) {
+    window.rawMinRatio = Math.min(window.rawMinRatio, rawRatio);
+    window.rawMaxRatio = Math.max(window.rawMaxRatio, rawRatio);
+    window.ratioSamples.push(rawRatio);
+  }
+  window.frameSamples.push({ t, ratio: rawRatio, kneeAngle: rawKneeAngle });
+
+  if (sideViewConfidence !== null) {
+    window.sideViewConfidenceSum += sideViewConfidence;
+    window.sideViewConfidenceMin = Math.min(window.sideViewConfidenceMin, sideViewConfidence);
+    window.sideViewConfidenceSamples++;
+  }
+
+  if (rawKneeAngle !== null) {
+    window.rawMinKneeAngle = Math.min(window.rawMinKneeAngle, rawKneeAngle);
+    window.rawMaxKneeAngle = Math.max(window.rawMaxKneeAngle, rawKneeAngle);
+    window.kneeAngleSamples.push(rawKneeAngle);
+    window.kneeAngleSampleCount++;
+    window.kneeAngleConfidenceSum += minKeypointConfidence(signalKeypoints, [
+      `${visibleSide}_hip`, `${visibleSide}_knee`, `${visibleSide}_ankle`,
+    ]);
+  }
+
+  if (rawHipAngle !== null) {
+    if (window.hipAngleBaseline === null) {
+      window.hipAngleBaseline = rawHipAngle;
+      window.hipBaselineSource = 'rep_start';
+      window.baselineSampleCount = Math.max(window.baselineSampleCount, 1);
+    }
+    const hipConf = minKeypointConfidence(signalKeypoints, [
+      `${visibleSide}_shoulder`, `${visibleSide}_hip`, `${visibleSide}_knee`,
+    ]);
+    if (hipConf >= FORM_CONFIDENCE_MIN) {
+      const delta = Math.abs(rawHipAngle - window.hipAngleBaseline);
+      window.rawMaxHipDelta = Math.max(window.rawMaxHipDelta, delta);
+      window.hipDeltaSamples.push(delta);
+    }
+  }
+
+  const hip = visibleKeypoint(signalKeypoints, `${visibleSide}_hip`, FORM_CONFIDENCE_MIN);
+  const legChainLength = calculateLegChainLength(signalKeypoints, visibleSide);
+  if (hip && legChainLength !== null) {
+    if (window.hipYBaseline === null) {
+      window.hipYBaseline = hip.y;
+      window.hipBaselineSource = 'rep_start';
+      window.baselineSampleCount = Math.max(window.baselineSampleCount, 1);
+    }
+    const hipRiseRatio = calculateHipRiseRatio(hip.y, window.hipYBaseline, legChainLength);
+    if (hipRiseRatio !== null) {
+      window.rawMaxHipRiseRatio = Math.max(window.rawMaxHipRiseRatio, hipRiseRatio);
+      window.hipRiseRatioSamples.push(hipRiseRatio);
+      window.hipRiseSampleCount++;
+    }
+  }
+
+  if (rawTorsoDev !== null) {
+    if (window.torsoDevBaseline === null) {
+      window.torsoDevBaseline = rawTorsoDev;
+      window.torsoBaselineSource = 'rep_start';
+      window.baselineSampleCount = Math.max(window.baselineSampleCount, 1);
+    }
+    window.maxTorsoAbsDev = Math.max(window.maxTorsoAbsDev, rawTorsoDev);
+    const torsoDelta = Math.abs(rawTorsoDev - window.torsoDevBaseline);
+    window.rawMaxTorsoDev = Math.max(window.rawMaxTorsoDev, torsoDelta);
+    window.torsoDevSamples.push(torsoDelta);
+    window.torsoSampleCount++;
+    window.torsoConfidenceSum += torsoConfidence ?? 0;
+  }
+
+  const lockedOut = frameReachedLockout(rawRatio, rawKneeAngle);
+  if (window.tLockout === null) {
+    if (lockedOut) {
+      window.lockoutStreakStart ??= t;
+      window.lockoutStreakCount++;
+      if (hasPersistedFor(window.lockoutStreakStart, t, THRESHOLDS.LOCKOUT_CONFIRM_MS)) {
+        window.tLockout = window.lockoutStreakStart;
+      }
+    } else {
+      window.lockoutStreakCount = 0;
+      window.lockoutStreakStart = null;
+    }
+  } else if (window.tReturnStart === null) {
+    if (!lockedOut) {
+      window.returnStreakStart ??= t;
+      window.returnStreakCount++;
+      if (hasPersistedFor(window.returnStreakStart, t, THRESHOLDS.RETURN_CONFIRM_MS)) {
+        window.tReturnStart = window.returnStreakStart;
+      }
+    } else {
+      window.returnStreakCount = 0;
+      window.returnStreakStart = null;
+    }
+  }
+
+  refreshRepWindowMetrics(window);
+}
+
 function updateLegExtensionState(
   keypoints: Keypoint[],
-  currentState: LegExtensionState
+  currentState: LegExtensionState,
+  frameContext?: ExerciseFrameContext,
 ): LegExtensionState {
   const t = Date.now() / 1000;
+  const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate
   if (!currentState.warmedUp) {
-    const ready = currentState.warmupGate.update(keypoints);
+    const ready = currentState.warmupGate.update(signalKeypoints);
     if (!ready) {
       return currentState;
     }
@@ -592,12 +1655,20 @@ function updateLegExtensionState(
   // Only update visible side in REST -- lock it during active rep phases
   // to prevent mid-rep side switching that corrupts measurements.
   const inActiveRep = currentState.fsm.phase !== 'REST';
-  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(signalKeypoints);
 
   // Calculate raw values
-  const rawRatio = computeReachRatio(keypoints, visibleSide);
-  const rawHip = calculateHipAngle(keypoints, visibleSide);
-  const rawTorsoDev = calculateTorsoDeviation(keypoints, visibleSide);
+  const rawRatio = computeReachRatio(signalKeypoints, visibleSide);
+  const rawKneeAngle = calculateKneeAngle(signalKeypoints, visibleSide);
+  const rawHip = calculateHipAngle(signalKeypoints, visibleSide);
+  const torsoSample = calculateTorsoDeviationSample(frameContext, signalKeypoints, visibleSide);
+  const rawTorsoDev = torsoSample?.value ?? null;
+  const sideViewConfidence = calculateSideViewConfidence(signalKeypoints);
+  const currentRepWindow = currentState.repWindow;
+  const hip = visibleKeypoint(signalKeypoints, `${visibleSide}_hip`, FORM_CONFIDENCE_MIN);
+  const currentHipRiseRatio = hip && currentRepWindow && currentRepWindow.hipYBaseline !== null
+    ? calculateHipRiseRatio(hip.y, currentRepWindow.hipYBaseline, calculateLegChainLength(signalKeypoints, visibleSide))
+    : null;
 
   // If we can't compute the ratio, bail out
   if (rawRatio === null) {
@@ -606,6 +1677,8 @@ function updateLegExtensionState(
       visibleSide,
       smoothedRatio: null,
       fastRatio: null,
+      currentKneeAngle: null,
+      currentHipRiseRatio: null,
       smoothedHip: null,
       smoothedTorso: null,
     };
@@ -626,12 +1699,29 @@ function updateLegExtensionState(
     visibleSide,
     smoothedRatio,
     fastRatio: isNaN(fastRatio) ? null : fastRatio,
+    currentKneeAngle: rawKneeAngle,
+    currentHipRiseRatio,
     smoothedHip: isNaN(smoothedHip) ? null : smoothedHip,
     smoothedTorso: isNaN(smoothedTorso) ? null : smoothedTorso,
   };
 
   if (isNaN(fastRatio)) {
     return newState;
+  }
+
+  if (currentState.fsm.phase === 'REST' && fastRatio <= THRESHOLDS.EXTEND_CLOCK_START) {
+    recordRestBaselineSample(newState, visibleSide, rawTorsoDev, rawHip, hip?.y ?? null);
+  }
+
+  const currentFrameLockedOut = frameReachedLockout(rawRatio, rawKneeAngle);
+  if (!currentState.repWindow) {
+    if (currentFrameLockedOut) {
+      newState.preWindowLockoutStreakCount = currentState.preWindowLockoutStreakCount + 1;
+      newState.preWindowLockoutStreakStart = currentState.preWindowLockoutStreakStart ?? t;
+    } else {
+      newState.preWindowLockoutStreakCount = 0;
+      newState.preWindowLockoutStreakStart = null;
+    }
   }
 
   // Update FSM
@@ -646,27 +1736,36 @@ function updateLegExtensionState(
 
   if (returnedPartial && newState.repWindow) {
     const window = newState.repWindow;
-    window.tEnd = t;
-    if (!isNaN(smoothedRatio)) {
-      window.minRatio = Math.min(window.minRatio, smoothedRatio);
-      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
-    }
+    recordFrameInWindow({
+      window,
+      signalKeypoints,
+      visibleSide,
+      rawRatio,
+      smoothedRatio,
+      rawKneeAngle,
+      rawHipAngle: rawHip,
+      rawTorsoDev,
+      torsoConfidence: torsoSample?.confidence ?? null,
+      sideViewConfidence,
+      t,
+    });
+    refreshRepWindowMetrics(window);
     const actualRom = window.maxRatio - window.minRatio;
     const duration = window.tEnd - window.tStart;
 
-    if (isMeaningfulPartialRep({
-      actualRom,
-      minRom: THRESHOLDS.MIN_PARTIAL_ROM,
-      duration,
-      minDuration: THRESHOLDS.MIN_REP_TIME,
-    })) {
+    if (isMeaningfulLegExtensionPartialRep(window, duration)) {
       newState.repCount++;
       const score = computeLegExtensionScore(window);
       const messages = generateFormMessages(window);
+      const scorable = sideViewIsScorable(window);
+      const qualityWarnings = legExtensionQualityWarnings(window);
       newState.lastRepResult = {
         repIndex: newState.repCount,
         score,
         messages,
+        scorable,
+        qualityWarnings,
+        diagnostics: buildLegExtensionDiagnostics(window, newState.repCount, visibleSide, scorable),
       };
       newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
       newState.lastFeedbackTime = t;
@@ -688,81 +1787,72 @@ function updateLegExtensionState(
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
     newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio);
+    applyRestBaselines(newState.repWindow, newState.baselineSamples[visibleSide]);
+    newState.repWindow.lockoutStreakCount = currentState.preWindowLockoutStreakCount;
+    newState.repWindow.lockoutStreakStart = currentState.preWindowLockoutStreakStart;
     if (currentState.restMinRatio !== Infinity) {
-      newState.repWindow.minRatio = currentState.restMinRatio;
+      seedRatioSample(newState.repWindow, currentState.restMinRatio, newState.fsm.tRepStart ?? t);
+      refreshRepWindowMetrics(newState.repWindow);
     }
     newState.restMinRatio = Infinity;
+    newState.preWindowLockoutStreakCount = 0;
+    newState.preWindowLockoutStreakStart = null;
   }
 
   if (newState.repWindow && inRep) {
     const window = newState.repWindow;
-    window.tEnd = t;
-    window.frameCount++;
-
-    // Update ratio min/max
-    if (!isNaN(smoothedRatio)) {
-      window.minRatio = Math.min(window.minRatio, smoothedRatio);
-      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
-    }
-
-    // Track hip angle delta from baseline
-    // Only update when shoulder, hip, and knee all have sufficient confidence.
-    if (!isNaN(smoothedHip)) {
-      if (window.hipAngleBaseline === null) {
-        window.hipAngleBaseline = smoothedHip;
-      }
-      const hipConf = minKeypointConfidence(keypoints, [
-        `${visibleSide}_shoulder`, `${visibleSide}_hip`, `${visibleSide}_knee`,
-      ]);
-      if (hipConf >= 0.3) {
-        const delta = Math.abs(smoothedHip - window.hipAngleBaseline);
-        window.maxHipDelta = Math.max(window.maxHipDelta, delta);
-      }
-    }
-
-    // Track torso deviation
-    // Only update when shoulder + hip have sufficient confidence.
-    if (!isNaN(smoothedTorso)) {
-      const torsoConf = minKeypointConfidence(keypoints, [
-        `${visibleSide}_shoulder`, `${visibleSide}_hip`,
-      ]);
-      if (torsoConf >= 0.3) {
-        window.maxTorsoDev = Math.max(window.maxTorsoDev, smoothedTorso);
-      }
-    }
+    recordFrameInWindow({
+      window,
+      signalKeypoints,
+      visibleSide,
+      rawRatio,
+      smoothedRatio,
+      rawKneeAngle,
+      rawHipAngle: rawHip,
+      rawTorsoDev,
+      torsoConfidence: torsoSample?.confidence ?? null,
+      sideViewConfidence,
+      t,
+      incrementFrame: true,
+    });
 
     // Record extended timestamp
     if (newState.fsm.phase === 'EXTENDED' && window.tExtended === null) {
       window.tExtended = t;
     }
-
-    if (
-      currentState.fsm.phase === 'EXTENDED' &&
-      window.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL &&
-      fastRatio < FORM_THRESHOLDS.EXTENSION_FAIL &&
-      window.tReturnStart === null
-    ) {
-      window.tReturnStart = t;
-    }
   }
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
-    newState.repWindow.tEnd = t;
-    if (!isNaN(smoothedRatio)) {
-      newState.repWindow.minRatio = Math.min(newState.repWindow.minRatio, smoothedRatio);
-      newState.repWindow.maxRatio = Math.max(newState.repWindow.maxRatio, smoothedRatio);
-    }
+    recordFrameInWindow({
+      window: newState.repWindow,
+      signalKeypoints,
+      visibleSide,
+      rawRatio,
+      smoothedRatio,
+      rawKneeAngle,
+      rawHipAngle: rawHip,
+      rawTorsoDev,
+      torsoConfidence: torsoSample?.confidence ?? null,
+      sideViewConfidence,
+      t,
+    });
+    refreshRepWindowMetrics(newState.repWindow);
 
     newState.repCount++;
 
     const score = computeLegExtensionScore(newState.repWindow);
     const messages = generateFormMessages(newState.repWindow);
+    const scorable = sideViewIsScorable(newState.repWindow);
+    const qualityWarnings = legExtensionQualityWarnings(newState.repWindow);
 
     newState.lastRepResult = {
       repIndex: newState.repCount,
       score,
       messages,
+      scorable,
+      qualityWarnings,
+      diagnostics: buildLegExtensionDiagnostics(newState.repWindow, newState.repCount, visibleSide, scorable),
     };
 
     if (messages.length > 0) {
@@ -801,13 +1891,207 @@ function getDebugInfo(state: LegExtensionState): LegExtensionDebugInfo {
     warmedUp: state.warmedUp,
     ratio: fmt(state.smoothedRatio),
     fastRatio: fmt(state.fastRatio),
+    kneeAngle: fmt(state.currentKneeAngle),
     hipAngle: fmt(state.smoothedHip),
+    hipRiseRatio: fmt(state.currentHipRiseRatio),
     torsoDev: fmt(state.smoothedTorso),
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmt(repWin.minRatio) : null,
     ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmt(repWin.maxRatio) : null,
+    kneeAngleMin: repWin && repWin.minKneeAngle !== Infinity ? fmt(repWin.minKneeAngle) : null,
+    kneeAngleMax: repWin && repWin.maxKneeAngle !== -Infinity ? fmt(repWin.maxKneeAngle) : null,
     hipDelta: repWin ? fmt(repWin.maxHipDelta) : null,
+    hipRiseMax: repWin ? fmt(repWin.maxHipRiseRatio) : null,
     torsoDevMax: repWin ? fmt(repWin.maxTorsoDev) : null,
+    topHoldMs: repWin ? fmt(topHoldMilliseconds(repWin)) : null,
   };
+}
+
+// ============================================================================
+// CONFIG VALIDATION
+// ============================================================================
+
+function configNumber(config: ExerciseHeuristicConfig, path: string, issues: string[]): number | null {
+  const value = getConfigValue(config, path);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    issues.push(`Leg Extensions config "${path}" must be a finite number.`);
+    return null;
+  }
+  return value;
+}
+
+function requireOrdered(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  firstPath: string,
+  secondPath: string,
+  allowEqual = false,
+): void {
+  const first = configNumber(config, firstPath, issues);
+  const second = configNumber(config, secondPath, issues);
+  if (first === null || second === null) return;
+  const valid = allowEqual ? first <= second : first < second;
+  if (!valid) {
+    issues.push(
+      `Leg Extensions config ordering invalid: "${firstPath}" (${first}) must be ${allowEqual ? '<=' : '<'} "${secondPath}" (${second}).`,
+    );
+  }
+}
+
+function validatePenaltyConfigs(config: ExerciseHeuristicConfig, issues: string[]): void {
+  const penaltyConfigs = getConfigValue(config, 'penaltyConfigs');
+  if (penaltyConfigs === null || typeof penaltyConfigs !== 'object' || Array.isArray(penaltyConfigs)) {
+    issues.push('Leg Extensions config "penaltyConfigs" must be an object.');
+    return;
+  }
+
+  for (const [penaltyName, penaltyConfig] of Object.entries(penaltyConfigs)) {
+    if (penaltyConfig === null || typeof penaltyConfig !== 'object' || Array.isArray(penaltyConfig)) {
+      issues.push(`Leg Extensions penalty config "${penaltyName}" must be an object.`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(penaltyConfig)) {
+      const path = `penaltyConfigs.${penaltyName}.${key}`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        issues.push(`Leg Extensions config "${path}" must be a finite number.`);
+        continue;
+      }
+      if (key === 'scale' && value <= 0) {
+        issues.push(`Leg Extensions config "${path}" must be greater than 0.`);
+      }
+      if (key === 'cap' && value < 0) {
+        issues.push(`Leg Extensions config "${path}" must be greater than or equal to 0.`);
+      }
+      if (key === 'deadzone' && value < 0) {
+        issues.push(`Leg Extensions config "${path}" must be greater than or equal to 0.`);
+      }
+    }
+  }
+}
+
+function validatePositiveInteger(config: ExerciseHeuristicConfig, issues: string[], path: string): number | null {
+  const value = configNumber(config, path, issues);
+  if (value === null) return null;
+  if (!Number.isInteger(value) || value <= 0) {
+    issues.push(`Leg Extensions config "${path}" must be a positive integer.`);
+  }
+  return value;
+}
+
+function validateLegExtensionsHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const issues: string[] = [];
+
+  requireOrdered(config, issues, 'thresholds.EXTEND_CLOCK_START', 'thresholds.REST_REENTER');
+  requireOrdered(config, issues, 'thresholds.REST_REENTER', 'thresholds.EXTENDING_ENTER', true);
+  requireOrdered(config, issues, 'thresholds.EXTENDING_ENTER', 'thresholds.EXTENDED_EXIT');
+  requireOrdered(config, issues, 'thresholds.EXTENDED_EXIT', 'thresholds.EXTENDED_ENTER');
+  requireOrdered(config, issues, 'formThresholds.FLEXION_FAIL', 'formThresholds.EXTENSION_FAIL');
+  requireOrdered(config, issues, 'formThresholds.KNEE_FLEXION_FAIL', 'formThresholds.KNEE_EXTENSION_FAIL');
+  requireOrdered(config, issues, 'formThresholds.KNEE_EXTENSION_FAIL', 'formThresholds.KNEE_EXTENSION_IDEAL', true);
+  requireOrdered(config, issues, 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', true);
+
+  const minPartialRom = configNumber(config, 'thresholds.MIN_PARTIAL_ROM', issues);
+  const minPartialKneeRom = configNumber(config, 'thresholds.MIN_PARTIAL_KNEE_ROM', issues);
+  const extendedEnter = configNumber(config, 'thresholds.EXTENDED_ENTER', issues);
+  const restReenter = configNumber(config, 'thresholds.REST_REENTER', issues);
+  const kneeExtensionFail = configNumber(config, 'formThresholds.KNEE_EXTENSION_FAIL', issues);
+  const kneeFlexionFail = configNumber(config, 'formThresholds.KNEE_FLEXION_FAIL', issues);
+  if (
+    minPartialRom !== null &&
+    extendedEnter !== null &&
+    restReenter !== null &&
+    minPartialRom >= extendedEnter - restReenter
+  ) {
+    issues.push(
+      'Leg Extensions config "thresholds.MIN_PARTIAL_ROM" must be less than EXTENDED_ENTER - REST_REENTER.',
+    );
+  }
+  if (
+    minPartialKneeRom !== null &&
+    kneeExtensionFail !== null &&
+    kneeFlexionFail !== null &&
+    (minPartialKneeRom <= 0 || minPartialKneeRom >= kneeExtensionFail - kneeFlexionFail)
+  ) {
+    issues.push(
+      'Leg Extensions config "thresholds.MIN_PARTIAL_KNEE_ROM" must be greater than 0 and less than KNEE_EXTENSION_FAIL - KNEE_FLEXION_FAIL.',
+    );
+  }
+
+  for (const path of [
+    'thresholds.EXTEND_CLOCK_START',
+    'thresholds.EXTENDING_ENTER',
+    'thresholds.EXTENDED_ENTER',
+    'thresholds.EXTENDED_EXIT',
+    'thresholds.REST_REENTER',
+    'thresholds.MIN_PARTIAL_ROM',
+    'formThresholds.EXTENSION_FAIL',
+    'formThresholds.FLEXION_FAIL',
+    'formThresholds.HIP_RISE_RATIO_WARN',
+    'formThresholds.TOP_HOLD_RATIO_BAND',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1.2)) {
+      issues.push(`Leg Extensions config "${path}" must be greater than 0 and at most 1.2.`);
+    }
+  }
+
+  for (const path of [
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1)) {
+      issues.push(`Leg Extensions config "${path}" must be greater than 0 and at most 1.`);
+    }
+  }
+
+  for (const path of [
+    'thresholds.MIN_REP_TIME',
+    'formThresholds.TORSO_LEAN_WARN',
+    'formThresholds.HIP_LIFT_WARN',
+    'formThresholds.TOP_HOLD_MIN',
+    'formThresholds.TOP_HOLD_KNEE_BAND',
+    'formThresholds.TOP_HOLD_MAX_RATIO_VELOCITY',
+    'formThresholds.TOP_HOLD_MAX_KNEE_VELOCITY',
+    'formThresholds.TEMPO_EXTEND_MIN',
+    'formThresholds.TEMPO_RETURN_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && value <= 0) {
+      issues.push(`Leg Extensions config "${path}" must be greater than 0.`);
+    }
+  }
+
+  for (const path of [
+    'formThresholds.KNEE_EXTENSION_FAIL',
+    'formThresholds.KNEE_EXTENSION_IDEAL',
+    'formThresholds.KNEE_FLEXION_FAIL',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 180)) {
+      issues.push(`Leg Extensions config "${path}" must be greater than 0 and at most 180.`);
+    }
+  }
+
+  const baselineWindow = validatePositiveInteger(config, issues, 'thresholds.BASELINE_WINDOW_FRAMES');
+  const baselineMin = validatePositiveInteger(config, issues, 'thresholds.BASELINE_MIN_SAMPLES');
+  validatePositiveInteger(config, issues, 'thresholds.ROBUST_EXTREMA_MIN_SAMPLES');
+  validatePositiveInteger(config, issues, 'formThresholds.SIDE_VIEW_MIN_SAMPLES');
+  validatePositiveInteger(config, issues, 'thresholds.LOCKOUT_CONFIRM_MS');
+  validatePositiveInteger(config, issues, 'thresholds.RETURN_CONFIRM_MS');
+  for (const path of ['thresholds.LOCKOUT_CONFIRM_MS', 'thresholds.RETURN_CONFIRM_MS']) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 500)) {
+      issues.push(`Leg Extensions config "${path}" must be greater than 0 and at most 500.`);
+    }
+  }
+  if (baselineWindow !== null && baselineMin !== null && baselineMin > baselineWindow) {
+    issues.push(
+      'Leg Extensions config "thresholds.BASELINE_MIN_SAMPLES" must be less than or equal to BASELINE_WINDOW_FRAMES.',
+    );
+  }
+
+  validatePenaltyConfigs(config, issues);
+  return issues;
 }
 
 // ============================================================================
@@ -831,11 +2115,11 @@ export function createLegExtensionsDefinition(
     _internal: withLegExtensionsConfig(config, () => initializeLegExtensionState()),
   }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+  update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
     const internal = state._internal as LegExtensionState;
     const newInternal = withLegExtensionsConfig(
       config,
-      () => updateLegExtensionState(keypoints, internal),
+      () => updateLegExtensionState(keypoints, internal, frameContext),
     );
 
     // Map internal RepResult to framework RepResult
@@ -844,6 +2128,9 @@ export function createLegExtensionsDefinition(
           repIndex: newInternal.lastRepResult.repIndex,
           score: newInternal.lastRepResult.score,
           messages: newInternal.lastRepResult.messages,
+          scorable: newInternal.lastRepResult.scorable,
+          qualityWarnings: newInternal.lastRepResult.qualityWarnings,
+          diagnostics: newInternal.lastRepResult.diagnostics,
         }
       : null;
 
@@ -863,6 +2150,7 @@ export function createLegExtensionsDefinition(
   tunedConfigPath: 'src/utils/exercises/definitions/tuned/legExtensions.json',
   createVariant: (variantConfig) =>
     createLegExtensionsDefinition(mergeHeuristicConfig(config, variantConfig)),
+  validateHeuristicConfig: validateLegExtensionsHeuristicConfig,
 
   ttsConfig: {
     feedbackToIssue: {
@@ -870,6 +2158,7 @@ export function createLegExtensionsDefinition(
       'Lower the weight more \u2014 start from a deeper bend.': 'rom_short_leg_ext',
       'Keep your back against the pad \u2014 avoid leaning forward.': 'torso_warn',
       "Keep your hips on the seat \u2014 don't lift off the pad.": 'hip_lift',
+      'Pause briefly at full extension.': 'top_hold_short',
       'Slow down the extension \u2014 control the lift.': 'tempo_up',
       "Control the return \u2014 don't let the weight drop.": 'tempo_down',
     },
@@ -888,6 +2177,11 @@ export function createLegExtensionsDefinition(
         'Hips stay on the seat.',
         'Keep your hips down.',
         'No lifting off the pad.',
+      ],
+      'Pause briefly at full extension.': [
+        'Pause at the top.',
+        'Hold the squeeze briefly.',
+        'Brief pause at full extension.',
       ],
       'Slow down the extension \u2014 control the lift.': [
         'Slow the extension.',
@@ -919,6 +2213,15 @@ export function createLegExtensionsDefinition(
           'Keep your seat planted.',
         ],
       },
+      {
+        issueType: 'top_hold_short',
+        priority: 15,
+        messages: [
+          'Pause at the top.',
+          'Hold the squeeze briefly.',
+          'Brief pause at full extension.',
+        ],
+      },
     ],
   },
 
@@ -931,6 +2234,8 @@ export function createLegExtensionsDefinition(
       'Maintain contact with the backrest throughout the movement to isolate the quadriceps.',
     "Keep your hips on the seat \u2014 don't lift off the pad.":
       'Keep your hips firmly on the seat \u2014 lifting off uses momentum instead of quad strength.',
+    'Pause briefly at full extension.':
+      'Pause briefly at full knee extension and squeeze the quads before lowering.',
     'Slow down the extension \u2014 control the lift.':
       'Control the concentric phase \u2014 aim for 1-2 seconds on the extension.',
     "Control the return \u2014 don't let the weight drop.":

@@ -34,8 +34,20 @@
       "feedbackMessage": "Extend fully — reach all the way up at the top."
     },
     {
+      "issueId": "cable-lat-pulldowns.elbow_drive",
+      "feedbackMessage": "Drive your elbows down — pull with your lats, not just your arms."
+    },
+    {
       "issueId": "cable-lat-pulldowns.torso_warn",
       "feedbackMessage": "Stay upright — avoid leaning back excessively."
+    },
+    {
+      "issueId": "cable-lat-pulldowns.torso_rocking",
+      "feedbackMessage": "Keep your torso steady through the pulldown."
+    },
+    {
+      "issueId": "cable-lat-pulldowns.shoulder_shrug",
+      "feedbackMessage": "Keep your shoulders down as you pull."
     },
     {
       "issueId": "cable-lat-pulldowns.tempo_down",

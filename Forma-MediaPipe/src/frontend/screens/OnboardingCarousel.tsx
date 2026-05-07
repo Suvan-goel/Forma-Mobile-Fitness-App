@@ -345,7 +345,7 @@ const slideStyles = StyleSheet.create({
   artCardEdge: {
     flex: 1,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.115)',
     padding: 16,
@@ -370,7 +370,7 @@ const slideStyles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 9,
     backgroundColor: 'rgba(52, 224, 166, 0.10)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(52, 224, 166, 0.20)',
   },
   liveDot: {
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.09)',
   },
   ctaText: {

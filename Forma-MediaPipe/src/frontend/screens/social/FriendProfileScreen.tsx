@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   statStrip: {
     minHeight: 76,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.06)',
     backgroundColor: 'rgba(255,255,255,0.045)',
     flexDirection: 'row',
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   },
   cardInner: {
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.055)',
     padding: 14,
   },
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 10,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.035)',
   },
   achievementRow: {

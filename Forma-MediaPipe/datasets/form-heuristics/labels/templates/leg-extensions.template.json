@@ -2,6 +2,7 @@
   "_templateNotes": [
     "Copy this file to a new label file such as leg_extension_001.json, then edit the paths, split, expectedReps, and reps.",
     "Use issueIds from availableIssues. Use an empty issueIds array for a clean rep.",
+    "Knee angle and hip-rise diagnostics support the lockout, bottom-ROM, and hip-lift issues; label the visible coaching issue, not the underlying metric name.",
     "Files named _template.json or *.template.json are ignored by dataset:evaluate and dataset:optimize."
   ],
   "schemaVersion": 1,
@@ -40,6 +41,10 @@
     {
       "issueId": "leg-extensions.hip_lift",
       "feedbackMessage": "Keep your hips on the seat — don't lift off the pad."
+    },
+    {
+      "issueId": "leg-extensions.top_hold_short",
+      "feedbackMessage": "Pause briefly at full extension."
     },
     {
       "issueId": "leg-extensions.tempo_up",

@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
 },
   cardEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 12,
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 7,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   specialtyBadgeSelected: {

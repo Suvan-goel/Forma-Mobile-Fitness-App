@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
   },
   heroInner: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(122, 85, 255, 0.12)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.24)',
   },
   changePhotoText: {
@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
   },
   groupEdge: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 14,
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   bioCharCount: {
@@ -704,7 +704,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(122, 85, 255, 0.14)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.30)',
   },
   compactSaveText: {
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: CARD_RADIUS_SM,
     backgroundColor: 'rgba(122, 85, 255, 0.14)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(122, 85, 255, 0.30)',
   },
   groupSaveText: {
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
   logoutBtn: {
     marginTop: 16,
     borderRadius: CARD_RADIUS_SM,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(239, 68, 68, 0.28)',
     backgroundColor: 'rgba(239, 68, 68, 0.16)',
   },

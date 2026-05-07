@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   statStrip: {
     minHeight: 76,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
   videoLibraryInner: {
     minHeight: 112,
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     flexDirection: 'row',
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.045)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.075)',
   },
   videoPreviewImage: {
@@ -656,7 +656,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122,85,255,0.92)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.18)',
   },
   videoLibraryCopy: {
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.045)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.055)',
   },
   videoMetaText: {
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
   },
   cardInner: {
     borderRadius: CARD_RADIUS,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.09)',
     padding: 14,
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 10,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.035)',
   },
   achievementRow: {

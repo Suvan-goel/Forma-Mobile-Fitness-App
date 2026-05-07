@@ -42,6 +42,18 @@
       "feedbackMessage": "Stay upright — avoid leaning back during the pull."
     },
     {
+      "issueId": "cable-row.torso_rocking",
+      "feedbackMessage": "Keep your torso steady through the row."
+    },
+    {
+      "issueId": "cable-row.high_row",
+      "feedbackMessage": "Keep your elbows lower — row toward your ribs."
+    },
+    {
+      "issueId": "cable-row.shoulder_shrug",
+      "feedbackMessage": "Keep your shoulders down as you pull."
+    },
+    {
       "issueId": "cable-row.tempo_down",
       "feedbackMessage": "Slow down the pull — control the contraction."
     },

@@ -1,5 +1,7 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { Keypoint } from '../../poseAnalysis';
-import type { ExerciseDefinition, ExerciseState } from '../types';
+import type { ExerciseDefinition, ExerciseState, RepDiagnostics } from '../types';
 import { evaluateCase } from '../dataset';
 import { validateLabelFile } from '../dataset/validation';
 import { replayRecordingVerbose, type LandmarkRecording } from '../replay';
@@ -64,9 +66,82 @@ describe('dataset label validation', () => {
 
     expect(issues).toEqual([]);
   });
+
+  it('lists heel-lift as an available squat label issue', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/barbell-squat.template.json'),
+        'utf8',
+      ),
+    ) as { availableIssues: Array<{ issueId: string }> };
+
+    expect(template.availableIssues.map((issue) => issue.issueId)).toContain('barbell-squat.heel_lift');
+  });
+
+  it('lists production-hardening cable-row issues in the label template', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/cable-row.template.json'),
+        'utf8',
+      ),
+    ) as { availableIssues: Array<{ issueId: string }> };
+
+    expect(template.availableIssues.map((issue) => issue.issueId)).toEqual(expect.arrayContaining([
+      'cable-row.torso_rocking',
+      'cable-row.high_row',
+      'cable-row.shoulder_shrug',
+    ]));
+    expect(template.availableIssues.map((issue) => issue.issueId)).not.toContain('cable-row.row_target_high');
+    expect(template.availableIssues.map((issue) => issue.issueId)).not.toContain('cable-row.jerky_pull');
+  });
+
+  it('lists production-hardening cable-pushdown issues in the label template', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/cable-pushdowns.template.json'),
+        'utf8',
+      ),
+    ) as { availableIssues: Array<{ issueId: string }> };
+
+    expect(template.availableIssues.map((issue) => issue.issueId)).toEqual(expect.arrayContaining([
+      'cable-pushdowns.elbow_forward',
+      'cable-pushdowns.torso_rocking',
+    ]));
+  });
 });
 
 describe('dataset evaluator', () => {
+  const depthDiagnostics: RepDiagnostics = {
+    exerciseName: 'Demo Exercise',
+    repIndex: 1,
+    view: 'front',
+    selectedSide: 'both',
+    scorable: true,
+    metrics: {
+      depthRatio: {
+        key: 'depthRatio',
+        value: 0.82,
+        unit: 'ratio',
+        eligible: true,
+        confidence: 0.93,
+        sampleCount: 6,
+      },
+    },
+    cues: {
+      'demo-exercise.depth_short': {
+        issueId: 'demo-exercise.depth_short',
+        metricKeys: ['depthRatio'],
+        triggered: true,
+        eligible: true,
+        direction: 'above',
+        thresholdPath: 'formThresholds.DEPTH_WARN',
+        thresholdValue: 0.75,
+        margin: 0.07,
+        support: 6,
+      },
+    },
+  };
+
   it('scores count mismatches, false positives, and false negatives', () => {
     const evaluation = evaluateCase(
       {
@@ -297,6 +372,144 @@ describe('dataset evaluator', () => {
       overlapMs: 0,
     });
   });
+
+  it('preserves predicted diagnostics and summarizes eligible metric distributions', () => {
+    const evaluation = evaluateCase(
+      {
+        label: {
+          ...baseLabel,
+          expectedReps: 1,
+          reps: [{ index: 1, startMs: 0, endMs: 1000, issueIds: ['demo-exercise.depth_short'] }],
+        },
+        recording: { exerciseName: 'Demo Exercise', metadata: {}, frames: [] },
+      },
+      {
+        finalRepCount: 1,
+        reps: [
+          {
+            repIndex: 1,
+            score: 80,
+            messages: [],
+            issueIds: ['demo-exercise.depth_short'],
+            diagnostics: depthDiagnostics,
+            startedAt: 0,
+            completedAt: 1000,
+          },
+        ],
+      },
+    );
+
+    expect(evaluation.matchedReps[0].predictedDiagnostics).toEqual(depthDiagnostics);
+    expect(evaluation.diagnosticSummary?.weightedIssueF1).toBe(1);
+    expect(evaluation.diagnosticSummary?.issueSummaries['demo-exercise.depth_short']).toMatchObject({
+      eligiblePositiveCount: 1,
+      eligibleNegativeCount: 0,
+      truePositiveCount: 1,
+      expectedPositiveMetric: {
+        count: 1,
+        min: 0.82,
+        max: 0.82,
+        mean: 0.82,
+      },
+      averageConfidence: 0.93,
+      averageSampleCount: 6,
+    });
+  });
+
+  it('summarizes eligible positive and negative distributions for squat heel lift diagnostics', () => {
+    const makeHeelDiagnostics = (
+      repIndex: number,
+      delta: number,
+      triggered: boolean,
+    ): RepDiagnostics => ({
+      exerciseName: 'Barbell Squat',
+      repIndex,
+      view: 'side',
+      selectedSide: 'left',
+      scorable: true,
+      metrics: {
+        heelLiftDeltaDeg: {
+          key: 'heelLiftDeltaDeg',
+          value: delta,
+          unit: 'degrees',
+          eligible: true,
+          confidence: 0.9,
+          sampleCount: 12,
+        },
+        heelLiftSupport: {
+          key: 'heelLiftSupport',
+          value: triggered ? 0.5 : 0,
+          unit: 'ratio',
+          eligible: true,
+          confidence: 0.9,
+          sampleCount: 12,
+        },
+      },
+      cues: {
+        'barbell-squat.heel_lift': {
+          issueId: 'barbell-squat.heel_lift',
+          metricKeys: ['heelLiftDeltaDeg', 'heelLiftSupport'],
+          triggered,
+          eligible: true,
+          direction: 'above',
+          thresholdPath: ['formThresholds.HEEL_LIFT_WARN', 'formThresholds.HEEL_LIFT_MIN_SUPPORT'],
+          thresholdValue: {
+            heelLiftDeltaDeg: 12,
+            heelLiftSupport: 0.2,
+          },
+          margin: null,
+          support: triggered ? 0.5 : 0,
+        },
+      },
+    });
+
+    const evaluation = evaluateCase(
+      {
+        label: {
+          schemaVersion: 1,
+          exerciseName: 'Barbell Squat',
+          sourceVideo: 'videos/squat.mp4',
+          split: 'train',
+          expectedReps: 2,
+          reps: [
+            { index: 1, startMs: 0, endMs: 1000, issueIds: ['barbell-squat.heel_lift'] },
+            { index: 2, startMs: 1200, endMs: 2200, issueIds: [] },
+          ],
+        },
+        recording: { exerciseName: 'Barbell Squat', metadata: {}, frames: [] },
+      },
+      {
+        finalRepCount: 2,
+        reps: [
+          {
+            repIndex: 1,
+            score: 82,
+            messages: [],
+            issueIds: ['barbell-squat.heel_lift'],
+            diagnostics: makeHeelDiagnostics(1, 18, true),
+            startedAt: 0,
+            completedAt: 1000,
+          },
+          {
+            repIndex: 2,
+            score: 96,
+            messages: [],
+            issueIds: [],
+            diagnostics: makeHeelDiagnostics(2, 2, false),
+            startedAt: 1200,
+            completedAt: 2200,
+          },
+        ],
+      },
+    );
+
+    expect(evaluation.diagnosticSummary?.issueSummaries['barbell-squat.heel_lift']).toMatchObject({
+      eligiblePositiveCount: 1,
+      eligibleNegativeCount: 1,
+      expectedPositiveMetric: { count: 1, min: 18, max: 18, mean: 18 },
+      expectedNegativeMetric: { count: 1, min: 2, max: 2, mean: 2 },
+    });
+  });
 });
 
 describe('shared replay tracing', () => {
@@ -332,6 +545,36 @@ describe('shared replay tracing', () => {
           repIndex: 1,
           score: 88,
           messages: ['Go deeper.'],
+          diagnostics: {
+            exerciseName: 'Demo Exercise',
+            repIndex: 1,
+            view: 'unknown',
+            selectedSide: 'unknown',
+            scorable: true,
+            metrics: {
+              depthRatio: {
+                key: 'depthRatio',
+                value: 0.82,
+                unit: 'ratio',
+                eligible: true,
+                confidence: 0.9,
+                sampleCount: 1,
+              },
+            },
+            cues: {
+              'demo-exercise.depth_short': {
+                issueId: 'demo-exercise.depth_short',
+                metricKeys: ['depthRatio'],
+                triggered: true,
+                eligible: true,
+                direction: 'above',
+                thresholdPath: 'formThresholds.DEPTH_WARN',
+                thresholdValue: 0.75,
+                margin: 0.07,
+                support: 1,
+              },
+            },
+          },
         },
         feedback: 'Go deeper.',
         feedbackTimestamp: Date.now(),
@@ -367,6 +610,13 @@ describe('shared replay tracing', () => {
       issueIds: ['demo-exercise.depth_short'],
       startedAt: 0,
       completedAt: 500,
+      diagnostics: {
+        cues: {
+          'demo-exercise.depth_short': {
+            issueId: 'demo-exercise.depth_short',
+          },
+        },
+      },
     });
     expect(result.repTraces[0].transitions[0]).toMatchObject({
       fromPhase: 'START',

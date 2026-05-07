@@ -36,12 +36,21 @@ import {
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import {
+  buildRepDiagnostics,
+  diagnosticCue,
+  diagnosticLabelMetric,
+  diagnosticMetric,
+} from '../shared/diagnostics';
 import tunedConfig from './tuned/lyingLegCurl.json';
 
 import type {
   ExerciseDefinition,
+  ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
+  NumericTunable,
+  RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
 
@@ -50,6 +59,8 @@ import type {
 // ============================================================================
 
 type Point2D = { x: number; y: number };
+type DistalEndpointName = 'ankle' | 'heel' | 'foot_index';
+type DistalEndpoint = { name: DistalEndpointName; keypoint: Keypoint };
 
 /** Euclidean distance between two 2D points. */
 function dist2D(a: Point2D, b: Point2D): number {
@@ -77,6 +88,44 @@ function getPoint(kp: Keypoint | null): Point2D | null {
   return { x: kp.x, y: kp.y };
 }
 
+function finiteMetric(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) return 0;
+  let sum = 0;
+  for (const value of values) sum += value;
+  return sum / values.length;
+}
+
+function sortedFinite(values: number[]): number[] {
+  return values
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+}
+
+function robustHigh(values: number[]): number | null {
+  const sorted = sortedFinite(values);
+  if (sorted.length === 0) return null;
+  if (sorted.length < THRESHOLDS.ROBUST_EXTREMA_MIN_SAMPLES) return sorted[sorted.length - 1];
+  const index = Math.max(0, Math.floor((sorted.length - 1) * 0.9));
+  return sorted[index];
+}
+
+function robustLow(values: number[]): number | null {
+  const sorted = sortedFinite(values);
+  if (sorted.length === 0) return null;
+  if (sorted.length < THRESHOLDS.ROBUST_EXTREMA_MIN_SAMPLES) return sorted[0];
+  const index = Math.min(sorted.length - 1, Math.ceil((sorted.length - 1) * 0.1));
+  return sorted[index];
+}
+
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
 // ============================================================================
@@ -96,21 +145,65 @@ const THRESHOLDS = {
   /** Minimum rep duration (seconds) */
   MIN_REP_TIME: 0.6,
   /** Minimum ratio ROM for a returned partial rep to count */
-  MIN_PARTIAL_ROM: 0.19,
+  MIN_PARTIAL_ROM: 0.18,
+  /** Minimum samples before robust extrema replace raw extrema */
+  ROBUST_EXTREMA_MIN_SAMPLES: 3,
+  /** Rolling REST samples retained for extension baseline capture */
+  REST_SAMPLE_WINDOW_FRAMES: 20,
 } as const;
 
 /** Form heuristic thresholds (discrete messages) */
 const FORM_THRESHOLDS = {
   /** Min ratio above which flexion is insufficient (didn't curl enough) */
   FLEXION_FAIL: 0.55,
+  /** Ideal flexion ratio for scoring */
+  FLEXION_IDEAL_RATIO: 0.45,
   /** Max ratio below which extension is insufficient (didn't straighten) */
   EXTENSION_FAIL: 0.93,
+  /** Ideal extension ratio for scoring */
+  EXTENSION_IDEAL_RATIO: 0.97,
+  /** Min knee angle above which top flexion is insufficient */
+  KNEE_FLEXION_FAIL: 115,
+  /** Ideal knee flexion angle for conservative knee-angle score support */
+  KNEE_FLEXION_IDEAL: 95,
+  /** Max knee angle below which bottom extension is insufficient */
+  KNEE_EXTENSION_FAIL: 160,
+  /** Ideal bottom extension angle for conservative knee-angle score support */
+  KNEE_EXTENSION_IDEAL: 170,
   /** Hip angle delta from baseline above which hips are lifting */
   HIP_LIFT_WARN: 12,
+  /** Normalized upward hip movement above which hips are lifting */
+  HIP_RISE_RATIO_WARN: 0.04,
+  /** Normalized thigh/knee drift above which the thigh is moving off the pad */
+  THIGH_DRIFT_RATIO_WARN: 0.06,
+  /** Minimum squeeze/pause at the curled position (seconds) */
+  TOP_HOLD_MIN: 0.12,
+  /** Maximum near-top ratio velocity considered a stable hold */
+  TOP_HOLD_VELOCITY_MAX: 0.08,
   /** Concentric (curl up) too fast threshold (seconds) */
-  TEMPO_CURL_MIN: 0.3,
+  TEMPO_CURL_MIN: 0.5,
   /** Eccentric (lower down) too fast threshold (seconds) */
-  TEMPO_LOWER_MIN: 0.4,
+  TEMPO_LOWER_MIN: 0.8,
+  /** Velocity spike ratio above which the rep looks bouncy/jerky */
+  TEMPO_JERK_SPIKE_WARN: 2.5,
+  /** Absolute ratio velocity above which the rep looks bouncy/jerky */
+  TEMPO_JERK_VELOCITY_WARN: 8.0,
+  /** Minimum ratio velocity sample included in jerk/bounce analysis */
+  VELOCITY_SAMPLE_MIN: 0.04,
+  /** Average side-view confidence below which the rep is not scorable */
+  SIDE_VIEW_AVG_CONFIDENCE_MIN: 0.45,
+  /** Minimum side-view confidence below which the rep is not scorable */
+  SIDE_VIEW_MIN_CONFIDENCE_MIN: 0.25,
+  /** Minimum side-view samples before enforcing the side-view gate */
+  SIDE_VIEW_MIN_SAMPLES: 5,
+  /** Per-frame landmark confidence below which a form-critical sample is low quality */
+  PRIMARY_CONFIDENCE_MIN: 0.3,
+  /** Max low-confidence sample rate before a counted rep is marked unscorable */
+  LOW_CONFIDENCE_MAX_RATE: 0.35,
+  /** Minimum knee-angle samples before knee-angle ROM can affect score/feedback */
+  KNEE_METRIC_MIN_SAMPLES: 5,
+  /** Minimum knee-angle sample rate before knee-angle ROM can affect score/feedback */
+  KNEE_METRIC_MIN_SAMPLE_RATE: 0.35,
 } as const;
 
 /**
@@ -118,20 +211,32 @@ const FORM_THRESHOLDS = {
  *
  * | Category          | Cap | Deadzone | Scale | Key Input                            |
  * |-------------------|-----|----------|-------|--------------------------------------|
- * | ROM flexion       | 30  | 0        | 500   | max(0, minRatio - 0.45) excess       |
- * | ROM extension     | 25  | 0        | 800   | max(0, 0.96 - maxRatio) shortfall    |
- * | Hip lift          | 30  | 8        | 0.10  | max hip angle delta from baseline     |
- * | Tempo curl        | 12  | 0.4s     | 60    | concentric time deficit              |
- * | Tempo lower       | 10  | 0.5s     | 40    | eccentric time deficit               |
+ * | ROM flexion       | 40  | 0        | 1000  | max(0, minRatio - ideal) excess      |
+ * | ROM extension     | 35  | 0        | 3500  | max(0, ideal - maxRatio) shortfall   |
+ * | Knee flexion ROM  | 12  | 0        | 0.04  | min knee angle - ideal flexion        |
+ * | Knee extension    | 10  | 0        | 0.04  | ideal extension - max knee angle      |
+ * | Hip lift          | 30  | 8        | 0.20  | max hip angle delta from baseline     |
+ * | Hip rise          | 15  | 0.03     | 20000 | normalized upward hip movement        |
+ * | Thigh movement    | 12  | 0.04     | 5000  | normalized hip-knee vector drift       |
+ * | Top hold          | 5   | 0        | 160   | top-hold time deficit                 |
+ * | Tempo curl        | 15  | 0.5s     | 80    | concentric time deficit              |
+ * | Tempo lower       | 15  | 0.8s     | 45    | eccentric time deficit               |
+ * | Tempo jerk        | 10  | 0        | 8     | velocity spike/absolute excess        |
  *
- * Max total penalty: 107 -> worst possible rep = 0.
+ * Max total penalty: 199 -> worst possible rep = 0.
  */
 const PENALTY_CONFIGS = {
-  FLEXION_ROM:    { cap: 30, deadzone: 0, scale: 500 } as PenaltyConfig,
-  EXTENSION_ROM:  { cap: 25, deadzone: 0, scale: 800 } as PenaltyConfig,
-  HIP_LIFT:       { cap: 30, deadzone: 8, scale: 0.10 } as PenaltyConfig,
-  TEMPO_CURL:     { cap: 12, deadzone: 0.4, scale: 60 } as PenaltyConfig,
-  TEMPO_LOWER:    { cap: 10, deadzone: 0.5, scale: 40 } as PenaltyConfig,
+  FLEXION_ROM:         { cap: 40, deadzone: 0, scale: 1000 } as PenaltyConfig,
+  EXTENSION_ROM:       { cap: 35, deadzone: 0, scale: 3500 } as PenaltyConfig,
+  KNEE_FLEXION_ROM:    { cap: 12, deadzone: 0, scale: 0.04 } as PenaltyConfig,
+  KNEE_EXTENSION_ROM:  { cap: 10, deadzone: 0, scale: 0.04 } as PenaltyConfig,
+  HIP_LIFT:            { cap: 30, deadzone: 8, scale: 0.20 } as PenaltyConfig,
+  HIP_RISE:            { cap: 15, deadzone: 0.03, scale: 20000 } as PenaltyConfig,
+  THIGH_MOVEMENT:      { cap: 12, deadzone: 0.04, scale: 5000 } as PenaltyConfig,
+  TOP_HOLD:            { cap: 5, deadzone: 0, scale: 160 } as PenaltyConfig,
+  TEMPO_CURL:          { cap: 15, deadzone: 0.5, scale: 80 } as PenaltyConfig,
+  TEMPO_LOWER:         { cap: 15, deadzone: 0.8, scale: 45 } as PenaltyConfig,
+  TEMPO_JERK:          { cap: 10, deadzone: 0, scale: 8 } as PenaltyConfig,
 } as const;
 
 const VISIBILITY_THRESHOLD = 0.15;
@@ -152,6 +257,86 @@ const LYING_LEG_CURL_TUNABLE_SPEC = createDefaultTunableSpec(
   'Lying Leg Curl',
   DEFAULT_LYING_LEG_CURL_HEURISTIC_CONFIG,
 );
+
+function upsertLyingLegCurlTunable(tunable: NumericTunable): void {
+  const index = LYING_LEG_CURL_TUNABLE_SPEC.tunables.findIndex(existing => existing.path === tunable.path);
+  if (index >= 0) {
+    LYING_LEG_CURL_TUNABLE_SPEC.tunables[index] = tunable;
+  } else {
+    LYING_LEG_CURL_TUNABLE_SPEC.tunables.push(tunable);
+  }
+}
+
+([
+  { path: 'formThresholds.KNEE_FLEXION_FAIL', min: 90, max: 135, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_FLEXION_IDEAL', min: 70, max: 115, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_EXTENSION_FAIL', min: 145, max: 175, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_EXTENSION_IDEAL', min: 155, max: 180, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.FLEXION_IDEAL_RATIO', min: 0.30, max: 0.60, step: 0.01, kind: 'scoring' },
+  { path: 'formThresholds.EXTENSION_IDEAL_RATIO', min: 0.90, max: 1.05, step: 0.01, kind: 'scoring' },
+  { path: 'formThresholds.HIP_RISE_RATIO_WARN', min: 0.01, max: 0.12, step: 0.01, kind: 'feedback' },
+  { path: 'formThresholds.THIGH_DRIFT_RATIO_WARN', min: 0.02, max: 0.14, step: 0.01, kind: 'feedback' },
+  { path: 'formThresholds.TOP_HOLD_MIN', min: 0, max: 0.5, step: 0.02, kind: 'feedback' },
+  { path: 'formThresholds.TOP_HOLD_VELOCITY_MAX', min: 0.02, max: 0.30, step: 0.01, kind: 'feedback' },
+  { path: 'formThresholds.TEMPO_CURL_MIN', min: 0.15, max: 1.2, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.TEMPO_LOWER_MIN', min: 0.2, max: 1.8, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.TEMPO_JERK_SPIKE_WARN', min: 2, max: 10, step: 0.1, kind: 'feedback' },
+  { path: 'formThresholds.TEMPO_JERK_VELOCITY_WARN', min: 3, max: 14, step: 0.1, kind: 'feedback' },
+  { path: 'formThresholds.VELOCITY_SAMPLE_MIN', min: 0.01, max: 0.20, step: 0.01, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', min: 0.2, max: 0.75, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', min: 0.1, max: 0.5, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.LOW_CONFIDENCE_MAX_RATE', min: 0.15, max: 0.6, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_METRIC_MIN_SAMPLES', min: 1, max: 12, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_METRIC_MIN_SAMPLE_RATE', min: 0.1, max: 0.8, step: 0.05, kind: 'feedback' },
+  { path: 'penaltyConfigs.FLEXION_ROM.cap', min: 20, max: 60, step: 5, kind: 'scoring' },
+  { path: 'penaltyConfigs.FLEXION_ROM.deadzone', min: 0, max: 0.05, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.FLEXION_ROM.scale', min: 500, max: 2500, step: 100, kind: 'scoring' },
+  { path: 'penaltyConfigs.EXTENSION_ROM.cap', min: 15, max: 50, step: 5, kind: 'scoring' },
+  { path: 'penaltyConfigs.EXTENSION_ROM.deadzone', min: 0, max: 0.05, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.EXTENSION_ROM.scale', min: 1000, max: 6000, step: 250, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_FLEXION_ROM.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_FLEXION_ROM.deadzone', min: 0, max: 10, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_FLEXION_ROM.scale', min: 0.01, max: 0.10, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_EXTENSION_ROM.cap', min: 0, max: 20, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_EXTENSION_ROM.deadzone', min: 0, max: 10, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.KNEE_EXTENSION_ROM.scale', min: 0.01, max: 0.10, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_LIFT.cap', min: 10, max: 45, step: 5, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_LIFT.deadzone', min: 0, max: 18, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_LIFT.scale', min: 0.05, max: 0.5, step: 0.05, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_RISE.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_RISE.deadzone', min: 0, max: 0.08, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.HIP_RISE.scale', min: 5000, max: 40000, step: 1000, kind: 'scoring' },
+  { path: 'penaltyConfigs.THIGH_MOVEMENT.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.THIGH_MOVEMENT.deadzone', min: 0, max: 0.10, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.THIGH_MOVEMENT.scale', min: 1000, max: 15000, step: 500, kind: 'scoring' },
+  { path: 'penaltyConfigs.TOP_HOLD.cap', min: 0, max: 10, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TOP_HOLD.deadzone', min: 0, max: 0.10, step: 0.01, kind: 'scoring' },
+  { path: 'penaltyConfigs.TOP_HOLD.scale', min: 40, max: 300, step: 20, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_CURL.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_CURL.deadzone', min: 0.15, max: 1.2, step: 0.05, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_CURL.scale', min: 20, max: 160, step: 10, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_LOWER.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_LOWER.deadzone', min: 0.2, max: 1.8, step: 0.05, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_LOWER.scale', min: 15, max: 120, step: 5, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_JERK.cap', min: 0, max: 20, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_JERK.deadzone', min: 0, max: 3, step: 0.1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_JERK.scale', min: 0.5, max: 8, step: 0.5, kind: 'scoring' },
+] satisfies NumericTunable[]).forEach(upsertLyingLegCurlTunable);
+
+LYING_LEG_CURL_TUNABLE_SPEC.diagnosticTuning = [
+  { issueId: 'lying-leg-curl.rom_curl_short', metricKey: 'curlDepthRatio', thresholdPath: 'formThresholds.FLEXION_FAIL', direction: 'above' },
+  { issueId: 'lying-leg-curl.rom_curl_short', metricKey: 'kneeFlexionAngle', thresholdPath: 'formThresholds.KNEE_FLEXION_FAIL', direction: 'above' },
+  { issueId: 'lying-leg-curl.rom_extend_short', metricKey: 'extensionRatio', thresholdPath: 'formThresholds.EXTENSION_FAIL', direction: 'below' },
+  { issueId: 'lying-leg-curl.rom_extend_short', metricKey: 'kneeExtensionAngle', thresholdPath: 'formThresholds.KNEE_EXTENSION_FAIL', direction: 'below' },
+  { issueId: 'lying-leg-curl.hip_lift', metricKey: 'hipDelta', thresholdPath: 'formThresholds.HIP_LIFT_WARN', direction: 'above' },
+  { issueId: 'lying-leg-curl.hip_lift', metricKey: 'hipRiseRatio', thresholdPath: 'formThresholds.HIP_RISE_RATIO_WARN', direction: 'above' },
+  { issueId: 'lying-leg-curl.thigh_movement', metricKey: 'thighDriftRatio', thresholdPath: 'formThresholds.THIGH_DRIFT_RATIO_WARN', direction: 'above' },
+  { issueId: 'lying-leg-curl.top_hold_short', metricKey: 'topHoldSeconds', thresholdPath: 'formThresholds.TOP_HOLD_MIN', direction: 'below' },
+  { issueId: 'lying-leg-curl.tempo_up', metricKey: 'tCurl', thresholdPath: 'formThresholds.TEMPO_CURL_MIN', direction: 'below' },
+  { issueId: 'lying-leg-curl.tempo_down', metricKey: 'tLower', thresholdPath: 'formThresholds.TEMPO_LOWER_MIN', direction: 'below' },
+  { issueId: 'lying-leg-curl.tempo_jerk', metricKey: 'velocitySpikeRatio', thresholdPath: 'formThresholds.TEMPO_JERK_SPIKE_WARN', direction: 'above' },
+  { issueId: 'lying-leg-curl.side_view_uncertain', metricKey: 'sideViewConfidence', thresholdPath: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', direction: 'below' },
+];
 
 const LYING_LEG_CURL_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
@@ -187,12 +372,49 @@ interface LyingLegCurlFSM {
 interface RepWindow {
   /** Min ratio during rep (should be low -- peak flexion) */
   minRatio: number;
+  ratioSamples: number[];
   /** Max ratio during rep (should be high -- full extension at start/end) */
   maxRatio: number;
+  /** Min knee angle during rep (should be low -- peak flexion) */
+  minKneeAngle: number;
+  /** Max knee angle during rep (should be high -- full extension) */
+  maxKneeAngle: number;
+  kneeAngleSamples: number[];
+  kneeAngleSampleCount: number;
+  kneeAngleConfidenceSum: number;
   /** Hip angle at rep start (baseline for detecting lift) */
   hipAngleBaseline: number | null;
   /** Max absolute hip angle delta from baseline during rep */
   maxHipDelta: number;
+  hipDeltaSamples: number[];
+  hipYBaseline: number | null;
+  maxHipRiseRatio: number;
+  hipRiseRatioSamples: number[];
+  hipRiseSampleCount: number;
+  thighVectorBaseline: Point2D | null;
+  maxThighDriftRatio: number;
+  thighDriftRatioSamples: number[];
+  thighDriftSampleCount: number;
+  distalEndpointCounts: Record<DistalEndpointName, number>;
+  /** Low-confidence form-critical samples during the active rep */
+  lowConfidenceFrames: number;
+  /** Time accumulated near peak curl with very low ratio velocity */
+  topHoldSeconds: number;
+  /** Ratio-velocity samples for jerk/bounce detection */
+  lastRatioForVelocity: number | null;
+  lastRatioVelocityAt: number | null;
+  velocitySamples: number;
+  velocitySum: number;
+  velocitySampleValues: number[];
+  curlVelocitySampleValues: number[];
+  lowerVelocitySampleValues: number[];
+  maxVelocity: number;
+  maxCurlVelocity: number;
+  maxLowerVelocity: number;
+  /** Side-view confidence across the rep */
+  sideViewConfidenceSamples: number;
+  sideViewConfidenceSum: number;
+  sideViewConfidenceMin: number;
   /** Timestamps */
   tStart: number;
   tCurled: number | null;
@@ -206,6 +428,9 @@ interface RepResult {
   repIndex: number;
   score: number;
   messages: string[];
+  scorable?: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
+  diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
 interface LyingLegCurlState {
@@ -223,6 +448,8 @@ interface LyingLegCurlState {
   smoothedRatio: number | null;
   /** Median-only ratio used for responsive FSM transitions */
   fastRatio: number | null;
+  currentKneeAngle: number | null;
+  currentHipRiseRatio: number | null;
   smoothedHip: number | null;
   /** Feedback */
   feedback: string | null;
@@ -231,6 +458,10 @@ interface LyingLegCurlState {
   visibleSide: 'left' | 'right';
   /** Maximum smoothed ratio observed in REST before the current rep starts */
   restMaxRatio: number;
+  /** Maximum knee angle observed in REST before the current rep starts */
+  restMaxKneeAngle: number;
+  restRatioSamples: number[];
+  restKneeAngleSamples: number[];
 }
 
 interface LyingLegCurlDebugInfo {
@@ -239,11 +470,22 @@ interface LyingLegCurlDebugInfo {
   warmedUp: boolean;
   ratio: number | null;
   fastRatio: number | null;
+  kneeAngle: number | null;
   hipAngle: number | null;
+  hipRiseRatio: number | null;
   // Rep window
   ratioMin: number | null;
   ratioMax: number | null;
+  kneeAngleMin: number | null;
+  kneeAngleMax: number | null;
   hipDelta: number | null;
+  hipRiseMax: number | null;
+  thighDriftRatio: number | null;
+  distalEndpoint: string | null;
+  topHoldSeconds: number | null;
+  velocitySpikeRatio: number | null;
+  sideViewConfidence: number | null;
+  scorable: boolean | null;
 }
 
 // ============================================================================
@@ -260,12 +502,52 @@ function initFSM(): LyingLegCurlFSM {
   };
 }
 
-function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
+function initRepWindow(
+  tStart: number,
+  initialRatio?: number,
+  initialKneeAngle?: number | null,
+): RepWindow {
+  const hasInitialKneeAngle = finiteMetric(initialKneeAngle);
   return {
     minRatio: initialRatio ?? Infinity,
+    ratioSamples: [],
     maxRatio: initialRatio ?? -Infinity,
+    minKneeAngle: hasInitialKneeAngle ? initialKneeAngle : Infinity,
+    maxKneeAngle: hasInitialKneeAngle ? initialKneeAngle : -Infinity,
+    kneeAngleSamples: [],
+    kneeAngleSampleCount: 0,
+    kneeAngleConfidenceSum: 0,
     hipAngleBaseline: null,
     maxHipDelta: 0,
+    hipDeltaSamples: [],
+    hipYBaseline: null,
+    maxHipRiseRatio: 0,
+    hipRiseRatioSamples: [],
+    hipRiseSampleCount: 0,
+    thighVectorBaseline: null,
+    maxThighDriftRatio: 0,
+    thighDriftRatioSamples: [],
+    thighDriftSampleCount: 0,
+    distalEndpointCounts: {
+      ankle: 0,
+      heel: 0,
+      foot_index: 0,
+    },
+    lowConfidenceFrames: 0,
+    topHoldSeconds: 0,
+    lastRatioForVelocity: null,
+    lastRatioVelocityAt: null,
+    velocitySamples: 0,
+    velocitySum: 0,
+    velocitySampleValues: [],
+    curlVelocitySampleValues: [],
+    lowerVelocitySampleValues: [],
+    maxVelocity: 0,
+    maxCurlVelocity: 0,
+    maxLowerVelocity: 0,
+    sideViewConfidenceSamples: 0,
+    sideViewConfidenceSum: 0,
+    sideViewConfidenceMin: Infinity,
     tStart,
     tCurled: null,
     tLowerStart: null,
@@ -293,11 +575,16 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
     warmedUp: false,
     smoothedRatio: null,
     fastRatio: null,
+    currentKneeAngle: null,
+    currentHipRiseRatio: null,
     smoothedHip: null,
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
     restMaxRatio: -Infinity,
+    restMaxKneeAngle: -Infinity,
+    restRatioSamples: [],
+    restKneeAngleSamples: [],
   };
 }
 
@@ -306,8 +593,8 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
 // ============================================================================
 
 function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
-  const leftParts = ['left_hip', 'left_knee', 'left_ankle', 'left_shoulder'];
-  const rightParts = ['right_hip', 'right_knee', 'right_ankle', 'right_shoulder'];
+  const leftParts = ['left_hip', 'left_knee', 'left_shoulder'];
+  const rightParts = ['right_hip', 'right_knee', 'right_shoulder'];
 
   let leftScore = 0;
   let rightScore = 0;
@@ -320,8 +607,50 @@ function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
     const kp = getKeypoint(keypoints, name);
     if (kp) rightScore += kp.score;
   }
+  leftScore += selectDistalEndpoint(keypoints, 'left', 0)?.keypoint.score ?? 0;
+  rightScore += selectDistalEndpoint(keypoints, 'right', 0)?.keypoint.score ?? 0;
 
   return leftScore >= rightScore ? 'left' : 'right';
+}
+
+function signalSourceKeypoints(
+  frameContext: ExerciseFrameContext | undefined,
+  fallbackKeypoints: Keypoint[],
+): Keypoint[] {
+  return frameContext?.imageKeypoints ?? fallbackKeypoints;
+}
+
+function visibleKeypoint(
+  keypoints: Keypoint[],
+  name: string,
+  threshold = VISIBILITY_THRESHOLD,
+): Keypoint | null {
+  const keypoint = getKeypoint(keypoints, name);
+  return isVisible(keypoint, threshold) ? keypoint : null;
+}
+
+function distalEndpointKey(side: 'left' | 'right', endpoint: DistalEndpointName): string {
+  return `${side}_${endpoint}`;
+}
+
+function selectDistalEndpoint(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+  threshold = VISIBILITY_THRESHOLD,
+): DistalEndpoint | null {
+  for (const endpoint of ['ankle', 'heel', 'foot_index'] satisfies DistalEndpointName[]) {
+    const keypoint = visibleKeypoint(keypoints, distalEndpointKey(side, endpoint), threshold);
+    if (keypoint) return { name: endpoint, keypoint };
+  }
+  return null;
+}
+
+function distalEndpointConfidence(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number {
+  const endpoint = selectDistalEndpoint(keypoints, side, 0);
+  return endpoint?.keypoint.score ?? 0;
 }
 
 // ============================================================================
@@ -334,26 +663,78 @@ function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
  */
 function calculateKneeRatio(
   keypoints: Keypoint[],
-  side: 'left' | 'right'
+  side: 'left' | 'right',
+  distalEndpoint = selectDistalEndpoint(keypoints, side),
 ): number | null {
-  const hip = getKeypoint(keypoints, `${side}_hip`);
-  const knee = getKeypoint(keypoints, `${side}_knee`);
-  const ankle = getKeypoint(keypoints, `${side}_ankle`);
-
-  if (
-    !hip || !knee || !ankle ||
-    !isVisible(hip, VISIBILITY_THRESHOLD) ||
-    !isVisible(knee, VISIBILITY_THRESHOLD) ||
-    !isVisible(ankle, VISIBILITY_THRESHOLD)
-  ) {
-    return null;
-  }
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  if (!hip || !knee || !distalEndpoint) return null;
 
   const hipPt = getPoint(hip)!;
   const kneePt = getPoint(knee)!;
-  const anklePt = getPoint(ankle)!;
+  const distalPt = getPoint(distalEndpoint.keypoint)!;
 
-  return computeReachRatio(hipPt, kneePt, anklePt);
+  return computeReachRatio(hipPt, kneePt, distalPt);
+}
+
+function calculateKneeAngle(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+  distalEndpoint = selectDistalEndpoint(keypoints, side),
+): number | null {
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  if (!hip || !knee || !distalEndpoint) return null;
+
+  const value = calculateAngle2D(
+    getPoint(hip)!,
+    getPoint(knee)!,
+    getPoint(distalEndpoint.keypoint)!,
+  );
+  return finiteMetric(value) && value > 0 && value <= 180 ? value : null;
+}
+
+function calculateLegChainLength(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+  distalEndpoint = selectDistalEndpoint(keypoints, side),
+): number | null {
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  if (!hip || !knee || !distalEndpoint) return null;
+
+  const length =
+    dist2D(getPoint(hip)!, getPoint(knee)!) +
+    dist2D(getPoint(knee)!, getPoint(distalEndpoint.keypoint)!);
+  return length > 1e-6 ? length : null;
+}
+
+function calculateHipRiseRatio(
+  currentHipY: number,
+  baselineHipY: number,
+  legChainLength: number | null,
+): number | null {
+  if (!legChainLength || legChainLength <= 1e-6) return null;
+  return Math.max(0, (baselineHipY - currentHipY) / legChainLength);
+}
+
+function calculateThighVector(keypoints: Keypoint[], side: 'left' | 'right'): Point2D | null {
+  const hip = visibleKeypoint(keypoints, `${side}_hip`, FORM_CONFIDENCE_MIN);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`, FORM_CONFIDENCE_MIN);
+  if (!hip || !knee) return null;
+  return {
+    x: knee.x - hip.x,
+    y: knee.y - hip.y,
+  };
+}
+
+function calculateThighDriftRatio(
+  currentVector: Point2D,
+  baselineVector: Point2D,
+  legChainLength: number | null,
+): number | null {
+  if (!legChainLength || legChainLength <= 1e-6) return null;
+  return dist2D(currentVector, baselineVector) / legChainLength;
 }
 
 /**
@@ -366,24 +747,54 @@ function calculateHipAngle(
   keypoints: Keypoint[],
   side: 'left' | 'right'
 ): number | null {
-  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
-  const hip = getKeypoint(keypoints, `${side}_hip`);
-  const knee = getKeypoint(keypoints, `${side}_knee`);
-
-  if (
-    !shoulder || !hip || !knee ||
-    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
-    !isVisible(hip, VISIBILITY_THRESHOLD) ||
-    !isVisible(knee, VISIBILITY_THRESHOLD)
-  ) {
-    return null;
-  }
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  if (!shoulder || !hip || !knee) return null;
 
   return calculateAngle2D(
     getPoint(shoulder)!,
     getPoint(hip)!,
     getPoint(knee)!
   );
+}
+
+function sideBodyLength(keypoints: Keypoint[], side: 'left' | 'right'): number | null {
+  const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`);
+  const hip = visibleKeypoint(keypoints, `${side}_hip`);
+  const knee = visibleKeypoint(keypoints, `${side}_knee`);
+  const distalEndpoint = selectDistalEndpoint(keypoints, side);
+  if (!shoulder || !hip || !knee || !distalEndpoint) return null;
+
+  const length =
+    dist2D(getPoint(shoulder)!, getPoint(hip)!) +
+    dist2D(getPoint(hip)!, getPoint(knee)!) +
+    dist2D(getPoint(knee)!, getPoint(distalEndpoint.keypoint)!);
+  return length > 1e-6 ? length : null;
+}
+
+function calculateSideViewConfidence(keypoints: Keypoint[]): number | null {
+  const widths: number[] = [];
+  for (const joint of ['shoulder', 'hip', 'knee']) {
+    const left = visibleKeypoint(keypoints, `left_${joint}`);
+    const right = visibleKeypoint(keypoints, `right_${joint}`);
+    if (left && right) widths.push(dist2D(getPoint(left)!, getPoint(right)!));
+  }
+  const leftDistal = selectDistalEndpoint(keypoints, 'left');
+  const rightDistal = selectDistalEndpoint(keypoints, 'right');
+  if (leftDistal && rightDistal) {
+    widths.push(dist2D(getPoint(leftDistal.keypoint)!, getPoint(rightDistal.keypoint)!));
+  }
+  if (widths.length < 2) return null;
+
+  const bodyLengths = [
+    sideBodyLength(keypoints, 'left'),
+    sideBodyLength(keypoints, 'right'),
+  ].filter(finiteMetric);
+  if (bodyLengths.length === 0) return null;
+
+  const widthRatio = average(widths) / average(bodyLengths);
+  return 1 - clamp01((widthRatio - 0.08) / (0.24 - 0.08));
 }
 
 // ============================================================================
@@ -464,21 +875,189 @@ function updateFSM(
 // SCORING (continuous penalty curves)
 // ============================================================================
 
+const FEEDBACK = {
+  CURL_SHORT: 'Curl higher \u2014 bring your heels closer to your glutes.',
+  EXTEND_SHORT: 'Extend fully \u2014 straighten your legs at the bottom.',
+  HIP_LIFT: 'Keep your hips down \u2014 avoid lifting off the pad.',
+  TEMPO_CURL: 'Slow down the curl \u2014 control the contraction.',
+  TEMPO_LOWER: 'Control the descent \u2014 lower the weight slowly.',
+  TOP_HOLD: 'Pause briefly at the top \u2014 squeeze your hamstrings.',
+  TEMPO_JERK: 'Move smoothly \u2014 avoid bouncing the weight.',
+  SIDE_VIEW: 'Turn fully side-on so I can judge your leg curl.',
+  THIGH_MOVEMENT: 'Keep your thighs down \u2014 only your lower legs should move.',
+  TRACKING_SETUP: 'Keep your hips, knees, and lower legs visible so I can judge your curl.',
+} as const;
+
+function hasKneeAngleSamples(repWindow: RepWindow): boolean {
+  const sampleRate = repWindow.frameCount > 0
+    ? repWindow.kneeAngleSampleCount / repWindow.frameCount
+    : 0;
+  return repWindow.kneeAngleSampleCount >= FORM_THRESHOLDS.KNEE_METRIC_MIN_SAMPLES &&
+    sampleRate >= FORM_THRESHOLDS.KNEE_METRIC_MIN_SAMPLE_RATE &&
+    Number.isFinite(repWindow.minKneeAngle) &&
+    Number.isFinite(repWindow.maxKneeAngle);
+}
+
+function averageKneeAngleConfidence(repWindow: RepWindow): number | null {
+  if (repWindow.kneeAngleSampleCount === 0) return null;
+  return repWindow.kneeAngleConfidenceSum / repWindow.kneeAngleSampleCount;
+}
+
+function averageSideViewConfidence(repWindow: RepWindow): number | null {
+  if (repWindow.sideViewConfidenceSamples === 0) return null;
+  return repWindow.sideViewConfidenceSum / repWindow.sideViewConfidenceSamples;
+}
+
+function topHoldSeconds(repWindow: RepWindow): number | null {
+  if (repWindow.tCurled === null) return null;
+  return repWindow.topHoldSeconds;
+}
+
+function velocitySpikeRatio(repWindow: RepWindow): number | null {
+  if (repWindow.velocitySamples === 0) return null;
+  const mean = repWindow.velocitySum / repWindow.velocitySamples;
+  if (mean <= 1e-6) return null;
+  return repWindow.maxVelocity / mean;
+}
+
+function mostUsedDistalEndpoint(repWindow: RepWindow): DistalEndpointName | null {
+  let bestEndpoint: DistalEndpointName | null = null;
+  let bestCount = 0;
+  for (const endpoint of ['ankle', 'heel', 'foot_index'] satisfies DistalEndpointName[]) {
+    const count = repWindow.distalEndpointCounts[endpoint];
+    if (count > bestCount) {
+      bestEndpoint = endpoint;
+      bestCount = count;
+    }
+  }
+  return bestEndpoint;
+}
+
+function curlDepthShort(repWindow: RepWindow): boolean {
+  return (
+    repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL ||
+    (hasKneeAngleSamples(repWindow) && repWindow.minKneeAngle > FORM_THRESHOLDS.KNEE_FLEXION_FAIL)
+  );
+}
+
+function extensionShort(repWindow: RepWindow): boolean {
+  return (
+    repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL ||
+    (hasKneeAngleSamples(repWindow) && repWindow.maxKneeAngle < FORM_THRESHOLDS.KNEE_EXTENSION_FAIL)
+  );
+}
+
+function hipLiftTriggered(repWindow: RepWindow): boolean {
+  return (
+    repWindow.maxHipDelta > FORM_THRESHOLDS.HIP_LIFT_WARN ||
+    repWindow.maxHipRiseRatio > FORM_THRESHOLDS.HIP_RISE_RATIO_WARN
+  );
+}
+
+function thighMovementTriggered(repWindow: RepWindow): boolean {
+  return repWindow.maxThighDriftRatio > FORM_THRESHOLDS.THIGH_DRIFT_RATIO_WARN;
+}
+
+function topHoldShort(repWindow: RepWindow): boolean {
+  const hold = topHoldSeconds(repWindow);
+  return hold !== null && hold < FORM_THRESHOLDS.TOP_HOLD_MIN;
+}
+
+function tempoJerkTriggered(repWindow: RepWindow): boolean {
+  const spikeRatio = velocitySpikeRatio(repWindow);
+  return (
+    repWindow.maxCurlVelocity > FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN ||
+    repWindow.maxLowerVelocity > FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN ||
+    (spikeRatio !== null && spikeRatio > FORM_THRESHOLDS.TEMPO_JERK_SPIKE_WARN)
+  );
+}
+
+function sideViewIsScorable(repWindow: RepWindow): boolean {
+  if (repWindow.sideViewConfidenceSamples < FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES) return true;
+  const averageConfidence = averageSideViewConfidence(repWindow);
+  if (averageConfidence === null) return true;
+  return (
+    averageConfidence >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN
+  );
+}
+
+function primaryConfidenceIsScorable(repWindow: RepWindow): boolean {
+  if (repWindow.frameCount === 0) return false;
+  const lowRate = repWindow.lowConfidenceFrames / repWindow.frameCount;
+  return lowRate <= FORM_THRESHOLDS.LOW_CONFIDENCE_MAX_RATE;
+}
+
+function isLyingLegCurlRepScorable(repWindow: RepWindow): boolean {
+  return sideViewIsScorable(repWindow) && primaryConfidenceIsScorable(repWindow);
+}
+
+function lyingLegCurlQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
+  const warnings: FrameworkRepResult['qualityWarnings'] = [];
+  if (!sideViewIsScorable(repWindow)) warnings.push('side_view_uncertain');
+  if (!primaryConfidenceIsScorable(repWindow)) warnings.push('missing_required_joints');
+  return warnings;
+}
+
+function buildLyingLegCurlViewQuality(repWindow: RepWindow): RepViewQualityDiagnostic {
+  const averageConfidence = averageSideViewConfidence(repWindow);
+  const hasEnoughSamples =
+    repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES &&
+    averageConfidence !== null;
+  const sideConfirmed = Boolean(
+    hasEnoughSamples &&
+    averageConfidence! >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN,
+  );
+  const frontishConfirmed = Boolean(hasEnoughSamples && !sideConfirmed);
+  return {
+    status: sideConfirmed
+      ? 'side_confirmed'
+      : frontishConfirmed
+        ? 'frontish_confirmed'
+        : 'view_unknown',
+    sideConfirmed,
+    frontishConfirmed,
+    viewUnknown: !sideConfirmed && !frontishConfirmed,
+    averageSideViewConfidence: averageConfidence,
+    minSideViewConfidence: repWindow.sideViewConfidenceSamples > 0
+      ? repWindow.sideViewConfidenceMin
+      : null,
+    sampleCount: repWindow.sideViewConfidenceSamples,
+  };
+}
+
 function computeLyingLegCurlScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM -- flexion: ideal minRatio is 0.45 or below. Excess = max(0, minRatio - 0.45)
-  const flexionExcess = Math.max(0, repWindow.minRatio - 0.45);
+  // 1. ROM -- flexion: ideal minRatio is configurable. Excess = max(0, minRatio - ideal)
+  const flexionExcess = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.FLEXION_IDEAL_RATIO);
   penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
 
-  // 2. ROM -- extension: ideal maxRatio is 0.96+. Shortfall = max(0, 0.96 - maxRatio)
-  const extensionShortfall = Math.max(0, 0.96 - repWindow.maxRatio);
+  // 2. ROM -- extension: ideal maxRatio is configurable. Shortfall = max(0, ideal - maxRatio)
+  const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_IDEAL_RATIO - repWindow.maxRatio);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
-  // 3. Hip lift (hip angle delta -- already camera-invariant)
-  penalties.push({ value: repWindow.maxHipDelta, config: PENALTY_CONFIGS.HIP_LIFT });
+  if (hasKneeAngleSamples(repWindow)) {
+    const kneeFlexionExcess = Math.max(0, repWindow.minKneeAngle - FORM_THRESHOLDS.KNEE_FLEXION_IDEAL);
+    penalties.push({ value: kneeFlexionExcess, config: PENALTY_CONFIGS.KNEE_FLEXION_ROM });
 
-  // 4. Tempo
+    const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.maxKneeAngle);
+    penalties.push({ value: kneeExtensionShortfall, config: PENALTY_CONFIGS.KNEE_EXTENSION_ROM });
+  }
+
+  // 3. Hip lift (hip angle delta + normalized vertical hip rise)
+  penalties.push({ value: repWindow.maxHipDelta, config: PENALTY_CONFIGS.HIP_LIFT });
+  penalties.push({ value: repWindow.maxHipRiseRatio, config: PENALTY_CONFIGS.HIP_RISE });
+  penalties.push({ value: repWindow.maxThighDriftRatio, config: PENALTY_CONFIGS.THIGH_MOVEMENT });
+
+  const hold = topHoldSeconds(repWindow);
+  if (hold !== null && hold < FORM_THRESHOLDS.TOP_HOLD_MIN) {
+    const deficit = FORM_THRESHOLDS.TOP_HOLD_MIN - hold;
+    penalties.push({ value: deficit, config: PENALTY_CONFIGS.TOP_HOLD });
+  }
+
+  // 4. Tempo and jerk/bounce
   if (repWindow.tCurled !== null) {
     const tCurl = repWindow.tCurled - repWindow.tStart;    // concentric (curl up)
     const tLower = repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled); // eccentric (lower down)
@@ -494,6 +1073,15 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
     }
   }
 
+  const spikeRatio = velocitySpikeRatio(repWindow);
+  const jerkExcess = Math.max(
+    spikeRatio !== null ? spikeRatio - FORM_THRESHOLDS.TEMPO_JERK_SPIKE_WARN : 0,
+    repWindow.maxCurlVelocity - FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN,
+    repWindow.maxLowerVelocity - FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN,
+    0,
+  );
+  penalties.push({ value: jerkExcess, config: PENALTY_CONFIGS.TEMPO_JERK });
+
   return computeScore(penalties);
 }
 
@@ -505,18 +1093,26 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
 
   // 1. Flexion ROM -- didn't curl far enough (minRatio too high)
-  if (repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL) {
-    messages.push('Curl higher \u2014 bring your heels closer to your glutes.');
+  if (curlDepthShort(repWindow)) {
+    messages.push(FEEDBACK.CURL_SHORT);
   }
 
   // 2. Extension ROM -- didn't straighten fully (maxRatio too low)
-  if (repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL) {
-    messages.push('Extend fully \u2014 straighten your legs at the bottom.');
+  if (extensionShort(repWindow)) {
+    messages.push(FEEDBACK.EXTEND_SHORT);
   }
 
   // 3. Hip lift
-  if (repWindow.maxHipDelta > FORM_THRESHOLDS.HIP_LIFT_WARN) {
-    messages.push('Keep your hips down \u2014 avoid lifting off the pad.');
+  if (hipLiftTriggered(repWindow)) {
+    messages.push(FEEDBACK.HIP_LIFT);
+  }
+
+  if (thighMovementTriggered(repWindow)) {
+    messages.push(FEEDBACK.THIGH_MOVEMENT);
+  }
+
+  if (topHoldShort(repWindow)) {
+    messages.push(FEEDBACK.TOP_HOLD);
   }
 
   // 4. Tempo
@@ -525,29 +1121,419 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     const tLower = repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled);
 
     if (tCurl > 0 && tCurl < FORM_THRESHOLDS.TEMPO_CURL_MIN) {
-      messages.push('Slow down the curl \u2014 control the contraction.');
+      messages.push(FEEDBACK.TEMPO_CURL);
     }
     if (tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN) {
-      messages.push('Control the descent \u2014 lower the weight slowly.');
+      messages.push(FEEDBACK.TEMPO_LOWER);
     }
   }
 
+  if (tempoJerkTriggered(repWindow)) {
+    messages.push(FEEDBACK.TEMPO_JERK);
+  }
+
+  if (!sideViewIsScorable(repWindow)) {
+    messages.push(FEEDBACK.SIDE_VIEW);
+  }
+
   return messages;
+}
+
+function buildLyingLegCurlDiagnostics(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+  scorable: boolean,
+): FrameworkRepResult['diagnostics'] {
+  const hasTempo = repWindow.tCurled !== null;
+  const tCurl = repWindow.tCurled !== null ? repWindow.tCurled - repWindow.tStart : null;
+  const tLower = repWindow.tCurled !== null ? repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled) : null;
+  const hasKnee = hasKneeAngleSamples(repWindow);
+  const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES;
+  const sideViewConfidence = averageSideViewConfidence(repWindow);
+  const spikeRatio = velocitySpikeRatio(repWindow);
+  const hold = topHoldSeconds(repWindow);
+  const viewQuality = buildLyingLegCurlViewQuality(repWindow);
+  const distalEndpoint = mostUsedDistalEndpoint(repWindow);
+  return buildRepDiagnostics({
+    exerciseName: 'Lying Leg Curl',
+    repIndex,
+    scorable,
+    view: viewQuality.sideConfirmed ? 'side' : viewQuality.frontishConfirmed ? 'front' : 'unknown',
+    selectedSide: visibleSide,
+    viewQuality,
+    metrics: [
+      diagnosticMetric('curlDepthRatio', repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
+      diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
+      diagnosticLabelMetric('distalEndpoint', distalEndpoint, {
+        sampleCount: Object.values(repWindow.distalEndpointCounts).reduce((sum, count) => sum + count, 0),
+        skippedReason: 'distal_endpoint_unavailable',
+      }),
+      diagnosticMetric('kneeFlexionAngle', hasKnee ? repWindow.minKneeAngle : null, {
+        unit: 'degrees',
+        eligible: hasKnee,
+        confidence: averageKneeAngleConfidence(repWindow) ?? undefined,
+        sampleCount: repWindow.kneeAngleSampleCount,
+        skippedReason: 'insufficient_knee_angle_samples',
+      }),
+      diagnosticMetric('kneeExtensionAngle', hasKnee ? repWindow.maxKneeAngle : null, {
+        unit: 'degrees',
+        eligible: hasKnee,
+        confidence: averageKneeAngleConfidence(repWindow) ?? undefined,
+        sampleCount: repWindow.kneeAngleSampleCount,
+        skippedReason: 'insufficient_knee_angle_samples',
+      }),
+      diagnosticMetric('hipDelta', repWindow.maxHipDelta, { unit: 'degrees' }),
+      diagnosticMetric('hipRiseRatio', repWindow.maxHipRiseRatio, {
+        unit: 'ratio',
+        eligible: repWindow.hipRiseSampleCount > 0,
+        sampleCount: repWindow.hipRiseSampleCount,
+        skippedReason: 'insufficient_hip_rise_samples',
+      }),
+      diagnosticMetric('thighDriftRatio', repWindow.maxThighDriftRatio, {
+        unit: 'ratio',
+        eligible: repWindow.thighDriftSampleCount > 0,
+        sampleCount: repWindow.thighDriftSampleCount,
+        skippedReason: 'insufficient_thigh_drift_samples',
+      }),
+      diagnosticMetric('topHoldSeconds', hold, {
+        unit: 'seconds',
+        eligible: hold !== null,
+        skippedReason: 'curled_position_not_detected',
+      }),
+      diagnosticMetric('tCurl', tCurl, { unit: 'seconds', eligible: hasTempo, skippedReason: 'curled_position_not_detected' }),
+      diagnosticMetric('tLower', tLower, { unit: 'seconds', eligible: hasTempo, skippedReason: 'curled_position_not_detected' }),
+      diagnosticMetric('velocitySpikeRatio', spikeRatio, {
+        eligible: spikeRatio !== null,
+        sampleCount: repWindow.velocitySamples,
+        skippedReason: 'insufficient_velocity_samples',
+      }),
+      diagnosticMetric('maxCurlVelocity', repWindow.maxCurlVelocity),
+      diagnosticMetric('maxLowerVelocity', repWindow.maxLowerVelocity),
+      diagnosticMetric('sideViewConfidence', sideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('sideViewConfidenceMin', viewQuality.minSideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+    ],
+    cues: [
+      diagnosticCue({
+        issueId: 'lying-leg-curl.rom_curl_short',
+        metricKeys: ['curlDepthRatio', 'kneeFlexionAngle'],
+        direction: 'above',
+        value: repWindow.minRatio,
+        thresholdPath: ['formThresholds.FLEXION_FAIL', 'formThresholds.KNEE_FLEXION_FAIL'],
+        thresholdValue: {
+          FLEXION_FAIL: FORM_THRESHOLDS.FLEXION_FAIL,
+          KNEE_FLEXION_FAIL: FORM_THRESHOLDS.KNEE_FLEXION_FAIL,
+        },
+        triggered: curlDepthShort(repWindow),
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.rom_extend_short',
+        metricKeys: ['extensionRatio', 'kneeExtensionAngle'],
+        direction: 'below',
+        value: repWindow.maxRatio,
+        thresholdPath: ['formThresholds.EXTENSION_FAIL', 'formThresholds.KNEE_EXTENSION_FAIL'],
+        thresholdValue: {
+          EXTENSION_FAIL: FORM_THRESHOLDS.EXTENSION_FAIL,
+          KNEE_EXTENSION_FAIL: FORM_THRESHOLDS.KNEE_EXTENSION_FAIL,
+        },
+        triggered: extensionShort(repWindow),
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.hip_lift',
+        metricKeys: ['hipDelta', 'hipRiseRatio'],
+        direction: 'above',
+        value: repWindow.maxHipDelta,
+        thresholdPath: ['formThresholds.HIP_LIFT_WARN', 'formThresholds.HIP_RISE_RATIO_WARN'],
+        thresholdValue: {
+          HIP_LIFT_WARN: FORM_THRESHOLDS.HIP_LIFT_WARN,
+          HIP_RISE_RATIO_WARN: FORM_THRESHOLDS.HIP_RISE_RATIO_WARN,
+        },
+        triggered: hipLiftTriggered(repWindow),
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.thigh_movement',
+        metricKeys: ['thighDriftRatio'],
+        direction: 'above',
+        value: repWindow.maxThighDriftRatio,
+        thresholdPath: 'formThresholds.THIGH_DRIFT_RATIO_WARN',
+        thresholdValue: FORM_THRESHOLDS.THIGH_DRIFT_RATIO_WARN,
+        eligible: repWindow.thighDriftSampleCount > 0,
+        triggered: thighMovementTriggered(repWindow),
+        skippedReason: 'insufficient_thigh_drift_samples',
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.top_hold_short',
+        metricKeys: ['topHoldSeconds'],
+        direction: 'below',
+        value: hold,
+        thresholdPath: 'formThresholds.TOP_HOLD_MIN',
+        thresholdValue: FORM_THRESHOLDS.TOP_HOLD_MIN,
+        eligible: hold !== null,
+        triggered: topHoldShort(repWindow),
+        skippedReason: 'curled_position_not_detected',
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.tempo_up',
+        metricKeys: ['tCurl'],
+        direction: 'below',
+        value: tCurl,
+        thresholdPath: 'formThresholds.TEMPO_CURL_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_CURL_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tCurl !== null && tCurl > 0 && tCurl < FORM_THRESHOLDS.TEMPO_CURL_MIN,
+        skippedReason: 'curled_position_not_detected',
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.tempo_down',
+        metricKeys: ['tLower'],
+        direction: 'below',
+        value: tLower,
+        thresholdPath: 'formThresholds.TEMPO_LOWER_MIN',
+        thresholdValue: FORM_THRESHOLDS.TEMPO_LOWER_MIN,
+        eligible: hasTempo,
+        triggered: hasTempo && tLower !== null && tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN,
+        skippedReason: 'curled_position_not_detected',
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.tempo_jerk',
+        metricKeys: ['velocitySpikeRatio', 'maxCurlVelocity', 'maxLowerVelocity'],
+        direction: 'above',
+        value: spikeRatio,
+        thresholdPath: ['formThresholds.TEMPO_JERK_SPIKE_WARN', 'formThresholds.TEMPO_JERK_VELOCITY_WARN'],
+        thresholdValue: {
+          TEMPO_JERK_SPIKE_WARN: FORM_THRESHOLDS.TEMPO_JERK_SPIKE_WARN,
+          TEMPO_JERK_VELOCITY_WARN: FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN,
+        },
+        eligible: spikeRatio !== null,
+        triggered: tempoJerkTriggered(repWindow),
+        skippedReason: 'insufficient_velocity_samples',
+      }),
+      diagnosticCue({
+        issueId: 'lying-leg-curl.side_view_uncertain',
+        metricKeys: ['sideViewConfidence'],
+        direction: 'below',
+        value: sideViewConfidence,
+        thresholdPath: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+        thresholdValue: FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN,
+        eligible: hasSideViewConfidence,
+        triggered: hasSideViewConfidence && !sideViewIsScorable(repWindow),
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+    ],
+  });
 }
 
 // ============================================================================
 // UPDATE LOGIC
 // ============================================================================
 
+interface RepFrameMetrics {
+  ratio: number;
+  fastRatio: number;
+  velocityRatio: number;
+  kneeAngle: number | null;
+  kneeConfidence: number;
+  hipAngle: number | null;
+  hipConfidence: number;
+  ratioConfidence: number;
+  hipY: number | null;
+  legChainLength: number | null;
+  thighVector: Point2D | null;
+  distalEndpoint: DistalEndpointName | null;
+  sideViewConfidence: number | null;
+  phase: LyingLegCurlPhase;
+  t: number;
+}
+
+function refreshRepWindowMetrics(window: RepWindow): void {
+  const minRatio = robustLow(window.ratioSamples);
+  const maxRatio = robustHigh(window.ratioSamples);
+  if (minRatio !== null) window.minRatio = minRatio;
+  if (maxRatio !== null) window.maxRatio = maxRatio;
+
+  const minKneeAngle = robustLow(window.kneeAngleSamples);
+  const maxKneeAngle = robustHigh(window.kneeAngleSamples);
+  if (minKneeAngle !== null) window.minKneeAngle = minKneeAngle;
+  if (maxKneeAngle !== null) window.maxKneeAngle = maxKneeAngle;
+
+  const maxHipDelta = robustHigh(window.hipDeltaSamples);
+  if (maxHipDelta !== null) window.maxHipDelta = maxHipDelta;
+
+  const maxHipRiseRatio = robustHigh(window.hipRiseRatioSamples);
+  if (maxHipRiseRatio !== null) window.maxHipRiseRatio = maxHipRiseRatio;
+
+  const maxThighDriftRatio = robustHigh(window.thighDriftRatioSamples);
+  if (maxThighDriftRatio !== null) window.maxThighDriftRatio = maxThighDriftRatio;
+
+  const maxVelocity = robustHigh(window.velocitySampleValues);
+  if (maxVelocity !== null) window.maxVelocity = maxVelocity;
+
+  const maxCurlVelocity = robustHigh(window.curlVelocitySampleValues);
+  if (maxCurlVelocity !== null) window.maxCurlVelocity = maxCurlVelocity;
+
+  const maxLowerVelocity = robustHigh(window.lowerVelocitySampleValues);
+  if (maxLowerVelocity !== null) window.maxLowerVelocity = maxLowerVelocity;
+}
+
+function updateRepWindowMetrics(window: RepWindow, sample: RepFrameMetrics): void {
+  window.tEnd = sample.t;
+  window.frameCount++;
+  window.ratioSamples.push(sample.ratio);
+  window.minRatio = Math.min(window.minRatio, sample.ratio);
+  window.maxRatio = Math.max(window.maxRatio, sample.ratio);
+  if (sample.distalEndpoint) {
+    window.distalEndpointCounts[sample.distalEndpoint]++;
+  }
+
+  const lowConfidenceSample =
+    sample.ratioConfidence < FORM_THRESHOLDS.PRIMARY_CONFIDENCE_MIN ||
+    sample.kneeConfidence < FORM_THRESHOLDS.PRIMARY_CONFIDENCE_MIN ||
+    sample.hipConfidence < FORM_THRESHOLDS.PRIMARY_CONFIDENCE_MIN ||
+    sample.kneeAngle === null;
+  if (lowConfidenceSample) {
+    window.lowConfidenceFrames++;
+  }
+
+  if (sample.kneeAngle !== null && sample.kneeConfidence >= FORM_CONFIDENCE_MIN) {
+    window.kneeAngleSamples.push(sample.kneeAngle);
+    window.minKneeAngle = Math.min(window.minKneeAngle, sample.kneeAngle);
+    window.maxKneeAngle = Math.max(window.maxKneeAngle, sample.kneeAngle);
+    window.kneeAngleSampleCount++;
+    window.kneeAngleConfidenceSum += sample.kneeConfidence;
+  }
+
+  if (sample.hipAngle !== null && sample.hipConfidence >= FORM_CONFIDENCE_MIN) {
+    if (window.hipAngleBaseline === null) {
+      window.hipAngleBaseline = sample.hipAngle;
+    }
+    const delta = Math.abs(sample.hipAngle - window.hipAngleBaseline);
+    window.hipDeltaSamples.push(delta);
+    window.maxHipDelta = Math.max(window.maxHipDelta, delta);
+  }
+
+  if (sample.hipY !== null && sample.hipConfidence >= FORM_CONFIDENCE_MIN) {
+    if (window.hipYBaseline === null) {
+      window.hipYBaseline = sample.hipY;
+    }
+    const hipRise = calculateHipRiseRatio(sample.hipY, window.hipYBaseline, sample.legChainLength);
+    if (hipRise !== null) {
+      window.hipRiseRatioSamples.push(hipRise);
+      window.maxHipRiseRatio = Math.max(window.maxHipRiseRatio, hipRise);
+      window.hipRiseSampleCount++;
+    }
+  }
+
+  if (sample.thighVector !== null && sample.kneeConfidence >= FORM_CONFIDENCE_MIN) {
+    if (window.thighVectorBaseline === null) {
+      window.thighVectorBaseline = sample.thighVector;
+    }
+    const drift = calculateThighDriftRatio(
+      sample.thighVector,
+      window.thighVectorBaseline,
+      sample.legChainLength,
+    );
+    if (drift !== null) {
+      window.thighDriftRatioSamples.push(drift);
+      window.maxThighDriftRatio = Math.max(window.maxThighDriftRatio, drift);
+      window.thighDriftSampleCount++;
+    }
+  }
+
+  if (sample.sideViewConfidence !== null) {
+    window.sideViewConfidenceSamples++;
+    window.sideViewConfidenceSum += sample.sideViewConfidence;
+    window.sideViewConfidenceMin = Math.min(window.sideViewConfidenceMin, sample.sideViewConfidence);
+  }
+
+  if (window.lastRatioForVelocity !== null && window.lastRatioVelocityAt !== null) {
+    const dt = sample.t - window.lastRatioVelocityAt;
+    if (dt > 0) {
+      const delta = sample.velocityRatio - window.lastRatioForVelocity;
+      const velocity = Math.abs(delta) / dt;
+      if (velocity >= FORM_THRESHOLDS.VELOCITY_SAMPLE_MIN) {
+        window.velocitySamples++;
+        window.velocitySum += velocity;
+        window.velocitySampleValues.push(velocity);
+        window.maxVelocity = Math.max(window.maxVelocity, velocity);
+        if (delta < 0) {
+          window.curlVelocitySampleValues.push(velocity);
+          window.maxCurlVelocity = Math.max(window.maxCurlVelocity, velocity);
+        } else if (delta > 0) {
+          window.lowerVelocitySampleValues.push(velocity);
+          window.maxLowerVelocity = Math.max(window.maxLowerVelocity, velocity);
+        }
+      }
+      if (
+        sample.phase === 'CURLED' &&
+        sample.fastRatio <= FORM_THRESHOLDS.FLEXION_FAIL &&
+        velocity <= FORM_THRESHOLDS.TOP_HOLD_VELOCITY_MAX
+      ) {
+        window.topHoldSeconds += dt;
+      }
+    }
+  }
+  window.lastRatioForVelocity = sample.velocityRatio;
+  window.lastRatioVelocityAt = sample.t;
+  refreshRepWindowMetrics(window);
+}
+
+function completeRep(
+  state: LyingLegCurlState,
+  window: RepWindow,
+  visibleSide: 'left' | 'right',
+  cleanFeedback: string,
+  t: number,
+): void {
+  state.repCount++;
+  const score = computeLyingLegCurlScore(window);
+  const formMessages = generateFormMessages(window);
+  const scorable = isLyingLegCurlRepScorable(window);
+  const qualityWarnings = lyingLegCurlQualityWarnings(window);
+  const messages = !scorable && qualityWarnings?.includes('side_view_uncertain')
+    ? [FEEDBACK.SIDE_VIEW]
+    : !scorable && qualityWarnings?.includes('missing_required_joints')
+      ? [FEEDBACK.TRACKING_SETUP]
+      : formMessages;
+
+  state.lastRepResult = {
+    repIndex: state.repCount,
+    score,
+    messages,
+    scorable,
+    qualityWarnings,
+    diagnostics: buildLyingLegCurlDiagnostics(window, state.repCount, visibleSide, scorable),
+  };
+
+  if (messages.length > 0) {
+    state.feedback = messages.join('\n');
+  } else {
+    state.feedback = cleanFeedback;
+  }
+  state.lastFeedbackTime = t;
+}
+
 function updateLyingLegCurlState(
   keypoints: Keypoint[],
-  currentState: LyingLegCurlState
+  currentState: LyingLegCurlState,
+  frameContext?: ExerciseFrameContext,
 ): LyingLegCurlState {
   const t = Date.now() / 1000;
+  const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate
   if (!currentState.warmedUp) {
-    const ready = currentState.warmupGate.update(keypoints);
+    const ready = currentState.warmupGate.update(signalKeypoints);
     if (!ready) {
       return currentState;
     }
@@ -557,17 +1543,26 @@ function updateLyingLegCurlState(
   // Select visible side in REST, then lock it through the active rep so
   // transient confidence changes do not splice two legs into one rep.
   const inActiveRep = currentState.fsm.phase !== 'REST';
-  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(signalKeypoints);
 
   // Calculate raw ratio and hip angle
-  const rawRatio = calculateKneeRatio(keypoints, visibleSide);
-  const rawHip = calculateHipAngle(keypoints, visibleSide);
-  const ratioConf = minKeypointConfidence(keypoints, [
-    `${visibleSide}_hip`, `${visibleSide}_knee`, `${visibleSide}_ankle`,
+  const distalEndpoint = selectDistalEndpoint(signalKeypoints, visibleSide);
+  const rawRatio = calculateKneeRatio(signalKeypoints, visibleSide, distalEndpoint);
+  const rawKneeAngle = calculateKneeAngle(signalKeypoints, visibleSide, distalEndpoint);
+  const rawHip = calculateHipAngle(signalKeypoints, visibleSide);
+  const ratioConf = minKeypointConfidence(signalKeypoints, [
+    `${visibleSide}_hip`, `${visibleSide}_knee`,
   ]);
-  const hipConf = minKeypointConfidence(keypoints, [
+  const distalConf = distalEndpoint?.keypoint.score ?? 0;
+  const primaryRatioConf = Math.min(ratioConf, distalConf);
+  const kneeConf = primaryRatioConf;
+  const hipConf = minKeypointConfidence(signalKeypoints, [
     `${visibleSide}_shoulder`, `${visibleSide}_hip`, `${visibleSide}_knee`,
   ]);
+  const hip = visibleKeypoint(signalKeypoints, `${visibleSide}_hip`, FORM_CONFIDENCE_MIN);
+  const legChainLength = calculateLegChainLength(signalKeypoints, visibleSide, distalEndpoint);
+  const thighVector = calculateThighVector(signalKeypoints, visibleSide);
+  const sideViewConfidence = calculateSideViewConfidence(frameContext?.imageKeypoints ?? signalKeypoints);
 
   // If we can't even compute the ratio, bail out
   if (rawRatio === null) {
@@ -576,12 +1571,14 @@ function updateLyingLegCurlState(
       visibleSide,
       smoothedRatio: null,
       fastRatio: null,
+      currentKneeAngle: null,
+      currentHipRiseRatio: null,
       smoothedHip: null,
     };
   }
 
   // Smooth values through tracker pipeline
-  const smoothedRatio = currentState.ratioTracker.push(rawRatio, ratioConf);
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio, primaryRatioConf);
   const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedHip = rawHip !== null
     ? currentState.hipTracker.push(rawHip, hipConf)
@@ -592,6 +1589,8 @@ function updateLyingLegCurlState(
     visibleSide,
     smoothedRatio,
     fastRatio: isNaN(fastRatio) ? null : fastRatio,
+    currentKneeAngle: rawKneeAngle,
+    currentHipRiseRatio: null,
     smoothedHip: isNaN(smoothedHip) ? null : smoothedHip,
   };
 
@@ -603,19 +1602,82 @@ function updateLyingLegCurlState(
   const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
 
+  if (newState.fsm.phase === 'REST' && !fsmResult.repCompleted && !isNaN(smoothedRatio)) {
+    newState.restMaxRatio = Math.max(newState.restMaxRatio, smoothedRatio);
+    newState.restRatioSamples = [...newState.restRatioSamples, smoothedRatio]
+      .slice(-THRESHOLDS.REST_SAMPLE_WINDOW_FRAMES);
+    if (rawKneeAngle !== null && kneeConf >= FORM_CONFIDENCE_MIN) {
+      newState.restMaxKneeAngle = Math.max(newState.restMaxKneeAngle, rawKneeAngle);
+      newState.restKneeAngleSamples = [...newState.restKneeAngleSamples, rawKneeAngle]
+        .slice(-THRESHOLDS.REST_SAMPLE_WINDOW_FRAMES);
+    }
+  }
+
+  // Track rep window while actively in a rep (not REST)
+  const inRep = newState.fsm.phase !== 'REST';
+  if (inRep && !currentState.repWindow) {
+    newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio, rawKneeAngle);
+    newState.repWindow.ratioSamples.push(...currentState.restRatioSamples);
+    newState.repWindow.kneeAngleSamples.push(...currentState.restKneeAngleSamples);
+    newState.repWindow.kneeAngleSampleCount += currentState.restKneeAngleSamples.length;
+    newState.repWindow.kneeAngleConfidenceSum += currentState.restKneeAngleSamples.length * FORM_CONFIDENCE_MIN;
+    if (currentState.restMaxRatio !== -Infinity) {
+      newState.repWindow.maxRatio = currentState.restMaxRatio;
+    }
+    if (currentState.restMaxKneeAngle !== -Infinity) {
+      newState.repWindow.maxKneeAngle = currentState.restMaxKneeAngle;
+    }
+    newState.restMaxRatio = -Infinity;
+    newState.restMaxKneeAngle = -Infinity;
+    newState.restRatioSamples = [];
+    newState.restKneeAngleSamples = [];
+  }
+
   const returnedPartial =
     currentState.fsm.phase === 'CURLING' &&
     newState.fsm.phase === 'REST' &&
     !fsmResult.repCompleted &&
     newState.repWindow !== null;
 
+  if (
+    currentState.fsm.phase === 'CURLED' &&
+    newState.fsm.phase === 'LOWERING' &&
+    newState.repWindow?.tLowerStart === null
+  ) {
+    newState.repWindow.tLowerStart = t;
+  }
+
+  if (newState.repWindow && (inRep || fsmResult.repCompleted || returnedPartial)) {
+    const hipRiseRatio = hip && newState.repWindow.hipYBaseline !== null
+      ? calculateHipRiseRatio(hip.y, newState.repWindow.hipYBaseline, legChainLength)
+      : null;
+    newState.currentHipRiseRatio = hipRiseRatio;
+    updateRepWindowMetrics(newState.repWindow, {
+      ratio: smoothedRatio,
+      fastRatio,
+      velocityRatio: rawRatio,
+      kneeAngle: rawKneeAngle,
+      kneeConfidence: kneeConf,
+      hipAngle: isNaN(smoothedHip) ? null : smoothedHip,
+      hipConfidence: hipConf,
+      ratioConfidence: primaryRatioConf,
+      hipY: hip?.y ?? null,
+      legChainLength,
+      thighVector,
+      distalEndpoint: distalEndpoint?.name ?? null,
+      sideViewConfidence,
+      phase: newState.fsm.phase,
+      t,
+    });
+
+    // Record curled timestamp
+    if (newState.fsm.phase === 'CURLED' && newState.repWindow.tCurled === null) {
+      newState.repWindow.tCurled = t;
+    }
+  }
+
   if (returnedPartial && newState.repWindow) {
     const window = newState.repWindow;
-    window.tEnd = t;
-    if (!isNaN(smoothedRatio)) {
-      window.minRatio = Math.min(window.minRatio, smoothedRatio);
-      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
-    }
     const actualRom = window.maxRatio - window.minRatio;
     const duration = window.tEnd - window.tStart;
 
@@ -625,16 +1687,7 @@ function updateLyingLegCurlState(
       duration,
       minDuration: THRESHOLDS.MIN_REP_TIME,
     })) {
-      newState.repCount++;
-      const score = computeLyingLegCurlScore(window);
-      const messages = generateFormMessages(window);
-      newState.lastRepResult = {
-        repIndex: newState.repCount,
-        score,
-        messages,
-      };
-      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
-      newState.lastFeedbackTime = t;
+      completeRep(newState, window, visibleSide, 'Good rep.', t);
     } else if (actualRom > 0) {
       newState.feedback = LOW_ROM_FEEDBACK;
       newState.lastFeedbackTime = t;
@@ -645,80 +1698,9 @@ function updateLyingLegCurlState(
     return newState;
   }
 
-  if (newState.fsm.phase === 'REST' && !isNaN(smoothedRatio)) {
-    newState.restMaxRatio = Math.max(newState.restMaxRatio, smoothedRatio);
-  }
-
-  // Track rep window while actively in a rep (not REST)
-  const inRep = newState.fsm.phase !== 'REST';
-  if (inRep && !currentState.repWindow) {
-    newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio);
-    if (currentState.restMaxRatio !== -Infinity) {
-      newState.repWindow.maxRatio = currentState.restMaxRatio;
-    }
-    newState.restMaxRatio = -Infinity;
-  }
-
-  if (newState.repWindow && inRep) {
-    const window = newState.repWindow;
-    window.tEnd = t;
-    window.frameCount++;
-
-    // Update ratio min/max
-    if (!isNaN(smoothedRatio)) {
-      window.minRatio = Math.min(window.minRatio, smoothedRatio);
-      window.maxRatio = Math.max(window.maxRatio, smoothedRatio);
-    }
-
-    // Track hip angle delta from baseline
-    if (!isNaN(smoothedHip) && hipConf >= FORM_CONFIDENCE_MIN) {
-      if (window.hipAngleBaseline === null) {
-        window.hipAngleBaseline = smoothedHip;
-      }
-      const delta = Math.abs(smoothedHip - window.hipAngleBaseline);
-      window.maxHipDelta = Math.max(window.maxHipDelta, delta);
-    }
-
-    // Record curled timestamp
-    if (newState.fsm.phase === 'CURLED' && window.tCurled === null) {
-      window.tCurled = t;
-    }
-
-    if (
-      currentState.fsm.phase === 'CURLED' &&
-      window.minRatio <= FORM_THRESHOLDS.FLEXION_FAIL &&
-      fastRatio > FORM_THRESHOLDS.FLEXION_FAIL &&
-      window.tLowerStart === null
-    ) {
-      window.tLowerStart = t;
-    }
-  }
-
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
-    newState.repWindow.tEnd = t;
-    if (!isNaN(smoothedRatio)) {
-      newState.repWindow.minRatio = Math.min(newState.repWindow.minRatio, smoothedRatio);
-      newState.repWindow.maxRatio = Math.max(newState.repWindow.maxRatio, smoothedRatio);
-    }
-
-    newState.repCount++;
-
-    const score = computeLyingLegCurlScore(newState.repWindow);
-    const messages = generateFormMessages(newState.repWindow);
-
-    newState.lastRepResult = {
-      repIndex: newState.repCount,
-      score,
-      messages,
-    };
-
-    if (messages.length > 0) {
-      newState.feedback = messages.join('\n');
-    } else {
-      newState.feedback = 'Great rep!';
-    }
-    newState.lastFeedbackTime = t;
+    completeRep(newState, newState.repWindow, visibleSide, 'Great rep!', t);
 
     // Reset rep window and FSM
     newState.repWindow = null;
@@ -754,10 +1736,21 @@ function getDebugInfo(state: LyingLegCurlState): LyingLegCurlDebugInfo {
     warmedUp: state.warmedUp,
     ratio: fmtRatio(state.smoothedRatio),
     fastRatio: fmtRatio(state.fastRatio),
+    kneeAngle: fmt(state.currentKneeAngle),
     hipAngle: fmt(state.smoothedHip),
+    hipRiseRatio: fmtRatio(state.currentHipRiseRatio),
     ratioMin: repWin && repWin.minRatio !== Infinity ? fmtRatio(repWin.minRatio) : null,
     ratioMax: repWin && repWin.maxRatio !== -Infinity ? fmtRatio(repWin.maxRatio) : null,
+    kneeAngleMin: repWin && repWin.minKneeAngle !== Infinity ? fmt(repWin.minKneeAngle) : null,
+    kneeAngleMax: repWin && repWin.maxKneeAngle !== -Infinity ? fmt(repWin.maxKneeAngle) : null,
     hipDelta: repWin ? fmt(repWin.maxHipDelta) : null,
+    hipRiseMax: repWin ? fmtRatio(repWin.maxHipRiseRatio) : null,
+    thighDriftRatio: repWin ? fmtRatio(repWin.maxThighDriftRatio) : null,
+    distalEndpoint: repWin ? mostUsedDistalEndpoint(repWin) : null,
+    topHoldSeconds: repWin ? fmt(repWin.topHoldSeconds) : null,
+    velocitySpikeRatio: repWin ? fmt(velocitySpikeRatio(repWin)) : null,
+    sideViewConfidence: repWin ? fmt(averageSideViewConfidence(repWin)) : null,
+    scorable: repWin ? isLyingLegCurlRepScorable(repWin) : null,
   };
 }
 
@@ -782,11 +1775,11 @@ export function createLyingLegCurlDefinition(
     _internal: withLyingLegCurlConfig(config, () => initializeLyingLegCurlState()),
   }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+  update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
     const internal = state._internal as LyingLegCurlState;
     const newInternal = withLyingLegCurlConfig(
       config,
-      () => updateLyingLegCurlState(keypoints, internal),
+      () => updateLyingLegCurlState(keypoints, internal, frameContext),
     );
 
     // Map internal RepResult to framework RepResult
@@ -795,6 +1788,9 @@ export function createLyingLegCurlDefinition(
           repIndex: newInternal.lastRepResult.repIndex,
           score: newInternal.lastRepResult.score,
           messages: newInternal.lastRepResult.messages,
+          scorable: newInternal.lastRepResult.scorable,
+          qualityWarnings: newInternal.lastRepResult.qualityWarnings,
+          diagnostics: newInternal.lastRepResult.diagnostics,
         }
       : null;
 
@@ -817,17 +1813,41 @@ export function createLyingLegCurlDefinition(
 
   ttsConfig: {
     feedbackToIssue: {
-      'Curl higher \u2014 bring your heels closer to your glutes.': 'rom_curl_short',
-      'Extend fully \u2014 straighten your legs at the bottom.': 'rom_extend_short',
-      'Keep your hips down \u2014 avoid lifting off the pad.': 'hip_lift',
-      'Slow down the curl \u2014 control the contraction.': 'tempo_up',
-      'Control the descent \u2014 lower the weight slowly.': 'tempo_down',
+      [FEEDBACK.CURL_SHORT]: 'rom_curl_short',
+      [FEEDBACK.EXTEND_SHORT]: 'rom_extend_short',
+      [FEEDBACK.HIP_LIFT]: 'hip_lift',
+      [FEEDBACK.TEMPO_CURL]: 'tempo_up',
+      [FEEDBACK.TEMPO_LOWER]: 'tempo_down',
+      [FEEDBACK.TOP_HOLD]: 'top_hold_short',
+      [FEEDBACK.TEMPO_JERK]: 'tempo_jerk',
+      [FEEDBACK.SIDE_VIEW]: 'side_view_uncertain',
+      [FEEDBACK.THIGH_MOVEMENT]: 'thigh_movement',
     },
     feedbackMessages: {
-      'Keep your hips down \u2014 avoid lifting off the pad.': [
+      [FEEDBACK.HIP_LIFT]: [
         'Keep your hips down.',
         'Press your hips into the pad.',
         "Don't lift your hips during the curl.",
+      ],
+      [FEEDBACK.TOP_HOLD]: [
+        'Pause and squeeze at the top.',
+        'Hold the curl briefly.',
+        'Squeeze your hamstrings up top.',
+      ],
+      [FEEDBACK.TEMPO_JERK]: [
+        'Keep it smooth.',
+        'No bouncing the weight.',
+        'Smooth reps. Control the machine.',
+      ],
+      [FEEDBACK.SIDE_VIEW]: [
+        'Turn fully side-on.',
+        'Set the camera side-on.',
+        'I need a side view to judge this.',
+      ],
+      [FEEDBACK.THIGH_MOVEMENT]: [
+        'Keep your thighs down.',
+        'Only your lower legs should move.',
+        'Keep your knees pressed into the pad.',
       ],
     },
     issueDefinitions: [
@@ -858,20 +1878,64 @@ export function createLyingLegCurlDefinition(
           'Don\'t lift your hips.',
         ],
       },
+      {
+        issueType: 'top_hold_short',
+        priority: 18,
+        messages: [
+          'Pause at the top.',
+          'Squeeze briefly up top.',
+          'Hold the curl for a beat.',
+        ],
+      },
+      {
+        issueType: 'tempo_jerk',
+        priority: 22,
+        messages: [
+          'Keep it smooth.',
+          'No bouncing the weight.',
+          'Control the machine.',
+        ],
+      },
+      {
+        issueType: 'side_view_uncertain',
+        priority: 35,
+        messages: [
+          'Turn fully side-on.',
+          'Move the camera to your side.',
+          'I need a side view to judge this.',
+        ],
+      },
+      {
+        issueType: 'thigh_movement',
+        priority: 24,
+        messages: [
+          'Keep your thighs down.',
+          'Only your lower legs should move.',
+          'Keep your knees on the pad.',
+        ],
+      },
     ],
   },
 
   summaryConfig: {
-    'Curl higher \u2014 bring your heels closer to your glutes.':
+    [FEEDBACK.CURL_SHORT]:
       'Focus on curling your heels as close to your glutes as possible for full hamstring contraction.',
-    'Extend fully \u2014 straighten your legs at the bottom.':
+    [FEEDBACK.EXTEND_SHORT]:
       'Fully straighten your legs at the bottom of each rep to maximize range of motion.',
-    'Keep your hips down \u2014 avoid lifting off the pad.':
+    [FEEDBACK.HIP_LIFT]:
       'Press your hips into the pad throughout the movement \u2014 lifting uses momentum instead of hamstring strength.',
-    'Slow down the curl \u2014 control the contraction.':
+    [FEEDBACK.TEMPO_CURL]:
       'Control the concentric phase \u2014 aim for 1-2 seconds on the curl up.',
-    'Control the descent \u2014 lower the weight slowly.':
+    [FEEDBACK.TEMPO_LOWER]:
       'Slow the eccentric phase \u2014 resist the weight on the way down for 2-3 seconds.',
+    [FEEDBACK.TOP_HOLD]:
+      'Pause briefly at peak flexion and squeeze your hamstrings before lowering.',
+    [FEEDBACK.TEMPO_JERK]:
+      'Move smoothly through the rep instead of bouncing or letting the machine yank your legs.',
+    [FEEDBACK.SIDE_VIEW]:
+      'Set the camera fully side-on so your hip, knee, and ankle path can be judged accurately.',
+    [FEEDBACK.THIGH_MOVEMENT]:
+      'Keep your thighs pinned to the pad so the hamstrings move the weight instead of your hips or knees.',
   },
   };
 }

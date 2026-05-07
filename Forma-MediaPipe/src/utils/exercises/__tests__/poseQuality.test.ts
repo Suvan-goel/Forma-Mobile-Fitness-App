@@ -188,6 +188,24 @@ describe('PoseQualityTracker', () => {
     expect(message).toBe('Move the camera back.');
   });
 
+  it('maps side-view uncertainty to generic setup guidance', () => {
+    const message = getPoseQualityMessage({
+      status: 'medium',
+      warnings: ['side_view_uncertain'],
+    });
+
+    expect(message).toBe('Turn side-on so I can judge your form.');
+  });
+
+  it('maps front-view uncertainty to lateral raise setup guidance', () => {
+    const message = getPoseQualityMessage({
+      status: 'medium',
+      warnings: ['front_view_uncertain'],
+    });
+
+    expect(message).toBe('Face the camera so I can judge your lateral raise.');
+  });
+
   it('recovers confidence after the user re-enters frame', () => {
     const tracker = new PoseQualityTracker();
     settleTracker(tracker, Array.from({ length: 18 }, () => []));

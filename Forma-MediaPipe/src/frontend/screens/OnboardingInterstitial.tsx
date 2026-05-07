@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: CARD_RADIUS,
     backgroundColor: 'rgba(23, 27, 30, 0.78)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.115)',
     ...CARD_SHADOW,
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   metricsCard: {
     alignSelf: 'stretch',
     backgroundColor: 'rgba(23, 27, 30, 0.84)',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.065)',
     borderTopColor: 'rgba(255, 255, 255, 0.115)',
     borderRadius: CARD_RADIUS,

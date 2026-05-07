@@ -18,6 +18,11 @@ import {
 } from '../dataset';
 import { replayRecording } from '../replay';
 import '../definitions/register';
+import { cablePushdownDefinition } from '../definitions/cablePushdown';
+import { cableRowDefinition } from '../definitions/cableRow';
+import { legExtensionsDefinition } from '../definitions/legExtensions';
+import { machineAbCrunchDefinition } from '../definitions/machineAbCrunch';
+import { squatDefinition } from '../definitions/squat';
 import { ExerciseRegistry } from '../ExerciseRegistry';
 import type {
   DatasetCase,
@@ -214,6 +219,222 @@ describe('heuristic config helpers', () => {
     ]);
     expect(spec.tunables[0]).toMatchObject({ min: 0.72, max: 0.88, step: 0.01 });
   });
+
+  it('validates the default squat heuristic config', () => {
+    expect(squatDefinition.validateHeuristicConfig?.(squatDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('rejects invalid squat threshold ordering with clear messages', () => {
+    const base = squatDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.BOTTOM_ENTER', 0.86);
+    const invalidDepth = setConfigValue(base, 'formThresholds.THIGH_DEPTH_WARN', 30);
+    const invalidTorso = setConfigValue(base, 'formThresholds.TORSO_LEAN_DELTA_WARN', 20);
+    const invalidRom = setConfigValue(base, 'thresholds.MIN_PARTIAL_ROM', 0.2);
+
+    expect(squatDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.BOTTOM_ENTER')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidDepth)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.THIGH_DEPTH_WARN')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidTorso)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.TORSO_LEAN_DELTA_WARN')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidRom)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.MIN_PARTIAL_ROM')]),
+    );
+  });
+
+  it('rejects invalid squat heel support and score curves', () => {
+    const base = squatDefinition.heuristicConfig ?? {};
+    const invalidHeelSupport = setConfigValue(base, 'formThresholds.HEEL_LIFT_MIN_SUPPORT', 1.2);
+    const invalidHeelEligibleSupport = setConfigValue(base, 'formThresholds.HEEL_LIFT_MIN_ELIGIBLE_SUPPORT', -0.1);
+    const invalidScale = setConfigValue(base, 'scoreCurves.HEEL_LIFT.scale', 0);
+    const invalidCap = setConfigValue(base, 'scoreCurves.THIGH_DEPTH.cap', -1);
+
+    expect(squatDefinition.validateHeuristicConfig?.(invalidHeelSupport)).toEqual(
+      expect.arrayContaining([expect.stringContaining('HEEL_LIFT_MIN_SUPPORT')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidHeelEligibleSupport)).toEqual(
+      expect.arrayContaining([expect.stringContaining('HEEL_LIFT_MIN_ELIGIBLE_SUPPORT')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidScale)).toEqual(
+      expect.arrayContaining([expect.stringContaining('scoreCurves.HEEL_LIFT.scale')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidCap)).toEqual(
+      expect.arrayContaining([expect.stringContaining('scoreCurves.THIGH_DEPTH.cap')]),
+    );
+  });
+
+  it('rejects invalid squat lockout delta and side-view quality thresholds', () => {
+    const base = squatDefinition.heuristicConfig ?? {};
+    const invalidLockoutDelta = setConfigValue(base, 'formThresholds.LOCKOUT_BASELINE_DELTA_FAIL', 0.2);
+    const invalidSideOrdering = setConfigValue(base, 'formThresholds.SIDE_VIEW_WIDTH_WARN', 0.35);
+    const invalidSideValue = setConfigValue(base, 'formThresholds.SIDE_VIEW_WIDTH_FAIL', 0);
+
+    expect(squatDefinition.validateHeuristicConfig?.(invalidLockoutDelta)).toEqual(
+      expect.arrayContaining([expect.stringContaining('LOCKOUT_BASELINE_DELTA_FAIL')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidSideOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_WIDTH_WARN')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidSideValue)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_WIDTH_FAIL')]),
+    );
+  });
+
+  it('validates the default cable-row heuristic config', () => {
+    expect(cableRowDefinition.validateHeuristicConfig?.(cableRowDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('rejects invalid cable-row thresholds and penalty configs', () => {
+    const base = cableRowDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.CONTRACTED_ENTER', 0.7);
+    const invalidRowTarget = setConfigValue(base, 'formThresholds.ROW_TARGET_HIGH_WARN', 0.6);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_PULL_MIN', 0);
+    const invalidPenalty = setConfigValue(base, 'penaltyConfigs.HIGH_ROW.scale', 0);
+
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.CONTRACTED_ENTER')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidRowTarget)).toEqual(
+      expect.arrayContaining([expect.stringContaining('ROW_TARGET_HIGH_WARN')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TEMPO_PULL_MIN')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs.HIGH_ROW.scale')]),
+    );
+  });
+
+  it('validates the default cable-pushdown heuristic config', () => {
+    expect(cablePushdownDefinition.validateHeuristicConfig?.(cablePushdownDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('rejects invalid cable-pushdown thresholds and penalty configs', () => {
+    const base = cablePushdownDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.EXTENDED_EXIT', 0.99);
+    const invalidMovement = setConfigValue(base, 'thresholds.RETURN_COMPLETE_BUFFER', 0.9);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_RETURN_MIN', 0);
+    const invalidLockoutGap = setConfigValue(base, 'formThresholds.LOCKOUT_GAP_TOLERANCE_MS', -1);
+    const invalidPenalty = setConfigValue(base, 'penaltyConfigs.RETURN_SPIKE.scale', 0);
+
+    expect(cablePushdownDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.EXTENDED_EXIT')]),
+    );
+    expect(cablePushdownDefinition.validateHeuristicConfig?.(invalidMovement)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.RETURN_COMPLETE_BUFFER')]),
+    );
+    expect(cablePushdownDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TEMPO_RETURN_MIN')]),
+    );
+    expect(cablePushdownDefinition.validateHeuristicConfig?.(invalidLockoutGap)).toEqual(
+      expect.arrayContaining([expect.stringContaining('LOCKOUT_GAP_TOLERANCE_MS')]),
+    );
+    expect(cablePushdownDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs.RETURN_SPIKE.scale')]),
+    );
+  });
+
+  it('exposes cable-pushdown scoring penalties as optimizer tunables', () => {
+    const tunablePaths = cablePushdownDefinition.tunableSpec?.tunables.map(tunable => tunable.path) ?? [];
+
+    expect(tunablePaths).toEqual(expect.arrayContaining([
+      'penaltyConfigs.ELBOW_FORWARD.scale',
+      'penaltyConfigs.TORSO_ROCK.deadzone',
+      'penaltyConfigs.LOCKOUT_HOLD.scale',
+      'penaltyConfigs.TEMPO_PUSH.deadzone',
+      'penaltyConfigs.PUSH_SPIKE.deadzone',
+      'penaltyConfigs.RETURN_SPIKE.scale',
+    ]));
+  });
+
+  it('validates the default leg-extension heuristic config', () => {
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(legExtensionsDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('rejects invalid leg-extension threshold ordering and support thresholds', () => {
+    const base = legExtensionsDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.EXTENDED_EXIT', 0.73);
+    const invalidPartial = setConfigValue(base, 'thresholds.MIN_PARTIAL_ROM', 0.2);
+    const invalidKneeOrdering = setConfigValue(base, 'formThresholds.KNEE_EXTENSION_FAIL', 175);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_EXTEND_MIN', 0);
+    const invalidPenalty = setConfigValue(base, 'penaltyConfigs.TOP_HOLD.scale', 0);
+    const invalidKneePartial = setConfigValue(base, 'thresholds.MIN_PARTIAL_KNEE_ROM', 90);
+    const invalidLockoutMs = setConfigValue(base, 'thresholds.LOCKOUT_CONFIRM_MS', 0);
+    const invalidReturnMs = setConfigValue(base, 'thresholds.RETURN_CONFIRM_MS', 700);
+    const invalidBaselineSamples = setConfigValue(base, 'thresholds.BASELINE_MIN_SAMPLES', 20);
+    const invalidSideOrdering = setConfigValue(base, 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', 0.7);
+    const invalidSideSamples = setConfigValue(base, 'formThresholds.SIDE_VIEW_MIN_SAMPLES', 1.5);
+    const invalidHoldBand = setConfigValue(base, 'formThresholds.TOP_HOLD_RATIO_BAND', 0);
+    const invalidHoldVelocity = setConfigValue(base, 'formThresholds.TOP_HOLD_MAX_KNEE_VELOCITY', -1);
+
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.EXTENDED_EXIT')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidPartial)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.MIN_PARTIAL_ROM')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidKneeOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('KNEE_EXTENSION_FAIL')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TEMPO_EXTEND_MIN')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs.TOP_HOLD.scale')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidKneePartial)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.MIN_PARTIAL_KNEE_ROM')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidLockoutMs)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.LOCKOUT_CONFIRM_MS')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidReturnMs)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.RETURN_CONFIRM_MS')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidBaselineSamples)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.BASELINE_MIN_SAMPLES')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidSideOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_MIN_CONFIDENCE_MIN')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidSideSamples)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_MIN_SAMPLES')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidHoldBand)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TOP_HOLD_RATIO_BAND')]),
+    );
+    expect(legExtensionsDefinition.validateHeuristicConfig?.(invalidHoldVelocity)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TOP_HOLD_MAX_KNEE_VELOCITY')]),
+    );
+  });
+
+  it('validates the default machine ab crunch heuristic config', () => {
+    expect(machineAbCrunchDefinition.validateHeuristicConfig?.(machineAbCrunchDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('rejects invalid machine ab crunch thresholds and penalty configs', () => {
+    const base = machineAbCrunchDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.BOTTOM_ENTER', 113);
+    const invalidSideOrdering = setConfigValue(base, 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', 0.6);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_RETURN_MIN', 0);
+    const invalidPenalty = setConfigValue(base, 'penaltyConfigs.ARM_PULL.scale', 0);
+
+    expect(machineAbCrunchDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.BOTTOM_ENTER')]),
+    );
+    expect(machineAbCrunchDefinition.validateHeuristicConfig?.(invalidSideOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_MIN_CONFIDENCE_MIN')]),
+    );
+    expect(machineAbCrunchDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TEMPO_RETURN_MIN')]),
+    );
+    expect(machineAbCrunchDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs.ARM_PULL.scale')]),
+    );
+  });
 });
 
 describe('automatic heuristic optimiser helpers', () => {
@@ -361,6 +582,24 @@ describe('automatic heuristic optimiser helpers', () => {
       expect(replayRecording(variant!, recording)).toEqual(
         replayRecording(definition, recording),
       );
+    }
+  });
+
+  it('registered diagnostic tuning entries point at declared tunable paths', () => {
+    const definitions = ExerciseRegistry.list()
+      .map((name) => ExerciseRegistry.get(name))
+      .filter(
+        (definition): definition is ExerciseDefinition =>
+          Boolean(definition?.tunableSpec?.diagnosticTuning?.length),
+      );
+
+    expect(definitions.length).toBeGreaterThan(0);
+    for (const definition of definitions) {
+      const spec = definition.tunableSpec!;
+      const tunablePaths = new Set(spec.tunables.map((tunable) => tunable.path));
+      for (const entry of spec.diagnosticTuning ?? []) {
+        expect(tunablePaths.has(entry.thresholdPath)).toBe(true);
+      }
     }
   });
 });

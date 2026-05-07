@@ -2,6 +2,9 @@ import type {
   CaseEvaluation,
   DatasetCase,
   DatasetEvaluation,
+  DiagnosticEvaluationSummary,
+  DiagnosticIssueSummary,
+  DiagnosticMetricDistribution,
   EvaluationMetrics,
   EvaluationTotals,
   PredictionLike,
@@ -53,6 +56,7 @@ function evaluateRep(
   predicted: string[],
   index: number,
   timing: RepTimingMetadata,
+  prediction?: ReplayRepPrediction,
 ): RepEvaluation {
   const expectedSet = new Set(unique(expected));
   const predictedSet = new Set(unique(predicted));
@@ -73,6 +77,7 @@ function evaluateRep(
     ...timing,
     expectedIssueIds: Array.from(expectedSet),
     predictedIssueIds: Array.from(predictedSet),
+    predictedDiagnostics: prediction?.diagnostics,
     truePositives,
     falsePositives,
     falseNegatives,
@@ -199,6 +204,203 @@ function combineQualityCoverage(cases: CaseEvaluation[]): QualityCoverageMetrics
   };
 }
 
+function emptyDistribution(): { values: number[] } {
+  return { values: [] };
+}
+
+function distribution(values: number[]): DiagnosticMetricDistribution {
+  if (values.length === 0) return { count: 0, min: null, max: null, mean: null };
+  const sum = values.reduce((total, value) => total + value, 0);
+  return {
+    count: values.length,
+    min: Math.min(...values),
+    max: Math.max(...values),
+    mean: sum / values.length,
+  };
+}
+
+type MutableIssueSummary = Omit<
+  DiagnosticIssueSummary,
+  'expectedPositiveMetric' | 'expectedNegativeMetric'
+> & {
+  positiveValues: number[];
+  negativeValues: number[];
+  confidenceValues: number[];
+  sampleCounts: number[];
+};
+
+function createMutableIssueSummary(issueId: string): MutableIssueSummary {
+  return {
+    issueId,
+    eligiblePositiveCount: 0,
+    eligibleNegativeCount: 0,
+    truePositiveCount: 0,
+    falsePositiveCount: 0,
+    falseNegativeCount: 0,
+    skippedCount: 0,
+    ineligibleCount: 0,
+    nearThresholdMismatchCount: 0,
+    averageConfidence: null,
+    averageSampleCount: null,
+    weightedTruePositive: 0,
+    weightedFalsePositive: 0,
+    weightedFalseNegative: 0,
+    positiveValues: emptyDistribution().values,
+    negativeValues: emptyDistribution().values,
+    confidenceValues: [],
+    sampleCounts: [],
+  };
+}
+
+function mismatchIsNearThreshold(margin: number | null | undefined, threshold: unknown): boolean {
+  if (typeof margin !== 'number' || !Number.isFinite(margin)) return false;
+  const numericThreshold = typeof threshold === 'number' && Number.isFinite(threshold) ? Math.abs(threshold) : 0;
+  const tolerance = Math.max(0.05, numericThreshold * 0.1);
+  return Math.abs(margin) <= tolerance;
+}
+
+function firstMetricValue(rep: RepEvaluation, metricKeys: string[]): number | null {
+  const metrics = rep.predictedDiagnostics?.metrics;
+  if (!metrics) return null;
+  for (const key of metricKeys) {
+    const value = metrics[key]?.value;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function addDiagnosticRep(
+  summaries: Map<string, MutableIssueSummary>,
+  rep: RepEvaluation,
+): void {
+  const diagnostics = rep.predictedDiagnostics;
+  if (!diagnostics) return;
+  const issueIds = new Set([
+    ...rep.expectedIssueIds,
+    ...rep.predictedIssueIds,
+    ...Object.keys(diagnostics.cues),
+  ]);
+
+  for (const issueId of issueIds) {
+    const cue = diagnostics.cues[issueId];
+    const summary = summaries.get(issueId) ?? createMutableIssueSummary(issueId);
+    summaries.set(issueId, summary);
+
+    const expectedPositive = rep.expectedIssueIds.includes(issueId);
+    const predictedPositive = rep.predictedIssueIds.includes(issueId);
+    const eligible = cue?.eligible ?? false;
+    const weight = eligible ? 1 : 0.35;
+
+    if (expectedPositive && eligible) summary.eligiblePositiveCount += 1;
+    if (!expectedPositive && eligible) summary.eligibleNegativeCount += 1;
+    if (!eligible) summary.ineligibleCount += 1;
+    if (cue?.skippedReason) summary.skippedCount += 1;
+
+    if (expectedPositive && predictedPositive) {
+      summary.truePositiveCount += 1;
+      summary.weightedTruePositive += weight;
+    } else if (!expectedPositive && predictedPositive) {
+      summary.falsePositiveCount += 1;
+      summary.weightedFalsePositive += weight;
+    } else if (expectedPositive && !predictedPositive) {
+      summary.falseNegativeCount += 1;
+      summary.weightedFalseNegative += weight;
+    }
+
+    if (cue && expectedPositive !== predictedPositive && mismatchIsNearThreshold(cue.margin, cue.thresholdValue)) {
+      summary.nearThresholdMismatchCount += 1;
+    }
+
+    if (cue && eligible) {
+      const value = firstMetricValue(rep, cue.metricKeys);
+      if (value !== null) {
+        if (expectedPositive) summary.positiveValues.push(value);
+        else summary.negativeValues.push(value);
+      }
+      for (const key of cue.metricKeys) {
+        const metric = diagnostics.metrics[key];
+        if (!metric) continue;
+        if (typeof metric.confidence === 'number' && Number.isFinite(metric.confidence)) {
+          summary.confidenceValues.push(metric.confidence);
+        }
+        if (typeof metric.sampleCount === 'number' && Number.isFinite(metric.sampleCount)) {
+          summary.sampleCounts.push(metric.sampleCount);
+        }
+      }
+    }
+  }
+}
+
+function average(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function combineDiagnosticSummary(cases: CaseEvaluation[]): DiagnosticEvaluationSummary | undefined {
+  const summaries = new Map<string, MutableIssueSummary>();
+  let diagnosticRepCount = 0;
+
+  for (const caseEvaluation of cases) {
+    for (const rep of caseEvaluation.reps) {
+      if (!rep.predictedDiagnostics) continue;
+      diagnosticRepCount += 1;
+      addDiagnosticRep(summaries, rep);
+    }
+  }
+
+  if (diagnosticRepCount === 0) return undefined;
+
+  const issueSummaries: Record<string, DiagnosticIssueSummary> = {};
+  let weightedTp = 0;
+  let weightedFp = 0;
+  let weightedFn = 0;
+  let nearThresholdMismatchCount = 0;
+
+  for (const [issueId, summary] of summaries.entries()) {
+    weightedTp += summary.weightedTruePositive;
+    weightedFp += summary.weightedFalsePositive;
+    weightedFn += summary.weightedFalseNegative;
+    nearThresholdMismatchCount += summary.nearThresholdMismatchCount;
+    issueSummaries[issueId] = {
+      issueId,
+      eligiblePositiveCount: summary.eligiblePositiveCount,
+      eligibleNegativeCount: summary.eligibleNegativeCount,
+      truePositiveCount: summary.truePositiveCount,
+      falsePositiveCount: summary.falsePositiveCount,
+      falseNegativeCount: summary.falseNegativeCount,
+      skippedCount: summary.skippedCount,
+      ineligibleCount: summary.ineligibleCount,
+      expectedPositiveMetric: distribution(summary.positiveValues),
+      expectedNegativeMetric: distribution(summary.negativeValues),
+      nearThresholdMismatchCount: summary.nearThresholdMismatchCount,
+      averageConfidence: average(summary.confidenceValues),
+      averageSampleCount: average(summary.sampleCounts),
+      weightedTruePositive: summary.weightedTruePositive,
+      weightedFalsePositive: summary.weightedFalsePositive,
+      weightedFalseNegative: summary.weightedFalseNegative,
+    };
+  }
+
+  const precisionDenominator = weightedTp + weightedFp;
+  const recallDenominator = weightedTp + weightedFn;
+  const weightedIssuePrecision = precisionDenominator === 0 ? 1 : weightedTp / precisionDenominator;
+  const weightedIssueRecall = recallDenominator === 0 ? 1 : weightedTp / recallDenominator;
+  const weightedIssueF1 =
+    weightedIssuePrecision + weightedIssueRecall === 0
+      ? 0
+      : (2 * weightedIssuePrecision * weightedIssueRecall) /
+        (weightedIssuePrecision + weightedIssueRecall);
+
+  return {
+    issueSummaries,
+    weightedIssuePrecision,
+    weightedIssueRecall,
+    weightedIssueF1,
+    nearThresholdMismatchCount,
+    diagnosticRepCount,
+  };
+}
+
 export function evaluateCase(
   datasetCase: DatasetCase,
   prediction: PredictionLike,
@@ -233,17 +435,23 @@ export function evaluateCase(
     }
 
     usedPredictionIndexes.add(match.predictionIndex);
-    const rep = evaluateRep(expectedRep.issueIds, match.prediction.issueIds, expectedRep.index, {
-      matchStatus: 'matched',
-      expectedRepIndex: expectedRep.index,
-      predictedRepIndex: match.prediction.repIndex,
-      expectedStartMs: expectedRep.startMs,
-      expectedEndMs: expectedRep.endMs,
-      predictedStartMs: predictionStart(match.prediction),
-      predictedEndMs: predictionEnd(match.prediction),
-      overlapMs: match.overlapMs,
-      completionDeltaMs: match.completionDeltaMs,
-    });
+    const rep = evaluateRep(
+      expectedRep.issueIds,
+      match.prediction.issueIds,
+      expectedRep.index,
+      {
+        matchStatus: 'matched',
+        expectedRepIndex: expectedRep.index,
+        predictedRepIndex: match.prediction.repIndex,
+        expectedStartMs: expectedRep.startMs,
+        expectedEndMs: expectedRep.endMs,
+        predictedStartMs: predictionStart(match.prediction),
+        predictedEndMs: predictionEnd(match.prediction),
+        overlapMs: match.overlapMs,
+        completionDeltaMs: match.completionDeltaMs,
+      },
+      match.prediction,
+    );
     reps.push(rep);
     addRepToTotals(totals, rep);
   }
@@ -252,22 +460,28 @@ export function evaluateCase(
   prediction.reps.forEach((predictedRep, predictionIndex) => {
     if (usedPredictionIndexes.has(predictionIndex)) return;
     extraRepCount += 1;
-    const rep = evaluateRep([], predictedRep.issueIds, datasetCase.label.reps.length + extraRepCount, {
-      matchStatus: 'extra_predicted',
-      expectedRepIndex: null,
-      predictedRepIndex: predictedRep.repIndex,
-      expectedStartMs: null,
-      expectedEndMs: null,
-      predictedStartMs: predictionStart(predictedRep),
-      predictedEndMs: predictionEnd(predictedRep),
-      overlapMs: 0,
-      completionDeltaMs: null,
-    });
+    const rep = evaluateRep(
+      [],
+      predictedRep.issueIds,
+      datasetCase.label.reps.length + extraRepCount,
+      {
+        matchStatus: 'extra_predicted',
+        expectedRepIndex: null,
+        predictedRepIndex: predictedRep.repIndex,
+        expectedStartMs: null,
+        expectedEndMs: null,
+        predictedStartMs: predictionStart(predictedRep),
+        predictedEndMs: predictionEnd(predictedRep),
+        overlapMs: 0,
+        completionDeltaMs: null,
+      },
+      predictedRep,
+    );
     reps.push(rep);
     addRepToTotals(totals, rep);
   });
 
-  return {
+  const caseEvaluation: CaseEvaluation = {
     exerciseName: datasetCase.label.exerciseName,
     sourceVideo: datasetCase.label.sourceVideo,
     split: datasetCase.label.split,
@@ -280,6 +494,10 @@ export function evaluateCase(
     extraPredictedReps: reps.filter((rep) => rep.matchStatus === 'extra_predicted'),
     totals,
     qualityCoverage: qualityCoverageFromPrediction(prediction),
+  };
+  return {
+    ...caseEvaluation,
+    diagnosticSummary: combineDiagnosticSummary([caseEvaluation]),
   };
 }
 
@@ -300,7 +518,13 @@ export function summarizeEvaluations(cases: CaseEvaluation[]): DatasetEvaluation
   for (const caseEvaluation of cases) {
     addCaseTotals(totals, caseEvaluation);
   }
-  return { cases, totals, metrics: metricsFromTotals(totals), qualityCoverage: combineQualityCoverage(cases) };
+  return {
+    cases,
+    totals,
+    metrics: metricsFromTotals(totals),
+    qualityCoverage: combineQualityCoverage(cases),
+    diagnosticSummary: combineDiagnosticSummary(cases),
+  };
 }
 
 export function evaluateDataset(

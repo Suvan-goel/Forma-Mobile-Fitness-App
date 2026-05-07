@@ -80,6 +80,98 @@ function replayTestDefinition(activeUntilFrame: number): ExerciseDefinition {
 }
 
 describe('Replay quality windows', () => {
+  it('passes image and world frame context into exercise updates', () => {
+    const seen: Array<{
+      keypointX: number;
+      worldX: number | null;
+      imageX: number | null;
+      primarySource: string | null;
+    }> = [];
+    const definition: ExerciseDefinition = {
+      ...replayTestDefinition(1),
+      name: 'Replay Frame Context Test',
+      qualityProfile: {
+        exerciseName: 'Replay Frame Context Test',
+        requiredView: 'any',
+        requiredJoints: ['left_shoulder'],
+        importantJoints: [],
+        windowSize: 1,
+      },
+      update: (keypoints, state, frameContext) => {
+        seen.push({
+          keypointX: keypoints[0]?.x ?? NaN,
+          worldX: frameContext?.worldKeypoints?.[0]?.x ?? null,
+          imageX: frameContext?.imageKeypoints?.[0]?.x ?? null,
+          primarySource: frameContext?.primarySource ?? null,
+        });
+        return state;
+      },
+    };
+    const recording: LandmarkRecording = {
+      exerciseName: 'Replay Frame Context Test',
+      metadata: {},
+      frames: [{
+        timestamp: 0,
+        keypoints: [{ name: 'left_shoulder', x: 2, y: 0, z: 0, score: 0.99 }],
+        worldKeypoints: [{ name: 'left_shoulder', x: 2, y: 0, z: 0, score: 0.99 }],
+        imageKeypoints: [{ name: 'left_shoulder', x: 0.5, y: 0.5, z: 0, score: 0.99 }],
+      }],
+    };
+
+    replayRecording(definition, recording);
+
+    expect(seen).toEqual([{
+      keypointX: 2,
+      worldX: 2,
+      imageX: 0.5,
+      primarySource: 'world',
+    }]);
+  });
+
+  it('uses image as replay primary source when only image landmarks are present', () => {
+    const seen: Array<{
+      worldX: number | null;
+      imageX: number | null;
+      primarySource: string | null;
+    }> = [];
+    const definition: ExerciseDefinition = {
+      ...replayTestDefinition(1),
+      name: 'Replay Image Context Test',
+      qualityProfile: {
+        exerciseName: 'Replay Image Context Test',
+        requiredView: 'any',
+        requiredJoints: ['left_shoulder'],
+        importantJoints: [],
+        windowSize: 1,
+      },
+      update: (_keypoints, state, frameContext) => {
+        seen.push({
+          worldX: frameContext?.worldKeypoints?.[0]?.x ?? null,
+          imageX: frameContext?.imageKeypoints?.[0]?.x ?? null,
+          primarySource: frameContext?.primarySource ?? null,
+        });
+        return state;
+      },
+    };
+    const recording: LandmarkRecording = {
+      exerciseName: 'Replay Image Context Test',
+      metadata: {},
+      frames: [{
+        timestamp: 0,
+        keypoints: [{ name: 'left_shoulder', x: 0.5, y: 0.5, z: 0, score: 0.99 }],
+        imageKeypoints: [{ name: 'left_shoulder', x: 0.5, y: 0.5, z: 0, score: 0.99 }],
+      }],
+    };
+
+    replayRecording(definition, recording);
+
+    expect(seen).toEqual([{
+      worldX: null,
+      imageX: 0.5,
+      primarySource: 'image',
+    }]);
+  });
+
   it('ignores low-confidence setup frames before an active rep window', () => {
     const recording: LandmarkRecording = {
       exerciseName: 'Replay Quality Window Test',
@@ -112,6 +204,45 @@ describe('Replay quality windows', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
     expect(result.feedbackMessages[0]).toContain(UNSCORED_REP_FEEDBACK);
+  });
+
+  it('preserves exercise-provided unscorable reps and quality warnings', () => {
+    const definition: ExerciseDefinition = {
+      ...replayTestDefinition(4),
+      update: (_keypoints, state) => {
+        const internal = state._internal as { frameIndex: number };
+        const frameIndex = internal.frameIndex + 1;
+        const completed = frameIndex === 5;
+        return {
+          ...state,
+          repCount: completed ? 1 : 0,
+          repQualityWindowActive: frameIndex >= 3 && frameIndex <= 4,
+          lastRepResult: completed
+            ? {
+                repIndex: 1,
+                score: 90,
+                messages: [],
+                scorable: false,
+                qualityWarnings: ['side_view_uncertain'],
+              }
+            : null,
+          debugInfo: { phase: frameIndex >= 3 && frameIndex <= 4 ? 'ACTIVE' : 'REST' },
+          _internal: { frameIndex },
+        };
+      },
+    };
+    const recording: LandmarkRecording = {
+      exerciseName: 'Replay Quality Window Test',
+      metadata: {},
+      frames: Array.from({ length: 5 }, (_, index) => frame(index * 33, 0.99)),
+    };
+
+    const result = replayRecording(definition, recording, { confidenceGating: true });
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
 });
 
