@@ -17,6 +17,8 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "view": "side",
+      "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",
       "suggestedIssueIds": [],
       "suggestedFeedbackMessages": [],
@@ -24,6 +26,13 @@
     }
   ],
   "notes": "Draft label template. Copy to a real label file, review timings/issues, then set reviewStatus to reviewed.",
+  "labelingGuidance": [
+    "Annotate each rep view as side, front, oblique, or unknown.",
+    "Set scorable=false for oblique, occluded, or otherwise ambiguous views where form issues should not count toward issue precision/recall; these reps still count for rep-count accuracy.",
+    "Label side-view depth, heel lift, and torso lean only when a clear side view supports that cue.",
+    "Label knee valgus only from a clear front view.",
+    "Label ROM, lockout, and tempo when the movement is visible enough to judge."
+  ],
   "availableIssues": [
     {
       "issueId": "barbell-squat.depth_short",
@@ -40,6 +49,10 @@
     {
       "issueId": "barbell-squat.heel_lift",
       "feedbackMessage": "Keep your heels planted — drive through your mid-foot."
+    },
+    {
+      "issueId": "barbell-squat.knee_valgus",
+      "feedbackMessage": "Track your knees over your toes."
     },
     {
       "issueId": "barbell-squat.torso_fail",

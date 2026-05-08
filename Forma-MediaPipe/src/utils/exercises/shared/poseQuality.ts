@@ -16,6 +16,7 @@ export type PoseQualityWarning =
   | 'keep_full_body_in_frame'
   | 'side_view_uncertain'
   | 'front_view_uncertain'
+  | 'view_uncertain'
   | 'unstable_tracking';
 
 export interface RequiredJointGroup {
@@ -141,11 +142,25 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
     exerciseName: 'Standing Dumbbell Lateral Raises',
   },
   'Barbell Squat': {
-    requiredView: 'side',
+    requiredView: 'any',
     exerciseName: 'Barbell Squat',
     requiredJointGroups: [
       { id: 'left_side', label: 'left side', joints: ['left_shoulder', ...LOWER_CHAIN_LEFT] },
       { id: 'right_side', label: 'right side', joints: ['right_shoulder', ...LOWER_CHAIN_RIGHT] },
+      {
+        id: 'front_bilateral',
+        label: 'front bilateral',
+        joints: [
+          'left_shoulder',
+          'right_shoulder',
+          'left_hip',
+          'right_hip',
+          'left_knee',
+          'right_knee',
+          'left_ankle',
+          'right_ankle',
+        ],
+      },
     ],
     importantJoints: ['left_heel', 'right_heel', 'left_foot_index', 'right_foot_index'],
   },
@@ -217,7 +232,8 @@ const WARNING_MESSAGES: Record<PoseQualityWarning, string> = {
   move_camera_back: 'Move the camera back.',
   keep_full_body_in_frame: 'Keep your full body inside the frame.',
   side_view_uncertain: 'Turn side-on so I can judge your form.',
-  front_view_uncertain: 'Face the camera so I can judge your lateral raise.',
+  front_view_uncertain: 'Face the camera so I can judge your form.',
+  view_uncertain: 'Use a clear side or front view so I can judge your squat.',
   unstable_tracking: 'Hold steady.',
 };
 
@@ -227,6 +243,7 @@ const ACTIONABLE_WARNING_PRIORITY: PoseQualityWarning[] = [
   'keep_full_body_in_frame',
   'side_view_uncertain',
   'front_view_uncertain',
+  'view_uncertain',
   'missing_required_joints',
   'knees_hidden',
   'feet_hidden',

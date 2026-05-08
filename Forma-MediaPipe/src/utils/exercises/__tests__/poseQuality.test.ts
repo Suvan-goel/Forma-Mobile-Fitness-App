@@ -197,13 +197,33 @@ describe('PoseQualityTracker', () => {
     expect(message).toBe('Turn side-on so I can judge your form.');
   });
 
-  it('maps front-view uncertainty to lateral raise setup guidance', () => {
+  it('maps front-view uncertainty to front-facing setup guidance', () => {
     const message = getPoseQualityMessage({
       status: 'medium',
       warnings: ['front_view_uncertain'],
     });
 
-    expect(message).toBe('Face the camera so I can judge your lateral raise.');
+    expect(message).toBe('Face the camera so I can judge your form.');
+  });
+
+  it('maps squat multi-view uncertainty to clear setup guidance', () => {
+    const message = getPoseQualityMessage({
+      status: 'medium',
+      warnings: ['view_uncertain'],
+    });
+
+    expect(message).toBe('Use a clear side or front view so I can judge your squat.');
+  });
+
+  it('resolves squat quality as any-view with side and front joint groups', () => {
+    const profile = resolveExerciseQualityProfile(definition('Barbell Squat', 'any'));
+
+    expect(profile.requiredView).toBe('any');
+    expect(profile.requiredJointGroups?.map((group) => group.id)).toEqual(expect.arrayContaining([
+      'left_side',
+      'right_side',
+      'front_bilateral',
+    ]));
   });
 
   it('recovers confidence after the user re-enters frame', () => {

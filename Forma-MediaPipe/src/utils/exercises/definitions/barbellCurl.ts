@@ -22,6 +22,7 @@ import {
 
 import {
   createDefaultTunableSpec,
+  getConfigValue,
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
@@ -29,13 +30,17 @@ import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps'
 import {
   buildRepDiagnostics,
   diagnosticCue,
+  diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
 import tunedConfig from './tuned/barbellCurl.json';
 import type {
   ExerciseDefinition,
+  ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
+  NumericTunable,
+  RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
 
@@ -65,6 +70,8 @@ const THRESHOLDS = {
   ROM_MIN: 0.38,
   /** Minimum ratio ROM for a returned partial rep to count */
   MIN_PARTIAL_ROM: 0.19,
+  /** Minimum per-arm ROM required to treat an arm as participating in a bilateral rep. */
+  MIN_ARM_PARTICIPATION_ROM: 0.19,
   /** Min seconds the arm must be in DOWN state before normal completion.
    *  Filters pose-estimation noise spikes. */
   MIN_DOWN_GUARD: 0.10,
@@ -94,6 +101,28 @@ const FORM_THRESHOLDS = {
   EXTEND_RATIO_WARN: 0.90, // max ratio below this → "extend fully"
 } as const;
 
+const PENALTY_CONFIGS = {
+  TORSO: { cap: 35, scale: 0.40, deadzone: 0 },
+  SHOULDER: { cap: 30, scale: 0.018, deadzone: 0 },
+  ROM_FLEX: { cap: 20, scale: 300, deadzone: 0 },
+  ROM_EXTEND: { cap: 20, scale: 300, deadzone: 0 },
+  ROM_TOTAL: { cap: 15, scale: 250, deadzone: 0 },
+  TEMPO_UP: { cap: 10, scale: 60, deadzone: 0 },
+  TEMPO_DOWN: { cap: 10, scale: 40, deadzone: 0 },
+  ELBOW_FLARE: { cap: 20, scale: 0.022, deadzone: 0 },
+  ASYMMETRY_MIN: { cap: 10, scale: 500, deadzone: 0 },
+  ASYMMETRY_ROM: { cap: 10, scale: 500, deadzone: 0 },
+  SYNC_DELTA: { cap: 8, scale: 20, deadzone: 0 },
+  WRIST: { cap: 10, scale: 80, deadzone: 0 },
+} as const;
+
+const VIEW_QUALITY_THRESHOLDS = {
+  MIN_SAMPLES: 4,
+  FRONT_MIN_SUPPORT: 0.60,
+  SIDE_MIN_SUPPORT: 0.55,
+  PRIMARY_SIDE_MIN_SUPPORT: 0.60,
+} as const;
+
 /** Smoothing parameters */
 const MEDIAN_WINDOW = 4;
 const EMA_ALPHA = 0.4;
@@ -111,6 +140,8 @@ const WARMUP_VISIBILITY_MIN = 0.3;   // avg visibility of 8 key joints must exce
 const DEFAULT_BARBELL_CURL_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
   formThresholds: FORM_THRESHOLDS,
+  penaltyConfigs: PENALTY_CONFIGS,
+  viewQualityThresholds: VIEW_QUALITY_THRESHOLDS,
 } satisfies ExerciseHeuristicConfig;
 
 const ACTIVE_BARBELL_CURL_HEURISTIC_CONFIG = mergeHeuristicConfig(
@@ -122,6 +153,16 @@ const BARBELL_CURL_TUNABLE_SPEC = createDefaultTunableSpec(
   'Barbell Curl',
   DEFAULT_BARBELL_CURL_HEURISTIC_CONFIG,
 );
+
+function upsertBarbellCurlTunable(tunable: NumericTunable): void {
+  const existingIndex = BARBELL_CURL_TUNABLE_SPEC.tunables.findIndex((entry) => entry.path === tunable.path);
+  if (existingIndex >= 0) {
+    BARBELL_CURL_TUNABLE_SPEC.tunables[existingIndex] = tunable;
+    return;
+  }
+  BARBELL_CURL_TUNABLE_SPEC.tunables.push(tunable);
+}
+
 BARBELL_CURL_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'barbell-curl.incomplete_flex', metricKey: 'minCurlRatio', thresholdPath: 'formThresholds.FLEX_RATIO_WARN', direction: 'above' },
   { issueId: 'barbell-curl.incomplete_extend', metricKey: 'maxCurlRatio', thresholdPath: 'formThresholds.EXTEND_RATIO_WARN', direction: 'below' },
@@ -130,17 +171,79 @@ BARBELL_CURL_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'barbell-curl.shoulder_warn', metricKey: 'shoulderDelta', thresholdPath: 'formThresholds.SHOULDER_WARN', direction: 'above' },
   { issueId: 'barbell-curl.torso_fail', metricKey: 'torsoDelta', thresholdPath: 'formThresholds.TORSO_FAIL', direction: 'above' },
   { issueId: 'barbell-curl.torso_warn', metricKey: 'torsoDelta', thresholdPath: 'formThresholds.TORSO_WARN', direction: 'above' },
-  { issueId: 'barbell-curl.elbow_flare', metricKey: 'elbowFlareMaxDeg', thresholdPath: 'formThresholds.ELBOW_FLARE_WARN', direction: 'above' },
+  { issueId: 'barbell-curl.elbow_flare', metricKey: 'elbowFlareMaxDeg', thresholdPath: 'formThresholds.ELBOW_FLARE_WARN', direction: 'above', minEligibleSamples: ELBOW_FLARE_MIN_CONFIDENT_SAMPLES, minPositiveCases: 2, minNegativeCases: 2 },
   { issueId: 'barbell-curl.tempo_up', metricKey: 'tUp', thresholdPath: 'formThresholds.TEMPO_UP_MIN', direction: 'below' },
   { issueId: 'barbell-curl.tempo_down', metricKey: 'tDown', thresholdPath: 'formThresholds.TEMPO_DOWN_MIN', direction: 'below' },
-  { issueId: 'barbell-curl.asymmetry', metricKey: 'asymmetryRatio', thresholdPath: 'formThresholds.SYMMETRY_ROM_RATIO', direction: 'above' },
-  { issueId: 'barbell-curl.wrist_curl', metricKey: 'wristDeviationRatio', thresholdPath: 'formThresholds.WRIST_DEV_DURATION', direction: 'above' },
+  { issueId: 'barbell-curl.asymmetry', metricKey: 'asymmetryMinRatio', thresholdPath: 'formThresholds.SYMMETRY_MIN_RATIO', direction: 'above', minPositiveCases: 2, minNegativeCases: 2 },
+  { issueId: 'barbell-curl.asymmetry', metricKey: 'asymmetryRomRatio', thresholdPath: 'formThresholds.SYMMETRY_ROM_RATIO', direction: 'above', minPositiveCases: 2, minNegativeCases: 2 },
+  { issueId: 'barbell-curl.asymmetry', metricKey: 'syncDelta', thresholdPath: 'thresholds.SYNC_WINDOW', direction: 'above', minPositiveCases: 2, minNegativeCases: 2 },
+  { issueId: 'barbell-curl.wrist_curl', metricKey: 'wristDeviationRatio', thresholdPath: 'formThresholds.WRIST_DEV_DURATION', direction: 'above', minEligibleSamples: WRIST_MIN_CONFIDENT_SAMPLES, minPositiveCases: 2, minNegativeCases: 2 },
 ];
+
+[
+  { path: 'penaltyConfigs.ROM_FLEX.scale', min: 50, max: 800, step: 25 },
+  { path: 'penaltyConfigs.ROM_EXTEND.scale', min: 50, max: 800, step: 25 },
+  { path: 'penaltyConfigs.ROM_TOTAL.scale', min: 50, max: 800, step: 25 },
+  { path: 'penaltyConfigs.TEMPO_UP.scale', min: 5, max: 160, step: 5 },
+  { path: 'penaltyConfigs.TEMPO_DOWN.scale', min: 5, max: 160, step: 5 },
+  { path: 'penaltyConfigs.SHOULDER.scale', min: 0.002, max: 0.08, step: 0.002 },
+  { path: 'penaltyConfigs.SHOULDER.deadzone', min: 0, max: 20, step: 1 },
+  { path: 'penaltyConfigs.TORSO.scale', min: 0.05, max: 1.2, step: 0.05 },
+  { path: 'penaltyConfigs.TORSO.deadzone', min: 0, max: 10, step: 1 },
+  { path: 'penaltyConfigs.ASYMMETRY_MIN.scale', min: 50, max: 1200, step: 50 },
+  { path: 'penaltyConfigs.ASYMMETRY_ROM.scale', min: 50, max: 1200, step: 50 },
+  { path: 'penaltyConfigs.SYNC_DELTA.scale', min: 2, max: 60, step: 2 },
+  { path: 'penaltyConfigs.ELBOW_FLARE.scale', min: 0.002, max: 0.08, step: 0.002 },
+  { path: 'penaltyConfigs.WRIST.scale', min: 5, max: 160, step: 5 },
+].forEach((entry) => upsertBarbellCurlTunable({ ...entry, kind: 'scoring' }));
+
+[
+  { path: 'viewQualityThresholds.MIN_SAMPLES', min: 2, max: 20, step: 1 },
+  { path: 'viewQualityThresholds.FRONT_MIN_SUPPORT', min: 0.3, max: 0.95, step: 0.05 },
+  { path: 'viewQualityThresholds.SIDE_MIN_SUPPORT', min: 0.3, max: 0.95, step: 0.05 },
+  { path: 'viewQualityThresholds.PRIMARY_SIDE_MIN_SUPPORT', min: 0.3, max: 0.95, step: 0.05 },
+].forEach((entry) => upsertBarbellCurlTunable({ ...entry, kind: 'feedback' }));
 
 const BARBELL_CURL_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
   { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
+  { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
+  { path: 'viewQualityThresholds', target: VIEW_QUALITY_THRESHOLDS as unknown as Record<string, unknown> },
 ];
+
+const BARBELL_CURL_QUALITY_PROFILE: NonNullable<ExerciseDefinition['qualityProfile']> = {
+  exerciseName: 'Barbell Curl',
+  requiredView: 'front',
+  requiredJointGroups: [
+    {
+      id: 'front_bilateral',
+      label: 'front bilateral arms',
+      joints: [
+        'left_shoulder',
+        'right_shoulder',
+        'left_elbow',
+        'right_elbow',
+        'left_wrist',
+        'right_wrist',
+        'left_hip',
+        'right_hip',
+      ],
+    },
+    {
+      id: 'left_primary_arm',
+      label: 'left primary arm',
+      joints: ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip', 'right_shoulder', 'right_hip'],
+    },
+    {
+      id: 'right_primary_arm',
+      label: 'right primary arm',
+      joints: ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip', 'left_shoulder', 'left_hip'],
+    },
+  ],
+  importantJoints: ['nose', 'left_ear', 'right_ear', 'left_index', 'right_index'],
+  minRequiredVisibility: VISIBILITY_THRESHOLD,
+  minImportantVisibility: 0.12,
+};
 
 function withBarbellCurlConfig<T>(
   config: ExerciseHeuristicConfig,
@@ -149,81 +252,188 @@ function withBarbellCurlConfig<T>(
   return runWithConfigBindings(config, BARBELL_CURL_CONFIG_BINDINGS, fn);
 }
 
+function mergedBarbellCurlConfig(config: ExerciseHeuristicConfig): ExerciseHeuristicConfig {
+  return mergeHeuristicConfig(DEFAULT_BARBELL_CURL_HEURISTIC_CONFIG, config);
+}
+
+function finiteConfigNumber(
+  config: ExerciseHeuristicConfig,
+  path: string,
+  errors: string[],
+): number {
+  const value = getConfigValue(config, path);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    errors.push(`${path} must be a finite number.`);
+    return NaN;
+  }
+  return value;
+}
+
+function isConfigObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireConfigObject(
+  config: ExerciseHeuristicConfig,
+  path: string,
+  errors: string[],
+): boolean {
+  const value = getConfigValue(config, path);
+  if (!isConfigObject(value)) {
+    errors.push(`${path} must be an object.`);
+    return false;
+  }
+  return true;
+}
+
+function requireGreaterThan(
+  config: ExerciseHeuristicConfig,
+  leftPath: string,
+  rightPath: string,
+  errors: string[],
+  allowEqual = false,
+): void {
+  const left = finiteConfigNumber(config, leftPath, errors);
+  const right = finiteConfigNumber(config, rightPath, errors);
+  if (!Number.isFinite(left) || !Number.isFinite(right)) return;
+  if (allowEqual ? left < right : left <= right) {
+    errors.push(`${leftPath} must be ${allowEqual ? 'greater than or equal to' : 'greater than'} ${rightPath}.`);
+  }
+}
+
+function requireRange(
+  config: ExerciseHeuristicConfig,
+  path: string,
+  min: number,
+  max: number,
+  errors: string[],
+): void {
+  const value = finiteConfigNumber(config, path, errors);
+  if (!Number.isFinite(value)) return;
+  if (value < min || value > max) {
+    errors.push(`${path} must be between ${min} and ${max}.`);
+  }
+}
+
+function validatePenaltyConfig(config: ExerciseHeuristicConfig, key: PenaltyConfigKey, errors: string[]): void {
+  const prefix = `penaltyConfigs.${key}`;
+  if (!requireConfigObject(config, prefix, errors)) return;
+  const cap = finiteConfigNumber(config, `${prefix}.cap`, errors);
+  const scale = finiteConfigNumber(config, `${prefix}.scale`, errors);
+  const deadzone = finiteConfigNumber(config, `${prefix}.deadzone`, errors);
+  if (Number.isFinite(cap) && cap < 0) errors.push(`${prefix}.cap must be non-negative.`);
+  if (Number.isFinite(scale) && scale <= 0) errors.push(`${prefix}.scale must be greater than 0.`);
+  if (Number.isFinite(deadzone) && deadzone < 0) errors.push(`${prefix}.deadzone must be non-negative.`);
+}
+
+export function validateBarbellCurlHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const activeConfig = mergedBarbellCurlConfig(config);
+  const errors: string[] = [];
+  const hasViewQualityConfig = requireConfigObject(activeConfig, 'viewQualityThresholds', errors);
+  const hasPenaltyConfigs = requireConfigObject(activeConfig, 'penaltyConfigs', errors);
+
+  requireGreaterThan(activeConfig, 'thresholds.FLEXED_EXIT', 'thresholds.FLEXED_ENTER', errors);
+  requireGreaterThan(activeConfig, 'thresholds.EXTENDED_EXIT', 'thresholds.FLEXED_EXIT', errors);
+  requireGreaterThan(activeConfig, 'thresholds.EXTENDED_ENTER', 'thresholds.FLEXED_EXIT', errors);
+  requireGreaterThan(activeConfig, 'thresholds.EXTENDED_EXIT', 'thresholds.EXTENDED_ENTER', errors, true);
+  requireRange(activeConfig, 'thresholds.FLEXED_EXIT_DELTA', 0, 0.25, errors);
+  requireRange(activeConfig, 'thresholds.MIN_REP_TIME', 0.05, 5, errors);
+  requireRange(activeConfig, 'thresholds.MIN_DOWN_GUARD', 0, 2, errors);
+  requireRange(activeConfig, 'thresholds.SYNC_WINDOW', 0.05, 5, errors);
+  requireGreaterThan(activeConfig, 'thresholds.ROM_MIN', 'thresholds.MIN_PARTIAL_ROM', errors, true);
+  requireGreaterThan(activeConfig, 'thresholds.MIN_PARTIAL_ROM', 'thresholds.MIN_ARM_PARTICIPATION_ROM', errors, true);
+
+  requireGreaterThan(activeConfig, 'formThresholds.SHOULDER_FAIL', 'formThresholds.SHOULDER_WARN', errors);
+  requireGreaterThan(activeConfig, 'formThresholds.TORSO_FAIL', 'formThresholds.TORSO_WARN', errors);
+  requireGreaterThan(activeConfig, 'formThresholds.ELBOW_FLARE_FAIL', 'formThresholds.ELBOW_FLARE_WARN', errors);
+  requireRange(activeConfig, 'formThresholds.TEMPO_UP_MIN', 0.01, 10, errors);
+  requireRange(activeConfig, 'formThresholds.TEMPO_DOWN_MIN', 0.01, 10, errors);
+  requireRange(activeConfig, 'formThresholds.WRIST_DEV_DURATION', 0, 1, errors);
+  requireRange(activeConfig, 'formThresholds.SYMMETRY_MIN_RATIO', 0, 1, errors);
+  requireRange(activeConfig, 'formThresholds.SYMMETRY_ROM_RATIO', 0, 1, errors);
+  requireRange(activeConfig, 'formThresholds.FLEX_RATIO_WARN', 0, 1.2, errors);
+  requireRange(activeConfig, 'formThresholds.EXTEND_RATIO_WARN', 0, 1.2, errors);
+  requireGreaterThan(activeConfig, 'formThresholds.EXTEND_RATIO_WARN', 'formThresholds.FLEX_RATIO_WARN', errors);
+
+  if (hasViewQualityConfig) {
+    const minSamples = finiteConfigNumber(activeConfig, 'viewQualityThresholds.MIN_SAMPLES', errors);
+    if (Number.isFinite(minSamples) && (!Number.isInteger(minSamples) || minSamples < 1 || minSamples > 120)) {
+      errors.push('viewQualityThresholds.MIN_SAMPLES must be an integer between 1 and 120.');
+    }
+    requireRange(activeConfig, 'viewQualityThresholds.FRONT_MIN_SUPPORT', 0, 1, errors);
+    requireRange(activeConfig, 'viewQualityThresholds.SIDE_MIN_SUPPORT', 0, 1, errors);
+    requireRange(activeConfig, 'viewQualityThresholds.PRIMARY_SIDE_MIN_SUPPORT', 0, 1, errors);
+  }
+
+  if (hasPenaltyConfigs) {
+    for (const key of Object.keys(PENALTY_CONFIGS) as PenaltyConfigKey[]) {
+      validatePenaltyConfig(activeConfig, key, errors);
+    }
+  }
+
+  return errors;
+}
+
 // ============================================================================
 // CONTINUOUS PENALTY FUNCTIONS (ratio-based where applicable)
 // All use quadratic ramps: penalty(x) = min(cap, scale * max(0, x - deadzone)^2)
 // ============================================================================
 
-/** Torso swing penalty — max 35 pts. Deadzone 10deg (shoulder drift + breathing/sway/noise).
- *  Already camera-invariant: measures delta within a single rep. */
+type PenaltyConfigKey = keyof typeof PENALTY_CONFIGS;
+
+function penaltyAbove(value: number, threshold: number, configKey: PenaltyConfigKey): number {
+  const config = PENALTY_CONFIGS[configKey];
+  const d = Math.max(0, value - threshold - config.deadzone);
+  return Math.min(config.cap, config.scale * d * d);
+}
+
+function penaltyBelow(value: number, threshold: number, configKey: PenaltyConfigKey): number {
+  const config = PENALTY_CONFIGS[configKey];
+  const d = Math.max(0, threshold - value - config.deadzone);
+  return Math.min(config.cap, config.scale * d * d);
+}
+
+/** Torso swing penalty. Already camera-invariant: measures delta within a single rep. */
 function penaltyTorso(delta: number): number {
-  const d = Math.max(0, delta - 10);
-  return Math.min(35, 0.40 * d * d);
+  return penaltyAbove(delta, FORM_THRESHOLDS.TORSO_WARN, 'TORSO');
 }
 
-/** Shoulder movement penalty — max 30 pts. Deadzone 10deg (normal stabilisation).
- *  Already camera-invariant: measures delta within a single rep. */
+/** Shoulder movement penalty. Already camera-invariant: measures delta within a single rep. */
 function penaltyShoulder(delta: number): number {
-  const d = Math.max(0, delta - 10);
-  return Math.min(30, 0.018 * d * d);
+  return penaltyAbove(delta, FORM_THRESHOLDS.SHOULDER_WARN, 'SHOULDER');
 }
 
-/** ROM shortfall penalty — ratio-based, no foreshortening compensation needed.
- *  max 35 pts. Flex (min ratio too high) + extension (max ratio too low).
- *
- *  Target: minRatio ≤ 0.48 (fully curled), maxRatio ≥ 0.93 (fully extended).
- *  Ratios are inherently camera-invariant. */
-function penaltyROM(minRatio: number, maxRatio: number): number {
-  // Flex shortfall: penalize if min ratio is above 0.48 (didn't curl enough)
-  const FLEX_TARGET = 0.48;
-  const flexShortfall = Math.max(0, minRatio - FLEX_TARGET);
-  // Scale: at ratio 0.58 (10% short), penalty = 300 * 0.10^2 = 3pts
-  // At ratio 0.68 (20% short), penalty = 300 * 0.20^2 = 12pts
-  const flexPenalty = Math.min(20, 300 * flexShortfall * flexShortfall);
-
-  // Extension shortfall: penalize if max ratio is below 0.93 (didn't extend enough)
-  const EXT_TARGET = 0.93;
-  const extShortfall = Math.max(0, EXT_TARGET - maxRatio);
-  // Scale: at ratio 0.83 (10% short), penalty = 300 * 0.10^2 = 3pts
-  const extPenalty = Math.min(20, 300 * extShortfall * extShortfall);
-
-  return Math.min(35, flexPenalty + extPenalty);
+/** ROM shortfall penalty — ratio-based, no foreshortening compensation needed. */
+function penaltyROM(minRatio: number, maxRatio: number, romRatio: number): number {
+  const flexPenalty = penaltyAbove(minRatio, FORM_THRESHOLDS.FLEX_RATIO_WARN, 'ROM_FLEX');
+  const extPenalty = penaltyBelow(maxRatio, FORM_THRESHOLDS.EXTEND_RATIO_WARN, 'ROM_EXTEND');
+  const totalPenalty = penaltyBelow(romRatio, THRESHOLDS.ROM_MIN, 'ROM_TOTAL');
+  return Math.min(35, flexPenalty + extPenalty + totalPenalty);
 }
 
-/** Tempo penalty — max 20 pts. Concentric < 0.4s or eccentric < 0.5s. */
+/** Tempo penalty — tuned thresholds, capped as secondary feedback. */
 function penaltyTempo(tUp: number, tDown: number): number {
-  let upPenalty = 0;
-  if (tUp > 0 && tUp < 0.4) {
-    const deficit = 0.4 - tUp;
-    upPenalty = Math.min(10, 60 * deficit * deficit);
-  }
-  let downPenalty = 0;
-  if (tDown > 0 && tDown < 0.5) {
-    const deficit = 0.5 - tDown;
-    downPenalty = Math.min(10, 40 * deficit * deficit);
-  }
+  const upPenalty = tUp > 0 ? penaltyBelow(tUp, getEffectiveTempoUpMin(), 'TEMPO_UP') : 0;
+  const downPenalty = tDown > 0 ? penaltyBelow(tDown, FORM_THRESHOLDS.TEMPO_DOWN_MIN, 'TEMPO_DOWN') : 0;
   return Math.min(20, upPenalty + downPenalty);
 }
 
-/** Elbow flare penalty — max 20 pts. Deadzone 15deg (some natural abduction is normal). */
+/** Elbow flare penalty. */
 function penaltyElbowFlare(maxFlareDeg: number): number {
-  const d = Math.max(0, maxFlareDeg - 15);
-  return Math.min(20, 0.022 * d * d);
+  return penaltyAbove(maxFlareDeg, FORM_THRESHOLDS.ELBOW_FLARE_WARN, 'ELBOW_FLARE');
 }
 
-/** Asymmetry penalty — ratio-based. max 15 pts.
- *  Compares reach ratio differences between arms (camera-invariant). */
-function penaltyAsymmetry(deltaMinRatio: number, deltaRomRatio: number): number {
-  // Scale: at 0.10 diff, penalty = 500 * 0.10^2 = 5pts. At 0.20 diff = 20pts (capped at 10).
-  const minPenalty = Math.min(10, 500 * deltaMinRatio * deltaMinRatio);
-  const romPenalty = Math.min(10, 500 * deltaRomRatio * deltaRomRatio);
-  return Math.min(15, minPenalty + romPenalty);
+/** Asymmetry penalty — ratio-based. Compares reach ratio differences between arms. */
+function penaltyAsymmetry(deltaMinRatio: number, deltaRomRatio: number, syncDelta: number | null): number {
+  const minPenalty = penaltyAbove(deltaMinRatio, FORM_THRESHOLDS.SYMMETRY_MIN_RATIO, 'ASYMMETRY_MIN');
+  const romPenalty = penaltyAbove(deltaRomRatio, FORM_THRESHOLDS.SYMMETRY_ROM_RATIO, 'ASYMMETRY_ROM');
+  const syncPenalty = syncDelta !== null ? penaltyAbove(syncDelta, THRESHOLDS.SYNC_WINDOW, 'SYNC_DELTA') : 0;
+  return Math.min(15, minPenalty + romPenalty + syncPenalty);
 }
 
 /** Wrist deviation penalty — max 10 pts. Counts only sustained wrist curling. */
 function penaltyWristDeviation(deviationFrameRatio: number): number {
-  const d = Math.max(0, deviationFrameRatio - 0.25);
-  return Math.min(10, 80 * d * d);
+  return penaltyAbove(deviationFrameRatio, FORM_THRESHOLDS.WRIST_DEV_DURATION, 'WRIST');
 }
 
 function getConcentricDuration(arm: ArmFSM): number {
@@ -329,6 +539,69 @@ function getWristDeviationFrameRatio(
   return primaryIsLeft ? sideRatio('left') : sideRatio('right');
 }
 
+function sideRatioOk(repWindow: RepWindow, side: CurlSide): boolean {
+  if (side === 'left') {
+    return Number.isFinite(repWindow.ratios.minLeftRatio) && Number.isFinite(repWindow.ratios.maxLeftRatio);
+  }
+  return Number.isFinite(repWindow.ratios.minRightRatio) && Number.isFinite(repWindow.ratios.maxRightRatio);
+}
+
+function sideRomRatio(repWindow: RepWindow, side: CurlSide): number {
+  if (!sideRatioOk(repWindow, side)) return 0;
+  if (side === 'left') return repWindow.ratios.maxLeftRatio - repWindow.ratios.minLeftRatio;
+  return repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio;
+}
+
+function sideParticipated(repWindow: RepWindow, side: CurlSide): boolean {
+  return (
+    repWindow.ratioSamples[side].validSamples > 0 &&
+    sideRomRatio(repWindow, side) >= THRESHOLDS.MIN_ARM_PARTICIPATION_ROM
+  );
+}
+
+function primarySideForView(viewAngle: ViewAngle): CurlSide {
+  return viewAngle.primarySide === 'right' ? 'right' : 'left';
+}
+
+function finiteDelta(min: number, max: number): number | null {
+  const delta = max - min;
+  return Number.isFinite(delta) ? delta : null;
+}
+
+interface ShoulderDeltaSummary {
+  left: number | null;
+  right: number | null;
+  primary: number | null;
+  scoring: number | null;
+  skippedReason: string | null;
+}
+
+function getShoulderDeltaSummary(repWindow: RepWindow, viewAngle: ViewAngle): ShoulderDeltaSummary {
+  const left = finiteDelta(repWindow.minAngles.leftShoulder, repWindow.maxAngles.leftShoulder);
+  const right = finiteDelta(repWindow.minAngles.rightShoulder, repWindow.maxAngles.rightShoulder);
+  const values = [left, right].filter((value): value is number => value !== null);
+
+  if (viewAngle.zone === 'frontal') {
+    const scoring = values.length > 0 ? Math.max(...values) : null;
+    return {
+      left,
+      right,
+      primary: null,
+      scoring,
+      skippedReason: scoring === null ? 'shoulder_unavailable' : null,
+    };
+  }
+
+  const primary = primarySideForView(viewAngle) === 'left' ? left : right;
+  return {
+    left,
+    right,
+    primary,
+    scoring: primary,
+    skippedReason: primary === null ? 'primary_shoulder_unavailable' : null,
+  };
+}
+
 /** Compute a continuous rep score from ratio-based measurements. */
 function computeRepScore(
   repWindow: RepWindow,
@@ -338,7 +611,6 @@ function computeRepScore(
 ): number {
   const { minAngles, maxAngles } = repWindow;
   const isFrontal = viewAngle.zone === 'frontal';
-  const isSide = viewAngle.zone === 'side';
   const primaryIsLeft = viewAngle.primarySide !== 'right';
 
   // Torso penalty (delta-based, already camera-invariant)
@@ -347,17 +619,9 @@ function computeRepScore(
     : 0;
   const torsoP = penaltyTorso(deltaTorso);
 
-  // Shoulder penalty (delta-based, skip at side angles)
-  let shoulderP = 0;
-  if (!isSide) {
-    const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
-    const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
-    const shValues: number[] = [];
-    if (isFinite(deltaShL)) shValues.push(deltaShL);
-    if (isFinite(deltaShR)) shValues.push(deltaShR);
-    const maxDeltaSh = shValues.length > 0 ? Math.max(...shValues) : 0;
-    shoulderP = penaltyShoulder(maxDeltaSh);
-  }
+  // Shoulder penalty: frontal uses bilateral max; side/oblique uses selected primary side.
+  const shoulderSummary = getShoulderDeltaSummary(repWindow, viewAngle);
+  const shoulderP = shoulderSummary.scoring !== null ? penaltyShoulder(shoulderSummary.scoring) : 0;
 
   // ROM penalty — ratio-based (camera-invariant, no foreshortening compensation)
   const leftRatioOk = isFinite(repWindow.ratios.minLeftRatio) && isFinite(repWindow.ratios.maxLeftRatio);
@@ -381,9 +645,11 @@ function computeRepScore(
       ? (leftRatioOk ? repWindow.ratios.maxLeftRatio : 0.95)
       : (rightRatioOk ? repWindow.ratios.maxRightRatio : 0.95);
   }
+  const romRatio = getRepWindowRomRatio(repWindow, viewAngle);
   const romP = penaltyROM(
     isFinite(minRatio) ? minRatio : 0.45,
-    isFinite(maxRatio) ? maxRatio : 0.95
+    isFinite(maxRatio) ? maxRatio : 0.95,
+    romRatio,
   );
 
   const { tUp, tDown } = getRepTempoDurations(repWindow, leftArm, _rightArm, viewAngle);
@@ -396,7 +662,7 @@ function computeRepScore(
     const romRRatio = repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio;
     const deltaMinRatio = Math.abs(repWindow.ratios.minLeftRatio - repWindow.ratios.minRightRatio);
     const deltaRomRatio = Math.abs(romLRatio - romRRatio);
-    asymmetryP = penaltyAsymmetry(deltaMinRatio, deltaRomRatio);
+    asymmetryP = penaltyAsymmetry(deltaMinRatio, deltaRomRatio, repWindow.metadata.syncDelta);
   }
 
   // Elbow flare penalty (frontal only)
@@ -419,6 +685,9 @@ function computeRepScore(
 const SIDES = ['left', 'right'] as const;
 type CurlSide = typeof SIDES[number];
 type ArmState = 'REST' | 'UP' | 'TOP' | 'DOWN';
+type LandmarkSource = 'world' | 'image';
+type RatioDistanceMode = 'world_3d' | 'image_2d';
+type TorsoAnchorSource = 'nose' | 'mid_ear' | 'shoulder_center' | 'unavailable';
 
 interface ArmFSM {
   state: ArmState;
@@ -460,12 +729,42 @@ interface RepElbowFlareCounts {
   maxFlareDeg: number;
 }
 
+interface RepRatioSampleCounts {
+  validSamples: number;
+  dropoutSamples: number;
+}
+
+interface RepViewSamples {
+  total: number;
+  front: number;
+  oblique: number;
+  side: number;
+  bilateralValid: number;
+  primaryLeft: number;
+  primaryRight: number;
+}
+
+interface RepMetadata {
+  landmarkSource: LandmarkSource;
+  ratioDistanceMode: RatioDistanceMode;
+  torsoAnchorSources: Record<TorsoAnchorSource, number>;
+  completionView: ViewAngle | null;
+  selectedSideAtCompletion: ViewAngle['primarySide'] | null;
+  syncDelta: number | null;
+}
+
 interface RepWindow {
   /** Rolling min/max for angular metrics during the rep (torso, shoulder, wrist — still angle-based) */
   minAngles: AngleSet;
   maxAngles: AngleSet;
   /** Rolling min/max reach ratios per arm — the primary metric for ROM/flex/extend evaluation */
   ratios: {
+    minLeftRatio: number;
+    maxLeftRatio: number;
+    minRightRatio: number;
+    maxRightRatio: number;
+  };
+  rawRatios: {
     minLeftRatio: number;
     maxLeftRatio: number;
     minRightRatio: number;
@@ -482,6 +781,10 @@ interface RepWindow {
   wrist: Record<CurlSide, RepSampleCounts>;
   /** Sustained elbow flare samples. Frontal view only. */
   elbowFlare: Record<CurlSide, RepElbowFlareCounts>;
+  /** Current-frame ratio sample validity for diagnostics and view quality. */
+  ratioSamples: Record<CurlSide, RepRatioSampleCounts>;
+  viewSamples: RepViewSamples;
+  metadata: RepMetadata;
 }
 
 interface AngleSet {
@@ -502,6 +805,12 @@ interface AngleSet {
 
 interface SmoothedAngles extends AngleSet {}
 
+interface JointAnglesResult {
+  angles: AngleSet;
+  torsoAnchorSource: TorsoAnchorSource;
+  ratioDistanceMode: RatioDistanceMode;
+}
+
 /** Exercise-specific RepResult (richer than framework RepResult) */
 interface RepResult {
   repIndex: number;
@@ -512,6 +821,8 @@ interface RepResult {
   tDown: number;
   score: number;
   messages: string[];
+  scorable?: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
   diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
@@ -623,12 +934,44 @@ function initRepWindow(tStart: number): RepWindow {
       minRightRatio: Infinity,
       maxRightRatio: -Infinity,
     },
+    rawRatios: {
+      minLeftRatio: Infinity,
+      maxLeftRatio: -Infinity,
+      minRightRatio: Infinity,
+      maxRightRatio: -Infinity,
+    },
     tStart,
     tEnd: tStart,
     frameCount: 0,
     tempo: { left: initRepTempoSide(), right: initRepTempoSide() },
     wrist: { left: initSampleCounts(), right: initSampleCounts() },
     elbowFlare: { left: initElbowFlareCounts(), right: initElbowFlareCounts() },
+    ratioSamples: {
+      left: { validSamples: 0, dropoutSamples: 0 },
+      right: { validSamples: 0, dropoutSamples: 0 },
+    },
+    viewSamples: {
+      total: 0,
+      front: 0,
+      oblique: 0,
+      side: 0,
+      bilateralValid: 0,
+      primaryLeft: 0,
+      primaryRight: 0,
+    },
+    metadata: {
+      landmarkSource: 'image',
+      ratioDistanceMode: 'image_2d',
+      torsoAnchorSources: {
+        nose: 0,
+        mid_ear: 0,
+        shoulder_center: 0,
+        unavailable: 0,
+      },
+      completionView: null,
+      selectedSideAtCompletion: null,
+      syncDelta: null,
+    },
   };
 }
 
@@ -769,18 +1112,66 @@ function dist2D(a: Point3D, b: Point3D): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** Euclidean distance using x, y, z for world landmarks. */
+function dist3D(a: Point3D, b: Point3D): number {
+  if (a.z === undefined || b.z === undefined) return NaN;
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function distanceForRatio(a: Point3D, b: Point3D, mode: RatioDistanceMode): number {
+  return mode === 'world_3d' ? dist3D(a, b) : dist2D(a, b);
+}
+
+function midpoint(a: Point3D, b: Point3D): Point3D {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+    z: ((a.z ?? 0) + (b.z ?? 0)) / 2,
+  };
+}
+
+function getTorsoUpperAnchor(
+  keypoints: Keypoint[],
+  shoulderCenter: Point3D | null,
+): { point: Point3D | null; source: TorsoAnchorSource } {
+  const nose = getKeypoint(keypoints, 'nose');
+  if (nose && isVisible(nose, VISIBILITY_THRESHOLD)) {
+    return { point: getPoint(nose), source: 'nose' };
+  }
+
+  const leftEar = getKeypoint(keypoints, 'left_ear');
+  const rightEar = getKeypoint(keypoints, 'right_ear');
+  if (
+    leftEar &&
+    rightEar &&
+    isVisible(leftEar, VISIBILITY_THRESHOLD) &&
+    isVisible(rightEar, VISIBILITY_THRESHOLD)
+  ) {
+    return { point: midpoint(getPoint(leftEar)!, getPoint(rightEar)!), source: 'mid_ear' };
+  }
+
+  if (shoulderCenter) {
+    return { point: shoulderCenter, source: 'shoulder_center' };
+  }
+
+  return { point: null, source: 'unavailable' };
+}
+
 /**
  * Compute normalized arm reach ratio for one arm.
- * reach = dist2D(shoulder, wrist) / (dist2D(shoulder, elbow) + dist2D(elbow, wrist))
+ * reach = dist(shoulder, wrist) / (dist(shoulder, elbow) + dist(elbow, wrist))
  *
  * ~0.95-1.0  = arm nearly straight (full extension)
  * ~0.70-0.85 = forearm foreshortened (pointing into depth axis)
  */
-function computeArmReachRatio(keypoints: Keypoint[], side: 'left' | 'right'): number {
-  // Reach ratio is calibrated on world (3D) landmarks. Image landmarks lack z and
-  // produce foreshortened distances that make the ratio unreliable for front-on curls.
-  if (keypoints.length === 0 || keypoints[0].z === undefined) return NaN;
-
+function computeArmReachRatio(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+  ratioDistanceMode: RatioDistanceMode,
+): number {
   const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
   const elbow = getKeypoint(keypoints, `${side}_elbow`);
   const wrist = getKeypoint(keypoints, `${side}_wrist`);
@@ -794,10 +1185,16 @@ function computeArmReachRatio(keypoints: Keypoint[], side: 'left' | 'right'): nu
     return NaN;
   }
 
-  const segmentLength = dist2D(shoulder, elbow) + dist2D(elbow, wrist);
-  if (segmentLength < 1e-6) return NaN;
+  const shoulderPoint = getPoint(shoulder)!;
+  const elbowPoint = getPoint(elbow)!;
+  const wristPoint = getPoint(wrist)!;
+  const upperArm = distanceForRatio(shoulderPoint, elbowPoint, ratioDistanceMode);
+  const forearm = distanceForRatio(elbowPoint, wristPoint, ratioDistanceMode);
+  const reach = distanceForRatio(shoulderPoint, wristPoint, ratioDistanceMode);
+  const segmentLength = upperArm + forearm;
+  if (!Number.isFinite(segmentLength) || !Number.isFinite(reach) || segmentLength < 1e-6) return NaN;
 
-  return dist2D(shoulder, wrist) / segmentLength;
+  return reach / segmentLength;
 }
 
 /**
@@ -875,7 +1272,10 @@ function updateRepTempoSide(tempo: RepTempoSide, ratio: number, t: number): void
  * Calculate all 8 joint angles from keypoints.
  * Uses existing calculation functions.
  */
-function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
+function calculateJointAngles(
+  keypoints: Keypoint[],
+  ratioDistanceMode: RatioDistanceMode,
+): JointAnglesResult | null {
   const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
   const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
   const leftElbow = getKeypoint(keypoints, 'left_elbow');
@@ -968,9 +1368,11 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
   const torsoAngle =
     hipCenter && shoulderCenter && leftShoulder && rightShoulder
       ? (() => {
+          const upperAnchor = getTorsoUpperAnchor(keypoints, shoulderCenter);
+          if (!upperAnchor.point) return NaN;
           const angle = calculateSignedVerticalAngleSagittal(
             hipCenter,
-            shoulderCenter,
+            upperAnchor.point,
             getPoint(leftHip)!,
             getPoint(rightHip)!,
             getPoint(leftShoulder)!,
@@ -979,6 +1381,7 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
           return Number.isNaN(angle) ? 0 : angle;
         })()
       : NaN;
+  const torsoAnchorSource = getTorsoUpperAnchor(keypoints, shoulderCenter).source;
 
   // Wrist angles (2D — elbow-wrist-index as proxy for wrist deviation)
   const leftWristAngle =
@@ -992,24 +1395,28 @@ function calculateJointAngles(keypoints: Keypoint[]): AngleSet | null {
 
   // Reach ratios — the primary camera-invariant metric for curl detection
   const leftRatio = leftOk
-    ? computeArmReachRatio(keypoints, 'left')
+    ? computeArmReachRatio(keypoints, 'left', ratioDistanceMode)
     : NaN;
   const rightRatio = rightOk
-    ? computeArmReachRatio(keypoints, 'right')
+    ? computeArmReachRatio(keypoints, 'right', ratioDistanceMode)
     : NaN;
 
   return {
-    leftElbow: leftElbowAngle,
-    rightElbow: rightElbowAngle,
-    leftShoulder: leftShoulderAngle,
-    rightShoulder: rightShoulderAngle,
-    leftTorso: leftTorsoAngle,
-    rightTorso: rightTorsoAngle,
-    torso: torsoAngle,
-    leftWrist: leftWristAngle,
-    rightWrist: rightWristAngle,
-    leftRatio,
-    rightRatio,
+    angles: {
+      leftElbow: leftElbowAngle,
+      rightElbow: rightElbowAngle,
+      leftShoulder: leftShoulderAngle,
+      rightShoulder: rightShoulderAngle,
+      leftTorso: leftTorsoAngle,
+      rightTorso: rightTorsoAngle,
+      torso: torsoAngle,
+      leftWrist: leftWristAngle,
+      rightWrist: rightWristAngle,
+      leftRatio,
+      rightRatio,
+    },
+    torsoAnchorSource,
+    ratioDistanceMode,
   };
 }
 
@@ -1186,7 +1593,6 @@ function evaluateForm(
   const { minAngles, maxAngles, ratios } = repWindow;
   const messages: string[] = [];
   const isFrontal = viewAngle.zone === 'frontal';
-  const isSide = viewAngle.zone === 'side';
   const primaryIsLeft = viewAngle.primarySide !== 'right';
 
   const leftRatioOk = isFinite(ratios.minLeftRatio) && isFinite(ratios.maxLeftRatio);
@@ -1227,17 +1633,11 @@ function evaluateForm(
 
   // 1. Severe shoulder involvement / severe torso swing
   // 2. Shoulder warning / torso warning
-  const deltaShL = maxAngles.leftShoulder - minAngles.leftShoulder;
-  const deltaShR = maxAngles.rightShoulder - minAngles.rightShoulder;
-  if (!isSide) {
-    const shValues: number[] = [];
-    if (isFinite(deltaShL)) shValues.push(deltaShL);
-    if (isFinite(deltaShR)) shValues.push(deltaShR);
-    const maxDeltaSh = shValues.length > 0 ? Math.max(...shValues) : 0;
-
-    if (maxDeltaSh > FORM_THRESHOLDS.SHOULDER_FAIL) {
+  const shoulderSummary = getShoulderDeltaSummary(repWindow, viewAngle);
+  if (shoulderSummary.scoring !== null) {
+    if (shoulderSummary.scoring > FORM_THRESHOLDS.SHOULDER_FAIL) {
       severeMessages.push('Too much shoulder involvement — reduce the weight.');
-    } else if (maxDeltaSh > FORM_THRESHOLDS.SHOULDER_WARN) {
+    } else if (shoulderSummary.scoring > FORM_THRESHOLDS.SHOULDER_WARN) {
       warningMessages.push('Upper arms moving — keep elbows pinned to your sides.');
     }
   }
@@ -1294,7 +1694,12 @@ function evaluateForm(
   if (isFrontal && leftRatioOk && rightRatioOk) {
     const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
     const deltaRomRatio = Math.abs(romLRatio - romRRatio);
-    if (deltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO || deltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO) {
+    const syncDelta = repWindow.metadata.syncDelta;
+    if (
+      deltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO ||
+      deltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO ||
+      (syncDelta !== null && syncDelta > THRESHOLDS.SYNC_WINDOW)
+    ) {
       tempoAsymmetryMessages.push('Arms are uneven — curl both sides together.');
     }
   }
@@ -1347,22 +1752,97 @@ function maxElbowFlareSupport(repWindow: RepWindow): { sampleCount: number; supp
   return { sampleCount, support };
 }
 
+function ratioSampleSupport(repWindow: RepWindow, side: CurlSide): number {
+  return sampleRatio(repWindow.ratioSamples[side].validSamples, repWindow.viewSamples.total);
+}
+
+function dominantTorsoAnchorSource(repWindow: RepWindow): TorsoAnchorSource {
+  let dominant: TorsoAnchorSource = 'unavailable';
+  let dominantCount = -1;
+  for (const source of Object.keys(repWindow.metadata.torsoAnchorSources) as TorsoAnchorSource[]) {
+    const count = repWindow.metadata.torsoAnchorSources[source];
+    if (count > dominantCount) {
+      dominant = source;
+      dominantCount = count;
+    }
+  }
+  return dominant;
+}
+
+function buildBarbellCurlViewQuality(
+  repWindow: RepWindow,
+  viewAngle: ViewAngle,
+): RepViewQualityDiagnostic {
+  const total = repWindow.viewSamples.total;
+  const frontSupport = sampleRatio(repWindow.viewSamples.bilateralValid, total);
+  const selectedSide = viewAngle.primarySide === 'right' ? 'right' : 'left';
+  const selectedSupport = ratioSampleSupport(repWindow, selectedSide);
+  const sideSamples = repWindow.viewSamples.oblique + repWindow.viewSamples.side;
+  const selectedPrimarySamples = selectedSide === 'left'
+    ? repWindow.viewSamples.primaryLeft
+    : repWindow.viewSamples.primaryRight;
+  const primarySideSupport = sampleRatio(selectedPrimarySamples, sideSamples);
+  const frontishConfirmed =
+    total >= VIEW_QUALITY_THRESHOLDS.MIN_SAMPLES &&
+    viewAngle.zone === 'frontal' &&
+    frontSupport >= VIEW_QUALITY_THRESHOLDS.FRONT_MIN_SUPPORT;
+  const sideConfirmed =
+    total >= VIEW_QUALITY_THRESHOLDS.MIN_SAMPLES &&
+    viewAngle.zone !== 'frontal' &&
+    selectedSupport >= VIEW_QUALITY_THRESHOLDS.SIDE_MIN_SUPPORT &&
+    primarySideSupport >= VIEW_QUALITY_THRESHOLDS.PRIMARY_SIDE_MIN_SUPPORT;
+
+  return {
+    status: sideConfirmed ? 'side_confirmed' : frontishConfirmed ? 'frontish_confirmed' : 'view_unknown',
+    sideConfirmed,
+    frontishConfirmed,
+    viewUnknown: !sideConfirmed && !frontishConfirmed,
+    averageSideViewConfidence: viewAngle.zone === 'frontal' ? frontSupport : selectedSupport,
+    minSideViewConfidence: viewAngle.zone === 'frontal'
+      ? frontSupport
+      : Math.min(selectedSupport, primarySideSupport),
+    sampleCount: total,
+  };
+}
+
+function getBarbellCurlQualityWarnings(
+  viewQuality: RepViewQualityDiagnostic,
+  viewAngle: ViewAngle,
+): FrameworkRepResult['qualityWarnings'] {
+  if (!viewQuality.viewUnknown) return [];
+  return viewAngle.zone === 'frontal' ? ['front_view_uncertain'] : ['side_view_uncertain'];
+}
+
 function buildBarbellCurlDiagnostics(
   repWindow: RepWindow,
   leftArm: ArmFSM,
   rightArm: ArmFSM,
   viewAngle: ViewAngle,
   repIndex: number,
+  scorable: boolean,
+  viewQuality: RepViewQualityDiagnostic,
 ): FrameworkRepResult['diagnostics'] {
   const { ratios, minAngles, maxAngles } = repWindow;
   const isFrontal = viewAngle.zone === 'frontal';
-  const isSide = viewAngle.zone === 'side';
   const primaryIsLeft = viewAngle.primarySide !== 'right';
   const leftRatioOk = isFinite(ratios.minLeftRatio) && isFinite(ratios.maxLeftRatio);
   const rightRatioOk = isFinite(ratios.minRightRatio) && isFinite(ratios.maxRightRatio);
   const romLRatio = leftRatioOk ? ratios.maxLeftRatio - ratios.minLeftRatio : 0;
   const romRRatio = rightRatioOk ? ratios.maxRightRatio - ratios.minRightRatio : 0;
   const romRatio = getRepWindowRomRatio(repWindow, viewAngle);
+  const rawLeftOk = Number.isFinite(repWindow.rawRatios.minLeftRatio) && Number.isFinite(repWindow.rawRatios.maxLeftRatio);
+  const rawRightOk = Number.isFinite(repWindow.rawRatios.minRightRatio) && Number.isFinite(repWindow.rawRatios.maxRightRatio);
+  const selectedSide = viewAngle.primarySide === 'right' ? 'right' : viewAngle.primarySide === 'left' ? 'left' : 'both';
+  const primarySide = primarySideForView(viewAngle);
+  const frontSupportRatio = sampleRatio(repWindow.viewSamples.bilateralValid, repWindow.viewSamples.total);
+  const primarySideSupportRatio = ratioSampleSupport(repWindow, primarySide);
+  const sideSamples = repWindow.viewSamples.oblique + repWindow.viewSamples.side;
+  const sideViewSupportRatio = viewAngle.zone === 'frontal'
+    ? sampleRatio(repWindow.viewSamples.front, repWindow.viewSamples.total)
+    : sampleRatio(viewAngle.primarySide === 'right' ? repWindow.viewSamples.primaryRight : repWindow.viewSamples.primaryLeft, sideSamples);
+  const viewSupportRatio = isFrontal
+    ? frontSupportRatio
+    : Math.min(sideViewSupportRatio, primarySideSupportRatio);
   const minRatio = isFrontal
     ? Math.min(leftRatioOk ? ratios.minLeftRatio : Infinity, rightRatioOk ? ratios.minRightRatio : Infinity)
     : primaryIsLeft
@@ -1379,29 +1859,34 @@ function buildBarbellCurlDiagnostics(
     ? (romLRatio < THRESHOLDS.ROM_MIN || romRRatio < THRESHOLDS.ROM_MIN) && !flexTriggered && !extendTriggered
     : romRatio < THRESHOLDS.ROM_MIN && !flexTriggered && !extendTriggered;
 
-  const shoulderDeltas = [
-    maxAngles.leftShoulder - minAngles.leftShoulder,
-    maxAngles.rightShoulder - minAngles.rightShoulder,
-  ].filter(value => Number.isFinite(value));
-  const shoulderDelta = shoulderDeltas.length > 0 ? Math.max(...shoulderDeltas) : null;
+  const shoulderSummary = getShoulderDeltaSummary(repWindow, viewAngle);
+  const shoulderDelta = shoulderSummary.scoring;
   const torsoDelta = maxAngles.torso - minAngles.torso;
   const torsoWarnThreshold = repIndex === 0 ? FORM_THRESHOLDS.TORSO_FAIL : FORM_THRESHOLDS.TORSO_WARN;
   const flareSummary = getElbowFlareSummary(repWindow, isFrontal);
   const flareSupport = maxElbowFlareSupport(repWindow);
   const { tUp, tDown } = getRepTempoDurations(repWindow, leftArm, rightArm, viewAngle);
+  const asymmetryMinRatio = isFrontal && leftRatioOk && rightRatioOk
+    ? Math.abs(ratios.minLeftRatio - ratios.minRightRatio)
+    : null;
+  const asymmetryRomRatio = isFrontal && leftRatioOk && rightRatioOk
+    ? Math.abs(romLRatio - romRRatio)
+    : null;
   const asymmetryRatio =
-    isFrontal && leftRatioOk && rightRatioOk
-      ? Math.max(
-          Math.abs(ratios.minLeftRatio - ratios.minRightRatio),
-          Math.abs(romLRatio - romRRatio),
-        )
+    asymmetryMinRatio !== null && asymmetryRomRatio !== null
+      ? Math.max(asymmetryMinRatio, asymmetryRomRatio)
       : null;
-  const asymmetryTriggered =
+  const asymmetryEligible =
     isFrontal &&
     leftRatioOk &&
     rightRatioOk &&
-    (Math.abs(ratios.minLeftRatio - ratios.minRightRatio) > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO ||
-      Math.abs(romLRatio - romRRatio) > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO);
+    sideParticipated(repWindow, 'left') &&
+    sideParticipated(repWindow, 'right');
+  const asymmetryTriggered =
+    asymmetryEligible &&
+    ((asymmetryMinRatio ?? 0) > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO ||
+      (asymmetryRomRatio ?? 0) > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO ||
+      (repWindow.metadata.syncDelta !== null && repWindow.metadata.syncDelta > THRESHOLDS.SYNC_WINDOW));
   const wristDeviationRatio = getWristDeviationFrameRatio(repWindow, isFrontal, primaryIsLeft);
   const wristSamples = maxWristConfidentSamples(repWindow, isFrontal, primaryIsLeft);
 
@@ -1409,14 +1894,44 @@ function buildBarbellCurlDiagnostics(
     exerciseName: 'Barbell Curl',
     repIndex,
     view: viewDiagnostic(viewAngle),
-    selectedSide: viewAngle.primarySide,
+    selectedSide,
+    scorable,
+    viewQuality,
     metrics: [
+      diagnosticLabelMetric('landmarkSource', repWindow.metadata.landmarkSource, { sampleCount: repWindow.frameCount }),
+      diagnosticLabelMetric('ratioDistanceMode', repWindow.metadata.ratioDistanceMode, { sampleCount: repWindow.frameCount }),
+      diagnosticLabelMetric('torsoAnchorSource', dominantTorsoAnchorSource(repWindow), { sampleCount: repWindow.frameCount }),
+      diagnosticMetric('viewAngleDeg', viewAngle.angleDeg, { unit: 'degrees', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('smoothedViewAngleDeg', viewAngle.smoothedAngleDeg, { unit: 'degrees', sampleCount: repWindow.viewSamples.total }),
       diagnosticMetric('minCurlRatio', minRatio, { unit: 'ratio' }),
       diagnosticMetric('maxCurlRatio', maxRatio, { unit: 'ratio' }),
       diagnosticMetric('romRatio', romRatio, { unit: 'ratio' }),
       diagnosticMetric('leftRomRatio', romLRatio, { unit: 'ratio', eligible: leftRatioOk, skippedReason: 'left_arm_unavailable' }),
       diagnosticMetric('rightRomRatio', romRRatio, { unit: 'ratio', eligible: rightRatioOk, skippedReason: 'right_arm_unavailable' }),
-      diagnosticMetric('shoulderDelta', shoulderDelta, { unit: 'degrees', eligible: !isSide && shoulderDelta !== null, skippedReason: 'side_view_or_shoulder_unavailable' }),
+      diagnosticMetric('rawLeftMinCurlRatio', rawLeftOk ? repWindow.rawRatios.minLeftRatio : null, { unit: 'ratio', eligible: rawLeftOk, skippedReason: 'left_raw_ratio_unavailable' }),
+      diagnosticMetric('rawLeftMaxCurlRatio', rawLeftOk ? repWindow.rawRatios.maxLeftRatio : null, { unit: 'ratio', eligible: rawLeftOk, skippedReason: 'left_raw_ratio_unavailable' }),
+      diagnosticMetric('rawRightMinCurlRatio', rawRightOk ? repWindow.rawRatios.minRightRatio : null, { unit: 'ratio', eligible: rawRightOk, skippedReason: 'right_raw_ratio_unavailable' }),
+      diagnosticMetric('rawRightMaxCurlRatio', rawRightOk ? repWindow.rawRatios.maxRightRatio : null, { unit: 'ratio', eligible: rawRightOk, skippedReason: 'right_raw_ratio_unavailable' }),
+      diagnosticMetric('leftValidSamples', repWindow.ratioSamples.left.validSamples, { unit: 'count', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('rightValidSamples', repWindow.ratioSamples.right.validSamples, { unit: 'count', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('leftDropoutSamples', repWindow.ratioSamples.left.dropoutSamples, { unit: 'count', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('rightDropoutSamples', repWindow.ratioSamples.right.dropoutSamples, { unit: 'count', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('viewSupportRatio', viewSupportRatio, { unit: 'ratio', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('frontViewSupportRatio', frontSupportRatio, { unit: 'ratio', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('sideViewSupportRatio', sideViewSupportRatio, { unit: 'ratio', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('primarySideSupportRatio', primarySideSupportRatio, { unit: 'ratio', sampleCount: repWindow.viewSamples.total }),
+      diagnosticMetric('leftShoulderDelta', shoulderSummary.left, { unit: 'degrees', eligible: shoulderSummary.left !== null, skippedReason: 'left_shoulder_unavailable' }),
+      diagnosticMetric('rightShoulderDelta', shoulderSummary.right, { unit: 'degrees', eligible: shoulderSummary.right !== null, skippedReason: 'right_shoulder_unavailable' }),
+      diagnosticMetric('primaryShoulderDelta', shoulderSummary.primary, {
+        unit: 'degrees',
+        eligible: !isFrontal && shoulderSummary.primary !== null,
+        skippedReason: isFrontal ? 'not_primary_side_view' : 'primary_shoulder_unavailable',
+      }),
+      diagnosticMetric('shoulderDelta', shoulderDelta, {
+        unit: 'degrees',
+        eligible: shoulderDelta !== null,
+        skippedReason: shoulderSummary.skippedReason ?? 'shoulder_unavailable',
+      }),
       diagnosticMetric('torsoDelta', torsoDelta, { unit: 'degrees' }),
       diagnosticMetric('elbowFlareMaxDeg', flareSummary.maxFlareDeg, {
         unit: 'degrees',
@@ -1432,7 +1947,10 @@ function buildBarbellCurlDiagnostics(
       }),
       diagnosticMetric('tUp', tUp, { unit: 'seconds', eligible: tUp > 0, skippedReason: 'curl_up_timestamp_unavailable' }),
       diagnosticMetric('tDown', tDown, { unit: 'seconds', eligible: tDown > 0, skippedReason: 'lowering_timestamp_unavailable' }),
-      diagnosticMetric('asymmetryRatio', asymmetryRatio, { unit: 'ratio', eligible: isFrontal && asymmetryRatio !== null, skippedReason: 'not_front_view_or_side_missing' }),
+      diagnosticMetric('asymmetryRatio', asymmetryRatio, { unit: 'ratio', eligible: asymmetryEligible && asymmetryRatio !== null, skippedReason: isFrontal ? 'bilateral_participation_missing' : 'not_front_view' }),
+      diagnosticMetric('asymmetryMinRatio', asymmetryMinRatio, { unit: 'ratio', eligible: asymmetryEligible && asymmetryMinRatio !== null, skippedReason: isFrontal ? 'bilateral_participation_missing' : 'not_front_view' }),
+      diagnosticMetric('asymmetryRomRatio', asymmetryRomRatio, { unit: 'ratio', eligible: asymmetryEligible && asymmetryRomRatio !== null, skippedReason: isFrontal ? 'bilateral_participation_missing' : 'not_front_view' }),
+      diagnosticMetric('syncDelta', repWindow.metadata.syncDelta, { unit: 'seconds', eligible: asymmetryEligible && repWindow.metadata.syncDelta !== null, skippedReason: isFrontal ? 'sync_completion_unavailable' : 'not_front_view' }),
       diagnosticMetric('wristDeviationRatio', wristDeviationRatio, {
         unit: 'ratio',
         eligible: wristSamples >= WRIST_MIN_CONFIDENT_SAMPLES,
@@ -1470,29 +1988,28 @@ function buildBarbellCurlDiagnostics(
       }),
       diagnosticCue({
         issueId: 'barbell-curl.shoulder_fail',
-        metricKeys: ['shoulderDelta'],
+        metricKeys: ['shoulderDelta', 'primaryShoulderDelta'],
         direction: 'above',
         value: shoulderDelta,
         thresholdPath: 'formThresholds.SHOULDER_FAIL',
         thresholdValue: FORM_THRESHOLDS.SHOULDER_FAIL,
-        eligible: !isSide && shoulderDelta !== null,
-        triggered: !isSide && shoulderDelta !== null && shoulderDelta > FORM_THRESHOLDS.SHOULDER_FAIL,
-        skippedReason: 'side_view_or_shoulder_unavailable',
+        eligible: shoulderDelta !== null,
+        triggered: shoulderDelta !== null && shoulderDelta > FORM_THRESHOLDS.SHOULDER_FAIL,
+        skippedReason: shoulderSummary.skippedReason ?? 'shoulder_unavailable',
       }),
       diagnosticCue({
         issueId: 'barbell-curl.shoulder_warn',
-        metricKeys: ['shoulderDelta'],
+        metricKeys: ['shoulderDelta', 'primaryShoulderDelta'],
         direction: 'above',
         value: shoulderDelta,
         thresholdPath: 'formThresholds.SHOULDER_WARN',
         thresholdValue: FORM_THRESHOLDS.SHOULDER_WARN,
-        eligible: !isSide && shoulderDelta !== null,
+        eligible: shoulderDelta !== null,
         triggered:
-          !isSide &&
           shoulderDelta !== null &&
           shoulderDelta > FORM_THRESHOLDS.SHOULDER_WARN &&
           shoulderDelta <= FORM_THRESHOLDS.SHOULDER_FAIL,
-        skippedReason: 'side_view_or_shoulder_unavailable',
+        skippedReason: shoulderSummary.skippedReason ?? 'shoulder_unavailable',
       }),
       diagnosticCue({
         issueId: 'barbell-curl.torso_fail',
@@ -1551,14 +2068,22 @@ function buildBarbellCurlDiagnostics(
       }),
       diagnosticCue({
         issueId: 'barbell-curl.asymmetry',
-        metricKeys: ['asymmetryRatio'],
+        metricKeys: ['asymmetryMinRatio', 'asymmetryRomRatio', 'syncDelta'],
         direction: 'above',
         value: asymmetryRatio,
-        thresholdPath: 'formThresholds.SYMMETRY_ROM_RATIO',
-        thresholdValue: FORM_THRESHOLDS.SYMMETRY_ROM_RATIO,
-        eligible: isFrontal && asymmetryRatio !== null,
+        thresholdPath: [
+          'formThresholds.SYMMETRY_MIN_RATIO',
+          'formThresholds.SYMMETRY_ROM_RATIO',
+          'thresholds.SYNC_WINDOW',
+        ],
+        thresholdValue: {
+          minRatio: FORM_THRESHOLDS.SYMMETRY_MIN_RATIO,
+          romRatio: FORM_THRESHOLDS.SYMMETRY_ROM_RATIO,
+          syncDelta: THRESHOLDS.SYNC_WINDOW,
+        },
+        eligible: asymmetryEligible && asymmetryRatio !== null,
         triggered: asymmetryTriggered,
-        skippedReason: 'not_front_view_or_side_missing',
+        skippedReason: isFrontal ? 'bilateral_participation_missing' : 'not_front_view',
       }),
       diagnosticCue({
         issueId: 'barbell-curl.wrist_curl',
@@ -1582,24 +2107,33 @@ function buildBarbellCurlDiagnostics(
 
 function updateBarbellCurlState(
   keypoints: Keypoint[],
-  currentState: BarbellCurlState
+  currentState: BarbellCurlState,
+  frameContext?: ExerciseFrameContext,
 ): BarbellCurlState {
   const t = Date.now() / 1000; // seconds
+  const mechanicsKeypoints = frameContext?.worldKeypoints?.length
+    ? frameContext.worldKeypoints
+    : frameContext?.imageKeypoints?.length
+      ? frameContext.imageKeypoints
+      : keypoints;
+  const landmarkSource: LandmarkSource = frameContext?.worldKeypoints?.length ? 'world' : 'image';
+  const ratioDistanceMode: RatioDistanceMode = landmarkSource === 'world' ? 'world_3d' : 'image_2d';
 
   // Estimate view angle
-  const viewAngle = estimateViewAngle(keypoints, currentState.viewAngle.smoothedAngleDeg);
+  const viewAngle = estimateViewAngle(mechanicsKeypoints, currentState.viewAngle.smoothedAngleDeg);
 
   // Calculate raw angles
-  const rawAngles = calculateJointAngles(keypoints);
-  if (!rawAngles) {
+  const rawResult = calculateJointAngles(mechanicsKeypoints, ratioDistanceMode);
+  if (!rawResult) {
     return { ...currentState, displayAngles: null, viewAngle };
   }
+  const rawAngles = rawResult.angles;
 
   // Apply smoothing — returns fast (median-only) and smoothed (median+EMA)
   const { smoothed, fast } = applySmoothing(rawAngles, currentState.angleHistory, currentState.smoothed);
 
   // Warm-up gate: require consecutive stable frames before enabling FSM
-  const frameStable = isFrameStable(keypoints);
+  const frameStable = isFrameStable(mechanicsKeypoints);
   let warmupFrames = currentState.warmupFrames;
   if (frameStable) {
     warmupFrames = Math.min(warmupFrames + 1, WARMUP_REQUIRED + 1);
@@ -1623,15 +2157,15 @@ function updateBarbellCurlState(
   }
 
   // Use fast (median-only) ratios for FSM: avoids EMA lag that prevents reaching extremes
-  const leftValid = !isNaN(fast.leftRatio);
-  const rightValid = !isNaN(fast.rightRatio);
+  const leftValid = Number.isFinite(rawAngles.leftRatio) && Number.isFinite(fast.leftRatio);
+  const rightValid = Number.isFinite(rawAngles.rightRatio) && Number.isFinite(fast.rightRatio);
 
-  // If neither arm is valid, bail
-  if (!leftValid && !rightValid) {
+  // If neither arm is valid and no rep is active, bail. During an active rep,
+  // keep the window alive so dropout samples are visible in diagnostics, but
+  // do not advance the FSM from held/smoothed values.
+  if (!leftValid && !rightValid && !currentState.repWindow) {
     return newState;
   }
-
-  const isSingleArm = !leftValid || !rightValid;
 
   // Update per-arm FSMs using fast (median-only) reach ratios
   const prevLeftState = currentState.leftArm.state;
@@ -1653,14 +2187,24 @@ function updateBarbellCurlState(
 
   // Include the transition frame (DOWN→REST): the angle that triggered completion
   // must be recorded so evaluateForm sees the actual peak extension, not the prior frame.
-  const leftWasInRep = leftValid && currentState.leftArm.state !== 'REST';
-  const rightWasInRep = rightValid && currentState.rightArm.state !== 'REST';
+  const leftWasInRep = currentState.leftArm.state !== 'REST';
+  const rightWasInRep = currentState.rightArm.state !== 'REST';
   const shouldAccumulate = inRep || leftWasInRep || rightWasInRep;
 
   if (newState.repWindow && shouldAccumulate) {
     const window = newState.repWindow;
+    window.metadata.landmarkSource = landmarkSource;
+    window.metadata.ratioDistanceMode = rawResult.ratioDistanceMode;
+    window.metadata.torsoAnchorSources[rawResult.torsoAnchorSource]++;
     window.tEnd = t;
     window.frameCount++;
+    window.viewSamples.total++;
+    if (viewAngle.zone === 'frontal') window.viewSamples.front++;
+    else if (viewAngle.zone === 'oblique') window.viewSamples.oblique++;
+    else window.viewSamples.side++;
+    if (viewAngle.primarySide === 'left') window.viewSamples.primaryLeft++;
+    if (viewAngle.primarySide === 'right') window.viewSamples.primaryRight++;
+    if (leftValid && rightValid) window.viewSamples.bilateralValid++;
 
     // Update min/max only when the current frame has a valid source chain.
     for (const key of [
@@ -1676,7 +2220,7 @@ function updateBarbellCurlState(
 
     for (const side of SIDES) {
       const wristKey = `${side}Wrist` as keyof AngleSet;
-      if (hasWristConfidence(keypoints, side) && Number.isFinite(smoothed[wristKey])) {
+      if (hasWristConfidence(mechanicsKeypoints, side) && Number.isFinite(smoothed[wristKey])) {
         updateMinMax(window, wristKey, smoothed[wristKey]);
         const samples = window.wrist[side];
         samples.confidentSamples++;
@@ -1688,22 +2232,32 @@ function updateBarbellCurlState(
 
     // Track reach ratios using current-frame-valid fast values to capture true depth/lockout.
     if (Number.isFinite(rawAngles.leftRatio) && Number.isFinite(fast.leftRatio)) {
+      window.ratioSamples.left.validSamples++;
       updateMinMax(window, 'leftRatio', fast.leftRatio);
       window.ratios.minLeftRatio = Math.min(window.ratios.minLeftRatio, fast.leftRatio);
       window.ratios.maxLeftRatio = Math.max(window.ratios.maxLeftRatio, fast.leftRatio);
+      window.rawRatios.minLeftRatio = Math.min(window.rawRatios.minLeftRatio, rawAngles.leftRatio);
+      window.rawRatios.maxLeftRatio = Math.max(window.rawRatios.maxLeftRatio, rawAngles.leftRatio);
       updateRepTempoSide(window.tempo.left, fast.leftRatio, t);
+    } else {
+      window.ratioSamples.left.dropoutSamples++;
     }
     if (Number.isFinite(rawAngles.rightRatio) && Number.isFinite(fast.rightRatio)) {
+      window.ratioSamples.right.validSamples++;
       updateMinMax(window, 'rightRatio', fast.rightRatio);
       window.ratios.minRightRatio = Math.min(window.ratios.minRightRatio, fast.rightRatio);
       window.ratios.maxRightRatio = Math.max(window.ratios.maxRightRatio, fast.rightRatio);
+      window.rawRatios.minRightRatio = Math.min(window.rawRatios.minRightRatio, rawAngles.rightRatio);
+      window.rawRatios.maxRightRatio = Math.max(window.rawRatios.maxRightRatio, rawAngles.rightRatio);
       updateRepTempoSide(window.tempo.right, fast.rightRatio, t);
+    } else {
+      window.ratioSamples.right.dropoutSamples++;
     }
 
     // Track elbow flare (frontal only — lateral deviation is visible facing the camera)
     if (viewAngle.zone === 'frontal') {
       for (const side of SIDES) {
-        const flare = computeElbowFlareDeg(keypoints, side);
+        const flare = computeElbowFlareDeg(mechanicsKeypoints, side);
         if (Number.isFinite(flare)) {
           const samples = window.elbowFlare[side];
           samples.confidentSamples++;
@@ -1716,8 +2270,9 @@ function updateBarbellCurlState(
   }
 
   // Rep completion logic
-  if (viewAngle.zone === 'frontal' && !isSingleArm) {
-    // FRONTAL MODE: two-arm sync logic
+  if (viewAngle.zone === 'frontal') {
+    // FRONTAL MODE: require both arms to participate. Desync is counted and
+    // diagnosed as asymmetry instead of silently dropping the rep.
     const bothInRest = newState.leftArm.state === 'REST' && newState.rightArm.state === 'REST';
     const leftJustFinished = prevLeftState === 'DOWN' && newState.leftArm.state === 'REST';
     const rightJustFinished = prevRightState === 'DOWN' && newState.rightArm.state === 'REST';
@@ -1725,34 +2280,39 @@ function updateBarbellCurlState(
     const rightPartialFinished = prevRightState === 'UP' && newState.rightArm.partialReturnedToRest;
 
     if (bothInRest && (leftJustFinished || rightJustFinished || leftPartialFinished || rightPartialFinished) && newState.repWindow) {
-      const leftEndTime = newState.leftArm.tDownToRest ?? t;
-      const rightEndTime = newState.rightArm.tDownToRest ?? t;
-      const syncDelta = Math.abs(leftEndTime - rightEndTime);
+      const leftParticipated = sideParticipated(newState.repWindow, 'left');
+      const rightParticipated = sideParticipated(newState.repWindow, 'right');
+      const leftEndTime = newState.leftArm.tDownToRest;
+      const rightEndTime = newState.rightArm.tDownToRest;
 
-      if (syncDelta <= THRESHOLDS.SYNC_WINDOW) {
-        if (leftJustFinished || rightJustFinished) {
-          completeRep(newState, t, viewAngle);
-        } else {
+      if (leftParticipated && rightParticipated && leftEndTime !== null && rightEndTime !== null) {
+        newState.repWindow.metadata.syncDelta = Math.abs(leftEndTime - rightEndTime);
+        if (leftPartialFinished || rightPartialFinished) {
           completePartialRepIfMeaningful(newState, t, viewAngle);
+        } else {
+          completeRep(newState, t, viewAngle);
         }
       } else {
-        // Not synced — reset
+        // Single-arm movement in a front-view barbell curl is not a clean bilateral rep.
         resetBarbellCurlRepTracking(newState);
       }
     }
   } else {
-    // OBLIQUE/SIDE MODE or single-arm: count rep from the primary (visible) arm
+    // OBLIQUE/SIDE MODE: count from the selected visible primary arm only.
     const primaryArm = getPrimaryArm(viewAngle, leftValid, rightValid);
     const armState = primaryArm === 'left' ? newState.leftArm : newState.rightArm;
     const prevArmState = primaryArm === 'left' ? prevLeftState : prevRightState;
+    const primaryParticipated = newState.repWindow ? sideParticipated(newState.repWindow, primaryArm) : false;
 
     const justFinished = prevArmState === 'DOWN' && armState.state === 'REST';
     const partialFinished = prevArmState === 'UP' && armState.partialReturnedToRest;
 
-    if (justFinished && newState.repWindow) {
+    if (justFinished && newState.repWindow && primaryParticipated) {
       completeRep(newState, t, viewAngle);
-    } else if (partialFinished && newState.repWindow) {
+    } else if (partialFinished && newState.repWindow && primaryParticipated) {
       completePartialRepIfMeaningful(newState, t, viewAngle);
+    } else if ((justFinished || partialFinished) && newState.repWindow) {
+      resetBarbellCurlRepTracking(newState);
     }
   }
 
@@ -1784,7 +2344,7 @@ function getRepWindowRomRatio(repWindow: RepWindow, viewAngle: ViewAngle): numbe
   const rightRom = rightOk ? repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio : 0;
 
   if (viewAngle.zone === 'frontal') {
-    return Math.max(leftRom, rightRom);
+    return leftOk && rightOk ? Math.min(leftRom, rightRom) : Math.max(leftRom, rightRom);
   }
   return viewAngle.primarySide === 'right' ? rightRom : leftRom;
 }
@@ -1827,20 +2387,29 @@ function completeRep(
   t: number,
   viewAngle: ViewAngle
 ): void {
+  const repWindow = newState.repWindow;
+  if (!repWindow) return;
+
+  repWindow.metadata.completionView = viewAngle;
+  repWindow.metadata.selectedSideAtCompletion = viewAngle.primarySide;
+  const viewQuality = buildBarbellCurlViewQuality(repWindow, viewAngle);
+  const scorable = !viewQuality.viewUnknown;
+  const qualityWarnings = getBarbellCurlQualityWarnings(viewQuality, viewAngle);
+
   newState.repCount++;
 
-  const romLRatio = newState.leftArm.maxRatio - newState.leftArm.minRatio;
-  const romRRatio = newState.rightArm.maxRatio - newState.rightArm.minRatio;
+  const romLRatio = sideRomRatio(repWindow, 'left');
+  const romRRatio = sideRomRatio(repWindow, 'right');
 
   const { tUp, tDown } = getRepTempoDurations(
-    newState.repWindow!,
+    repWindow,
     newState.leftArm,
     newState.rightArm,
     viewAngle,
   );
 
   const { score, messages } = evaluateForm(
-    newState.repWindow!,
+    repWindow,
     newState.leftArm,
     newState.rightArm,
     viewAngle,
@@ -1855,16 +2424,22 @@ function completeRep(
     tDown,
     score,
     messages,
+    scorable,
+    qualityWarnings,
     diagnostics: buildBarbellCurlDiagnostics(
-      newState.repWindow!,
+      repWindow,
       newState.leftArm,
       newState.rightArm,
       viewAngle,
       newState.repCount,
+      scorable,
+      viewQuality,
     ),
   };
 
-  if (messages.length > 0) {
+  if (!scorable) {
+    newState.feedback = 'Form view unclear.';
+  } else if (messages.length > 0) {
     newState.feedback = messages.join('\n');
   } else {
     newState.feedback = viewAngle.zone === 'frontal' ? 'Great rep!' : 'Good rep.';
@@ -1966,6 +2541,7 @@ export function createBarbellCurlDefinition(
   return {
   name: 'Barbell Curl',
   requiredView: 'front',
+  qualityProfile: BARBELL_CURL_QUALITY_PROFILE,
 
   createState: (): ExerciseState => ({
     repCount: 0,
@@ -1977,11 +2553,11 @@ export function createBarbellCurlDefinition(
     _internal: withBarbellCurlConfig(config, () => initializeBarbellCurlState()),
   }),
 
-  update: (keypoints, state) => {
+  update: (keypoints, state, frameContext) => {
     const internal = state._internal as BarbellCurlState;
     const newInternal = withBarbellCurlConfig(
       config,
-      () => updateBarbellCurlState(keypoints, internal),
+      () => updateBarbellCurlState(keypoints, internal, frameContext),
     );
 
     // Map internal RepResult to framework RepResult
@@ -1990,6 +2566,8 @@ export function createBarbellCurlDefinition(
           repIndex: newInternal.lastRepResult.repIndex,
           score: newInternal.lastRepResult.score,
           messages: newInternal.lastRepResult.messages,
+          scorable: newInternal.lastRepResult.scorable,
+          qualityWarnings: newInternal.lastRepResult.qualityWarnings,
           diagnostics: newInternal.lastRepResult.diagnostics,
         }
       : null;
@@ -2006,6 +2584,7 @@ export function createBarbellCurlDefinition(
   },
 
   heuristicConfig: config,
+  validateHeuristicConfig: validateBarbellCurlHeuristicConfig,
   tunableSpec: BARBELL_CURL_TUNABLE_SPEC,
   tunedConfigPath: 'src/utils/exercises/definitions/tuned/barbellCurl.json',
   createVariant: (variantConfig) =>

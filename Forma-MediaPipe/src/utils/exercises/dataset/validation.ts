@@ -9,9 +9,11 @@ import type {
 const VALID_SPLITS: DatasetSplit[] = ['train', 'validation', 'test'];
 const VALID_REVIEW_STATUSES = ['draft', 'reviewed'];
 const VALID_CAPTURE_CAMERA_SIDES = ['left', 'right', 'oblique', 'frontish', 'unknown'];
+const VALID_CAPTURE_CAMERA_VIEWS = ['front', 'frontish', 'oblique', 'side', 'unknown'];
 const VALID_CAPTURE_MACHINE_STYLES = ['seated_selectorized', 'kneeling', 'plate_loaded', 'unknown'];
 const VALID_CAPTURE_VISIBLE_HANDLES = ['yes', 'no', 'partial', 'unknown'];
 const VALID_REVIEWER_VIEW_CONFIDENCES = ['good', 'usable', 'poor'];
+const VALID_REP_VIEWS = ['side', 'front', 'oblique', 'unknown'];
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -73,6 +75,12 @@ export function validateLabelFile(
         !VALID_CAPTURE_CAMERA_SIDES.includes(metadata.cameraSide as string)
       ) {
         issues.push({ path: '$.captureMetadata.cameraSide', message: 'cameraSide must be left, right, oblique, frontish, or unknown.' });
+      }
+      if (
+        metadata.cameraView !== undefined &&
+        !VALID_CAPTURE_CAMERA_VIEWS.includes(metadata.cameraView as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.cameraView', message: 'cameraView must be front, frontish, oblique, side, or unknown.' });
       }
       if (
         metadata.machineStyle !== undefined &&
@@ -182,6 +190,13 @@ export function validateLabelFile(
           issues.push({ path: `${path}.issueIds`, message: `Unknown issue id "${issueId}".` });
         }
       }
+    }
+
+    if (rep.view !== undefined && !VALID_REP_VIEWS.includes(rep.view as string)) {
+      issues.push({ path: `${path}.view`, message: 'view must be side, front, oblique, or unknown.' });
+    }
+    if (rep.scorable !== undefined && typeof rep.scorable !== 'boolean') {
+      issues.push({ path: `${path}.scorable`, message: 'scorable must be a boolean when provided.' });
     }
 
     if (rep.suggestedIssueIds !== undefined) {

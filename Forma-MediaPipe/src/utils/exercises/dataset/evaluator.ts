@@ -25,6 +25,10 @@ function emptyTotals(): EvaluationTotals {
     falseNegatives: 0,
     cleanReps: 0,
     cleanFalsePositives: 0,
+    viewEvaluatedReps: 0,
+    viewCorrectReps: 0,
+    scorableEvaluatedReps: 0,
+    scorableCorrectReps: 0,
   };
 }
 
@@ -57,19 +61,27 @@ function evaluateRep(
   index: number,
   timing: RepTimingMetadata,
   prediction?: ReplayRepPrediction,
+  options: {
+    expectedScorable?: boolean;
+    expectedScorableExplicit?: boolean;
+    expectedView?: RepEvaluation['expectedView'];
+  } = {},
 ): RepEvaluation {
+  const expectedScorable = options.expectedScorable ?? true;
   const expectedSet = new Set(unique(expected));
   const predictedSet = new Set(unique(predicted));
   const truePositives: string[] = [];
   const falsePositives: string[] = [];
   const falseNegatives: string[] = [];
 
-  for (const issueId of predictedSet) {
-    if (expectedSet.has(issueId)) truePositives.push(issueId);
-    else falsePositives.push(issueId);
-  }
-  for (const issueId of expectedSet) {
-    if (!predictedSet.has(issueId)) falseNegatives.push(issueId);
+  if (expectedScorable) {
+    for (const issueId of predictedSet) {
+      if (expectedSet.has(issueId)) truePositives.push(issueId);
+      else falsePositives.push(issueId);
+    }
+    for (const issueId of expectedSet) {
+      if (!predictedSet.has(issueId)) falseNegatives.push(issueId);
+    }
   }
 
   return {
@@ -81,12 +93,29 @@ function evaluateRep(
     truePositives,
     falsePositives,
     falseNegatives,
+    expectedScorable,
+    expectedScorableExplicit: options.expectedScorableExplicit,
+    predictedScorable: prediction?.scorable ?? prediction?.diagnostics?.scorable,
+    expectedView: options.expectedView,
+    predictedView: prediction?.diagnostics?.view,
     expectedClean: expectedSet.size === 0,
     predictedClean: predictedSet.size === 0,
   };
 }
 
 function addRepToTotals(totals: EvaluationTotals, rep: RepEvaluation): void {
+  if (rep.matchStatus === 'matched') {
+    if (rep.expectedView && rep.expectedView !== 'unknown') {
+      totals.viewEvaluatedReps += 1;
+      if (rep.predictedView === rep.expectedView) totals.viewCorrectReps += 1;
+    }
+    if (rep.expectedScorableExplicit) {
+      totals.scorableEvaluatedReps += 1;
+      if (rep.predictedScorable === rep.expectedScorable) totals.scorableCorrectReps += 1;
+    }
+  }
+
+  if (!rep.expectedScorable) return;
   totals.truePositives += rep.truePositives.length;
   totals.falsePositives += rep.falsePositives.length;
   totals.falseNegatives += rep.falseNegatives.length;
@@ -164,6 +193,10 @@ function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
     issueF1,
     cleanRepFalsePositiveRate:
       totals.cleanReps === 0 ? 0 : totals.cleanFalsePositives / totals.cleanReps,
+    viewAccuracy:
+      totals.viewEvaluatedReps === 0 ? 1 : totals.viewCorrectReps / totals.viewEvaluatedReps,
+    scorableAccuracy:
+      totals.scorableEvaluatedReps === 0 ? 1 : totals.scorableCorrectReps / totals.scorableEvaluatedReps,
   };
 }
 
@@ -273,6 +306,7 @@ function addDiagnosticRep(
   summaries: Map<string, MutableIssueSummary>,
   rep: RepEvaluation,
 ): void {
+  if (!rep.expectedScorable) return;
   const diagnostics = rep.predictedDiagnostics;
   if (!diagnostics) return;
   const issueIds = new Set([
@@ -342,6 +376,7 @@ function combineDiagnosticSummary(cases: CaseEvaluation[]): DiagnosticEvaluation
 
   for (const caseEvaluation of cases) {
     for (const rep of caseEvaluation.reps) {
+      if (!rep.expectedScorable) continue;
       if (!rep.predictedDiagnostics) continue;
       diagnosticRepCount += 1;
       addDiagnosticRep(summaries, rep);
@@ -428,6 +463,10 @@ export function evaluateCase(
         predictedEndMs: null,
         overlapMs: 0,
         completionDeltaMs: null,
+      }, undefined, {
+        expectedScorable: expectedRep.scorable ?? true,
+        expectedScorableExplicit: typeof expectedRep.scorable === 'boolean',
+        expectedView: expectedRep.view,
       });
       reps.push(rep);
       addRepToTotals(totals, rep);
@@ -451,6 +490,11 @@ export function evaluateCase(
         completionDeltaMs: match.completionDeltaMs,
       },
       match.prediction,
+      {
+        expectedScorable: expectedRep.scorable ?? true,
+        expectedScorableExplicit: typeof expectedRep.scorable === 'boolean',
+        expectedView: expectedRep.view,
+      },
     );
     reps.push(rep);
     addRepToTotals(totals, rep);
@@ -511,6 +555,10 @@ function addCaseTotals(totals: EvaluationTotals, caseEvaluation: CaseEvaluation)
   totals.falseNegatives += caseEvaluation.totals.falseNegatives;
   totals.cleanReps += caseEvaluation.totals.cleanReps;
   totals.cleanFalsePositives += caseEvaluation.totals.cleanFalsePositives;
+  totals.viewEvaluatedReps += caseEvaluation.totals.viewEvaluatedReps;
+  totals.viewCorrectReps += caseEvaluation.totals.viewCorrectReps;
+  totals.scorableEvaluatedReps += caseEvaluation.totals.scorableEvaluatedReps;
+  totals.scorableCorrectReps += caseEvaluation.totals.scorableCorrectReps;
 }
 
 export function summarizeEvaluations(cases: CaseEvaluation[]): DatasetEvaluation {

@@ -7,6 +7,9 @@ type Side = 'left' | 'right';
 type Orientation = 'facing-right' | 'facing-left';
 type TorsoPosture = 'upright' | 'leaned' | 'stable-forward' | 'backward';
 type PoseProfile = 'clean' | 'true-depth-shallow' | 'ratio-fallback-shallow' | 'natural-low-lockout';
+type SquatViewMode = 'front' | 'oblique';
+type FrontMotionMode = 'normal' | 'weak';
+type WorldMotionMode = 'normal' | 'z-driven';
 
 type Pose = {
   shoulder: { x: number; y: number };
@@ -281,6 +284,143 @@ function buildRecording(
   };
 }
 
+function frontImageKeypoints(
+  depth: number,
+  kneeValgus = false,
+  score = 0.99,
+  motionMode: FrontMotionMode = 'normal',
+): Keypoint[] {
+  const motionDepth = motionMode === 'weak' ? depth * 0.08 : depth;
+  const hipY = 0.42 + motionDepth * 0.18;
+  const kneeY = 0.72 + motionDepth * 0.1;
+  const ankleY = 0.96;
+  const leftHipX = 0.38;
+  const rightHipX = 0.62;
+  const leftAnkleX = 0.3;
+  const rightAnkleX = 0.7;
+  const lineLeftKneeX = leftHipX + (leftAnkleX - leftHipX) * ((kneeY - hipY) / (ankleY - hipY));
+  const lineRightKneeX = rightHipX + (rightAnkleX - rightHipX) * ((kneeY - hipY) / (ankleY - hipY));
+  const outwardBend = 0.14 * motionDepth;
+  const valgusOffset = kneeValgus ? 0.22 * motionDepth : 0;
+
+  return [
+    kp('left_shoulder', 0.32, 0.2 + motionDepth * 0.06, score),
+    kp('right_shoulder', 0.68, 0.2 + motionDepth * 0.06, score),
+    kp('left_hip', leftHipX, hipY, score),
+    kp('right_hip', rightHipX, hipY, score),
+    kp('left_knee', lineLeftKneeX - outwardBend + valgusOffset, kneeY, score),
+    kp('right_knee', lineRightKneeX + outwardBend - valgusOffset, kneeY, score),
+    kp('left_ankle', leftAnkleX, ankleY, score),
+    kp('right_ankle', rightAnkleX, ankleY, score),
+    kp('left_heel', leftAnkleX - 0.03, ankleY, score),
+    kp('right_heel', rightAnkleX + 0.03, ankleY, score),
+    kp('left_foot_index', leftAnkleX + 0.04, ankleY + 0.01, score),
+    kp('right_foot_index', rightAnkleX - 0.04, ankleY + 0.01, score),
+  ];
+}
+
+function frontWorldKeypoints(
+  depth: number,
+  viewMode: SquatViewMode,
+  score = 0.99,
+  options: { worldMotion?: WorldMotionMode; hiddenSide?: Side } = {},
+): Keypoint[] {
+  const { worldMotion = 'normal', hiddenSide } = options;
+  const makeZDrivenPose = (): Record<keyof Pose, { x: number; y: number; z: number }> => {
+    const lerp = (standing: { x: number; y: number; z: number }, bottom: { x: number; y: number; z: number }) => ({
+      x: standing.x + (bottom.x - standing.x) * depth,
+      y: standing.y + (bottom.y - standing.y) * depth,
+      z: standing.z + (bottom.z - standing.z) * depth,
+    });
+    return {
+      shoulder: lerp({ x: 0, y: 0, z: 0 }, { x: 0, y: 0.42, z: -0.12 }),
+      hip: lerp({ x: 0, y: 0.5, z: 0 }, { x: 0, y: 1.02, z: -0.24 }),
+      knee: lerp({ x: 0, y: 1.0, z: 0 }, { x: 0, y: 1.05, z: 0.48 }),
+      ankle: lerp({ x: 0, y: 1.5, z: 0 }, { x: 0, y: 1.5, z: 0 }),
+      heel: lerp({ x: -0.08, y: 1.5, z: 0 }, { x: -0.08, y: 1.5, z: 0 }),
+      foot: lerp({ x: 0.2, y: 1.5, z: 0 }, { x: 0.2, y: 1.5, z: 0 }),
+    };
+  };
+  const leftPose = worldMotion === 'z-driven'
+    ? makeZDrivenPose()
+    : poseAt(depth, 'facing-right', 'upright', 'clean', false);
+  const rightPose = worldMotion === 'z-driven'
+    ? makeZDrivenPose()
+    : poseAt(depth, 'facing-right', 'upright', 'clean', false);
+  const sideOffset = 0.12;
+  const zSpread = viewMode === 'front' ? 0.02 : 0.34;
+  const sideKps = (side: Side, pose: Pose | Record<keyof Pose, { x: number; y: number; z: number }>, offset: number, zOffset: number) => [
+    { name: `${side}_shoulder`, point: pose.shoulder },
+    { name: `${side}_hip`, point: pose.hip },
+    { name: `${side}_knee`, point: pose.knee },
+    { name: `${side}_ankle`, point: pose.ankle },
+    { name: `${side}_heel`, point: pose.heel },
+    { name: `${side}_foot_index`, point: pose.foot },
+  ].map(({ name, point }) => ({
+    name,
+    x: point.x + offset,
+    y: point.y,
+    z: ('z' in point ? point.z : 0) + zOffset,
+    score: hiddenSide === side ? 0.05 : score,
+  }));
+
+  return [
+    ...sideKps('left', leftPose, -sideOffset, -zSpread / 2),
+    ...sideKps('right', rightPose, sideOffset, zSpread / 2),
+  ];
+}
+
+function buildFrontRecording(
+  description: string,
+  depthPath: number[],
+  options: {
+    viewMode?: SquatViewMode;
+    kneeValgus?: boolean;
+    includeWorld?: boolean;
+    imageMotion?: FrontMotionMode;
+    worldMotion?: WorldMotionMode;
+    hiddenWorldSide?: Side;
+    score?: number | ((index: number, depth: number) => number);
+  } = {},
+): LandmarkRecording {
+  const {
+    viewMode = 'front',
+    kneeValgus = false,
+    includeWorld = true,
+    imageMotion = 'normal',
+    worldMotion = 'normal',
+    hiddenWorldSide,
+    score = 0.99,
+  } = options;
+
+  return {
+    exerciseName: 'Barbell Squat',
+    metadata: {
+      recordedAt: '2026-04-29T00:00:00.000Z',
+      duration: (depthPath.length * FRAME_MS) / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames: depthPath.map((depth, index) => {
+      const frameScore = typeof score === 'function' ? score(index, depth) : score;
+      const imageKeypoints = frontImageKeypoints(depth, kneeValgus, frameScore, imageMotion);
+      const frame: LandmarkRecording['frames'][number] = {
+        timestamp: index * FRAME_MS,
+        keypoints: imageKeypoints,
+        imageKeypoints,
+      };
+      if (includeWorld) {
+        frame.worldKeypoints = frontWorldKeypoints(depth, viewMode, frameScore, {
+          worldMotion,
+          hiddenSide: hiddenWorldSide,
+        });
+      }
+      return frame;
+    }),
+  };
+}
+
 describe('Barbell Squat synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -327,6 +467,156 @@ describe('Barbell Squat synthetic replay coverage', () => {
     );
   });
 
+  it('counts and scores a clean front-view squat using world movement plus front diagnostics', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildFrontRecording('synthetic clean front squat', fullRepPath()),
+    );
+
+    const rep = result.reps[0];
+    expect(result.finalRepCount).toBe(1);
+    expect(rep.score).toBeGreaterThanOrEqual(85);
+    expect(rep.scorable).toBe(true);
+    expect(rep.messages).toEqual([]);
+    expect(rep.diagnostics?.view).toBe('front');
+    expect(rep.diagnostics?.viewQuality?.frontConfirmed).toBe(true);
+    expect(rep.diagnostics?.metrics.metricSource.label).toBe('world');
+    expect(rep.diagnostics?.cues['barbell-squat.heel_lift'].eligible).toBe(false);
+    expect(rep.diagnostics?.cues['barbell-squat.heel_lift'].skippedReason).toBe('not_side_view');
+    expect(rep.diagnostics?.cues['barbell-squat.knee_valgus'].triggered).toBe(false);
+  });
+
+  it('counts and scores a front-view squat from true world-z knee travel when image movement is weak', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildFrontRecording('synthetic world-z front squat', fullRepPath(), {
+        imageMotion: 'weak',
+        worldMotion: 'z-driven',
+      }),
+    );
+
+    const rep = result.reps[0];
+    expect(result.finalRepCount).toBe(1);
+    expect(rep.scorable).toBe(true);
+    expect(rep.diagnostics?.view).toBe('front');
+    expect(rep.diagnostics?.metrics.metricSource.label).toBe('world');
+    expect(rep.diagnostics?.metrics.movementKneeRatio.value).toBeLessThan(0.76);
+    expect(rep.diagnostics?.metrics.leftWorldKneeRatioSupport.value).toBeGreaterThanOrEqual(0.35);
+    expect(rep.diagnostics?.metrics.rightWorldKneeRatioSupport.value).toBeGreaterThanOrEqual(0.35);
+  });
+
+  it('counts front-view squats from the supported world side when the other side is occluded', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildFrontRecording('synthetic one-side world front squat', fullRepPath(), {
+        worldMotion: 'z-driven',
+        hiddenWorldSide: 'right',
+      }),
+    );
+
+    const rep = result.reps[0];
+    expect(result.finalRepCount).toBe(1);
+    expect(rep.scorable).toBe(true);
+    expect(rep.diagnostics?.metrics.leftKneeRatioSource.label).toBe('world');
+    expect(rep.diagnostics?.metrics.rightKneeRatioSource.label).toBe('image');
+    expect(rep.diagnostics?.metrics.leftWorldKneeRatioSupport.value).toBeGreaterThanOrEqual(0.35);
+    expect(rep.diagnostics?.metrics.rightWorldKneeRatioSupport.eligible).toBe(false);
+  });
+
+  it('flags front-view knee valgus without using side-only squat cues', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildFrontRecording('synthetic front knee valgus squat', fullRepPath(), {
+        kneeValgus: true,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].messages).toContain('Track your knees over your toes.');
+    expect(result.reps[0].issueIds).toContain('barbell-squat.knee_valgus');
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.knee_valgus']).toMatchObject({
+      eligible: true,
+      triggered: true,
+    });
+    expect(result.reps[0].diagnostics?.metrics.kneeTrackingOffsetRatio.value).toBeGreaterThan(0.1);
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.depth_short'].eligible).toBe(false);
+  });
+
+  it('marks front-view knee valgus ineligible when bilateral image support is missing', () => {
+    const recording = buildFrontRecording('synthetic front knee tracking occlusion squat', fullRepPath(), {
+      kneeValgus: true,
+      worldMotion: 'z-driven',
+    });
+    for (const frame of recording.frames) {
+      for (const keypoint of frame.keypoints) {
+        if (keypoint.name === 'right_knee' || keypoint.name === 'right_ankle') keypoint.score = 0.05;
+      }
+      for (const keypoint of frame.imageKeypoints ?? []) {
+        if (keypoint.name === 'right_knee' || keypoint.name === 'right_ankle') keypoint.score = 0.05;
+      }
+    }
+
+    const result = replayRecordingVerbose(squatDefinition, recording);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].issueIds).not.toContain('barbell-squat.knee_valgus');
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.knee_valgus']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'knee_tracking_unavailable',
+    });
+  });
+
+  it('counts an oblique-view squat but marks the rep unscorable with a view warning', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildFrontRecording('synthetic oblique squat', fullRepPath(), {
+        viewMode: 'oblique',
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('oblique');
+    expect(result.reps[0].diagnostics?.scorable).toBe(false);
+    expect(result.reps[0].messages).toEqual([]);
+  });
+
+  it('counts a front-view image-only squat but does not score form without world landmarks', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildFrontRecording('synthetic front image-only squat', fullRepPath(), {
+        includeWorld: false,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('missing_required_joints');
+    expect(result.reps[0].diagnostics?.view).toBe('front');
+    expect(result.reps[0].diagnostics?.metrics.worldKneeRatioSupport.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.lockout_short'].eligible).toBe(false);
+    expect(result.reps[0].messages).toEqual([]);
+  });
+
+  it('keeps front-view image-only reps unscorable even when image motion is enough to count', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildFrontRecording('synthetic front image-only countable squat', fullRepPath(), {
+        includeWorld: false,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.leftWorldKneeRatioSupport.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.rightWorldKneeRatioSupport.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.leftImageKneeRatioSupport.value).toBeGreaterThan(0);
+    expect(result.reps[0].diagnostics?.metrics.rightImageKneeRatioSupport.value).toBeGreaterThan(0);
+  });
+
   it('flags incomplete lockout when the rep does not return to the standing baseline', () => {
     const result = replayRecordingVerbose(
       squatDefinition,
@@ -337,6 +627,16 @@ describe('Barbell Squat synthetic replay coverage', () => {
     expect(result.reps[0].messages).toContain('Stand all the way up — fully extend your knees.');
     expect(result.reps[0].diagnostics?.metrics.lockoutDeltaRatio.value).toBeGreaterThan(0.035);
     expect(result.reps[0].diagnostics?.cues['barbell-squat.lockout_short'].metricKeys).toContain('lockoutDeltaRatio');
+    const metrics = result.reps[0].diagnostics?.metrics;
+    expect(metrics?.movementEndDelaySeconds.value).toBeGreaterThan(0);
+    expect(metrics?.tMovementEnd.value).toBeLessThan(metrics?.tConfirmedEnd.value ?? 0);
+    expect(metrics?.tUp.value).toBeCloseTo(
+      (metrics?.tMovementEnd.value ?? 0) - (metrics?.tBottom.value ?? 0),
+      5,
+    );
+    expect(metrics?.tUp.value).toBeLessThan(
+      (metrics?.tConfirmedEnd.value ?? 0) - (metrics?.tBottom.value ?? 0),
+    );
   });
 
   it('does not false-positive lockout for a naturally lower but repeatable standing baseline', () => {

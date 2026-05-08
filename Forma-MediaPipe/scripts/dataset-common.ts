@@ -297,6 +297,8 @@ export function formatEvaluationSummary(evaluation: DatasetEvaluation): string {
     `Issue recall: ${formatMetricPercent(evaluation.metrics.issueRecall)}`,
     `Issue F1: ${formatMetricPercent(evaluation.metrics.issueF1)}`,
     `Clean-rep false-positive rate: ${formatMetricPercent(evaluation.metrics.cleanRepFalsePositiveRate)}`,
+    `View accuracy: ${formatMetricPercent(evaluation.metrics.viewAccuracy)} (${evaluation.totals.viewCorrectReps}/${evaluation.totals.viewEvaluatedReps})`,
+    `Scorable accuracy: ${formatMetricPercent(evaluation.metrics.scorableAccuracy)} (${evaluation.totals.scorableCorrectReps}/${evaluation.totals.scorableEvaluatedReps})`,
   ];
   if (evaluation.qualityCoverage) {
     lines.push(

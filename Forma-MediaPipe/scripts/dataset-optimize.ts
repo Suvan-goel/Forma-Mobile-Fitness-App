@@ -185,6 +185,10 @@ function emptyTotals(): EvaluationTotals {
     falseNegatives: 0,
     cleanReps: 0,
     cleanFalsePositives: 0,
+    viewEvaluatedReps: 0,
+    viewCorrectReps: 0,
+    scorableEvaluatedReps: 0,
+    scorableCorrectReps: 0,
   };
 }
 
@@ -198,6 +202,10 @@ function addTotals(target: EvaluationTotals, source: EvaluationTotals): void {
   target.falseNegatives += source.falseNegatives;
   target.cleanReps += source.cleanReps;
   target.cleanFalsePositives += source.cleanFalsePositives;
+  target.viewEvaluatedReps += source.viewEvaluatedReps;
+  target.viewCorrectReps += source.viewCorrectReps;
+  target.scorableEvaluatedReps += source.scorableEvaluatedReps;
+  target.scorableCorrectReps += source.scorableCorrectReps;
 }
 
 function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
@@ -218,6 +226,10 @@ function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
     issueF1,
     cleanRepFalsePositiveRate:
       totals.cleanReps === 0 ? 0 : totals.cleanFalsePositives / totals.cleanReps,
+    viewAccuracy:
+      totals.viewEvaluatedReps === 0 ? 1 : totals.viewCorrectReps / totals.viewEvaluatedReps,
+    scorableAccuracy:
+      totals.scorableEvaluatedReps === 0 ? 1 : totals.scorableCorrectReps / totals.scorableEvaluatedReps,
   };
 }
 

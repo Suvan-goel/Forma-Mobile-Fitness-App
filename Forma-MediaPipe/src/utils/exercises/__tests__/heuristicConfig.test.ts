@@ -20,6 +20,7 @@ import { replayRecording } from '../replay';
 import '../definitions/register';
 import { cablePushdownDefinition } from '../definitions/cablePushdown';
 import { cableRowDefinition } from '../definitions/cableRow';
+import { barbellCurlDefinition } from '../definitions/barbellCurl';
 import { legExtensionsDefinition } from '../definitions/legExtensions';
 import { machineAbCrunchDefinition } from '../definitions/machineAbCrunch';
 import { squatDefinition } from '../definitions/squat';
@@ -60,6 +61,14 @@ function summarizeCaseEvaluation(caseEvaluation: ReturnType<typeof evaluateCase>
         caseEvaluation.totals.cleanReps === 0
           ? 0
           : caseEvaluation.totals.cleanFalsePositives / caseEvaluation.totals.cleanReps,
+      viewAccuracy:
+        caseEvaluation.totals.viewEvaluatedReps === 0
+          ? 1
+          : caseEvaluation.totals.viewCorrectReps / caseEvaluation.totals.viewEvaluatedReps,
+      scorableAccuracy:
+        caseEvaluation.totals.scorableEvaluatedReps === 0
+          ? 1
+          : caseEvaluation.totals.scorableCorrectReps / caseEvaluation.totals.scorableEvaluatedReps,
     },
   };
 }
@@ -77,6 +86,10 @@ function makeEvaluation(repCountAccuracy: number, issueF1: number, cleanRate: nu
       falseNegatives: 0,
       cleanReps: 1,
       cleanFalsePositives: cleanRate > 0 ? 1 : 0,
+      viewEvaluatedReps: 0,
+      viewCorrectReps: 0,
+      scorableEvaluatedReps: 0,
+      scorableCorrectReps: 0,
     },
     metrics: {
       repCountAccuracy,
@@ -84,6 +97,8 @@ function makeEvaluation(repCountAccuracy: number, issueF1: number, cleanRate: nu
       issueRecall: issueF1,
       issueF1,
       cleanRepFalsePositiveRate: cleanRate,
+      viewAccuracy: 1,
+      scorableAccuracy: 1,
     },
   };
 }
@@ -283,6 +298,62 @@ describe('heuristic config helpers', () => {
     );
   });
 
+  it('rejects invalid squat multi-view and knee-tracking thresholds', () => {
+    const base = squatDefinition.heuristicConfig ?? {};
+    const invalidViewOrdering = setConfigValue(base, 'formThresholds.FRONT_VIEW_MAX', 70);
+    const invalidViewSupport = setConfigValue(base, 'formThresholds.FRONT_VIEW_MIN_SUPPORT', 1.2);
+    const invalidViewSamples = setConfigValue(base, 'formThresholds.VIEW_MIN_SAMPLES', 0.5);
+    const invalidMetricConfidence = setConfigValue(base, 'formThresholds.METRIC_CONFIDENCE_MIN', 1.2);
+    const invalidBaselineConfidence = setConfigValue(base, 'formThresholds.BASELINE_CONFIDENCE_MIN', -0.1);
+    const invalidKneeTrackingConfidence = setConfigValue(base, 'formThresholds.KNEE_TRACKING_CONFIDENCE_MIN', 1.1);
+    const invalidKneeOrdering = setConfigValue(base, 'formThresholds.KNEE_VALGUS_WARN', 0.2);
+    const invalidKneeSupport = setConfigValue(base, 'formThresholds.KNEE_VALGUS_MIN_SUPPORT', -0.1);
+
+    expect(squatDefinition.validateHeuristicConfig?.(invalidViewOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('FRONT_VIEW_MAX')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidViewSupport)).toEqual(
+      expect.arrayContaining([expect.stringContaining('FRONT_VIEW_MIN_SUPPORT')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidViewSamples)).toEqual(
+      expect.arrayContaining([expect.stringContaining('VIEW_MIN_SAMPLES')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidMetricConfidence)).toEqual(
+      expect.arrayContaining([expect.stringContaining('METRIC_CONFIDENCE_MIN')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidBaselineConfidence)).toEqual(
+      expect.arrayContaining([expect.stringContaining('BASELINE_CONFIDENCE_MIN')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidKneeTrackingConfidence)).toEqual(
+      expect.arrayContaining([expect.stringContaining('KNEE_TRACKING_CONFIDENCE_MIN')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidKneeOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('KNEE_VALGUS_WARN')]),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidKneeSupport)).toEqual(
+      expect.arrayContaining([expect.stringContaining('KNEE_VALGUS_MIN_SUPPORT')]),
+    );
+  });
+
+  it('exposes squat knee-tracking diagnostics as optimizer tuning metadata', () => {
+    expect(squatDefinition.tunableSpec?.diagnosticTuning).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        issueId: 'barbell-squat.knee_valgus',
+        metricKey: 'kneeTrackingOffsetRatio',
+        thresholdPath: 'formThresholds.KNEE_VALGUS_WARN',
+      }),
+    ]));
+    expect(squatDefinition.tunableSpec?.tunables).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'formThresholds.VIEW_MIN_SAMPLES',
+        step: 1,
+      }),
+      expect.objectContaining({ path: 'formThresholds.METRIC_CONFIDENCE_MIN' }),
+      expect.objectContaining({ path: 'formThresholds.BASELINE_CONFIDENCE_MIN' }),
+      expect.objectContaining({ path: 'formThresholds.KNEE_TRACKING_CONFIDENCE_MIN' }),
+    ]));
+  });
+
   it('validates the default cable-row heuristic config', () => {
     expect(cableRowDefinition.validateHeuristicConfig?.(cableRowDefinition.heuristicConfig ?? {})).toEqual([]);
   });
@@ -335,6 +406,65 @@ describe('heuristic config helpers', () => {
     expect(cablePushdownDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
       expect.arrayContaining([expect.stringContaining('penaltyConfigs.RETURN_SPIKE.scale')]),
     );
+  });
+
+  it('validates the default barbell-curl heuristic config', () => {
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(barbellCurlDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('rejects invalid barbell-curl thresholds, view support, and penalty configs', () => {
+    const base = barbellCurlDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.FLEXED_EXIT', 0.5);
+    const invalidParticipation = setConfigValue(base, 'thresholds.MIN_ARM_PARTICIPATION_ROM', 0.4);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_UP_MIN', 0);
+    const invalidSupport = setConfigValue(base, 'viewQualityThresholds.SIDE_MIN_SUPPORT', 1.2);
+    const invalidSamples = setConfigValue(base, 'viewQualityThresholds.MIN_SAMPLES', 1.5);
+    const invalidPenalty = setConfigValue(base, 'penaltyConfigs.ROM_FLEX.scale', 0);
+    const invalidPenaltyGroup = setConfigValue(base, 'penaltyConfigs', null);
+    const invalidViewGroup = setConfigValue(base, 'viewQualityThresholds', 'bad');
+
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.FLEXED_EXIT')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidParticipation)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.MIN_PARTIAL_ROM')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TEMPO_UP_MIN')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidSupport)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_MIN_SUPPORT')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidSamples)).toEqual(
+      expect.arrayContaining([expect.stringContaining('MIN_SAMPLES')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs.ROM_FLEX.scale')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidPenaltyGroup)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs must be an object')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidViewGroup)).toEqual(
+      expect.arrayContaining([expect.stringContaining('viewQualityThresholds must be an object')]),
+    );
+  });
+
+  it('exposes barbell-curl scoring and view-quality tunables for optimization', () => {
+    const tunablePaths = barbellCurlDefinition.tunableSpec?.tunables.map(tunable => tunable.path) ?? [];
+
+    expect(tunablePaths).toEqual(expect.arrayContaining([
+      'penaltyConfigs.ROM_FLEX.scale',
+      'penaltyConfigs.ROM_EXTEND.scale',
+      'penaltyConfigs.SHOULDER.scale',
+      'penaltyConfigs.SHOULDER.deadzone',
+      'penaltyConfigs.TORSO.scale',
+      'penaltyConfigs.ASYMMETRY_MIN.scale',
+      'penaltyConfigs.SYNC_DELTA.scale',
+      'viewQualityThresholds.MIN_SAMPLES',
+      'viewQualityThresholds.FRONT_MIN_SUPPORT',
+      'viewQualityThresholds.SIDE_MIN_SUPPORT',
+      'viewQualityThresholds.PRIMARY_SIDE_MIN_SUPPORT',
+    ]));
   });
 
   it('exposes cable-pushdown scoring penalties as optimizer tunables', () => {

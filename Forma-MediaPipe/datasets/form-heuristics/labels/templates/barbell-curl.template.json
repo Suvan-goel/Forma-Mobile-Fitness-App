@@ -2,6 +2,8 @@
   "_templateNotes": [
     "Copy this file to a new label file such as curl_001.json, then edit the paths, split, expectedReps, and reps.",
     "Use issueIds from availableIssues. Use an empty issueIds array for a clean rep.",
+    "Set captureMetadata.cameraView to front, frontish, oblique, side, or unknown before review.",
+    "Set captureMetadata.cameraSide to left, right, frontish, oblique, or unknown before review.",
     "Files named _template.json or *.template.json are ignored by dataset:evaluate and dataset:optimize."
   ],
   "schemaVersion": 1,
@@ -10,6 +12,16 @@
   "landmarkFile": "landmarks/barbell-curl/<video-file>.json",
   "split": "train",
   "reviewStatus": "draft",
+  "captureMetadata": {
+    "cameraView": "front",
+    "cameraSide": "unknown",
+    "reviewerViewConfidence": "good"
+  },
+  "labelingGuidance": [
+    "Front/frontish captures may label bilateral issues such as asymmetry, elbow flare, and one-sided ROM failures.",
+    "Side/oblique captures should label the visible primary side for shoulder involvement, ROM, torso swing, wrist curl, and tempo; do not label asymmetry or elbow flare unless both arms are clearly visible.",
+    "Use scorable=false for poor view/tracking instead of labelling the rep clean."
+  ],
   "expectedReps": 1,
   "reps": [
     {
@@ -17,6 +29,8 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "view": "front",
+      "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",
       "suggestedIssueIds": [],
       "suggestedFeedbackMessages": [],

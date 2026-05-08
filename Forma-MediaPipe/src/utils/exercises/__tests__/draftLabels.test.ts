@@ -92,6 +92,8 @@ describe('draft label generation', () => {
           startMs: 125,
           endMs: 500,
           issueIds: [],
+          view: 'unknown',
+          scorable: true,
           suggestedIssueIds: ['demo-exercise.depth_short'],
           suggestedFeedbackMessages: ['Go deeper.'],
           suggestedScore: 88,

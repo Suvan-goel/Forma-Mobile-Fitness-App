@@ -140,15 +140,25 @@ export interface RepCueDiagnostic {
   skippedReason?: string;
 }
 
-export type ViewQualityStatus = 'side_confirmed' | 'frontish_confirmed' | 'view_unknown';
+export type ViewQualityStatus =
+  | 'side_confirmed'
+  | 'frontish_confirmed'
+  | 'front_confirmed'
+  | 'oblique_confirmed'
+  | 'view_unknown';
 
 export interface RepViewQualityDiagnostic {
   status: ViewQualityStatus;
   sideConfirmed: boolean;
-  frontishConfirmed: boolean;
+  /** Legacy side-only exercise bucket; kept for existing diagnostics consumers. */
+  frontishConfirmed?: boolean;
+  frontConfirmed?: boolean;
+  obliqueConfirmed?: boolean;
   viewUnknown: boolean;
   averageSideViewConfidence?: number | null;
   minSideViewConfidence?: number | null;
+  averageViewConfidence?: number | null;
+  minViewConfidence?: number | null;
   sampleCount: number;
 }
 

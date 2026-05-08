@@ -4,6 +4,7 @@ import type { RepDiagnostics } from '../types';
 
 export type DatasetSplit = 'train' | 'validation' | 'test';
 export type LabelReviewStatus = 'draft' | 'reviewed';
+export type RepViewLabel = 'side' | 'front' | 'oblique' | 'unknown';
 
 export interface AvailableIssue {
   issueId: string;
@@ -17,12 +18,14 @@ export interface DraftLabelMetadata {
 }
 
 export type CaptureCameraSide = 'left' | 'right' | 'oblique' | 'frontish' | 'unknown';
+export type CaptureCameraView = 'front' | 'frontish' | 'oblique' | 'side' | 'unknown';
 export type CaptureMachineStyle = 'seated_selectorized' | 'kneeling' | 'plate_loaded' | 'unknown';
 export type CaptureVisibleHandles = 'yes' | 'no' | 'partial' | 'unknown';
 export type ReviewerViewConfidence = 'good' | 'usable' | 'poor';
 
 export interface ExerciseCaptureMetadata {
   cameraSide?: CaptureCameraSide;
+  cameraView?: CaptureCameraView;
   machineStyle?: CaptureMachineStyle;
   visibleHandles?: CaptureVisibleHandles;
   reviewerViewConfidence?: ReviewerViewConfidence;
@@ -33,6 +36,8 @@ export interface RepLabel {
   startMs: number;
   endMs: number;
   issueIds: string[];
+  view?: RepViewLabel;
+  scorable?: boolean;
   notes?: string;
   suggestedIssueIds?: string[];
   suggestedFeedbackMessages?: string[];
@@ -86,6 +91,11 @@ export interface RepEvaluation {
   truePositives: string[];
   falsePositives: string[];
   falseNegatives: string[];
+  expectedScorable: boolean;
+  expectedScorableExplicit?: boolean;
+  predictedScorable?: boolean;
+  expectedView?: RepViewLabel;
+  predictedView?: RepViewLabel;
   expectedClean: boolean;
   predictedClean: boolean;
 }
@@ -116,6 +126,10 @@ export interface EvaluationTotals {
   falseNegatives: number;
   cleanReps: number;
   cleanFalsePositives: number;
+  viewEvaluatedReps: number;
+  viewCorrectReps: number;
+  scorableEvaluatedReps: number;
+  scorableCorrectReps: number;
 }
 
 export interface EvaluationMetrics {
@@ -124,6 +138,8 @@ export interface EvaluationMetrics {
   issueRecall: number;
   issueF1: number;
   cleanRepFalsePositiveRate: number;
+  viewAccuracy: number;
+  scorableAccuracy: number;
 }
 
 export interface DatasetEvaluation {

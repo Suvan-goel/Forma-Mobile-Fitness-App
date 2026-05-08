@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { Keypoint } from '../../poseAnalysis';
 import type { ExerciseDefinition, ExerciseState, RepDiagnostics } from '../types';
-import { evaluateCase } from '../dataset';
+import { evaluateCase, summarizeEvaluations } from '../dataset';
 import { validateLabelFile } from '../dataset/validation';
 import { replayRecordingVerbose, type LandmarkRecording } from '../replay';
 
@@ -47,6 +47,33 @@ describe('dataset label validation', () => {
     expect(validateLabelFile(baseLabel, new Set(['demo-exercise.depth_short']))).toEqual([]);
   });
 
+  it('accepts optional per-rep view and scorable fields and rejects invalid values', () => {
+    expect(validateLabelFile(
+      {
+        ...baseLabel,
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'front', scorable: false },
+        ],
+      },
+      new Set(['demo-exercise.depth_short']),
+    )).toEqual([]);
+
+    expect(validateLabelFile(
+      {
+        ...baseLabel,
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'diagonal', scorable: 'no' },
+        ],
+      },
+      new Set(['demo-exercise.depth_short']),
+    ).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'view must be side, front, oblique, or unknown.',
+      'scorable must be a boolean when provided.',
+    ]));
+  });
+
   it('accepts multiple known issue ids on the same rep', () => {
     const issues = validateLabelFile(
       {
@@ -67,7 +94,7 @@ describe('dataset label validation', () => {
     expect(issues).toEqual([]);
   });
 
-  it('lists heel-lift as an available squat label issue', () => {
+  it('lists multi-view squat issues in the label template', () => {
     const template = JSON.parse(
       readFileSync(
         join(process.cwd(), 'datasets/form-heuristics/labels/templates/barbell-squat.template.json'),
@@ -76,6 +103,7 @@ describe('dataset label validation', () => {
     ) as { availableIssues: Array<{ issueId: string }> };
 
     expect(template.availableIssues.map((issue) => issue.issueId)).toContain('barbell-squat.heel_lift');
+    expect(template.availableIssues.map((issue) => issue.issueId)).toContain('barbell-squat.knee_valgus');
   });
 
   it('lists production-hardening cable-row issues in the label template', () => {
@@ -225,6 +253,103 @@ describe('dataset evaluator', () => {
     expect(evaluation.totals.truePositives).toBe(1);
     expect(evaluation.totals.falsePositives).toBe(0);
     expect(evaluation.totals.falseNegatives).toBe(1);
+  });
+
+  it('keeps unscorable labelled reps in rep-count accuracy but excludes them from issue metrics', () => {
+    const evaluation = evaluateCase(
+      {
+        label: {
+          ...baseLabel,
+          expectedReps: 1,
+          reps: [
+            {
+              index: 1,
+              startMs: 0,
+              endMs: 1000,
+              issueIds: ['demo-exercise.depth_short'],
+              view: 'oblique',
+              scorable: false,
+            },
+          ],
+        },
+        recording: { exerciseName: 'Demo Exercise', metadata: {}, frames: [] },
+      },
+      {
+        finalRepCount: 1,
+        reps: [
+          {
+            repIndex: 1,
+            score: 0,
+            messages: [],
+            issueIds: [],
+            startedAt: 0,
+            completedAt: 1000,
+            scorable: false,
+          },
+        ],
+      },
+    );
+
+    expect(evaluation.repCountCorrect).toBe(true);
+    expect(evaluation.matchedReps[0]).toMatchObject({
+      expectedScorable: false,
+      expectedView: 'oblique',
+      falseNegatives: [],
+    });
+    expect(evaluation.totals.falseNegatives).toBe(0);
+    expect(evaluation.totals.truePositives).toBe(0);
+    expect(evaluation.totals.falsePositives).toBe(0);
+  });
+
+  it('reports view and scorable accuracy only for matched reps with explicit labels', () => {
+    const evaluation = evaluateCase(
+      {
+        label: {
+          ...baseLabel,
+          expectedReps: 3,
+          reps: [
+            { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'front', scorable: true },
+            { index: 2, startMs: 1100, endMs: 2000, issueIds: [], view: 'unknown', scorable: false },
+            { index: 3, startMs: 2100, endMs: 3000, issueIds: [], view: 'side' },
+          ],
+        },
+        recording: { exerciseName: 'Demo Exercise', metadata: {}, frames: [] },
+      },
+      {
+        finalRepCount: 2,
+        reps: [
+          {
+            repIndex: 1,
+            score: 90,
+            messages: [],
+            issueIds: [],
+            diagnostics: { ...depthDiagnostics, view: 'front', scorable: true },
+            scorable: true,
+            startedAt: 0,
+            completedAt: 1000,
+          },
+          {
+            repIndex: 2,
+            score: 0,
+            messages: [],
+            issueIds: [],
+            diagnostics: { ...depthDiagnostics, repIndex: 2, view: 'front', scorable: true },
+            scorable: true,
+            startedAt: 1100,
+            completedAt: 2000,
+          },
+        ],
+      },
+    );
+
+    const summary = summarizeEvaluations([evaluation]);
+
+    expect(evaluation.totals.viewEvaluatedReps).toBe(1);
+    expect(evaluation.totals.viewCorrectReps).toBe(1);
+    expect(summary.metrics.viewAccuracy).toBe(1);
+    expect(evaluation.totals.scorableEvaluatedReps).toBe(2);
+    expect(evaluation.totals.scorableCorrectReps).toBe(1);
+    expect(summary.metrics.scorableAccuracy).toBe(0.5);
   });
 
   it('scores all matched issues on the same rep as true positives', () => {

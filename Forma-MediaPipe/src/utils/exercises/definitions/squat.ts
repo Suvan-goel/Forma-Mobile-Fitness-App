@@ -16,6 +16,7 @@
 
 import {
   Keypoint,
+  calculateSignedVerticalAngleSagittal,
   calculateVerticalAngle,
   getKeypoint,
   isVisible,
@@ -24,9 +25,11 @@ import {
 
 import type {
   ExerciseDefinition,
+  ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
   RepResult as FrameworkRepResult,
+  RepViewQualityDiagnostic,
 } from '../types';
 import {
   createDefaultTunableSpec,
@@ -37,6 +40,7 @@ import {
 import {
   buildRepDiagnostics,
   diagnosticCue,
+  diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
@@ -110,6 +114,23 @@ const FORM_THRESHOLDS = {
   // Side-view quality: left/right body width divided by body height.
   SIDE_VIEW_WIDTH_WARN: 0.18,
   SIDE_VIEW_WIDTH_FAIL: 0.28,
+  // Multi-view quality: world shoulder yaw angle, where 0 = front and ~90 = side.
+  FRONT_VIEW_MAX: 35,
+  OBLIQUE_VIEW_MAX: 65,
+  VIEW_MIN_SAMPLES: 5,
+  VIEW_CONFIDENCE_MIN: 0.3,
+  METRIC_CONFIDENCE_MIN: 0.3,
+  BASELINE_CONFIDENCE_MIN: 0.3,
+  SIDE_VIEW_MIN_SUPPORT: 0.45,
+  FRONT_VIEW_MIN_SUPPORT: 0.45,
+  OBLIQUE_VIEW_MIN_SUPPORT: 0.45,
+  WORLD_KNEE_RATIO_MIN_SUPPORT: 0.35,
+  // Front-view knee tracking: inward knee offset from hip-to-ankle line.
+  KNEE_VALGUS_WARN: 0.10,
+  KNEE_VALGUS_FAIL: 0.16,
+  KNEE_TRACKING_CONFIDENCE_MIN: 0.3,
+  KNEE_VALGUS_MIN_SUPPORT: 0.20,
+  KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT: 0.35,
   // Tempo
   TEMPO_CONCENTRIC_MIN: 0.3,  // ascent too fast (seconds)
   TEMPO_ECCENTRIC_MIN: 0.8,   // descent too fast (seconds)
@@ -129,6 +150,7 @@ const SCORE_CURVES = {
   LOCKOUT: { ideal: 0.98,    scale: 15000, cap: 20 },
   TORSO:   { deadzone: 30,   scale: 0.06, cap: 30 },
   HEEL_LIFT: { deadzone: 8, scale: 0.35, cap: 15 },
+  KNEE_VALGUS: { deadzone: 0.08, scale: 1200, cap: 20 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 8 },
   TEMPO_ECCENTRIC:  { deadzone: 0.8, scale: 40, cap: 7 },
 } as const;
@@ -153,6 +175,14 @@ const SQUAT_TUNABLE_SPEC = createDefaultTunableSpec(
   'Barbell Squat',
   DEFAULT_SQUAT_HEURISTIC_CONFIG,
 );
+const viewMinSamplesTunable = SQUAT_TUNABLE_SPEC.tunables.find(
+  (tunable) => tunable.path === 'formThresholds.VIEW_MIN_SAMPLES',
+);
+if (viewMinSamplesTunable) {
+  viewMinSamplesTunable.min = 1;
+  viewMinSamplesTunable.max = 15;
+  viewMinSamplesTunable.step = 1;
+}
 SQUAT_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'barbell-squat.depth_short', metricKey: 'thighDepthAngle', thresholdPath: 'formThresholds.THIGH_DEPTH_WARN', direction: 'above' },
   { issueId: 'barbell-squat.lockout_short', metricKey: 'lockoutRatio', thresholdPath: 'formThresholds.LOCKOUT_FAIL', direction: 'below' },
@@ -161,6 +191,9 @@ SQUAT_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'barbell-squat.heel_lift', metricKey: 'heelLiftDeltaDeg', thresholdPath: 'formThresholds.HEEL_LIFT_WARN', direction: 'above' },
   { issueId: 'barbell-squat.heel_lift', metricKey: 'heelLiftOverThresholdSupport', thresholdPath: 'formThresholds.HEEL_LIFT_MIN_SUPPORT', direction: 'above' },
   { issueId: 'barbell-squat.heel_lift', metricKey: 'heelLiftEligibleSupport', thresholdPath: 'formThresholds.HEEL_LIFT_MIN_ELIGIBLE_SUPPORT', direction: 'above' },
+  { issueId: 'barbell-squat.knee_valgus', metricKey: 'kneeTrackingOffsetRatio', thresholdPath: 'formThresholds.KNEE_VALGUS_WARN', direction: 'above' },
+  { issueId: 'barbell-squat.knee_valgus', metricKey: 'kneeTrackingOverThresholdSupport', thresholdPath: 'formThresholds.KNEE_VALGUS_MIN_SUPPORT', direction: 'above' },
+  { issueId: 'barbell-squat.knee_valgus', metricKey: 'kneeTrackingEligibleSupport', thresholdPath: 'formThresholds.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT', direction: 'above' },
   { issueId: 'barbell-squat.torso_fail', metricKey: 'torsoLeanSigned', thresholdPath: 'formThresholds.TORSO_LEAN_FAIL', direction: 'above' },
   { issueId: 'barbell-squat.torso_warn', metricKey: 'torsoLeanSigned', thresholdPath: 'formThresholds.TORSO_LEAN_WARN', direction: 'above' },
   { issueId: 'barbell-squat.torso_fail', metricKey: 'torsoLeanDelta', thresholdPath: 'formThresholds.TORSO_LEAN_DELTA_FAIL', direction: 'above' },
@@ -188,6 +221,33 @@ function withSquatConfig<T>(
 
 type SquatPhase = 'IDLE' | 'STANDING' | 'DESCENDING' | 'BOTTOM' | 'ASCENDING';
 type SideViewQuality = 'good' | 'warn' | 'fail' | 'unknown';
+type SquatViewClass = 'side' | 'front' | 'oblique' | 'unknown';
+type SquatMetricSource = 'world' | 'image';
+type SquatSide = 'left' | 'right';
+
+interface SquatViewEstimate {
+  viewClass: SquatViewClass;
+  confidence: number;
+  angleDeg: number | null;
+  source: 'world' | 'image_width' | 'unknown';
+}
+
+interface KneeTrackingEstimate {
+  offsetRatio: number;
+  confidence: number;
+  supportedSides: number;
+}
+
+interface KneeRatioEstimate {
+  ratio: number;
+  confidence: number;
+  source: SquatMetricSource;
+}
+
+interface MovementKneeRatioEstimate extends KneeRatioEstimate {
+  left: KneeRatioEstimate | null;
+  right: KneeRatioEstimate | null;
+}
 
 interface SquatFSM {
   phase: SquatPhase;
@@ -208,23 +268,55 @@ interface SquatRepWindow {
   minKneeRatio: number;
   maxKneeRatio: number;
   endKneeRatio: number | null;
+  minRawKneeRatio: number;
+  maxRawKneeRatio: number;
+  endRawKneeRatio: number | null;
   lockoutBaselineRatio: number | null;
+  kneeRatioSampleCount: number;
+  worldKneeRatioSampleCount: number;
+  imageKneeRatioSampleCount: number;
+  leftKneeRatioMin: number;
+  leftKneeRatioMax: number;
+  leftKneeRatioEnd: number | null;
+  leftRawKneeRatioMin: number;
+  leftRawKneeRatioMax: number;
+  leftRawKneeRatioEnd: number | null;
+  leftKneeRatioSampleCount: number;
+  leftWorldKneeRatioSampleCount: number;
+  leftImageKneeRatioSampleCount: number;
+  leftKneeRatioConfidenceSum: number;
+  rightKneeRatioMin: number;
+  rightKneeRatioMax: number;
+  rightKneeRatioEnd: number | null;
+  rightRawKneeRatioMin: number;
+  rightRawKneeRatioMax: number;
+  rightRawKneeRatioEnd: number | null;
+  rightKneeRatioSampleCount: number;
+  rightWorldKneeRatioSampleCount: number;
+  rightImageKneeRatioSampleCount: number;
+  rightKneeRatioConfidenceSum: number;
   /** True thigh depth angle: positive = shallow, 0 = parallel, negative = below parallel */
   minThighDepthAngle: number;
+  minRawThighDepthAngle: number;
   thighDepthSampleCount: number;
   thighDepthConfidenceSum: number;
   /** Max torso forward lean (degrees from vertical) during rep */
   maxTorsoLean: number;
+  maxRawTorsoLean: number;
   torsoLeanBaseline: number | null;
   maxTorsoLeanDelta: number;
   torsoLeanSignedBaseline: number | null;
   maxTorsoLeanSigned: number;
+  maxRawTorsoLeanSigned: number;
   maxTorsoLeanSignedDelta: number;
   torsoLeanSampleCount: number;
   torsoLeanConfidenceSum: number;
+  torsoWorldSampleCount: number;
+  torsoImageSampleCount: number;
   /** Heel lift relative to standing foot pitch baseline */
   footPitchBaseline: number | null;
   maxHeelLiftDeltaDeg: number;
+  maxRawHeelLiftDeltaDeg: number;
   heelLiftSampleCount: number;
   heelLiftTriggeredSampleCount: number;
   heelLiftConfidenceSum: number;
@@ -232,9 +324,26 @@ interface SquatRepWindow {
   maxSideViewWidthRatio: number;
   sideViewSampleCount: number;
   sideViewConfidenceSum: number;
+  /** Multi-view diagnostics */
+  viewSampleCount: number;
+  sideViewClassSampleCount: number;
+  frontViewClassSampleCount: number;
+  obliqueViewClassSampleCount: number;
+  unknownViewClassSampleCount: number;
+  viewConfidenceSum: number;
+  viewConfidenceMin: number;
+  maxViewAngleDeg: number;
+  viewAngleSampleCount: number;
+  /** Front-view knee tracking */
+  maxKneeTrackingOffsetRatio: number;
+  kneeTrackingSampleCount: number;
+  kneeTrackingTriggeredSampleCount: number;
+  kneeTrackingConfidenceSum: number;
   /** Timestamps */
   tStart: number;
   tBottom: number | null;
+  tMovementEnd: number | null;
+  tConfirmedEnd: number | null;
   tEnd: number;
   /** Frame count */
   frameCount: number;
@@ -246,12 +355,32 @@ interface SquatRepWindow {
 interface SquatAngles {
   knee: number;
   kneeRatio: number; // reach ratio: camera-invariant
+  rawKneeRatio: number;
+  leftKneeRatio: number;
+  rightKneeRatio: number;
+  rawLeftKneeRatio: number;
+  rawRightKneeRatio: number;
+  leftKneeRatioConfidence: number;
+  rightKneeRatioConfidence: number;
+  leftKneeRatioSourceRank: number;
+  rightKneeRatioSourceRank: number;
   torsoLean: number;
   torsoLeanSigned: number;
+  rawTorsoLean: number;
+  rawTorsoLeanSigned: number;
   hipAngle: number;
   thighDepthAngle: number;
+  rawThighDepthAngle: number;
   footPitch: number;
+  rawFootPitch: number;
   sideViewWidthRatio: number;
+  kneeTrackingOffsetRatio: number;
+  viewAngleDeg: number;
+  viewConfidence: number;
+  viewClassRank: number;
+  kneeRatioSourceRank: number;
+  torsoSourceRank: number;
+  viewSourceRank: number;
 }
 
 interface SmoothedSquatAngles extends SquatAngles {}
@@ -263,6 +392,8 @@ interface RepResult {
   tUp: number;
   score: number;
   messages: string[];
+  scorable?: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
   diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
@@ -315,6 +446,22 @@ interface SquatDebugInfo {
   kneeRatioMin: number | null;
   kneeRatioMax: number | null;
   maxTorsoLean: number | null;
+  rawKneeRatio: number | null;
+  leftKneeRatio: number | null;
+  rightKneeRatio: number | null;
+  leftKneeRatioSupport: number | null;
+  rightKneeRatioSupport: number | null;
+  leftWorldKneeRatioSupport: number | null;
+  rightWorldKneeRatioSupport: number | null;
+  rawThighDepthAngle: number | null;
+  rawTorsoLean: number | null;
+  rawFootPitch: number | null;
+  kneeTrackingOffsetRatio: number | null;
+  kneeTrackingEligibleSupport: number | null;
+  kneeTrackingOverThresholdSupport: number | null;
+  viewClass: SquatViewClass;
+  viewAngleDeg: number | null;
+  metricSource: SquatMetricSource | null;
 }
 
 interface FSMUpdateResult {
@@ -362,31 +509,78 @@ function initRepWindow(
     minKneeRatio: initialKneeRatio ?? Infinity,
     maxKneeRatio: initialKneeRatio ?? -Infinity,
     endKneeRatio: initialKneeRatio ?? null,
+    minRawKneeRatio: initialKneeRatio ?? Infinity,
+    maxRawKneeRatio: initialKneeRatio ?? -Infinity,
+    endRawKneeRatio: initialKneeRatio ?? null,
     lockoutBaselineRatio:
       initialKneeRatio !== undefined && Number.isFinite(initialKneeRatio)
         ? initialKneeRatio
         : null,
+    kneeRatioSampleCount: 0,
+    worldKneeRatioSampleCount: 0,
+    imageKneeRatioSampleCount: 0,
+    leftKneeRatioMin: Infinity,
+    leftKneeRatioMax: -Infinity,
+    leftKneeRatioEnd: null,
+    leftRawKneeRatioMin: Infinity,
+    leftRawKneeRatioMax: -Infinity,
+    leftRawKneeRatioEnd: null,
+    leftKneeRatioSampleCount: 0,
+    leftWorldKneeRatioSampleCount: 0,
+    leftImageKneeRatioSampleCount: 0,
+    leftKneeRatioConfidenceSum: 0,
+    rightKneeRatioMin: Infinity,
+    rightKneeRatioMax: -Infinity,
+    rightKneeRatioEnd: null,
+    rightRawKneeRatioMin: Infinity,
+    rightRawKneeRatioMax: -Infinity,
+    rightRawKneeRatioEnd: null,
+    rightKneeRatioSampleCount: 0,
+    rightWorldKneeRatioSampleCount: 0,
+    rightImageKneeRatioSampleCount: 0,
+    rightKneeRatioConfidenceSum: 0,
     minThighDepthAngle: Infinity,
+    minRawThighDepthAngle: Infinity,
     thighDepthSampleCount: 0,
     thighDepthConfidenceSum: 0,
     maxTorsoLean: -Infinity,
+    maxRawTorsoLean: -Infinity,
     torsoLeanBaseline: baselines.torsoLeanBaseline ?? null,
     maxTorsoLeanDelta: 0,
     torsoLeanSignedBaseline: baselines.torsoLeanSignedBaseline ?? null,
     maxTorsoLeanSigned: -Infinity,
+    maxRawTorsoLeanSigned: -Infinity,
     maxTorsoLeanSignedDelta: 0,
     torsoLeanSampleCount: 0,
     torsoLeanConfidenceSum: 0,
+    torsoWorldSampleCount: 0,
+    torsoImageSampleCount: 0,
     footPitchBaseline: baselines.footPitchBaseline ?? null,
     maxHeelLiftDeltaDeg: 0,
+    maxRawHeelLiftDeltaDeg: 0,
     heelLiftSampleCount: 0,
     heelLiftTriggeredSampleCount: 0,
     heelLiftConfidenceSum: 0,
     maxSideViewWidthRatio: -Infinity,
     sideViewSampleCount: 0,
     sideViewConfidenceSum: 0,
+    viewSampleCount: 0,
+    sideViewClassSampleCount: 0,
+    frontViewClassSampleCount: 0,
+    obliqueViewClassSampleCount: 0,
+    unknownViewClassSampleCount: 0,
+    viewConfidenceSum: 0,
+    viewConfidenceMin: Infinity,
+    maxViewAngleDeg: -Infinity,
+    viewAngleSampleCount: 0,
+    maxKneeTrackingOffsetRatio: 0,
+    kneeTrackingSampleCount: 0,
+    kneeTrackingTriggeredSampleCount: 0,
+    kneeTrackingConfidenceSum: 0,
     tStart,
     tBottom: null,
+    tMovementEnd: null,
+    tConfirmedEnd: null,
     tEnd: tStart,
     frameCount: 0,
     pendingCompletionFrames: null,
@@ -403,12 +597,32 @@ function initializeSquatState(): SquatState {
     angleHistory: {
       knee: [],
       kneeRatio: [],
+      rawKneeRatio: [],
+      leftKneeRatio: [],
+      rightKneeRatio: [],
+      rawLeftKneeRatio: [],
+      rawRightKneeRatio: [],
+      leftKneeRatioConfidence: [],
+      rightKneeRatioConfidence: [],
+      leftKneeRatioSourceRank: [],
+      rightKneeRatioSourceRank: [],
       torsoLean: [],
       torsoLeanSigned: [],
+      rawTorsoLean: [],
+      rawTorsoLeanSigned: [],
       hipAngle: [],
       thighDepthAngle: [],
+      rawThighDepthAngle: [],
       footPitch: [],
+      rawFootPitch: [],
       sideViewWidthRatio: [],
+      kneeTrackingOffsetRatio: [],
+      viewAngleDeg: [],
+      viewConfidence: [],
+      viewClassRank: [],
+      kneeRatioSourceRank: [],
+      torsoSourceRank: [],
+      viewSourceRank: [],
     },
     smoothed: null,
     fast: null,
@@ -427,10 +641,16 @@ function initializeSquatState(): SquatState {
 // ============================================================================
 
 type Point2D = { x: number; y: number };
+type Point3D = { x: number; y: number; z: number };
 
 function getPoint(kp: Keypoint | null): Point2D | null {
   if (!kp) return null;
   return { x: kp.x, y: kp.y };
+}
+
+function getPoint3D(kp: Keypoint | null): Point3D | null {
+  if (!kp) return null;
+  return { x: kp.x, y: kp.y, z: kp.z ?? 0 };
 }
 
 /** Euclidean distance in 2D */
@@ -440,11 +660,25 @@ function dist2D(a: Point2D, b: Point2D): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** Euclidean distance in 3D world space */
+function dist3D(a: Point3D, b: Point3D): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 /** Reach ratio for a 3-joint chain. 1.0 = straight, lower = more bent. */
 function computeReachRatio(proximal: Point2D, joint: Point2D, distal: Point2D): number {
   const chainLen = dist2D(proximal, joint) + dist2D(joint, distal);
   if (chainLen < 1e-6) return 1.0;
   return dist2D(proximal, distal) / chainLen;
+}
+
+function computeReachRatio3D(proximal: Point3D, joint: Point3D, distal: Point3D): number {
+  const chainLen = dist3D(proximal, joint) + dist3D(joint, distal);
+  if (chainLen < 1e-6) return 1.0;
+  return dist3D(proximal, distal) / chainLen;
 }
 
 function inferYDown(
@@ -626,6 +860,205 @@ function calculateSideViewWidthRatio(keypoints: Keypoint[]): number | null {
   return ((shoulderWidth + hipWidth) / 2) / bodyHeight;
 }
 
+function viewClassToRank(viewClass: SquatViewClass): number {
+  if (viewClass === 'side') return 0;
+  if (viewClass === 'front') return 1;
+  if (viewClass === 'oblique') return 2;
+  return 3;
+}
+
+function rankToViewClass(rank: number): SquatViewClass {
+  const rounded = Math.round(rank);
+  if (rounded === 0) return 'side';
+  if (rounded === 1) return 'front';
+  if (rounded === 2) return 'oblique';
+  return 'unknown';
+}
+
+function sourceToRank(source: SquatMetricSource): number {
+  return source === 'world' ? 1 : 0;
+}
+
+function rankToSource(rank: number): SquatMetricSource | null {
+  if (!Number.isFinite(rank)) return null;
+  return Math.round(rank) >= 1 ? 'world' : 'image';
+}
+
+function estimateWorldViewAngle(worldKeypoints: Keypoint[] | undefined): { angleDeg: number; confidence: number } | null {
+  if (!worldKeypoints) return null;
+  const ls = getKeypoint(worldKeypoints, 'left_shoulder');
+  const rs = getKeypoint(worldKeypoints, 'right_shoulder');
+  if (!isVisible(ls, VISIBILITY_THRESHOLD) || !isVisible(rs, VISIBILITY_THRESHOLD)) return null;
+  const confidence = minKeypointConfidence(worldKeypoints, ['left_shoulder', 'right_shoulder']);
+  if (confidence < FORM_THRESHOLDS.VIEW_CONFIDENCE_MIN) return null;
+  const dx = Math.abs(rs!.x - ls!.x);
+  const dz = Math.abs((rs!.z ?? 0) - (ls!.z ?? 0));
+  return {
+    angleDeg: Math.atan2(dz, Math.max(dx, 1e-6)) * (180 / Math.PI),
+    confidence,
+  };
+}
+
+function classifyViewAngle(angleDeg: number): SquatViewClass {
+  if (angleDeg < FORM_THRESHOLDS.FRONT_VIEW_MAX) return 'front';
+  if (angleDeg < FORM_THRESHOLDS.OBLIQUE_VIEW_MAX) return 'oblique';
+  return 'side';
+}
+
+function estimateSquatView(
+  imageKeypoints: Keypoint[],
+  worldKeypoints: Keypoint[] | undefined,
+  sideViewWidthRatio: number | null,
+): SquatViewEstimate {
+  const worldAngle = estimateWorldViewAngle(worldKeypoints);
+  if (worldAngle) {
+    return {
+      viewClass: classifyViewAngle(worldAngle.angleDeg),
+      confidence: worldAngle.confidence,
+      angleDeg: worldAngle.angleDeg,
+      source: 'world',
+    };
+  }
+
+  const leftSideConfidence = minKeypointConfidence(imageKeypoints, [
+    'left_shoulder',
+    'left_hip',
+    'left_knee',
+    'left_ankle',
+  ]);
+  const rightSideConfidence = minKeypointConfidence(imageKeypoints, [
+    'right_shoulder',
+    'right_hip',
+    'right_knee',
+    'right_ankle',
+  ]);
+  if (
+    Math.max(leftSideConfidence, rightSideConfidence) >= FORM_THRESHOLDS.VIEW_CONFIDENCE_MIN &&
+    Math.min(leftSideConfidence, rightSideConfidence) < VISIBILITY_THRESHOLD
+  ) {
+    return {
+      viewClass: 'side',
+      confidence: Math.max(leftSideConfidence, rightSideConfidence),
+      angleDeg: null,
+      source: 'image_width',
+    };
+  }
+
+  const imageConfidence = minKeypointConfidence(imageKeypoints, [
+    'left_shoulder',
+    'right_shoulder',
+    'left_hip',
+    'right_hip',
+  ]);
+  if (
+    sideViewWidthRatio !== null &&
+    Number.isFinite(sideViewWidthRatio) &&
+    imageConfidence >= FORM_THRESHOLDS.VIEW_CONFIDENCE_MIN
+  ) {
+    const viewClass =
+      sideViewWidthRatio <= FORM_THRESHOLDS.SIDE_VIEW_WIDTH_WARN
+        ? 'side'
+        : sideViewWidthRatio >= FORM_THRESHOLDS.SIDE_VIEW_WIDTH_FAIL
+          ? 'front'
+          : 'oblique';
+    return {
+      viewClass,
+      confidence: imageConfidence,
+      angleDeg: null,
+      source: 'image_width',
+    };
+  }
+
+  return {
+    viewClass: 'unknown',
+    confidence: 0,
+    angleDeg: null,
+    source: 'unknown',
+  };
+}
+
+function calculateSagittalTorsoLean(keypoints: Keypoint[]): number | null {
+  const ls = getKeypoint(keypoints, 'left_shoulder');
+  const rs = getKeypoint(keypoints, 'right_shoulder');
+  const lh = getKeypoint(keypoints, 'left_hip');
+  const rh = getKeypoint(keypoints, 'right_hip');
+  if (
+    !isVisible(ls, VISIBILITY_THRESHOLD) ||
+    !isVisible(rs, VISIBILITY_THRESHOLD) ||
+    !isVisible(lh, VISIBILITY_THRESHOLD) ||
+    !isVisible(rh, VISIBILITY_THRESHOLD)
+  ) {
+    return null;
+  }
+
+  const hipCenter = {
+    x: (lh!.x + rh!.x) / 2,
+    y: (lh!.y + rh!.y) / 2,
+    z: ((lh!.z ?? 0) + (rh!.z ?? 0)) / 2,
+  };
+  const shoulderCenter = {
+    x: (ls!.x + rs!.x) / 2,
+    y: (ls!.y + rs!.y) / 2,
+    z: ((ls!.z ?? 0) + (rs!.z ?? 0)) / 2,
+  };
+  const angle = calculateSignedVerticalAngleSagittal(hipCenter, shoulderCenter, lh!, rh!, ls!, rs!);
+  return Number.isFinite(angle) ? angle : null;
+}
+
+function lineXAtY(hip: Point2D, ankle: Point2D, kneeY: number): number {
+  const dy = ankle.y - hip.y;
+  if (Math.abs(dy) < 1e-6) return (hip.x + ankle.x) / 2;
+  const t = Math.max(0, Math.min(1, (kneeY - hip.y) / dy));
+  return hip.x + (ankle.x - hip.x) * t;
+}
+
+function sideKneeTrackingOffset(
+  hip: Keypoint,
+  knee: Keypoint,
+  ankle: Keypoint,
+  midlineX: number,
+  normalizer: number,
+): number {
+  const lineX = lineXAtY(getPoint(hip)!, getPoint(ankle)!, knee.y);
+  const towardMidlineSign = Math.sign(midlineX - lineX);
+  if (towardMidlineSign === 0) return 0;
+  return Math.max(0, (knee.x - lineX) * towardMidlineSign) / normalizer;
+}
+
+function calculateKneeTracking(imageKeypoints: Keypoint[]): KneeTrackingEstimate | null {
+  const required = [
+    'left_hip',
+    'right_hip',
+    'left_knee',
+    'right_knee',
+    'left_ankle',
+    'right_ankle',
+  ];
+  const confidence = minKeypointConfidence(imageKeypoints, required);
+  if (confidence < FORM_THRESHOLDS.KNEE_TRACKING_CONFIDENCE_MIN) return null;
+
+  const lh = getKeypoint(imageKeypoints, 'left_hip');
+  const rh = getKeypoint(imageKeypoints, 'right_hip');
+  const lk = getKeypoint(imageKeypoints, 'left_knee');
+  const rk = getKeypoint(imageKeypoints, 'right_knee');
+  const la = getKeypoint(imageKeypoints, 'left_ankle');
+  const ra = getKeypoint(imageKeypoints, 'right_ankle');
+  if (!lh || !rh || !lk || !rk || !la || !ra) return null;
+
+  const hipWidth = Math.abs(lh.x - rh.x);
+  const stanceWidth = Math.abs(la.x - ra.x);
+  const normalizer = Math.max(stanceWidth, hipWidth, 1e-6);
+  const midlineX = (lh.x + rh.x + la.x + ra.x) / 4;
+  const leftOffset = sideKneeTrackingOffset(lh, lk, la, midlineX, normalizer);
+  const rightOffset = sideKneeTrackingOffset(rh, rk, ra, midlineX, normalizer);
+
+  return {
+    offsetRatio: Math.max(leftOffset, rightOffset),
+    confidence,
+    supportedSides: 2,
+  };
+}
+
 /**
  * Calculate torso forward lean: deviation of the hip->shoulder vector from vertical.
  * 0 = perfectly upright, 90 = horizontal.
@@ -705,33 +1138,135 @@ function selectVisibleSide(keypoints: Keypoint[]): 'left' | 'right' {
 // ANGLE CALCULATION
 // ============================================================================
 
-function calculateSquatAngles(
-  keypoints: Keypoint[],
-  side: 'left' | 'right'
-): SquatAngles | null {
+function calculateKneeRatioForSide(
+  keypoints: Keypoint[] | undefined,
+  side: SquatSide,
+  source: SquatMetricSource,
+): KneeRatioEstimate | null {
+  if (!keypoints) return null;
   const hip = getKeypoint(keypoints, `${side}_hip`);
   const knee = getKeypoint(keypoints, `${side}_knee`);
   const ankle = getKeypoint(keypoints, `${side}_ankle`);
-  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
+  if (
+    !hip ||
+    !knee ||
+    !ankle ||
+    !isVisible(hip, VISIBILITY_THRESHOLD) ||
+    !isVisible(knee, VISIBILITY_THRESHOLD) ||
+    !isVisible(ankle, VISIBILITY_THRESHOLD)
+  ) {
+    return null;
+  }
 
-  const hasLeg =
-    hip && knee && ankle &&
+  const confidence = minKeypointConfidence(keypoints, [
+    `${side}_hip`,
+    `${side}_knee`,
+    `${side}_ankle`,
+  ]);
+  const ratio = source === 'world'
+    ? computeReachRatio3D(getPoint3D(hip)!, getPoint3D(knee)!, getPoint3D(ankle)!)
+    : computeReachRatio(getPoint(hip)!, getPoint(knee)!, getPoint(ankle)!);
+  if (!Number.isFinite(ratio)) return null;
+  return { ratio, confidence, source };
+}
+
+function weightedKneeRatioAverage(samples: KneeRatioEstimate[]): KneeRatioEstimate | null {
+  if (samples.length === 0) return null;
+  let numerator = 0;
+  let denominator = 0;
+  let confidenceSum = 0;
+  for (const sample of samples) {
+    const weight = Math.max(sample.confidence, 1e-6);
+    numerator += sample.ratio * weight;
+    denominator += weight;
+    confidenceSum += sample.confidence;
+  }
+  if (denominator <= 0) return null;
+  return {
+    ratio: numerator / denominator,
+    confidence: confidenceSum / samples.length,
+    source: samples.some((sample) => sample.source === 'world') ? 'world' : 'image',
+  };
+}
+
+function chooseSideKneeRatio(
+  side: SquatSide,
+  world: Record<SquatSide, KneeRatioEstimate | null>,
+  image: Record<SquatSide, KneeRatioEstimate | null>,
+): KneeRatioEstimate | null {
+  return world[side] ?? image[side];
+}
+
+function selectMovementKneeRatio(
+  side: SquatSide,
+  viewClass: SquatViewClass,
+  world: Record<SquatSide, KneeRatioEstimate | null>,
+  image: Record<SquatSide, KneeRatioEstimate | null>,
+): MovementKneeRatioEstimate | null {
+  const left = world.left ?? image.left;
+  const right = world.right ?? image.right;
+
+  if (viewClass === 'front') {
+    const worldSamples = [world.left, world.right].filter(
+      (sample): sample is KneeRatioEstimate => sample !== null,
+    );
+    const imageSamples = [image.left, image.right].filter(
+      (sample): sample is KneeRatioEstimate => sample !== null,
+    );
+    const aggregate = weightedKneeRatioAverage(worldSamples) ?? weightedKneeRatioAverage(imageSamples);
+    return aggregate ? { ...aggregate, left, right } : null;
+  }
+
+  const selected = chooseSideKneeRatio(side, world, image);
+  return selected ? { ...selected, left, right } : null;
+}
+
+function calculateSquatAngles(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+  frameContext?: ExerciseFrameContext,
+): SquatAngles | null {
+  const imageKeypoints = frameContext?.imageKeypoints ?? keypoints;
+  const worldKeypoints = frameContext?.worldKeypoints;
+  const sideViewWidthRatio = calculateSideViewWidthRatio(imageKeypoints);
+  const viewEstimate = estimateSquatView(imageKeypoints, worldKeypoints, sideViewWidthRatio);
+  const worldKneeRatios: Record<SquatSide, KneeRatioEstimate | null> = {
+    left: calculateKneeRatioForSide(worldKeypoints, 'left', 'world'),
+    right: calculateKneeRatioForSide(worldKeypoints, 'right', 'world'),
+  };
+  const imageKneeRatios: Record<SquatSide, KneeRatioEstimate | null> = {
+    left: calculateKneeRatioForSide(imageKeypoints, 'left', 'image'),
+    right: calculateKneeRatioForSide(imageKeypoints, 'right', 'image'),
+  };
+  const movementKneeRatio = selectMovementKneeRatio(side, viewEstimate.viewClass, worldKneeRatios, imageKneeRatios);
+  if (!movementKneeRatio) return null;
+
+  const metricSource = movementKneeRatio.source;
+  let metricKeypoints = metricSource === 'world' && worldKeypoints ? worldKeypoints : imageKeypoints;
+  let hip = getKeypoint(metricKeypoints, `${side}_hip`);
+  let knee = getKeypoint(metricKeypoints, `${side}_knee`);
+  let shoulder = getKeypoint(metricKeypoints, `${side}_shoulder`);
+  const hasSelectedMetricLeg =
+    hip &&
+    knee &&
+    getKeypoint(metricKeypoints, `${side}_ankle`) &&
     isVisible(hip, VISIBILITY_THRESHOLD) &&
     isVisible(knee, VISIBILITY_THRESHOLD) &&
-    isVisible(ankle, VISIBILITY_THRESHOLD);
+    isVisible(getKeypoint(metricKeypoints, `${side}_ankle`), VISIBILITY_THRESHOLD);
+  if (!hasSelectedMetricLeg) {
+    metricKeypoints = imageKeypoints;
+    hip = getKeypoint(metricKeypoints, `${side}_hip`);
+    knee = getKeypoint(metricKeypoints, `${side}_knee`);
+    shoulder = getKeypoint(metricKeypoints, `${side}_shoulder`);
+  }
 
-  if (!hasLeg) return null;
-
-  const hipPt = getPoint(hip)!;
-  const kneePt = getPoint(knee)!;
-  const anklePt = getPoint(ankle)!;
-
-  // Knee reach ratio (hip-knee-ankle): ~0.97 = fully extended, ~0.60 = deep squat
-  const kneeRatio = computeReachRatio(hipPt, kneePt, anklePt);
+  const kneeRatio = movementKneeRatio.ratio;
+  const hipPt = getPoint(hip) ?? getPoint(getKeypoint(imageKeypoints, `${side}_hip`));
+  const kneePt = getPoint(knee) ?? getPoint(getKeypoint(imageKeypoints, `${side}_knee`));
 
   // Hip angle (shoulder-hip-knee): indicates hip hinge depth
   let hipAngle = 180;
-  if (shoulder && isVisible(shoulder, VISIBILITY_THRESHOLD)) {
+  if (shoulder && hipPt && kneePt && isVisible(shoulder, VISIBILITY_THRESHOLD)) {
     const shoulderPt = getPoint(shoulder)!;
     hipAngle = computeReachRatio(shoulderPt, hipPt, kneePt);
     // Keep as angle-like value — hipAngle is not used in FSM, kept for debug
@@ -743,27 +1278,51 @@ function calculateSquatAngles(
   // Actually, let's keep hipAngle as a simple pass-through value since it's
   // not used by FSM or form checks. Set to 180 as default.
   hipAngle = 180;
-  if (shoulder && isVisible(shoulder, VISIBILITY_THRESHOLD)) {
+  if (shoulder && hipPt && kneePt && isVisible(shoulder, VISIBILITY_THRESHOLD)) {
     // Store hip reach ratio (not used for FSM, just debug)
     hipAngle = computeReachRatio(getPoint(shoulder)!, hipPt, kneePt);
   }
 
   // Torso forward lean from vertical
-  const torsoLean = calculateTorsoLean(keypoints, side);
-  const torsoLeanSigned = calculateSignedTorsoLean(keypoints, side);
-  const thighDepthAngle = calculateThighDepthAngle(keypoints, side);
-  const footPitch = calculateFootPitch(keypoints, side);
-  const sideViewWidthRatio = calculateSideViewWidthRatio(keypoints);
+  const sagittalTorsoLean = worldKeypoints ? calculateSagittalTorsoLean(worldKeypoints) : null;
+  const torsoLean = sagittalTorsoLean !== null
+    ? Math.abs(sagittalTorsoLean)
+    : calculateTorsoLean(metricKeypoints, side);
+  const torsoLeanSigned = sagittalTorsoLean ?? calculateSignedTorsoLean(metricKeypoints, side);
+  const torsoSource: SquatMetricSource = sagittalTorsoLean !== null ? 'world' : metricSource;
+  const thighDepthAngle = calculateThighDepthAngle(imageKeypoints, side);
+  const footPitch = calculateFootPitch(imageKeypoints, side);
+  const kneeTracking = calculateKneeTracking(imageKeypoints);
 
   return {
     knee: kneeRatio,
     kneeRatio,
+    rawKneeRatio: kneeRatio,
+    leftKneeRatio: movementKneeRatio.left?.ratio ?? NaN,
+    rightKneeRatio: movementKneeRatio.right?.ratio ?? NaN,
+    rawLeftKneeRatio: movementKneeRatio.left?.ratio ?? NaN,
+    rawRightKneeRatio: movementKneeRatio.right?.ratio ?? NaN,
+    leftKneeRatioConfidence: movementKneeRatio.left?.confidence ?? NaN,
+    rightKneeRatioConfidence: movementKneeRatio.right?.confidence ?? NaN,
+    leftKneeRatioSourceRank: movementKneeRatio.left ? sourceToRank(movementKneeRatio.left.source) : NaN,
+    rightKneeRatioSourceRank: movementKneeRatio.right ? sourceToRank(movementKneeRatio.right.source) : NaN,
     torsoLean: torsoLean ?? NaN,
     torsoLeanSigned: torsoLeanSigned ?? NaN,
+    rawTorsoLean: torsoLean ?? NaN,
+    rawTorsoLeanSigned: torsoLeanSigned ?? NaN,
     hipAngle,
     thighDepthAngle: thighDepthAngle ?? NaN,
+    rawThighDepthAngle: thighDepthAngle ?? NaN,
     footPitch: footPitch ?? NaN,
+    rawFootPitch: footPitch ?? NaN,
     sideViewWidthRatio: sideViewWidthRatio ?? NaN,
+    kneeTrackingOffsetRatio: kneeTracking?.offsetRatio ?? NaN,
+    viewAngleDeg: viewEstimate.angleDeg ?? NaN,
+    viewConfidence: viewEstimate.confidence,
+    viewClassRank: viewClassToRank(viewEstimate.viewClass),
+    kneeRatioSourceRank: sourceToRank(metricSource),
+    torsoSourceRank: sourceToRank(torsoSource),
+    viewSourceRank: viewEstimate.source === 'world' ? 1 : viewEstimate.source === 'image_width' ? 0 : NaN,
   };
 }
 
@@ -785,12 +1344,34 @@ function applySmoothing(
   const keys: (keyof SquatAngles)[] = [
     'knee',
     'kneeRatio',
+    'leftKneeRatio',
+    'rightKneeRatio',
+    'hipAngle',
     'torsoLean',
     'torsoLeanSigned',
-    'hipAngle',
     'thighDepthAngle',
     'footPitch',
     'sideViewWidthRatio',
+    'kneeTrackingOffsetRatio',
+    'viewAngleDeg',
+  ];
+  const passthroughKeys: (keyof SquatAngles)[] = [
+    'rawKneeRatio',
+    'rawLeftKneeRatio',
+    'rawRightKneeRatio',
+    'leftKneeRatioConfidence',
+    'rightKneeRatioConfidence',
+    'leftKneeRatioSourceRank',
+    'rightKneeRatioSourceRank',
+    'rawTorsoLean',
+    'rawTorsoLeanSigned',
+    'rawThighDepthAngle',
+    'rawFootPitch',
+    'viewConfidence',
+    'viewClassRank',
+    'kneeRatioSourceRank',
+    'torsoSourceRank',
+    'viewSourceRank',
   ];
   const smoothedResult: Partial<SmoothedSquatAngles> = {};
   const fastResult: Partial<SmoothedSquatAngles> = {};
@@ -819,6 +1400,12 @@ function applySmoothing(
       prev !== undefined && !isNaN(prev)
         ? EMA_ALPHA * medianValue + (1 - EMA_ALPHA) * prev
         : medianValue;
+  }
+
+  for (const key of passthroughKeys) {
+    const value = rawAngles[key];
+    smoothedResult[key] = value;
+    fastResult[key] = value;
   }
 
   return {
@@ -929,6 +1516,7 @@ const SQUAT_FEEDBACK = {
   TORSO_FAIL: 'Too much forward lean \u2014 keep your chest up.',
   TORSO_WARN: 'Stay more upright \u2014 brace your core.',
   HEEL_LIFT: 'Keep your heels planted \u2014 drive through your mid-foot.',
+  KNEE_VALGUS: 'Track your knees over your toes.',
   TEMPO_UP: 'Control the ascent \u2014 don\'t bounce out of the hole.',
   TEMPO_DOWN: 'Slow the descent \u2014 control the weight down.',
 } as const;
@@ -937,7 +1525,36 @@ type SquatSeverity = 'none' | 'warn' | 'fail';
 type DepthSource = 'thighDepthAngle' | 'depthRatio';
 
 interface SquatMetricSnapshot {
+  view: SquatViewClass;
+  viewQuality: RepViewQualityDiagnostic;
+  sideConfirmed: boolean;
+  frontConfirmed: boolean;
+  obliqueConfirmed: boolean;
+  scorable: boolean;
+  qualityWarnings: FrameworkRepResult['qualityWarnings'];
+  worldKneeRatioSupport: number | null;
+  imageKneeRatioSupport: number | null;
+  leftKneeRatio: number | null;
+  rightKneeRatio: number | null;
+  leftKneeRatioMin: number | null;
+  rightKneeRatioMin: number | null;
+  leftKneeRatioMax: number | null;
+  rightKneeRatioMax: number | null;
+  leftKneeRatioEnd: number | null;
+  rightKneeRatioEnd: number | null;
+  leftKneeRatioSupport: number | null;
+  rightKneeRatioSupport: number | null;
+  leftWorldKneeRatioSupport: number | null;
+  rightWorldKneeRatioSupport: number | null;
+  leftImageKneeRatioSupport: number | null;
+  rightImageKneeRatioSupport: number | null;
+  leftKneeRatioConfidence: number | undefined;
+  rightKneeRatioConfidence: number | undefined;
+  leftKneeRatioSource: SquatMetricSource | null;
+  rightKneeRatioSource: SquatMetricSource | null;
+  primaryMetricSource: SquatMetricSource | null;
   thighDepthEligible: boolean;
+  sideOnlyMetricsEligible: boolean;
   thighDepthAngle: number | null;
   thighDepthConfidence: number | undefined;
   depthRatio: number;
@@ -947,8 +1564,10 @@ interface SquatMetricSnapshot {
   lockoutRatio: number;
   lockoutBaselineRatio: number | null;
   lockoutDeltaRatio: number | null;
+  lockoutEligible: boolean;
   lockoutShort: boolean;
   romRatio: number;
+  romEligible: boolean;
   incompleteRom: boolean;
   partialRep: boolean;
   heelLiftEligible: boolean;
@@ -958,6 +1577,13 @@ interface SquatMetricSnapshot {
   heelLiftOverThresholdSupport: number | null;
   heelLiftConfidence: number | undefined;
   heelLiftTriggered: boolean;
+  kneeTrackingEligible: boolean;
+  kneeTrackingOffsetRatio: number | null;
+  kneeTrackingEligibleSupport: number | null;
+  kneeTrackingOverThresholdSupport: number | null;
+  kneeTrackingConfidence: number | undefined;
+  kneeValgusTriggered: boolean;
+  kneeValgusSeverity: SquatSeverity;
   torsoLean: number | null;
   torsoLeanDelta: number | null;
   torsoLeanSigned: number | null;
@@ -970,8 +1596,19 @@ interface SquatMetricSnapshot {
   sideViewQuality: SideViewQuality;
   sideViewQualityRank: number | null;
   sideViewConfidence: number | undefined;
+  viewClassRatioSide: number | null;
+  viewClassRatioFront: number | null;
+  viewClassRatioOblique: number | null;
+  viewClassRatioUnknown: number | null;
+  viewAverageConfidence: number | null;
+  viewMinConfidence: number | null;
+  maxViewAngleDeg: number | null;
   tDown: number | null;
   tUp: number | null;
+  tBottom: number | null;
+  tMovementEnd: number | null;
+  tConfirmedEnd: number | null;
+  movementEndDelaySeconds: number | null;
   tempoUpShort: boolean;
   tempoDownShort: boolean;
 }
@@ -984,8 +1621,140 @@ function finiteValue(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function supportRatio(count: number, total: number): number | null {
+  return total > 0 ? count / total : null;
+}
+
+function supportAtLeast(value: number | null, threshold: number): boolean {
+  return value !== null && value >= threshold;
+}
+
+function averageViewConfidence(repWindow: SquatRepWindow): number | null {
+  return repWindow.viewSampleCount > 0
+    ? repWindow.viewConfidenceSum / repWindow.viewSampleCount
+    : null;
+}
+
+function primarySourceFromCounts(
+  worldCount: number,
+  imageCount: number,
+  sampleCount: number,
+): SquatMetricSource | null {
+  if (sampleCount <= 0) return null;
+  return worldCount >= imageCount ? 'world' : 'image';
+}
+
+function buildSquatViewQuality(repWindow: SquatRepWindow): RepViewQualityDiagnostic {
+  const sampleCount = repWindow.viewSampleCount;
+  const hasSamples = sampleCount >= FORM_THRESHOLDS.VIEW_MIN_SAMPLES;
+  const sideRatio = supportRatio(repWindow.sideViewClassSampleCount, sampleCount);
+  const frontRatio = supportRatio(repWindow.frontViewClassSampleCount, sampleCount);
+  const obliqueRatio = supportRatio(repWindow.obliqueViewClassSampleCount, sampleCount);
+  const averageConfidence = averageViewConfidence(repWindow);
+  const minConfidence = sampleCount > 0 && repWindow.viewConfidenceMin !== Infinity
+    ? repWindow.viewConfidenceMin
+    : null;
+  const confidenceOk =
+    averageConfidence !== null &&
+    averageConfidence >= FORM_THRESHOLDS.VIEW_CONFIDENCE_MIN;
+  const sideConfirmed = Boolean(
+    hasSamples &&
+    confidenceOk &&
+    supportAtLeast(sideRatio, FORM_THRESHOLDS.SIDE_VIEW_MIN_SUPPORT),
+  );
+  const frontConfirmed = Boolean(
+    hasSamples &&
+    confidenceOk &&
+    supportAtLeast(frontRatio, FORM_THRESHOLDS.FRONT_VIEW_MIN_SUPPORT),
+  );
+  const obliqueConfirmed = Boolean(
+    hasSamples &&
+    confidenceOk &&
+    !sideConfirmed &&
+    !frontConfirmed &&
+    supportAtLeast(obliqueRatio, FORM_THRESHOLDS.OBLIQUE_VIEW_MIN_SUPPORT),
+  );
+  const viewUnknown = !sideConfirmed && !frontConfirmed && !obliqueConfirmed;
+
+  return {
+    status: sideConfirmed
+      ? 'side_confirmed'
+      : frontConfirmed
+        ? 'front_confirmed'
+        : obliqueConfirmed
+          ? 'oblique_confirmed'
+          : 'view_unknown',
+    sideConfirmed,
+    frontishConfirmed: frontConfirmed || obliqueConfirmed,
+    frontConfirmed,
+    obliqueConfirmed,
+    viewUnknown,
+    averageSideViewConfidence: averageConfidence,
+    minSideViewConfidence: minConfidence,
+    averageViewConfidence: averageConfidence,
+    minViewConfidence: minConfidence,
+    sampleCount,
+  };
+}
+
+function diagnosticsViewFor(viewQuality: RepViewQualityDiagnostic): SquatViewClass {
+  if (viewQuality.sideConfirmed) return 'side';
+  if (viewQuality.frontConfirmed) return 'front';
+  if (viewQuality.obliqueConfirmed) return 'oblique';
+  return 'unknown';
+}
+
+function squatQualityWarnings(analysis: Pick<SquatMetricSnapshot, 'scorable' | 'frontConfirmed' | 'sideConfirmed'>): FrameworkRepResult['qualityWarnings'] {
+  if (analysis.scorable) return [];
+  return analysis.sideConfirmed || analysis.frontConfirmed
+    ? ['missing_required_joints']
+    : ['view_uncertain'];
+}
+
 function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
+  const viewQuality = buildSquatViewQuality(repWindow);
+  const view = diagnosticsViewFor(viewQuality);
+  const sideConfirmed = view === 'side';
+  const frontConfirmed = view === 'front';
+  const obliqueConfirmed = view === 'oblique';
+  const worldKneeRatioSupport = supportRatio(
+    repWindow.worldKneeRatioSampleCount,
+    repWindow.kneeRatioSampleCount,
+  );
+  const imageKneeRatioSupport = supportRatio(
+    repWindow.imageKneeRatioSampleCount,
+    repWindow.kneeRatioSampleCount,
+  );
+  const leftKneeRatioSupport = supportRatio(repWindow.leftKneeRatioSampleCount, repWindow.frameCount);
+  const rightKneeRatioSupport = supportRatio(repWindow.rightKneeRatioSampleCount, repWindow.frameCount);
+  const leftWorldKneeRatioSupport = supportRatio(repWindow.leftWorldKneeRatioSampleCount, repWindow.frameCount);
+  const rightWorldKneeRatioSupport = supportRatio(repWindow.rightWorldKneeRatioSampleCount, repWindow.frameCount);
+  const leftImageKneeRatioSupport = supportRatio(repWindow.leftImageKneeRatioSampleCount, repWindow.frameCount);
+  const rightImageKneeRatioSupport = supportRatio(repWindow.rightImageKneeRatioSampleCount, repWindow.frameCount);
+  const frontHasWorldKneeRatio = supportAtLeast(
+    Math.max(leftWorldKneeRatioSupport ?? 0, rightWorldKneeRatioSupport ?? 0),
+    FORM_THRESHOLDS.WORLD_KNEE_RATIO_MIN_SUPPORT,
+  );
+  const scorable = sideConfirmed || (frontConfirmed && frontHasWorldKneeRatio);
+  const sideOnlyMetricsEligible = scorable && sideConfirmed;
+  const primaryMetricSource: SquatMetricSource | null =
+    primarySourceFromCounts(
+      repWindow.worldKneeRatioSampleCount,
+      repWindow.imageKneeRatioSampleCount,
+      repWindow.kneeRatioSampleCount,
+    );
+  const leftKneeRatioSource = primarySourceFromCounts(
+    repWindow.leftWorldKneeRatioSampleCount,
+    repWindow.leftImageKneeRatioSampleCount,
+    repWindow.leftKneeRatioSampleCount,
+  );
+  const rightKneeRatioSource = primarySourceFromCounts(
+    repWindow.rightWorldKneeRatioSampleCount,
+    repWindow.rightImageKneeRatioSampleCount,
+    repWindow.rightKneeRatioSampleCount,
+  );
   const thighDepthEligible =
+    sideOnlyMetricsEligible &&
     repWindow.thighDepthSampleCount > 0 &&
     Number.isFinite(repWindow.minThighDepthAngle);
   const thighDepthAngle = thighDepthEligible ? repWindow.minThighDepthAngle : null;
@@ -997,18 +1766,25 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
     lockoutBaselineRatio !== null
       ? Math.max(0, lockoutBaselineRatio - lockoutRatio)
       : null;
-  const lockoutShort =
-    lockoutDeltaRatio !== null
-      ? lockoutDeltaRatio > FORM_THRESHOLDS.LOCKOUT_BASELINE_DELTA_FAIL
-      : lockoutRatio < FORM_THRESHOLDS.LOCKOUT_FAIL;
+  const lockoutEligible = scorable && (sideConfirmed || frontHasWorldKneeRatio);
+  const lockoutShort = lockoutEligible
+    ? (
+        lockoutDeltaRatio !== null
+          ? lockoutDeltaRatio > FORM_THRESHOLDS.LOCKOUT_BASELINE_DELTA_FAIL
+          : lockoutRatio < FORM_THRESHOLDS.LOCKOUT_FAIL
+      )
+    : false;
   const romRatio = Math.max(0, lockoutRatio - depthRatio);
-  const incompleteRom = romRatio < FORM_THRESHOLDS.ROM_MIN;
+  const romEligible = lockoutEligible;
+  const incompleteRom = romEligible && romRatio < FORM_THRESHOLDS.ROM_MIN;
   const partialRep = repWindow.partialRep;
 
   const depthSource: DepthSource = thighDepthEligible ? 'thighDepthAngle' : 'depthRatio';
   const depthValue = thighDepthEligible ? thighDepthAngle! : depthRatio;
   let depthSeverity: SquatSeverity = 'none';
-  if (thighDepthEligible) {
+  if (!sideOnlyMetricsEligible) {
+    depthSeverity = 'none';
+  } else if (thighDepthEligible) {
     if (depthValue > FORM_THRESHOLDS.THIGH_DEPTH_FAIL) {
       depthSeverity = 'fail';
     } else if (depthValue > FORM_THRESHOLDS.THIGH_DEPTH_WARN) {
@@ -1021,6 +1797,7 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
   }
 
   const heelLiftEligible =
+    sideOnlyMetricsEligible &&
     repWindow.footPitchBaseline !== null &&
     repWindow.heelLiftSampleCount > 0;
   const heelLiftEligibleSupport = repWindow.frameCount > 0
@@ -1040,13 +1817,39 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
     heelLiftDeltaDeg > FORM_THRESHOLDS.HEEL_LIFT_WARN &&
     (heelLiftOverThresholdSupport ?? 0) >= FORM_THRESHOLDS.HEEL_LIFT_MIN_SUPPORT;
 
+  const kneeTrackingEligibleSupport = repWindow.frameCount > 0
+    ? repWindow.kneeTrackingSampleCount / repWindow.frameCount
+    : null;
+  const kneeTrackingOverThresholdSupport = repWindow.frameCount > 0
+    ? repWindow.kneeTrackingTriggeredSampleCount / repWindow.frameCount
+    : null;
+  const kneeTrackingEligible =
+    scorable &&
+    frontConfirmed &&
+    kneeTrackingEligibleSupport !== null &&
+    kneeTrackingEligibleSupport >= FORM_THRESHOLDS.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT;
+  const kneeTrackingOffsetRatio =
+    kneeTrackingEligible && Number.isFinite(repWindow.maxKneeTrackingOffsetRatio)
+      ? repWindow.maxKneeTrackingOffsetRatio
+      : null;
+  const kneeValgusTriggered =
+    kneeTrackingEligible &&
+    kneeTrackingOffsetRatio !== null &&
+    kneeTrackingOffsetRatio > FORM_THRESHOLDS.KNEE_VALGUS_WARN &&
+    (kneeTrackingOverThresholdSupport ?? 0) >= FORM_THRESHOLDS.KNEE_VALGUS_MIN_SUPPORT;
+  const kneeValgusSeverity: SquatSeverity = kneeValgusTriggered
+    ? kneeTrackingOffsetRatio! > FORM_THRESHOLDS.KNEE_VALGUS_FAIL ? 'fail' : 'warn'
+    : 'none';
+
   const torsoLeanEligible =
+    sideOnlyMetricsEligible &&
     repWindow.torsoLeanSampleCount > 0 &&
     Number.isFinite(repWindow.maxTorsoLean);
   const torsoLean = torsoLeanEligible ? repWindow.maxTorsoLean : null;
   const torsoHasBaseline = torsoLeanEligible && repWindow.torsoLeanBaseline !== null;
   const torsoLeanAbsoluteDelta = torsoHasBaseline ? repWindow.maxTorsoLeanDelta : null;
   const torsoSignedEligible =
+    sideOnlyMetricsEligible &&
     repWindow.torsoLeanSampleCount > 0 &&
     Number.isFinite(repWindow.maxTorsoLeanSigned);
   const torsoLeanSigned = torsoSignedEligible ? repWindow.maxTorsoLeanSigned : null;
@@ -1114,19 +1917,61 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
     }
   }
 
+  const tMovementEnd = repWindow.tMovementEnd ?? repWindow.tConfirmedEnd ?? repWindow.tEnd;
+  const tConfirmedEnd = repWindow.tConfirmedEnd ?? repWindow.tEnd;
   const tDown = repWindow.tBottom !== null ? repWindow.tBottom - repWindow.tStart : null;
-  const tUp = repWindow.tBottom !== null ? repWindow.tEnd - repWindow.tBottom : null;
+  const tUp = repWindow.tBottom !== null ? tMovementEnd - repWindow.tBottom : null;
+  const movementEndDelaySeconds = repWindow.tMovementEnd !== null
+    ? Math.max(0, tConfirmedEnd - repWindow.tMovementEnd)
+    : null;
   const tempoUpShort =
+    scorable &&
     tUp !== null &&
     tUp > 0 &&
     tUp < FORM_THRESHOLDS.TEMPO_CONCENTRIC_MIN;
   const tempoDownShort =
+    scorable &&
     tDown !== null &&
     tDown > 0 &&
     tDown < FORM_THRESHOLDS.TEMPO_ECCENTRIC_MIN;
 
   return {
+    view,
+    viewQuality,
+    sideConfirmed,
+    frontConfirmed,
+    obliqueConfirmed,
+    scorable,
+    qualityWarnings: squatQualityWarnings({ scorable, frontConfirmed, sideConfirmed }),
+    worldKneeRatioSupport,
+    imageKneeRatioSupport,
+    leftKneeRatio: Number.isFinite(repWindow.leftKneeRatioEnd ?? NaN) ? repWindow.leftKneeRatioEnd : null,
+    rightKneeRatio: Number.isFinite(repWindow.rightKneeRatioEnd ?? NaN) ? repWindow.rightKneeRatioEnd : null,
+    leftKneeRatioMin: Number.isFinite(repWindow.leftKneeRatioMin) ? repWindow.leftKneeRatioMin : null,
+    rightKneeRatioMin: Number.isFinite(repWindow.rightKneeRatioMin) ? repWindow.rightKneeRatioMin : null,
+    leftKneeRatioMax: Number.isFinite(repWindow.leftKneeRatioMax) ? repWindow.leftKneeRatioMax : null,
+    rightKneeRatioMax: Number.isFinite(repWindow.rightKneeRatioMax) ? repWindow.rightKneeRatioMax : null,
+    leftKneeRatioEnd: repWindow.leftKneeRatioEnd,
+    rightKneeRatioEnd: repWindow.rightKneeRatioEnd,
+    leftKneeRatioSupport,
+    rightKneeRatioSupport,
+    leftWorldKneeRatioSupport,
+    rightWorldKneeRatioSupport,
+    leftImageKneeRatioSupport,
+    rightImageKneeRatioSupport,
+    leftKneeRatioConfidence: confidenceAverage(
+      repWindow.leftKneeRatioConfidenceSum,
+      repWindow.leftKneeRatioSampleCount,
+    ),
+    rightKneeRatioConfidence: confidenceAverage(
+      repWindow.rightKneeRatioConfidenceSum,
+      repWindow.rightKneeRatioSampleCount,
+    ),
+    leftKneeRatioSource,
+    rightKneeRatioSource,
+    primaryMetricSource,
     thighDepthEligible,
+    sideOnlyMetricsEligible,
     thighDepthAngle,
     thighDepthConfidence: confidenceAverage(
       repWindow.thighDepthConfidenceSum,
@@ -1139,8 +1984,10 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
     lockoutRatio,
     lockoutBaselineRatio,
     lockoutDeltaRatio,
+    lockoutEligible,
     lockoutShort,
     romRatio,
+    romEligible,
     incompleteRom,
     partialRep,
     heelLiftEligible,
@@ -1153,6 +2000,16 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
       repWindow.heelLiftSampleCount,
     ),
     heelLiftTriggered,
+    kneeTrackingEligible,
+    kneeTrackingOffsetRatio,
+    kneeTrackingEligibleSupport,
+    kneeTrackingOverThresholdSupport,
+    kneeTrackingConfidence: confidenceAverage(
+      repWindow.kneeTrackingConfidenceSum,
+      repWindow.kneeTrackingSampleCount,
+    ),
+    kneeValgusTriggered,
+    kneeValgusSeverity,
     torsoLean,
     torsoLeanDelta,
     torsoLeanSigned,
@@ -1171,41 +2028,65 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
       repWindow.sideViewConfidenceSum,
       repWindow.sideViewSampleCount,
     ),
+    viewClassRatioSide: supportRatio(repWindow.sideViewClassSampleCount, repWindow.viewSampleCount),
+    viewClassRatioFront: supportRatio(repWindow.frontViewClassSampleCount, repWindow.viewSampleCount),
+    viewClassRatioOblique: supportRatio(repWindow.obliqueViewClassSampleCount, repWindow.viewSampleCount),
+    viewClassRatioUnknown: supportRatio(repWindow.unknownViewClassSampleCount, repWindow.viewSampleCount),
+    viewAverageConfidence: averageViewConfidence(repWindow),
+    viewMinConfidence: repWindow.viewSampleCount > 0 && repWindow.viewConfidenceMin !== Infinity
+      ? repWindow.viewConfidenceMin
+      : null,
+    maxViewAngleDeg: repWindow.viewAngleSampleCount > 0 && Number.isFinite(repWindow.maxViewAngleDeg)
+      ? repWindow.maxViewAngleDeg
+      : null,
     tDown,
     tUp,
+    tBottom: repWindow.tBottom,
+    tMovementEnd,
+    tConfirmedEnd,
+    movementEndDelaySeconds,
     tempoUpShort,
     tempoDownShort,
   };
 }
 
 function computeSquatRepScore(analysis: SquatMetricSnapshot): number {
+  if (!analysis.scorable) return 0;
+
   let penalty = 0;
 
-  if (analysis.thighDepthEligible && analysis.thighDepthAngle !== null) {
+  if (analysis.sideOnlyMetricsEligible && analysis.thighDepthEligible && analysis.thighDepthAngle !== null) {
     const depthExcess = Math.max(0, analysis.thighDepthAngle - SCORE_CURVES.THIGH_DEPTH.deadzone);
     penalty += Math.min(
       SCORE_CURVES.THIGH_DEPTH.cap,
       SCORE_CURVES.THIGH_DEPTH.scale * depthExcess * depthExcess,
     );
-  } else {
+  } else if (analysis.sideOnlyMetricsEligible) {
     const depthExcess = Math.max(0, analysis.depthRatio - SCORE_CURVES.DEPTH.deadzone);
     penalty += Math.min(SCORE_CURVES.DEPTH.cap, SCORE_CURVES.DEPTH.scale * depthExcess * depthExcess);
   }
 
-  const lockoutShortfall = analysis.lockoutDeltaRatio !== null
-    ? Math.max(0, analysis.lockoutDeltaRatio - FORM_THRESHOLDS.LOCKOUT_BASELINE_DELTA_FAIL * 0.5)
-    : Math.max(0, SCORE_CURVES.LOCKOUT.ideal - analysis.lockoutRatio);
-  penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
+  if (analysis.lockoutEligible) {
+    const lockoutShortfall = analysis.lockoutDeltaRatio !== null
+      ? Math.max(0, analysis.lockoutDeltaRatio - FORM_THRESHOLDS.LOCKOUT_BASELINE_DELTA_FAIL * 0.5)
+      : Math.max(0, SCORE_CURVES.LOCKOUT.ideal - analysis.lockoutRatio);
+    penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
+  }
 
   const torsoForScore = analysis.torsoLeanSigned ?? analysis.torsoLean;
-  if (analysis.torsoSeverity !== 'none' && torsoForScore !== null) {
+  if (analysis.sideOnlyMetricsEligible && analysis.torsoSeverity !== 'none' && torsoForScore !== null) {
     const torsoExcess = Math.max(0, torsoForScore - SCORE_CURVES.TORSO.deadzone);
     penalty += Math.min(SCORE_CURVES.TORSO.cap, SCORE_CURVES.TORSO.scale * torsoExcess * torsoExcess);
   }
 
-  if (analysis.heelLiftTriggered && analysis.heelLiftDeltaDeg !== null) {
+  if (analysis.sideOnlyMetricsEligible && analysis.heelLiftTriggered && analysis.heelLiftDeltaDeg !== null) {
     const heelExcess = Math.max(0, analysis.heelLiftDeltaDeg - SCORE_CURVES.HEEL_LIFT.deadzone);
     penalty += Math.min(SCORE_CURVES.HEEL_LIFT.cap, SCORE_CURVES.HEEL_LIFT.scale * heelExcess * heelExcess);
+  }
+
+  if (analysis.kneeValgusTriggered && analysis.kneeTrackingOffsetRatio !== null) {
+    const kneeExcess = Math.max(0, analysis.kneeTrackingOffsetRatio - SCORE_CURVES.KNEE_VALGUS.deadzone);
+    penalty += Math.min(SCORE_CURVES.KNEE_VALGUS.cap, SCORE_CURVES.KNEE_VALGUS.scale * kneeExcess * kneeExcess);
   }
 
   if (analysis.tUp !== null && analysis.tUp > 0 && analysis.tUp < SCORE_CURVES.TEMPO_CONCENTRIC.deadzone) {
@@ -1219,22 +2100,25 @@ function computeSquatRepScore(analysis: SquatMetricSnapshot): number {
 
   let score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
 
-  if (analysis.partialRep || analysis.incompleteRom) {
+  if ((analysis.romEligible && analysis.partialRep) || analysis.incompleteRom) {
     score = Math.min(score, 65);
   }
-  if (analysis.depthSeverity === 'fail') {
+  if (analysis.sideOnlyMetricsEligible && analysis.depthSeverity === 'fail') {
     score = Math.min(score, 70);
-  } else if (analysis.depthSeverity === 'warn') {
+  } else if (analysis.sideOnlyMetricsEligible && analysis.depthSeverity === 'warn') {
     score = Math.min(score, 85);
   }
-  if (analysis.torsoSeverity === 'fail') {
+  if (analysis.sideOnlyMetricsEligible && analysis.torsoSeverity === 'fail') {
     score = Math.min(score, 75);
   }
   if (analysis.lockoutShort) {
     score = Math.min(score, 85);
   }
-  if (analysis.heelLiftTriggered) {
+  if (analysis.sideOnlyMetricsEligible && analysis.heelLiftTriggered) {
     score = Math.min(score, 85);
+  }
+  if (analysis.kneeValgusTriggered) {
+    score = Math.min(score, analysis.kneeValgusSeverity === 'fail' ? 75 : 85);
   }
 
   return score;
@@ -1242,6 +2126,8 @@ function computeSquatRepScore(analysis: SquatMetricSnapshot): number {
 
 function generateFormMessages(analysis: SquatMetricSnapshot): string[] {
   const messages: string[] = [];
+  if (!analysis.scorable) return messages;
+
   let hasDepthOrRomCue = false;
 
   if (analysis.depthSeverity === 'fail') {
@@ -1267,6 +2153,10 @@ function generateFormMessages(analysis: SquatMetricSnapshot): string[] {
 
   if (analysis.heelLiftTriggered) {
     messages.push(SQUAT_FEEDBACK.HEEL_LIFT);
+  }
+
+  if (analysis.kneeValgusTriggered) {
+    messages.push(SQUAT_FEEDBACK.KNEE_VALGUS);
   }
 
   if (analysis.torsoSeverity === 'fail') {
@@ -1300,7 +2190,7 @@ function buildSquatDiagnostics(
   visibleSide: 'left' | 'right',
   analysis: SquatMetricSnapshot = analyzeSquatRep(repWindow),
 ): FrameworkRepResult['diagnostics'] {
-  const hasTempo = analysis.tDown !== null && analysis.tUp !== null;
+  const hasTempo = analysis.scorable && analysis.tDown !== null && analysis.tUp !== null;
   const depthThresholdPath = analysis.depthSource === 'thighDepthAngle'
     ? 'formThresholds.THIGH_DEPTH_WARN'
     : 'formThresholds.DEPTH_WARN';
@@ -1335,20 +2225,211 @@ function buildSquatDiagnostics(
   return buildRepDiagnostics({
     exerciseName: 'Barbell Squat',
     repIndex,
-    view: 'side',
+    scorable: analysis.scorable,
+    view: analysis.view,
     selectedSide: visibleSide,
+    viewQuality: analysis.viewQuality,
     metrics: [
+      diagnosticLabelMetric('viewClass', analysis.view, {
+        sampleCount: repWindow.viewSampleCount,
+      }),
+      diagnosticLabelMetric('metricSource', analysis.primaryMetricSource, {
+        sampleCount: repWindow.kneeRatioSampleCount,
+        skippedReason: 'knee_ratio_unavailable',
+      }),
+      diagnosticMetric('viewClassRatioSide', analysis.viewClassRatioSide, { unit: 'ratio', sampleCount: repWindow.viewSampleCount }),
+      diagnosticMetric('viewClassRatioFront', analysis.viewClassRatioFront, { unit: 'ratio', sampleCount: repWindow.viewSampleCount }),
+      diagnosticMetric('viewClassRatioOblique', analysis.viewClassRatioOblique, { unit: 'ratio', sampleCount: repWindow.viewSampleCount }),
+      diagnosticMetric('viewClassRatioUnknown', analysis.viewClassRatioUnknown, { unit: 'ratio', sampleCount: repWindow.viewSampleCount }),
+      diagnosticMetric('viewAverageConfidence', analysis.viewAverageConfidence, {
+        unit: 'ratio',
+        eligible: analysis.viewAverageConfidence !== null,
+        sampleCount: repWindow.viewSampleCount,
+        skippedReason: 'view_class_unavailable',
+      }),
+      diagnosticMetric('viewMinConfidence', analysis.viewMinConfidence, {
+        unit: 'ratio',
+        eligible: analysis.viewMinConfidence !== null,
+        sampleCount: repWindow.viewSampleCount,
+        skippedReason: 'view_class_unavailable',
+      }),
+      diagnosticMetric('viewAngleDeg', analysis.maxViewAngleDeg, {
+        unit: 'degrees',
+        eligible: analysis.maxViewAngleDeg !== null,
+        sampleCount: repWindow.viewAngleSampleCount,
+        skippedReason: 'world_view_angle_unavailable',
+      }),
+      diagnosticMetric('worldKneeRatioSupport', analysis.worldKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: repWindow.worldKneeRatioSampleCount > 0,
+        sampleCount: repWindow.worldKneeRatioSampleCount,
+        skippedReason: 'world_landmarks_unavailable',
+      }),
+      diagnosticMetric('imageKneeRatioSupport', analysis.imageKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: repWindow.imageKneeRatioSampleCount > 0,
+        sampleCount: repWindow.imageKneeRatioSampleCount,
+        skippedReason: 'image_knee_ratio_unavailable',
+      }),
+      diagnosticLabelMetric('leftKneeRatioSource', analysis.leftKneeRatioSource, {
+        sampleCount: repWindow.leftKneeRatioSampleCount,
+        skippedReason: 'left_knee_ratio_unavailable',
+      }),
+      diagnosticLabelMetric('rightKneeRatioSource', analysis.rightKneeRatioSource, {
+        sampleCount: repWindow.rightKneeRatioSampleCount,
+        skippedReason: 'right_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('leftKneeRatio', analysis.leftKneeRatio, {
+        unit: 'ratio',
+        eligible: analysis.leftKneeRatio !== null,
+        confidence: analysis.leftKneeRatioConfidence,
+        sampleCount: repWindow.leftKneeRatioSampleCount,
+        skippedReason: 'left_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rightKneeRatio', analysis.rightKneeRatio, {
+        unit: 'ratio',
+        eligible: analysis.rightKneeRatio !== null,
+        confidence: analysis.rightKneeRatioConfidence,
+        sampleCount: repWindow.rightKneeRatioSampleCount,
+        skippedReason: 'right_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('leftKneeRatioMin', analysis.leftKneeRatioMin, {
+        unit: 'ratio',
+        eligible: analysis.leftKneeRatioMin !== null,
+        confidence: analysis.leftKneeRatioConfidence,
+        sampleCount: repWindow.leftKneeRatioSampleCount,
+        skippedReason: 'left_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rightKneeRatioMin', analysis.rightKneeRatioMin, {
+        unit: 'ratio',
+        eligible: analysis.rightKneeRatioMin !== null,
+        confidence: analysis.rightKneeRatioConfidence,
+        sampleCount: repWindow.rightKneeRatioSampleCount,
+        skippedReason: 'right_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('leftKneeRatioMax', analysis.leftKneeRatioMax, {
+        unit: 'ratio',
+        eligible: analysis.leftKneeRatioMax !== null,
+        confidence: analysis.leftKneeRatioConfidence,
+        sampleCount: repWindow.leftKneeRatioSampleCount,
+        skippedReason: 'left_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rightKneeRatioMax', analysis.rightKneeRatioMax, {
+        unit: 'ratio',
+        eligible: analysis.rightKneeRatioMax !== null,
+        confidence: analysis.rightKneeRatioConfidence,
+        sampleCount: repWindow.rightKneeRatioSampleCount,
+        skippedReason: 'right_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('leftKneeRatioEnd', analysis.leftKneeRatioEnd, {
+        unit: 'ratio',
+        eligible: analysis.leftKneeRatioEnd !== null,
+        confidence: analysis.leftKneeRatioConfidence,
+        sampleCount: repWindow.leftKneeRatioSampleCount,
+        skippedReason: 'left_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rightKneeRatioEnd', analysis.rightKneeRatioEnd, {
+        unit: 'ratio',
+        eligible: analysis.rightKneeRatioEnd !== null,
+        confidence: analysis.rightKneeRatioConfidence,
+        sampleCount: repWindow.rightKneeRatioSampleCount,
+        skippedReason: 'right_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('leftKneeRatioSupport', analysis.leftKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: analysis.leftKneeRatioSupport !== null,
+        confidence: analysis.leftKneeRatioConfidence,
+        sampleCount: repWindow.leftKneeRatioSampleCount,
+        skippedReason: 'left_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rightKneeRatioSupport', analysis.rightKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: analysis.rightKneeRatioSupport !== null,
+        confidence: analysis.rightKneeRatioConfidence,
+        sampleCount: repWindow.rightKneeRatioSampleCount,
+        skippedReason: 'right_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('leftWorldKneeRatioSupport', analysis.leftWorldKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: repWindow.leftWorldKneeRatioSampleCount > 0,
+        confidence: analysis.leftKneeRatioConfidence,
+        sampleCount: repWindow.leftWorldKneeRatioSampleCount,
+        skippedReason: 'left_world_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rightWorldKneeRatioSupport', analysis.rightWorldKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: repWindow.rightWorldKneeRatioSampleCount > 0,
+        confidence: analysis.rightKneeRatioConfidence,
+        sampleCount: repWindow.rightWorldKneeRatioSampleCount,
+        skippedReason: 'right_world_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('leftImageKneeRatioSupport', analysis.leftImageKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: repWindow.leftImageKneeRatioSampleCount > 0,
+        confidence: analysis.leftKneeRatioConfidence,
+        sampleCount: repWindow.leftImageKneeRatioSampleCount,
+        skippedReason: 'left_image_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rightImageKneeRatioSupport', analysis.rightImageKneeRatioSupport, {
+        unit: 'ratio',
+        eligible: repWindow.rightImageKneeRatioSampleCount > 0,
+        confidence: analysis.rightKneeRatioConfidence,
+        sampleCount: repWindow.rightImageKneeRatioSampleCount,
+        skippedReason: 'right_image_knee_ratio_unavailable',
+      }),
+      diagnosticMetric('rawKneeRatio', finiteValue(repWindow.minRawKneeRatio, NaN), {
+        unit: 'ratio',
+        eligible: repWindow.kneeRatioSampleCount > 0 && Number.isFinite(repWindow.minRawKneeRatio),
+        sampleCount: repWindow.kneeRatioSampleCount,
+        skippedReason: 'knee_ratio_unavailable',
+      }),
+      diagnosticMetric('fastKneeRatio', finiteValue(repWindow.minKneeRatio, NaN), {
+        unit: 'ratio',
+        eligible: repWindow.kneeRatioSampleCount > 0 && Number.isFinite(repWindow.minKneeRatio),
+        sampleCount: repWindow.kneeRatioSampleCount,
+        skippedReason: 'knee_ratio_unavailable',
+      }),
+      diagnosticMetric('smoothedKneeRatio', analysis.depthRatio, {
+        unit: 'ratio',
+        eligible: repWindow.kneeRatioSampleCount > 0,
+        sampleCount: repWindow.kneeRatioSampleCount,
+        skippedReason: 'knee_ratio_unavailable',
+      }),
+      diagnosticMetric('movementKneeRatio', analysis.depthRatio, {
+        unit: 'ratio',
+        eligible: repWindow.kneeRatioSampleCount > 0,
+        sampleCount: repWindow.kneeRatioSampleCount,
+        skippedReason: 'knee_ratio_unavailable',
+      }),
       diagnosticMetric('thighDepthAngle', analysis.thighDepthAngle, {
         unit: 'degrees',
         eligible: analysis.thighDepthEligible,
         confidence: analysis.thighDepthConfidence,
         sampleCount: repWindow.thighDepthSampleCount,
-        skippedReason: 'hip_knee_depth_unavailable',
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'hip_knee_depth_unavailable' : 'not_side_view',
+      }),
+      diagnosticMetric('rawThighDepthAngle', finiteValue(repWindow.minRawThighDepthAngle, NaN), {
+        unit: 'degrees',
+        eligible: analysis.sideOnlyMetricsEligible && repWindow.thighDepthSampleCount > 0 && Number.isFinite(repWindow.minRawThighDepthAngle),
+        confidence: analysis.thighDepthConfidence,
+        sampleCount: repWindow.thighDepthSampleCount,
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'hip_knee_depth_unavailable' : 'not_side_view',
       }),
       diagnosticMetric('depthRatio', analysis.depthRatio, { unit: 'ratio' }),
-      diagnosticMetric('lockoutRatio', analysis.lockoutRatio, { unit: 'ratio' }),
+      diagnosticMetric('lockoutRatio', analysis.lockoutRatio, {
+        unit: 'ratio',
+        eligible: analysis.lockoutEligible,
+        sampleCount: repWindow.kneeRatioSampleCount,
+        skippedReason: analysis.frontConfirmed ? 'world_knee_ratio_unavailable' : 'view_uncertain',
+      }),
       diagnosticMetric('lockoutBaselineRatio', analysis.lockoutBaselineRatio, {
         unit: 'ratio',
+        eligible: analysis.lockoutBaselineRatio !== null,
+        sampleCount: analysis.lockoutBaselineRatio !== null ? 1 : 0,
+        skippedReason: 'lockout_baseline_unavailable',
+      }),
+      diagnosticMetric('lockoutBaselineSampleCount', analysis.lockoutBaselineRatio !== null ? 1 : 0, {
+        unit: 'count',
         eligible: analysis.lockoutBaselineRatio !== null,
         skippedReason: 'lockout_baseline_unavailable',
       }),
@@ -1357,13 +2438,35 @@ function buildSquatDiagnostics(
         eligible: analysis.lockoutDeltaRatio !== null,
         skippedReason: 'lockout_baseline_unavailable',
       }),
-      diagnosticMetric('romRatio', analysis.romRatio, { unit: 'ratio' }),
+      diagnosticMetric('romRatio', analysis.romRatio, {
+        unit: 'ratio',
+        eligible: analysis.romEligible,
+        sampleCount: repWindow.kneeRatioSampleCount,
+        skippedReason: analysis.frontConfirmed ? 'world_knee_ratio_unavailable' : 'view_uncertain',
+      }),
       diagnosticMetric('heelLiftDeltaDeg', analysis.heelLiftDeltaDeg, {
         unit: 'degrees',
         eligible: analysis.heelLiftEligible,
         confidence: analysis.heelLiftConfidence,
         sampleCount: repWindow.heelLiftSampleCount,
-        skippedReason: 'foot_landmarks_unavailable',
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'foot_landmarks_unavailable' : 'not_side_view',
+      }),
+      diagnosticMetric('footPitchBaseline', repWindow.footPitchBaseline, {
+        unit: 'degrees',
+        eligible: analysis.sideOnlyMetricsEligible && repWindow.footPitchBaseline !== null,
+        sampleCount: repWindow.footPitchBaseline !== null ? 1 : 0,
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'foot_baseline_unavailable' : 'not_side_view',
+      }),
+      diagnosticLabelMetric('footPitchBaselineSource', repWindow.footPitchBaseline !== null ? 'image' : null, {
+        sampleCount: repWindow.footPitchBaseline !== null ? 1 : 0,
+        skippedReason: 'foot_baseline_unavailable',
+      }),
+      diagnosticMetric('rawHeelLiftDeltaDeg', analysis.heelLiftEligible ? repWindow.maxRawHeelLiftDeltaDeg : null, {
+        unit: 'degrees',
+        eligible: analysis.heelLiftEligible,
+        confidence: analysis.heelLiftConfidence,
+        sampleCount: repWindow.heelLiftSampleCount,
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'foot_landmarks_unavailable' : 'not_side_view',
       }),
       diagnosticMetric('heelLiftSupport', analysis.heelLiftSupport, {
         unit: 'ratio',
@@ -1391,7 +2494,14 @@ function buildSquatDiagnostics(
         eligible: analysis.torsoLean !== null,
         confidence: analysis.torsoLeanConfidence,
         sampleCount: repWindow.torsoLeanSampleCount,
-        skippedReason: 'torso_landmarks_unavailable',
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'torso_landmarks_unavailable' : 'not_side_view',
+      }),
+      diagnosticMetric('rawTorsoLean', analysis.torsoLean !== null ? repWindow.maxRawTorsoLean : null, {
+        unit: 'degrees',
+        eligible: analysis.torsoLean !== null,
+        confidence: analysis.torsoLeanConfidence,
+        sampleCount: repWindow.torsoLeanSampleCount,
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'torso_landmarks_unavailable' : 'not_side_view',
       }),
       diagnosticMetric('torsoLeanDelta', analysis.torsoLeanDelta, {
         unit: 'degrees',
@@ -1399,6 +2509,26 @@ function buildSquatDiagnostics(
         confidence: analysis.torsoLeanConfidence,
         sampleCount: repWindow.torsoLeanSampleCount,
         skippedReason: 'torso_baseline_unavailable',
+      }),
+      diagnosticMetric('torsoLeanBaseline', repWindow.torsoLeanBaseline, {
+        unit: 'degrees',
+        eligible: analysis.sideOnlyMetricsEligible && repWindow.torsoLeanBaseline !== null,
+        sampleCount: repWindow.torsoLeanBaseline !== null ? 1 : 0,
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'torso_baseline_unavailable' : 'not_side_view',
+      }),
+      diagnosticMetric('torsoWorldSampleSupport', supportRatio(repWindow.torsoWorldSampleCount, repWindow.torsoLeanSampleCount), {
+        unit: 'ratio',
+        eligible: repWindow.torsoWorldSampleCount > 0,
+        confidence: analysis.torsoLeanConfidence,
+        sampleCount: repWindow.torsoWorldSampleCount,
+        skippedReason: 'world_torso_unavailable',
+      }),
+      diagnosticMetric('torsoImageSampleSupport', supportRatio(repWindow.torsoImageSampleCount, repWindow.torsoLeanSampleCount), {
+        unit: 'ratio',
+        eligible: repWindow.torsoImageSampleCount > 0,
+        confidence: analysis.torsoLeanConfidence,
+        sampleCount: repWindow.torsoImageSampleCount,
+        skippedReason: 'image_torso_unavailable',
       }),
       diagnosticMetric('torsoLeanSigned', analysis.torsoLeanSigned, {
         unit: 'degrees',
@@ -1421,9 +2551,38 @@ function buildSquatDiagnostics(
         sampleCount: repWindow.sideViewSampleCount,
         skippedReason: 'bilateral_body_width_unavailable',
       }),
+      diagnosticMetric('kneeTrackingOffsetRatio', analysis.kneeTrackingOffsetRatio, {
+        unit: 'ratio',
+        eligible: analysis.kneeTrackingEligible,
+        confidence: analysis.kneeTrackingConfidence,
+        sampleCount: repWindow.kneeTrackingSampleCount,
+        skippedReason: analysis.frontConfirmed ? 'knee_tracking_unavailable' : 'not_front_view',
+      }),
+      diagnosticMetric('kneeTrackingEligibleSupport', analysis.kneeTrackingEligibleSupport, {
+        unit: 'ratio',
+        eligible: analysis.kneeTrackingEligibleSupport !== null,
+        confidence: analysis.kneeTrackingConfidence,
+        sampleCount: repWindow.kneeTrackingSampleCount,
+        skippedReason: analysis.frontConfirmed ? 'knee_tracking_unavailable' : 'not_front_view',
+      }),
+      diagnosticMetric('kneeTrackingOverThresholdSupport', analysis.kneeTrackingOverThresholdSupport, {
+        unit: 'ratio',
+        eligible: analysis.kneeTrackingOverThresholdSupport !== null,
+        confidence: analysis.kneeTrackingConfidence,
+        sampleCount: repWindow.kneeTrackingSampleCount,
+        skippedReason: analysis.frontConfirmed ? 'knee_tracking_unavailable' : 'not_front_view',
+      }),
       diagnosticMetric('partialRep', analysis.partialRep ? 1 : 0, { unit: 'count' }),
       diagnosticMetric('tDown', analysis.tDown, { unit: 'seconds', eligible: hasTempo, skippedReason: 'bottom_not_detected' }),
       diagnosticMetric('tUp', analysis.tUp, { unit: 'seconds', eligible: hasTempo, skippedReason: 'bottom_not_detected' }),
+      diagnosticMetric('tBottom', analysis.tBottom, { unit: 'seconds', eligible: analysis.tBottom !== null, skippedReason: 'bottom_not_detected' }),
+      diagnosticMetric('tMovementEnd', analysis.tMovementEnd, { unit: 'seconds', eligible: analysis.tMovementEnd !== null, skippedReason: 'movement_end_unavailable' }),
+      diagnosticMetric('tConfirmedEnd', analysis.tConfirmedEnd, { unit: 'seconds', eligible: analysis.tConfirmedEnd !== null, skippedReason: 'confirmed_end_unavailable' }),
+      diagnosticMetric('movementEndDelaySeconds', analysis.movementEndDelaySeconds, {
+        unit: 'seconds',
+        eligible: analysis.movementEndDelaySeconds !== null,
+        skippedReason: 'movement_end_unavailable',
+      }),
     ],
     cues: [
       diagnosticCue({
@@ -1433,7 +2592,9 @@ function buildSquatDiagnostics(
         value: analysis.depthValue,
         thresholdPath: depthThresholdPath,
         thresholdValue: depthThresholdValue,
+        eligible: analysis.sideOnlyMetricsEligible,
         triggered: analysis.depthSeverity !== 'none',
+        skippedReason: 'not_side_view',
       }),
       diagnosticCue({
         issueId: 'barbell-squat.lockout_short',
@@ -1446,7 +2607,9 @@ function buildSquatDiagnostics(
         thresholdValue: analysis.lockoutDeltaRatio !== null
           ? FORM_THRESHOLDS.LOCKOUT_BASELINE_DELTA_FAIL
           : FORM_THRESHOLDS.LOCKOUT_FAIL,
+        eligible: analysis.lockoutEligible,
         triggered: analysis.lockoutShort,
+        skippedReason: analysis.frontConfirmed ? 'world_knee_ratio_unavailable' : 'view_uncertain',
       }),
       diagnosticCue({
         issueId: 'barbell-squat.incomplete_rom',
@@ -1455,7 +2618,9 @@ function buildSquatDiagnostics(
         value: analysis.romRatio,
         thresholdPath: 'formThresholds.ROM_MIN',
         thresholdValue: FORM_THRESHOLDS.ROM_MIN,
+        eligible: analysis.romEligible,
         triggered: analysis.incompleteRom || analysis.partialRep,
+        skippedReason: analysis.frontConfirmed ? 'world_knee_ratio_unavailable' : 'view_uncertain',
       }),
       diagnosticCue({
         issueId: 'barbell-squat.heel_lift',
@@ -1475,7 +2640,27 @@ function buildSquatDiagnostics(
         eligible: analysis.heelLiftEligible,
         triggered: analysis.heelLiftTriggered,
         support: analysis.heelLiftOverThresholdSupport ?? undefined,
-        skippedReason: 'foot_landmarks_unavailable',
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'foot_landmarks_unavailable' : 'not_side_view',
+      }),
+      diagnosticCue({
+        issueId: 'barbell-squat.knee_valgus',
+        metricKeys: ['kneeTrackingOffsetRatio', 'kneeTrackingEligibleSupport', 'kneeTrackingOverThresholdSupport'],
+        direction: 'above',
+        value: analysis.kneeTrackingOffsetRatio,
+        thresholdPath: [
+          'formThresholds.KNEE_VALGUS_WARN',
+          'formThresholds.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT',
+          'formThresholds.KNEE_VALGUS_MIN_SUPPORT',
+        ],
+        thresholdValue: {
+          kneeTrackingOffsetRatio: FORM_THRESHOLDS.KNEE_VALGUS_WARN,
+          kneeTrackingEligibleSupport: FORM_THRESHOLDS.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT,
+          kneeTrackingOverThresholdSupport: FORM_THRESHOLDS.KNEE_VALGUS_MIN_SUPPORT,
+        },
+        eligible: analysis.kneeTrackingEligible,
+        triggered: analysis.kneeValgusTriggered,
+        support: analysis.kneeTrackingOverThresholdSupport ?? undefined,
+        skippedReason: analysis.frontConfirmed ? 'knee_tracking_unavailable' : 'not_front_view',
       }),
       diagnosticCue({
         issueId: 'barbell-squat.torso_fail',
@@ -1484,9 +2669,9 @@ function buildSquatDiagnostics(
         value: torsoCueValue,
         thresholdPath: torsoFailThresholdPath,
         thresholdValue: torsoFailThresholdValue,
-        eligible: (analysis.torsoLeanSigned ?? analysis.torsoLean) !== null,
+        eligible: analysis.sideOnlyMetricsEligible && (analysis.torsoLeanSigned ?? analysis.torsoLean) !== null,
         triggered: analysis.torsoSeverity === 'fail',
-        skippedReason: 'torso_landmarks_unavailable',
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'torso_landmarks_unavailable' : 'not_side_view',
       }),
       diagnosticCue({
         issueId: 'barbell-squat.torso_warn',
@@ -1495,9 +2680,9 @@ function buildSquatDiagnostics(
         value: torsoCueValue,
         thresholdPath: torsoWarnThresholdPath,
         thresholdValue: torsoWarnThresholdValue,
-        eligible: (analysis.torsoLeanSigned ?? analysis.torsoLean) !== null,
+        eligible: analysis.sideOnlyMetricsEligible && (analysis.torsoLeanSigned ?? analysis.torsoLean) !== null,
         triggered: analysis.torsoSeverity === 'warn',
-        skippedReason: 'torso_landmarks_unavailable',
+        skippedReason: analysis.sideOnlyMetricsEligible ? 'torso_landmarks_unavailable' : 'not_side_view',
       }),
       diagnosticCue({
         issueId: 'barbell-squat.tempo_up',
@@ -1527,53 +2712,129 @@ function buildSquatDiagnostics(
 
 function captureStandingBaselines(
   state: SquatState,
-  keypoints: Keypoint[],
+  imageKeypoints: Keypoint[],
+  metricKeypoints: Keypoint[],
   visibleSide: 'left' | 'right',
+  rawAngles: SquatAngles,
   fast: SmoothedSquatAngles,
   smoothed: SmoothedSquatAngles,
 ): void {
   state.standingKneeRatioPeak = Math.max(state.standingKneeRatioPeak, fast.kneeRatio);
 
-  const torsoConf = minKeypointConfidence(keypoints, [`${visibleSide}_shoulder`, `${visibleSide}_hip`]);
-  if (torsoConf >= 0.3 && Number.isFinite(smoothed.torsoLean)) {
+  const torsoConf = minKeypointConfidence(metricKeypoints, [`${visibleSide}_shoulder`, `${visibleSide}_hip`]);
+  if (torsoConf >= FORM_THRESHOLDS.BASELINE_CONFIDENCE_MIN && Number.isFinite(rawAngles.rawTorsoLean) && Number.isFinite(smoothed.torsoLean)) {
     state.standingTorsoLeanBaseline = smoothed.torsoLean;
   }
-  if (torsoConf >= 0.3 && Number.isFinite(smoothed.torsoLeanSigned)) {
+  if (torsoConf >= FORM_THRESHOLDS.BASELINE_CONFIDENCE_MIN && Number.isFinite(rawAngles.rawTorsoLeanSigned) && Number.isFinite(smoothed.torsoLeanSigned)) {
     state.standingTorsoLeanSignedBaseline = smoothed.torsoLeanSigned;
   }
 
-  const footConf = minKeypointConfidence(keypoints, [
+  const footConf = minKeypointConfidence(imageKeypoints, [
     `${visibleSide}_heel`,
     `${visibleSide}_foot_index`,
     `${visibleSide}_ankle`,
   ]);
-  if (footConf >= 0.3 && Number.isFinite(smoothed.footPitch)) {
+  if (footConf >= FORM_THRESHOLDS.BASELINE_CONFIDENCE_MIN && Number.isFinite(rawAngles.rawFootPitch) && Number.isFinite(smoothed.footPitch)) {
     state.standingFootPitchBaseline = smoothed.footPitch;
   }
 }
 
+function updateSideKneeRatio(
+  repWindow: SquatRepWindow,
+  side: SquatSide,
+  rawValue: number,
+  fastValue: number,
+  sourceRank: number,
+  confidence: number,
+): void {
+  if (!Number.isFinite(rawValue) || !Number.isFinite(fastValue)) return;
+
+  const source = rankToSource(sourceRank);
+  if (side === 'left') {
+    repWindow.leftRawKneeRatioMin = Math.min(repWindow.leftRawKneeRatioMin, rawValue);
+    repWindow.leftRawKneeRatioMax = Math.max(repWindow.leftRawKneeRatioMax, rawValue);
+    repWindow.leftRawKneeRatioEnd = rawValue;
+    repWindow.leftKneeRatioMin = Math.min(repWindow.leftKneeRatioMin, fastValue);
+    repWindow.leftKneeRatioMax = Math.max(repWindow.leftKneeRatioMax, fastValue);
+    repWindow.leftKneeRatioEnd = fastValue;
+    repWindow.leftKneeRatioSampleCount++;
+    repWindow.leftKneeRatioConfidenceSum += Number.isFinite(confidence) ? confidence : 0;
+    if (source === 'world') repWindow.leftWorldKneeRatioSampleCount++;
+    else if (source === 'image') repWindow.leftImageKneeRatioSampleCount++;
+    return;
+  }
+
+  repWindow.rightRawKneeRatioMin = Math.min(repWindow.rightRawKneeRatioMin, rawValue);
+  repWindow.rightRawKneeRatioMax = Math.max(repWindow.rightRawKneeRatioMax, rawValue);
+  repWindow.rightRawKneeRatioEnd = rawValue;
+  repWindow.rightKneeRatioMin = Math.min(repWindow.rightKneeRatioMin, fastValue);
+  repWindow.rightKneeRatioMax = Math.max(repWindow.rightKneeRatioMax, fastValue);
+  repWindow.rightKneeRatioEnd = fastValue;
+  repWindow.rightKneeRatioSampleCount++;
+  repWindow.rightKneeRatioConfidenceSum += Number.isFinite(confidence) ? confidence : 0;
+  if (source === 'world') repWindow.rightWorldKneeRatioSampleCount++;
+  else if (source === 'image') repWindow.rightImageKneeRatioSampleCount++;
+}
+
 function updateRepWindowMetrics(
   repWindow: SquatRepWindow,
-  keypoints: Keypoint[],
+  imageKeypoints: Keypoint[],
+  metricKeypoints: Keypoint[],
   visibleSide: 'left' | 'right',
+  rawAngles: SquatAngles,
   fast: SmoothedSquatAngles,
   smoothed: SmoothedSquatAngles,
 ): void {
-  if (!isNaN(fast.kneeRatio)) {
+  if (Number.isFinite(rawAngles.rawKneeRatio) && Number.isFinite(fast.kneeRatio)) {
+    repWindow.minRawKneeRatio = Math.min(repWindow.minRawKneeRatio, rawAngles.rawKneeRatio);
+    repWindow.maxRawKneeRatio = Math.max(repWindow.maxRawKneeRatio, rawAngles.rawKneeRatio);
+    repWindow.endRawKneeRatio = rawAngles.rawKneeRatio;
     repWindow.minKneeRatio = Math.min(repWindow.minKneeRatio, fast.kneeRatio);
     repWindow.maxKneeRatio = Math.max(repWindow.maxKneeRatio, fast.kneeRatio);
     repWindow.endKneeRatio = fast.kneeRatio;
+    repWindow.kneeRatioSampleCount++;
+    if (rankToSource(rawAngles.kneeRatioSourceRank) === 'world') {
+      repWindow.worldKneeRatioSampleCount++;
+    } else {
+      repWindow.imageKneeRatioSampleCount++;
+    }
   }
+  updateSideKneeRatio(
+    repWindow,
+    'left',
+    rawAngles.rawLeftKneeRatio,
+    fast.leftKneeRatio,
+    rawAngles.leftKneeRatioSourceRank,
+    rawAngles.leftKneeRatioConfidence,
+  );
+  updateSideKneeRatio(
+    repWindow,
+    'right',
+    rawAngles.rawRightKneeRatio,
+    fast.rightKneeRatio,
+    rawAngles.rightKneeRatioSourceRank,
+    rawAngles.rightKneeRatioConfidence,
+  );
 
-  const thighDepthConf = minKeypointConfidence(keypoints, [`${visibleSide}_hip`, `${visibleSide}_knee`]);
-  if (thighDepthConf >= 0.3 && Number.isFinite(fast.thighDepthAngle)) {
+  const thighDepthConf = minKeypointConfidence(imageKeypoints, [`${visibleSide}_hip`, `${visibleSide}_knee`]);
+  if (
+    thighDepthConf >= FORM_THRESHOLDS.METRIC_CONFIDENCE_MIN &&
+    Number.isFinite(rawAngles.rawThighDepthAngle) &&
+    Number.isFinite(fast.thighDepthAngle)
+  ) {
+    repWindow.minRawThighDepthAngle = Math.min(repWindow.minRawThighDepthAngle, rawAngles.rawThighDepthAngle);
     repWindow.minThighDepthAngle = Math.min(repWindow.minThighDepthAngle, fast.thighDepthAngle);
     repWindow.thighDepthSampleCount++;
     repWindow.thighDepthConfidenceSum += thighDepthConf;
   }
 
-  const torsoConf = minKeypointConfidence(keypoints, [`${visibleSide}_shoulder`, `${visibleSide}_hip`]);
-  if (torsoConf >= 0.3 && Number.isFinite(fast.torsoLean)) {
+  const torsoConf = minKeypointConfidence(metricKeypoints, [`${visibleSide}_shoulder`, `${visibleSide}_hip`]);
+  if (
+    torsoConf >= FORM_THRESHOLDS.METRIC_CONFIDENCE_MIN &&
+    Number.isFinite(rawAngles.rawTorsoLean) &&
+    Number.isFinite(fast.torsoLean)
+  ) {
+    repWindow.maxRawTorsoLean = Math.max(repWindow.maxRawTorsoLean, rawAngles.rawTorsoLean);
     repWindow.maxTorsoLean = Math.max(repWindow.maxTorsoLean, fast.torsoLean);
     if (repWindow.torsoLeanBaseline !== null) {
       repWindow.maxTorsoLeanDelta = Math.max(
@@ -1583,8 +2844,18 @@ function updateRepWindowMetrics(
     }
     repWindow.torsoLeanSampleCount++;
     repWindow.torsoLeanConfidenceSum += torsoConf;
+    if (rankToSource(rawAngles.torsoSourceRank) === 'world') {
+      repWindow.torsoWorldSampleCount++;
+    } else {
+      repWindow.torsoImageSampleCount++;
+    }
   }
-  if (torsoConf >= 0.3 && Number.isFinite(fast.torsoLeanSigned)) {
+  if (
+    torsoConf >= FORM_THRESHOLDS.METRIC_CONFIDENCE_MIN &&
+    Number.isFinite(rawAngles.rawTorsoLeanSigned) &&
+    Number.isFinite(fast.torsoLeanSigned)
+  ) {
+    repWindow.maxRawTorsoLeanSigned = Math.max(repWindow.maxRawTorsoLeanSigned, rawAngles.rawTorsoLeanSigned);
     repWindow.maxTorsoLeanSigned = Math.max(repWindow.maxTorsoLeanSigned, fast.torsoLeanSigned);
     if (repWindow.torsoLeanSignedBaseline !== null) {
       repWindow.maxTorsoLeanSignedDelta = Math.max(
@@ -1594,17 +2865,20 @@ function updateRepWindowMetrics(
     }
   }
 
-  const footConf = minKeypointConfidence(keypoints, [
+  const footConf = minKeypointConfidence(imageKeypoints, [
     `${visibleSide}_heel`,
     `${visibleSide}_foot_index`,
     `${visibleSide}_ankle`,
   ]);
   if (
-    footConf >= 0.3 &&
+    footConf >= FORM_THRESHOLDS.METRIC_CONFIDENCE_MIN &&
     repWindow.footPitchBaseline !== null &&
+    Number.isFinite(rawAngles.rawFootPitch) &&
     Number.isFinite(fast.footPitch)
   ) {
     const heelLiftDelta = Math.max(0, fast.footPitch - repWindow.footPitchBaseline);
+    const rawHeelLiftDelta = Math.max(0, rawAngles.rawFootPitch - repWindow.footPitchBaseline);
+    repWindow.maxRawHeelLiftDeltaDeg = Math.max(repWindow.maxRawHeelLiftDeltaDeg, rawHeelLiftDelta);
     repWindow.maxHeelLiftDeltaDeg = Math.max(repWindow.maxHeelLiftDeltaDeg, heelLiftDelta);
     if (heelLiftDelta > FORM_THRESHOLDS.HEEL_LIFT_WARN) {
       repWindow.heelLiftTriggeredSampleCount++;
@@ -1613,16 +2887,47 @@ function updateRepWindowMetrics(
     repWindow.heelLiftConfidenceSum += footConf;
   }
 
-  const sideViewConf = minKeypointConfidence(keypoints, [
+  const sideViewConf = minKeypointConfidence(imageKeypoints, [
     'left_shoulder',
     'right_shoulder',
     'left_hip',
     'right_hip',
   ]);
-  if (sideViewConf >= 0.3 && Number.isFinite(fast.sideViewWidthRatio)) {
+  if (sideViewConf >= FORM_THRESHOLDS.VIEW_CONFIDENCE_MIN && Number.isFinite(fast.sideViewWidthRatio)) {
     repWindow.maxSideViewWidthRatio = Math.max(repWindow.maxSideViewWidthRatio, fast.sideViewWidthRatio);
     repWindow.sideViewSampleCount++;
     repWindow.sideViewConfidenceSum += sideViewConf;
+  }
+
+  const viewConfidence = Number.isFinite(rawAngles.viewConfidence) ? Math.max(0, rawAngles.viewConfidence) : 0;
+  const viewClass = rankToViewClass(rawAngles.viewClassRank);
+  repWindow.viewSampleCount++;
+  repWindow.viewConfidenceSum += viewConfidence;
+  repWindow.viewConfidenceMin = Math.min(repWindow.viewConfidenceMin, viewConfidence);
+  if (viewClass === 'side') repWindow.sideViewClassSampleCount++;
+  else if (viewClass === 'front') repWindow.frontViewClassSampleCount++;
+  else if (viewClass === 'oblique') repWindow.obliqueViewClassSampleCount++;
+  else repWindow.unknownViewClassSampleCount++;
+  if (Number.isFinite(rawAngles.viewAngleDeg)) {
+    repWindow.maxViewAngleDeg = Math.max(repWindow.maxViewAngleDeg, rawAngles.viewAngleDeg);
+    repWindow.viewAngleSampleCount++;
+  }
+
+  const kneeTracking = calculateKneeTracking(imageKeypoints);
+  if (
+    kneeTracking &&
+    Number.isFinite(rawAngles.kneeTrackingOffsetRatio)
+    && Number.isFinite(fast.kneeTrackingOffsetRatio)
+  ) {
+    repWindow.maxKneeTrackingOffsetRatio = Math.max(
+      repWindow.maxKneeTrackingOffsetRatio,
+      fast.kneeTrackingOffsetRatio,
+    );
+    if (fast.kneeTrackingOffsetRatio > FORM_THRESHOLDS.KNEE_VALGUS_WARN) {
+      repWindow.kneeTrackingTriggeredSampleCount++;
+    }
+    repWindow.kneeTrackingSampleCount++;
+    repWindow.kneeTrackingConfidenceSum += kneeTracking.confidence;
   }
 }
 
@@ -1642,15 +2947,11 @@ function finalizeRepWindow(
   }
 
   state.repCount++;
-
-  const tDown = state.repWindow.tBottom
-    ? state.repWindow.tBottom - state.repWindow.tStart
-    : 0;
-  const tUp = state.repWindow.tBottom
-    ? state.repWindow.tEnd - state.repWindow.tBottom
-    : 0;
+  state.repWindow.tConfirmedEnd = state.repWindow.tEnd;
 
   const { score, messages, analysis } = evaluateForm(state.repWindow);
+  const tDown = analysis.tDown ?? 0;
+  const tUp = analysis.tUp ?? 0;
 
   state.lastRepResult = {
     repIndex: state.repCount,
@@ -1659,10 +2960,12 @@ function finalizeRepWindow(
     tUp,
     score,
     messages,
+    scorable: analysis.scorable,
+    qualityWarnings: analysis.qualityWarnings,
     diagnostics: buildSquatDiagnostics(state.repWindow, state.repCount, visibleSide, analysis),
   };
 
-  state.feedback = messages.length > 0 ? messages.join('\n') : 'Great rep!';
+  state.feedback = messages.length > 0 ? messages.join('\n') : analysis.scorable ? 'Great rep!' : null;
   state.lastFeedbackTime = state.repWindow.tEnd;
   state.repWindow = null;
   state.fsm = resetFSMToStanding();
@@ -1680,18 +2983,21 @@ function pendingLockoutReady(repWindow: SquatRepWindow): boolean {
 
 function updateSquatState(
   keypoints: Keypoint[],
-  currentState: SquatState
+  currentState: SquatState,
+  frameContext?: ExerciseFrameContext,
 ): SquatState {
   const t = Date.now() / 1000;
+  const imageKeypoints = frameContext?.imageKeypoints ?? keypoints;
+  const metricKeypoints = frameContext?.worldKeypoints ?? keypoints;
 
   // Only update visible side in IDLE/STANDING — lock it during active rep phases
   // to prevent mid-rep side switching that corrupts angle measurements.
   const inActiveRep =
     currentState.repWindow !== null ||
     (currentState.fsm.phase !== 'IDLE' && currentState.fsm.phase !== 'STANDING');
-  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(keypoints);
+  const visibleSide = inActiveRep ? currentState.visibleSide : selectVisibleSide(metricKeypoints);
 
-  const rawAngles = calculateSquatAngles(keypoints, visibleSide);
+  const rawAngles = calculateSquatAngles(keypoints, visibleSide, frameContext);
   if (!rawAngles) {
     return { ...currentState, visibleSide };
   }
@@ -1712,7 +3018,7 @@ function updateSquatState(
   }
 
   if (currentState.fsm.phase === 'IDLE' || currentState.fsm.phase === 'STANDING') {
-    captureStandingBaselines(newState, keypoints, visibleSide, fast, smoothed);
+    captureStandingBaselines(newState, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
   }
 
   // Update FSM — uses fast (median-only) ratio to avoid smoothing-induced misses
@@ -1724,7 +3030,7 @@ function updateSquatState(
     if (newState.repWindow) {
       newState.repWindow.tEnd = t;
       newState.repWindow.frameCount++;
-      updateRepWindowMetrics(newState.repWindow, keypoints, visibleSide, fast, smoothed);
+      updateRepWindowMetrics(newState.repWindow, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
     }
 
     const finalPartialROM = newState.repWindow
@@ -1743,6 +3049,8 @@ function updateSquatState(
     ) {
       newState.repCount++;
       newState.repWindow.partialRep = true;
+      newState.repWindow.tMovementEnd = newState.repWindow.tEnd;
+      newState.repWindow.tConfirmedEnd = newState.repWindow.tEnd;
       const tDown = newState.repWindow.tEnd - newState.repWindow.tStart;
       const { score, messages, analysis } = evaluateForm(newState.repWindow);
       newState.lastRepResult = {
@@ -1752,9 +3060,11 @@ function updateSquatState(
         tUp: 0,
         score,
         messages,
+        scorable: analysis.scorable,
+        qualityWarnings: analysis.qualityWarnings,
         diagnostics: buildSquatDiagnostics(newState.repWindow, newState.repCount, visibleSide, analysis),
       };
-      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      newState.feedback = messages.length > 0 ? messages.join('\n') : analysis.scorable ? 'Good rep.' : null;
       newState.lastFeedbackTime = t;
     } else if (finalPartialROM > 0) {
       newState.feedback = LOW_ROM_FEEDBACK;
@@ -1770,7 +3080,7 @@ function updateSquatState(
     newState.repWindow.tEnd = t;
     newState.repWindow.frameCount++;
     newState.repWindow.pendingCompletionFrames++;
-    updateRepWindowMetrics(newState.repWindow, keypoints, visibleSide, fast, smoothed);
+    updateRepWindowMetrics(newState.repWindow, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
 
     if (pendingLockoutReady(newState.repWindow)) {
       finalizeRepWindow(newState, visibleSide, fast.kneeRatio);
@@ -1800,7 +3110,7 @@ function updateSquatState(
     const window = newState.repWindow;
     window.tEnd = t;
     window.frameCount++;
-    updateRepWindowMetrics(window, keypoints, visibleSide, fast, smoothed);
+    updateRepWindowMetrics(window, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
 
     // Set tBottom as soon as depth is reached so tempo reflects the full descent
     // and the whole ascent, rather than starting the ascent clock after bottom exit.
@@ -1816,8 +3126,9 @@ function updateSquatState(
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
     newState.repWindow.tEnd = t;
+    newState.repWindow.tMovementEnd ??= t;
     newState.repWindow.frameCount++;
-    updateRepWindowMetrics(newState.repWindow, keypoints, visibleSide, fast, smoothed);
+    updateRepWindowMetrics(newState.repWindow, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
     newState.repWindow.pendingCompletionFrames = 0;
     if (pendingLockoutReady(newState.repWindow)) {
       finalizeRepWindow(newState, visibleSide, fast.kneeRatio);
@@ -1869,6 +3180,22 @@ function getSquatDebugInfo(state: SquatState): SquatDebugInfo {
     kneeRatioMin: repWin && repWin.minKneeRatio !== Infinity ? fmt(repWin.minKneeRatio) : null,
     kneeRatioMax: repWin && repWin.maxKneeRatio !== -Infinity ? fmt(repWin.maxKneeRatio) : null,
     maxTorsoLean: repWin && repWin.maxTorsoLean !== -Infinity ? fmt(repWin.maxTorsoLean) : null,
+    rawKneeRatio: repWin && repWin.minRawKneeRatio !== Infinity ? fmt(repWin.minRawKneeRatio) : fmt(angles?.rawKneeRatio),
+    leftKneeRatio: analysis?.leftKneeRatio ?? fmt(angles?.leftKneeRatio),
+    rightKneeRatio: analysis?.rightKneeRatio ?? fmt(angles?.rightKneeRatio),
+    leftKneeRatioSupport: analysis?.leftKneeRatioSupport ?? null,
+    rightKneeRatioSupport: analysis?.rightKneeRatioSupport ?? null,
+    leftWorldKneeRatioSupport: analysis?.leftWorldKneeRatioSupport ?? null,
+    rightWorldKneeRatioSupport: analysis?.rightWorldKneeRatioSupport ?? null,
+    rawThighDepthAngle: repWin && repWin.minRawThighDepthAngle !== Infinity ? fmt(repWin.minRawThighDepthAngle) : fmt(angles?.rawThighDepthAngle),
+    rawTorsoLean: repWin && repWin.maxRawTorsoLean !== -Infinity ? fmt(repWin.maxRawTorsoLean) : fmt(angles?.rawTorsoLean),
+    rawFootPitch: fmt(angles?.rawFootPitch),
+    kneeTrackingOffsetRatio: analysis && analysis.kneeTrackingOffsetRatio !== null ? fmt(analysis.kneeTrackingOffsetRatio) : fmt(angles?.kneeTrackingOffsetRatio),
+    kneeTrackingEligibleSupport: analysis && analysis.kneeTrackingEligibleSupport !== null ? fmt(analysis.kneeTrackingEligibleSupport) : null,
+    kneeTrackingOverThresholdSupport: analysis && analysis.kneeTrackingOverThresholdSupport !== null ? fmt(analysis.kneeTrackingOverThresholdSupport) : null,
+    viewClass: analysis?.view ?? rankToViewClass(angles?.viewClassRank ?? 3),
+    viewAngleDeg: analysis && analysis.maxViewAngleDeg !== null ? fmt(analysis.maxViewAngleDeg) : fmt(angles?.viewAngleDeg),
+    metricSource: analysis?.primaryMetricSource ?? rankToSource(angles?.kneeRatioSourceRank ?? NaN),
   };
 }
 
@@ -1961,6 +3288,8 @@ function validateSquatHeuristicConfig(config: ExerciseHeuristicConfig): string[]
   requireOrdered(config, issues, 'formThresholds.TORSO_LEAN_WARN', 'formThresholds.TORSO_LEAN_FAIL');
   requireOrdered(config, issues, 'formThresholds.TORSO_LEAN_DELTA_WARN', 'formThresholds.TORSO_LEAN_DELTA_FAIL');
   requireOrdered(config, issues, 'formThresholds.SIDE_VIEW_WIDTH_WARN', 'formThresholds.SIDE_VIEW_WIDTH_FAIL');
+  requireOrdered(config, issues, 'formThresholds.FRONT_VIEW_MAX', 'formThresholds.OBLIQUE_VIEW_MAX');
+  requireOrdered(config, issues, 'formThresholds.KNEE_VALGUS_WARN', 'formThresholds.KNEE_VALGUS_FAIL');
 
   const lockoutDelta = configNumber(config, 'formThresholds.LOCKOUT_BASELINE_DELTA_FAIL', issues);
   if (lockoutDelta !== null && (lockoutDelta <= 0 || lockoutDelta >= 0.15)) {
@@ -1981,6 +3310,42 @@ function validateSquatHeuristicConfig(config: ExerciseHeuristicConfig): string[]
       issues.push(`Squat config "${path}" must be greater than 0.`);
     }
   }
+  for (const path of [
+    'formThresholds.VIEW_CONFIDENCE_MIN',
+    'formThresholds.METRIC_CONFIDENCE_MIN',
+    'formThresholds.BASELINE_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_MIN_SUPPORT',
+    'formThresholds.FRONT_VIEW_MIN_SUPPORT',
+    'formThresholds.OBLIQUE_VIEW_MIN_SUPPORT',
+    'formThresholds.WORLD_KNEE_RATIO_MIN_SUPPORT',
+    'formThresholds.KNEE_TRACKING_CONFIDENCE_MIN',
+    'formThresholds.KNEE_VALGUS_MIN_SUPPORT',
+    'formThresholds.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value < 0 || value > 1)) {
+      issues.push(`Squat config "${path}" must be between 0 and 1.`);
+    }
+  }
+  for (const path of [
+    'formThresholds.FRONT_VIEW_MAX',
+    'formThresholds.OBLIQUE_VIEW_MAX',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 90)) {
+      issues.push(`Squat config "${path}" must be greater than 0 and at most 90.`);
+    }
+  }
+  const viewSamples = configNumber(config, 'formThresholds.VIEW_MIN_SAMPLES', issues);
+  if (viewSamples !== null && (!Number.isInteger(viewSamples) || viewSamples <= 0)) {
+    issues.push('Squat config "formThresholds.VIEW_MIN_SAMPLES" must be a positive integer.');
+  }
+  for (const path of ['formThresholds.KNEE_VALGUS_WARN', 'formThresholds.KNEE_VALGUS_FAIL']) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1)) {
+      issues.push(`Squat config "${path}" must be greater than 0 and at most 1.`);
+    }
+  }
 
   validateScoreCurves(config, issues);
 
@@ -1992,7 +3357,7 @@ export function createSquatDefinition(
 ): ExerciseDefinition {
   return {
   name: 'Barbell Squat',
-  requiredView: 'side',
+  requiredView: 'any',
 
   createState: (): ExerciseState => ({
     repCount: 0,
@@ -2004,15 +3369,17 @@ export function createSquatDefinition(
     _internal: withSquatConfig(config, () => initializeSquatState()),
   }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState): ExerciseState => {
+  update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
     const internal = state._internal as SquatState;
-    const newInternal = withSquatConfig(config, () => updateSquatState(keypoints, internal));
+    const newInternal = withSquatConfig(config, () => updateSquatState(keypoints, internal, frameContext));
 
     const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
       ? {
           repIndex: newInternal.lastRepResult.repIndex,
           score: newInternal.lastRepResult.score,
           messages: newInternal.lastRepResult.messages,
+          scorable: newInternal.lastRepResult.scorable,
+          qualityWarnings: newInternal.lastRepResult.qualityWarnings,
           diagnostics: newInternal.lastRepResult.diagnostics,
         }
       : null;
@@ -2044,6 +3411,7 @@ export function createSquatDefinition(
       [SQUAT_FEEDBACK.TORSO_FAIL]: 'torso_fail',
       [SQUAT_FEEDBACK.TORSO_WARN]: 'torso_warn',
       [SQUAT_FEEDBACK.HEEL_LIFT]: 'heel_lift',
+      [SQUAT_FEEDBACK.KNEE_VALGUS]: 'knee_valgus',
       [SQUAT_FEEDBACK.TEMPO_UP]: 'tempo_up',
       [SQUAT_FEEDBACK.TEMPO_DOWN]: 'tempo_down',
     },
@@ -2067,6 +3435,11 @@ export function createSquatDefinition(
         'Keep your heels planted.',
         'Drive through your mid-foot.',
         'Keep pressure through your whole foot.',
+      ],
+      [SQUAT_FEEDBACK.KNEE_VALGUS]: [
+        'Track your knees over your toes.',
+        'Keep your knees in line with your feet.',
+        'Press your knees out gently as you stand.',
       ],
       [SQUAT_FEEDBACK.TORSO_FAIL]: [
         'Chest up.',
@@ -2099,6 +3472,15 @@ export function createSquatDefinition(
           'Keep pressure through your whole foot.',
         ],
       },
+      {
+        issueType: 'knee_valgus',
+        priority: 22,
+        messages: [
+          'Track your knees over your toes.',
+          'Keep your knees in line with your feet.',
+          'Press your knees out gently as you stand.',
+        ],
+      },
     ],
   },
 
@@ -2113,6 +3495,8 @@ export function createSquatDefinition(
       'Achieve complete range of motion from standing to at least parallel.',
     [SQUAT_FEEDBACK.HEEL_LIFT]:
       'Keep your heels planted and push through your mid-foot to maintain balance and consistent force through the rep.',
+    [SQUAT_FEEDBACK.KNEE_VALGUS]:
+      'Keep your knees tracking over your toes. Practice controlled tempo squats and use a stance that lets your knees follow your foot angle.',
     [SQUAT_FEEDBACK.TORSO_FAIL]:
       'Excessive forward lean shifts load to your lower back. Strengthen your upper back and core, and check ankle mobility.',
     [SQUAT_FEEDBACK.TORSO_WARN]:

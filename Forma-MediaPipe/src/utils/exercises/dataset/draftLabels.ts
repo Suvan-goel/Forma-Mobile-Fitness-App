@@ -58,6 +58,8 @@ function createRepLabel(
     startMs,
     endMs,
     issueIds: [],
+    view: trace.diagnostics?.view ?? 'unknown',
+    scorable: trace.scorable ?? trace.diagnostics?.scorable ?? true,
     suggestedIssueIds: trace.issueIds,
     suggestedFeedbackMessages: trace.messages,
     suggestedScore: trace.score,
