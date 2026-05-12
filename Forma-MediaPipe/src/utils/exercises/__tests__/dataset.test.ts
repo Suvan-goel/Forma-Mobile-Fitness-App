@@ -74,6 +74,190 @@ describe('dataset label validation', () => {
     ]));
   });
 
+  it.each(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row'])(
+    'requires view and scorable on reviewed %s reps but not drafts',
+    exerciseName => {
+      const reviewedLabel = {
+        ...baseLabel,
+        exerciseName,
+        reviewStatus: 'reviewed' as const,
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [] },
+        ],
+      };
+
+      expect(validateLabelFile(reviewedLabel).map((issue) => issue.message)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('reps must include view.'),
+          expect.stringContaining('reps must include scorable.'),
+        ]),
+      );
+
+      expect(validateLabelFile({
+        ...reviewedLabel,
+        reviewStatus: 'draft' as const,
+      })).toEqual([]);
+
+      const knownViewIssues = validateLabelFile({
+        ...reviewedLabel,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'front', scorable: true },
+        ],
+      });
+      if (exerciseName === 'Push-Up' || exerciseName === 'Barbell Squat' || exerciseName === 'Cable Row') {
+        expect(knownViewIssues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+          expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+        ]));
+      } else {
+        expect(knownViewIssues).toEqual([]);
+      }
+
+      expect(validateLabelFile({
+        ...reviewedLabel,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'unknown', scorable: true },
+        ],
+      }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining('reps must use front, side, or oblique view; use scorable=false when view is unknown.'),
+      ]));
+
+      expect(validateLabelFile({
+        ...reviewedLabel,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'unknown', scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
+  it('requires reviewed scorable lateral-raise reps to use front view', () => {
+    const reviewedLabel = {
+      ...baseLabel,
+      exerciseName: 'Standing Dumbbell Lateral Raises',
+      reviewStatus: 'reviewed' as const,
+      expectedReps: 1,
+      reps: [
+        { index: 1, startMs: 0, endMs: 1000, issueIds: [] },
+      ],
+    };
+
+    expect(validateLabelFile(reviewedLabel).map((issue) => issue.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Standing Dumbbell Lateral Raises'),
+        expect.stringContaining('reps must include scorable.'),
+      ]),
+    );
+
+    expect(validateLabelFile({
+      ...reviewedLabel,
+      reps: [
+        { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'front', scorable: true },
+      ],
+    })).toEqual([]);
+
+    expect(validateLabelFile({
+      ...reviewedLabel,
+      reps: [
+        { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'oblique', scorable: true },
+      ],
+    }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'reviewed scorable Standing Dumbbell Lateral Raises reps must use front view; use scorable=false for side, oblique, or unknown views.',
+    ]));
+
+    expect(validateLabelFile({
+      ...reviewedLabel,
+      reps: [
+        { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'oblique', scorable: false },
+      ],
+    })).toEqual([]);
+  });
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'allows reviewed unscorable Push-Up reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Push-Up',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'rejects reviewed scorable Cable Row reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Cable Row',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
+        ],
+      }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+      ]));
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'allows reviewed unscorable Cable Row reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Cable Row',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
+  it('includes reviewed-ready view and scorable metadata in the push-up label template', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/push-up.template.json'),
+        'utf8',
+      ),
+    ) as { reps: Array<{ view?: string; scorable?: boolean }>; labelingGuidance?: string[] };
+
+    expect(template.reps[0]?.view).toBe('side');
+    expect(template.reps[0]?.scorable).toBe(true);
+    expect(template.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Standard side-view floor push-ups are the target scope'),
+        expect.stringContaining('Use push-up.incomplete_rom only as the fallback ROM issue'),
+      ]),
+    );
+  });
+
+  it('includes reviewed-ready view, scorable metadata, and guidance in the lateral-raise label template', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/standing-dumbbell-lateral-raises.template.json'),
+        'utf8',
+      ),
+    ) as { reps: Array<{ view?: string; scorable?: boolean }>; labelingGuidance?: string[] };
+
+    expect(template.reps[0]?.view).toBe('front');
+    expect(template.reps[0]?.scorable).toBe(true);
+    expect(template.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Front-view Standing Dumbbell Lateral Raises are the v1 full-form scoring target'),
+        expect.stringContaining('do not count tiny pulses'),
+        expect.stringContaining('note the visible subcause'),
+        expect.stringContaining('Reviewed scorable Standing Dumbbell Lateral Raises reps must use view=front'),
+      ]),
+    );
+  });
+
   it('accepts multiple known issue ids on the same rep', () => {
     const issues = validateLabelFile(
       {
@@ -94,16 +278,26 @@ describe('dataset label validation', () => {
     expect(issues).toEqual([]);
   });
 
-  it('lists multi-view squat issues in the label template', () => {
+  it('lists side-view squat issues in the label template', () => {
     const template = JSON.parse(
       readFileSync(
         join(process.cwd(), 'datasets/form-heuristics/labels/templates/barbell-squat.template.json'),
         'utf8',
       ),
-    ) as { availableIssues: Array<{ issueId: string }> };
+    ) as { availableIssues: Array<{ issueId: string }>; labelingGuidance?: string[] };
 
-    expect(template.availableIssues.map((issue) => issue.issueId)).toContain('barbell-squat.heel_lift');
-    expect(template.availableIssues.map((issue) => issue.issueId)).toContain('barbell-squat.knee_valgus');
+    const issueIds = template.availableIssues.map((issue) => issue.issueId);
+    expect(issueIds).toEqual(expect.arrayContaining([
+      'barbell-squat.depth_short',
+      'barbell-squat.lockout_short',
+      'barbell-squat.incomplete_rom',
+      'barbell-squat.heel_lift',
+    ]));
+    expect(issueIds).not.toContain('barbell-squat.knee_valgus');
+    expect(template.labelingGuidance).toEqual(expect.arrayContaining([
+      expect.stringContaining('Side-view Barbell Squat reps are the v1 full-form scoring target'),
+      expect.stringContaining('Do not label knee valgus in v1'),
+    ]));
   });
 
   it('lists production-hardening cable-row issues in the label template', () => {
@@ -112,8 +306,14 @@ describe('dataset label validation', () => {
         join(process.cwd(), 'datasets/form-heuristics/labels/templates/cable-row.template.json'),
         'utf8',
       ),
-    ) as { availableIssues: Array<{ issueId: string }> };
+    ) as {
+      availableIssues: Array<{ issueId: string }>;
+      reps: Array<{ view?: string; scorable?: boolean }>;
+      labelingGuidance?: string[];
+    };
 
+    expect(template.reps[0]?.view).toBe('side');
+    expect(template.reps[0]?.scorable).toBe(true);
     expect(template.availableIssues.map((issue) => issue.issueId)).toEqual(expect.arrayContaining([
       'cable-row.torso_rocking',
       'cable-row.high_row',
@@ -121,6 +321,10 @@ describe('dataset label validation', () => {
     ]));
     expect(template.availableIssues.map((issue) => issue.issueId)).not.toContain('cable-row.row_target_high');
     expect(template.availableIssues.map((issue) => issue.issueId)).not.toContain('cable-row.jerky_pull');
+    expect(template.labelingGuidance).toEqual(expect.arrayContaining([
+      expect.stringContaining('Side-view Cable Row reps are the v1 full-form scoring target'),
+      expect.stringContaining('Do not label row-target height, hold, or velocity diagnostics'),
+    ]));
   });
 
   it('lists production-hardening cable-pushdown issues in the label template', () => {

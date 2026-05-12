@@ -145,7 +145,7 @@ describe('exercise TTS coverage', () => {
     expect(getTopFeedbackIssueCandidate([
       'Flex more at the top of the curl.',
       "Don't swing your torso — stay upright and controlled.",
-      'Keep your wrists neutral — avoid curling them in.',
+      'Arms are uneven — curl both sides together.',
     ])?.feedback).toBe("Don't swing your torso — stay upright and controlled.");
 
     expect(getTopFeedbackIssueCandidate([
@@ -154,9 +154,9 @@ describe('exercise TTS coverage', () => {
     ])?.feedback).toBe('Extend fully at the bottom.');
 
     expect(getTopFeedbackIssueCandidate([
-      'Keep your wrists neutral — avoid curling them in.',
       'Arms are uneven — curl both sides together.',
-    ])?.feedback).toBe('Arms are uneven — curl both sides together.');
+      "Tuck your elbows in — they're drifting outward.",
+    ])?.feedback).toBe("Tuck your elbows in — they're drifting outward.");
 
     expect(getTopFeedbackIssueCandidate([
       'Upper arms moving — keep elbows pinned to your sides.',

@@ -11,9 +11,12 @@ type PushupHeadPosture = 'neutral' | 'dropped';
 const FRAME_MS = 50;
 const EXTENDED_ELBOW_X = 0;
 const BOTTOM_ELBOW_X = 0.58;
+const NEAR_DEPTH_ELBOW_X = 0.14;
+const NEAR_LOCKOUT_ELBOW_X = 0.052;
 const PULSE_ELBOW_X = 0.04;
 const HALF_ELBOW_X = 0.12;
-const BORDERLINE_ELBOW_X = 0.16;
+const SOFT_LOCKOUT_ELBOW_X = 0.04;
+const LOW_LOCKOUT_ELBOW_X = 0.06;
 
 function kp(name: string, x: number, y: number, score = 0.99): Keypoint {
   return { name, x, y, z: 0, score };
@@ -29,6 +32,38 @@ function interpolate(from: number, to: number, frames: number): number[] {
 function fullRepPath(): number[] {
   return [
     ...Array(22).fill(EXTENDED_ELBOW_X),
+    ...interpolate(EXTENDED_ELBOW_X, BOTTOM_ELBOW_X, 50),
+    ...Array(4).fill(BOTTOM_ELBOW_X),
+    ...interpolate(BOTTOM_ELBOW_X, EXTENDED_ELBOW_X, 18),
+    ...Array(8).fill(EXTENDED_ELBOW_X),
+  ];
+}
+
+function nearDepthFullRepPath(): number[] {
+  return [
+    ...Array(22).fill(EXTENDED_ELBOW_X),
+    ...interpolate(EXTENDED_ELBOW_X, NEAR_DEPTH_ELBOW_X, 24),
+    ...Array(4).fill(NEAR_DEPTH_ELBOW_X),
+    ...interpolate(NEAR_DEPTH_ELBOW_X, EXTENDED_ELBOW_X, 18),
+    ...Array(8).fill(EXTENDED_ELBOW_X),
+  ];
+}
+
+function nearLockoutFullRepPath(): number[] {
+  return [
+    ...Array(22).fill(NEAR_LOCKOUT_ELBOW_X),
+    ...interpolate(NEAR_LOCKOUT_ELBOW_X, BOTTOM_ELBOW_X, 50),
+    ...Array(4).fill(BOTTOM_ELBOW_X),
+    ...interpolate(BOTTOM_ELBOW_X, NEAR_LOCKOUT_ELBOW_X, 18),
+    ...Array(8).fill(NEAR_LOCKOUT_ELBOW_X),
+  ];
+}
+
+function noisySetupThenFullRepPath(): number[] {
+  return [
+    ...Array(22).fill(EXTENDED_ELBOW_X),
+    ...[0.07, 0.075, 0.07, 0.075, 0.07, 0.075, 0.07, 0.075, 0.07, 0.075],
+    ...Array(10).fill(EXTENDED_ELBOW_X),
     ...interpolate(EXTENDED_ELBOW_X, BOTTOM_ELBOW_X, 50),
     ...Array(4).fill(BOTTOM_ELBOW_X),
     ...interpolate(BOTTOM_ELBOW_X, EXTENDED_ELBOW_X, 18),
@@ -54,13 +89,12 @@ function halfRepPath(): number[] {
   ];
 }
 
-function borderlineRepPath(): number[] {
+function lowLockoutHalfRepPath(): number[] {
   return [
-    ...Array(22).fill(EXTENDED_ELBOW_X),
-    ...interpolate(EXTENDED_ELBOW_X, BORDERLINE_ELBOW_X, 22),
-    ...Array(4).fill(BORDERLINE_ELBOW_X),
-    ...interpolate(BORDERLINE_ELBOW_X, EXTENDED_ELBOW_X, 18),
-    ...Array(8).fill(EXTENDED_ELBOW_X),
+    ...Array(22).fill(LOW_LOCKOUT_ELBOW_X),
+    ...interpolate(LOW_LOCKOUT_ELBOW_X, HALF_ELBOW_X, 18),
+    ...interpolate(HALF_ELBOW_X, LOW_LOCKOUT_ELBOW_X, 18),
+    ...Array(8).fill(LOW_LOCKOUT_ELBOW_X),
   ];
 }
 
@@ -69,6 +103,19 @@ function fastDescentPath(): number[] {
     ...Array(22).fill(EXTENDED_ELBOW_X),
     ...interpolate(EXTENDED_ELBOW_X, BOTTOM_ELBOW_X, 3),
     ...Array(4).fill(BOTTOM_ELBOW_X),
+    ...interpolate(BOTTOM_ELBOW_X, EXTENDED_ELBOW_X, 18),
+    ...Array(8).fill(EXTENDED_ELBOW_X),
+  ];
+}
+
+function immediateConsecutiveRepPath(): number[] {
+  return [
+    ...Array(22).fill(EXTENDED_ELBOW_X),
+    ...interpolate(EXTENDED_ELBOW_X, BOTTOM_ELBOW_X, 50),
+    ...Array(4).fill(BOTTOM_ELBOW_X),
+    ...interpolate(BOTTOM_ELBOW_X, EXTENDED_ELBOW_X, 18),
+    ...interpolate(EXTENDED_ELBOW_X, BOTTOM_ELBOW_X, 2),
+    ...Array(12).fill(BOTTOM_ELBOW_X),
     ...interpolate(BOTTOM_ELBOW_X, EXTENDED_ELBOW_X, 18),
     ...Array(8).fill(EXTENDED_ELBOW_X),
   ];
@@ -225,6 +272,29 @@ function buildRecording(
     };
   }
 
+function invalidSetupThenNearLockoutFullRepRecording(): LandmarkRecording {
+  const invalidSetup = buildRecording(
+    'synthetic invalid extended setup before near-lockout pushup',
+    Array(12).fill(EXTENDED_ELBOW_X),
+    { hiddenSideScore: 0.99, sideOffset: 0.14 },
+  );
+  const rep = buildRecording('synthetic near-lockout pushup after invalid setup', nearLockoutFullRepPath());
+  const offsetMs = invalidSetup.frames.length * FRAME_MS;
+
+  return {
+    ...rep,
+    metadata: {
+      ...rep.metadata,
+      description: 'synthetic near-lockout pushup after invalid pre-setup frames',
+      duration: ((invalidSetup.frames.length + rep.frames.length) * FRAME_MS) / 1000,
+    },
+    frames: [
+      ...invalidSetup.frames,
+      ...rep.frames.map(frame => ({ ...frame, timestamp: frame.timestamp + offsetMs })),
+    ],
+  };
+}
+
 function buildRecordingWithPostureDuringRep(
   description: string,
   elbowPath: number[],
@@ -253,6 +323,28 @@ function withKeypointUpdates(
   };
 }
 
+function withExplicitImageAndWorld(recording: LandmarkRecording): LandmarkRecording {
+  return {
+    ...recording,
+    frames: recording.frames.map(frame => {
+      const imageKeypoints = frame.keypoints.map(point => ({ ...point }));
+      const worldKeypoints = frame.keypoints.map(point => ({ ...point }));
+      return {
+        ...frame,
+        keypoints: worldKeypoints.map(point => ({ ...point })),
+        imageKeypoints,
+        worldKeypoints,
+      };
+    }),
+  };
+}
+
+function expectMetricRatioBounded(value: unknown) {
+  expect(typeof value).toBe('number');
+  expect(value as number).toBeGreaterThanOrEqual(0);
+  expect(value as number).toBeLessThanOrEqual(1);
+}
+
 function expectStaysIdle(recording: LandmarkRecording) {
   const result = replayRecordingVerbose(pushupDefinition, recording);
   expect(result.finalRepCount).toBe(0);
@@ -272,8 +364,29 @@ describe('Push-Up synthetic replay coverage', () => {
       expect(result.finalRepCount).toBe(1);
       expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
       expect(result.feedbackMessages).toEqual([]);
+      expect(result.reps[0].diagnostics?.metrics.frameCount.value).toBeGreaterThan(0);
+      expect(result.reps[0].diagnostics?.metrics.bodyJudgeableRate.value).toBeGreaterThanOrEqual(0.6);
+      expect(result.reps[0].diagnostics?.metrics.headJudgeableRate.value).toBeGreaterThanOrEqual(0.6);
+      expect(result.reps[0].diagnostics?.cues['push-up.depth_short'].triggered).toBe(false);
+      expect(result.reps[0].diagnostics?.cues['push-up.lockout_short'].triggered).toBe(false);
+      expect(result.reps[0].diagnostics?.cues['push-up.camera_setup'].triggered).toBe(false);
     },
   );
+
+  it('counts a clean full rep with explicit image and world landmark sources', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      withExplicitImageAndWorld(buildRecording('synthetic clean explicit-source pushup', fullRepPath())),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].diagnostics?.scorable).toBe(true);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.cues['push-up.depth_short'].triggered).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['push-up.lockout_short'].triggered).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['push-up.camera_setup'].triggered).toBe(false);
+  });
 
   it('does not count a small pulse that never reaches bottom', () => {
     const result = replayRecordingVerbose(
@@ -283,6 +396,33 @@ describe('Push-Up synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('does not double-count top-threshold jitter before a full rep', () => {
+    const result = replayRecordingVerbose(
+      pushupDefinition,
+      buildRecording('synthetic noisy setup before pushup', noisySetupThenFullRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('holds a soft-lockout plank without starting repeated low-ROM rep windows', () => {
+    const result = replayRecordingVerbose(
+      pushupDefinition,
+      buildRecording(
+        'synthetic static soft-lockout pushup plank',
+        Array(80).fill(SOFT_LOCKOUT_ELBOW_X),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(0);
+    expect(result.frameTraces.some(trace => trace.phase === 'PLANK')).toBe(true);
+    expect(result.frameTraces.every(trace => trace.phase === 'IDLE' || trace.phase === 'PLANK')).toBe(true);
+    expect(result.frameTraces.map(trace => trace.feedback).filter(Boolean)).not.toContain(
+      'Use more range for this rep to count.',
+    );
   });
 
   it('does not leave idle when setup is not side-on enough', () => {
@@ -295,6 +435,24 @@ describe('Push-Up synthetic replay coverage', () => {
       Array.isArray(trace.debugInfo.setupWarnings) &&
       trace.debugInfo.setupWarnings.includes('not_side_view')
     ))).toBe(true);
+  });
+
+  it('ignores low-confidence opposite-side width when checking side-view setup', () => {
+    const recording = withKeypointUpdates(
+      buildRecording('synthetic side-view pushup with hallucinated hidden side width', fullRepPath()),
+      point => {
+        if (point.name === 'right_shoulder') return { ...point, x: 0.78, score: 0.05 };
+        if (point.name === 'right_hip') return { ...point, x: 0.78, score: 0.05 };
+        return point;
+      },
+    );
+    const result = replayRecordingVerbose(pushupDefinition, recording);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.frameTraces.some(trace => (
+      Array.isArray(trace.debugInfo.setupWarnings) &&
+      trace.debugInfo.setupWarnings.includes('not_side_view')
+    ))).toBe(false);
   });
 
   it('does not leave idle when the arm or lower-body chain is hidden', () => {
@@ -331,29 +489,119 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(result.feedbackMessages).toContain('Go deeper — aim for elbows at 90 degrees.');
+    expect(result.reps[0].diagnostics?.metrics.frameCount.value).toBeGreaterThan(0);
+    expectMetricRatioBounded(result.reps[0].diagnostics?.metrics.bodyJudgeableRate.value);
+    expectMetricRatioBounded(result.reps[0].diagnostics?.metrics.headJudgeableRate.value);
+    expectMetricRatioBounded(result.reps[0].diagnostics?.metrics.setupWarningRate.value);
   });
 
-  it('uses shoulder drop as a secondary depth proxy for borderline shallow reps', () => {
+  it('uses the terminal completion frame for full-rep tempo diagnostics', () => {
+    const result = replayRecordingVerbose(
+      pushupDefinition,
+      buildRecording('synthetic clean pushup tempo diagnostics', fullRepPath()),
+    );
+
+    const rep = result.reps[0];
+    const repTrace = result.repTraces[0];
+    const startTransition = repTrace.transitions.find(transition => (
+      transition.fromPhase === 'PLANK' && transition.toPhase === 'DESCENDING'
+    ));
+    const bottomTransition = repTrace.transitions.find(transition => (
+      transition.fromPhase === 'DESCENDING' && transition.toPhase === 'BOTTOM'
+    ));
+    const completionTransition = repTrace.transitions.find(transition => (
+      transition.fromPhase === 'ASCENDING' && transition.toPhase === 'PLANK'
+    ));
+
+    expect(startTransition).toBeDefined();
+    expect(bottomTransition).toBeDefined();
+    expect(completionTransition).toBeDefined();
+    expect(rep.diagnostics?.metrics.tDown.value).toBeCloseTo(
+      ((bottomTransition!.timestamp - startTransition!.timestamp) / 1000),
+      5,
+    );
+    expect(rep.diagnostics?.metrics.tUp.value).toBeCloseTo(
+      ((completionTransition!.timestamp - bottomTransition!.timestamp) / 1000),
+      5,
+    );
+    expect(rep.completedAt).toBe(completionTransition!.timestamp);
+  });
+
+  it('counts a near-depth full rep while still exposing depth feedback', () => {
     const result = replayRecording(
       pushupDefinition,
-      buildRecording('synthetic borderline shallow pushup', borderlineRepPath()),
+      buildRecording('synthetic near-depth counted pushup', nearDepthFullRepPath()),
     );
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain('Go deeper — aim for elbows at 90 degrees.');
+    expect(result.reps[0].diagnostics?.cues['push-up.depth_short'].triggered).toBe(true);
   });
 
-  it('does not let the secondary depth proxy false-positive when elbow depth is clearly good', () => {
+  it('counts a near-lockout full rep while still exposing lockout feedback', () => {
     const result = replayRecording(
       pushupDefinition,
-      buildRecording('synthetic clean pushup with poor shoulder-drop proxy', fullRepPath()),
+      buildRecording('synthetic near-lockout counted pushup', nearLockoutFullRepPath()),
     );
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.feedbackMessages).not.toContain('Go deeper — aim for elbows at 90 degrees.');
+    expect(result.feedbackMessages).toContain('Lock out your arms fully at the top.');
+    expect(result.reps[0].diagnostics?.cues['push-up.lockout_short'].triggered).toBe(true);
+  });
+
+  it('does not let invalid idle setup seed first-rep lockout', () => {
+    const result = replayRecording(pushupDefinition, invalidSetupThenNearLockoutFullRepRecording());
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Lock out your arms fully at the top.');
+    expect(result.reps[0].diagnostics?.cues['push-up.lockout_short'].triggered).toBe(true);
+  });
+
+  it('marks counted reps unscorable with a side-view warning when setup degrades during the rep', () => {
+    const frontishDuringRep = withKeypointUpdates(
+      buildRecording('synthetic front-ish pushup during active rep', fullRepPath()),
+      (point, index) => {
+        if (index >= 22 && index < 94 && (point.name === 'right_shoulder' || point.name === 'right_hip')) {
+          return { ...point, x: 0.75, score: 0.99 };
+        }
+        return point;
+      },
+    );
+
+    const result = replayRecording(pushupDefinition, frontishDuringRep, { confidenceGating: true });
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('unknown');
+    expect(result.feedbackMessages[0]).toContain('Turn side-on');
+  });
+
+  it('does not duplicate endpoint ROM diagnostics with fallback incomplete_rom', () => {
+    const diagnosticVariant = pushupDefinition.createVariant?.({
+      thresholds: {
+        PLANK_REENTER: 0.92,
+        PARTIAL_REP_RESET: 0.925,
+      },
+    });
+    expect(diagnosticVariant).toBeDefined();
+
+    const result = replayRecording(
+      diagnosticVariant!,
+      buildRecording('synthetic endpoint-limited partial pushup', lowLockoutHalfRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].diagnostics?.cues['push-up.depth_short'].triggered).toBe(true);
+    expect(result.reps[0].diagnostics?.cues['push-up.lockout_short'].triggered).toBe(true);
+    expect(result.reps[0].diagnostics?.cues['push-up.incomplete_rom'].triggered).toBe(false);
   });
 
   it('flags persistent shoulder and wrist misalignment as low-priority form feedback', () => {
+    const clean = replayRecording(
+      pushupDefinition,
+      buildRecording('synthetic clean pushup for shoulder stack comparison', fullRepPath()),
+    );
     const result = replayRecording(
       pushupDefinition,
       buildRecording('synthetic shoulder wrist offset pushup', fullRepPath(), {
@@ -362,7 +610,36 @@ describe('Push-Up synthetic replay coverage', () => {
     );
 
     expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(result.feedbackMessages).toContain('Stack your shoulders over your hands.');
+    expect(result.feedbackMessages).not.toContain('Set the camera side-on with your full body in frame.');
+    expect(result.reps[0].diagnostics?.cues['push-up.shoulder_stack'].triggered).toBe(true);
+    expect(result.reps[0].diagnostics?.cues['push-up.camera_setup'].triggered).toBe(false);
+  });
+
+  it('does not flag shoulder stack from a low-confidence image wrist', () => {
+    const recording = withExplicitImageAndWorld(
+      buildRecording('synthetic pushup with low-confidence shifted image wrist', fullRepPath()),
+    );
+    const shiftedLowConfidenceImageWrist = {
+      ...recording,
+      frames: recording.frames.map((frame, index) => index >= 22 && index <= 94
+        ? {
+            ...frame,
+            imageKeypoints: frame.imageKeypoints?.map(point => (
+              point.name === 'left_wrist'
+                ? { ...point, x: point.x + 0.09, score: 0.05 }
+                : point
+            )),
+          }
+        : frame),
+    };
+
+    const result = replayRecording(pushupDefinition, shiftedLowConfidenceImageWrist);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Stack your shoulders over your hands.');
+    expect(result.reps[0].diagnostics?.cues['push-up.shoulder_stack'].triggered).toBe(false);
   });
 
   it.each<PushupOrientation>(['facing-right', 'facing-left'])(
@@ -375,8 +652,27 @@ describe('Push-Up synthetic replay coverage', () => {
 
       expect(result.finalRepCount).toBe(1);
       expect(result.feedbackMessages.join('\n')).toContain('Hips are sagging');
+      expect(result.reps[0].diagnostics?.cues['push-up.hip_sag'].triggered).toBe(true);
     },
   );
+
+  it('flags body-line feedback with explicit image and world landmark sources', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      withExplicitImageAndWorld(
+        buildRecordingWithPostureDuringRep(
+          'synthetic sag explicit-source pushup',
+          fullRepPath(),
+          'sag',
+          'facing-right',
+        ),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages.join('\n')).toContain('Hips are sagging');
+    expect(result.reps[0].diagnostics?.cues['push-up.hip_sag'].triggered).toBe(true);
+  });
 
   it.each<PushupOrientation>(['facing-right', 'facing-left'])(
     'flags hip pike consistently when %s',
@@ -388,6 +684,7 @@ describe('Push-Up synthetic replay coverage', () => {
 
       expect(result.finalRepCount).toBe(1);
       expect(result.feedbackMessages.join('\n')).toContain('Hips are piking');
+      expect(result.reps[0].diagnostics?.cues['push-up.hip_pike'].triggered).toBe(true);
     },
   );
 
@@ -405,6 +702,7 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(dropped.finalRepCount).toBe(1);
     expect(dropped.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(dropped.feedbackMessages).toContain('Keep your head neutral — align your neck with your spine.');
+    expect(dropped.reps[0].diagnostics?.cues['push-up.head_position'].triggered).toBe(true);
   });
 
   it('does not create hip or head feedback from low-confidence body landmarks', () => {
@@ -415,7 +713,7 @@ describe('Push-Up synthetic replay coverage', () => {
       'facing-right',
     );
     const droppedNose = nosePoint(bodyPoints('facing-right', 'sag').shoulder, 'facing-right', 'dropped');
-    noisy.frames = noisy.frames.map((frame, index) => index >= 22 && index < 94
+    noisy.frames = noisy.frames.map((frame, index) => index >= 22 && index <= 94
       ? {
           ...frame,
           keypoints: frame.keypoints.map(point => (
@@ -433,12 +731,15 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages.join('\n')).not.toContain('Hips are sagging');
     expect(result.feedbackMessages).not.toContain('Keep your head neutral — align your neck with your spine.');
+    expect(result.reps[0].diagnostics?.scorable).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.bodyJudgeableRate.value).toBeLessThan(0.6);
+    expect(result.reps[0].diagnostics?.metrics.headJudgeableRate.value).toBeLessThan(0.6);
   });
 
-  it('counts reps with hidden head tracking but marks them unscored under confidence gating', () => {
+  it('counts and scores reps with hidden head tracking while skipping the optional head cue', () => {
     const hiddenHead = withKeypointUpdates(
       buildRecording('synthetic hidden head during pushup', fullRepPath()),
-      (point, index) => index >= 22 && index < 94 && point.name === 'nose'
+      (point, index) => index >= 22 && index <= 94 && point.name === 'nose'
         ? { ...point, score: 0.05 }
         : point,
     );
@@ -446,8 +747,11 @@ describe('Push-Up synthetic replay coverage', () => {
     const result = replayRecording(pushupDefinition, hiddenHead, { confidenceGating: true });
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.reps[0].scorable).toBe(false);
-    expect(result.feedbackMessages[0]).toContain("I couldn't judge your form there.");
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].diagnostics?.scorable).toBe(true);
+    expect(result.reps[0].diagnostics?.metrics.headJudgeableRate.value).toBeLessThan(0.6);
+    expect(result.reps[0].diagnostics?.cues['push-up.head_position'].eligible).toBe(false);
+    expect(result.feedbackMessages).not.toContain("I couldn't judge your form there.");
   });
 
   it('keeps the active side locked through a rep even if visibility flips', () => {
@@ -472,5 +776,17 @@ describe('Push-Up synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain("Control the descent — don't drop into the pushup.");
+    expect(result.reps[0].diagnostics?.cues['push-up.tempo_down'].triggered).toBe(true);
+  });
+
+  it('preserves top lockout for immediate consecutive reps without a top hold', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildRecording('synthetic immediate consecutive pushups', immediateConsecutiveRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(2);
+    expect(result.feedbackMessages).not.toContain('Lock out your arms fully at the top.');
+    expect(result.reps.map(rep => rep.diagnostics?.cues['push-up.lockout_short'].triggered)).toEqual([false, false]);
   });
 });

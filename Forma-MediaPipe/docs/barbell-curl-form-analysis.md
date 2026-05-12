@@ -2,7 +2,9 @@
 
 ## Overview
 
-Forma uses on-device pose estimation (MediaPipe BlazePose Full) to detect barbell curl reps and evaluate form in real time. The system is fully deterministic — no ML inference for form scoring. It runs at ~30fps analysis with 10fps UI updates to keep the interface responsive.
+Forma uses on-device pose estimation (MediaPipe BlazePose) to detect barbell curl reps and evaluate form in real time. The system is fully deterministic - no ML inference for form scoring. It runs at ~30fps analysis with throttled UI updates to keep the interface responsive.
+
+Front view is the full-scoring target because both arms are visible for bilateral ROM, symmetry, and elbow-flare checks. Side or oblique views are supported as limited-signal fallback captures: reps can count from the visible primary arm, and only visible-arm cues are scored.
 
 ---
 
@@ -13,8 +15,9 @@ Camera (native)
   → MediaPipe BlazePose Full (33 landmarks, on-device)
   → NativeEventEmitter ("onLandmark") / iOS onLandmark callback
   → CameraScreen.handleLandmark()
-  → convertLandmarksToKeypoints()        // normalize to { name, x, y, z, score }
-  → updateBarbellCurlState()             // FSM + form evaluation
+  → convertLandmarksToKeypoints()        // normalize image + world landmarks
+  → ExerciseRegistry.get('Barbell Curl')
+  → barbellCurlDefinition.update()       // FSM + form evaluation
   → flushPendingUI()                     // batched React state updates
   → UI: rep count, form score, feedback text
   → handleRecordPress() on stop          // finalize set
@@ -26,12 +29,13 @@ Camera (native)
 
 | File | Role |
 |------|------|
-| `src/screens/CameraScreen.tsx` | Orchestrates camera, landmark handling, recording, and set finalization |
-| `src/utils/barbellCurlHeuristics.ts` | All curl-specific logic: angles, FSM, form evaluation, scoring |
+| `src/frontend/screens/CameraScreen.tsx` | Orchestrates camera, landmark handling, recording, and set finalization |
+| `src/utils/exercises/definitions/barbellCurl.ts` | Curl-specific logic: ratios, view handling, FSM, form evaluation, scoring, diagnostics |
+| `src/utils/exercises/shared/poseQuality.ts` | Per-frame and per-rep tracking/scorable quality gates |
+| `src/utils/exercises/replay/replayRunner.ts` | Offline replay path used by tests and dataset tooling |
 | `src/utils/poseAnalysis.ts` | Shared math: angle calculations, keypoint utilities, exercise detection |
 | `src/utils/setNotesSummary.ts` | Generates natural language summary from per-rep feedback |
-| `src/components/ui/SetNotesModal.tsx` | Displays per-rep breakdown and summary |
-| `src/contexts/CurrentWorkoutContext.tsx` | Stores workout exercises and sets (including per-rep data) |
+| `src/frontend/contexts/CurrentWorkoutContext.tsx` | Stores workout exercises and sets, including per-rep data |
 
 ### Performance architecture
 
@@ -45,44 +49,55 @@ The system uses a **three-tier update strategy** to avoid blocking the JS thread
 
 ## 2. Landmark Processing
 
-MediaPipe provides 33 landmarks per frame. The system uses these keypoints:
+MediaPipe provides image landmarks and, when available, world landmarks. Curl mechanics prefer world landmarks for camera-angle-robust ratio and view calculations, with image landmarks as fallback.
 
 | Keypoint | Used for |
 |----------|----------|
-| `left_shoulder`, `right_shoulder` | Elbow angle, shoulder flexion, torso midline, coronal axis |
-| `left_elbow`, `right_elbow` | Elbow angle (primary FSM driver) |
-| `left_wrist`, `right_wrist` | Elbow angle, wrist neutrality |
+| `left_shoulder`, `right_shoulder` | Reach ratio, shoulder flexion, torso midline, view angle |
+| `left_elbow`, `right_elbow` | Reach ratio and debug elbow angle |
+| `left_wrist`, `right_wrist` | Reach ratio |
 | `left_hip`, `right_hip` | Torso angle, shoulder flexion reference |
-| `left_index`, `right_index` | Wrist angle (elbow-wrist-finger) |
-| `nose`, `left_ear`, `right_ear` | Midline torso upper anchor (head stays stable during curls) |
 
 ### Visibility gating
 
-Each keypoint must have `visibility > 0.1` (lowered from default 0.5 for better side-on detection). Both sides must be visible for angle calculation; if only one side is visible, the system uses NaN and falls back to the previous smoothed value.
+Each mechanics keypoint must have `visibility > 0.15`. Front-view full scoring needs bilateral arm support. Side/oblique scoring can use the visible primary arm, while front-only cues such as asymmetry and elbow flare are marked ineligible outside confirmed front-view reps.
 
 ---
 
 ## 3. Angle Computation
 
-Eight angles are computed per frame:
+The primary FSM and ROM signal is the normalized reach ratio:
 
-| Angle | Calculation | Purpose |
-|-------|------------|---------|
-| **Left/Right Elbow** | `calculateAngle2D(shoulder, elbow, wrist)` | FSM driver — determines curl phase |
+```
+dist(shoulder, wrist) / (dist(shoulder, elbow) + dist(elbow, wrist))
+```
+
+Approximate interpretation:
+
+- Fully extended arm: about `0.95-1.0`
+- Fully curled top position: about `0.40-0.55`
+
+This ratio is more camera-angle tolerant than raw elbow angle because foreshortening affects the numerator and denominator together.
+
+The implementation also computes supporting angular metrics:
+
+| Metric | Calculation | Purpose |
+|--------|-------------|---------|
+| **Left/Right Reach Ratio** | normalized shoulder-wrist reach | FSM driver, ROM, flexion and extension checks |
+| **Left/Right Elbow** | `calculateAngle2D(shoulder, elbow, wrist)` | Debug/diagnostic display |
 | **Left/Right Shoulder** | `calculateShoulderFlexionAngle(hip, shoulder, elbow, oppShoulder)` | Detect elbow drift / shoulder takeover |
-| **Left/Right Torso** | `calculateSignedVerticalAngle(hip, shoulder)` | Per-side lean (legacy, used alongside midline) |
-| **Midline Torso** | `calculateSignedVerticalAngleSagittal(hipCenter, headPoint, ...)` | Primary swing detection — rotation-invariant |
-| **Left/Right Wrist** | `calculateAngle(elbow, wrist, index)` | Wrist neutrality (currently disabled for feedback) |
+| **Midline Torso** | sagittal hip-center to shoulder-center angle | Detect forward/backward body swing |
+| **Elbow Flare** | upper-arm angle from vertical in the frontal plane | Detect lateral elbow flare on confirmed front-view reps |
 
 ### Why 2D for elbows?
 
-`calculateAngle2D` ignores the Z axis. MediaPipe's depth (Z) is estimated from a single camera and can be noisy, especially when the arm is perpendicular to the camera. The 2D projection onto the XY plane matches what the user sees on screen, giving more stable elbow angle readings.
+The old elbow-angle FSM was replaced by reach ratio. Elbow angle is still useful in debug output, but production counting and ROM feedback are ratio-based.
 
 ### Why sagittal projection for torso?
 
 `calculateSignedVerticalAngleSagittal` projects the torso vector onto the person's own sagittal plane (perpendicular to the left-right hip/shoulder axis). This removes the effect of body rotation (yaw) — if the person is slightly turned, the raw vertical angle would show false lean. The sagittal projection isolates actual forward/backward swing.
 
-The upper anchor uses the **head** (nose or mid-ear) instead of the shoulder center, because shoulder landmarks drift forward/back with arm movement during curls. The head stays relatively stable.
+The current torso anchor is the shoulder center, projected into the person's sagittal plane. This avoids most yaw-related false lean while keeping the signal available when head landmarks are noisy.
 
 ### Why shoulder flexion projection?
 
@@ -94,9 +109,9 @@ The upper anchor uses the **head** (nose or mid-ear) instead of the shoulder cen
 
 Raw angles are noisy. Two-stage smoothing reduces jitter without adding significant latency:
 
-1. **Median filter** (window = 5 frames): Removes outlier spikes. Each angle maintains a circular buffer of the last 5 raw values; the median is used as the filtered value.
+1. **Median filter** (window = 4 frames): Removes outlier spikes. Each metric maintains a circular buffer of recent raw values; the median is used as the fast value for FSM transitions.
 
-2. **Exponential Moving Average** (alpha = 0.3): Smooths the median-filtered signal. `smoothed = 0.3 * median + 0.7 * previous`. Alpha of 0.3 provides responsive tracking (~3 frame effective lag) while eliminating most frame-to-frame noise.
+2. **Exponential Moving Average** (alpha = 0.4): Smooths the median-filtered signal for UI and form metric accumulation.
 
 If an angle becomes NaN (keypoint lost), the previous smoothed value is held rather than introducing a discontinuity.
 
@@ -116,22 +131,22 @@ REST ──→ UP ──→ TOP ──→ DOWN ──→ REST
 
 | From | To | Condition |
 |------|----|-----------|
-| REST | UP | Elbow angle < 145° (arm starting to bend) |
-| UP | TOP | Elbow angle < 70° (fully curled) |
-| TOP | DOWN | Elbow angle > 75° (starting to lower) |
-| DOWN | REST | Elbow angle > 150° AND elapsed > 0.45s since REST→UP |
+| REST | UP | reach ratio falls below `EXTENDED_EXIT` after a full extension has been seen |
+| UP | TOP | reach ratio falls below `FLEXED_ENTER` |
+| TOP | DOWN | reach ratio rises above `FLEXED_EXIT` or rebounds by `FLEXED_EXIT_DELTA` |
+| DOWN | REST | reach ratio rises above `EXTENDED_ENTER`, minimum rep time has elapsed, and the down guard has passed |
 
 ### Hysteresis
 
-Entry and exit thresholds differ slightly (e.g. FLEXED_ENTER=70°, FLEXED_EXIT=75°) to prevent oscillation at boundary angles.
+Entry and exit thresholds differ slightly to prevent oscillation at boundary ratios.
 
 ### Minimum rep time
 
-The DOWN→REST transition requires at least 0.45 seconds since the rep started (REST→UP). This prevents counting arm repositioning or partial movements as reps.
+The DOWN→REST transition requires a minimum rep time and a short DOWN-state guard. Timing uses native frame timestamps when available, falling back to JS time only if the native payload does not include `timestampMs`.
 
 ### Two-arm synchronization
 
-A rep is counted only when **both arms** reach REST within 0.35 seconds of each other. This ensures bilateral barbell curls are counted correctly — one arm finishing significantly before the other suggests an asymmetric movement (which still gets feedback but isn't double-counted).
+In confirmed front view, both arms must participate for the rep to count. Desynced but participating arms count once and receive asymmetry diagnostics. In side/oblique view, the selected visible primary arm drives counting.
 
 ---
 
@@ -139,9 +154,10 @@ A rep is counted only when **both arms** reach REST within 0.35 seconds of each 
 
 During a rep (either arm not in REST), a `RepWindow` accumulates:
 
-- **Min/max of all 8 angles** — used by form evaluation to determine range of motion, torso swing magnitude, shoulder movement, etc.
+- **Min/max reach ratios** - used for range of motion, flexion, and extension checks
+- **Min/max supporting angles** - used for torso swing, shoulder movement, and elbow flare
 - **Start/end timestamps** — for tempo calculation
-- **Wrist deviation frame count** — tracks how many frames the wrist was bent beyond threshold
+- **View and sample support** - used to mark reps scorable or unscorable
 
 The rep window is created when either arm leaves REST and destroyed when the rep completes or the arms desync.
 
@@ -155,25 +171,20 @@ When a rep completes, `evaluateForm()` analyzes the rep window and arm FSM data:
 
 | Check | Condition | Penalty | Feedback |
 |-------|-----------|---------|----------|
-| **Incomplete flexion** | Min elbow > 70° | -30 | "Flex more at the top of the curl." |
-| **Incomplete extension** | Max elbow < 150° | -30 | "Extend fully at the bottom." |
-| **Low ROM** | ROM < 80° (and no flex/extend issue) | -30 | "Incomplete rep — curl all the way up and fully extend." |
-| **Shoulder fail** | Shoulder delta > 65° | -25 | "Too much shoulder involvement — reduce the weight." |
-| **Shoulder warn** | Shoulder delta > 45° | -15 | "Upper arms moving — keep elbows pinned to your sides." |
-| **Torso fail** | Midline torso delta > 22° | -25 | "Excessive body swing — this is cheating the rep." |
-| **Torso warn** | Midline torso delta > 12° | -15 | "Don't swing your torso — stay upright and controlled." |
-| **Fast concentric** | Up phase < 0.05s | -10 | "Slow down — control the curl." |
-| **Fast eccentric** | Down phase < 0.20s | -10 | "Control the lowering — don't drop the weight." |
-| **Asymmetry** | Elbow min delta > 50° or ROM delta > 55° | -10 | "Arms are uneven — curl both sides together." |
+| **Incomplete flexion** | min reach ratio above `FLEX_RATIO_WARN` | continuous | "Flex more at the top of the curl." |
+| **Incomplete extension** | return max ratio below `EXTEND_RATIO_WARN` | continuous | "Extend fully at the bottom." |
+| **Low ROM** | ROM ratio below `ROM_MIN` and no clearer endpoint issue | continuous | "Incomplete rep — curl all the way up and fully extend." |
+| **Shoulder fail/warn** | shoulder delta above tuned thresholds | continuous | shoulder-involvement feedback |
+| **Torso fail/warn** | torso delta above tuned thresholds | continuous | torso-swing feedback |
+| **Elbow flare** | sustained frontal-plane upper-arm flare | continuous | elbow-flare feedback |
+| **Fast concentric/eccentric** | phase duration below tuned thresholds | continuous | tempo feedback |
+| **Asymmetry** | bilateral ratio/ROM/sync mismatch in confirmed front view | continuous | "Arms are uneven — curl both sides together." |
 
 Score is clamped to [0, 100]. If no issues are found, the feedback is "Great rep!".
 
 ### Why these thresholds?
 
-- **Torso 12°/22°**: A 12° forward lean is visible but minor — worth a heads-up. Beyond 22° the momentum is doing significant work. These were tuned from testing with intentional swing vs. strict form.
-- **Shoulder 45°/65°**: The sagittal projection isolates flexion, so >45° of shoulder movement genuinely means the upper arm is swinging forward (not just lateral positioning).
-- **ROM 80°**: A full barbell curl typically has 100-120° ROM. Below 80° suggests a half-rep.
-- **Tempo 0.05s/0.20s**: Near-zero up time means a ballistic swing. The eccentric threshold is higher because controlled lowering is important for muscle engagement.
+Thresholds live in `src/utils/exercises/definitions/tuned/barbellCurl.json` and can be updated by the dataset optimizer. The default implementation exposes FSM, feedback, and view-quality tunables, while score penalty curves remain guarded by config validation.
 
 ---
 

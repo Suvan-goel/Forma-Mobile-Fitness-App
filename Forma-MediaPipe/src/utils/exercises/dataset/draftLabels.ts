@@ -41,6 +41,60 @@ export function getAvailableIssues(definition: ExerciseDefinition): AvailableIss
   return availableIssues;
 }
 
+function getLabelingGuidance(definition: ExerciseDefinition): string[] | undefined {
+  if (definition.name === 'Push-Up') {
+    return [
+      'Standard side-view floor push-ups are the target scope for Push-Up labels.',
+      'Mark each rep view accurately; use scorable=false when the view, full body, or form-critical landmarks are not judgeable.',
+      'Count meaningful shallow or partial attempts as reps when there is clear descent and return.',
+      'Use push-up.depth_short or push-up.lockout_short for endpoint-specific range-of-motion failures.',
+      'Use push-up.incomplete_rom only as the fallback ROM issue when neither endpoint issue is the clearer label.',
+      'Label only visible faults; do not treat unobservable cues as clean negatives.',
+    ];
+  }
+
+  if (definition.name === 'Barbell Squat') {
+    return [
+      'Side-view Barbell Squat reps are the v1 full-form scoring target.',
+      'Front, oblique, or unknown-view reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.',
+      'Label depth, lockout, heel lift, torso lean, ROM, and tempo only when a clear side view supports the cue.',
+      'Use barbell-squat.incomplete_rom only as the fallback ROM issue when neither depth_short nor lockout_short is the clearer endpoint label.',
+      'Do not label knee valgus in v1; front-view knee tracking is deferred until a separate labelled scope exists.',
+    ];
+  }
+
+  if (definition.name === 'Standing Dumbbell Lateral Raises') {
+    return [
+      'Front-view Standing Dumbbell Lateral Raises are the v1 full-form scoring target.',
+      'Side, oblique, or unknown-view reps may still count movement, but mark them scorable=false and do not label clean negatives for front-view form cues.',
+      'Count meaningful partial raises as reps when there is a clear raise and return; do not count tiny pulses.',
+      'Label ROM height, over-raise, elbow bend, torso sway, asymmetry, wrong plane, tempo, and shoulder shrug only when the fault is visible.',
+      'Mark sustained poor wrist visibility as scorable=false unless the form issue is clearly visible.',
+      'For one-arm or highly asymmetric raises, label asymmetry; also label ROM height when the rep is effectively short as a bilateral lateral raise.',
+      'For torso sway labels, note the visible subcause when possible: lateral lean, forward/back rocking, or hip shift.',
+      'Reviewed scorable Standing Dumbbell Lateral Raises reps must use view=front; use scorable=false for side, oblique, or unknown views.',
+    ];
+  }
+
+  if (definition.name === 'Cable Row') {
+    return [
+      'Side-view Cable Row reps are the v1 full-form scoring target.',
+      'Front, oblique, or unknown-view Cable Row reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.',
+      'Label row depth, extension, shoulder retraction, torso lean, torso rocking, high row path, shoulder shrug, and tempo only when a clear side view supports the cue.',
+      'Do not label row-target height, hold, or velocity diagnostics as separate issues in v1.',
+    ];
+  }
+
+  if (definition.name !== 'Barbell Curl') return undefined;
+
+  return [
+    'Front-view Barbell Curl reps are full-form labels: review bilateral ROM, symmetry/sync, elbow flare, shoulder involvement, torso swing, and tempo.',
+    'Side/oblique Barbell Curl reps are limited-signal fallback labels: label only visible-arm ROM/flex/extend, shoulder involvement, torso swing, and tempo when observable.',
+    'For side/oblique reps, do not treat missing asymmetry or elbow-flare cues as clean negatives; leave those issues unlabelled.',
+    'Reviewed scorable Barbell Curl reps must be marked front, side, or oblique; use scorable=false when the view is unknown.',
+  ];
+}
+
 function createRepLabel(
   trace: ReplayResultVerbose['repTraces'][number],
   fallbackStartedAt: number | null,
@@ -69,6 +123,7 @@ function createRepLabel(
 
 export function createDraftLabelFromReplay(options: CreateDraftLabelOptions): ExerciseLabelFile {
   const fallbackStartedAt = options.recording.frames[0]?.timestamp ?? 0;
+  const labelingGuidance = getLabelingGuidance(options.definition);
   return {
     schemaVersion: 1,
     exerciseName: options.definition.name,
@@ -80,6 +135,7 @@ export function createDraftLabelFromReplay(options: CreateDraftLabelOptions): Ex
     reps: options.replay.repTraces.map((trace) => createRepLabel(trace, fallbackStartedAt)),
     notes:
       'Draft generated from heuristic replay. Review rep count/timing and move approved suggestions into issueIds before marking reviewed.',
+    ...(labelingGuidance ? { labelingGuidance } : {}),
     availableIssues: getAvailableIssues(options.definition),
     draftMetadata: {
       generatedAt: options.generatedAt ?? new Date().toISOString(),

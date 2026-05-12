@@ -69,6 +69,7 @@ type ConvertedLandmarks = {
   worldKeypoints?: Keypoint[];
   imageKeypoints?: Keypoint[];
   primarySource: ExerciseFrameContext['primarySource'];
+  timestampMs?: number;
 };
 
 type LandmarkRecordingFrame = {
@@ -272,6 +273,7 @@ export const CameraScreen: React.FC = () => {
   const isRecordingLandmarksRef = useRef(false);
   const landmarkBufferRef = useRef<LandmarkRecordingFrame[]>([]);
   const landmarkRecordingStartRef = useRef(0);
+  const nativeLandmarkRecordingStartRef = useRef<number | null>(null);
 
   const category = route.params?.category ?? 'Weightlifting';
   const exerciseNameFromRoute = route.params?.exerciseName;
@@ -431,6 +433,10 @@ export const CameraScreen: React.FC = () => {
 
       const worldLandmarksArray = parsedData?.worldLandmarks;
       const imageLandmarksArray = parsedData?.landmarks || parsedData;
+      const rawTimestampMs = parsedData?.timestampMs ?? parsedData?.additionalData?.timestampMs;
+      const timestampMs = typeof rawTimestampMs === 'number' && Number.isFinite(rawTimestampMs)
+        ? rawTimestampMs
+        : undefined;
 
       const hasWorld =
         Array.isArray(worldLandmarksArray) &&
@@ -462,6 +468,7 @@ export const CameraScreen: React.FC = () => {
         worldKeypoints: worldKeypoints ?? undefined,
         imageKeypoints: imageKeypoints ?? undefined,
         primarySource: worldKeypoints ? 'world' : 'image',
+        timestampMs,
       };
     } catch {
       return null;
@@ -568,12 +575,20 @@ export const CameraScreen: React.FC = () => {
       worldKeypoints,
       imageKeypoints,
       primarySource,
+      timestampMs: converted.timestampMs,
     };
 
     // __DEV__-only: buffer keypoints for landmark recording
     if (debugModeRef.current && isRecordingLandmarksRef.current) {
+      let frameTimestamp = Date.now() - landmarkRecordingStartRef.current;
+      if (converted.timestampMs !== undefined) {
+        if (nativeLandmarkRecordingStartRef.current === null) {
+          nativeLandmarkRecordingStartRef.current = converted.timestampMs;
+        }
+        frameTimestamp = converted.timestampMs - nativeLandmarkRecordingStartRef.current;
+      }
       const frame: LandmarkRecordingFrame = {
-        timestamp: Date.now() - landmarkRecordingStartRef.current,
+        timestamp: frameTimestamp,
         keypoints,
       };
       if (worldKeypoints) frame.worldKeypoints = worldKeypoints;
@@ -958,6 +973,7 @@ export const CameraScreen: React.FC = () => {
       // Start landmark recording when debug mode is on (works in Release builds too)
       if (debugModeRef.current) {
         landmarkRecordingStartRef.current = Date.now();
+        nativeLandmarkRecordingStartRef.current = null;
         landmarkBufferRef.current = [];
         isRecordingLandmarksRef.current = true;
       }
@@ -1443,19 +1459,23 @@ export const CameraScreen: React.FC = () => {
                 </Text>
                 <Text style={styles.torsoDebugText}>
                   Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
-                  {'  '}Body: {d.bodyAlignment != null ? d.bodyAlignment.toFixed(1) + '°' : '–'}
+                  {'  '}Ratio: {d.elbowRatio != null ? d.elbowRatio.toFixed(3) : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Body: {d.bodyAlignment != null ? d.bodyAlignment.toFixed(1) + '°' : '–'}
+                  {'  '}HipDev: {d.hipDev != null ? (d.hipDev * 100).toFixed(1) + '%' : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
                   Torso Incl: {d.torsoInclination != null ? d.torsoInclination.toFixed(1) + '°' : '–'}
-                  {'  '}HipDev: {d.hipDev != null ? (d.hipDev * 100).toFixed(1) + '%' : '–'}
+                  {'  '}Stack: {d.shoulderWristOffset != null ? (d.shoulderWristOffset * 100).toFixed(1) + '%' : '–'}
                 </Text>
-                {d.elbowMin != null && (
+                {d.elbowRatioMin != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Elbow: {d.elbowMin.toFixed(1)}°–{d.elbowMax != null ? d.elbowMax.toFixed(1) : '–'}°
+                    Rep Ratio: {d.elbowRatioMin.toFixed(3)}–{d.elbowRatioMax != null ? d.elbowRatioMax.toFixed(3) : '–'}
                     {'  '}HipDev: {d.hipDevMax != null ? (d.hipDevMax * 100).toFixed(1) : '–'}%
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Bottom &lt;105° | Lock &gt;155° | Body 155–195° | Incl 65–115°</Text>
+                <Text style={styles.torsoDebugHint}>Ratio: lower = deeper | Bottom &lt;0.73 | Lock &gt;0.93 | Incl 65–115°</Text>
               </View>
             </View>
             );
@@ -1471,22 +1491,31 @@ export const CameraScreen: React.FC = () => {
               <View style={styles.torsoDebugCard}>
                 <Text style={styles.torsoDebugTitle}>Barbell Squat{varianceStats ? <Text style={{ color: varianceStats.isStatic ? '#34E0A6' : '#FBBF24' }}> · {varianceStats.isStatic ? 'STATIC' : 'MOVING'}</Text> : null}</Text>
                 <Text style={styles.torsoDebugText}>
-                  {d.phase} | Side: {d.side}
+                  {d.phase} | Side: {d.side} | View: {d.viewClass ?? '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Knee: {d.knee != null ? d.knee.toFixed(1) + '°' : '–'}
+                  Ratio: {d.kneeRatio != null ? d.kneeRatio.toFixed(3) : '–'}
+                  {'  '}Fast: {d.fastKneeRatio != null ? d.fastKneeRatio.toFixed(3) : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Thigh: {d.thighDepthAngle != null ? d.thighDepthAngle.toFixed(1) + '°' : '–'}
                   {'  '}Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                  ROM: {d.romRatio != null ? d.romRatio.toFixed(3) : '–'}
+                  {'  '}Lock Δ: {d.lockoutDeltaRatio != null ? d.lockoutDeltaRatio.toFixed(3) : '–'}
                 </Text>
-                {d.kneeMin != null && (
+                <Text style={styles.torsoDebugText}>
+                  Source: {d.metricSource ?? '–'}
+                  {'  '}Heel: {d.heelLiftDeltaDeg != null ? d.heelLiftDeltaDeg.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.kneeRatioMin != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Knee: {d.kneeMin.toFixed(1)}°–{d.kneeMax != null ? d.kneeMax.toFixed(1) : '–'}°
+                    Rep Ratio: {d.kneeRatioMin.toFixed(3)}–{d.kneeRatioMax != null ? d.kneeRatioMax.toFixed(3) : '–'}
                     {'  '}Max Torso: {d.maxTorsoLean != null ? d.maxTorsoLean.toFixed(1) : '–'}°
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Bottom &lt;110° | Stand &gt;160° | Torso warn 50° fail 55°</Text>
+                <Text style={styles.torsoDebugHint}>Side view scores form | Bottom ratio &lt;0.76 | Stand &gt;0.93 | Depth thigh ≤12°</Text>
               </View>
             </View>
             );
@@ -1536,19 +1565,26 @@ export const CameraScreen: React.FC = () => {
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
-                  {'  '}Shoulder: {d.shoulderAngle != null ? d.shoulderAngle.toFixed(1) + '°' : '–'}
+                  Ratio: {d.ratio != null ? d.ratio.toFixed(3) : '–'}
+                  {'  '}Fast: {d.fastRatio != null ? d.fastRatio.toFixed(3) : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Torso dev: {d.torsoDev != null ? d.torsoDev.toFixed(1) + '°' : '–'}
+                  Shoulder Δ: {d.shoulderDelta != null ? d.shoulderDelta.toFixed(1) : '–'}°
+                  {'  '}Protract: {d.shoulderProtractionDelta != null ? d.shoulderProtractionDelta.toFixed(1) : '–'}°
                 </Text>
-                {d.elbowMin != null && (
+                <Text style={styles.torsoDebugText}>
+                  Torso back: {d.torsoLeanBackDelta != null ? d.torsoLeanBackDelta.toFixed(1) : '–'}°
+                  {'  '}Rock: {d.torsoRockDelta != null ? d.torsoRockDelta.toFixed(1) : '–'}°
+                </Text>
+                {d.ratioMin != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Elbow: {d.elbowMin.toFixed(1)}°–{d.elbowMax != null ? d.elbowMax.toFixed(1) : '–'}°
-                    {'  '}Shoulder Δ: {d.shoulderDelta != null ? d.shoulderDelta.toFixed(1) : '–'}°
+                    Rep Ratio: {d.ratioMin.toFixed(3)}–{d.ratioMax != null ? d.ratioMax.toFixed(3) : '–'}
+                    {'  '}High: {d.rowTargetHighRatio != null ? d.rowTargetHighRatio.toFixed(3) : '–'}
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Pull &lt;90° | Extend &gt;140° | Retract &gt;12° | Torso warn 15°</Text>
+                <Text style={styles.torsoDebugHint}>
+                  Side view {d.sideViewConfidence != null ? d.sideViewConfidence.toFixed(2) : '–'} | Pull &lt;0.90 | Contract &lt;0.60 | Extend &gt;0.90
+                </Text>
               </View>
             </View>
             );
@@ -1607,20 +1643,25 @@ export const CameraScreen: React.FC = () => {
                   {d.phase} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Abd L: {d.leftAbduction != null ? d.leftAbduction.toFixed(1) + '°' : '–'} | R: {d.rightAbduction != null ? d.rightAbduction.toFixed(1) + '°' : '–'}
+                  Height L/R: {d.leftHeightRatio != null ? d.leftHeightRatio.toFixed(3) : '–'} / {d.rightHeightRatio != null ? d.rightHeightRatio.toFixed(3) : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Avg: {d.avgAbduction != null ? d.avgAbduction.toFixed(1) + '°' : '–'}
-                  {'  '}Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
-                  {'  '}Shrug: {d.shrugPct != null ? (d.shrugPct * 100).toFixed(1) + '%' : '–'}
+                  Avg: {d.avgHeightRatio != null ? d.avgHeightRatio.toFixed(3) : '–'}
+                  {'  '}Reach: {d.lateralReachRatio != null ? d.lateralReachRatio.toFixed(3) : '–'}
                 </Text>
-                {d.maxAbduction != null && (
+                <Text style={styles.torsoDebugText}>
+                  Torso: {d.torsoLean != null ? d.torsoLean.toFixed(1) + '°' : '–'}
+                  {'  '}Shrug: {d.shrugPct != null ? d.shrugPct.toFixed(1) + '%' : '–'}
+                  {'  '}View: {d.viewAngleDeg != null ? d.viewAngleDeg.toFixed(1) + '°' : '–'}
+                </Text>
+                {d.maxHeightRatio != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Max Abd: {d.maxAbduction.toFixed(1)}°
-                    {'  '}Asym: {d.maxAbductionDiff != null ? d.maxAbductionDiff.toFixed(1) : '–'}°
+                    Max: {d.maxHeightRatio.toFixed(3)}
+                    {'  '}Top asym: {d.topHeightAsymmetry != null ? d.topHeightAsymmetry.toFixed(3) : '–'}
+                    {'  '}Peak reach: {d.maxLateralReachRatio != null ? d.maxLateralReachRatio.toFixed(3) : '–'}
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Top &gt;70° | Full ROM &gt;80° | Lean warn 8° | Shrug warn 6%</Text>
+                <Text style={styles.torsoDebugHint}>Height ratio: 1.0 shoulder level | Reach confirms lateral path | Front view scores form</Text>
               </View>
             </View>
             );

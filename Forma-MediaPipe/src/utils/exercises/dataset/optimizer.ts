@@ -62,7 +62,8 @@ export function validateTunableSpec(
     seenPaths.add(tunable.path);
 
     const baseValue = getConfigValue(baseConfig, tunable.path);
-    if (typeof baseValue !== 'number' || !Number.isFinite(baseValue)) {
+    const hasFiniteBaseValue = typeof baseValue === 'number' && Number.isFinite(baseValue);
+    if (!hasFiniteBaseValue) {
       issues.push(`Tunable path "${tunable.path}" must point to a finite numeric default config value.`);
     }
     if (!Number.isFinite(tunable.min) || !Number.isFinite(tunable.max)) {
@@ -76,6 +77,17 @@ export function validateTunableSpec(
     }
     if (!VALID_TUNABLE_KINDS.has(tunable.kind)) {
       issues.push(`Tunable "${tunable.path}" kind must be fsm, feedback, or scoring.`);
+    }
+    if (
+      hasFiniteBaseValue &&
+      Number.isFinite(tunable.min) &&
+      Number.isFinite(tunable.max) &&
+      tunable.max >= tunable.min &&
+      (baseValue < tunable.min || baseValue > tunable.max)
+    ) {
+      issues.push(
+        `Tunable path "${tunable.path}" default value (${baseValue}) must be within ${tunable.min}..${tunable.max}.`,
+      );
     }
   }
 
@@ -169,7 +181,9 @@ export function scoreEvaluation(evaluation: EvaluationScoringInput): number {
   return (
     evaluation.metrics.repCountAccuracy * 10000 +
     evaluation.metrics.issueF1 * 100 -
-    evaluation.metrics.cleanRepFalsePositiveRate
+    evaluation.metrics.cleanRepFalsePositiveRate +
+    evaluation.metrics.scorableAccuracy * 10 +
+    evaluation.metrics.viewAccuracy * 5
   );
 }
 
@@ -177,6 +191,8 @@ export function compareEvaluations(a: EvaluationScoringInput, b: EvaluationScori
   return (
     a.metrics.repCountAccuracy - b.metrics.repCountAccuracy ||
     a.metrics.issueF1 - b.metrics.issueF1 ||
+    a.metrics.scorableAccuracy - b.metrics.scorableAccuracy ||
+    a.metrics.viewAccuracy - b.metrics.viewAccuracy ||
     b.metrics.cleanRepFalsePositiveRate - a.metrics.cleanRepFalsePositiveRate
   );
 }
@@ -248,6 +264,26 @@ export function shouldApplyWinningConfig(args: {
       return {
         shouldApply: false,
         reason: `Rejected: test clean false-positive rate regressed by ${cleanRegression.toFixed(4)}.`,
+      };
+    }
+
+    const maxViewRegression = gates.maxTestViewAccuracyRegression ?? 0.05;
+    const viewRegression =
+      args.baselineTest.metrics.viewAccuracy - args.winnerTest.metrics.viewAccuracy;
+    if (viewRegression > maxViewRegression) {
+      return {
+        shouldApply: false,
+        reason: `Rejected: test view accuracy regressed by ${viewRegression.toFixed(4)}.`,
+      };
+    }
+
+    const maxScorableRegression = gates.maxTestScorableAccuracyRegression ?? 0.02;
+    const scorableRegression =
+      args.baselineTest.metrics.scorableAccuracy - args.winnerTest.metrics.scorableAccuracy;
+    if (scorableRegression > maxScorableRegression) {
+      return {
+        shouldApply: false,
+        reason: `Rejected: test scorable accuracy regressed by ${scorableRegression.toFixed(4)}.`,
       };
     }
   }

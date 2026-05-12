@@ -19,7 +19,8 @@
   },
   "labelingGuidance": [
     "Front/frontish captures may label bilateral issues such as asymmetry, elbow flare, and one-sided ROM failures.",
-    "Side/oblique captures should label the visible primary side for shoulder involvement, ROM, torso swing, wrist curl, and tempo; do not label asymmetry or elbow flare unless both arms are clearly visible.",
+    "Side/oblique captures should label the visible primary side for shoulder involvement, ROM, torso swing, and tempo; do not label asymmetry or elbow flare from these views.",
+    "Reviewed scorable reps must use view=front, side, or oblique. Use scorable=false when the view is unknown.",
     "Use scorable=false for poor view/tracking instead of labelling the rep clean."
   ],
   "expectedReps": 1,
@@ -82,10 +83,6 @@
     {
       "issueId": "barbell-curl.elbow_flare",
       "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
-    },
-    {
-      "issueId": "barbell-curl.wrist_curl",
-      "feedbackMessage": "Keep your wrists neutral — avoid curling them in."
     }
   ],
   "draftMetadata": {

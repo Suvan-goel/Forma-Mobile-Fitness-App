@@ -119,6 +119,10 @@ function makeSyntheticExercise(
 function makeDiagnosticSyntheticExercise(
   name: string,
   config: ExerciseHeuristicConfig,
+  options: {
+    cueMetricKeys?: string[];
+    cueThresholdPath?: string | string[];
+  } = {},
 ): ExerciseDefinition {
   const completeAt = Number(getConfigValue(config, 'thresholds.COMPLETE_AT'));
   const warnAt = Number(getConfigValue(config, 'formThresholds.WARN_AT'));
@@ -135,7 +139,7 @@ function makeDiagnosticSyntheticExercise(
     heuristicConfig: config,
     tunableSpec: { ...diagnosticSyntheticSpec, exerciseName: name },
     tunedConfigPath: `src/utils/exercises/definitions/tuned/${name}.json`,
-    createVariant: (variantConfig) => makeDiagnosticSyntheticExercise(name, variantConfig),
+    createVariant: (variantConfig) => makeDiagnosticSyntheticExercise(name, variantConfig, options),
     createState: (): ExerciseState => ({
       repCount: 0,
       lastRepResult: null,
@@ -168,11 +172,11 @@ function makeDiagnosticSyntheticExercise(
         cues: {
           [diagnosticSyntheticIssueId]: {
             issueId: diagnosticSyntheticIssueId,
-            metricKeys: ['peakX'],
+            metricKeys: options.cueMetricKeys ?? ['peakX'],
             triggered,
             eligible: true,
             direction: 'above',
-            thresholdPath: 'formThresholds.WARN_AT',
+            thresholdPath: options.cueThresholdPath ?? 'formThresholds.WARN_AT',
             thresholdValue: warnAt,
             margin: x - warnAt,
             support: 1,
@@ -397,6 +401,52 @@ describe('dataset optimiser scaling helpers', () => {
     expect(result.candidates[0].source).toBe('diagnostic');
     expect(getConfigValue(result.candidates[0].config, 'formThresholds.WARN_AT')).toBeLessThan(0.9);
     expect(result.candidates[0].evaluation.metrics.issueF1).toBe(1);
+  });
+
+  it('ignores diagnostic candidates when the active cue metric or threshold does not match the tuning entry', () => {
+    const metricMismatchDefinition = makeDiagnosticSyntheticExercise(
+      'Diagnostic Synthetic Metric Mismatch',
+      {
+        thresholds: { COMPLETE_AT: 0.5 },
+        formThresholds: { WARN_AT: 0.9 },
+      },
+      { cueMetricKeys: ['otherMetric'] },
+    );
+    const metricMismatchResult = searchExercise(
+      metricMismatchDefinition,
+      [
+        diagnosticSyntheticCase(metricMismatchDefinition.name, 0.8, [diagnosticSyntheticIssueId]),
+        diagnosticSyntheticCase(metricMismatchDefinition.name, 0.55, []),
+      ],
+      { randomCandidates: 0, refinementRounds: 0, survivorCount: 4, seed: 1 },
+      'diagnostic',
+    );
+
+    expect(metricMismatchResult.candidates).toHaveLength(0);
+    expect(metricMismatchResult.sourceBreakdown.diagnostic).toBe(0);
+    expect(metricMismatchResult.diagnosticFallbackReason).toContain('insufficient eligible diagnostic support');
+
+    const thresholdMismatchDefinition = makeDiagnosticSyntheticExercise(
+      'Diagnostic Synthetic Threshold Mismatch',
+      {
+        thresholds: { COMPLETE_AT: 0.5 },
+        formThresholds: { WARN_AT: 0.9 },
+      },
+      { cueThresholdPath: ['formThresholds.OTHER_WARN_AT'] },
+    );
+    const thresholdMismatchResult = searchExercise(
+      thresholdMismatchDefinition,
+      [
+        diagnosticSyntheticCase(thresholdMismatchDefinition.name, 0.8, [diagnosticSyntheticIssueId]),
+        diagnosticSyntheticCase(thresholdMismatchDefinition.name, 0.55, []),
+      ],
+      { randomCandidates: 0, refinementRounds: 0, survivorCount: 4, seed: 1 },
+      'diagnostic',
+    );
+
+    expect(thresholdMismatchResult.candidates).toHaveLength(0);
+    expect(thresholdMismatchResult.sourceBreakdown.diagnostic).toBe(0);
+    expect(thresholdMismatchResult.diagnosticFallbackReason).toContain('insufficient eligible diagnostic support');
   });
 
   it('reports diagnostic fallback reasons when an exercise has no diagnostic metadata', () => {

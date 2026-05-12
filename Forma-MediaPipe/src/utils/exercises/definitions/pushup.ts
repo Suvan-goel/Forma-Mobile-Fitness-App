@@ -23,7 +23,7 @@ import type {
   ExerciseState,
   RepResult as FrameworkRepResult,
 } from '../types';
-import { createDefaultTunableSpec, mergeHeuristicConfig, runWithConfigBindings } from '../heuristicConfig';
+import { createDefaultTunableSpec, getConfigValue, mergeHeuristicConfig, runWithConfigBindings } from '../heuristicConfig';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   buildRepDiagnostics,
@@ -46,18 +46,18 @@ import tunedConfig from './tuned/pushup.json';
  */
 const THRESHOLDS = {
   /** Reach ratio below which we transition PLANK -> DESCENDING */
-  DESCENDING_ENTER: 0.985,
+  DESCENDING_ENTER: 0.9,
   /** Reach ratio above which we transition ASCENDING -> PLANK */
-  PLANK_REENTER: 0.92,
+  PLANK_REENTER: 0.93,
   /** Reach ratio below which we reach BOTTOM.
    *  Camera-invariant — no foreshortening compensation needed. */
-  BOTTOM_ENTER: 0.73,
+  BOTTOM_ENTER: 0.75,
   /** Reach ratio above which we leave BOTTOM (hysteresis) */
-  BOTTOM_EXIT: 0.77,
+  BOTTOM_EXIT: 0.79,
   /** Minimum time (seconds) for a rep to count */
   MIN_REP_TIME: 0.4,
   /** Partial rep: ratio above which we reset from DESCENDING without hitting BOTTOM */
-  PARTIAL_REP_RESET: 0.93,
+  PARTIAL_REP_RESET: 0.94,
   /** Minimum time (seconds) in DESCENDING before a partial-rep reset can trigger */
   MIN_DESCENDING_TIME: 0.25,
   /** Minimum body alignment angle for plank detection in IDLE gate (degrees — pose metric) */
@@ -84,20 +84,15 @@ const THRESHOLDS = {
   SIDE_VIEW_MAX_WIDTH_RATIO: 0.2,
 } as const;
 
-/** Form heuristic thresholds — ratio-based for elbow, angle-based for hip/body */
+/** Form heuristic thresholds — ratio-based for elbow and signed image-space body-line deviations. */
 const FORM_THRESHOLDS = {
   // Depth: min ratio above this = insufficient depth
   DEPTH_FAIL: 0.73,
   // Lockout: max ratio below this = incomplete lockout
-  LOCKOUT_FAIL: 0.93,
+  LOCKOUT_FAIL: 0.95,
   // ROM: minimum ratio change during rep
   ROM_MIN: 0.22,
-  // Hip alignment (shoulder-hip-ankle angle — already camera-invariant as a body pose metric)
-  HIP_SAG_FAIL: 155,
-  HIP_SAG_WARN: 165,
-  HIP_PIKE_FAIL: 195,
-  HIP_PIKE_WARN: 185,
-  // Hip deviation (as fraction of shoulder-ankle distance — already ratio-based)
+  // Hip deviation as a fraction of shoulder-ankle distance. Positive = sag, negative = pike.
   HIP_DEV_SAG_FAIL: 0.1,
   HIP_DEV_SAG_WARN: 0.05,
   HIP_DEV_PIKE_FAIL: 0.1,
@@ -110,9 +105,6 @@ const FORM_THRESHOLDS = {
   TEMPO_ECCENTRIC_MIN: 0.2,
   // Setup/form sanity
   SHOULDER_WRIST_WARN: 0.12,
-  // Secondary depth proxy: only used when elbow ratio is borderline.
-  DEPTH_BORDERLINE: 0.68,
-  SHOULDER_DROP_MIN: -0.42,
 } as const;
 
 /**
@@ -122,7 +114,8 @@ const FORM_THRESHOLDS = {
  * |-------------------|-----|--------------|-------|-------------------------------|
  * | Depth shortfall   | 30  | 0.62 (ratio) | 300   | min ratio - no penalty below  |
  * | Lockout shortfall | 25  | 0.97 (ideal) | 300   | ideal - max ratio             |
- * | Hip alignment     | 35  | +/-8 from 180| 0.04  | worst body-angle deviation    |
+ * | Hip alignment     | 35  | +/-8 from 180| 0.04  | body-line bend + signed hip deviation |
+ * | Shoulder stack    | 8   | form threshold| 4000 | shoulder/wrist offset         |
  * | Tempo             | 20  | up: 0.3s     | 60/40 | concentric / eccentric time   |
  */
 const SCORE_CURVES = {
@@ -131,6 +124,7 @@ const SCORE_CURVES = {
   HIP: { deadzone: 8, scale: 0.04, cap: 35, neutral: 180 },
   HIP_DEV: { deadzone: 0.04, scale: 1200, cap: 35 },
   HEAD: { min: 165, scale: 0.04, cap: 10 },
+  SHOULDER_STACK: { scale: 4000, cap: 8 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 10 },
   TEMPO_ECCENTRIC: { deadzone: 0.4, scale: 40, cap: 10 },
 } as const;
@@ -189,9 +183,17 @@ type PushupSetupWarning =
   | 'camera_too_close'
   | 'shoulder_wrist_misaligned';
 
+const BLOCKING_SETUP_WARNINGS: PushupSetupWarning[] = [
+  'not_side_view',
+  'body_not_horizontal',
+  'full_body_not_visible',
+  'arm_chain_hidden',
+  'lower_body_hidden',
+  'camera_too_close',
+];
+
 interface PushupSetupQuality {
   acceptable: boolean;
-  confidence: number;
   warnings: PushupSetupWarning[];
 }
 
@@ -222,12 +224,11 @@ interface PushupRepWindow {
   maxHeadSpine: number;
   /** Shoulder/wrist stack offset: larger = less stacked */
   maxShoulderWristOffset: number;
-  /** Max shoulder drop toward hand line; larger/less negative = lower/deeper */
-  maxShoulderDropRatio: number;
   /** Visibility/scorability counters for active-rep form landmarks */
   bodyJudgeableFrames: number;
   headJudgeableFrames: number;
   setupWarningFrames: number;
+  setupWarningCounts: Partial<Record<PushupSetupWarning, number>>;
   /** Timestamps */
   tStart: number;
   tBottom: number | null;
@@ -243,7 +244,6 @@ interface PushupAngles {
   hipDeviation: number; // normalized: positive = sag, negative = pike
   headSpine: number;
   shoulderWristOffset: number;
-  shoulderDropRatio: number;
 }
 
 interface PushupFrameSignals extends PushupAngles {
@@ -270,6 +270,7 @@ interface RepResult {
   score: number;
   messages: string[];
   scorable: boolean;
+  qualityWarnings?: FrameworkRepResult['qualityWarnings'];
   diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
@@ -307,7 +308,6 @@ interface PushupDebugInfo {
   headSpine: number | null;
   torsoInclination: number | null;
   shoulderWristOffset: number | null;
-  shoulderDropRatio: number | null;
   setupWarnings: PushupSetupWarning[];
   setupAcceptable: boolean | null;
   elbowRatioMin: number | null;
@@ -360,14 +360,25 @@ function initRepWindow(tStart: number): PushupRepWindow {
     minHeadSpine: Infinity,
     maxHeadSpine: -Infinity,
     maxShoulderWristOffset: -Infinity,
-    maxShoulderDropRatio: -Infinity,
     bodyJudgeableFrames: 0,
     headJudgeableFrames: 0,
     setupWarningFrames: 0,
+    setupWarningCounts: {},
     tStart,
     tBottom: null,
     tEnd: tStart,
     frameCount: 0,
+  };
+}
+
+function emptyAngleHistory(): PushupState['angleHistory'] {
+  return {
+    elbow: [],
+    elbowRatio: [],
+    bodyAlignment: [],
+    hipDeviation: [],
+    headSpine: [],
+    shoulderWristOffset: [],
   };
 }
 
@@ -377,15 +388,7 @@ function initializePushupState(): PushupState {
     repCount: 0,
     repWindow: null,
     lastRepResult: null,
-    angleHistory: {
-      elbow: [],
-      elbowRatio: [],
-      bodyAlignment: [],
-      hipDeviation: [],
-      headSpine: [],
-      shoulderWristOffset: [],
-      shoulderDropRatio: [],
-    },
+    angleHistory: emptyAngleHistory(),
     smoothed: null,
     fast: null,
     displayAngles: null,
@@ -601,12 +604,17 @@ function addSideViewWarnings(warnings: Set<PushupSetupWarning>, keypoints: Keypo
   const selectedScore = sideChainScore(keypoints, side);
   const oppositeScore = sideChainScore(keypoints, opposite);
 
-  const selectedShoulder = getPoint(getKeypoint(keypoints, `${side}_shoulder`));
-  const selectedAnkle = getPoint(getKeypoint(keypoints, `${side}_ankle`));
-  const leftShoulder = getPoint(getKeypoint(keypoints, 'left_shoulder'));
-  const rightShoulder = getPoint(getKeypoint(keypoints, 'right_shoulder'));
-  const leftHip = getPoint(getKeypoint(keypoints, 'left_hip'));
-  const rightHip = getPoint(getKeypoint(keypoints, 'right_hip'));
+  const visiblePoint = (name: string): Point3D | null => {
+    const keypoint = getKeypoint(keypoints, name);
+    return isVisible(keypoint, VISIBILITY_THRESHOLD) ? getPoint(keypoint) : null;
+  };
+
+  const selectedShoulder = visiblePoint(`${side}_shoulder`);
+  const selectedAnkle = visiblePoint(`${side}_ankle`);
+  const leftShoulder = visiblePoint('left_shoulder');
+  const rightShoulder = visiblePoint('right_shoulder');
+  const leftHip = visiblePoint('left_hip');
+  const rightHip = visiblePoint('right_hip');
 
   if (!selectedShoulder || !selectedAnkle) return;
   const bodyLen = dist2D(selectedShoulder, selectedAnkle);
@@ -630,23 +638,24 @@ function addSideViewWarnings(warnings: Set<PushupSetupWarning>, keypoints: Keypo
 }
 
 function calculateShoulderWristOffset(imageKeypoints: Keypoint[], side: 'left' | 'right'): number {
-  const shoulder = getPoint(getKeypoint(imageKeypoints, `${side}_shoulder`));
-  const wrist = getPoint(getKeypoint(imageKeypoints, `${side}_wrist`));
-  const ankle = getPoint(getKeypoint(imageKeypoints, `${side}_ankle`));
+  const shoulderKeypoint = getKeypoint(imageKeypoints, `${side}_shoulder`);
+  const wristKeypoint = getKeypoint(imageKeypoints, `${side}_wrist`);
+  const ankleKeypoint = getKeypoint(imageKeypoints, `${side}_ankle`);
+  if (
+    !isVisible(shoulderKeypoint, VISIBILITY_THRESHOLD) ||
+    !isVisible(wristKeypoint, VISIBILITY_THRESHOLD) ||
+    !isVisible(ankleKeypoint, VISIBILITY_THRESHOLD)
+  ) {
+    return NaN;
+  }
+
+  const shoulder = getPoint(shoulderKeypoint);
+  const wrist = getPoint(wristKeypoint);
+  const ankle = getPoint(ankleKeypoint);
   if (!shoulder || !wrist || !ankle) return NaN;
   const bodyLen = dist2D(shoulder, ankle);
   if (bodyLen < 1e-6) return NaN;
   return Math.abs(shoulder.x - wrist.x) / bodyLen;
-}
-
-function calculateShoulderDropRatio(imageKeypoints: Keypoint[], side: 'left' | 'right'): number {
-  const shoulder = getPoint(getKeypoint(imageKeypoints, `${side}_shoulder`));
-  const wrist = getPoint(getKeypoint(imageKeypoints, `${side}_wrist`));
-  const ankle = getPoint(getKeypoint(imageKeypoints, `${side}_ankle`));
-  if (!shoulder || !wrist || !ankle) return NaN;
-  const bodyLen = dist2D(shoulder, ankle);
-  if (bodyLen < 1e-6) return NaN;
-  return (shoulder.y - wrist.y) / bodyLen;
 }
 
 function evaluateSetupQuality(
@@ -687,21 +696,11 @@ function evaluateSetupQuality(
     Number.isFinite(bodyAlignment) &&
     bodyAlignment >= THRESHOLDS.PLANK_BODY_MIN &&
     bodyAlignment <= THRESHOLDS.PLANK_BODY_MAX;
-  const blockingWarnings: PushupSetupWarning[] = [
-    'not_side_view',
-    'body_not_horizontal',
-    'full_body_not_visible',
-    'arm_chain_hidden',
-    'lower_body_hidden',
-    'camera_too_close',
-  ];
-  const hasBlockingWarning = blockingWarnings.some((warning) => warnings.has(warning));
+  const hasBlockingWarning = BLOCKING_SETUP_WARNINGS.some((warning) => warnings.has(warning));
   const acceptable = armsExtended && bodyAligned && !hasBlockingWarning && !shoulderStackExtreme;
-  const confidence = Math.max(0, Math.min(1, 1 - warnings.size * 0.16));
 
   return {
     acceptable,
-    confidence,
     warnings: Array.from(warnings),
   };
 }
@@ -776,7 +775,6 @@ function calculatePushupFrameSignals(
 
   const torsoInclination = calculateTorsoInclination(imageKeypoints, side);
   const shoulderWristOffset = calculateShoulderWristOffset(imageKeypoints, side);
-  const shoulderDropRatio = calculateShoulderDropRatio(imageKeypoints, side);
   const bodyConf = minKeypointConfidence(metricKeypoints, [`${side}_shoulder`, `${side}_hip`, `${side}_ankle`]);
   const headConf = minKeypointConfidence(imageKeypoints, [`${side}_hip`, `${side}_shoulder`, 'nose']);
   const setupQuality = evaluateSetupQuality(
@@ -796,7 +794,6 @@ function calculatePushupFrameSignals(
     hipDeviation,
     headSpine: headSpineAngle,
     shoulderWristOffset,
-    shoulderDropRatio,
     torsoInclinationImage: torsoInclination,
     setupQuality,
     bodyJudgeable:
@@ -827,7 +824,6 @@ function applySmoothing(
     'hipDeviation',
     'headSpine',
     'shoulderWristOffset',
-    'shoulderDropRatio',
   ];
   const smoothedResult: Partial<SmoothedPushupAngles> = {};
   const fastResult: Partial<SmoothedPushupAngles> = {};
@@ -969,6 +965,57 @@ function updateFSM(
   return { fsm, repCompleted, partialRep };
 }
 
+function recordBlockingSetupWarnings(window: PushupRepWindow, setupQuality: PushupSetupQuality): void {
+  let hasBlocking = false;
+  for (const warning of setupQuality.warnings) {
+    if (!BLOCKING_SETUP_WARNINGS.includes(warning)) continue;
+    hasBlocking = true;
+    window.setupWarningCounts[warning] = (window.setupWarningCounts[warning] ?? 0) + 1;
+  }
+  if (hasBlocking) {
+    window.setupWarningFrames++;
+  }
+}
+
+function dominantSetupWarning(repWindow: PushupRepWindow): PushupSetupWarning | null {
+  let selected: PushupSetupWarning | null = null;
+  let selectedCount = 0;
+  for (const [warning, count] of Object.entries(repWindow.setupWarningCounts) as Array<[PushupSetupWarning, number]>) {
+    if (count > selectedCount) {
+      selected = warning;
+      selectedCount = count;
+    }
+  }
+  return selected;
+}
+
+function setupWarningRate(repWindow: PushupRepWindow): number {
+  return repWindow.frameCount === 0 ? 1 : repWindow.setupWarningFrames / repWindow.frameCount;
+}
+
+function pushupQualityWarnings(repWindow: PushupRepWindow): FrameworkRepResult['qualityWarnings'] {
+  if (setupWarningRate(repWindow) <= 0.4) return [];
+  switch (dominantSetupWarning(repWindow)) {
+    case 'not_side_view':
+    case 'body_not_horizontal':
+      return ['side_view_uncertain'];
+    case 'full_body_not_visible':
+      return ['keep_full_body_in_frame'];
+    case 'camera_too_close':
+      return ['move_camera_back'];
+    case 'arm_chain_hidden':
+      return ['arms_hidden'];
+    case 'lower_body_hidden':
+      return ['feet_hidden'];
+    default:
+      return ['missing_required_joints'];
+  }
+}
+
+function pushupDiagnosticView(repWindow: PushupRepWindow): NonNullable<FrameworkRepResult['diagnostics']>['view'] {
+  return setupWarningRate(repWindow) > 0.4 ? 'unknown' : 'side';
+}
+
 // ============================================================================
 // FORM EVALUATION
 // ============================================================================
@@ -992,22 +1039,17 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
   const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxElbowRatio);
   penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
 
-  // 3. Hip alignment -- body should be ~180 (straight line)
-  //    Deadzone: +/-8 from 180 (172-188 is fine)
-  //    Sag (minBodyAngle < 172) and pike (maxBodyAngle > 188) measured independently;
-  //    worst direction drives the penalty.
+  // 3. Hip alignment -- body should be ~180 (straight line). Body angle
+  //    penalizes any bend; signed hip deviation preserves sag/pike direction
+  //    for feedback and adds a camera-normalized scoring check.
   const hasBodyAngles = Number.isFinite(repWindow.minBodyAngle) && Number.isFinite(repWindow.maxBodyAngle);
   const hasHipDeviation = Number.isFinite(repWindow.minHipDev) && Number.isFinite(repWindow.maxHipDev);
-  const sagDev = hasBodyAngles
+  const bodyLineDev = hasBodyAngles
     ? Math.max(0, SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone - repWindow.minBodyAngle)
     : 0;
-  const pikeDev = hasBodyAngles
-    ? Math.max(0, repWindow.maxBodyAngle - (SCORE_CURVES.HIP.neutral + SCORE_CURVES.HIP.deadzone))
-    : 0;
-  const worstHipAngleDev = Math.max(sagDev, pikeDev);
   const signedHipDev = hasHipDeviation ? Math.max(Math.abs(repWindow.minHipDev), Math.abs(repWindow.maxHipDev)) : 0;
   const hipDevExcess = Math.max(0, signedHipDev - SCORE_CURVES.HIP_DEV.deadzone);
-  const hipAnglePenalty = SCORE_CURVES.HIP.scale * worstHipAngleDev * worstHipAngleDev;
+  const hipAnglePenalty = SCORE_CURVES.HIP.scale * bodyLineDev * bodyLineDev;
   const hipDevPenalty = SCORE_CURVES.HIP_DEV.scale * hipDevExcess * hipDevExcess;
   penalty += Math.min(SCORE_CURVES.HIP.cap, Math.max(hipAnglePenalty, hipDevPenalty));
 
@@ -1017,7 +1059,16 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
     : 0;
   penalty += Math.min(SCORE_CURVES.HEAD.cap, SCORE_CURVES.HEAD.scale * headShortfall * headShortfall);
 
-  // 5. Tempo -- too fast in either direction
+  // 5. Shoulder/wrist stack -- small, capped setup/form penalty aligned with the low-priority cue.
+  const shoulderStackExcess = Number.isFinite(repWindow.maxShoulderWristOffset)
+    ? Math.max(0, repWindow.maxShoulderWristOffset - FORM_THRESHOLDS.SHOULDER_WRIST_WARN)
+    : 0;
+  penalty += Math.min(
+    SCORE_CURVES.SHOULDER_STACK.cap,
+    SCORE_CURVES.SHOULDER_STACK.scale * shoulderStackExcess * shoulderStackExcess,
+  );
+
+  // 6. Tempo -- too fast in either direction
   if (repWindow.tBottom !== null) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
@@ -1048,13 +1099,7 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
   const messages: string[] = [];
 
   // 1. Depth (ratio-based)
-  const shoulderDropInsufficient =
-    Number.isFinite(repWindow.maxShoulderDropRatio) &&
-    repWindow.maxShoulderDropRatio < FORM_THRESHOLDS.SHOULDER_DROP_MIN;
-  if (
-    repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL ||
-    (repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_BORDERLINE && shoulderDropInsufficient)
-  ) {
+  if (repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL) {
     messages.push('Go deeper \u2014 aim for elbows at 90 degrees.');
   }
 
@@ -1069,34 +1114,21 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
     messages.push('Incomplete rep \u2014 full range of motion from lockout to 90 degrees.');
   }
 
-  // 4. Hip alignment -- dual metric cross-check
-  const minBody = repWindow.minBodyAngle;
-  const maxBody = repWindow.maxBodyAngle;
+  // 4. Hip alignment -- signed image-space deviation gives sag/pike direction.
   const minDev = repWindow.minHipDev;
   const maxDev = repWindow.maxHipDev;
 
-  const hasBodyAngles = Number.isFinite(minBody) && Number.isFinite(maxBody);
   const hasHipDeviation = Number.isFinite(minDev) && Number.isFinite(maxDev);
 
   if (hasHipDeviation && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
     messages.push('Hips are sagging \u2014 engage your core to maintain a straight line.');
-  } else if (
-    hasBodyAngles &&
-    hasHipDeviation &&
-    minBody < FORM_THRESHOLDS.HIP_SAG_WARN &&
-    maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN
-  ) {
+  } else if (hasHipDeviation && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN) {
     messages.push('Keep your hips up \u2014 your body line is dropping.');
   }
 
   if (hasHipDeviation && minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL) {
     messages.push('Hips are piking up \u2014 lower them to maintain a straight plank.');
-  } else if (
-    hasBodyAngles &&
-    hasHipDeviation &&
-    maxBody > FORM_THRESHOLDS.HIP_PIKE_WARN &&
-    minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_WARN
-  ) {
+  } else if (hasHipDeviation && -minDev > FORM_THRESHOLDS.HIP_DEV_PIKE_WARN) {
     messages.push('Hips are riding high \u2014 aim for a straight body line.');
   }
 
@@ -1138,14 +1170,16 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
  * - `messages`: discrete threshold-based feedback (actionable coaching cues)
  * The two systems are independent per CLAUDE.md section 13.
  */
-function evaluateForm(repWindow: PushupRepWindow): { score: number; messages: string[]; scorable: boolean } {
+function evaluateForm(
+  repWindow: PushupRepWindow,
+): { score: number; messages: string[]; scorable: boolean; qualityWarnings: FrameworkRepResult['qualityWarnings'] } {
   const score = computePushupRepScore(repWindow);
   const messages = generateFormMessages(repWindow);
   const bodyCoverage = repWindow.frameCount === 0 ? 0 : repWindow.bodyJudgeableFrames / repWindow.frameCount;
-  const headCoverage = repWindow.frameCount === 0 ? 0 : repWindow.headJudgeableFrames / repWindow.frameCount;
-  const setupWarningRate = repWindow.frameCount === 0 ? 1 : repWindow.setupWarningFrames / repWindow.frameCount;
-  const scorable = bodyCoverage >= 0.6 && headCoverage >= 0.6 && setupWarningRate <= 0.4;
-  return { score, messages, scorable };
+  // Head tracking gates only the optional head-position cue. A rep with clear
+  // arms/body/setup remains scorable even when the nose landmark is unreliable.
+  const scorable = bodyCoverage >= 0.6 && setupWarningRate(repWindow) <= 0.4;
+  return { score, messages, scorable, qualityWarnings: pushupQualityWarnings(repWindow) };
 }
 
 function buildPushupDiagnostics(
@@ -1162,17 +1196,20 @@ function buildPushupDiagnostics(
   const hasHipDeviation = Number.isFinite(repWindow.minHipDev) && Number.isFinite(repWindow.maxHipDev);
   const hasHead = Number.isFinite(repWindow.minHeadSpine);
   const hasShoulderStack = Number.isFinite(repWindow.maxShoulderWristOffset);
-  const shoulderDropInsufficient =
-    Number.isFinite(repWindow.maxShoulderDropRatio) &&
-    repWindow.maxShoulderDropRatio < FORM_THRESHOLDS.SHOULDER_DROP_MIN;
-  const setupWarningRate = repWindow.frameCount === 0 ? 1 : repWindow.setupWarningFrames / repWindow.frameCount;
+  const warningRate = setupWarningRate(repWindow);
+  const bodyJudgeableRate = repWindow.frameCount === 0 ? 0 : repWindow.bodyJudgeableFrames / repWindow.frameCount;
+  const headJudgeableRate = repWindow.frameCount === 0 ? 0 : repWindow.headJudgeableFrames / repWindow.frameCount;
   const hipSagDeviation = hasHipDeviation ? repWindow.maxHipDev : null;
   const hipPikeDeviation = hasHipDeviation ? -repWindow.minHipDev : null;
+  const depthTriggered = repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL;
+  const lockoutTriggered = repWindow.maxElbowRatio < FORM_THRESHOLDS.LOCKOUT_FAIL;
+  const incompleteRomTriggered =
+    romRatio < FORM_THRESHOLDS.ROM_MIN && !depthTriggered && !lockoutTriggered;
 
   return buildRepDiagnostics({
     exerciseName: 'Push-Up',
     repIndex,
-    view: 'side',
+    view: pushupDiagnosticView(repWindow),
     selectedSide: visibleSide,
     scorable,
     metrics: [
@@ -1185,7 +1222,10 @@ function buildPushupDiagnostics(
       diagnosticMetric('hipPikeDeviation', hipPikeDeviation, { unit: 'ratio', eligible: hasHipDeviation, skippedReason: 'hip_chain_unavailable' }),
       diagnosticMetric('headSpineAngle', repWindow.minHeadSpine, { unit: 'degrees', eligible: hasHead, skippedReason: 'head_chain_unavailable' }),
       diagnosticMetric('shoulderWristOffset', repWindow.maxShoulderWristOffset, { unit: 'ratio', eligible: hasShoulderStack, skippedReason: 'shoulder_stack_unavailable' }),
-      diagnosticMetric('setupWarningRate', setupWarningRate, { unit: 'ratio', sampleCount: repWindow.frameCount }),
+      diagnosticMetric('frameCount', repWindow.frameCount, { unit: 'count', sampleCount: repWindow.frameCount }),
+      diagnosticMetric('bodyJudgeableRate', bodyJudgeableRate, { unit: 'ratio', sampleCount: repWindow.frameCount }),
+      diagnosticMetric('headJudgeableRate', headJudgeableRate, { unit: 'ratio', sampleCount: repWindow.frameCount }),
+      diagnosticMetric('setupWarningRate', warningRate, { unit: 'ratio', sampleCount: repWindow.frameCount }),
       diagnosticMetric('tDown', tDown, { unit: 'seconds', eligible: hasTempo, skippedReason: 'bottom_not_detected' }),
       diagnosticMetric('tUp', tUp, { unit: 'seconds', eligible: hasTempo, skippedReason: 'bottom_not_detected' }),
     ],
@@ -1197,9 +1237,7 @@ function buildPushupDiagnostics(
         value: repWindow.minElbowRatio,
         thresholdPath: 'formThresholds.DEPTH_FAIL',
         thresholdValue: FORM_THRESHOLDS.DEPTH_FAIL,
-        triggered:
-          repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL ||
-          (repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_BORDERLINE && shoulderDropInsufficient),
+        triggered: depthTriggered,
       }),
       diagnosticCue({
         issueId: 'push-up.lockout_short',
@@ -1208,7 +1246,7 @@ function buildPushupDiagnostics(
         value: repWindow.maxElbowRatio,
         thresholdPath: 'formThresholds.LOCKOUT_FAIL',
         thresholdValue: FORM_THRESHOLDS.LOCKOUT_FAIL,
-        triggered: repWindow.maxElbowRatio < FORM_THRESHOLDS.LOCKOUT_FAIL,
+        triggered: lockoutTriggered,
       }),
       diagnosticCue({
         issueId: 'push-up.incomplete_rom',
@@ -1217,38 +1255,28 @@ function buildPushupDiagnostics(
         value: romRatio,
         thresholdPath: 'formThresholds.ROM_MIN',
         thresholdValue: FORM_THRESHOLDS.ROM_MIN,
-        triggered: romRatio < FORM_THRESHOLDS.ROM_MIN,
+        triggered: incompleteRomTriggered,
       }),
       diagnosticCue({
         issueId: 'push-up.hip_sag',
-        metricKeys: ['hipSagDeviation', 'bodyMinAngle'],
+        metricKeys: ['hipSagDeviation'],
         direction: 'above',
         value: hipSagDeviation,
         thresholdPath: 'formThresholds.HIP_DEV_SAG_WARN',
         thresholdValue: FORM_THRESHOLDS.HIP_DEV_SAG_WARN,
         eligible: hasHipDeviation,
-        triggered:
-          hasHipDeviation &&
-          (repWindow.maxHipDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL ||
-            (hasBodyAngles &&
-              repWindow.minBodyAngle < FORM_THRESHOLDS.HIP_SAG_WARN &&
-              repWindow.maxHipDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN)),
+        triggered: hasHipDeviation && repWindow.maxHipDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN,
         skippedReason: 'hip_chain_unavailable',
       }),
       diagnosticCue({
         issueId: 'push-up.hip_pike',
-        metricKeys: ['hipPikeDeviation', 'bodyMaxAngle'],
+        metricKeys: ['hipPikeDeviation'],
         direction: 'above',
         value: hipPikeDeviation,
         thresholdPath: 'formThresholds.HIP_DEV_PIKE_WARN',
         thresholdValue: FORM_THRESHOLDS.HIP_DEV_PIKE_WARN,
         eligible: hasHipDeviation,
-        triggered:
-          hasHipDeviation &&
-          (-repWindow.minHipDev > FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL ||
-            (hasBodyAngles &&
-              repWindow.maxBodyAngle > FORM_THRESHOLDS.HIP_PIKE_WARN &&
-              -repWindow.minHipDev > FORM_THRESHOLDS.HIP_DEV_PIKE_WARN)),
+        triggered: hasHipDeviation && -repWindow.minHipDev > FORM_THRESHOLDS.HIP_DEV_PIKE_WARN,
         skippedReason: 'hip_chain_unavailable',
       }),
       diagnosticCue({
@@ -1277,10 +1305,10 @@ function buildPushupDiagnostics(
         issueId: 'push-up.camera_setup',
         metricKeys: ['setupWarningRate'],
         direction: 'above',
-        value: setupWarningRate,
+        value: warningRate,
         thresholdPath: 'setupWarningRate',
         thresholdValue: 0.4,
-        triggered: setupWarningRate > 0.4,
+        triggered: warningRate > 0.4,
       }),
       diagnosticCue({
         issueId: 'push-up.tempo_up',
@@ -1312,12 +1340,60 @@ function buildPushupDiagnostics(
 // UPDATE LOGIC
 // ============================================================================
 
+function plankLockoutSeedFromFrame(signals: SmoothedPushupAngles): number {
+  return Number.isFinite(signals.elbowRatio) && signals.setupQuality.acceptable
+    ? signals.elbowRatio
+    : -Infinity;
+}
+
+function recordRepWindowFrame(
+  window: PushupRepWindow,
+  fast: SmoothedPushupAngles,
+  smoothed: SmoothedPushupAngles,
+  t: number,
+  phase: PushupPhase,
+): void {
+  window.tEnd = t;
+  window.frameCount++;
+
+  // Use the median-only reach ratio for endpoints so EMA lag does not hide depth/lockout.
+  if (!isNaN(fast.elbowRatio)) {
+    window.minElbowRatio = Math.min(window.minElbowRatio, fast.elbowRatio);
+    window.maxElbowRatio = Math.max(window.maxElbowRatio, fast.elbowRatio);
+  }
+  if (!isNaN(smoothed.bodyAlignment) && smoothed.bodyJudgeable) {
+    window.minBodyAngle = Math.min(window.minBodyAngle, smoothed.bodyAlignment);
+    window.maxBodyAngle = Math.max(window.maxBodyAngle, smoothed.bodyAlignment);
+  }
+  if (!isNaN(smoothed.hipDeviation) && smoothed.bodyJudgeable) {
+    window.minHipDev = Math.min(window.minHipDev, smoothed.hipDeviation);
+    window.maxHipDev = Math.max(window.maxHipDev, smoothed.hipDeviation);
+  }
+  if (!isNaN(smoothed.headSpine) && smoothed.headJudgeable) {
+    window.minHeadSpine = Math.min(window.minHeadSpine, smoothed.headSpine);
+    window.maxHeadSpine = Math.max(window.maxHeadSpine, smoothed.headSpine);
+  }
+  if (!isNaN(smoothed.shoulderWristOffset)) {
+    window.maxShoulderWristOffset = Math.max(window.maxShoulderWristOffset, smoothed.shoulderWristOffset);
+  }
+  if (smoothed.bodyJudgeable) window.bodyJudgeableFrames++;
+  if (smoothed.headJudgeable) window.headJudgeableFrames++;
+  recordBlockingSetupWarnings(window, fast.setupQuality);
+
+  if (phase === 'BOTTOM' && window.tBottom === null) {
+    window.tBottom = t;
+  }
+}
+
 function updatePushupState(
   keypoints: Keypoint[],
   currentState: PushupState,
   frameContext?: ExerciseFrameContext,
 ): PushupState {
-  const t = Date.now() / 1000;
+  const timestampMs = typeof frameContext?.timestampMs === 'number' && Number.isFinite(frameContext.timestampMs)
+    ? frameContext.timestampMs
+    : Date.now();
+  const t = timestampMs / 1000;
   const metricKeypoints = frameContext?.worldKeypoints ?? keypoints;
   const imageKeypoints = frameContext?.imageKeypoints ?? keypoints;
 
@@ -1375,8 +1451,17 @@ function updatePushupState(
     newState.lastFeedbackTime = t;
   }
 
-  if (prevPhase === 'PLANK' || prevPhase === 'IDLE') {
+  const shouldSeedPlankLockout =
+    Number.isFinite(fast.elbowRatio) &&
+    fast.setupQuality.acceptable &&
+    (prevPhase === 'IDLE' || newState.fsm.phase === 'PLANK');
+  if (shouldSeedPlankLockout) {
     newState.plankMaxElbowRatio = Math.max(currentState.plankMaxElbowRatio, fast.elbowRatio);
+  } else if (prevPhase === 'IDLE' && !fast.setupQuality.acceptable) {
+    newState.plankMaxElbowRatio = -Infinity;
+    newState.angleHistory = emptyAngleHistory();
+    newState.smoothed = null;
+    newState.fast = null;
   }
 
   if (prevPhase === 'PLANK' && newState.fsm.phase === 'DESCENDING') {
@@ -1386,40 +1471,7 @@ function updatePushupState(
   // Handle returned partials: count meaningful ROM, ignore tiny setup pulses.
   if (fsmResult.partialRep) {
     if (newState.repWindow) {
-      newState.repWindow.tEnd = t;
-      if (!isNaN(fast.elbowRatio)) {
-        newState.repWindow.minElbowRatio = Math.min(newState.repWindow.minElbowRatio, fast.elbowRatio);
-        newState.repWindow.maxElbowRatio = Math.max(newState.repWindow.maxElbowRatio, fast.elbowRatio);
-      }
-      if (!isNaN(smoothed.bodyAlignment) && smoothed.bodyJudgeable) {
-        newState.repWindow.minBodyAngle = Math.min(newState.repWindow.minBodyAngle, smoothed.bodyAlignment);
-        newState.repWindow.maxBodyAngle = Math.max(newState.repWindow.maxBodyAngle, smoothed.bodyAlignment);
-      }
-      if (!isNaN(smoothed.hipDeviation) && smoothed.bodyJudgeable) {
-        newState.repWindow.minHipDev = Math.min(newState.repWindow.minHipDev, smoothed.hipDeviation);
-        newState.repWindow.maxHipDev = Math.max(newState.repWindow.maxHipDev, smoothed.hipDeviation);
-      }
-      if (!isNaN(smoothed.headSpine) && smoothed.headJudgeable) {
-        newState.repWindow.minHeadSpine = Math.min(newState.repWindow.minHeadSpine, smoothed.headSpine);
-        newState.repWindow.maxHeadSpine = Math.max(newState.repWindow.maxHeadSpine, smoothed.headSpine);
-      }
-      if (!isNaN(smoothed.shoulderWristOffset)) {
-        newState.repWindow.maxShoulderWristOffset = Math.max(
-          newState.repWindow.maxShoulderWristOffset,
-          smoothed.shoulderWristOffset,
-        );
-      }
-      if (!isNaN(smoothed.shoulderDropRatio)) {
-        newState.repWindow.maxShoulderDropRatio = Math.max(
-          newState.repWindow.maxShoulderDropRatio,
-          smoothed.shoulderDropRatio,
-        );
-      }
-      if (smoothed.bodyJudgeable) newState.repWindow.bodyJudgeableFrames++;
-      if (smoothed.headJudgeable) newState.repWindow.headJudgeableFrames++;
-      if (!fast.setupQuality.acceptable && fast.setupQuality.warnings.length > 0) {
-        newState.repWindow.setupWarningFrames++;
-      }
+      recordRepWindowFrame(newState.repWindow, fast, smoothed, t, newState.fsm.phase);
 
       const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
       const duration = newState.repWindow.tEnd - newState.repWindow.tStart;
@@ -1432,7 +1484,7 @@ function updatePushupState(
         })
       ) {
         newState.repCount++;
-        const { score, messages, scorable } = evaluateForm(newState.repWindow);
+        const { score, messages, scorable, qualityWarnings } = evaluateForm(newState.repWindow);
         newState.lastRepResult = {
           repIndex: newState.repCount,
           romRatio,
@@ -1441,6 +1493,7 @@ function updatePushupState(
           score,
           messages,
           scorable,
+          qualityWarnings,
           diagnostics: buildPushupDiagnostics(newState.repWindow, newState.repCount, visibleSide, scorable),
         };
         newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
@@ -1454,7 +1507,7 @@ function updatePushupState(
     }
     newState.repWindow = null;
     newState.activeSide = null;
-    newState.plankMaxElbowRatio = -Infinity;
+    newState.plankMaxElbowRatio = plankLockoutSeedFromFrame(fast);
     return newState;
   }
 
@@ -1468,47 +1521,13 @@ function updatePushupState(
   }
 
   if (newState.repWindow && inRep) {
-    const window = newState.repWindow;
-    window.tEnd = t;
-    window.frameCount++;
-
-    // Update min/max elbow ratio using fast (median-only) to capture true depth/lockout
-    if (!isNaN(fast.elbowRatio)) {
-      window.minElbowRatio = Math.min(window.minElbowRatio, fast.elbowRatio);
-      window.maxElbowRatio = Math.max(window.maxElbowRatio, fast.elbowRatio);
-    }
-    if (!isNaN(smoothed.bodyAlignment) && smoothed.bodyJudgeable) {
-      window.minBodyAngle = Math.min(window.minBodyAngle, smoothed.bodyAlignment);
-      window.maxBodyAngle = Math.max(window.maxBodyAngle, smoothed.bodyAlignment);
-    }
-    if (!isNaN(smoothed.hipDeviation) && smoothed.bodyJudgeable) {
-      window.minHipDev = Math.min(window.minHipDev, smoothed.hipDeviation);
-      window.maxHipDev = Math.max(window.maxHipDev, smoothed.hipDeviation);
-    }
-    if (!isNaN(smoothed.headSpine) && smoothed.headJudgeable) {
-      window.minHeadSpine = Math.min(window.minHeadSpine, smoothed.headSpine);
-      window.maxHeadSpine = Math.max(window.maxHeadSpine, smoothed.headSpine);
-    }
-    if (!isNaN(smoothed.shoulderWristOffset)) {
-      window.maxShoulderWristOffset = Math.max(window.maxShoulderWristOffset, smoothed.shoulderWristOffset);
-    }
-    if (!isNaN(smoothed.shoulderDropRatio)) {
-      window.maxShoulderDropRatio = Math.max(window.maxShoulderDropRatio, smoothed.shoulderDropRatio);
-    }
-    if (smoothed.bodyJudgeable) window.bodyJudgeableFrames++;
-    if (smoothed.headJudgeable) window.headJudgeableFrames++;
-    if (!fast.setupQuality.acceptable && fast.setupQuality.warnings.length > 0) {
-      window.setupWarningFrames++;
-    }
-
-    // Record bottom timestamp
-    if (newState.fsm.phase === 'BOTTOM' && window.tBottom === null) {
-      window.tBottom = t;
-    }
+    recordRepWindowFrame(newState.repWindow, fast, smoothed, t, newState.fsm.phase);
   }
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    recordRepWindowFrame(newState.repWindow, fast, smoothed, t, newState.fsm.phase);
+
     const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
     const duration = newState.repWindow.tEnd - newState.repWindow.tStart;
     const meaningfulFullRep = isMeaningfulPartialRep({
@@ -1526,7 +1545,7 @@ function updatePushupState(
       newState.repWindow = null;
       newState.fsm = resetFSMToPlank();
       newState.activeSide = null;
-      newState.plankMaxElbowRatio = -Infinity;
+      newState.plankMaxElbowRatio = plankLockoutSeedFromFrame(fast);
       return newState;
     }
 
@@ -1535,7 +1554,7 @@ function updatePushupState(
     const tDown = newState.repWindow.tBottom ? newState.repWindow.tBottom - newState.repWindow.tStart : 0;
     const tUp = newState.repWindow.tBottom ? newState.repWindow.tEnd - newState.repWindow.tBottom : 0;
 
-    const { score, messages, scorable } = evaluateForm(newState.repWindow);
+    const { score, messages, scorable, qualityWarnings } = evaluateForm(newState.repWindow);
 
     newState.lastRepResult = {
       repIndex: newState.repCount,
@@ -1545,6 +1564,7 @@ function updatePushupState(
       score,
       messages,
       scorable,
+      qualityWarnings,
       diagnostics: buildPushupDiagnostics(newState.repWindow, newState.repCount, visibleSide, scorable),
     };
 
@@ -1559,7 +1579,7 @@ function updatePushupState(
     newState.repWindow = null;
     newState.fsm = resetFSMToPlank();
     newState.activeSide = null;
-    newState.plankMaxElbowRatio = -Infinity;
+    newState.plankMaxElbowRatio = plankLockoutSeedFromFrame(fast);
   }
 
   // Clear feedback after 2 seconds
@@ -1591,7 +1611,6 @@ function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
     headSpine: fmt(angles?.headSpine),
     torsoInclination: fmt(state.lastTorsoInclination ?? undefined),
     shoulderWristOffset: fmt(angles?.shoulderWristOffset),
-    shoulderDropRatio: fmt(angles?.shoulderDropRatio),
     setupWarnings: state.lastSetupQuality?.warnings ?? [],
     setupAcceptable: state.lastSetupQuality?.acceptable ?? null,
     elbowRatioMin: repWin ? fmtW(repWin.minElbowRatio, repWin.maxElbowRatio) && fmt(repWin.minElbowRatio) : null,
@@ -1601,6 +1620,164 @@ function getPushupDebugInfo(state: PushupState): PushupDebugInfo {
     hipDevMin: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.minHipDev) : null,
     hipDevMax: repWin ? fmtW(repWin.minHipDev, repWin.maxHipDev) && fmt(repWin.maxHipDev) : null,
   };
+}
+
+// ============================================================================
+// CONFIG VALIDATION
+// ============================================================================
+
+function configNumber(config: ExerciseHeuristicConfig, path: string, issues: string[]): number | null {
+  const value = getConfigValue(config, path);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    issues.push(`Push-Up config "${path}" must be a finite number.`);
+    return null;
+  }
+  return value;
+}
+
+function requireOrdered(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  firstPath: string,
+  secondPath: string,
+  allowEqual = false,
+): void {
+  const first = configNumber(config, firstPath, issues);
+  const second = configNumber(config, secondPath, issues);
+  if (first === null || second === null) return;
+  const valid = allowEqual ? first <= second : first < second;
+  if (!valid) {
+    issues.push(
+      `Push-Up config ordering invalid: "${firstPath}" (${first}) must be ${allowEqual ? '<=' : '<'} "${secondPath}" (${second}).`,
+    );
+  }
+}
+
+function validateNumberRange(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  path: string,
+  min: number,
+  max: number,
+): number | null {
+  const value = configNumber(config, path, issues);
+  if (value !== null && (value < min || value > max)) {
+    issues.push(`Push-Up config "${path}" must be between ${min} and ${max}.`);
+  }
+  return value;
+}
+
+function validatePositive(config: ExerciseHeuristicConfig, issues: string[], path: string): number | null {
+  const value = configNumber(config, path, issues);
+  if (value !== null && value <= 0) {
+    issues.push(`Push-Up config "${path}" must be greater than 0.`);
+  }
+  return value;
+}
+
+function validatePositiveInteger(config: ExerciseHeuristicConfig, issues: string[], path: string): number | null {
+  const value = configNumber(config, path, issues);
+  if (value !== null && (!Number.isInteger(value) || value <= 0)) {
+    issues.push(`Push-Up config "${path}" must be a positive integer.`);
+  }
+  return value;
+}
+
+function validateScoreCurves(config: ExerciseHeuristicConfig, issues: string[]): void {
+  const scoreCurves = getConfigValue(config, 'scoreCurves');
+  if (scoreCurves === null || typeof scoreCurves !== 'object' || Array.isArray(scoreCurves)) {
+    issues.push('Push-Up config "scoreCurves" must be an object.');
+    return;
+  }
+
+  for (const [curveName, curveConfig] of Object.entries(scoreCurves)) {
+    if (curveConfig === null || typeof curveConfig !== 'object' || Array.isArray(curveConfig)) {
+      issues.push(`Push-Up score curve "${curveName}" must be an object.`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(curveConfig)) {
+      const path = `scoreCurves.${curveName}.${key}`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        issues.push(`Push-Up config "${path}" must be a finite number.`);
+        continue;
+      }
+      if (key === 'scale' && value <= 0) {
+        issues.push(`Push-Up config "${path}" must be greater than 0.`);
+      }
+      if (key === 'cap' && value < 0) {
+        issues.push(`Push-Up config "${path}" must be greater than or equal to 0.`);
+      }
+      if ((key === 'deadzone' || key === 'min' || key === 'ideal') && value < 0) {
+        issues.push(`Push-Up config "${path}" must be greater than or equal to 0.`);
+      }
+    }
+  }
+}
+
+function validatePushupHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const issues: string[] = [];
+
+  requireOrdered(config, issues, 'thresholds.BOTTOM_ENTER', 'thresholds.BOTTOM_EXIT');
+  requireOrdered(config, issues, 'thresholds.BOTTOM_EXIT', 'thresholds.DESCENDING_ENTER');
+  requireOrdered(config, issues, 'thresholds.DESCENDING_ENTER', 'thresholds.IDLE_ARMS_EXTENDED');
+  requireOrdered(config, issues, 'thresholds.IDLE_ARMS_EXTENDED', 'thresholds.PLANK_REENTER', true);
+  requireOrdered(config, issues, 'thresholds.PLANK_REENTER', 'thresholds.PARTIAL_REP_RESET', true);
+  requireOrdered(config, issues, 'thresholds.PARTIAL_REP_RESET', 'formThresholds.LOCKOUT_FAIL');
+  requireOrdered(config, issues, 'thresholds.PLANK_BODY_MIN', 'thresholds.PLANK_BODY_MAX');
+  requireOrdered(config, issues, 'thresholds.TORSO_INCLINE_MIN', 'thresholds.TORSO_INCLINE_MAX');
+  requireOrdered(config, issues, 'formThresholds.DEPTH_FAIL', 'thresholds.BOTTOM_ENTER');
+  requireOrdered(config, issues, 'formThresholds.DEPTH_FAIL', 'formThresholds.LOCKOUT_FAIL');
+  requireOrdered(config, issues, 'formThresholds.HIP_DEV_SAG_WARN', 'formThresholds.HIP_DEV_SAG_FAIL');
+  requireOrdered(config, issues, 'formThresholds.HIP_DEV_PIKE_WARN', 'formThresholds.HIP_DEV_PIKE_FAIL');
+  requireOrdered(config, issues, 'formThresholds.SHOULDER_WRIST_WARN', 'thresholds.SHOULDER_WRIST_SETUP_FAIL');
+
+  for (const path of [
+    'thresholds.DESCENDING_ENTER',
+    'thresholds.PLANK_REENTER',
+    'thresholds.BOTTOM_ENTER',
+    'thresholds.BOTTOM_EXIT',
+    'thresholds.PARTIAL_REP_RESET',
+    'thresholds.IDLE_ARMS_EXTENDED',
+    'thresholds.MIN_PARTIAL_ROM',
+    'thresholds.SHOULDER_WRIST_SETUP_FAIL',
+    'thresholds.SIDE_VIEW_MIN_SCORE_EDGE',
+    'thresholds.SIDE_VIEW_MAX_WIDTH_RATIO',
+    'formThresholds.DEPTH_FAIL',
+    'formThresholds.LOCKOUT_FAIL',
+    'formThresholds.ROM_MIN',
+    'formThresholds.HIP_DEV_SAG_FAIL',
+    'formThresholds.HIP_DEV_SAG_WARN',
+    'formThresholds.HIP_DEV_PIKE_FAIL',
+    'formThresholds.HIP_DEV_PIKE_WARN',
+    'formThresholds.SHOULDER_WRIST_WARN',
+  ]) {
+    validateNumberRange(config, issues, path, 0, 1.2);
+  }
+
+  for (const path of [
+    'thresholds.MIN_REP_TIME',
+    'thresholds.MIN_DESCENDING_TIME',
+    'thresholds.PLANK_HOLD_TIME',
+    'formThresholds.TEMPO_CONCENTRIC_MIN',
+    'formThresholds.TEMPO_ECCENTRIC_MIN',
+  ]) {
+    validatePositive(config, issues, path);
+  }
+
+  validatePositiveInteger(config, issues, 'thresholds.MIN_REP_FRAMES');
+
+  for (const path of [
+    'thresholds.PLANK_BODY_MIN',
+    'thresholds.PLANK_BODY_MAX',
+    'thresholds.TORSO_INCLINE_MIN',
+    'thresholds.TORSO_INCLINE_MAX',
+    'formThresholds.HEAD_SPINE_WARN',
+  ]) {
+    validateNumberRange(config, issues, path, 0, 360);
+  }
+
+  validateScoreCurves(config, issues);
+  return issues;
 }
 
 // ============================================================================
@@ -1635,6 +1812,7 @@ export function createPushupDefinition(
             score: newInternal.lastRepResult.score,
             messages: newInternal.lastRepResult.messages,
             scorable: newInternal.lastRepResult.scorable,
+            qualityWarnings: newInternal.lastRepResult.qualityWarnings,
             diagnostics: newInternal.lastRepResult.diagnostics,
           }
         : null;
@@ -1654,10 +1832,10 @@ export function createPushupDefinition(
     tunableSpec: PUSHUP_TUNABLE_SPEC,
     tunedConfigPath: 'src/utils/exercises/definitions/tuned/pushup.json',
     createVariant: (variantConfig) => createPushupDefinition(mergeHeuristicConfig(config, variantConfig)),
+    validateHeuristicConfig: validatePushupHeuristicConfig,
 
     ttsConfig: {
       feedbackToIssue: {
-        'Go deeper \u2014 try to hit 90 degrees.': 'depth_short',
         'Go deeper \u2014 aim for elbows at 90 degrees.': 'depth_short',
         'Lock out your arms fully at the top.': 'lockout_short',
         'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': 'incomplete_rom',
@@ -1698,7 +1876,6 @@ export function createPushupDefinition(
     },
 
     summaryConfig: {
-      'Go deeper \u2014 try to hit 90 degrees.': 'Focus on reaching full push-up depth before returning to plank.',
       'Go deeper \u2014 aim for elbows at 90 degrees.': 'Focus on hitting full depth each rep.',
       'Lock out your arms fully at the top.': 'Fully extend at the top of each rep for complete range of motion.',
       'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.':

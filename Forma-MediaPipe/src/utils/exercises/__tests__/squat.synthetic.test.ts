@@ -6,7 +6,7 @@ import type { Keypoint } from '../../poseAnalysis';
 type Side = 'left' | 'right';
 type Orientation = 'facing-right' | 'facing-left';
 type TorsoPosture = 'upright' | 'leaned' | 'stable-forward' | 'backward';
-type PoseProfile = 'clean' | 'true-depth-shallow' | 'ratio-fallback-shallow' | 'natural-low-lockout';
+type PoseProfile = 'clean' | 'true-depth-shallow' | 'ratio-fallback-shallow' | 'natural-low-lockout' | 'low-rom-fallback';
 type SquatViewMode = 'front' | 'oblique';
 type FrontMotionMode = 'normal' | 'weak';
 type WorldMotionMode = 'normal' | 'z-driven';
@@ -53,6 +53,13 @@ const RATIO_FALLBACK_SHALLOW_BOTTOM: Pose = {
   ankle: { x: 0.9, y: 1.5 },
   heel: { x: 0.82, y: 1.5 },
   foot: { x: 1.1, y: 1.5 },
+};
+
+const LOW_ROM_FALLBACK_BOTTOM: Pose = {
+  ...BOTTOM,
+  shoulder: { x: -0.06, y: 0.48 },
+  hip: { x: 0, y: 1.03 },
+  knee: { x: 0.12, y: 1.05 },
 };
 
 const NATURAL_LOW_LOCKOUT_STANDING: Pose = {
@@ -127,6 +134,7 @@ function standingPoseFor(profile: PoseProfile): Pose {
 function bottomPoseFor(profile: PoseProfile): Pose {
   if (profile === 'true-depth-shallow') return TRUE_DEPTH_SHALLOW_BOTTOM;
   if (profile === 'ratio-fallback-shallow') return RATIO_FALLBACK_SHALLOW_BOTTOM;
+  if (profile === 'low-rom-fallback') return LOW_ROM_FALLBACK_BOTTOM;
   return BOTTOM;
 }
 
@@ -445,6 +453,7 @@ describe('Barbell Squat synthetic replay coverage', () => {
     );
 
     expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].diagnostics?.metrics.smoothedKneeRatio).toBeUndefined();
     expect(result.reps[0].diagnostics?.metrics).toEqual(
       expect.objectContaining({
         thighDepthAngle: expect.objectContaining({ eligible: true }),
@@ -467,7 +476,7 @@ describe('Barbell Squat synthetic replay coverage', () => {
     );
   });
 
-  it('counts and scores a clean front-view squat using world movement plus front diagnostics', () => {
+  it('counts a clean front-view squat but marks it unscorable for side-view form scoring', () => {
     const result = replayRecordingVerbose(
       squatDefinition,
       buildFrontRecording('synthetic clean front squat', fullRepPath()),
@@ -475,18 +484,23 @@ describe('Barbell Squat synthetic replay coverage', () => {
 
     const rep = result.reps[0];
     expect(result.finalRepCount).toBe(1);
-    expect(rep.score).toBeGreaterThanOrEqual(85);
-    expect(rep.scorable).toBe(true);
+    expect(rep.score).toBe(0);
+    expect(rep.scorable).toBe(false);
+    expect(rep.qualityWarnings).toContain('side_view_uncertain');
     expect(rep.messages).toEqual([]);
+    expect(rep.issueIds).toEqual([]);
     expect(rep.diagnostics?.view).toBe('front');
     expect(rep.diagnostics?.viewQuality?.frontConfirmed).toBe(true);
     expect(rep.diagnostics?.metrics.metricSource.label).toBe('world');
+    expect(rep.diagnostics?.cues['barbell-squat.depth_short'].eligible).toBe(false);
+    expect(rep.diagnostics?.cues['barbell-squat.lockout_short'].eligible).toBe(false);
+    expect(rep.diagnostics?.cues['barbell-squat.incomplete_rom'].eligible).toBe(false);
     expect(rep.diagnostics?.cues['barbell-squat.heel_lift'].eligible).toBe(false);
     expect(rep.diagnostics?.cues['barbell-squat.heel_lift'].skippedReason).toBe('not_side_view');
-    expect(rep.diagnostics?.cues['barbell-squat.knee_valgus'].triggered).toBe(false);
+    expect(rep.diagnostics?.cues['barbell-squat.knee_valgus']).toBeUndefined();
   });
 
-  it('counts and scores a front-view squat from true world-z knee travel when image movement is weak', () => {
+  it('counts front-view world-z knee travel but keeps form scoring disabled', () => {
     const result = replayRecordingVerbose(
       squatDefinition,
       buildFrontRecording('synthetic world-z front squat', fullRepPath(), {
@@ -497,7 +511,10 @@ describe('Barbell Squat synthetic replay coverage', () => {
 
     const rep = result.reps[0];
     expect(result.finalRepCount).toBe(1);
-    expect(rep.scorable).toBe(true);
+    expect(rep.score).toBe(0);
+    expect(rep.scorable).toBe(false);
+    expect(rep.messages).toEqual([]);
+    expect(rep.issueIds).toEqual([]);
     expect(rep.diagnostics?.view).toBe('front');
     expect(rep.diagnostics?.metrics.metricSource.label).toBe('world');
     expect(rep.diagnostics?.metrics.movementKneeRatio.value).toBeLessThan(0.76);
@@ -516,14 +533,16 @@ describe('Barbell Squat synthetic replay coverage', () => {
 
     const rep = result.reps[0];
     expect(result.finalRepCount).toBe(1);
-    expect(rep.scorable).toBe(true);
+    expect(rep.scorable).toBe(false);
+    expect(rep.messages).toEqual([]);
+    expect(rep.issueIds).toEqual([]);
     expect(rep.diagnostics?.metrics.leftKneeRatioSource.label).toBe('world');
     expect(rep.diagnostics?.metrics.rightKneeRatioSource.label).toBe('image');
     expect(rep.diagnostics?.metrics.leftWorldKneeRatioSupport.value).toBeGreaterThanOrEqual(0.35);
     expect(rep.diagnostics?.metrics.rightWorldKneeRatioSupport.eligible).toBe(false);
   });
 
-  it('flags front-view knee valgus without using side-only squat cues', () => {
+  it('does not emit front-view knee valgus feedback in the side-only scoring scope', () => {
     const result = replayRecordingVerbose(
       squatDefinition,
       buildFrontRecording('synthetic front knee valgus squat', fullRepPath(), {
@@ -532,17 +551,15 @@ describe('Barbell Squat synthetic replay coverage', () => {
     );
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.reps[0].messages).toContain('Track your knees over your toes.');
-    expect(result.reps[0].issueIds).toContain('barbell-squat.knee_valgus');
-    expect(result.reps[0].diagnostics?.cues['barbell-squat.knee_valgus']).toMatchObject({
-      eligible: true,
-      triggered: true,
-    });
-    expect(result.reps[0].diagnostics?.metrics.kneeTrackingOffsetRatio.value).toBeGreaterThan(0.1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].messages).toEqual([]);
+    expect(result.reps[0].issueIds).toEqual([]);
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.knee_valgus']).toBeUndefined();
+    expect(result.reps[0].diagnostics?.metrics.kneeTrackingOffsetRatio.eligible).toBe(false);
     expect(result.reps[0].diagnostics?.cues['barbell-squat.depth_short'].eligible).toBe(false);
   });
 
-  it('marks front-view knee valgus ineligible when bilateral image support is missing', () => {
+  it('keeps front-view reps unscorable when bilateral knee-tracking support is missing', () => {
     const recording = buildFrontRecording('synthetic front knee tracking occlusion squat', fullRepPath(), {
       kneeValgus: true,
       worldMotion: 'z-driven',
@@ -559,13 +576,10 @@ describe('Barbell Squat synthetic replay coverage', () => {
     const result = replayRecordingVerbose(squatDefinition, recording);
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].messages).toEqual([]);
     expect(result.reps[0].issueIds).not.toContain('barbell-squat.knee_valgus');
-    expect(result.reps[0].diagnostics?.cues['barbell-squat.knee_valgus']).toMatchObject({
-      eligible: false,
-      triggered: false,
-      skippedReason: 'knee_tracking_unavailable',
-    });
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.knee_valgus']).toBeUndefined();
   });
 
   it('counts an oblique-view squat but marks the rep unscorable with a view warning', () => {
@@ -578,10 +592,11 @@ describe('Barbell Squat synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
-    expect(result.reps[0].qualityWarnings).toContain('view_uncertain');
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.reps[0].diagnostics?.view).toBe('oblique');
     expect(result.reps[0].diagnostics?.scorable).toBe(false);
     expect(result.reps[0].messages).toEqual([]);
+    expect(result.reps[0].issueIds).toEqual([]);
   });
 
   it('counts a front-view image-only squat but does not score form without world landmarks', () => {
@@ -594,11 +609,12 @@ describe('Barbell Squat synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
-    expect(result.reps[0].qualityWarnings).toContain('missing_required_joints');
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.metrics.worldKneeRatioSupport.eligible).toBe(false);
     expect(result.reps[0].diagnostics?.cues['barbell-squat.lockout_short'].eligible).toBe(false);
     expect(result.reps[0].messages).toEqual([]);
+    expect(result.reps[0].issueIds).toEqual([]);
   });
 
   it('keeps front-view image-only reps unscorable even when image motion is enough to count', () => {
@@ -611,6 +627,8 @@ describe('Barbell Squat synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].messages).toEqual([]);
+    expect(result.reps[0].issueIds).toEqual([]);
     expect(result.reps[0].diagnostics?.metrics.leftWorldKneeRatioSupport.eligible).toBe(false);
     expect(result.reps[0].diagnostics?.metrics.rightWorldKneeRatioSupport.eligible).toBe(false);
     expect(result.reps[0].diagnostics?.metrics.leftImageKneeRatioSupport.value).toBeGreaterThan(0);
@@ -625,8 +643,12 @@ describe('Barbell Squat synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].messages).toContain('Stand all the way up — fully extend your knees.');
+    expect(result.reps[0].messages).not.toContain('Incomplete rep — use a full range of motion.');
+    expect(result.reps[0].issueIds).toContain('barbell-squat.lockout_short');
+    expect(result.reps[0].issueIds).not.toContain('barbell-squat.incomplete_rom');
     expect(result.reps[0].diagnostics?.metrics.lockoutDeltaRatio.value).toBeGreaterThan(0.035);
     expect(result.reps[0].diagnostics?.cues['barbell-squat.lockout_short'].metricKeys).toContain('lockoutDeltaRatio');
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.incomplete_rom'].triggered).toBe(false);
     const metrics = result.reps[0].diagnostics?.metrics;
     expect(metrics?.movementEndDelaySeconds.value).toBeGreaterThan(0);
     expect(metrics?.tMovementEnd.value).toBeLessThan(metrics?.tConfirmedEnd.value ?? 0);
@@ -658,7 +680,7 @@ describe('Barbell Squat synthetic replay coverage', () => {
       squatDefinition,
       buildRecording('synthetic clean squat', fullRepPath()),
     );
-    const shallow = replayRecording(
+    const shallow = replayRecordingVerbose(
       squatDefinition,
       buildRecording('synthetic true-depth shallow squat', fullRepPath(), {
         poseProfile: 'true-depth-shallow',
@@ -666,8 +688,12 @@ describe('Barbell Squat synthetic replay coverage', () => {
     );
 
     expect(shallow.finalRepCount).toBe(1);
-    expect(shallow.feedbackMessages).toContain('Squat deeper — aim to get your thighs parallel.');
-    expect(shallow.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(shallow.reps[0].messages).toContain('Squat deeper — aim to get your thighs parallel.');
+    expect(shallow.reps[0].messages).not.toContain('Incomplete rep — use a full range of motion.');
+    expect(shallow.reps[0].issueIds).toContain('barbell-squat.depth_short');
+    expect(shallow.reps[0].issueIds).not.toContain('barbell-squat.incomplete_rom');
+    expect(shallow.reps[0].diagnostics?.cues['barbell-squat.incomplete_rom'].triggered).toBe(false);
+    expect(shallow.reps[0].score).toBeLessThan(clean.repScores[0]);
   });
 
   it('catches true-depth shallow reps even when knee ratio looks deep enough', () => {
@@ -681,8 +707,10 @@ describe('Barbell Squat synthetic replay coverage', () => {
     const diagnostics = result.reps[0].diagnostics!;
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].messages).toContain('Squat deeper — aim to get your thighs parallel.');
+    expect(result.reps[0].issueIds).toEqual(['barbell-squat.depth_short']);
     expect(diagnostics.metrics.depthRatio.value).toBeLessThan(0.7);
     expect(diagnostics.cues['barbell-squat.depth_short'].metricKeys).toEqual(['thighDepthAngle']);
+    expect(diagnostics.cues['barbell-squat.incomplete_rom'].triggered).toBe(false);
   });
 
   it('falls back to knee ratio when true thigh depth is unavailable', () => {
@@ -696,8 +724,11 @@ describe('Barbell Squat synthetic replay coverage', () => {
     const diagnostics = result.reps[0].diagnostics!;
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].messages).toContain('Squat deeper — aim to get your thighs parallel.');
+    expect(result.reps[0].issueIds).toContain('barbell-squat.depth_short');
+    expect(result.reps[0].issueIds).not.toContain('barbell-squat.incomplete_rom');
     expect(diagnostics.metrics.thighDepthAngle.eligible).toBe(false);
     expect(diagnostics.cues['barbell-squat.depth_short'].metricKeys).toEqual(['depthRatio']);
+    expect(diagnostics.cues['barbell-squat.incomplete_rom'].triggered).toBe(false);
   });
 
   it('does not count a tiny squat pulse', () => {
@@ -710,14 +741,40 @@ describe('Barbell Squat synthetic replay coverage', () => {
     expect(result.repTraces).toEqual([]);
   });
 
-  it('counts a meaningful partial squat and records depth feedback', () => {
+  it('counts a meaningful partial squat and records one endpoint ROM cue', () => {
     const clean = replayRecording(squatDefinition, buildRecording('synthetic clean squat', fullRepPath()));
-    const result = replayRecording(squatDefinition, buildRecording('synthetic half squat', halfRepPath()));
+    const result = replayRecordingVerbose(squatDefinition, buildRecording('synthetic half squat', halfRepPath()));
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
-    expect(result.repScores[0]).toBeLessThanOrEqual(65);
-    expect(result.feedbackMessages).toContain('Squat deeper — aim to get your thighs parallel.');
+    expect(result.reps[0].score).toBeLessThan(clean.repScores[0]);
+    expect(result.reps[0].score).toBeLessThanOrEqual(65);
+    expect(result.reps[0].messages).toContain('Squat deeper — aim to get your thighs parallel.');
+    expect(result.reps[0].messages).not.toContain('Incomplete rep — use a full range of motion.');
+    expect(result.reps[0].issueIds).toContain('barbell-squat.depth_short');
+    expect(result.reps[0].issueIds).not.toContain('barbell-squat.incomplete_rom');
+  });
+
+  it('uses incomplete ROM only as the low-ROM fallback when endpoints are not clearer', () => {
+    const diagnosticVariant = squatDefinition.createVariant?.({
+      formThresholds: {
+        LOCKOUT_BASELINE_DELTA_FAIL: 0.08,
+      },
+    });
+    expect(diagnosticVariant).toBeDefined();
+
+    const result = replayRecordingVerbose(
+      diagnosticVariant!,
+      buildRecording('synthetic low-rom fallback squat', fullRepPath(), {
+        poseProfile: 'low-rom-fallback',
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].messages).toEqual(['Incomplete rep — use a full range of motion.']);
+    expect(result.reps[0].issueIds).toEqual(['barbell-squat.incomplete_rom']);
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.depth_short'].triggered).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.lockout_short'].triggered).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.incomplete_rom'].triggered).toBe(true);
   });
 
   it('flags heel lift when support is sustained during the active rep', () => {

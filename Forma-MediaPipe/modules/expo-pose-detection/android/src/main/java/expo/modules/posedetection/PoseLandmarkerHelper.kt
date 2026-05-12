@@ -17,7 +17,7 @@ import java.nio.ByteBuffer
 class PoseLandmarkerHelper(
   private val context: Context,
   private val modelAsset: String = "pose_landmarker_heavy.task",
-  private val listener: ((PoseLandmarkerResult, Int, Int) -> Unit)? = null
+  private val listener: ((PoseLandmarkerResult, Int, Int, Long) -> Unit)? = null
 ) {
   companion object {
     private const val TAG = "PoseLandmarkerHelper"
@@ -217,7 +217,7 @@ class PoseLandmarkerHelper(
 
   private fun returnLivestreamResult(result: PoseLandmarkerResult, input: com.google.mediapipe.framework.image.MPImage) {
     if (isClosed) return
-    listener?.invoke(result, input.height, input.width)
+    listener?.invoke(result, input.height, input.width, result.timestampMs())
   }
 
   private fun returnLivestreamError(error: RuntimeException) {

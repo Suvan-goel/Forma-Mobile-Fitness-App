@@ -33,6 +33,7 @@ import type {
   ExerciseDefinition,
   ExerciseHeuristicConfig,
   NumericTunable,
+  RepCueDiagnostic,
 } from '../src/utils/exercises/types';
 import {
   DATASET_ROOT,
@@ -237,7 +238,9 @@ function scoreLegacyEvaluationSummary(evaluation: EvaluationSummary): number {
   return (
     evaluation.metrics.repCountAccuracy * 10000 +
     evaluation.metrics.issueF1 * 100 -
-    evaluation.metrics.cleanRepFalsePositiveRate
+    evaluation.metrics.cleanRepFalsePositiveRate +
+    evaluation.metrics.scorableAccuracy * 10 +
+    evaluation.metrics.viewAccuracy * 5
   );
 }
 
@@ -254,7 +257,9 @@ function scoreDiagnosticEvaluationSummary(evaluation: EvaluationSummary): number
     diagnosticIssueF1 * 125 -
     evaluation.metrics.cleanRepFalsePositiveRate * 5 -
     nearThresholdRate * 10 +
-    scorableRate * 5
+    scorableRate * 5 +
+    evaluation.metrics.scorableAccuracy * 10 +
+    evaluation.metrics.viewAccuracy * 5
   );
 }
 
@@ -682,6 +687,17 @@ function quantile(sortedValues: number[], q: number): number | null {
   return sortedValues[index];
 }
 
+function cueMatchesDiagnosticEntry(cue: RepCueDiagnostic, entry: DiagnosticTuningEntry): boolean {
+  if (!cue.metricKeys.includes(entry.metricKey)) return false;
+  if (typeof cue.thresholdPath === 'string') {
+    return cue.thresholdPath === entry.thresholdPath;
+  }
+  if (Array.isArray(cue.thresholdPath)) {
+    return cue.thresholdPath.includes(entry.thresholdPath);
+  }
+  return true;
+}
+
 function valuesForDiagnosticEntry(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
@@ -697,6 +713,7 @@ function valuesForDiagnosticEntry(
       const cue = rep.predictedDiagnostics?.cues[entry.issueId];
       const metric = rep.predictedDiagnostics?.metrics[entry.metricKey];
       if (!cue || !metric || !cue.eligible || !metric.eligible) continue;
+      if (!cueMatchesDiagnosticEntry(cue, entry)) continue;
       if (typeof metric.value !== 'number' || !Number.isFinite(metric.value)) continue;
       if (
         entry.minEligibleSamples !== undefined &&

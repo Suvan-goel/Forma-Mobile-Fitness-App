@@ -11,49 +11,65 @@
       "index": 1,
       "startMs": 1750,
       "endMs": 3750,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 2,
       "startMs": 4750,
       "endMs": 6750,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 3,
       "startMs": 8000,
       "endMs": 10250,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 4,
       "startMs": 11350,
       "endMs": 13750,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 5,
       "startMs": 14750,
       "endMs": 16750,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 6,
       "startMs": 17850,
       "endMs": 20000,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 7,
       "startMs": 20750,
       "endMs": 23000,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 8,
       "startMs": 24000,
       "endMs": 26750,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     }
   ],
   "notes": "Human-reviewed from video. Eight visible controlled reps labelled with bottom-to-bottom windows. Draft setup time was removed from the first rep, and wrist-curl suggestions were not copied because the visible wrist position is not reliable enough to label as a form issue."

@@ -21,9 +21,18 @@ export interface PenaltyConfig {
  * @param config - Penalty configuration
  * @returns Penalty points (0 to cap)
  */
-function computePenalty(value: number, config: PenaltyConfig): number {
+export function computePenaltyPoints(value: number, config: PenaltyConfig): number {
   const d = Math.max(0, value - config.deadzone);
   return Math.min(config.cap, config.scale * d * d);
+}
+
+/**
+ * Computes total score from precomputed penalty points.
+ * Returns max(0, min(100, 100 - totalPenalty)), rounded to nearest integer.
+ */
+export function computeScoreFromPenaltyPoints(points: number[]): number {
+  const total = points.reduce((sum, point) => sum + point, 0);
+  return Math.max(0, Math.min(100, Math.round(100 - total)));
 }
 
 /**
@@ -33,9 +42,7 @@ function computePenalty(value: number, config: PenaltyConfig): number {
 export function computeScore(
   penalties: Array<{ value: number; config: PenaltyConfig }>
 ): number {
-  let total = 0;
-  for (const p of penalties) {
-    total += computePenalty(p.value, p.config);
-  }
-  return Math.max(0, Math.min(100, Math.round(100 - total)));
+  return computeScoreFromPenaltyPoints(
+    penalties.map((penalty) => computePenaltyPoints(penalty.value, penalty.config)),
+  );
 }

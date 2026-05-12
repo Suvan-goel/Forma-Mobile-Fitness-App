@@ -43,6 +43,7 @@ export interface ExerciseFrameContext {
   worldKeypoints?: Keypoint[];
   imageKeypoints?: Keypoint[];
   primarySource: 'world' | 'image';
+  timestampMs?: number;
 }
 
 // ============================================================================
@@ -110,6 +111,7 @@ export type DiagnosticDirection = 'above' | 'below' | 'range' | 'outside_range';
 
 export type DiagnosticUnit =
   | 'ratio'
+  | 'percent'
   | 'degrees'
   | 'seconds'
   | 'milliseconds'
@@ -196,6 +198,8 @@ export interface TunableSpec {
       minValidationImprovement?: number;
       maxTestRepCountAccuracyRegression?: number;
       maxTestCleanFalsePositiveRegression?: number;
+      maxTestViewAccuracyRegression?: number;
+      maxTestScorableAccuracyRegression?: number;
     };
   };
 }

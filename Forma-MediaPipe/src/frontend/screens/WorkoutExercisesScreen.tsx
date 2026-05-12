@@ -71,7 +71,11 @@ export const WorkoutExercisesScreen: React.FC = () => {
   const exercises = workoutExercises[category] || [];
 
   const handleStartWorkout = () => {
-    navigation.navigate('Camera', { category });
+    const singleExercise = exercises.length === 1 ? exercises[0] : undefined;
+    navigation.navigate('Camera', {
+      category,
+      exerciseName: singleExercise,
+    });
   };
 
   const handleGoBack = () => {

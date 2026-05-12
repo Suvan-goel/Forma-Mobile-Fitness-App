@@ -1,4 +1,9 @@
 import { createDraftLabelFromReplay, getAvailableIssues } from '../dataset';
+import { barbellCurlDefinition } from '../definitions/barbellCurl';
+import { cableRowDefinition } from '../definitions/cableRow';
+import { lateralRaiseDefinition } from '../definitions/lateralRaise';
+import { pushupDefinition } from '../definitions/pushup';
+import { squatDefinition } from '../definitions/squat';
 import type { ExerciseDefinition } from '../types';
 import type { LandmarkRecording, ReplayResultVerbose } from '../replay';
 
@@ -116,5 +121,135 @@ describe('draft label generation', () => {
       { issueId: 'demo-exercise.depth_short', feedbackMessage: 'Go deeper.' },
       { issueId: 'demo-exercise.torso_warn', feedbackMessage: 'Stay upright.' },
     ]);
+  });
+
+  it('adds Barbell Curl multi-view labeling guidance to draft labels', () => {
+    const label = createDraftLabelFromReplay({
+      definition: barbellCurlDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Barbell Curl',
+      },
+      replay,
+      sourceVideo: 'videos/barbell-curl/barbell_curl_001.mp4',
+      landmarkFile: 'landmarks/barbell-curl/barbell_curl_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Front-view Barbell Curl reps are full-form labels'),
+        expect.stringContaining('Side/oblique Barbell Curl reps are limited-signal fallback labels'),
+        expect.stringContaining('do not treat missing asymmetry or elbow-flare cues as clean negatives'),
+      ]),
+    );
+  });
+
+  it('adds Push-Up labeling guidance to draft labels', () => {
+    const label = createDraftLabelFromReplay({
+      definition: pushupDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Push-Up',
+      },
+      replay,
+      sourceVideo: 'videos/push-up/pushup_001.mp4',
+      landmarkFile: 'landmarks/push-up/pushup_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Standard side-view floor push-ups are the target scope'),
+        expect.stringContaining('use scorable=false when the view, full body, or form-critical landmarks are not judgeable'),
+        expect.stringContaining('Use push-up.depth_short or push-up.lockout_short'),
+        expect.stringContaining('Use push-up.incomplete_rom only as the fallback ROM issue'),
+        expect.stringContaining('do not treat unobservable cues as clean negatives'),
+      ]),
+    );
+  });
+
+  it('adds side-view Barbell Squat labeling guidance to draft labels', () => {
+    const label = createDraftLabelFromReplay({
+      definition: squatDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Barbell Squat',
+      },
+      replay,
+      sourceVideo: 'videos/barbell-squat/squat_001.mp4',
+      landmarkFile: 'landmarks/barbell-squat/squat_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Side-view Barbell Squat reps are the v1 full-form scoring target'),
+        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('Use barbell-squat.incomplete_rom only as the fallback ROM issue'),
+        expect.stringContaining('Do not label knee valgus in v1'),
+      ]),
+    );
+    expect(label.availableIssues?.map((issue) => issue.issueId) ?? []).not.toContain('barbell-squat.knee_valgus');
+  });
+
+  it('adds side-view Cable Row labeling guidance to draft labels', () => {
+    const label = createDraftLabelFromReplay({
+      definition: cableRowDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Cable Row',
+      },
+      replay,
+      sourceVideo: 'videos/cable-row/cable_row_001.mp4',
+      landmarkFile: 'landmarks/cable-row/cable_row_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Side-view Cable Row reps are the v1 full-form scoring target'),
+        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('Label row depth, extension, shoulder retraction'),
+        expect.stringContaining('Do not label row-target height, hold, or velocity diagnostics'),
+      ]),
+    );
+    expect(label.reps[0]?.view).toBe('unknown');
+    expect(label.reps[0]?.scorable).toBe(true);
+    expect(label.availableIssues?.map((issue) => issue.issueId) ?? []).not.toContain('cable-row.row_target_high');
+  });
+
+  it('adds front-view lateral-raise labeling guidance to draft labels', () => {
+    const label = createDraftLabelFromReplay({
+      definition: lateralRaiseDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Standing Dumbbell Lateral Raises',
+      },
+      replay,
+      sourceVideo: 'videos/standing-dumbbell-lateral-raises/lateral_raise_001.mp4',
+      landmarkFile: 'landmarks/standing-dumbbell-lateral-raises/lateral_raise_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Front-view Standing Dumbbell Lateral Raises are the v1 full-form scoring target'),
+        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('do not count tiny pulses'),
+        expect.stringContaining('note the visible subcause'),
+        expect.stringContaining('Reviewed scorable Standing Dumbbell Lateral Raises reps must use view=front'),
+      ]),
+    );
   });
 });

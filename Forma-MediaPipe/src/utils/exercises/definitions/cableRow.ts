@@ -124,6 +124,10 @@ const FORM_THRESHOLDS = {
   TEMPO_PULL_MIN: 0.3,
   /** Eccentric (return) too fast threshold (seconds) */
   TEMPO_RETURN_MIN: 0.4,
+  /** Average side-view confidence below which a counted rep is marked unscorable */
+  SIDE_VIEW_AVG_CONFIDENCE_MIN: 0.45,
+  /** Minimum side-view confidence below which a counted rep is marked unscorable */
+  SIDE_VIEW_MIN_CONFIDENCE_MIN: 0.25,
 } as const;
 
 /**
@@ -154,8 +158,6 @@ const PENALTY_CONFIGS = {
 
 const VISIBILITY_THRESHOLD = 0.15;
 const FORM_CONFIDENCE_MIN = 0.3;
-const SIDE_VIEW_AVG_CONFIDENCE_MIN = 0.45;
-const SIDE_VIEW_MIN_CONFIDENCE_MIN = 0.25;
 const SIDE_VIEW_MIN_SAMPLES = 5;
 const SETUP_SIDE_VIEW_MIN_SAMPLES = 8;
 const FEEDBACK_COOLDOWN_SECONDS = 2.0;
@@ -688,8 +690,8 @@ function isCableRowRepScorable(repWindow: RepWindow): boolean {
   const averageConfidence = averageSideViewConfidence(repWindow);
   if (averageConfidence === null) return true;
   return (
-    averageConfidence >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
-    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN
+    averageConfidence >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN
   );
 }
 
@@ -716,7 +718,10 @@ function shouldShowSetupSideViewFeedback(state: CableRowState, t: number): boole
   return (
     averageConfidence !== null &&
     minConfidence !== null &&
-    (averageConfidence < SIDE_VIEW_AVG_CONFIDENCE_MIN || minConfidence < SIDE_VIEW_MIN_CONFIDENCE_MIN)
+    (
+      averageConfidence < FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN ||
+      minConfidence < FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN
+    )
   );
 }
 
@@ -745,6 +750,13 @@ function pullVelocitySpikeRatio(repWindow: RepWindow): number | null {
   const mean = repWindow.pullVelocitySum / repWindow.pullVelocitySamples;
   if (mean <= 1e-6) return null;
   return repWindow.maxPullVelocityRatioPerSec / mean;
+}
+
+function torsoRockDelta(repWindow: RepWindow): number {
+  if (repWindow.maxTorsoLeanBackDelta <= 0 || repWindow.maxTorsoForwardDelta <= 0) {
+    return 0;
+  }
+  return repWindow.maxTorsoLeanBackDelta + repWindow.maxTorsoForwardDelta;
 }
 
 // ============================================================================
@@ -837,7 +849,7 @@ function computeCableRowScore(repWindow: RepWindow): number {
 
   // 4. Torso mechanics
   penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
-  penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_ROCK });
+  penalties.push({ value: torsoRockDelta(repWindow), config: PENALTY_CONFIGS.TORSO_ROCK });
   penalties.push({ value: highRowPenaltyValue(repWindow), config: PENALTY_CONFIGS.HIGH_ROW });
   penalties.push({ value: repWindow.maxShoulderShrugRatio, config: PENALTY_CONFIGS.SHOULDER_SHRUG });
 
@@ -887,7 +899,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Stay upright \u2014 avoid leaning back during the pull.');
   }
 
-  if (repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
+  if (torsoRockDelta(repWindow) > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
     messages.push('Keep your torso steady through the row.');
   }
 
@@ -927,14 +939,19 @@ function buildCableRowDiagnostics(
     : null;
   const sideViewConfidence = averageSideViewConfidence(repWindow);
   const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES;
+  const sideViewMinConfidence = repWindow.sideViewConfidenceSamples > 0
+    ? repWindow.sideViewConfidenceMin
+    : null;
   const holdMs = contractedHoldMs(repWindow);
   const spikeRatio = pullVelocitySpikeRatio(repWindow);
+  const rockDelta = torsoRockDelta(repWindow);
+  const scorable = isCableRowRepScorable(repWindow);
   return buildRepDiagnostics({
     exerciseName: 'Cable Row',
     repIndex,
-    view: 'side',
+    view: scorable ? 'side' : 'unknown',
     selectedSide: visibleSide,
-    scorable: isCableRowRepScorable(repWindow),
+    scorable,
     metrics: [
       diagnosticMetric('pullDepthRatio', repWindow.minRatio, { unit: 'ratio' }),
       diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
@@ -943,10 +960,11 @@ function buildCableRowDiagnostics(
       diagnosticMetric('shoulderProtractionDelta', repWindow.maxShoulderProtractionDelta, { unit: 'degrees' }),
       diagnosticMetric('torsoLeanBackDelta', repWindow.maxTorsoLeanBackDelta, { unit: 'degrees' }),
       diagnosticMetric('torsoForwardDelta', repWindow.maxTorsoForwardDelta, { unit: 'degrees' }),
-      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoDev, { unit: 'degrees' }),
+      diagnosticMetric('torsoRockDelta', rockDelta, { unit: 'degrees' }),
       diagnosticMetric('elbowAboveShoulderRatio', repWindow.maxElbowAboveShoulderRatio, { unit: 'ratio' }),
       diagnosticMetric('rowTargetHighRatio', repWindow.maxRowTargetHighRatio, { unit: 'ratio' }),
       diagnosticMetric('shoulderShrugRatio', repWindow.maxShoulderShrugRatio, { unit: 'ratio' }),
+      // Exploratory only: useful in replay reports, but not current label/tuning targets.
       diagnosticMetric('contractedHoldMs', holdMs, {
         unit: 'milliseconds',
         eligible: holdMs !== null,
@@ -959,6 +977,12 @@ function buildCableRowDiagnostics(
         skippedReason: 'pull_velocity_unavailable',
       }),
       diagnosticMetric('sideViewConfidence', sideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('sideViewMinConfidence', sideViewMinConfidence, {
         unit: 'ratio',
         eligible: hasSideViewConfidence,
         sampleCount: repWindow.sideViewConfidenceSamples,
@@ -1008,10 +1032,10 @@ function buildCableRowDiagnostics(
         issueId: 'cable-row.torso_rocking',
         metricKeys: ['torsoRockDelta'],
         direction: 'above',
-        value: repWindow.maxTorsoDev,
+        value: rockDelta,
         thresholdPath: 'formThresholds.TORSO_ROCK_WARN',
         thresholdValue: FORM_THRESHOLDS.TORSO_ROCK_WARN,
-        triggered: repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        triggered: rockDelta > FORM_THRESHOLDS.TORSO_ROCK_WARN,
       }),
       diagnosticCue({
         issueId: 'cable-row.high_row',
@@ -1408,7 +1432,7 @@ function getDebugInfo(state: CableRowState): CableRowDebugInfo {
     shoulderProtractionDelta: repWin ? fmt(repWin.maxShoulderProtractionDelta) : null,
     torsoLeanBackDelta: repWin ? fmt(repWin.maxTorsoLeanBackDelta) : null,
     torsoForwardDelta: repWin ? fmt(repWin.maxTorsoForwardDelta) : null,
-    torsoRockDelta: repWin ? fmt(repWin.maxTorsoDev) : null,
+    torsoRockDelta: repWin ? fmt(torsoRockDelta(repWin)) : null,
     elbowAboveShoulderRatio: repWin ? fmt(repWin.maxElbowAboveShoulderRatio) : null,
     rowTargetHighRatio: repWin ? fmt(repWin.maxRowTargetHighRatio) : null,
     shoulderShrugRatio: repWin ? fmt(repWin.maxShoulderShrugRatio) : null,
@@ -1485,6 +1509,16 @@ function validateCableRowHeuristicConfig(config: ExerciseHeuristicConfig): strin
   requireOrdered(config, issues, 'thresholds.CONTRACTED_EXIT', 'thresholds.PULLING_ENTER');
   requireOrdered(config, issues, 'thresholds.PULLING_ENTER', 'thresholds.REST_REENTER', true);
   requireOrdered(config, issues, 'thresholds.MIN_PARTIAL_ROM', 'thresholds.PULLING_ENTER');
+  requireOrdered(config, issues, 'thresholds.CONTRACTED_ENTER', 'formThresholds.PULL_DEPTH_FAIL', true);
+  requireOrdered(config, issues, 'formThresholds.PULL_DEPTH_FAIL', 'thresholds.PULLING_ENTER');
+  requireOrdered(config, issues, 'thresholds.REST_REENTER', 'formThresholds.EXTENSION_FAIL', true);
+  requireOrdered(
+    config,
+    issues,
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    true,
+  );
 
   for (const path of [
     'thresholds.PULLING_ENTER',
@@ -1512,6 +1546,16 @@ function validateCableRowHeuristicConfig(config: ExerciseHeuristicConfig): strin
     const value = configNumber(config, path, issues);
     if (value !== null && value <= 0) {
       issues.push(`Cable Row config "${path}" must be greater than 0.`);
+    }
+  }
+
+  for (const path of [
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1)) {
+      issues.push(`Cable Row config "${path}" must be greater than 0 and at most 1.`);
     }
   }
 

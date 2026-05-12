@@ -14,6 +14,10 @@ const VALID_CAPTURE_MACHINE_STYLES = ['seated_selectorized', 'kneeling', 'plate_
 const VALID_CAPTURE_VISIBLE_HANDLES = ['yes', 'no', 'partial', 'unknown'];
 const VALID_REVIEWER_VIEW_CONFIDENCES = ['good', 'usable', 'poor'];
 const VALID_REP_VIEWS = ['side', 'front', 'oblique', 'unknown'];
+const REVIEWED_REP_METADATA_REQUIRED_EXERCISES = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Standing Dumbbell Lateral Raises', 'Cable Row']);
+const REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row']);
+const REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Push-Up', 'Barbell Squat', 'Cable Row']);
+const REVIEWED_FRONT_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Standing Dumbbell Lateral Raises']);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -29,6 +33,10 @@ function isStringArray(value: unknown): value is string[] {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function exerciseList(exercises: Set<string>): string {
+  return Array.from(exercises).join(' or ');
 }
 
 export function validateLabelFile(
@@ -139,6 +147,11 @@ export function validateLabelFile(
   let previousEndMs = -Infinity;
   const seenIndexes = new Set<number>();
 
+  const requiresReviewedRepMetadata =
+    value.reviewStatus === 'reviewed' &&
+    typeof value.exerciseName === 'string' &&
+    REVIEWED_REP_METADATA_REQUIRED_EXERCISES.has(value.exerciseName);
+
   value.reps.forEach((rep: unknown, zeroBasedIndex: number) => {
     const path = `$.reps[${zeroBasedIndex}]`;
     if (!isObject(rep)) {
@@ -192,8 +205,58 @@ export function validateLabelFile(
       }
     }
 
+    if (requiresReviewedRepMetadata && rep.view === undefined) {
+      issues.push({
+        path: `${path}.view`,
+        message: `reviewed ${exerciseList(REVIEWED_REP_METADATA_REQUIRED_EXERCISES)} reps must include view.`,
+      });
+    }
     if (rep.view !== undefined && !VALID_REP_VIEWS.includes(rep.view as string)) {
       issues.push({ path: `${path}.view`, message: 'view must be side, front, oblique, or unknown.' });
+    }
+    if (
+      value.reviewStatus === 'reviewed' &&
+      typeof value.exerciseName === 'string' &&
+      REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE.has(value.exerciseName) &&
+      rep.scorable === true &&
+      rep.view === 'unknown'
+    ) {
+      issues.push({
+        path: `${path}.view`,
+        message: `reviewed scorable ${exerciseList(REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE)} reps must use front, side, or oblique view; use scorable=false when view is unknown.`,
+      });
+    }
+    if (
+      value.reviewStatus === 'reviewed' &&
+      typeof value.exerciseName === 'string' &&
+      REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE.has(value.exerciseName) &&
+      rep.scorable === true &&
+      rep.view !== undefined &&
+      rep.view !== 'side'
+    ) {
+      issues.push({
+        path: `${path}.view`,
+        message: `reviewed scorable ${exerciseList(REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE)} reps must use side view; use scorable=false for front, oblique, or unknown views.`,
+      });
+    }
+    if (
+      value.reviewStatus === 'reviewed' &&
+      typeof value.exerciseName === 'string' &&
+      REVIEWED_FRONT_VIEW_REQUIRED_WHEN_SCORABLE.has(value.exerciseName) &&
+      rep.scorable === true &&
+      rep.view !== undefined &&
+      rep.view !== 'front'
+    ) {
+      issues.push({
+        path: `${path}.view`,
+        message: `reviewed scorable ${exerciseList(REVIEWED_FRONT_VIEW_REQUIRED_WHEN_SCORABLE)} reps must use front view; use scorable=false for side, oblique, or unknown views.`,
+      });
+    }
+    if (requiresReviewedRepMetadata && rep.scorable === undefined) {
+      issues.push({
+        path: `${path}.scorable`,
+        message: `reviewed ${exerciseList(REVIEWED_REP_METADATA_REQUIRED_EXERCISES)} reps must include scorable.`,
+      });
     }
     if (rep.scorable !== undefined && typeof rep.scorable !== 'boolean') {
       issues.push({ path: `${path}.scorable`, message: 'scorable must be a boolean when provided.' });

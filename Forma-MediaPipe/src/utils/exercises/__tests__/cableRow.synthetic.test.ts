@@ -93,7 +93,13 @@ function lerpPoint(a: Point, b: Point, t: number, mirror: number): Point {
   };
 }
 
-function poseAt(progress: number, orientation: Orientation, posture: TorsoPosture, armPath: ArmPath) {
+function poseAt(
+  progress: number,
+  orientation: Orientation,
+  posture: TorsoPosture,
+  armPath: ArmPath,
+  torsoZMagnitude = 0.34,
+) {
   const mirror = orientation === 'facing-left' ? -1 : 1;
   const shoulder = lerpPoint(EXTENDED.shoulder, CONTRACTED.shoulder, progress, mirror);
   const elbow = lerpPoint(EXTENDED.elbow, CONTRACTED.elbow, progress, mirror);
@@ -101,9 +107,9 @@ function poseAt(progress: number, orientation: Orientation, posture: TorsoPostur
   const hip = lerpPoint(EXTENDED.hip, CONTRACTED.hip, progress, mirror);
 
   if (posture === 'leaned') {
-    shoulder.z = -0.34;
+    shoulder.z = -torsoZMagnitude;
   } else if (posture === 'forward') {
-    shoulder.z = 0.34;
+    shoulder.z = torsoZMagnitude;
   }
 
   if (armPath === 'highRow') {
@@ -137,8 +143,9 @@ function sideKeypoints(
   score: number,
   armPath: ArmPath,
   sideGap: number,
+  torsoZMagnitude: number,
 ): Keypoint[] {
-  const pose = poseAt(progress, orientation, posture, armPath);
+  const pose = poseAt(progress, orientation, posture, armPath, torsoZMagnitude);
   const offset = side === 'left' ? -sideGap / 2 : sideGap / 2;
   const withOffset = (point: Point) => ({ ...point, x: point.x + offset });
 
@@ -159,12 +166,13 @@ function makeFrameWithScores(
   rightScore: number,
   armPath: ArmPath,
   sideGap: number,
+  torsoZMagnitude: number,
 ): LandmarkRecording['frames'][number] {
   return {
     timestamp,
     keypoints: [
-      ...sideKeypoints('left', progress, orientation, posture, leftScore, armPath, sideGap),
-      ...sideKeypoints('right', progress, orientation, posture, rightScore, armPath, sideGap),
+      ...sideKeypoints('left', progress, orientation, posture, leftScore, armPath, sideGap, torsoZMagnitude),
+      ...sideKeypoints('right', progress, orientation, posture, rightScore, armPath, sideGap, torsoZMagnitude),
     ],
   };
 }
@@ -178,10 +186,11 @@ function makeFrame(
   hiddenSideScore = 0.3,
   armPath: ArmPath,
   sideGap: number,
+  torsoZMagnitude: number,
 ): LandmarkRecording['frames'][number] {
   return side === 'left'
-    ? makeFrameWithScores(timestamp, progress, orientation, posture, 0.99, hiddenSideScore, armPath, sideGap)
-    : makeFrameWithScores(timestamp, progress, orientation, posture, hiddenSideScore, 0.99, armPath, sideGap);
+    ? makeFrameWithScores(timestamp, progress, orientation, posture, 0.99, hiddenSideScore, armPath, sideGap, torsoZMagnitude)
+    : makeFrameWithScores(timestamp, progress, orientation, posture, hiddenSideScore, 0.99, armPath, sideGap, torsoZMagnitude);
 }
 
 function buildRecording(
@@ -194,6 +203,7 @@ function buildRecording(
     armPath?: ArmPath;
     sideGap?: number;
     sideSwitchFrame?: number;
+    torsoZMagnitude?: number;
   } = {},
 ): LandmarkRecording {
   const {
@@ -203,6 +213,7 @@ function buildRecording(
     armPath = 'normal',
     sideGap = 0.03,
     sideSwitchFrame,
+    torsoZMagnitude = 0.34,
   } = options;
 
   return {
@@ -218,10 +229,10 @@ function buildRecording(
       const framePosture = typeof posture === 'function' ? posture(index) : posture;
       if (sideSwitchFrame !== undefined && index >= sideSwitchFrame) {
         return side === 'left'
-          ? makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.7, 0.99, armPath, sideGap)
-          : makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.99, 0.7, armPath, sideGap);
+          ? makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.7, 0.99, armPath, sideGap, torsoZMagnitude)
+          : makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, 0.99, 0.7, armPath, sideGap, torsoZMagnitude);
       }
-      return makeFrame(index * FRAME_MS, progress, side, orientation, framePosture, 0.3, armPath, sideGap);
+      return makeFrame(index * FRAME_MS, progress, side, orientation, framePosture, 0.3, armPath, sideGap, torsoZMagnitude);
     }),
   };
 }
@@ -339,10 +350,15 @@ describe('Cable Row synthetic replay coverage', () => {
         posture: index => (index < 45 ? 'upright' : 'leaned'),
       }),
     );
+    const diagnostics = leaned.reps[0].diagnostics!;
 
     expect(clean.feedbackMessages).not.toContain('Stay upright — avoid leaning back during the pull.');
     expect(leaned.finalRepCount).toBe(1);
     expect(leaned.feedbackMessages).toContain('Stay upright — avoid leaning back during the pull.');
+    expect(leaned.feedbackMessages).not.toContain('Keep your torso steady through the row.');
+    expect(diagnostics.metrics.torsoRockDelta.value).toBe(0);
+    expect(diagnostics.cues['cable-row.torso_warn'].triggered).toBe(true);
+    expect(diagnostics.cues['cable-row.torso_rocking'].triggered).toBe(false);
   });
 
   it.each<Orientation>(['facing-right', 'facing-left'])(
@@ -394,12 +410,16 @@ describe('Cable Row synthetic replay coverage', () => {
     const result = replayRecording(
       cableRowDefinition,
       buildRecording('synthetic rocking cable row', fullRepPath(), {
-        posture: index => (index < 30 ? 'upright' : index < 54 ? 'leaned' : 'forward'),
+        posture: index => (index < 45 ? 'upright' : index < 70 ? 'leaned' : 'forward'),
+        torsoZMagnitude: 0.75,
       }),
     );
+    const diagnostics = result.reps[0].diagnostics!;
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain('Keep your torso steady through the row.');
+    expect(diagnostics.metrics.torsoRockDelta.value ?? 0).toBeGreaterThan(0);
+    expect(diagnostics.cues['cable-row.torso_rocking'].triggered).toBe(true);
   });
 
   it('flags a high row path without punishing a clean rib-level row', () => {
@@ -485,9 +505,15 @@ describe('Cable Row synthetic replay coverage', () => {
       buildRecording('synthetic poor side view cable row', fullRepPath(), { sideGap: 0.42 }),
       { confidenceGating: true },
     );
+    const diagnostics = result.reps[0].diagnostics!;
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(diagnostics.scorable).toBe(false);
+    expect(diagnostics.view).toBe('unknown');
+    expect(diagnostics.metrics.sideViewConfidence.sampleCount).toBeGreaterThanOrEqual(5);
+    expect(diagnostics.metrics.sideViewMinConfidence.sampleCount).toBeGreaterThanOrEqual(5);
+    expect(diagnostics.metrics.sideViewMinConfidence.value ?? 1).toBeLessThan(0.25);
     expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });

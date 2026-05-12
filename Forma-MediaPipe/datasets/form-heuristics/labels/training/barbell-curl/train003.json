@@ -11,43 +11,57 @@
       "index": 1,
       "startMs": 4380,
       "endMs": 5750,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 2,
       "startMs": 6250,
       "endMs": 7250,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 3,
       "startMs": 7620,
       "endMs": 8750,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 4,
       "startMs": 8880,
       "endMs": 9500,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 5,
       "startMs": 9750,
       "endMs": 11120,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 6,
       "startMs": 11250,
       "endMs": 12250,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 7,
       "startMs": 12750,
       "endMs": 14120,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     }
   ],
   "notes": "Human-reviewed from video. Long setup removed from rep labels; seven visible reps labelled."

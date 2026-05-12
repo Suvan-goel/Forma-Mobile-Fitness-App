@@ -31,10 +31,15 @@ import type {
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
-import { computeScore, PenaltyConfig } from '../shared/scoring';
+import {
+  computePenaltyPoints,
+  computeScoreFromPenaltyPoints,
+  PenaltyConfig,
+} from '../shared/scoring';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
+  getConfigValue,
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
@@ -168,6 +173,26 @@ const LATERAL_RAISE_TUNABLE_SPEC = createDefaultTunableSpec(
   'Standing Dumbbell Lateral Raises',
   DEFAULT_LATERAL_RAISE_HEURISTIC_CONFIG,
 );
+// Keep the first labelled-data pass from independently tuning world-only torso
+// sub-signals against one aggregated torso_warn label.
+LATERAL_RAISE_TUNABLE_SPEC.tunables = LATERAL_RAISE_TUNABLE_SPEC.tunables
+  .filter(tunable => ![
+    'formThresholds.MIN_FORM_SAMPLES',
+    'formThresholds.SAGITTAL_SWAY_WARN',
+    'formThresholds.HIP_SWAY_WARN',
+  ].includes(tunable.path))
+  .map((tunable) => {
+    switch (tunable.path) {
+      case 'formThresholds.TORSO_LEAN_WARN':
+        return { ...tunable, min: 1, max: 8, step: 0.25 };
+      case 'formThresholds.TEMPO_RAISE_MIN':
+        return { ...tunable, min: 0.15, max: 0.45, step: 0.05 };
+      case 'formThresholds.TEMPO_LOWER_MIN':
+        return { ...tunable, min: 0.20, max: 0.55, step: 0.05 };
+      default:
+        return tunable;
+    }
+  });
 LATERAL_RAISE_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'standing-dumbbell-lateral-raises.rom_height', metricKey: 'peakHeightRatio', thresholdPath: 'formThresholds.ROM_MIN', direction: 'below' },
   { issueId: 'standing-dumbbell-lateral-raises.over_raise', metricKey: 'peakHeightRatio', thresholdPath: 'formThresholds.OVER_RAISE_WARN', direction: 'above' },
@@ -213,6 +238,8 @@ interface RepFrameMetrics {
   avgHeightRatio: number;
   leftHeightRatio: number;
   rightHeightRatio: number;
+  leftWristEndpointObserved: boolean;
+  rightWristEndpointObserved: boolean;
   avgLateralReach: number;
   leftLateralReach: number;
   rightLateralReach: number;
@@ -290,6 +317,8 @@ interface RepWindow {
   asymmetrySampleCount: number;
   topFrameCount: number;
   lateralReachSampleCount: number;
+  wristEndpointSampleCount: number;
+  wristEndpointObservedCount: number;
   shrugSampleCount: number;
   headShrugSampleCount: number;
   sagittalSwaySampleCount: number;
@@ -467,6 +496,8 @@ function initRepWindow(
     asymmetrySampleCount: 0,
     topFrameCount: 0,
     lateralReachSampleCount: 0,
+    wristEndpointSampleCount: 0,
+    wristEndpointObservedCount: 0,
     shrugSampleCount: 0,
     headShrugSampleCount: 0,
     sagittalSwaySampleCount: 0,
@@ -528,6 +559,23 @@ function computeTorsoHeight(
   const midHipY = (leftHip.y + rightHip.y) / 2;
   const midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
   return Math.abs(midHipY - midShoulderY);
+}
+
+function estimateWristEndpointFromElbow(
+  name: string,
+  shoulder: Keypoint,
+  elbow: Keypoint,
+): Keypoint {
+  const estimated: Keypoint = {
+    name,
+    x: elbow.x + (elbow.x - shoulder.x),
+    y: elbow.y + (elbow.y - shoulder.y),
+    score: Math.min(shoulder.score, elbow.score),
+  };
+  if (shoulder.z !== undefined || elbow.z !== undefined) {
+    estimated.z = (elbow.z ?? 0) + ((elbow.z ?? 0) - (shoulder.z ?? 0));
+  }
+  return estimated;
 }
 
 /**
@@ -693,7 +741,9 @@ function lateralRaiseQualityWarnings(repWindow: RepWindow): FrameworkRepResult['
 }
 
 function diagnosticView(repWindow: RepWindow): ViewDiagnostic {
-  if (!hasEnoughViewAngleSamples(repWindow)) return 'unknown';
+  const ratio = nonFrontViewSampleRatio(repWindow);
+  if (!hasEnoughViewAngleSamples(repWindow) || ratio === null) return 'unknown';
+  if (ratio < FRONT_VIEW_WARN_SAMPLE_RATIO) return 'front';
   return classifyFrontViewAngle(repWindow.maxViewAngleDeg);
 }
 
@@ -790,12 +840,17 @@ function hasEnoughSamples(count: number): boolean {
 function accumulateRepWindowFrame(repWindow: RepWindow, metrics: RepFrameMetrics): void {
   repWindow.tEnd = metrics.t;
   repWindow.frameCount++;
+  repWindow.wristEndpointSampleCount += 2;
+  repWindow.wristEndpointObservedCount +=
+    (metrics.leftWristEndpointObserved ? 1 : 0) +
+    (metrics.rightWristEndpointObserved ? 1 : 0);
 
   repWindow.maxHeightRatio = Math.max(repWindow.maxHeightRatio, metrics.avgHeightRatio);
   repWindow.maxLeftHeightRatio = Math.max(repWindow.maxLeftHeightRatio, metrics.leftHeightRatio);
   repWindow.maxRightHeightRatio = Math.max(repWindow.maxRightHeightRatio, metrics.rightHeightRatio);
 
   const nearTop = metrics.avgHeightRatio >= THRESHOLDS.TOP_EXIT;
+  const asymmetryNearTop = Math.max(metrics.leftHeightRatio, metrics.rightHeightRatio) >= THRESHOLDS.TOP_EXIT;
   if (
     nearTop &&
     metrics.lateralReachConf >= FORM_CONFIDENCE_MIN &&
@@ -811,7 +866,7 @@ function accumulateRepWindowFrame(repWindow: RepWindow, metrics: RepFrameMetrics
     const heightRatioDiff = Math.abs(metrics.leftHeightRatio - metrics.rightHeightRatio);
     repWindow.maxHeightRatioDiff = Math.max(repWindow.maxHeightRatioDiff, heightRatioDiff);
     repWindow.asymmetrySampleCount++;
-    if (nearTop) {
+    if (asymmetryNearTop) {
       repWindow.topFrameCount++;
       repWindow.topHeightAsymmetrySum += heightRatioDiff;
       repWindow.topHeightAsymmetry = repWindow.topHeightAsymmetrySum / repWindow.topFrameCount;
@@ -927,63 +982,70 @@ function torsoWarningTriggered(repWindow: RepWindow): boolean {
 }
 
 function computeRepWindowScore(repWindow: RepWindow): number {
-  const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
+  const penaltyPoints: number[] = [];
+  const addPenalty = (value: number, config: PenaltyConfig) => {
+    penaltyPoints.push(computePenaltyPoints(value, config));
+  };
 
   // 1. ROM shortfall — ideal is ratio 1.0 (shoulder level). FSM ensures ≥0.85.
   const romShortfall = Math.max(0, IDEAL.MAX_HEIGHT_RATIO - repWindow.maxHeightRatio);
-  penalties.push({ value: romShortfall, config: PENALTY_CONFIGS.ROM });
+  addPenalty(romShortfall, PENALTY_CONFIGS.ROM);
 
   // 2. Arm straightness — ideal is 0.97 (slight bend OK). Lower = more bend = worse.
   if (hasEnoughSamples(repWindow.straightnessSampleCount)) {
     const straightnessDeficit = Math.max(0, IDEAL.MIN_STRAIGHTNESS - repWindow.minStraightnessRatio);
-    penalties.push({ value: straightnessDeficit, config: PENALTY_CONFIGS.ARM_STRAIGHT });
+    addPenalty(straightnessDeficit, PENALTY_CONFIGS.ARM_STRAIGHT);
   }
 
   // 3. Torso lean — lower is better (deadzone handles small amounts)
+  const torsoPenaltyPoints: number[] = [];
   if (hasEnoughSamples(repWindow.torsoSampleCount)) {
-    penalties.push({ value: repWindow.maxTorsoLean, config: PENALTY_CONFIGS.TORSO_LEAN });
+    torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxTorsoLean, PENALTY_CONFIGS.TORSO_LEAN));
   }
   if (hasEnoughSamples(repWindow.sagittalSwaySampleCount)) {
-    penalties.push({ value: repWindow.maxSagittalTorsoSway, config: PENALTY_CONFIGS.SAGITTAL_SWAY });
+    torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxSagittalTorsoSway, PENALTY_CONFIGS.SAGITTAL_SWAY));
   }
   if (hasEnoughSamples(repWindow.hipSwaySampleCount)) {
-    penalties.push({ value: repWindow.maxHipSwayRatio, config: PENALTY_CONFIGS.HIP_SWAY });
+    torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxHipSwayRatio, PENALTY_CONFIGS.HIP_SWAY));
+  }
+  if (torsoPenaltyPoints.length > 0) {
+    penaltyPoints.push(Math.max(...torsoPenaltyPoints));
   }
 
   // 4. Tempo — lightly penalize swingy raises and uncontrolled descents.
   if (repWindow.tTop !== null) {
     const tRaise = repWindow.tTop - repWindow.tStart;
     if (tRaise > 0 && tRaise < IDEAL.CONCENTRIC_TIME) {
-      penalties.push({ value: IDEAL.CONCENTRIC_TIME - tRaise, config: PENALTY_CONFIGS.TEMPO_RAISE });
+      addPenalty(IDEAL.CONCENTRIC_TIME - tRaise, PENALTY_CONFIGS.TEMPO_RAISE);
     }
   }
   if (repWindow.tLoweringStart !== null) {
     const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < IDEAL.ECCENTRIC_TIME) {
       const deficit = IDEAL.ECCENTRIC_TIME - tLower;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_LOWER });
+      addPenalty(deficit, PENALTY_CONFIGS.TEMPO_LOWER);
     }
   }
 
   // 5. Asymmetry — sustained top-phase difference between arms.
   if (hasEnoughSamples(repWindow.topFrameCount)) {
-    penalties.push({ value: repWindow.topHeightAsymmetry, config: PENALTY_CONFIGS.ASYMMETRY });
+    addPenalty(repWindow.topHeightAsymmetry, PENALTY_CONFIGS.ASYMMETRY);
   }
 
   // 6. Shoulder shrug — torso-height or optional head-relative support.
-  penalties.push({ value: effectiveShrugPct(repWindow), config: PENALTY_CONFIGS.SHRUG });
+  addPenalty(effectiveShrugPct(repWindow), PENALTY_CONFIGS.SHRUG);
 
   // 7. Over-raising — above shoulder level shifts tension and often invites shrugging.
   const overRaise = Math.max(0, repWindow.maxHeightRatio - IDEAL.MAX_HEIGHT_RATIO);
-  penalties.push({ value: overRaise, config: PENALTY_CONFIGS.OVER_RAISE });
+  addPenalty(overRaise, PENALTY_CONFIGS.OVER_RAISE);
 
   // 8. Wrong plane — height without enough outward reach is a front/scaption raise.
   if (hasEnoughSamples(repWindow.lateralReachSampleCount)) {
     const lateralReachShortfall = Math.max(0, FORM_THRESHOLDS.LATERAL_REACH_MIN - repWindow.maxLateralReachRatio);
-    penalties.push({ value: lateralReachShortfall, config: PENALTY_CONFIGS.LATERAL_PATH });
+    addPenalty(lateralReachShortfall, PENALTY_CONFIGS.LATERAL_PATH);
   }
 
-  return computeScore(penalties);
+  return computeScoreFromPenaltyPoints(penaltyPoints);
 }
 
 // ============================================================================
@@ -1081,6 +1143,10 @@ function buildLateralRaiseDiagnostics(
   const hasSagittalSway = hasEnoughSamples(repWindow.sagittalSwaySampleCount);
   const hasHipSway = hasEnoughSamples(repWindow.hipSwaySampleCount);
   const hasShrug = hasEnoughSamples(repWindow.shrugSampleCount) || hasEnoughSamples(repWindow.headShrugSampleCount);
+  const hasWristEndpointSamples = repWindow.wristEndpointSampleCount > 0;
+  const wristEndpointCoverage = hasWristEndpointSamples
+    ? repWindow.wristEndpointObservedCount / repWindow.wristEndpointSampleCount
+    : null;
   const hasViewAngle = hasEnoughViewAngleSamples(repWindow);
   const hasAnyViewAngle = repWindow.viewAngleSampleCount > 0;
   const viewSkippedReason = hasAnyViewAngle
@@ -1134,6 +1200,12 @@ function buildLateralRaiseDiagnostics(
         sampleCount: repWindow.straightnessSampleCount,
         skippedReason: 'wrist_landmarks_unavailable',
       }),
+      diagnosticMetric('wristEndpointCoverage', wristEndpointCoverage, {
+        unit: 'ratio',
+        eligible: hasWristEndpointSamples,
+        sampleCount: repWindow.wristEndpointSampleCount,
+        skippedReason: 'no_rep_frames',
+      }),
       diagnosticMetric('torsoLean', repWindow.maxTorsoLean, {
         unit: 'degrees',
         eligible: hasTorsoLean,
@@ -1153,13 +1225,13 @@ function buildLateralRaiseDiagnostics(
         skippedReason: 'insufficient_hip_sway_samples',
       }),
       diagnosticMetric('shrugPct', shrugMetricPct, {
-        unit: 'ratio',
+        unit: 'percent',
         eligible: hasShrug,
         sampleCount: Math.max(repWindow.shrugSampleCount, repWindow.headShrugSampleCount),
         skippedReason: 'insufficient_shrug_samples',
       }),
       diagnosticMetric('headShrugPct', repWindow.maxHeadShrugPct, {
-        unit: 'ratio',
+        unit: 'percent',
         eligible: hasEnoughSamples(repWindow.headShrugSampleCount),
         sampleCount: repWindow.headShrugSampleCount,
         skippedReason: 'head_landmarks_unavailable',
@@ -1353,33 +1425,24 @@ function updateLateralRaiseState(
 
   // -- Compute raw ratios --
   // Arm height ratio: wrist height relative to torso (0 = hip, 1.0 = shoulder)
-  // Uses elbow as fallback for wrist if wrist not visible (arms still track via elbow height)
+  // Uses an explicit elbow-projected endpoint only for rep-count continuity
+  // when wrist landmarks drop out; wrist-dependent form cues remain ineligible.
   const leftWristVisible = isVisible(lw, VISIBILITY_THRESHOLD);
   const rightWristVisible = isVisible(rw, VISIBILITY_THRESHOLD);
-  const leftWristPoint = leftWristVisible ? lw! : le!;
-  const rightWristPoint = rightWristVisible ? rw! : re!;
-  const rawLeftHeightRatio = computeArmHeightRatio(leftWristPoint, lh!, rh!, ls!, rs!);
-  const rawRightHeightRatio = computeArmHeightRatio(rightWristPoint, lh!, rh!, ls!, rs!);
-  const rawLeftLateralReach = computeLateralReachRatio(
-    'left',
-    ls!,
-    le!,
-    leftWristVisible ? lw! : null,
-    lh!,
-    rh!,
-    ls!,
-    rs!,
-  );
-  const rawRightLateralReach = computeLateralReachRatio(
-    'right',
-    rs!,
-    re!,
-    rightWristVisible ? rw! : null,
-    lh!,
-    rh!,
-    ls!,
-    rs!,
-  );
+  const leftWristEndpoint = leftWristVisible
+    ? lw!
+    : estimateWristEndpointFromElbow('left_wrist_estimated', ls!, le!);
+  const rightWristEndpoint = rightWristVisible
+    ? rw!
+    : estimateWristEndpointFromElbow('right_wrist_estimated', rs!, re!);
+  const rawLeftHeightRatio = computeArmHeightRatio(leftWristEndpoint, lh!, rh!, ls!, rs!);
+  const rawRightHeightRatio = computeArmHeightRatio(rightWristEndpoint, lh!, rh!, ls!, rs!);
+  const rawLeftLateralReach = leftWristVisible
+    ? computeLateralReachRatio('left', ls!, le!, lw!, lh!, rh!, ls!, rs!)
+    : NaN;
+  const rawRightLateralReach = rightWristVisible
+    ? computeLateralReachRatio('right', rs!, re!, rw!, lh!, rh!, ls!, rs!)
+    : NaN;
 
   // Arm straightness ratio (only when wrist visible)
   let rawLeftStraightness = NaN;
@@ -1423,7 +1486,7 @@ function updateLateralRaiseState(
   const torsoConf = minKeypointConfidence(imageKeypoints, [
     'left_shoulder', 'right_shoulder', 'left_hip', 'right_hip',
   ]);
-  const lateralReachConf = Math.min(leftHeightConf, rightHeightConf);
+  const lateralReachConf = leftWristVisible && rightWristVisible ? Math.min(leftHeightConf, rightHeightConf) : 0;
   const headShrugConf = rawShoulderHeadGap !== null
     ? minKeypointConfidence(imageKeypoints, ['nose', 'left_shoulder', 'right_shoulder'])
     : 0;
@@ -1517,6 +1580,8 @@ function updateLateralRaiseState(
       avgHeightRatio: fastAvgHeightRatio,
       leftHeightRatio: fastLeftHeightRatio,
       rightHeightRatio: fastRightHeightRatio,
+      leftWristEndpointObserved: leftWristVisible,
+      rightWristEndpointObserved: rightWristVisible,
       avgLateralReach: fastAvgLateralReach,
       leftLateralReach: fastLeftLateralReach,
       rightLateralReach: fastRightLateralReach,
@@ -1625,6 +1690,134 @@ function getDebugInfo(state: LateralRaiseState): LateralRaiseDebugInfo {
 }
 
 // ============================================================================
+// CONFIG VALIDATION
+// ============================================================================
+
+function configNumber(config: ExerciseHeuristicConfig, path: string, issues: string[]): number | null {
+  const value = getConfigValue(config, path);
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  issues.push(`Lateral Raise config "${path}" must be a finite number.`);
+  return null;
+}
+
+function requireOrdered(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  lowerPath: string,
+  upperPath: string,
+  allowEqual = false,
+): void {
+  const lower = configNumber(config, lowerPath, issues);
+  const upper = configNumber(config, upperPath, issues);
+  if (lower === null || upper === null) return;
+  const valid = allowEqual ? lower <= upper : lower < upper;
+  if (!valid) {
+    issues.push(
+      `Lateral Raise config "${lowerPath}" must be ${allowEqual ? 'less than or equal to' : 'less than'} "${upperPath}".`,
+    );
+  }
+}
+
+function requirePositive(config: ExerciseHeuristicConfig, issues: string[], path: string): void {
+  const value = configNumber(config, path, issues);
+  if (value !== null && value <= 0) {
+    issues.push(`Lateral Raise config "${path}" must be greater than 0.`);
+  }
+}
+
+function requireNonNegative(config: ExerciseHeuristicConfig, issues: string[], path: string): void {
+  const value = configNumber(config, path, issues);
+  if (value !== null && value < 0) {
+    issues.push(`Lateral Raise config "${path}" must be greater than or equal to 0.`);
+  }
+}
+
+function requirePositiveInteger(config: ExerciseHeuristicConfig, issues: string[], path: string): void {
+  const value = configNumber(config, path, issues);
+  if (value !== null && (!Number.isInteger(value) || value <= 0)) {
+    issues.push(`Lateral Raise config "${path}" must be a positive integer.`);
+  }
+}
+
+function validatePenaltyConfigs(config: ExerciseHeuristicConfig, issues: string[]): void {
+  const penaltyConfigs = getConfigValue(config, 'penaltyConfigs');
+  if (penaltyConfigs === null || typeof penaltyConfigs !== 'object' || Array.isArray(penaltyConfigs)) {
+    issues.push('Lateral Raise config "penaltyConfigs" must be an object.');
+    return;
+  }
+
+  for (const [penaltyName, penaltyConfig] of Object.entries(penaltyConfigs)) {
+    if (penaltyConfig === null || typeof penaltyConfig !== 'object' || Array.isArray(penaltyConfig)) {
+      issues.push(`Lateral Raise penalty config "${penaltyName}" must be an object.`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(penaltyConfig)) {
+      const path = `penaltyConfigs.${penaltyName}.${key}`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        issues.push(`Lateral Raise config "${path}" must be a finite number.`);
+        continue;
+      }
+      if ((key === 'cap' || key === 'deadzone' || key === 'scale') && value < 0) {
+        issues.push(`Lateral Raise config "${path}" must be greater than or equal to 0.`);
+      }
+    }
+  }
+}
+
+function validateLateralRaiseHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const issues: string[] = [];
+
+  requireOrdered(config, issues, 'thresholds.REST_ENTER', 'thresholds.RAISING_ENTER', true);
+  requireOrdered(config, issues, 'thresholds.RAISING_ENTER', 'thresholds.MIN_PARTIAL_HEIGHT_RATIO');
+  requireOrdered(config, issues, 'thresholds.MIN_PARTIAL_HEIGHT_RATIO', 'thresholds.TOP_EXIT');
+  requireOrdered(config, issues, 'thresholds.TOP_EXIT', 'thresholds.TOP_ENTER');
+  requireOrdered(config, issues, 'thresholds.TOP_ENTER', 'formThresholds.ROM_MIN', true);
+  requireOrdered(config, issues, 'formThresholds.ROM_MIN', 'formThresholds.OVER_RAISE_WARN');
+
+  for (const path of [
+    'thresholds.REST_ENTER',
+    'thresholds.RAISING_ENTER',
+    'thresholds.MIN_PARTIAL_HEIGHT_RATIO',
+    'thresholds.TOP_EXIT',
+    'thresholds.TOP_ENTER',
+    'formThresholds.ROM_MIN',
+    'formThresholds.OVER_RAISE_WARN',
+  ]) {
+    requireNonNegative(config, issues, path);
+  }
+
+  for (const path of [
+    'thresholds.MIN_REP_TIME',
+    'formThresholds.TEMPO_RAISE_MIN',
+    'formThresholds.TEMPO_LOWER_MIN',
+  ]) {
+    requirePositive(config, issues, path);
+  }
+
+  for (const path of [
+    'formThresholds.ELBOW_STRAIGHTNESS_WARN',
+    'formThresholds.TORSO_LEAN_WARN',
+    'formThresholds.ASYMMETRY_WARN',
+    'formThresholds.SHRUG_WARN',
+    'formThresholds.LATERAL_REACH_MIN',
+    'formThresholds.SAGITTAL_SWAY_WARN',
+    'formThresholds.HIP_SWAY_WARN',
+  ]) {
+    requireNonNegative(config, issues, path);
+  }
+
+  const elbowStraightness = configNumber(config, 'formThresholds.ELBOW_STRAIGHTNESS_WARN', issues);
+  if (elbowStraightness !== null && elbowStraightness > 1) {
+    issues.push('Lateral Raise config "formThresholds.ELBOW_STRAIGHTNESS_WARN" must be at most 1.');
+  }
+
+  requirePositiveInteger(config, issues, 'formThresholds.MIN_FORM_SAMPLES');
+  validatePenaltyConfigs(config, issues);
+
+  return issues;
+}
+
+// ============================================================================
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
@@ -1675,6 +1868,7 @@ export function createLateralRaiseDefinition(
   heuristicConfig: config,
   tunableSpec: LATERAL_RAISE_TUNABLE_SPEC,
   tunedConfigPath: 'src/utils/exercises/definitions/tuned/lateralRaise.json',
+  validateHeuristicConfig: validateLateralRaiseHeuristicConfig,
   createVariant: (variantConfig) =>
     createLateralRaiseDefinition(mergeHeuristicConfig(config, variantConfig)),
 

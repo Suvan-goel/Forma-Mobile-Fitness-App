@@ -14,25 +14,31 @@
       "issueIds": [
         "barbell-curl.torso_warn"
       ],
-      "notes": "Forward torso dip before curling, then leans back into the top."
+      "notes": "Forward torso dip before curling, then leans back into the top.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 2,
       "startMs": 3000,
       "endMs": 4750,
       "issueIds": [
-          "barbell-curl.torso_fail"
+        "barbell-curl.torso_fail"
       ],
-      "notes": "Uses a forward dip and body swing to start the curl."
+      "notes": "Uses a forward dip and body swing to start the curl.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 3,
       "startMs": 5000,
       "endMs": 6750,
       "issueIds": [
-          "barbell-curl.torso_fail"
+        "barbell-curl.torso_fail"
       ],
-      "notes": "Torso rocks forward at the bottom and rises through the curl."
+      "notes": "Torso rocks forward at the bottom and rises through the curl.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 4,
@@ -42,7 +48,9 @@
         "barbell-curl.torso_warn",
         "barbell-curl.shoulder_warn"
       ],
-      "notes": "Small forward dip and lean-back through the top of the rep."
+      "notes": "Small forward dip and lean-back through the top of the rep.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 5,
@@ -51,7 +59,9 @@
       "issueIds": [
         "barbell-curl.torso_warn"
       ],
-      "notes": "Clear forward body dip before curling, then leans back at the top."
+      "notes": "Clear forward body dip before curling, then leans back at the top.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 6,
@@ -60,7 +70,9 @@
       "issueIds": [
         "barbell-curl.torso_warn"
       ],
-      "notes": "Uses torso momentum through the curl."
+      "notes": "Uses torso momentum through the curl.",
+      "view": "unknown",
+      "scorable": true
     }
   ],
   "notes": "Human-reviewed from video. Six visible reps labelled with setup time removed from the first draft window. All reps show visible torso swing, but not enough to label as excessive torso fail. Wrist and shoulder draft suggestions were not copied because those issues are not reliably visible enough in this footage."

@@ -110,6 +110,7 @@ function frameContextForReplay(frame: LandmarkRecording['frames'][number]): Exer
     worldKeypoints: hasExplicitWorld ? frame.worldKeypoints : primarySource === 'world' ? frame.keypoints : undefined,
     imageKeypoints: hasExplicitImage ? frame.imageKeypoints : primarySource === 'image' ? frame.keypoints : undefined,
     primarySource,
+    timestampMs: frame.timestamp,
   };
 }
 

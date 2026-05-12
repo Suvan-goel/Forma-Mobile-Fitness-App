@@ -13,7 +13,9 @@
       "endMs": 3150,
       "issueIds": [
         "barbell-curl.elbow_flare"
-      ]
+      ],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 2,
@@ -21,7 +23,9 @@
       "endMs": 5050,
       "issueIds": [
         "barbell-curl.elbow_flare"
-      ]
+      ],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 3,
@@ -29,7 +33,9 @@
       "endMs": 6750,
       "issueIds": [
         "barbell-curl.elbow_flare"
-      ]
+      ],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 4,
@@ -37,19 +43,25 @@
       "endMs": 8550,
       "issueIds": [
         "barbell-curl.elbow_flare"
-      ]
+      ],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 5,
       "startMs": 10000,
       "endMs": 11650,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 6,
       "startMs": 12150,
       "endMs": 13650,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     }
   ],
   "notes": "Human-reviewed from video. Six visible reps labelled with bottom-to-bottom windows. First four reps show clear elbow flare; wrist-curl suggestions were not copied because wrist position is not reliable enough from this footage. Final two reps are clean."

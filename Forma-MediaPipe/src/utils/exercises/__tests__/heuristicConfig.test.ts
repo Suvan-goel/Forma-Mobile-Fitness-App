@@ -22,7 +22,9 @@ import { cablePushdownDefinition } from '../definitions/cablePushdown';
 import { cableRowDefinition } from '../definitions/cableRow';
 import { barbellCurlDefinition } from '../definitions/barbellCurl';
 import { legExtensionsDefinition } from '../definitions/legExtensions';
+import { lateralRaiseDefinition } from '../definitions/lateralRaise';
 import { machineAbCrunchDefinition } from '../definitions/machineAbCrunch';
+import { pushupDefinition } from '../definitions/pushup';
 import { squatDefinition } from '../definitions/squat';
 import { ExerciseRegistry } from '../ExerciseRegistry';
 import type {
@@ -73,7 +75,12 @@ function summarizeCaseEvaluation(caseEvaluation: ReturnType<typeof evaluateCase>
   };
 }
 
-function makeEvaluation(repCountAccuracy: number, issueF1: number, cleanRate: number): DatasetEvaluation {
+function makeEvaluation(
+  repCountAccuracy: number,
+  issueF1: number,
+  cleanRate: number,
+  options: { viewAccuracy?: number; scorableAccuracy?: number } = {},
+): DatasetEvaluation {
   return {
     cases: [],
     totals: {
@@ -97,8 +104,8 @@ function makeEvaluation(repCountAccuracy: number, issueF1: number, cleanRate: nu
       issueRecall: issueF1,
       issueF1,
       cleanRepFalsePositiveRate: cleanRate,
-      viewAccuracy: 1,
-      scorableAccuracy: 1,
+      viewAccuracy: options.viewAccuracy ?? 1,
+      scorableAccuracy: options.scorableAccuracy ?? 1,
     },
   };
 }
@@ -239,6 +246,27 @@ describe('heuristic config helpers', () => {
     expect(squatDefinition.validateHeuristicConfig?.(squatDefinition.heuristicConfig ?? {})).toEqual([]);
   });
 
+  it('rejects squat ratio thresholds outside zero to one', () => {
+    const base = squatDefinition.heuristicConfig ?? {};
+    const invalidHighFsm = setConfigValue(base, 'thresholds.DESCENT_CLOCK_START', 1.05);
+    const invalidLowFsm = setConfigValue(base, 'thresholds.IDLE_STANDING_MIN', -0.01);
+    const invalidHighForm = setConfigValue(base, 'formThresholds.LOCKOUT_FAIL', 1.05);
+    const invalidLowForm = setConfigValue(base, 'formThresholds.ROM_MIN', -0.01);
+
+    expect(squatDefinition.validateHeuristicConfig?.(invalidHighFsm)).toEqual(
+      expect.arrayContaining(['Squat config "thresholds.DESCENT_CLOCK_START" must be between 0 and 1.']),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidLowFsm)).toEqual(
+      expect.arrayContaining(['Squat config "thresholds.IDLE_STANDING_MIN" must be between 0 and 1.']),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidHighForm)).toEqual(
+      expect.arrayContaining(['Squat config "formThresholds.LOCKOUT_FAIL" must be between 0 and 1.']),
+    );
+    expect(squatDefinition.validateHeuristicConfig?.(invalidLowForm)).toEqual(
+      expect.arrayContaining(['Squat config "formThresholds.ROM_MIN" must be between 0 and 1.']),
+    );
+  });
+
   it('rejects invalid squat threshold ordering with clear messages', () => {
     const base = squatDefinition.heuristicConfig ?? {};
     const invalidFsm = setConfigValue(base, 'thresholds.BOTTOM_ENTER', 0.86);
@@ -335,14 +363,17 @@ describe('heuristic config helpers', () => {
     );
   });
 
-  it('exposes squat knee-tracking diagnostics as optimizer tuning metadata', () => {
-    expect(squatDefinition.tunableSpec?.diagnosticTuning).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        issueId: 'barbell-squat.knee_valgus',
-        metricKey: 'kneeTrackingOffsetRatio',
-        thresholdPath: 'formThresholds.KNEE_VALGUS_WARN',
-      }),
-    ]));
+  it('keeps inactive squat knee-valgus/front-view paths out of optimizer metadata', () => {
+    const diagnosticEntries = squatDefinition.tunableSpec?.diagnosticTuning ?? [];
+    const tunablePaths = (squatDefinition.tunableSpec?.tunables ?? []).map((tunable) => tunable.path);
+
+    expect(diagnosticEntries.some((entry) => entry.issueId === 'barbell-squat.knee_valgus')).toBe(false);
+    expect(tunablePaths.some((path) =>
+      path.includes('KNEE_VALGUS') ||
+      path.includes('KNEE_TRACKING') ||
+      path.includes('FRONT_VIEW') ||
+      path.includes('OBLIQUE_VIEW')
+    )).toBe(false);
     expect(squatDefinition.tunableSpec?.tunables).toEqual(expect.arrayContaining([
       expect.objectContaining({
         path: 'formThresholds.VIEW_MIN_SAMPLES',
@@ -350,12 +381,17 @@ describe('heuristic config helpers', () => {
       }),
       expect.objectContaining({ path: 'formThresholds.METRIC_CONFIDENCE_MIN' }),
       expect.objectContaining({ path: 'formThresholds.BASELINE_CONFIDENCE_MIN' }),
-      expect.objectContaining({ path: 'formThresholds.KNEE_TRACKING_CONFIDENCE_MIN' }),
     ]));
   });
 
   it('validates the default cable-row heuristic config', () => {
     expect(cableRowDefinition.validateHeuristicConfig?.(cableRowDefinition.heuristicConfig ?? {})).toEqual([]);
+    expect((cableRowDefinition.tunableSpec?.tunables ?? []).map((tunable) => tunable.path)).toEqual(
+      expect.arrayContaining([
+        'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+        'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+      ]),
+    );
   });
 
   it('rejects invalid cable-row thresholds and penalty configs', () => {
@@ -364,6 +400,11 @@ describe('heuristic config helpers', () => {
     const invalidRowTarget = setConfigValue(base, 'formThresholds.ROW_TARGET_HIGH_WARN', 0.6);
     const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_PULL_MIN', 0);
     const invalidPenalty = setConfigValue(base, 'penaltyConfigs.HIGH_ROW.scale', 0);
+    const invalidSideViewRange = setConfigValue(base, 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', 1.2);
+    const invalidSideViewOrdering = setConfigValue(base, 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', 0.6);
+    const invalidDepthBelowContracted = setConfigValue(base, 'formThresholds.PULL_DEPTH_FAIL', 0.5);
+    const invalidDepthAbovePulling = setConfigValue(base, 'formThresholds.PULL_DEPTH_FAIL', 0.95);
+    const invalidExtensionBelowRest = setConfigValue(base, 'formThresholds.EXTENSION_FAIL', 0.85);
 
     expect(cableRowDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
       expect.arrayContaining([expect.stringContaining('thresholds.CONTRACTED_ENTER')]),
@@ -376,6 +417,21 @@ describe('heuristic config helpers', () => {
     );
     expect(cableRowDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
       expect.arrayContaining([expect.stringContaining('penaltyConfigs.HIGH_ROW.scale')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidSideViewRange)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_AVG_CONFIDENCE_MIN')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidSideViewOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_MIN_CONFIDENCE_MIN')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidDepthBelowContracted)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.CONTRACTED_ENTER')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidDepthAbovePulling)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.PULLING_ENTER')]),
+    );
+    expect(cableRowDefinition.validateHeuristicConfig?.(invalidExtensionBelowRest)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.REST_REENTER')]),
     );
   });
 
@@ -408,6 +464,159 @@ describe('heuristic config helpers', () => {
     );
   });
 
+  it('validates the default push-up heuristic config', () => {
+    expect(pushupDefinition.validateHeuristicConfig?.(pushupDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('rejects invalid push-up threshold ordering and bounds', () => {
+    const base = pushupDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.BOTTOM_EXIT', 0.95);
+    const invalidDescendingIdleOrder = setConfigValue(base, 'thresholds.DESCENDING_ENTER', 0.92);
+    const invalidIdlePlankOrder = setConfigValue(base, 'thresholds.IDLE_ARMS_EXTENDED', 0.94);
+    const invalidPlankPartialOrder = setConfigValue(base, 'thresholds.PARTIAL_REP_RESET', 0.92);
+    const invalidPartialLockoutOrder = setConfigValue(base, 'formThresholds.LOCKOUT_FAIL', 0.93);
+    const invalidRatio = setConfigValue(base, 'thresholds.MIN_PARTIAL_ROM', -0.01);
+    const invalidDepthCountOrder = setConfigValue(base, 'thresholds.BOTTOM_ENTER', 0.72);
+    const invalidBodyOrdering = setConfigValue(base, 'thresholds.PLANK_BODY_MIN', 200);
+    const invalidTorsoOrdering = setConfigValue(base, 'thresholds.TORSO_INCLINE_MIN', 120);
+    const invalidHipDevWarnFail = setConfigValue(base, 'formThresholds.HIP_DEV_PIKE_WARN', 0.2);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_ECCENTRIC_MIN', 0);
+    const invalidFrames = setConfigValue(base, 'thresholds.MIN_REP_FRAMES', 1.5);
+    const invalidShoulderStackOrdering = setConfigValue(base, 'thresholds.SHOULDER_WRIST_SETUP_FAIL', 0.1);
+
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.BOTTOM_EXIT')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidDescendingIdleOrder)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.DESCENDING_ENTER')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidIdlePlankOrder)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.IDLE_ARMS_EXTENDED')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidPlankPartialOrder)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.PARTIAL_REP_RESET')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidPartialLockoutOrder)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.LOCKOUT_FAIL')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidRatio)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.MIN_PARTIAL_ROM')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidDepthCountOrder)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.BOTTOM_ENTER')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidBodyOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.PLANK_BODY_MIN')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidTorsoOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.TORSO_INCLINE_MIN')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidHipDevWarnFail)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.HIP_DEV_PIKE_WARN')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.TEMPO_ECCENTRIC_MIN')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidFrames)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.MIN_REP_FRAMES')]),
+    );
+    expect(pushupDefinition.validateHeuristicConfig?.(invalidShoulderStackOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.SHOULDER_WRIST_WARN')]),
+    );
+  });
+
+  it('keeps active push-up tunable defaults inside declared ranges', () => {
+    expect(validateTunableSpec(
+      pushupDefinition.heuristicConfig ?? {},
+      pushupDefinition.tunableSpec!,
+    )).toEqual([]);
+  });
+
+  it('validates the default lateral-raise heuristic config', () => {
+    expect(lateralRaiseDefinition.validateHeuristicConfig?.(lateralRaiseDefinition.heuristicConfig ?? {})).toEqual([]);
+  });
+
+  it('keeps active lateral-raise tunable defaults valid without sample-count tuning', () => {
+    const spec = lateralRaiseDefinition.tunableSpec!;
+    const tunablePaths = spec.tunables.map(tunable => tunable.path);
+
+    expect(validateTunableSpec(lateralRaiseDefinition.heuristicConfig ?? {}, spec)).toEqual([]);
+    expect(tunablePaths).not.toContain('formThresholds.MIN_FORM_SAMPLES');
+  });
+
+  it('rejects invalid lateral-raise threshold ordering, samples, and penalty configs', () => {
+    const base = lateralRaiseDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.TOP_EXIT', 0.9);
+    const invalidPartial = setConfigValue(base, 'thresholds.MIN_PARTIAL_HEIGHT_RATIO', 0.2);
+    const invalidRomOrder = setConfigValue(base, 'formThresholds.ROM_MIN', 1.2);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_RAISE_MIN', 0);
+    const invalidSamples = setConfigValue(base, 'formThresholds.MIN_FORM_SAMPLES', 1.5);
+    const invalidPenalty = setConfigValue(base, 'penaltyConfigs.ROM.cap', -1);
+
+    expect(lateralRaiseDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.TOP_EXIT')]),
+    );
+    expect(lateralRaiseDefinition.validateHeuristicConfig?.(invalidPartial)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.MIN_PARTIAL_HEIGHT_RATIO')]),
+    );
+    expect(lateralRaiseDefinition.validateHeuristicConfig?.(invalidRomOrder)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.ROM_MIN')]),
+    );
+    expect(lateralRaiseDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.TEMPO_RAISE_MIN')]),
+    );
+    expect(lateralRaiseDefinition.validateHeuristicConfig?.(invalidSamples)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.MIN_FORM_SAMPLES')]),
+    );
+    expect(lateralRaiseDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs.ROM.cap')]),
+    );
+  });
+
+  it('keeps lateral-raise optimizer metadata safe for aggregated torso labels', () => {
+    const spec = lateralRaiseDefinition.tunableSpec!;
+    const tunablePaths = new Set(spec.tunables.map(tunable => tunable.path));
+
+    expect(spec.diagnosticTuning).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        issueId: 'standing-dumbbell-lateral-raises.torso_warn',
+        metricKey: 'torsoLean',
+        thresholdPath: 'formThresholds.TORSO_LEAN_WARN',
+      }),
+    ]));
+    expect(spec.diagnosticTuning).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        issueId: 'standing-dumbbell-lateral-raises.torso_warn',
+        metricKey: 'sagittalTorsoSway',
+        thresholdPath: 'formThresholds.SAGITTAL_SWAY_WARN',
+      }),
+    ]));
+    expect(spec.diagnosticTuning).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        issueId: 'standing-dumbbell-lateral-raises.torso_warn',
+        metricKey: 'hipSwayRatio',
+        thresholdPath: 'formThresholds.HIP_SWAY_WARN',
+      }),
+    ]));
+    expect(tunablePaths).not.toContain('formThresholds.SAGITTAL_SWAY_WARN');
+    expect(tunablePaths).not.toContain('formThresholds.HIP_SWAY_WARN');
+    expect(spec.tunables.find(tunable => tunable.path === 'formThresholds.TORSO_LEAN_WARN')).toMatchObject({
+      min: 1,
+      max: 8,
+      step: 0.25,
+    });
+    expect(spec.tunables.find(tunable => tunable.path === 'formThresholds.TEMPO_RAISE_MIN')).toMatchObject({
+      min: 0.15,
+      max: 0.45,
+      step: 0.05,
+    });
+    expect(spec.tunables.find(tunable => tunable.path === 'formThresholds.TEMPO_LOWER_MIN')).toMatchObject({
+      min: 0.20,
+      max: 0.55,
+      step: 0.05,
+    });
+  });
+
   it('validates the default barbell-curl heuristic config', () => {
     expect(barbellCurlDefinition.validateHeuristicConfig?.(barbellCurlDefinition.heuristicConfig ?? {})).toEqual([]);
   });
@@ -417,6 +626,9 @@ describe('heuristic config helpers', () => {
     const invalidFsm = setConfigValue(base, 'thresholds.FLEXED_EXIT', 0.5);
     const invalidParticipation = setConfigValue(base, 'thresholds.MIN_ARM_PARTICIPATION_ROM', 0.4);
     const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_UP_MIN', 0);
+    const invalidFlexEndpoint = setConfigValue(base, 'formThresholds.FLEX_RATIO_WARN', 0.5);
+    const invalidExtendEndpoint = setConfigValue(base, 'formThresholds.EXTEND_RATIO_WARN', 0.8);
+    const invalidExtensionReadiness = setConfigValue(base, 'thresholds.EXTENDED_EXIT', 0.95);
     const invalidSupport = setConfigValue(base, 'viewQualityThresholds.SIDE_MIN_SUPPORT', 1.2);
     const invalidSamples = setConfigValue(base, 'viewQualityThresholds.MIN_SAMPLES', 1.5);
     const invalidPenalty = setConfigValue(base, 'penaltyConfigs.ROM_FLEX.scale', 0);
@@ -431,6 +643,15 @@ describe('heuristic config helpers', () => {
     );
     expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
       expect.arrayContaining([expect.stringContaining('TEMPO_UP_MIN')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidFlexEndpoint)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.FLEX_RATIO_WARN')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidExtendEndpoint)).toEqual(
+      expect.arrayContaining([expect.stringContaining('formThresholds.EXTEND_RATIO_WARN')]),
+    );
+    expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidExtensionReadiness)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.EXTENDED_EXIT')]),
     );
     expect(barbellCurlDefinition.validateHeuristicConfig?.(invalidSupport)).toEqual(
       expect.arrayContaining([expect.stringContaining('SIDE_MIN_SUPPORT')]),
@@ -449,22 +670,28 @@ describe('heuristic config helpers', () => {
     );
   });
 
-  it('exposes barbell-curl scoring and view-quality tunables for optimization', () => {
+  it('exposes barbell-curl threshold and view-quality tunables without score-penalty tunables', () => {
     const tunablePaths = barbellCurlDefinition.tunableSpec?.tunables.map(tunable => tunable.path) ?? [];
 
     expect(tunablePaths).toEqual(expect.arrayContaining([
-      'penaltyConfigs.ROM_FLEX.scale',
-      'penaltyConfigs.ROM_EXTEND.scale',
-      'penaltyConfigs.SHOULDER.scale',
-      'penaltyConfigs.SHOULDER.deadzone',
-      'penaltyConfigs.TORSO.scale',
-      'penaltyConfigs.ASYMMETRY_MIN.scale',
-      'penaltyConfigs.SYNC_DELTA.scale',
+      'thresholds.EXTENDED_ENTER',
+      'thresholds.FLEXED_ENTER',
+      'formThresholds.FLEX_RATIO_WARN',
+      'formThresholds.EXTEND_RATIO_WARN',
       'viewQualityThresholds.MIN_SAMPLES',
       'viewQualityThresholds.FRONT_MIN_SUPPORT',
       'viewQualityThresholds.SIDE_MIN_SUPPORT',
       'viewQualityThresholds.PRIMARY_SIDE_MIN_SUPPORT',
     ]));
+    expect(tunablePaths.some(path => path.startsWith('penaltyConfigs.'))).toBe(false);
+    expect(tunablePaths.some(path => path.includes('WRIST'))).toBe(false);
+  });
+
+  it('keeps active barbell-curl tunable defaults inside declared ranges', () => {
+    expect(validateTunableSpec(
+      barbellCurlDefinition.heuristicConfig ?? {},
+      barbellCurlDefinition.tunableSpec!,
+    )).toEqual([]);
   });
 
   it('exposes cable-pushdown scoring penalties as optimizer tunables', () => {
@@ -598,6 +825,23 @@ describe('automatic heuristic optimiser helpers', () => {
     expect(evaluateSyntheticCandidate(baseline).evaluation.metrics.repCountAccuracy).toBe(0);
   });
 
+  it('uses scorable and view accuracy when ranking otherwise equivalent candidates', () => {
+    const ranked = sortCandidateEvaluations([
+      {
+        id: 'lower-quality',
+        config: {},
+        evaluation: makeEvaluation(1, 0.8, 0, { viewAccuracy: 0.5, scorableAccuracy: 0.5 }),
+      },
+      {
+        id: 'higher-quality',
+        config: {},
+        evaluation: makeEvaluation(1, 0.8, 0, { viewAccuracy: 1, scorableAccuracy: 1 }),
+      },
+    ]);
+
+    expect(ranked[0].id).toBe('higher-quality');
+  });
+
   it('gates application on validation improvement and test regressions', () => {
     const spec: TunableSpec = {
       exerciseName: 'Demo',
@@ -627,6 +871,26 @@ describe('automatic heuristic optimiser helpers', () => {
         winnerSelection: makeEvaluation(1, 1, 0),
         baselineTest: makeEvaluation(1, 1, 0),
         winnerTest: makeEvaluation(0, 1, 0),
+        spec,
+      }).shouldApply,
+    ).toBe(false);
+
+    expect(
+      shouldApplyWinningConfig({
+        baselineSelection: makeEvaluation(0, 1, 0),
+        winnerSelection: makeEvaluation(1, 1, 0),
+        baselineTest: makeEvaluation(1, 1, 0, { viewAccuracy: 1, scorableAccuracy: 1 }),
+        winnerTest: makeEvaluation(1, 1, 0, { viewAccuracy: 0.9, scorableAccuracy: 1 }),
+        spec,
+      }).shouldApply,
+    ).toBe(false);
+
+    expect(
+      shouldApplyWinningConfig({
+        baselineSelection: makeEvaluation(0, 1, 0),
+        winnerSelection: makeEvaluation(1, 1, 0),
+        baselineTest: makeEvaluation(1, 1, 0, { viewAccuracy: 1, scorableAccuracy: 1 }),
+        winnerTest: makeEvaluation(1, 1, 0, { viewAccuracy: 1, scorableAccuracy: 0.9 }),
         spec,
       }).shouldApply,
     ).toBe(false);
@@ -664,6 +928,9 @@ describe('automatic heuristic optimiser helpers', () => {
 
   it('validates tunable specs and generated candidate configs before replay', () => {
     expect(validateTunableSpec({ thresholds: { COMPLETE_AT: 0.7 } }, syntheticSpec)).toEqual([]);
+    expect(validateTunableSpec({ thresholds: { COMPLETE_AT: 0.9 } }, syntheticSpec)).toEqual([
+      'Tunable path "thresholds.COMPLETE_AT" default value (0.9) must be within 0.4..0.8.',
+    ]);
     expect(
       validateTunableSpec(
         { thresholds: { COMPLETE_AT: 0.7 } },

@@ -105,8 +105,8 @@ const SIDE_CHAIN_LEFT = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip'
 const SIDE_CHAIN_RIGHT = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip'];
 const LOWER_CHAIN_LEFT = ['left_hip', 'left_knee', 'left_ankle'];
 const LOWER_CHAIN_RIGHT = ['right_hip', 'right_knee', 'right_ankle'];
-const FULL_SIDE_LEFT = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip', 'left_knee', 'left_ankle'];
-const FULL_SIDE_RIGHT = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip', 'right_knee', 'right_ankle'];
+const PUSHUP_SIDE_LEFT = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip', 'left_ankle'];
+const PUSHUP_SIDE_RIGHT = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip', 'right_ankle'];
 
 const DEFAULT_FRONT_PROFILE: ExerciseQualityProfile = {
   requiredView: 'front',
@@ -168,8 +168,8 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
     requiredView: 'side',
     exerciseName: 'Push-Up',
     requiredJointGroups: [
-      { id: 'left_side', label: 'left side', joints: FULL_SIDE_LEFT },
-      { id: 'right_side', label: 'right side', joints: FULL_SIDE_RIGHT },
+      { id: 'left_side', label: 'left side', joints: PUSHUP_SIDE_LEFT },
+      { id: 'right_side', label: 'right side', joints: PUSHUP_SIDE_RIGHT },
     ],
   },
   'Leg Extensions': {

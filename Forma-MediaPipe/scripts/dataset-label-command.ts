@@ -232,7 +232,7 @@ export function runDraftLabelCommand(
     );
   }
 
-  const replay = replayRecordingVerbose(definition, recording);
+  const replay = replayRecordingVerbose(definition, recording, { confidenceGating: true });
   const label = createDraftLabelFromReplay({
     definition,
     recording,

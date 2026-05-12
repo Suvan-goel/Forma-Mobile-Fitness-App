@@ -17,6 +17,8 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "view": "front",
+      "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",
       "suggestedIssueIds": [],
       "suggestedFeedbackMessages": [],
@@ -24,6 +26,16 @@
     }
   ],
   "notes": "Draft label template. Copy to a real label file, review timings/issues, then set reviewStatus to reviewed.",
+  "labelingGuidance": [
+    "Front-view Standing Dumbbell Lateral Raises are the v1 full-form scoring target.",
+    "Side, oblique, or unknown-view reps may still count movement, but mark them scorable=false and do not label clean negatives for front-view form cues.",
+    "Count meaningful partial raises as reps when there is a clear raise and return; do not count tiny pulses.",
+    "Label ROM height, over-raise, elbow bend, torso sway, asymmetry, wrong plane, tempo, and shoulder shrug only when the fault is visible.",
+    "Mark sustained poor wrist visibility as scorable=false unless the form issue is clearly visible.",
+    "For one-arm or highly asymmetric raises, label asymmetry; also label ROM height when the rep is effectively short as a bilateral lateral raise.",
+    "For torso sway labels, note the visible subcause when possible: lateral lean, forward/back rocking, or hip shift.",
+    "Reviewed scorable Standing Dumbbell Lateral Raises reps must use view=front; use scorable=false for side, oblique, or unknown views."
+  ],
   "availableIssues": [
     {
       "issueId": "standing-dumbbell-lateral-raises.rom_height",

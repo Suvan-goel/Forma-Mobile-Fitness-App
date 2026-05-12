@@ -226,6 +226,37 @@ describe('PoseQualityTracker', () => {
     ]));
   });
 
+  it('does not require knees for push-up pose quality', () => {
+    const profile = resolveExerciseQualityProfile(definition('Push-Up', 'side'));
+
+    expect(profile.requiredView).toBe('side');
+    expect(profile.requiredJointGroups).toBeDefined();
+    for (const group of profile.requiredJointGroups ?? []) {
+      expect(group.joints).toEqual(expect.arrayContaining([
+        group.id === 'left_side' ? 'left_shoulder' : 'right_shoulder',
+        group.id === 'left_side' ? 'left_elbow' : 'right_elbow',
+        group.id === 'left_side' ? 'left_wrist' : 'right_wrist',
+        group.id === 'left_side' ? 'left_hip' : 'right_hip',
+        group.id === 'left_side' ? 'left_ankle' : 'right_ankle',
+      ]));
+      expect(group.joints.some(joint => joint.includes('_knee'))).toBe(false);
+    }
+  });
+
+  it('keeps push-up tracking scorable when knees are hidden but form-critical side joints are visible', () => {
+    const tracker = new PoseQualityTracker();
+    const hiddenKnees = keypoints(0.99, {
+      left_knee: { score: 0.01 },
+      right_knee: { score: 0.01 },
+    });
+    const snapshot = settleTracker(tracker, Array.from({ length: 18 }, () => hiddenKnees), 'Push-Up');
+
+    expect(snapshot.canScoreRep).toBe(true);
+    expect(snapshot.warnings).not.toContain('knees_hidden');
+    expect(snapshot.missingRequiredJoints).not.toContain('left_knee');
+    expect(snapshot.missingRequiredJoints).not.toContain('right_knee');
+  });
+
   it('recovers confidence after the user re-enters frame', () => {
     const tracker = new PoseQualityTracker();
     settleTracker(tracker, Array.from({ length: 18 }, () => []));

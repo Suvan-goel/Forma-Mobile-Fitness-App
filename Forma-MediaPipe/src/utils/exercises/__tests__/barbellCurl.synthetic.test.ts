@@ -4,13 +4,13 @@ import type { LandmarkRecording } from './types';
 import type { Keypoint } from '../../poseAnalysis';
 
 type CurlView = 'front' | 'side-left' | 'side-right' | 'oblique-left' | 'oblique-right';
-type WristStyle = 'neutral' | 'curled';
 type FrameValue<T> = T | ((index: number) => T);
 
 const EXTENDED_WRIST_Y = 0.6;
 const TOP_WRIST_Y = 1.2;
 const PULSE_WRIST_Y = 0.78;
 const HALF_WRIST_Y = 1.08;
+const CLEAN_THRESHOLD_RETURN_WRIST_Y = 1.006;
 const FRAME_MS = 50;
 
 function kp(name: string, x: number, y: number, z: number, score = 0.99): Keypoint {
@@ -74,10 +74,8 @@ function armKeypoints(
   z: number,
   wristY: number,
   visible: boolean,
-  wristStyle: WristStyle,
   elbowOffset: number,
   elbowZOffset: number,
-  indexScore: number,
   jointScore?: number,
   shoulderScore = 0.99,
   hipScore = 0.99,
@@ -88,16 +86,13 @@ function armKeypoints(
   const elbowX = x + (side === 'left' ? -elbowOffset : elbowOffset);
   const elbowZ = z + elbowZOffset;
   const indexY = wristY + (wristY - elbowY) * 0.2;
-  const indexX = wristStyle === 'curled'
-    ? x + (side === 'left' ? -0.18 : 0.18)
-    : x;
-  const effectiveIndexScore = visible ? indexScore : 0.05;
+  const effectiveIndexScore = visible ? 0.99 : 0.05;
 
   return [
     kp(`${side}_shoulder`, x, shoulderY, z, shoulderScore),
     kp(`${side}_elbow`, elbowX, elbowY, elbowZ, score),
     kp(`${side}_wrist`, x, wristY, z, score),
-    kp(`${side}_index`, indexX, indexY, z, effectiveIndexScore),
+    kp(`${side}_index`, x, indexY, z, effectiveIndexScore),
     kp(`${side}_hip`, x, 0.5, z, hipScore),
   ];
 }
@@ -106,11 +101,9 @@ function makeFrame(
   timestamp: number,
   wristY: number,
   view: CurlView,
-  wristStyle: WristStyle,
   index: number,
   options: {
     elbowOffset?: FrameValue<number>;
-    indexScore?: FrameValue<number>;
     leftScore?: FrameValue<number>;
     rightScore?: FrameValue<number>;
     leftElbowZOffset?: FrameValue<number>;
@@ -121,7 +114,7 @@ function makeFrame(
     rightHipScore?: FrameValue<number>;
   } = {},
 ): LandmarkRecording['frames'][number] {
-  return makeDualFrame(timestamp, wristY, wristY, view, wristStyle, index, options);
+  return makeDualFrame(timestamp, wristY, wristY, view, index, options);
 }
 
 function makeDualFrame(
@@ -129,11 +122,9 @@ function makeDualFrame(
   leftWristY: number,
   rightWristY: number,
   view: CurlView,
-  wristStyle: WristStyle,
   index: number,
   options: {
     elbowOffset?: FrameValue<number>;
-    indexScore?: FrameValue<number>;
     leftScore?: FrameValue<number>;
     rightScore?: FrameValue<number>;
     leftElbowZOffset?: FrameValue<number>;
@@ -148,7 +139,6 @@ function makeDualFrame(
   const leftVisible = geom.visibleArm === 'both' || geom.visibleArm === 'left';
   const rightVisible = geom.visibleArm === 'both' || geom.visibleArm === 'right';
   const elbowOffset = frameValue(options.elbowOffset, index, 0);
-  const indexScore = frameValue(options.indexScore, index, 0.99);
   const leftScore = frameValue(options.leftScore, index, 0.99);
   const rightScore = frameValue(options.rightScore, index, 0.99);
   const leftElbowZOffset = frameValue(options.leftElbowZOffset, index, 0);
@@ -162,8 +152,8 @@ function makeDualFrame(
     timestamp,
     keypoints: [
       kp('nose', 0, 1.72, -0.05, 0.99),
-      ...armKeypoints('left', geom.leftX, geom.leftZ, leftWristY, leftVisible, wristStyle, elbowOffset, leftElbowZOffset, indexScore, leftScore, leftShoulderScore, leftHipScore),
-      ...armKeypoints('right', geom.rightX, geom.rightZ, rightWristY, rightVisible, wristStyle, elbowOffset, rightElbowZOffset, indexScore, rightScore, rightShoulderScore, rightHipScore),
+      ...armKeypoints('left', geom.leftX, geom.leftZ, leftWristY, leftVisible, elbowOffset, leftElbowZOffset, leftScore, leftShoulderScore, leftHipScore),
+      ...armKeypoints('right', geom.rightX, geom.rightZ, rightWristY, rightVisible, elbowOffset, rightElbowZOffset, rightScore, rightShoulderScore, rightHipScore),
     ],
   };
 }
@@ -173,9 +163,7 @@ function buildRecording(
   wristPath: number[],
   view: CurlView = 'front',
   options: {
-    wristStyle?: WristStyle | ((index: number) => WristStyle);
     elbowOffset?: FrameValue<number>;
-    indexScore?: FrameValue<number>;
     leftScore?: FrameValue<number>;
     rightScore?: FrameValue<number>;
     leftElbowZOffset?: FrameValue<number>;
@@ -186,7 +174,7 @@ function buildRecording(
     rightHipScore?: FrameValue<number>;
   } = {},
 ): LandmarkRecording {
-  const { wristStyle = 'neutral', elbowOffset, indexScore, leftScore, rightScore, leftElbowZOffset, rightElbowZOffset, leftShoulderScore, rightShoulderScore, leftHipScore, rightHipScore } = options;
+  const { elbowOffset, leftScore, rightScore, leftElbowZOffset, rightElbowZOffset, leftShoulderScore, rightShoulderScore, leftHipScore, rightHipScore } = options;
 
   return {
     exerciseName: 'Barbell Curl',
@@ -198,10 +186,8 @@ function buildRecording(
       expectedScoreRange: [0, 100],
     },
     frames: wristPath.map((wristY, index) => {
-      const frameWristStyle = typeof wristStyle === 'function' ? wristStyle(index) : wristStyle;
-      return makeFrame(index * FRAME_MS, wristY, view, frameWristStyle, index, {
+      return makeFrame(index * FRAME_MS, wristY, view, index, {
         elbowOffset,
-        indexScore,
         leftScore,
         rightScore,
         leftElbowZOffset,
@@ -221,9 +207,7 @@ function buildDualRecording(
   rightWristPath: number[],
   view: CurlView = 'front',
   options: {
-    wristStyle?: WristStyle | ((index: number) => WristStyle);
     elbowOffset?: FrameValue<number>;
-    indexScore?: FrameValue<number>;
     leftScore?: FrameValue<number>;
     rightScore?: FrameValue<number>;
     leftElbowZOffset?: FrameValue<number>;
@@ -234,7 +218,7 @@ function buildDualRecording(
     rightHipScore?: FrameValue<number>;
   } = {},
 ): LandmarkRecording {
-  const { wristStyle = 'neutral', elbowOffset, indexScore, leftScore, rightScore, leftElbowZOffset, rightElbowZOffset, leftShoulderScore, rightShoulderScore, leftHipScore, rightHipScore } = options;
+  const { elbowOffset, leftScore, rightScore, leftElbowZOffset, rightElbowZOffset, leftShoulderScore, rightShoulderScore, leftHipScore, rightHipScore } = options;
   const frameCount = Math.max(leftWristPath.length, rightWristPath.length);
 
   return {
@@ -247,15 +231,13 @@ function buildDualRecording(
       expectedScoreRange: [0, 100],
     },
     frames: Array.from({ length: frameCount }, (_, index) => {
-      const frameWristStyle = typeof wristStyle === 'function' ? wristStyle(index) : wristStyle;
       return makeDualFrame(
         index * FRAME_MS,
         leftWristPath[index] ?? EXTENDED_WRIST_Y,
         rightWristPath[index] ?? EXTENDED_WRIST_Y,
         view,
-        frameWristStyle,
         index,
-        { elbowOffset, indexScore, leftScore, rightScore, leftElbowZOffset, rightElbowZOffset, leftShoulderScore, rightShoulderScore, leftHipScore, rightHipScore },
+        { elbowOffset, leftScore, rightScore, leftElbowZOffset, rightElbowZOffset, leftShoulderScore, rightShoulderScore, leftHipScore, rightHipScore },
       );
     }),
   };
@@ -316,6 +298,32 @@ function halfRepPath(): number[] {
   ];
 }
 
+function shortReturnReflexPath(): number[] {
+  return [
+    ...Array(16).fill(EXTENDED_WRIST_Y),
+    ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 16),
+    ...Array(4).fill(TOP_WRIST_Y),
+    ...interpolate(TOP_WRIST_Y, HALF_WRIST_Y, 10),
+    ...Array(8).fill(HALF_WRIST_Y),
+    ...interpolate(HALF_WRIST_Y, TOP_WRIST_Y, 10),
+    ...Array(8).fill(TOP_WRIST_Y),
+  ];
+}
+
+function cleanThresholdReturnDoubleRepPath(): number[] {
+  return [
+    ...Array(16).fill(EXTENDED_WRIST_Y),
+    ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 16),
+    ...Array(4).fill(TOP_WRIST_Y),
+    ...interpolate(TOP_WRIST_Y, CLEAN_THRESHOLD_RETURN_WRIST_Y, 8),
+    ...Array(10).fill(CLEAN_THRESHOLD_RETURN_WRIST_Y),
+    ...interpolate(CLEAN_THRESHOLD_RETURN_WRIST_Y, TOP_WRIST_Y, 16),
+    ...Array(4).fill(TOP_WRIST_Y),
+    ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 18),
+    ...Array(8).fill(EXTENDED_WRIST_Y),
+  ];
+}
+
 function mirrorFrontRecording(recording: LandmarkRecording): LandmarkRecording {
   return {
     ...recording,
@@ -328,6 +336,95 @@ function mirrorFrontRecording(recording: LandmarkRecording): LandmarkRecording {
       keypoints: frame.keypoints.map(point => ({ ...point, x: -point.x })),
     })),
   };
+}
+
+function transformRecording(
+  recording: LandmarkRecording,
+  transform: (point: Keypoint, frameIndex: number) => Keypoint,
+  description: string,
+): LandmarkRecording {
+  return {
+    ...recording,
+    metadata: {
+      ...recording.metadata,
+      description,
+    },
+    frames: recording.frames.map((frame, frameIndex) => ({
+      ...frame,
+      keypoints: frame.keypoints.map(point => transform(point, frameIndex)),
+      imageKeypoints: frame.imageKeypoints?.map(point => transform(point, frameIndex)),
+      worldKeypoints: frame.worldKeypoints?.map(point => transform(point, frameIndex)),
+    })),
+  };
+}
+
+function recordingWithHeadMotion(recording: LandmarkRecording): LandmarkRecording {
+  return transformRecording(
+    recording,
+    (point, index) => (
+      point.name === 'nose' && index >= 18 && index <= 52
+        ? { ...point, z: (point.z ?? 0) + 0.75 }
+        : point
+    ),
+    `${recording.metadata.description} with head motion`,
+  );
+}
+
+function recordingWithTorsoSwing(recording: LandmarkRecording): LandmarkRecording {
+  const upperBodyJoints = new Set([
+    'nose',
+    'left_ear',
+    'right_ear',
+    'left_shoulder',
+    'right_shoulder',
+    'left_elbow',
+    'right_elbow',
+    'left_wrist',
+    'right_wrist',
+    'left_index',
+    'right_index',
+  ]);
+  return transformRecording(
+    recording,
+    (point, index) => {
+      if (!upperBodyJoints.has(point.name) || index < 18 || index > 52) return point;
+      const progress = index <= 35
+        ? (index - 18) / (35 - 18)
+        : (52 - index) / (52 - 35);
+      return { ...point, z: (point.z ?? 0) + 1.0 * Math.max(0, progress) };
+    },
+    `${recording.metadata.description} with torso swing`,
+  );
+}
+
+function recordingWithSmallPoseNoise(recording: LandmarkRecording): LandmarkRecording {
+  return transformRecording(
+    recording,
+    (point, index) => {
+      if (!point.name.includes('_')) return point;
+      const jitter = ((index % 5) - 2) * 0.0015;
+      return {
+        ...point,
+        x: point.x + jitter,
+        y: point.y - jitter * 0.5,
+      };
+    },
+    `${recording.metadata.description} with small deterministic noise`,
+  );
+}
+
+function recordingWithFrontalCompletionOnly(recording: LandmarkRecording): LandmarkRecording {
+  const frontSwitchIndex = Math.max(0, recording.frames.length - 30);
+  return transformRecording(
+    recording,
+    (point, index) => {
+      if (index >= frontSwitchIndex) return point;
+      if (point.name === 'left_shoulder') return { ...point, z: -0.25 };
+      if (point.name === 'right_shoulder') return { ...point, z: 0.25 };
+      return point;
+    },
+    `${recording.metadata.description} with frontal completion only`,
+  );
 }
 
 function recordingWithExplicitSources(
@@ -365,7 +462,7 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.feedbackMessages).toEqual([]);
     expect(result.reps[0]?.diagnostics?.metrics.landmarkSource.label).toBe('image');
     expect(result.reps[0]?.diagnostics?.metrics.ratioDistanceMode.label).toBe('image_2d');
-    expect(result.reps[0]?.diagnostics?.metrics.torsoAnchorSource.label).toBe('nose');
+    expect(result.reps[0]?.diagnostics?.metrics.torsoAnchorSource.label).toBe('shoulder_center');
     expect(result.reps[0]?.diagnostics?.metrics.viewAngleDeg.value).toBeGreaterThanOrEqual(0);
     expect(result.reps[0]?.diagnostics?.metrics.smoothedViewAngleDeg.value).toBeGreaterThanOrEqual(0);
     expect(result.reps[0]?.diagnostics?.metrics.viewSupportRatio.value).toBeGreaterThan(0);
@@ -374,7 +471,127 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.reps[0]?.diagnostics?.metrics.leftShoulderDelta).toBeDefined();
     expect(result.reps[0]?.diagnostics?.metrics.rightShoulderDelta).toBeDefined();
     expect(result.reps[0]?.diagnostics?.metrics.primaryShoulderDelta).toBeDefined();
+    expect(result.reps[0]?.diagnostics?.metrics.returnMaxCurlRatio.value).toBeGreaterThanOrEqual(0.85);
     expect(result.reps[0]?.diagnostics?.viewQuality?.frontishConfirmed).toBe(true);
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.incomplete_extend']).toMatchObject({
+      metricKeys: ['returnMaxCurlRatio'],
+      triggered: false,
+    });
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry'].eligible).toBe(true);
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.elbow_flare'].eligible).toBe(true);
+  });
+
+  it('uses frame timestamps instead of JS callback time for live rep timing', () => {
+    const recording = buildRecording('synthetic timestamp-driven front curl', fullRepPath(), 'front');
+    const originalDateNow = Date.now;
+    let state = barbellCurlDefinition.createState();
+
+    try {
+      Date.now = () => 1234567890;
+      for (const frame of recording.frames) {
+        state = barbellCurlDefinition.update(frame.keypoints, state, {
+          imageKeypoints: frame.keypoints,
+          primarySource: 'image',
+          timestampMs: frame.timestamp,
+        });
+      }
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.score).toBeGreaterThanOrEqual(85);
+    expect(state.lastRepResult?.messages).toEqual([]);
+    expect(state.lastRepResult?.diagnostics?.metrics.tUp.value).toBeGreaterThan(0);
+    expect(state.lastRepResult?.diagnostics?.metrics.tDown.value).toBeGreaterThan(0);
+  });
+
+  it('re-arms counting after a scoring-clean bottom return', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic clean-threshold double front curl', cleanThresholdReturnDoubleRepPath(), 'front'),
+    );
+
+    expect(result.finalRepCount).toBe(2);
+    expect(result.feedbackMessages).not.toContain('Extend fully at the bottom.');
+  });
+
+  it('does not treat head-only motion as torso swing', () => {
+    const cleanRecording = buildRecording('synthetic clean front curl', fullRepPath(), 'front');
+    const clean = replayRecording(barbellCurlDefinition, cleanRecording);
+    const headMotion = replayRecording(
+      barbellCurlDefinition,
+      recordingWithHeadMotion(cleanRecording),
+    );
+
+    expect(headMotion.finalRepCount).toBe(1);
+    expect(headMotion.feedbackMessages).toEqual([]);
+    expect(headMotion.repScores[0]).toBeGreaterThanOrEqual(clean.repScores[0] - 2);
+    expect(headMotion.reps[0]?.diagnostics?.metrics.torsoAnchorSource.label).toBe('shoulder_center');
+    expect(headMotion.reps[0]?.diagnostics?.cues['barbell-curl.torso_warn'].triggered).toBe(false);
+    expect(headMotion.reps[0]?.diagnostics?.cues['barbell-curl.torso_fail'].triggered).toBe(false);
+  });
+
+  it('flags real upper-body torso swing', () => {
+    const cleanRecording = buildRecording('synthetic clean front curl', fullRepPath(), 'front');
+    const clean = replayRecording(barbellCurlDefinition, cleanRecording);
+    const swinging = replayRecording(
+      barbellCurlDefinition,
+      recordingWithTorsoSwing(cleanRecording),
+    );
+
+    expect(swinging.finalRepCount).toBe(1);
+    expect(swinging.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(swinging.feedbackMessages).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/swing|torso|upright/),
+      ]),
+    );
+    expect(swinging.reps[0]?.diagnostics?.metrics.torsoDelta.value).toBeGreaterThan(
+      clean.reps[0]?.diagnostics?.metrics.torsoDelta.value ?? 0,
+    );
+  });
+
+  it('keeps a clean front rep stable under small deterministic pose noise', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      recordingWithSmallPoseNoise(buildRecording('synthetic clean front curl', fullRepPath(), 'front')),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(80);
+    expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('does not emit front-only cues from a frontal completion frame without sustained front support', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      recordingWithFrontalCompletionOnly(
+        buildRecording('synthetic mixed-view flared curl', fullRepPath(), 'front', {
+          elbowOffset: index => (index >= 24 && index <= 48 ? 0.35 : 0),
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0]?.diagnostics).toMatchObject({
+      view: 'front',
+      viewQuality: { frontishConfirmed: false },
+    });
+    expect(result.reps[0]?.scorable).toBe(false);
+    expect(result.reps[0]?.diagnostics?.viewQuality?.frontishConfirmed).toBe(false);
+    expect(result.reps[0]?.diagnostics?.metrics.frontZoneSupportRatio.value).toBeLessThan(0.6);
+    expect(result.feedbackMessages).not.toContain("Keep your elbows in — don't flare them out to the sides.");
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.elbow_flare']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'front_view_unconfirmed',
+    });
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'front_view_unconfirmed',
+    });
   });
 
   it('uses explicit world landmarks for curl ratios when image landmarks diverge', () => {
@@ -410,6 +627,15 @@ describe('Barbell Curl synthetic replay coverage', () => {
       expect(result.finalRepCount).toBe(1);
       expect(result.repScores[0]).toBeGreaterThanOrEqual(80);
       expect(result.reps[0]?.diagnostics?.metrics.ratioDistanceMode.label).toBe('image_2d');
+      expect(result.reps[0]?.scorable).toBe(true);
+      expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry']).toMatchObject({
+        eligible: false,
+        skippedReason: 'not_front_view',
+      });
+      expect(result.reps[0]?.diagnostics?.cues['barbell-curl.elbow_flare']).toMatchObject({
+        eligible: false,
+        skippedReason: 'not_front_view',
+      });
     },
   );
 
@@ -550,7 +776,7 @@ describe('Barbell Curl synthetic replay coverage', () => {
     const result = replayRecording(
       barbellCurlDefinition,
       buildRecording('synthetic occluded side-left curl', fullRepPath(), 'side-left', {
-        leftScore: index => (index >= 16 && index <= 54 && index % 2 === 0 ? 0.05 : 0.99),
+        leftScore: index => (index >= 16 && index <= 54 && index % 4 !== 0 ? 0.05 : 0.99),
       }),
       { confidenceGating: true },
     );
@@ -601,35 +827,54 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Flex more at the top of the curl.');
   });
 
-  it('flags wrist curling without punishing neutral wrists', () => {
+  it('flags incomplete extension when the lifter re-curls before returning to the bottom', () => {
     const clean = replayRecording(
       barbellCurlDefinition,
-      buildRecording('synthetic neutral wrist curl', fullRepPath(), 'front'),
+      buildRecording('synthetic clean front curl', fullRepPath(), 'front'),
     );
-    const curled = replayRecording(
-      barbellCurlDefinition,
-      buildRecording('synthetic curled wrist curl', fullRepPath(), 'front', {
-        wristStyle: index => (index < 16 ? 'neutral' : 'curled'),
-      }),
-    );
-
-    expect(clean.feedbackMessages).not.toContain('Keep your wrists neutral — avoid curling them in.');
-    expect(curled.finalRepCount).toBe(1);
-    expect(curled.repScores[0]).toBeLessThan(clean.repScores[0]);
-    expect(curled.feedbackMessages).toContain('Keep your wrists neutral — avoid curling them in.');
-  });
-
-  it('ignores wrist curling when hand landmarks are low-confidence', () => {
     const result = replayRecording(
       barbellCurlDefinition,
-      buildRecording('synthetic curled wrist with low-confidence index', fullRepPath(), 'front', {
-        wristStyle: index => (index < 16 ? 'neutral' : 'curled'),
-        indexScore: index => (index < 16 ? 0.99 : 0.05),
+      buildRecording('synthetic short return then re-flex curl', shortReturnReflexPath(), 'front'),
+    );
+    const metrics = result.reps[0]?.diagnostics?.metrics;
+    const cue = result.reps[0]?.diagnostics?.cues['barbell-curl.incomplete_extend'];
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
+    expect(result.feedbackMessages).toContain('Extend fully at the bottom.');
+    expect(result.reps[0]?.issueIds).toContain('barbell-curl.incomplete_extend');
+    expect(metrics?.returnMaxCurlRatio.value).toBeLessThan(0.85);
+    expect(metrics?.maxCurlRatio.value).toBeGreaterThan(metrics?.returnMaxCurlRatio.value ?? 0);
+    expect(cue).toMatchObject({
+      metricKeys: ['returnMaxCurlRatio'],
+      eligible: true,
+      triggered: true,
+    });
+  });
+
+  it('marks torso cues ineligible when bilateral torso samples are unavailable', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic side-left torso unavailable curl', fullRepPath(), 'side-left', {
+        rightHipScore: index => (index < 16 ? 0.99 : 0.05),
       }),
     );
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.feedbackMessages).not.toContain('Keep your wrists neutral — avoid curling them in.');
+    expect(result.reps[0]?.diagnostics?.metrics.torsoDelta).toMatchObject({
+      eligible: false,
+      skippedReason: 'torso_unavailable',
+    });
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.torso_warn']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'torso_unavailable',
+    });
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.torso_fail']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'torso_unavailable',
+    });
   });
 
   it('does not flag elbow flare from a single noisy frame', () => {

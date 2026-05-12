@@ -6,6 +6,7 @@ protocol PoseLandmarkerServiceDelegate: AnyObject {
   func poseLandmarkerService(
     _ service: PoseLandmarkerService,
     didFinishDetection result: PoseLandmarkerResult?,
+    timestampInMilliseconds: Int,
     error: Error?
   )
 }
@@ -111,6 +112,11 @@ extension PoseLandmarkerService: PoseLandmarkerLiveStreamDelegate {
     error: (any Error)?
   ) {
     guard !isClosed() else { return }
-    delegate?.poseLandmarkerService(self, didFinishDetection: result, error: error)
+    delegate?.poseLandmarkerService(
+      self,
+      didFinishDetection: result,
+      timestampInMilliseconds: timestampInMilliseconds,
+      error: error
+    )
   }
 }

@@ -11,61 +11,81 @@
       "index": 1,
       "startMs": 1200,
       "endMs": 2550,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 2,
       "startMs": 2850,
       "endMs": 4400,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 3,
       "startMs": 4550,
       "endMs": 6200,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 4,
       "startMs": 6500,
       "endMs": 7950,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 5,
       "startMs": 8250,
       "endMs": 9900,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 6,
       "startMs": 10000,
       "endMs": 11650,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 7,
       "startMs": 13500,
       "endMs": 15100,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 8,
       "startMs": 15750,
       "endMs": 18400,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 9,
       "startMs": 18850,
       "endMs": 21300,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 10,
       "startMs": 21600,
       "endMs": 23900,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     }
   ],
   "notes": "Human-reviewed from video. Ten visible side-angle reps labelled with full bottom-to-bottom windows. Draft wrist-curl and incomplete-extension suggestions were not copied because wrist position is not reliable enough from this footage and every labelled rep visibly returns to the bottom position."

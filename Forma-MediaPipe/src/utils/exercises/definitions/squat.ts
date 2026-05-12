@@ -150,7 +150,6 @@ const SCORE_CURVES = {
   LOCKOUT: { ideal: 0.98,    scale: 15000, cap: 20 },
   TORSO:   { deadzone: 30,   scale: 0.06, cap: 30 },
   HEEL_LIFT: { deadzone: 8, scale: 0.35, cap: 15 },
-  KNEE_VALGUS: { deadzone: 0.08, scale: 1200, cap: 20 },
   TEMPO_CONCENTRIC: { deadzone: 0.3, scale: 60, cap: 8 },
   TEMPO_ECCENTRIC:  { deadzone: 0.8, scale: 40, cap: 7 },
 } as const;
@@ -191,9 +190,6 @@ SQUAT_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'barbell-squat.heel_lift', metricKey: 'heelLiftDeltaDeg', thresholdPath: 'formThresholds.HEEL_LIFT_WARN', direction: 'above' },
   { issueId: 'barbell-squat.heel_lift', metricKey: 'heelLiftOverThresholdSupport', thresholdPath: 'formThresholds.HEEL_LIFT_MIN_SUPPORT', direction: 'above' },
   { issueId: 'barbell-squat.heel_lift', metricKey: 'heelLiftEligibleSupport', thresholdPath: 'formThresholds.HEEL_LIFT_MIN_ELIGIBLE_SUPPORT', direction: 'above' },
-  { issueId: 'barbell-squat.knee_valgus', metricKey: 'kneeTrackingOffsetRatio', thresholdPath: 'formThresholds.KNEE_VALGUS_WARN', direction: 'above' },
-  { issueId: 'barbell-squat.knee_valgus', metricKey: 'kneeTrackingOverThresholdSupport', thresholdPath: 'formThresholds.KNEE_VALGUS_MIN_SUPPORT', direction: 'above' },
-  { issueId: 'barbell-squat.knee_valgus', metricKey: 'kneeTrackingEligibleSupport', thresholdPath: 'formThresholds.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT', direction: 'above' },
   { issueId: 'barbell-squat.torso_fail', metricKey: 'torsoLeanSigned', thresholdPath: 'formThresholds.TORSO_LEAN_FAIL', direction: 'above' },
   { issueId: 'barbell-squat.torso_warn', metricKey: 'torsoLeanSigned', thresholdPath: 'formThresholds.TORSO_LEAN_WARN', direction: 'above' },
   { issueId: 'barbell-squat.torso_fail', metricKey: 'torsoLeanDelta', thresholdPath: 'formThresholds.TORSO_LEAN_DELTA_FAIL', direction: 'above' },
@@ -201,6 +197,12 @@ SQUAT_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'barbell-squat.tempo_up', metricKey: 'tUp', thresholdPath: 'formThresholds.TEMPO_CONCENTRIC_MIN', direction: 'below' },
   { issueId: 'barbell-squat.tempo_down', metricKey: 'tDown', thresholdPath: 'formThresholds.TEMPO_ECCENTRIC_MIN', direction: 'below' },
 ];
+SQUAT_TUNABLE_SPEC.tunables = SQUAT_TUNABLE_SPEC.tunables.filter((tunable) =>
+  !tunable.path.includes('KNEE_VALGUS') &&
+  !tunable.path.includes('KNEE_TRACKING') &&
+  !tunable.path.includes('FRONT_VIEW') &&
+  !tunable.path.includes('OBLIQUE_VIEW')
+);
 
 const SQUAT_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
@@ -1394,7 +1396,7 @@ function applySmoothing(
     // fast = median only: responds to extremes within ~1-2 frames, used for FSM
     fastResult[key] = medianValue;
 
-    // smoothed = median + EMA: stable for form evaluation
+    // smoothed = median + EMA: stable for standing baselines and live display
     const prev = prevSmoothed?.[key];
     smoothedResult[key] =
       prev !== undefined && !isNaN(prev)
@@ -1516,7 +1518,6 @@ const SQUAT_FEEDBACK = {
   TORSO_FAIL: 'Too much forward lean \u2014 keep your chest up.',
   TORSO_WARN: 'Stay more upright \u2014 brace your core.',
   HEEL_LIFT: 'Keep your heels planted \u2014 drive through your mid-foot.',
-  KNEE_VALGUS: 'Track your knees over your toes.',
   TEMPO_UP: 'Control the ascent \u2014 don\'t bounce out of the hole.',
   TEMPO_DOWN: 'Slow the descent \u2014 control the weight down.',
 } as const;
@@ -1704,9 +1705,10 @@ function diagnosticsViewFor(viewQuality: RepViewQualityDiagnostic): SquatViewCla
   return 'unknown';
 }
 
-function squatQualityWarnings(analysis: Pick<SquatMetricSnapshot, 'scorable' | 'frontConfirmed' | 'sideConfirmed'>): FrameworkRepResult['qualityWarnings'] {
+function squatQualityWarnings(analysis: Pick<SquatMetricSnapshot, 'scorable' | 'frontConfirmed' | 'sideConfirmed' | 'obliqueConfirmed'>): FrameworkRepResult['qualityWarnings'] {
   if (analysis.scorable) return [];
-  return analysis.sideConfirmed || analysis.frontConfirmed
+  if (analysis.frontConfirmed || analysis.obliqueConfirmed) return ['side_view_uncertain'];
+  return analysis.sideConfirmed
     ? ['missing_required_joints']
     : ['view_uncertain'];
 }
@@ -1731,11 +1733,7 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
   const rightWorldKneeRatioSupport = supportRatio(repWindow.rightWorldKneeRatioSampleCount, repWindow.frameCount);
   const leftImageKneeRatioSupport = supportRatio(repWindow.leftImageKneeRatioSampleCount, repWindow.frameCount);
   const rightImageKneeRatioSupport = supportRatio(repWindow.rightImageKneeRatioSampleCount, repWindow.frameCount);
-  const frontHasWorldKneeRatio = supportAtLeast(
-    Math.max(leftWorldKneeRatioSupport ?? 0, rightWorldKneeRatioSupport ?? 0),
-    FORM_THRESHOLDS.WORLD_KNEE_RATIO_MIN_SUPPORT,
-  );
-  const scorable = sideConfirmed || (frontConfirmed && frontHasWorldKneeRatio);
+  const scorable = sideConfirmed;
   const sideOnlyMetricsEligible = scorable && sideConfirmed;
   const primaryMetricSource: SquatMetricSource | null =
     primarySourceFromCounts(
@@ -1766,7 +1764,7 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
     lockoutBaselineRatio !== null
       ? Math.max(0, lockoutBaselineRatio - lockoutRatio)
       : null;
-  const lockoutEligible = scorable && (sideConfirmed || frontHasWorldKneeRatio);
+  const lockoutEligible = scorable;
   const lockoutShort = lockoutEligible
     ? (
         lockoutDeltaRatio !== null
@@ -1942,7 +1940,7 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
     frontConfirmed,
     obliqueConfirmed,
     scorable,
-    qualityWarnings: squatQualityWarnings({ scorable, frontConfirmed, sideConfirmed }),
+    qualityWarnings: squatQualityWarnings({ scorable, frontConfirmed, sideConfirmed, obliqueConfirmed }),
     worldKneeRatioSupport,
     imageKneeRatioSupport,
     leftKneeRatio: Number.isFinite(repWindow.leftKneeRatioEnd ?? NaN) ? repWindow.leftKneeRatioEnd : null,
@@ -2084,11 +2082,6 @@ function computeSquatRepScore(analysis: SquatMetricSnapshot): number {
     penalty += Math.min(SCORE_CURVES.HEEL_LIFT.cap, SCORE_CURVES.HEEL_LIFT.scale * heelExcess * heelExcess);
   }
 
-  if (analysis.kneeValgusTriggered && analysis.kneeTrackingOffsetRatio !== null) {
-    const kneeExcess = Math.max(0, analysis.kneeTrackingOffsetRatio - SCORE_CURVES.KNEE_VALGUS.deadzone);
-    penalty += Math.min(SCORE_CURVES.KNEE_VALGUS.cap, SCORE_CURVES.KNEE_VALGUS.scale * kneeExcess * kneeExcess);
-  }
-
   if (analysis.tUp !== null && analysis.tUp > 0 && analysis.tUp < SCORE_CURVES.TEMPO_CONCENTRIC.deadzone) {
     const deficit = SCORE_CURVES.TEMPO_CONCENTRIC.deadzone - analysis.tUp;
     penalty += Math.min(SCORE_CURVES.TEMPO_CONCENTRIC.cap, SCORE_CURVES.TEMPO_CONCENTRIC.scale * deficit * deficit);
@@ -2117,46 +2110,37 @@ function computeSquatRepScore(analysis: SquatMetricSnapshot): number {
   if (analysis.sideOnlyMetricsEligible && analysis.heelLiftTriggered) {
     score = Math.min(score, 85);
   }
-  if (analysis.kneeValgusTriggered) {
-    score = Math.min(score, analysis.kneeValgusSeverity === 'fail' ? 75 : 85);
-  }
-
   return score;
+}
+
+function shouldEmitIncompleteRomCue(analysis: SquatMetricSnapshot): boolean {
+  return (
+    (analysis.incompleteRom || analysis.partialRep) &&
+    analysis.depthSeverity === 'none' &&
+    !analysis.lockoutShort
+  );
 }
 
 function generateFormMessages(analysis: SquatMetricSnapshot): string[] {
   const messages: string[] = [];
   if (!analysis.scorable) return messages;
 
-  let hasDepthOrRomCue = false;
-
   if (analysis.depthSeverity === 'fail') {
     messages.push(SQUAT_FEEDBACK.DEPTH_FAIL);
-    hasDepthOrRomCue = true;
   } else if (analysis.depthSeverity === 'warn') {
     messages.push(SQUAT_FEEDBACK.DEPTH_WARN);
-    hasDepthOrRomCue = true;
   }
 
   if (analysis.lockoutShort) {
     messages.push(SQUAT_FEEDBACK.LOCKOUT);
   }
 
-  if (analysis.incompleteRom) {
-    messages.push(SQUAT_FEEDBACK.ROM);
-    hasDepthOrRomCue = true;
-  }
-
-  if (analysis.partialRep && !hasDepthOrRomCue) {
+  if (shouldEmitIncompleteRomCue(analysis)) {
     messages.push(SQUAT_FEEDBACK.ROM);
   }
 
   if (analysis.heelLiftTriggered) {
     messages.push(SQUAT_FEEDBACK.HEEL_LIFT);
-  }
-
-  if (analysis.kneeValgusTriggered) {
-    messages.push(SQUAT_FEEDBACK.KNEE_VALGUS);
   }
 
   if (analysis.torsoSeverity === 'fail') {
@@ -2389,12 +2373,6 @@ function buildSquatDiagnostics(
         sampleCount: repWindow.kneeRatioSampleCount,
         skippedReason: 'knee_ratio_unavailable',
       }),
-      diagnosticMetric('smoothedKneeRatio', analysis.depthRatio, {
-        unit: 'ratio',
-        eligible: repWindow.kneeRatioSampleCount > 0,
-        sampleCount: repWindow.kneeRatioSampleCount,
-        skippedReason: 'knee_ratio_unavailable',
-      }),
       diagnosticMetric('movementKneeRatio', analysis.depthRatio, {
         unit: 'ratio',
         eligible: repWindow.kneeRatioSampleCount > 0,
@@ -2619,7 +2597,7 @@ function buildSquatDiagnostics(
         thresholdPath: 'formThresholds.ROM_MIN',
         thresholdValue: FORM_THRESHOLDS.ROM_MIN,
         eligible: analysis.romEligible,
-        triggered: analysis.incompleteRom || analysis.partialRep,
+        triggered: shouldEmitIncompleteRomCue(analysis),
         skippedReason: analysis.frontConfirmed ? 'world_knee_ratio_unavailable' : 'view_uncertain',
       }),
       diagnosticCue({
@@ -2641,26 +2619,6 @@ function buildSquatDiagnostics(
         triggered: analysis.heelLiftTriggered,
         support: analysis.heelLiftOverThresholdSupport ?? undefined,
         skippedReason: analysis.sideOnlyMetricsEligible ? 'foot_landmarks_unavailable' : 'not_side_view',
-      }),
-      diagnosticCue({
-        issueId: 'barbell-squat.knee_valgus',
-        metricKeys: ['kneeTrackingOffsetRatio', 'kneeTrackingEligibleSupport', 'kneeTrackingOverThresholdSupport'],
-        direction: 'above',
-        value: analysis.kneeTrackingOffsetRatio,
-        thresholdPath: [
-          'formThresholds.KNEE_VALGUS_WARN',
-          'formThresholds.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT',
-          'formThresholds.KNEE_VALGUS_MIN_SUPPORT',
-        ],
-        thresholdValue: {
-          kneeTrackingOffsetRatio: FORM_THRESHOLDS.KNEE_VALGUS_WARN,
-          kneeTrackingEligibleSupport: FORM_THRESHOLDS.KNEE_VALGUS_MIN_ELIGIBLE_SUPPORT,
-          kneeTrackingOverThresholdSupport: FORM_THRESHOLDS.KNEE_VALGUS_MIN_SUPPORT,
-        },
-        eligible: analysis.kneeTrackingEligible,
-        triggered: analysis.kneeValgusTriggered,
-        support: analysis.kneeTrackingOverThresholdSupport ?? undefined,
-        skippedReason: analysis.frontConfirmed ? 'knee_tracking_unavailable' : 'not_front_view',
       }),
       diagnosticCue({
         issueId: 'barbell-squat.torso_fail',
@@ -3272,6 +3230,28 @@ function validateSquatHeuristicConfig(config: ExerciseHeuristicConfig): string[]
   requireOrdered(config, issues, 'thresholds.MIN_PARTIAL_ROM', 'thresholds.MIN_REP_ROM');
 
   for (const path of [
+    'thresholds.DESCENT_CLOCK_START',
+    'thresholds.DESCENDING_ENTER',
+    'thresholds.BOTTOM_ENTER',
+    'thresholds.BOTTOM_EXIT',
+    'thresholds.STANDING_REENTER',
+    'thresholds.PARTIAL_REP_RESET',
+    'thresholds.IDLE_STANDING_MIN',
+    'thresholds.MIN_PARTIAL_ROM',
+    'thresholds.MIN_REP_ROM',
+    'formThresholds.DEPTH_WARN',
+    'formThresholds.DEPTH_FAIL',
+    'formThresholds.LOCKOUT_FAIL',
+    'formThresholds.LOCKOUT_BASELINE_DELTA_FAIL',
+    'formThresholds.ROM_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value < 0 || value > 1)) {
+      issues.push(`Squat config "${path}" must be between 0 and 1.`);
+    }
+  }
+
+  for (const path of [
     'thresholds.MIN_REP_TIME',
     'thresholds.MIN_DESCENDING_TIME',
     'thresholds.STANDING_HOLD_TIME',
@@ -3356,156 +3336,139 @@ export function createSquatDefinition(
   config: ExerciseHeuristicConfig = ACTIVE_SQUAT_HEURISTIC_CONFIG,
 ): ExerciseDefinition {
   return {
-  name: 'Barbell Squat',
-  requiredView: 'any',
+    name: 'Barbell Squat',
+    requiredView: 'any',
 
-  createState: (): ExerciseState => ({
-    repCount: 0,
-    lastRepResult: null,
-    feedback: null,
-    feedbackTimestamp: null,
-    debugInfo: {},
-    repQualityWindowActive: false,
-    _internal: withSquatConfig(config, () => initializeSquatState()),
-  }),
+    createState: (): ExerciseState => ({
+      repCount: 0,
+      lastRepResult: null,
+      feedback: null,
+      feedbackTimestamp: null,
+      debugInfo: {},
+      repQualityWindowActive: false,
+      _internal: withSquatConfig(config, () => initializeSquatState()),
+    }),
 
-  update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
-    const internal = state._internal as SquatState;
-    const newInternal = withSquatConfig(config, () => updateSquatState(keypoints, internal, frameContext));
+    update: (keypoints: Keypoint[], state: ExerciseState, frameContext?: ExerciseFrameContext): ExerciseState => {
+      const internal = state._internal as SquatState;
+      const newInternal = withSquatConfig(config, () => updateSquatState(keypoints, internal, frameContext));
 
-    const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
-      ? {
-          repIndex: newInternal.lastRepResult.repIndex,
-          score: newInternal.lastRepResult.score,
-          messages: newInternal.lastRepResult.messages,
-          scorable: newInternal.lastRepResult.scorable,
-          qualityWarnings: newInternal.lastRepResult.qualityWarnings,
-          diagnostics: newInternal.lastRepResult.diagnostics,
-        }
-      : null;
+      const lastRepResult: FrameworkRepResult | null = newInternal.lastRepResult
+        ? {
+            repIndex: newInternal.lastRepResult.repIndex,
+            score: newInternal.lastRepResult.score,
+            messages: newInternal.lastRepResult.messages,
+            scorable: newInternal.lastRepResult.scorable,
+            qualityWarnings: newInternal.lastRepResult.qualityWarnings,
+            diagnostics: newInternal.lastRepResult.diagnostics,
+          }
+        : null;
 
-    return {
-      repCount: newInternal.repCount,
-      lastRepResult,
-      feedback: newInternal.feedback,
-      feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
-      debugInfo: getSquatDebugInfo(newInternal) as unknown as Record<string, unknown>,
-      repQualityWindowActive: newInternal.repWindow !== null,
-      _internal: newInternal,
-    };
-  },
-
-  heuristicConfig: config,
-  tunableSpec: SQUAT_TUNABLE_SPEC,
-  tunedConfigPath: 'src/utils/exercises/definitions/tuned/squat.json',
-  createVariant: (variantConfig) =>
-    createSquatDefinition(mergeHeuristicConfig(config, variantConfig)),
-  validateHeuristicConfig: validateSquatHeuristicConfig,
-
-  ttsConfig: {
-    feedbackToIssue: {
-      [SQUAT_FEEDBACK.DEPTH_FAIL]: 'depth_short',
-      [SQUAT_FEEDBACK.DEPTH_WARN]: 'depth_short',
-      [SQUAT_FEEDBACK.LOCKOUT]: 'lockout_short',
-      [SQUAT_FEEDBACK.ROM]: 'incomplete_rom',
-      [SQUAT_FEEDBACK.TORSO_FAIL]: 'torso_fail',
-      [SQUAT_FEEDBACK.TORSO_WARN]: 'torso_warn',
-      [SQUAT_FEEDBACK.HEEL_LIFT]: 'heel_lift',
-      [SQUAT_FEEDBACK.KNEE_VALGUS]: 'knee_valgus',
-      [SQUAT_FEEDBACK.TEMPO_UP]: 'tempo_up',
-      [SQUAT_FEEDBACK.TEMPO_DOWN]: 'tempo_down',
+      return {
+        repCount: newInternal.repCount,
+        lastRepResult,
+        feedback: newInternal.feedback,
+        feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
+        debugInfo: getSquatDebugInfo(newInternal) as unknown as Record<string, unknown>,
+        repQualityWindowActive: newInternal.repWindow !== null,
+        _internal: newInternal,
+      };
     },
-    feedbackMessages: {
-      [SQUAT_FEEDBACK.DEPTH_FAIL]: [
-        'Squat deeper.',
-        'Aim for parallel.',
-        'Drop a little lower with control.',
-      ],
-      [SQUAT_FEEDBACK.DEPTH_WARN]: [
-        'A little more depth.',
-        "You're close. Sink a touch deeper.",
-        'Find full depth next rep.',
-      ],
-      [SQUAT_FEEDBACK.LOCKOUT]: [
-        'Stand all the way up.',
-        'Finish tall at the top.',
-        'Finish with your knees straight.',
-      ],
-      [SQUAT_FEEDBACK.HEEL_LIFT]: [
-        'Keep your heels planted.',
-        'Drive through your mid-foot.',
-        'Keep pressure through your whole foot.',
-      ],
-      [SQUAT_FEEDBACK.KNEE_VALGUS]: [
-        'Track your knees over your toes.',
-        'Keep your knees in line with your feet.',
-        'Press your knees out gently as you stand.',
-      ],
-      [SQUAT_FEEDBACK.TORSO_FAIL]: [
-        'Chest up.',
-        'Too much forward lean. Stay tall.',
-        'Brace and keep your chest up.',
-      ],
-      [SQUAT_FEEDBACK.TORSO_WARN]: [
-        'Stay more upright.',
-        'Brace your core and keep your chest up.',
-        'Keep your torso tall.',
-      ],
-      [SQUAT_FEEDBACK.TEMPO_UP]: [
-        'Drive up with control.',
-        "Don't bounce out of the bottom.",
-        'Smooth ascent, stay braced.',
-      ],
-      [SQUAT_FEEDBACK.TEMPO_DOWN]: [
-        'Control it on the way down.',
-        'Slow the descent.',
-        "Don't drop into the squat.",
-      ],
-    },
-    issueDefinitions: [
-      {
-        issueType: 'heel_lift',
-        priority: 20,
-        messages: [
+
+    heuristicConfig: config,
+    tunableSpec: SQUAT_TUNABLE_SPEC,
+    tunedConfigPath: 'src/utils/exercises/definitions/tuned/squat.json',
+    createVariant: (variantConfig) =>
+      createSquatDefinition(mergeHeuristicConfig(config, variantConfig)),
+    validateHeuristicConfig: validateSquatHeuristicConfig,
+
+    ttsConfig: {
+      feedbackToIssue: {
+        [SQUAT_FEEDBACK.DEPTH_FAIL]: 'depth_short',
+        [SQUAT_FEEDBACK.DEPTH_WARN]: 'depth_short',
+        [SQUAT_FEEDBACK.LOCKOUT]: 'lockout_short',
+        [SQUAT_FEEDBACK.ROM]: 'incomplete_rom',
+        [SQUAT_FEEDBACK.TORSO_FAIL]: 'torso_fail',
+        [SQUAT_FEEDBACK.TORSO_WARN]: 'torso_warn',
+        [SQUAT_FEEDBACK.HEEL_LIFT]: 'heel_lift',
+        [SQUAT_FEEDBACK.TEMPO_UP]: 'tempo_up',
+        [SQUAT_FEEDBACK.TEMPO_DOWN]: 'tempo_down',
+      },
+      feedbackMessages: {
+        [SQUAT_FEEDBACK.DEPTH_FAIL]: [
+          'Squat deeper.',
+          'Aim for parallel.',
+          'Drop a little lower with control.',
+        ],
+        [SQUAT_FEEDBACK.DEPTH_WARN]: [
+          'A little more depth.',
+          "You're close. Sink a touch deeper.",
+          'Find full depth next rep.',
+        ],
+        [SQUAT_FEEDBACK.LOCKOUT]: [
+          'Stand all the way up.',
+          'Finish tall at the top.',
+          'Finish with your knees straight.',
+        ],
+        [SQUAT_FEEDBACK.HEEL_LIFT]: [
           'Keep your heels planted.',
           'Drive through your mid-foot.',
           'Keep pressure through your whole foot.',
         ],
-      },
-      {
-        issueType: 'knee_valgus',
-        priority: 22,
-        messages: [
-          'Track your knees over your toes.',
-          'Keep your knees in line with your feet.',
-          'Press your knees out gently as you stand.',
+        [SQUAT_FEEDBACK.TORSO_FAIL]: [
+          'Chest up.',
+          'Too much forward lean. Stay tall.',
+          'Brace and keep your chest up.',
+        ],
+        [SQUAT_FEEDBACK.TORSO_WARN]: [
+          'Stay more upright.',
+          'Brace your core and keep your chest up.',
+          'Keep your torso tall.',
+        ],
+        [SQUAT_FEEDBACK.TEMPO_UP]: [
+          'Drive up with control.',
+          "Don't bounce out of the bottom.",
+          'Smooth ascent, stay braced.',
+        ],
+        [SQUAT_FEEDBACK.TEMPO_DOWN]: [
+          'Control it on the way down.',
+          'Slow the descent.',
+          "Don't drop into the squat.",
         ],
       },
-    ],
-  },
+      issueDefinitions: [
+        {
+          issueType: 'heel_lift',
+          priority: 20,
+          messages: [
+            'Keep your heels planted.',
+            'Drive through your mid-foot.',
+            'Keep pressure through your whole foot.',
+          ],
+        },
+      ],
+    },
 
-  summaryConfig: {
-    [SQUAT_FEEDBACK.DEPTH_FAIL]:
-      'Focus on hip mobility and ankle flexibility to achieve parallel depth. Try box squats to build confidence at depth.',
-    [SQUAT_FEEDBACK.DEPTH_WARN]:
-      'You\'re close to parallel \u2014 work on ankle mobility and try paused squats to build strength at the bottom.',
-    [SQUAT_FEEDBACK.LOCKOUT]:
-      'Fully lock out at the top of each rep to complete the range of motion.',
-    [SQUAT_FEEDBACK.ROM]:
-      'Achieve complete range of motion from standing to at least parallel.',
-    [SQUAT_FEEDBACK.HEEL_LIFT]:
-      'Keep your heels planted and push through your mid-foot to maintain balance and consistent force through the rep.',
-    [SQUAT_FEEDBACK.KNEE_VALGUS]:
-      'Keep your knees tracking over your toes. Practice controlled tempo squats and use a stance that lets your knees follow your foot angle.',
-    [SQUAT_FEEDBACK.TORSO_FAIL]:
-      'Excessive forward lean shifts load to your lower back. Strengthen your upper back and core, and check ankle mobility.',
-    [SQUAT_FEEDBACK.TORSO_WARN]:
-      'Take a deep breath and brace your core before each rep. Think about driving your chest up as you ascend.',
-    [SQUAT_FEEDBACK.TEMPO_UP]:
-      'Drive up with control \u2014 bouncing at the bottom puts extra stress on your knees.',
-    [SQUAT_FEEDBACK.TEMPO_DOWN]:
-      'Aim for a 2-3 second descent. Controlled eccentrics build more strength and protect your joints.',
-  },
+    summaryConfig: {
+      [SQUAT_FEEDBACK.DEPTH_FAIL]:
+        'Focus on hip mobility and ankle flexibility to achieve parallel depth. Try box squats to build confidence at depth.',
+      [SQUAT_FEEDBACK.DEPTH_WARN]:
+        'You\'re close to parallel \u2014 work on ankle mobility and try paused squats to build strength at the bottom.',
+      [SQUAT_FEEDBACK.LOCKOUT]:
+        'Fully lock out at the top of each rep to complete the range of motion.',
+      [SQUAT_FEEDBACK.ROM]:
+        'Achieve complete range of motion from standing to at least parallel.',
+      [SQUAT_FEEDBACK.HEEL_LIFT]:
+        'Keep your heels planted and push through your mid-foot to maintain balance and consistent force through the rep.',
+      [SQUAT_FEEDBACK.TORSO_FAIL]:
+        'Excessive forward lean shifts load to your lower back. Strengthen your upper back and core, and check ankle mobility.',
+      [SQUAT_FEEDBACK.TORSO_WARN]:
+        'Take a deep breath and brace your core before each rep. Think about driving your chest up as you ascend.',
+      [SQUAT_FEEDBACK.TEMPO_UP]:
+        'Drive up with control \u2014 bouncing at the bottom puts extra stress on your knees.',
+      [SQUAT_FEEDBACK.TEMPO_DOWN]:
+        'Aim for a 2-3 second descent. Controlled eccentrics build more strength and protect your joints.',
+    },
   };
 }
 

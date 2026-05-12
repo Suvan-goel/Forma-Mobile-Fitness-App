@@ -268,7 +268,8 @@ class ExpoPoseDetectionView(
   private fun handlePoseResult(
     result: PoseLandmarkerResult,
     inputImageHeight: Int,
-    inputImageWidth: Int
+    inputImageWidth: Int,
+    timestampMs: Long
   ) {
     if (isDisposed) return
 
@@ -307,9 +308,11 @@ class ExpoPoseDetectionView(
     val payload = mapOf(
       "landmarks" to landmarksArray,
       "worldLandmarks" to worldLandmarksArray,
+      "timestampMs" to timestampMs,
       "additionalData" to mapOf(
         "height" to inputImageHeight,
-        "width" to inputImageWidth
+        "width" to inputImageWidth,
+        "timestampMs" to timestampMs
       )
     )
 

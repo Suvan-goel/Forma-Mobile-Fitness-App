@@ -174,6 +174,8 @@ export function createDefaultTunableSpec(
         minValidationImprovement: 0.001,
         maxTestRepCountAccuracyRegression: 0,
         maxTestCleanFalsePositiveRegression: 0.02,
+        maxTestViewAccuracyRegression: 0.05,
+        maxTestScorableAccuracyRegression: 0.02,
         ...search?.applyGates,
       },
     },

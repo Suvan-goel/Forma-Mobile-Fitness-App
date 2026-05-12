@@ -17,6 +17,8 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "view": "side",
+      "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",
       "suggestedIssueIds": [],
       "suggestedFeedbackMessages": [],
@@ -24,6 +26,12 @@
     }
   ],
   "notes": "Draft label template. Copy to a real label file, review timings/issues, then set reviewStatus to reviewed.",
+  "labelingGuidance": [
+    "Side-view Cable Row reps are the v1 full-form scoring target.",
+    "Front, oblique, or unknown-view Cable Row reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.",
+    "Label row depth, extension, shoulder retraction, torso lean, torso rocking, high row path, shoulder shrug, and tempo only when a clear side view supports the cue.",
+    "Do not label row-target height, hold, or velocity diagnostics as separate issues in v1."
+  ],
   "availableIssues": [
     {
       "issueId": "cable-row.row_depth",

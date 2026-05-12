@@ -13,9 +13,11 @@ export interface Landmark {
 export interface LandmarkData {
   landmarks: Landmark[];
   worldLandmarks: Landmark[];
+  timestampMs?: number;
   additionalData: {
     height: number;
     width: number;
+    timestampMs?: number;
   };
 }
 

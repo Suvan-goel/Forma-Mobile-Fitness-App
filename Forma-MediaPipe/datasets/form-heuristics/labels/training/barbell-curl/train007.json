@@ -12,18 +12,24 @@
       "startMs": 1750,
       "endMs": 3500,
       "issueIds": [
-        "barbell-curl.torso_warn", "barbell-curl.shoulder_warn"
+        "barbell-curl.torso_warn",
+        "barbell-curl.shoulder_warn"
       ],
-      "notes": "Forward torso dip before curling, then rises into the rep."
+      "notes": "Forward torso dip before curling, then rises into the rep.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 2,
       "startMs": 3850,
       "endMs": 5900,
       "issueIds": [
-        "barbell-curl.torso_warn", "barbell-curl.shoulder_warn"
+        "barbell-curl.torso_warn",
+        "barbell-curl.shoulder_warn"
       ],
-      "notes": "Forward torso dip before curling, then rises into the rep."
+      "notes": "Forward torso dip before curling, then rises into the rep.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 3,
@@ -32,25 +38,35 @@
       "issueIds": [
         "barbell-curl.torso_warn"
       ],
-      "notes": "Torso rocks forward at the bottom and rises through the curl."
+      "notes": "Torso rocks forward at the bottom and rises through the curl.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 4,
       "startMs": 8250,
       "endMs": 9850,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 5,
       "startMs": 10250,
       "endMs": 11650,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 6,
       "startMs": 12500,
       "endMs": 13900,
-      "issueIds": ["barbell-curl.tempo_down"]
+      "issueIds": [
+        "barbell-curl.tempo_down"
+      ],
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 7,
@@ -59,13 +75,17 @@
       "issueIds": [
         "barbell-curl.torso_warn"
       ],
-      "notes": "Forward torso dip before curling, then rises into the rep."
+      "notes": "Forward torso dip before curling, then rises into the rep.",
+      "view": "unknown",
+      "scorable": true
     },
     {
       "index": 8,
       "startMs": 17250,
       "endMs": 19000,
-      "issueIds": []
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
     }
   ],
   "notes": "Human-reviewed from video. Eight visible reps labelled with bottom-to-bottom windows. Torso-control labels are applied to the reps with clear forward-dip/rise body swing; wrist and ROM draft suggestions were not copied because those issues are not reliably visible in this footage."

@@ -6,19 +6,19 @@ export interface ExerciseSetupData {
 
 export const EXERCISE_SETUP_DATA: Record<string, ExerciseSetupData> = {
   'Barbell Curl': {
-    keySetup: 'Face the camera directly',
-    reasonText: 'Tracks both arms for bilateral curl symmetry and elbow drift.',
+    keySetup: 'Face the camera for full scoring',
+    reasonText: 'Front view scores both arms, symmetry, and elbow drift. Side or diagonal views can still count reps, but only score the visible-arm form cues.',
     cameraTips: [
       'Place the phone about 6–8 feet in front of you at chest height.',
       'Stand centered in frame with your full body and the barbell visible.',
-      'Leave a bit of headroom so the bar never leaves the screen at the top.',
+      'Use a side or diagonal angle only when front view is not practical, and keep one full arm and your torso visible.',
     ],
   },
   'Barbell Squat': {
-    keySetup: 'Camera perpendicular to your body',
-    reasonText: 'Tracks depth, lockout, torso lean, heel lift, and tempo from the side.',
+    keySetup: 'Side view required for form scoring',
+    reasonText: 'Scores depth, lockout, torso lean, heel lift, and tempo from a side view. Front or oblique captures may count movement but will not receive form scores.',
     cameraTips: [
-      'Set the phone roughly at hip height, perpendicular to your body.',
+      'Set the phone roughly at hip height, perpendicular to your body for a clear side view.',
       'Stand 6–8 feet away so your whole body and the barbell are in frame.',
       'Aim the camera so you can see your feet, hips, and head throughout the squat.',
     ],

@@ -427,6 +427,7 @@ extension ExpoPoseDetectionView: PoseLandmarkerServiceDelegate {
   func poseLandmarkerService(
     _ service: PoseLandmarkerService,
     didFinishDetection result: PoseLandmarkerResult?,
+    timestampInMilliseconds: Int,
     error: Error?
   ) {
     guard !isDisposed(), let result = result else { return }
@@ -466,9 +467,11 @@ extension ExpoPoseDetectionView: PoseLandmarkerServiceDelegate {
       let payload: [String: Any] = [
         "landmarks": landmarksArray,
         "worldLandmarks": worldLandmarksArray,
+        "timestampMs": timestampInMilliseconds,
         "additionalData": [
           "height": imageSize.height,
-          "width": imageSize.width
+          "width": imageSize.width,
+          "timestampMs": timestampInMilliseconds
         ]
       ]
 
