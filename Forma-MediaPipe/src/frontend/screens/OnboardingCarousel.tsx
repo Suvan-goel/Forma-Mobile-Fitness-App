@@ -346,8 +346,8 @@ const slideStyles = StyleSheet.create({
     flex: 1,
     borderRadius: CARD_RADIUS,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.115)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
     padding: 16,
   },
   visualHeader: {

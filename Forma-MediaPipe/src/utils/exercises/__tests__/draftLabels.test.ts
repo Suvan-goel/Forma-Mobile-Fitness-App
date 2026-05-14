@@ -2,9 +2,10 @@ import { createDraftLabelFromReplay, getAvailableIssues } from '../dataset';
 import { barbellCurlDefinition } from '../definitions/barbellCurl';
 import { cableRowDefinition } from '../definitions/cableRow';
 import { lateralRaiseDefinition } from '../definitions/lateralRaise';
+import { legExtensionsDefinition } from '../definitions/legExtensions';
 import { pushupDefinition } from '../definitions/pushup';
 import { squatDefinition } from '../definitions/squat';
-import type { ExerciseDefinition } from '../types';
+import type { ExerciseDefinition, RepDiagnostics } from '../types';
 import type { LandmarkRecording, ReplayResultVerbose } from '../replay';
 
 const definition: ExerciseDefinition = {
@@ -225,6 +226,50 @@ describe('draft label generation', () => {
     expect(label.reps[0]?.view).toBe('unknown');
     expect(label.reps[0]?.scorable).toBe(true);
     expect(label.availableIssues?.map((issue) => issue.issueId) ?? []).not.toContain('cable-row.row_target_high');
+  });
+
+  it('adds side-view Leg Extensions labeling guidance and inferred rep metadata to draft labels', () => {
+    const diagnostics: RepDiagnostics = {
+      exerciseName: 'Leg Extensions',
+      repIndex: 1,
+      view: 'side',
+      selectedSide: 'left',
+      scorable: true,
+      metrics: {},
+      cues: {},
+    };
+    const legExtensionReplay: ReplayResultVerbose = {
+      ...replay,
+      repTraces: replay.repTraces.map(trace => ({
+        ...trace,
+        diagnostics,
+        scorable: true,
+      })),
+    };
+    const label = createDraftLabelFromReplay({
+      definition: legExtensionsDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Leg Extensions',
+      },
+      replay: legExtensionReplay,
+      sourceVideo: 'videos/leg-extensions/leg_extension_001.mp4',
+      landmarkFile: 'landmarks/leg-extensions/leg_extension_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Side-view Leg Extensions reps are the v1 full-form scoring target'),
+        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('Label lockout, bottom range, hip lift, torso movement, top hold, and tempo'),
+        expect.stringContaining('Reviewed scorable Leg Extensions reps must use view=side'),
+      ]),
+    );
+    expect(label.reps[0]?.view).toBe('side');
+    expect(label.reps[0]?.scorable).toBe(true);
   });
 
   it('adds front-view lateral-raise labeling guidance to draft labels', () => {

@@ -349,8 +349,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     borderRadius: 8,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
   },
   searchInput: {
     flex: 1,
@@ -420,8 +420,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     borderRadius: 8,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
   },
   avatar: {
     width: 42,

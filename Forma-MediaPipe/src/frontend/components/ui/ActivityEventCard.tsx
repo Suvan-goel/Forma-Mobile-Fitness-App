@@ -244,8 +244,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.10)',
+    borderColor: 'rgba(255, 255, 255, 0.085)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
   },
   header: {
     flexDirection: 'row',

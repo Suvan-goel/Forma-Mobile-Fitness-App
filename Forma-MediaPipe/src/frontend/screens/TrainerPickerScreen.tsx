@@ -236,8 +236,8 @@ const styles = StyleSheet.create({
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.085)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
     paddingHorizontal: 12,
     paddingVertical: 2,
   },

@@ -23,6 +23,7 @@ import { cableRowDefinition } from '../definitions/cableRow';
 import { barbellCurlDefinition } from '../definitions/barbellCurl';
 import { legExtensionsDefinition } from '../definitions/legExtensions';
 import { lateralRaiseDefinition } from '../definitions/lateralRaise';
+import { latPulldownDefinition } from '../definitions/latPulldown';
 import { machineAbCrunchDefinition } from '../definitions/machineAbCrunch';
 import { pushupDefinition } from '../definitions/pushup';
 import { squatDefinition } from '../definitions/squat';
@@ -432,6 +433,61 @@ describe('heuristic config helpers', () => {
     );
     expect(cableRowDefinition.validateHeuristicConfig?.(invalidExtensionBelowRest)).toEqual(
       expect.arrayContaining([expect.stringContaining('thresholds.REST_REENTER')]),
+    );
+  });
+
+  it('validates the default lat-pulldown heuristic config', () => {
+    expect(latPulldownDefinition.validateHeuristicConfig?.(latPulldownDefinition.heuristicConfig ?? {})).toEqual([]);
+    expect((latPulldownDefinition.tunableSpec?.tunables ?? []).map((tunable) => tunable.path)).toEqual(
+      expect.arrayContaining([
+        'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+        'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+      ]),
+    );
+  });
+
+  it('rejects invalid lat-pulldown thresholds and penalty configs', () => {
+    const base = latPulldownDefinition.heuristicConfig ?? {};
+    const invalidFsm = setConfigValue(base, 'thresholds.BOTTOM_ENTER', 0.7);
+    const invalidPhysicalRatio = setConfigValue(base, 'thresholds.PULLING_ENTER', 1.01);
+    const invalidPartialRom = setConfigValue(base, 'thresholds.MIN_PARTIAL_ROM', 0.4);
+    const invalidRepTime = setConfigValue(base, 'thresholds.MIN_REP_TIME', 0.1);
+    const invalidPullRom = setConfigValue(base, 'formThresholds.PULL_ROM_FAIL', 0.95);
+    const invalidExtensionRom = setConfigValue(base, 'formThresholds.EXTENSION_ROM_FAIL', 0.8);
+    const invalidSideViewRange = setConfigValue(base, 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', 1.2);
+    const invalidSideViewOrdering = setConfigValue(base, 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', 0.6);
+    const invalidTempo = setConfigValue(base, 'formThresholds.TEMPO_RETURN_MIN', 0);
+    const invalidPenalty = setConfigValue(base, 'penaltyConfigs.TORSO_ROCK.scale', 0);
+
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidFsm)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.BOTTOM_ENTER')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidPhysicalRatio)).toEqual(
+      expect.arrayContaining([expect.stringContaining('at most 1')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidPartialRom)).toEqual(
+      expect.arrayContaining([expect.stringContaining('MIN_PARTIAL_ROM')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidRepTime)).toEqual(
+      expect.arrayContaining([expect.stringContaining('PULLING_ABORT_MIN_TIME')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidPullRom)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.PULLING_ENTER')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidExtensionRom)).toEqual(
+      expect.arrayContaining([expect.stringContaining('thresholds.REST_REENTER')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidSideViewRange)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_AVG_CONFIDENCE_MIN')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidSideViewOrdering)).toEqual(
+      expect.arrayContaining([expect.stringContaining('SIDE_VIEW_MIN_CONFIDENCE_MIN')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidTempo)).toEqual(
+      expect.arrayContaining([expect.stringContaining('TEMPO_RETURN_MIN')]),
+    );
+    expect(latPulldownDefinition.validateHeuristicConfig?.(invalidPenalty)).toEqual(
+      expect.arrayContaining([expect.stringContaining('penaltyConfigs.TORSO_ROCK.scale')]),
     );
   });
 

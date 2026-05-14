@@ -46,6 +46,24 @@ function fullRepPath(): number[] {
   ];
 }
 
+function loweringOnlyFromExtendedPath(): number[] {
+  return [
+    ...Array(16).fill(1),
+    ...interpolate(1, 0, 58),
+    ...Array(8).fill(0),
+  ];
+}
+
+function borderlineBentFullRepPath(): number[] {
+  return [
+    ...Array(16).fill(0.1),
+    ...interpolate(0.1, 1, 26),
+    ...Array(4).fill(1),
+    ...interpolate(1, 0.1, 58),
+    ...Array(8).fill(0.1),
+  ];
+}
+
 function partialPath(): number[] {
   return [
     ...Array(16).fill(0),
@@ -95,12 +113,10 @@ function fastNoHoldPath(): number[] {
 function bounceThroughPath(): number[] {
   return [
     ...Array(16).fill(0),
-    0,
+    ...interpolate(0, 0.99, 28),
     1,
-    1,
-    1,
-    0.5,
-    ...interpolate(0.5, 0, 50),
+    0.82,
+    ...interpolate(0.82, 0, 50),
     ...Array(8).fill(0),
   ];
 }
@@ -308,6 +324,25 @@ describe('Leg Extension synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.metrics.sideViewConfidence.value).toBeLessThan(0.45);
   });
 
+  it('keeps one clear side-view leg chain scorable when the far side is hidden', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      buildRecording('synthetic one-sided leg extension', fullRepPath(), {
+        keypointMutator: keypoint => (
+          keypoint.name.startsWith('right_') ? { ...keypoint, score: 0.05 } : keypoint
+        ),
+      }),
+      { confidenceGating: true },
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].qualityWarnings ?? []).not.toContain('side_view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('side');
+    expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('side_confirmed');
+    expect(result.reps[0].diagnostics?.viewQuality?.sampleCount).toBeGreaterThanOrEqual(5);
+  });
+
   it('uses image landmarks for leg-extension motion when world landmarks are distorted', () => {
     const result = replayRecording(
       legExtensionsDefinition,
@@ -318,6 +353,16 @@ describe('Leg Extension synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('does not count when the clip starts extended and only lowers to rest', () => {
+    const result = replayRecordingVerbose(
+      legExtensionsDefinition,
+      buildRecording('synthetic lowering-only leg extension from lockout', loweringOnlyFromExtendedPath()),
+    );
+
+    expect(result.finalRepCount).toBe(0);
+    expect(result.repTraces).toEqual([]);
   });
 
   it('does not count a tiny leg-extension pulse', () => {
@@ -364,6 +409,55 @@ describe('Leg Extension synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Extend fully — straighten your legs completely at the top.');
     expect(result.reps[0].diagnostics?.metrics.kneeExtensionAngleRaw.value).toBeGreaterThan(160);
     expect(result.reps[0].diagnostics?.metrics.kneeExtensionAngle.value).toBeLessThan(160);
+  });
+
+  it('lets robust ROM override a sustained raw lockout artifact on a short-lockout rep', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      buildRecording('synthetic short lockout with sustained raw lockout artifact', halfRepPath(), {
+        keypointMutator: (keypoint, index) => (
+          index >= 25 && index < 28 && keypoint.name === 'left_ankle'
+            ? { ...keypoint, x: EXTENDED.ankle.x - 0.015, y: EXTENDED.ankle.y }
+            : keypoint
+        ),
+      }),
+    );
+    const diagnostics = result.reps[0].diagnostics;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages[0]).toBe('Extend fully — straighten your legs completely at the top.');
+    expect(result.feedbackMessages).toContain('Extend fully — straighten your legs completely at the top.');
+    expect(result.feedbackMessages).not.toContain('Pause briefly at full extension.');
+    expect(diagnostics?.metrics.extensionRatioRaw.value).toBeGreaterThanOrEqual(0.93);
+    expect(diagnostics?.metrics.kneeExtensionAngleRaw.value).toBeGreaterThan(160);
+    expect(diagnostics?.metrics.extensionRatio.value).toBeLessThan(0.93);
+    expect(diagnostics?.metrics.kneeExtensionAngle.value).toBeLessThan(160);
+    expect(diagnostics?.metrics.tExtend.value).not.toBeNull();
+    expect(diagnostics?.cues['leg-extensions.lockout_short'].triggered).toBe(true);
+    expect(diagnostics?.cues['leg-extensions.lockout_short'].thresholdPath).toEqual([
+      'formThresholds.EXTENSION_FAIL',
+      'formThresholds.KNEE_EXTENSION_FAIL',
+    ]);
+  });
+
+  it('does not add a top-hold score penalty when lockout is already short', () => {
+    const recording = buildRecording('synthetic short lockout with sustained raw lockout artifact', halfRepPath(), {
+      keypointMutator: (keypoint, index) => (
+        index >= 25 && index < 28 && keypoint.name === 'left_ankle'
+          ? { ...keypoint, x: EXTENDED.ankle.x - 0.015, y: EXTENDED.ankle.y }
+          : keypoint
+      ),
+    });
+    const defaultResult = replayRecording(legExtensionsDefinition, recording);
+    const noTopHoldPenalty = replayRecording(
+      legExtensionsDefinition,
+      recording,
+      { heuristicConfig: { penaltyConfigs: { TOP_HOLD: { cap: 0 } } } },
+    );
+
+    expect(defaultResult.feedbackMessages).toContain('Extend fully — straighten your legs completely at the top.');
+    expect(defaultResult.feedbackMessages).not.toContain('Pause briefly at full extension.');
+    expect(defaultResult.repScores[0]).toBe(noTopHoldPenalty.repScores[0]);
   });
 
   it('counts a meaningful partial leg extension and records ROM feedback', () => {
@@ -465,6 +559,20 @@ describe('Leg Extension synthetic replay coverage', () => {
     const result = replayRecording(
       legExtensionsDefinition,
       buildRecording('synthetic torso lean from the first active frame', fullRepPath(), {
+        posture: index => (index < 16 ? 'upright' : 'leaned'),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your back against the pad — avoid leaning forward.');
+    expect(result.reps[0].diagnostics?.metrics.torsoBaselineSource.label).toBe('rest');
+    expect(result.reps[0].diagnostics?.metrics.baselineSampleCount.value).toBeGreaterThanOrEqual(5);
+  });
+
+  it('uses REST baselines from a borderline bent setup above the extension clock threshold', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      buildRecording('synthetic borderline bent setup with immediate torso lean', borderlineBentFullRepPath(), {
         posture: index => (index < 16 ? 'upright' : 'leaned'),
       }),
     );
@@ -578,6 +686,9 @@ describe('Leg Extension synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain("Keep your hips on the seat — don't lift off the pad.");
     expect(result.reps[0].diagnostics?.metrics.hipRiseRatio.value).toBeGreaterThan(0.04);
+    expect(result.reps[0].diagnostics?.metrics.hipDeltaRaw.value).toBeGreaterThanOrEqual(
+      result.reps[0].diagnostics?.metrics.hipDelta.value ?? 0,
+    );
   });
 
   it('uses knee ROM to reject shallow partial reps even when ratio ROM is noisy', () => {

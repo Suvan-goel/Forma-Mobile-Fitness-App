@@ -85,6 +85,25 @@ function getLabelingGuidance(definition: ExerciseDefinition): string[] | undefin
     ];
   }
 
+  if (definition.name === 'Cable Lat Pulldowns') {
+    return [
+      'Side-view Cable Lat Pulldowns reps are the v1 full-form scoring target.',
+      'Usable side-diagonal Cable Lat Pulldowns captures should be marked view=side for v1; front, oblique, or unknown-view reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.',
+      'Label pull depth, top extension, elbow drive, torso lean, torso rocking, shoulder shrug, and tempo only when a clear side view supports the cue.',
+      'Do not label bar path or handle path as separate issues in v1.',
+    ];
+  }
+
+  if (definition.name === 'Leg Extensions') {
+    return [
+      'Side-view Leg Extensions reps are the v1 full-form scoring target.',
+      'Front, oblique, or unknown-view Leg Extensions reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.',
+      'Label lockout, bottom range, hip lift, torso movement, top hold, and tempo only when a clear side view supports the cue.',
+      'Label only visible faults; do not treat unobservable cues as clean negatives.',
+      'Reviewed scorable Leg Extensions reps must use view=side; use scorable=false for front, oblique, or unknown views.',
+    ];
+  }
+
   if (definition.name !== 'Barbell Curl') return undefined;
 
   return [

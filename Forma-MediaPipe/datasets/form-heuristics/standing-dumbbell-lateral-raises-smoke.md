@@ -8,7 +8,7 @@ Record each clip as a short set of 2-5 reps when possible. Verify rep count, `sc
 |---|---|---:|---|---|---|---|
 | 1 | Clean front-view reps | Count all clean reps | `true` | None | None | `peakHeightRatio`, `peakLateralReachRatio`, `viewAngleDeg` |
 | 2 | Clean front-camera mirrored capture | Count all clean reps | `true` | None | None | `leftPeakHeightRatio`, `rightPeakHeightRatio`, `viewAngleDeg` |
-| 3 | Image-only landmarks available, no world landmarks | Count all clean reps | `true` | None | None | `viewAngleDeg.eligible=false`, `skippedReason=world_landmarks_unavailable` |
+| 3 | Image-only landmarks available, no world landmarks | Count all clean reps | `false` | `front_view_uncertain` | None | `viewAngleDeg.eligible=false`, `skippedReason=world_landmarks_unavailable` |
 | 4 | Oblique camera, roughly 35 degrees | Count reps | `false` | `front_view_uncertain` | None | `view=oblique`, `nonFrontViewSampleRatio` |
 | 5 | Side-ish camera, roughly 60-90 degrees | Count reps if movement signal is visible | `false` | `front_view_uncertain` | None | `view=side`, `maxViewAngleDeg` |
 | 6 | Front raise mistaken for lateral raise | Count reps | `true` if front view is valid | `None` | `standing-dumbbell-lateral-raises.wrong_plane` | `peakLateralReachRatio` |

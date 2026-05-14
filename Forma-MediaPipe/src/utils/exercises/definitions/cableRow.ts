@@ -158,6 +158,7 @@ const PENALTY_CONFIGS = {
 
 const VISIBILITY_THRESHOLD = 0.15;
 const FORM_CONFIDENCE_MIN = 0.3;
+const WORLD_IMAGE_REACH_RATIO_MAX_DELTA = 0.2;
 const SIDE_VIEW_MIN_SAMPLES = 5;
 const SETUP_SIDE_VIEW_MIN_SAMPLES = 8;
 const FEEDBACK_COOLDOWN_SECONDS = 2.0;
@@ -251,8 +252,6 @@ interface RepWindow {
   maxTorsoLeanBackDelta: number;
   /** Max forward torso delta from baseline during rep */
   maxTorsoForwardDelta: number;
-  /** Max total torso movement from baseline during rep */
-  maxTorsoDev: number;
   /** Image-space shoulder Y baseline for shoulder elevation checks */
   shoulderYBaseline: number | null;
   /** Max elbow height above shoulder, normalized by torso height */
@@ -261,12 +260,6 @@ interface RepWindow {
   maxRowTargetHighRatio: number;
   /** Max shoulder elevation, normalized by torso height */
   maxShoulderShrugRatio: number;
-  /** Pull velocity diagnostics */
-  lastVelocityRatio: number | null;
-  lastVelocityTimestamp: number | null;
-  maxPullVelocityRatioPerSec: number;
-  pullVelocitySum: number;
-  pullVelocitySamples: number;
   /** Side-view confidence accumulation */
   sideViewConfidenceSum: number;
   sideViewConfidenceMin: number;
@@ -359,16 +352,10 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
     torsoDevBaseline: null,
     maxTorsoLeanBackDelta: 0,
     maxTorsoForwardDelta: 0,
-    maxTorsoDev: 0,
     shoulderYBaseline: null,
     maxElbowAboveShoulderRatio: 0,
     maxRowTargetHighRatio: 0,
     maxShoulderShrugRatio: 0,
-    lastVelocityRatio: initialRatio ?? null,
-    lastVelocityTimestamp: tStart,
-    maxPullVelocityRatioPerSec: 0,
-    pullVelocitySum: 0,
-    pullVelocitySamples: 0,
     sideViewConfidenceSum: 0,
     sideViewConfidenceMin: 1,
     sideViewConfidenceSamples: 0,
@@ -531,12 +518,31 @@ function signalSourceKeypoints(frameContext: ExerciseFrameContext | undefined, f
   return frameContext?.imageKeypoints ?? fallbackKeypoints;
 }
 
+function sourceMatchesImageReach(
+  source: LandmarkSource,
+  frameContext: ExerciseFrameContext | undefined,
+  side: 'left' | 'right',
+): boolean {
+  if (source.name !== 'world') return true;
+  const imageKeypoints = frameContext?.imageKeypoints;
+  if (!imageKeypoints) return true;
+
+  const imageReachRatio = calculateArmReachRatio(imageKeypoints, side);
+  const sourceReachRatio = calculateArmReachRatio(source.keypoints, side);
+  if (imageReachRatio === null || sourceReachRatio === null) return true;
+
+  return Math.abs(sourceReachRatio - imageReachRatio) <= WORLD_IMAGE_REACH_RATIO_MAX_DELTA;
+}
+
 function calculateShoulderAngleSample(
   frameContext: ExerciseFrameContext | undefined,
   fallbackKeypoints: Keypoint[],
   side: 'left' | 'right',
 ): MetricSample | null {
   for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    if (!sourceMatchesImageReach(source, frameContext, side)) {
+      continue;
+    }
     if (minKeypointConfidence(source.keypoints, [`${side}_hip`, `${side}_shoulder`, `${side}_elbow`]) < FORM_CONFIDENCE_MIN) {
       continue;
     }
@@ -597,6 +603,9 @@ function calculateTorsoDeviationSample(
 ): MetricSample | null {
   const sources = landmarkSources(frameContext, fallbackKeypoints);
   for (const source of sources) {
+    if (!sourceMatchesImageReach(source, frameContext, side)) {
+      continue;
+    }
     const value = calculateSagittalTorsoDeviation(source.keypoints);
     if (isFiniteMetric(value)) {
       return { value, source: source.name, keypoints: source.keypoints, method: 'sagittal' };
@@ -604,6 +613,9 @@ function calculateTorsoDeviationSample(
   }
 
   for (const source of sources) {
+    if (!sourceMatchesImageReach(source, frameContext, side)) {
+      continue;
+    }
     const value = calculateSelectedSideTorsoDeviation(source.keypoints, side);
     if (isFiniteMetric(value)) {
       return { value, source: source.name, keypoints: source.keypoints, method: 'selected_side' };
@@ -733,23 +745,11 @@ function highRowTriggered(repWindow: RepWindow): boolean {
 }
 
 function highRowPenaltyValue(repWindow: RepWindow): number {
-  const shiftedRowTargetHighRatio = Math.max(
+  return Math.max(
     0,
-    repWindow.maxRowTargetHighRatio - (FORM_THRESHOLDS.ROW_TARGET_HIGH_WARN - FORM_THRESHOLDS.HIGH_ROW_WARN),
+    repWindow.maxElbowAboveShoulderRatio - FORM_THRESHOLDS.HIGH_ROW_WARN,
+    repWindow.maxRowTargetHighRatio - FORM_THRESHOLDS.ROW_TARGET_HIGH_WARN,
   );
-  return Math.max(repWindow.maxElbowAboveShoulderRatio, shiftedRowTargetHighRatio);
-}
-
-function contractedHoldMs(repWindow: RepWindow): number | null {
-  if (repWindow.tContracted === null || repWindow.tReturnStart === null) return null;
-  return Math.max(0, (repWindow.tReturnStart - repWindow.tContracted) * 1000);
-}
-
-function pullVelocitySpikeRatio(repWindow: RepWindow): number | null {
-  if (repWindow.pullVelocitySamples === 0) return null;
-  const mean = repWindow.pullVelocitySum / repWindow.pullVelocitySamples;
-  if (mean <= 1e-6) return null;
-  return repWindow.maxPullVelocityRatioPerSec / mean;
 }
 
 function torsoRockDelta(repWindow: RepWindow): number {
@@ -833,39 +833,44 @@ function updateFSM(
 
 function computeCableRowScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
+  const fromThreshold = (config: PenaltyConfig): PenaltyConfig => ({ ...config, deadzone: 0 });
 
-  // 1. ROM -- pull depth: ideal min ratio is 0.55 or below. Shortfall = max(0, minRatio - 0.55)
-  const pullShortfall = Math.max(0, repWindow.minRatio - 0.55);
-  penalties.push({ value: pullShortfall, config: PENALTY_CONFIGS.PULL_DEPTH });
+  // Keep scoring aligned with feedback thresholds so labelled-data tuning moves
+  // cue behavior and score behavior together.
+  const pullShortfall = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.PULL_DEPTH_FAIL);
+  penalties.push({ value: pullShortfall, config: fromThreshold(PENALTY_CONFIGS.PULL_DEPTH) });
 
-  // 2. ROM -- extension: ideal max ratio is 0.95+. Shortfall = max(0, 0.95 - maxRatio)
-  const extensionShortfall = Math.max(0, 0.95 - repWindow.maxRatio);
-  penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_FAIL - repWindow.maxRatio);
+  penalties.push({ value: extensionShortfall, config: fromThreshold(PENALTY_CONFIGS.EXTENSION_ROM) });
 
-  // 3. Shoulder retraction (delta from baseline should be sufficient)
-  // If delta is small, they're not pulling elbows back enough
-  const retractionShortfall = Math.max(0, 20 - repWindow.maxShoulderDelta);
-  penalties.push({ value: retractionShortfall, config: PENALTY_CONFIGS.SHOULDER_RETRACT });
+  const retractionShortfall = Math.max(0, FORM_THRESHOLDS.RETRACTION_FAIL - repWindow.maxShoulderDelta);
+  penalties.push({ value: retractionShortfall, config: fromThreshold(PENALTY_CONFIGS.SHOULDER_RETRACT) });
 
-  // 4. Torso mechanics
-  penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
-  penalties.push({ value: torsoRockDelta(repWindow), config: PENALTY_CONFIGS.TORSO_ROCK });
-  penalties.push({ value: highRowPenaltyValue(repWindow), config: PENALTY_CONFIGS.HIGH_ROW });
-  penalties.push({ value: repWindow.maxShoulderShrugRatio, config: PENALTY_CONFIGS.SHOULDER_SHRUG });
+  penalties.push({
+    value: Math.max(0, repWindow.maxTorsoLeanBackDelta - FORM_THRESHOLDS.TORSO_LEAN_WARN),
+    config: fromThreshold(PENALTY_CONFIGS.TORSO_LEAN),
+  });
+  penalties.push({
+    value: Math.max(0, torsoRockDelta(repWindow) - FORM_THRESHOLDS.TORSO_ROCK_WARN),
+    config: fromThreshold(PENALTY_CONFIGS.TORSO_ROCK),
+  });
+  penalties.push({ value: highRowPenaltyValue(repWindow), config: fromThreshold(PENALTY_CONFIGS.HIGH_ROW) });
+  penalties.push({
+    value: Math.max(0, repWindow.maxShoulderShrugRatio - FORM_THRESHOLDS.SHOULDER_SHRUG_WARN),
+    config: fromThreshold(PENALTY_CONFIGS.SHOULDER_SHRUG),
+  });
 
-  // 5. Tempo
   if (repWindow.tContracted !== null) {
     const tPull = repWindow.tContracted - repWindow.tStart;    // concentric (pull)
     const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tContracted); // eccentric (return)
 
-    // Penalize if too fast
-    if (tPull > 0 && tPull < PENALTY_CONFIGS.TEMPO_PULL.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_PULL.deadzone - tPull;
-      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_PULL, deadzone: 0 } });
+    if (tPull > 0 && tPull < FORM_THRESHOLDS.TEMPO_PULL_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_PULL_MIN - tPull;
+      penalties.push({ value: deficit, config: fromThreshold(PENALTY_CONFIGS.TEMPO_PULL) });
     }
-    if (tReturn > 0 && tReturn < PENALTY_CONFIGS.TEMPO_RETURN.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_RETURN.deadzone - tReturn;
-      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
+    if (tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_RETURN_MIN - tReturn;
+      penalties.push({ value: deficit, config: fromThreshold(PENALTY_CONFIGS.TEMPO_RETURN) });
     }
   }
 
@@ -942,8 +947,6 @@ function buildCableRowDiagnostics(
   const sideViewMinConfidence = repWindow.sideViewConfidenceSamples > 0
     ? repWindow.sideViewConfidenceMin
     : null;
-  const holdMs = contractedHoldMs(repWindow);
-  const spikeRatio = pullVelocitySpikeRatio(repWindow);
   const rockDelta = torsoRockDelta(repWindow);
   const scorable = isCableRowRepScorable(repWindow);
   return buildRepDiagnostics({
@@ -964,18 +967,6 @@ function buildCableRowDiagnostics(
       diagnosticMetric('elbowAboveShoulderRatio', repWindow.maxElbowAboveShoulderRatio, { unit: 'ratio' }),
       diagnosticMetric('rowTargetHighRatio', repWindow.maxRowTargetHighRatio, { unit: 'ratio' }),
       diagnosticMetric('shoulderShrugRatio', repWindow.maxShoulderShrugRatio, { unit: 'ratio' }),
-      // Exploratory only: useful in replay reports, but not current label/tuning targets.
-      diagnosticMetric('contractedHoldMs', holdMs, {
-        unit: 'milliseconds',
-        eligible: holdMs !== null,
-        skippedReason: 'contracted_hold_unavailable',
-      }),
-      diagnosticMetric('maxPullVelocityRatioPerSec', repWindow.maxPullVelocityRatioPerSec, { unit: 'ratio' }),
-      diagnosticMetric('pullVelocitySpikeRatio', spikeRatio, {
-        unit: 'ratio',
-        eligible: spikeRatio !== null,
-        skippedReason: 'pull_velocity_unavailable',
-      }),
       diagnosticMetric('sideViewConfidence', sideViewConfidence, {
         unit: 'ratio',
         eligible: hasSideViewConfidence,
@@ -1284,7 +1275,6 @@ function updateCableRowState(
         window.torsoDevBaseline = rawTorsoDev;
       }
       const signedTorsoDelta = rawTorsoDev - window.torsoDevBaseline;
-      const torsoDelta = Math.abs(signedTorsoDelta);
       window.maxTorsoLeanBackDelta = Math.max(
         window.maxTorsoLeanBackDelta,
         Math.max(0, -signedTorsoDelta),
@@ -1293,7 +1283,6 @@ function updateCableRowState(
         window.maxTorsoForwardDelta,
         Math.max(0, signedTorsoDelta),
       );
-      window.maxTorsoDev = Math.max(window.maxTorsoDev, torsoDelta);
     }
 
     const shoulder = visibleKeypoint(signalKeypoints, `${visibleSide}_shoulder`, FORM_CONFIDENCE_MIN);
@@ -1331,24 +1320,6 @@ function updateCableRowState(
         );
       }
     }
-
-    const previousVelocityRatio = window.lastVelocityRatio;
-    const previousVelocityTimestamp = window.lastVelocityTimestamp;
-    const velocityEligible =
-      previousVelocityRatio !== null &&
-      previousVelocityTimestamp !== null &&
-      t > previousVelocityTimestamp &&
-      (currentState.fsm.phase === 'PULLING' || newState.fsm.phase === 'PULLING');
-    if (velocityEligible) {
-      const velocity = Math.max(0, (previousVelocityRatio - rawRatio) / (t - previousVelocityTimestamp));
-      if (Number.isFinite(velocity)) {
-        window.maxPullVelocityRatioPerSec = Math.max(window.maxPullVelocityRatioPerSec, velocity);
-        window.pullVelocitySum += velocity;
-        window.pullVelocitySamples++;
-      }
-    }
-    window.lastVelocityRatio = rawRatio;
-    window.lastVelocityTimestamp = t;
 
     // Record contracted timestamp
     if (newState.fsm.phase === 'CONTRACTED' && window.tContracted === null) {

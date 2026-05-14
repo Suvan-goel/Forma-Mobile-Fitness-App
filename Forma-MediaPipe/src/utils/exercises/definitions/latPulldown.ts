@@ -29,6 +29,7 @@ import { computeScore, type PenaltyConfig } from '../shared/scoring';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
+  getConfigValue,
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
@@ -92,18 +93,19 @@ const FORM_THRESHOLDS = {
   TEMPO_PULL_MIN: 0.45,
   /** Eccentric (return) too fast threshold (seconds). */
   TEMPO_RETURN_MIN: 0.8,
+  /** Average side-view confidence below which a counted rep is marked unscorable. */
+  SIDE_VIEW_AVG_CONFIDENCE_MIN: 0.45,
+  /** Minimum side-view confidence below which a counted rep is marked unscorable. */
+  SIDE_VIEW_MIN_CONFIDENCE_MIN: 0.25,
 } as const;
 
 /**
  * Continuous penalty curve parameters for scoring.
  *
- * | Category         | Cap | Deadzone | Scale  | Key Input                        |
- * |------------------|-----|----------|--------|----------------------------------|
- * | ROM pull         | 30  | 0        | 400    | minRatio shortfall from 0.58     |
- * | ROM extension    | 25  | 0        | 300    | maxRatio shortfall from 0.97     |
- * | Torso lean       | 25  | 8        | 0.12   | max torso lean from vertical     |
- * | Tempo pull       | 10  | 0.35s    | 50     | concentric time deficit          |
- * | Tempo return     | 25  | 0.80s    | 800    | eccentric time deficit           |
+ * Scoring uses the values in PENALTY_CONFIGS below as the source of truth.
+ * ROM and elbow-drive penalties are measured as shortfalls from the feedback
+ * threshold; tempo penalties are measured as deficits from the minimum phase
+ * duration.
  *
  * Max total penalty: 100 -> worst possible rep = 0.
  */
@@ -121,10 +123,10 @@ const PENALTY_CONFIGS = {
 
 const VISIBILITY_THRESHOLD = 0.15;
 const FORM_CONFIDENCE_MIN = 0.3;
-const SIDE_VIEW_AVG_CONFIDENCE_MIN = 0.45;
-const SIDE_VIEW_MIN_CONFIDENCE_MIN = 0.25;
+const FORM_METRIC_MIN_SAMPLES = 3;
 const SIDE_VIEW_MIN_SAMPLES = 5;
 const BILATERAL_MIN_SAMPLES = 5;
+const WORLD_IMAGE_REACH_RATIO_MAX_DELTA = 0.2;
 
 const DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -187,6 +189,8 @@ interface RepWindow {
   upperArmDriveBaseline: number | null;
   /** Max upper-arm drive from baseline */
   maxUpperArmDriveDelta: number;
+  /** Valid samples contributing to upper-arm drive diagnostics */
+  upperArmDriveSamples: number;
   /** Signed torso angle baseline */
   torsoDevBaseline: number | null;
   /** Max backward torso lean delta from baseline */
@@ -197,14 +201,21 @@ interface RepWindow {
   maxTorsoDev: number;
   /** Max absolute torso lean from vertical */
   maxTorsoAbsoluteBackLean: number;
+  /** Valid samples contributing to absolute torso lean diagnostics */
+  torsoLeanSamples: number;
+  /** Valid samples contributing to torso deviation diagnostics */
+  torsoDevSamples: number;
   /** Image-space shoulder Y baseline */
   shoulderYBaseline: number | null;
   /** Max shoulder elevation normalized by torso height */
   maxShoulderShrugRatio: number;
+  /** Valid samples contributing to shoulder shrug diagnostics */
+  shoulderShrugSamples: number;
   /** Side-view confidence accumulation */
   sideViewConfidenceSum: number;
   sideViewConfidenceMin: number;
   sideViewConfidenceSamples: number;
+  selectedSideSamples: number;
   /** Passive bilateral diagnostics, used only when both arms are visible. */
   bilateralSamples: number;
   leftMinRatio: number;
@@ -357,16 +368,21 @@ function initRepWindow(tStart: number): RepWindow {
     maxTorsoLean: 0,
     upperArmDriveBaseline: null,
     maxUpperArmDriveDelta: 0,
+    upperArmDriveSamples: 0,
     torsoDevBaseline: null,
     maxTorsoLeanBackDelta: 0,
     maxTorsoForwardDelta: 0,
     maxTorsoDev: 0,
     maxTorsoAbsoluteBackLean: 0,
+    torsoLeanSamples: 0,
+    torsoDevSamples: 0,
     shoulderYBaseline: null,
     maxShoulderShrugRatio: 0,
+    shoulderShrugSamples: 0,
     sideViewConfidenceSum: 0,
     sideViewConfidenceMin: 1,
     sideViewConfidenceSamples: 0,
+    selectedSideSamples: 0,
     bilateralSamples: 0,
     leftMinRatio: Infinity,
     leftMaxRatio: -Infinity,
@@ -490,6 +506,23 @@ function signalSourceKeypoints(
   return frameContext?.imageKeypoints ?? fallbackKeypoints;
 }
 
+function sourceMatchesImageReach(
+  source: LandmarkSource,
+  frameContext: ExerciseFrameContext | undefined,
+  side: 'left' | 'right',
+): boolean {
+  if (source.name !== 'world') return true;
+
+  const imageKeypoints = frameContext?.imageKeypoints;
+  if (!imageKeypoints) return true;
+
+  const imageReachRatio = calculateArmReachRatio(imageKeypoints, side);
+  const sourceReachRatio = calculateArmReachRatio(source.keypoints, side);
+  if (imageReachRatio === null || sourceReachRatio === null) return true;
+
+  return Math.abs(sourceReachRatio - imageReachRatio) <= WORLD_IMAGE_REACH_RATIO_MAX_DELTA;
+}
+
 function visibleKeypoint(
   keypoints: Keypoint[],
   name: string,
@@ -518,21 +551,11 @@ function calculateUpperArmDriveSample(
   fallbackKeypoints: Keypoint[],
   side: 'left' | 'right',
 ): MetricSample | null {
-  const signalKeypoints = frameContext?.imageKeypoints;
-  const signalReachRatio = signalKeypoints
-    ? calculateArmReachRatio(signalKeypoints, side)
-    : null;
-
   for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
     if (minKeypointConfidence(source.keypoints, [`${side}_hip`, `${side}_shoulder`, `${side}_elbow`]) < FORM_CONFIDENCE_MIN) {
       continue;
     }
-    if (source.name === 'world' && signalReachRatio !== null) {
-      const sourceReachRatio = calculateArmReachRatio(source.keypoints, side);
-      if (sourceReachRatio !== null && Math.abs(sourceReachRatio - signalReachRatio) > 0.2) {
-        continue;
-      }
-    }
+    if (!sourceMatchesImageReach(source, frameContext, side)) continue;
     const value = calculateUpperArmDriveAngle(source.keypoints, side);
     if (isFiniteMetric(value) && value >= 0 && value <= 180) {
       return { value, source: source.name, keypoints: source.keypoints };
@@ -590,6 +613,7 @@ function calculateTorsoDeviationSample(
 ): MetricSample | null {
   const sources = landmarkSources(frameContext, fallbackKeypoints);
   for (const source of sources) {
+    if (!sourceMatchesImageReach(source, frameContext, side)) continue;
     const value = calculateSagittalTorsoDeviation(source.keypoints);
     if (isFiniteMetric(value)) {
       return { value, source: source.name, keypoints: source.keypoints, method: 'sagittal' };
@@ -597,6 +621,7 @@ function calculateTorsoDeviationSample(
   }
 
   for (const source of sources) {
+    if (!sourceMatchesImageReach(source, frameContext, side)) continue;
     const value = calculateSelectedSideTorsoDeviation(source.keypoints, side);
     if (isFiniteMetric(value)) {
       return { value, source: source.name, keypoints: source.keypoints, method: 'selected_side' };
@@ -645,17 +670,35 @@ function averageSideViewConfidence(repWindow: RepWindow): number | null {
   return repWindow.sideViewConfidenceSum / repWindow.sideViewConfidenceSamples;
 }
 
+function updateSelectedSideSamples(
+  repWindow: RepWindow,
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): void {
+  const confidence = minKeypointConfidence(keypoints, [
+    `${side}_shoulder`,
+    `${side}_elbow`,
+    `${side}_wrist`,
+    `${side}_hip`,
+  ]);
+  if (confidence >= FORM_CONFIDENCE_MIN) {
+    repWindow.selectedSideSamples++;
+  }
+}
+
 function buildLatPulldownViewQuality(repWindow: RepWindow): RepViewQualityDiagnostic {
   const averageConfidence = averageSideViewConfidence(repWindow);
   const hasEnoughSamples =
     repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES &&
     averageConfidence !== null;
-  const sideConfirmed = Boolean(
+  const bilateralSideConfirmed = Boolean(
     hasEnoughSamples &&
-    averageConfidence! >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
-    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN,
+    averageConfidence! >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN,
   );
-  const frontishConfirmed = Boolean(hasEnoughSamples && !sideConfirmed);
+  const selectedSideConfirmed = repWindow.selectedSideSamples >= SIDE_VIEW_MIN_SAMPLES;
+  const sideConfirmed = bilateralSideConfirmed || (!hasEnoughSamples && selectedSideConfirmed);
+  const frontishConfirmed = Boolean(hasEnoughSamples && !bilateralSideConfirmed);
   return {
     status: sideConfirmed
       ? 'side_confirmed'
@@ -669,12 +712,12 @@ function buildLatPulldownViewQuality(repWindow: RepWindow): RepViewQualityDiagno
     minSideViewConfidence: repWindow.sideViewConfidenceSamples > 0
       ? repWindow.sideViewConfidenceMin
       : null,
-    sampleCount: repWindow.sideViewConfidenceSamples,
+    sampleCount: hasEnoughSamples ? repWindow.sideViewConfidenceSamples : repWindow.selectedSideSamples,
   };
 }
 
 function isLatPulldownRepScorable(repWindow: RepWindow): boolean {
-  return !buildLatPulldownViewQuality(repWindow).frontishConfirmed;
+  return buildLatPulldownViewQuality(repWindow).sideConfirmed;
 }
 
 function latPulldownQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
@@ -726,10 +769,43 @@ function bilateralExtensionAsymmetry(repWindow: RepWindow): number | null {
   return Math.abs(repWindow.leftMaxRatio - repWindow.rightMaxRatio);
 }
 
+function hasUpperArmDriveDiagnostics(repWindow: RepWindow): boolean {
+  return repWindow.upperArmDriveSamples >= FORM_METRIC_MIN_SAMPLES;
+}
+
+function hasTorsoLeanDiagnostics(repWindow: RepWindow): boolean {
+  return repWindow.torsoLeanSamples >= FORM_METRIC_MIN_SAMPLES;
+}
+
+function hasTorsoDeviationDiagnostics(repWindow: RepWindow): boolean {
+  return repWindow.torsoDevSamples >= FORM_METRIC_MIN_SAMPLES;
+}
+
+function hasShoulderShrugDiagnostics(repWindow: RepWindow): boolean {
+  return repWindow.shoulderShrugSamples >= FORM_METRIC_MIN_SAMPLES;
+}
+
+function hasAnyTorsoWarnDiagnostics(repWindow: RepWindow): boolean {
+  return hasTorsoDeviationDiagnostics(repWindow) || hasTorsoLeanDiagnostics(repWindow);
+}
+
+function torsoWarnValue(repWindow: RepWindow): number | null {
+  const values: number[] = [];
+  if (hasTorsoDeviationDiagnostics(repWindow)) values.push(repWindow.maxTorsoLeanBackDelta);
+  if (hasTorsoLeanDiagnostics(repWindow)) values.push(repWindow.maxTorsoAbsoluteBackLean);
+  return values.length > 0 ? Math.max(...values) : null;
+}
+
 function torsoWarnTriggered(repWindow: RepWindow): boolean {
   return (
-    repWindow.maxTorsoLeanBackDelta > FORM_THRESHOLDS.TORSO_LEAN_WARN ||
-    repWindow.maxTorsoAbsoluteBackLean > FORM_THRESHOLDS.TORSO_ABSOLUTE_WARN
+    (
+      hasTorsoDeviationDiagnostics(repWindow) &&
+      repWindow.maxTorsoLeanBackDelta > FORM_THRESHOLDS.TORSO_LEAN_WARN
+    ) ||
+    (
+      hasTorsoLeanDiagnostics(repWindow) &&
+      repWindow.maxTorsoAbsoluteBackLean > FORM_THRESHOLDS.TORSO_ABSOLUTE_WARN
+    )
   );
 }
 
@@ -803,23 +879,31 @@ function updateFSM(
 function computeLatPulldownScore(repWindow: RepWindow): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  // 1. ROM pull: ideal minRatio is 0.58 or below
-  const pullShortfall = Math.max(0, repWindow.minRatio - 0.58);
+  // 1. ROM pull: target follows the tunable feedback threshold.
+  const pullShortfall = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.PULL_ROM_FAIL);
   penalties.push({ value: pullShortfall, config: PENALTY_CONFIGS.PULL_ROM });
 
-  // 2. ROM extension: ideal maxRatio is 0.97 or above
-  const extensionShortfall = Math.max(0, 0.97 - repWindow.maxRatio);
+  // 2. ROM extension: target follows the tunable feedback threshold.
+  const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_ROM_FAIL - repWindow.maxRatio);
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
   // 3. Upper-arm drive: elbows should travel down instead of only bending the arms.
-  const upperArmDriveShortfall = Math.max(0, FORM_THRESHOLDS.ELBOW_DRIVE_FAIL - repWindow.maxUpperArmDriveDelta);
-  penalties.push({ value: upperArmDriveShortfall, config: PENALTY_CONFIGS.ELBOW_DRIVE });
+  if (hasUpperArmDriveDiagnostics(repWindow)) {
+    const upperArmDriveShortfall = Math.max(0, FORM_THRESHOLDS.ELBOW_DRIVE_FAIL - repWindow.maxUpperArmDriveDelta);
+    penalties.push({ value: upperArmDriveShortfall, config: PENALTY_CONFIGS.ELBOW_DRIVE });
+  }
 
   // 4. Torso and shoulder mechanics.
-  penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
-  penalties.push({ value: repWindow.maxTorsoAbsoluteBackLean, config: PENALTY_CONFIGS.TORSO_ABSOLUTE });
-  penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_ROCK });
-  penalties.push({ value: repWindow.maxShoulderShrugRatio, config: PENALTY_CONFIGS.SHOULDER_SHRUG });
+  if (hasTorsoDeviationDiagnostics(repWindow)) {
+    penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
+    penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_ROCK });
+  }
+  if (hasTorsoLeanDiagnostics(repWindow)) {
+    penalties.push({ value: repWindow.maxTorsoAbsoluteBackLean, config: PENALTY_CONFIGS.TORSO_ABSOLUTE });
+  }
+  if (hasShoulderShrugDiagnostics(repWindow)) {
+    penalties.push({ value: repWindow.maxShoulderShrugRatio, config: PENALTY_CONFIGS.SHOULDER_SHRUG });
+  }
 
   // 5. Tempo
   if (repWindow.tBottom !== null) {
@@ -854,7 +938,10 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Extend fully \u2014 reach all the way up at the top.');
   }
 
-  if (repWindow.maxUpperArmDriveDelta < FORM_THRESHOLDS.ELBOW_DRIVE_FAIL) {
+  if (
+    hasUpperArmDriveDiagnostics(repWindow) &&
+    repWindow.maxUpperArmDriveDelta < FORM_THRESHOLDS.ELBOW_DRIVE_FAIL
+  ) {
     messages.push('Drive your elbows down \u2014 pull with your lats, not just your arms.');
   }
 
@@ -862,11 +949,17 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     messages.push('Stay upright \u2014 avoid leaning back excessively.');
   }
 
-  if (repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
+  if (
+    hasTorsoDeviationDiagnostics(repWindow) &&
+    repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN
+  ) {
     messages.push('Keep your torso steady through the pulldown.');
   }
 
-  if (repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN) {
+  if (
+    hasShoulderShrugDiagnostics(repWindow) &&
+    repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN
+  ) {
     messages.push('Keep your shoulders down as you pull.');
   }
 
@@ -897,6 +990,11 @@ function buildLatPulldownDiagnostics(
   const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES;
   const viewQuality = buildLatPulldownViewQuality(repWindow);
   const hasBilateral = hasBilateralDiagnostics(repWindow);
+  const hasUpperArmDrive = hasUpperArmDriveDiagnostics(repWindow);
+  const hasTorsoLean = hasTorsoLeanDiagnostics(repWindow);
+  const hasTorsoDeviation = hasTorsoDeviationDiagnostics(repWindow);
+  const hasTorsoWarn = hasAnyTorsoWarnDiagnostics(repWindow);
+  const hasShoulderShrug = hasShoulderShrugDiagnostics(repWindow);
   const leftRomRatio = hasBilateral ? repWindow.leftMaxRatio - repWindow.leftMinRatio : null;
   const rightRomRatio = hasBilateral ? repWindow.rightMaxRatio - repWindow.rightMinRatio : null;
   return buildRepDiagnostics({
@@ -910,12 +1008,42 @@ function buildLatPulldownDiagnostics(
       diagnosticMetric('pullDepthRatio', repWindow.minRatio, { unit: 'ratio' }),
       diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
       diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
-      diagnosticMetric('upperArmDriveDelta', repWindow.maxUpperArmDriveDelta, { unit: 'degrees' }),
-      diagnosticMetric('torsoLeanBackDelta', repWindow.maxTorsoLeanBackDelta, { unit: 'degrees' }),
-      diagnosticMetric('torsoForwardDelta', repWindow.maxTorsoForwardDelta, { unit: 'degrees' }),
-      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoDev, { unit: 'degrees' }),
-      diagnosticMetric('torsoAbsoluteBackLean', repWindow.maxTorsoAbsoluteBackLean, { unit: 'degrees' }),
-      diagnosticMetric('shoulderShrugRatio', repWindow.maxShoulderShrugRatio, { unit: 'ratio' }),
+      diagnosticMetric('upperArmDriveDelta', repWindow.maxUpperArmDriveDelta, {
+        unit: 'degrees',
+        eligible: hasUpperArmDrive,
+        sampleCount: repWindow.upperArmDriveSamples,
+        skippedReason: 'insufficient_upper_arm_drive_samples',
+      }),
+      diagnosticMetric('torsoLeanBackDelta', repWindow.maxTorsoLeanBackDelta, {
+        unit: 'degrees',
+        eligible: hasTorsoDeviation,
+        sampleCount: repWindow.torsoDevSamples,
+        skippedReason: 'insufficient_torso_deviation_samples',
+      }),
+      diagnosticMetric('torsoForwardDelta', repWindow.maxTorsoForwardDelta, {
+        unit: 'degrees',
+        eligible: hasTorsoDeviation,
+        sampleCount: repWindow.torsoDevSamples,
+        skippedReason: 'insufficient_torso_deviation_samples',
+      }),
+      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoDev, {
+        unit: 'degrees',
+        eligible: hasTorsoDeviation,
+        sampleCount: repWindow.torsoDevSamples,
+        skippedReason: 'insufficient_torso_deviation_samples',
+      }),
+      diagnosticMetric('torsoAbsoluteBackLean', repWindow.maxTorsoAbsoluteBackLean, {
+        unit: 'degrees',
+        eligible: hasTorsoLean,
+        sampleCount: repWindow.torsoLeanSamples,
+        skippedReason: 'insufficient_torso_lean_samples',
+      }),
+      diagnosticMetric('shoulderShrugRatio', repWindow.maxShoulderShrugRatio, {
+        unit: 'ratio',
+        eligible: hasShoulderShrug,
+        sampleCount: repWindow.shoulderShrugSamples,
+        skippedReason: 'insufficient_shoulder_shrug_samples',
+      }),
       diagnosticMetric('sideViewConfidence', sideViewConfidence, {
         unit: 'ratio',
         eligible: hasSideViewConfidence,
@@ -928,6 +1056,7 @@ function buildLatPulldownDiagnostics(
         sampleCount: repWindow.sideViewConfidenceSamples,
         skippedReason: 'insufficient_side_view_samples',
       }),
+      diagnosticMetric('selectedSideSampleCount', repWindow.selectedSideSamples, { unit: 'count' }),
       diagnosticMetric('sideViewConfirmed', viewQuality.sideConfirmed ? 1 : 0, { unit: 'count' }),
       diagnosticMetric('frontishViewConfirmed', viewQuality.frontishConfirmed ? 1 : 0, { unit: 'count' }),
       diagnosticMetric('viewUnknown', viewQuality.viewUnknown ? 1 : 0, { unit: 'count' }),
@@ -1015,19 +1144,25 @@ function buildLatPulldownDiagnostics(
         value: repWindow.maxUpperArmDriveDelta,
         thresholdPath: 'formThresholds.ELBOW_DRIVE_FAIL',
         thresholdValue: FORM_THRESHOLDS.ELBOW_DRIVE_FAIL,
-        triggered: repWindow.maxUpperArmDriveDelta < FORM_THRESHOLDS.ELBOW_DRIVE_FAIL,
+        eligible: hasUpperArmDrive,
+        triggered: hasUpperArmDrive && repWindow.maxUpperArmDriveDelta < FORM_THRESHOLDS.ELBOW_DRIVE_FAIL,
+        support: repWindow.upperArmDriveSamples,
+        skippedReason: 'insufficient_upper_arm_drive_samples',
       }),
       diagnosticCue({
         issueId: 'cable-lat-pulldowns.torso_warn',
         metricKeys: ['torsoLeanBackDelta', 'torsoAbsoluteBackLean'],
         direction: 'above',
-        value: Math.max(repWindow.maxTorsoLeanBackDelta, repWindow.maxTorsoAbsoluteBackLean),
+        value: torsoWarnValue(repWindow),
         thresholdPath: ['formThresholds.TORSO_LEAN_WARN', 'formThresholds.TORSO_ABSOLUTE_WARN'],
         thresholdValue: {
           torsoLeanBackDelta: FORM_THRESHOLDS.TORSO_LEAN_WARN,
           torsoAbsoluteBackLean: FORM_THRESHOLDS.TORSO_ABSOLUTE_WARN,
         },
-        triggered: torsoWarnTriggered(repWindow),
+        eligible: hasTorsoWarn,
+        triggered: hasTorsoWarn && torsoWarnTriggered(repWindow),
+        support: Math.max(repWindow.torsoDevSamples, repWindow.torsoLeanSamples),
+        skippedReason: 'insufficient_torso_samples',
       }),
       diagnosticCue({
         issueId: 'cable-lat-pulldowns.torso_rocking',
@@ -1036,7 +1171,10 @@ function buildLatPulldownDiagnostics(
         value: repWindow.maxTorsoDev,
         thresholdPath: 'formThresholds.TORSO_ROCK_WARN',
         thresholdValue: FORM_THRESHOLDS.TORSO_ROCK_WARN,
-        triggered: repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        eligible: hasTorsoDeviation,
+        triggered: hasTorsoDeviation && repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        support: repWindow.torsoDevSamples,
+        skippedReason: 'insufficient_torso_deviation_samples',
       }),
       diagnosticCue({
         issueId: 'cable-lat-pulldowns.shoulder_shrug',
@@ -1045,7 +1183,10 @@ function buildLatPulldownDiagnostics(
         value: repWindow.maxShoulderShrugRatio,
         thresholdPath: 'formThresholds.SHOULDER_SHRUG_WARN',
         thresholdValue: FORM_THRESHOLDS.SHOULDER_SHRUG_WARN,
-        triggered: repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN,
+        eligible: hasShoulderShrug,
+        triggered: hasShoulderShrug && repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN,
+        support: repWindow.shoulderShrugSamples,
+        skippedReason: 'insufficient_shoulder_shrug_samples',
       }),
       diagnosticCue({
         issueId: 'cable-lat-pulldowns.tempo_down',
@@ -1238,14 +1379,17 @@ function updateLatPulldownState(
       w.sideViewConfidenceMin = Math.min(w.sideViewConfidenceMin, sideViewConfidence);
       w.sideViewConfidenceSamples++;
     }
+    updateSelectedSideSamples(w, signalKeypoints, side);
     updateBilateralRatios(w, signalKeypoints);
     // Only update torso lean max when shoulder + hip have sufficient confidence.
     if (torsoConf >= 0.3 && !isNaN(smoothedTorsoLean)) {
+      w.torsoLeanSamples++;
       w.maxTorsoLean = Math.max(w.maxTorsoLean, smoothedTorsoLean);
       w.maxTorsoAbsoluteBackLean = Math.max(w.maxTorsoAbsoluteBackLean, smoothedTorsoLean);
     }
 
     if (rawUpperArmDrive !== null) {
+      w.upperArmDriveSamples++;
       if (w.upperArmDriveBaseline === null) {
         w.upperArmDriveBaseline = rawUpperArmDrive;
       }
@@ -1254,6 +1398,7 @@ function updateLatPulldownState(
     }
 
     if (rawTorsoDev !== null) {
+      w.torsoDevSamples++;
       if (w.torsoDevBaseline === null) {
         w.torsoDevBaseline = rawTorsoDev;
       }
@@ -1276,6 +1421,7 @@ function updateLatPulldownState(
         torsoHeight,
       );
       if (shoulderShrugRatio !== null) {
+        w.shoulderShrugSamples++;
         w.maxShoulderShrugRatio = Math.max(w.maxShoulderShrugRatio, shoulderShrugRatio);
       }
     }
@@ -1296,6 +1442,7 @@ function updateLatPulldownState(
       );
       state.repWindow.sideViewConfidenceSamples++;
     }
+    updateSelectedSideSamples(state.repWindow, signalKeypoints, side);
     updateBilateralRatios(state.repWindow, signalKeypoints);
 
     state.repCount++;
@@ -1327,6 +1474,7 @@ function updateLatPulldownState(
         w.sideViewConfidenceMin = Math.min(w.sideViewConfidenceMin, sideViewConfidence);
         w.sideViewConfidenceSamples++;
       }
+      updateSelectedSideSamples(w, signalKeypoints, side);
       updateBilateralRatios(w, signalKeypoints);
       const actualRom = w.maxRatio - w.minRatio;
       const duration = w.tEnd - w.tStart;
@@ -1403,6 +1551,162 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
 }
 
 // ============================================================================
+// CONFIG VALIDATION
+// ============================================================================
+
+function configNumber(config: ExerciseHeuristicConfig, path: string, issues: string[]): number | null {
+  const value = getConfigValue(config, path);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    issues.push(`Cable Lat Pulldowns config "${path}" must be a finite number.`);
+    return null;
+  }
+  return value;
+}
+
+function requireOrdered(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  firstPath: string,
+  secondPath: string,
+  allowEqual = false,
+): void {
+  const first = configNumber(config, firstPath, issues);
+  const second = configNumber(config, secondPath, issues);
+  if (first === null || second === null) return;
+
+  const valid = allowEqual ? first <= second : first < second;
+  if (!valid) {
+    issues.push(
+      `Cable Lat Pulldowns config ordering invalid: "${firstPath}" (${first}) must be ${allowEqual ? '<=' : '<'} "${secondPath}" (${second}).`,
+    );
+  }
+}
+
+function validatePenaltyConfigs(config: ExerciseHeuristicConfig, issues: string[]): void {
+  const penaltyConfigs = getConfigValue(config, 'penaltyConfigs');
+  if (penaltyConfigs === null || typeof penaltyConfigs !== 'object' || Array.isArray(penaltyConfigs)) {
+    issues.push('Cable Lat Pulldowns config "penaltyConfigs" must be an object.');
+    return;
+  }
+
+  for (const [penaltyName, penaltyConfig] of Object.entries(penaltyConfigs)) {
+    if (penaltyConfig === null || typeof penaltyConfig !== 'object' || Array.isArray(penaltyConfig)) {
+      issues.push(`Cable Lat Pulldowns penalty config "${penaltyName}" must be an object.`);
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(penaltyConfig)) {
+      const path = `penaltyConfigs.${penaltyName}.${key}`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        issues.push(`Cable Lat Pulldowns config "${path}" must be a finite number.`);
+        continue;
+      }
+      if (key === 'scale' && value <= 0) {
+        issues.push(`Cable Lat Pulldowns config "${path}" must be greater than 0.`);
+      }
+      if (key === 'cap' && value < 0) {
+        issues.push(`Cable Lat Pulldowns config "${path}" must be greater than or equal to 0.`);
+      }
+      if (key === 'deadzone' && value < 0) {
+        issues.push(`Cable Lat Pulldowns config "${path}" must be greater than or equal to 0.`);
+      }
+    }
+  }
+}
+
+function validateLatPulldownHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const issues: string[] = [];
+
+  requireOrdered(config, issues, 'thresholds.BOTTOM_ENTER', 'thresholds.BOTTOM_EXIT');
+  requireOrdered(config, issues, 'thresholds.BOTTOM_EXIT', 'thresholds.REST_REENTER');
+  requireOrdered(config, issues, 'thresholds.REST_REENTER', 'thresholds.PULLING_ENTER');
+  requireOrdered(config, issues, 'thresholds.BOTTOM_ENTER', 'formThresholds.PULL_ROM_FAIL', true);
+  requireOrdered(config, issues, 'formThresholds.PULL_ROM_FAIL', 'thresholds.PULLING_ENTER');
+  requireOrdered(config, issues, 'thresholds.REST_REENTER', 'formThresholds.EXTENSION_ROM_FAIL', true);
+  requireOrdered(config, issues, 'formThresholds.EXTENSION_ROM_FAIL', 'thresholds.PULLING_ENTER', true);
+  requireOrdered(
+    config,
+    issues,
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    true,
+  );
+
+  for (const path of [
+    'thresholds.PULLING_ENTER',
+    'thresholds.BOTTOM_ENTER',
+    'thresholds.BOTTOM_EXIT',
+    'thresholds.REST_REENTER',
+    'thresholds.MIN_PARTIAL_ROM',
+    'formThresholds.PULL_ROM_FAIL',
+    'formThresholds.EXTENSION_ROM_FAIL',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1)) {
+      issues.push(`Cable Lat Pulldowns config "${path}" must be greater than 0 and at most 1.`);
+    }
+  }
+
+  const minPartialRom = configNumber(config, 'thresholds.MIN_PARTIAL_ROM', issues);
+  const pullingEnter = configNumber(config, 'thresholds.PULLING_ENTER', issues);
+  const bottomEnter = configNumber(config, 'thresholds.BOTTOM_ENTER', issues);
+  if (minPartialRom !== null && pullingEnter !== null && bottomEnter !== null) {
+    const fullRom = pullingEnter - bottomEnter;
+    if (minPartialRom <= 0 || minPartialRom >= fullRom) {
+      issues.push(
+        `Cable Lat Pulldowns config "thresholds.MIN_PARTIAL_ROM" (${minPartialRom}) must be greater than 0 and less than PULLING_ENTER - BOTTOM_ENTER (${fullRom}).`,
+      );
+    }
+  }
+
+  const minRepTime = configNumber(config, 'thresholds.MIN_REP_TIME', issues);
+  const pullingAbortMinTime = configNumber(config, 'thresholds.PULLING_ABORT_MIN_TIME', issues);
+  if (minRepTime !== null && minRepTime <= 0) {
+    issues.push('Cable Lat Pulldowns config "thresholds.MIN_REP_TIME" must be greater than 0.');
+  }
+  if (pullingAbortMinTime !== null && pullingAbortMinTime <= 0) {
+    issues.push('Cable Lat Pulldowns config "thresholds.PULLING_ABORT_MIN_TIME" must be greater than 0.');
+  }
+  if (minRepTime !== null && pullingAbortMinTime !== null && minRepTime < pullingAbortMinTime) {
+    issues.push(
+      `Cable Lat Pulldowns config ordering invalid: "thresholds.MIN_REP_TIME" (${minRepTime}) must be >= "thresholds.PULLING_ABORT_MIN_TIME" (${pullingAbortMinTime}).`,
+    );
+  }
+
+  for (const path of [
+    'formThresholds.ELBOW_DRIVE_FAIL',
+    'formThresholds.TORSO_LEAN_WARN',
+    'formThresholds.TORSO_ABSOLUTE_WARN',
+    'formThresholds.TORSO_ROCK_WARN',
+    'formThresholds.TEMPO_PULL_MIN',
+    'formThresholds.TEMPO_RETURN_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && value <= 0) {
+      issues.push(`Cable Lat Pulldowns config "${path}" must be greater than 0.`);
+    }
+  }
+
+  const shoulderShrugWarn = configNumber(config, 'formThresholds.SHOULDER_SHRUG_WARN', issues);
+  if (shoulderShrugWarn !== null && (shoulderShrugWarn <= 0 || shoulderShrugWarn >= 0.5)) {
+    issues.push('Cable Lat Pulldowns config "formThresholds.SHOULDER_SHRUG_WARN" must be greater than 0 and less than 0.5.');
+  }
+
+  for (const path of [
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1)) {
+      issues.push(`Cable Lat Pulldowns config "${path}" must be greater than 0 and at most 1.`);
+    }
+  }
+
+  validatePenaltyConfigs(config, issues);
+  return issues;
+}
+
+// ============================================================================
 // EXERCISE DEFINITION (the only export)
 // ============================================================================
 
@@ -1454,6 +1758,7 @@ export function createLatPulldownDefinition(
   tunedConfigPath: 'src/utils/exercises/definitions/tuned/latPulldown.json',
   createVariant: (variantConfig) =>
     createLatPulldownDefinition(mergeHeuristicConfig(config, variantConfig)),
+  validateHeuristicConfig: validateLatPulldownHeuristicConfig,
 
   ttsConfig: {
     feedbackToIssue: {

@@ -524,8 +524,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 19,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
     padding: 8,
   },
   cardHeader: {

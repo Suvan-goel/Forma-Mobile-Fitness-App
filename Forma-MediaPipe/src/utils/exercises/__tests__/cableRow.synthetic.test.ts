@@ -75,6 +75,16 @@ function fastReturnPath(): number[] {
   ];
 }
 
+function shortExtensionPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 1, 40),
+    ...Array(4).fill(1),
+    ...interpolate(1, 0.47, 24),
+    ...Array(8).fill(0.47),
+  ];
+}
+
 function fastPullPath(): number[] {
   return [
     ...Array(16).fill(0),
@@ -237,8 +247,33 @@ function buildRecording(
   };
 }
 
-function buildWorldStaticImageRecording(description: string, path: number[]): LandmarkRecording {
-  const imageRecording = buildRecording(description, path);
+function jitter(index: number, keypointIndex: number, axis: number): number {
+  const value = ((index + 1) * 17 + (keypointIndex + 3) * 11 + axis * 5) % 9;
+  return (value - 4) * 0.0005;
+}
+
+function buildNoisyRecording(description: string, path: number[]): LandmarkRecording {
+  const recording = buildRecording(description, path);
+  return {
+    ...recording,
+    frames: recording.frames.map((frame, frameIndex) => ({
+      ...frame,
+      keypoints: frame.keypoints.map((keypoint, keypointIndex) => ({
+        ...keypoint,
+        x: keypoint.x + jitter(frameIndex, keypointIndex, 0),
+        y: keypoint.y + jitter(frameIndex, keypointIndex, 1),
+        z: (keypoint.z ?? 0) + jitter(frameIndex, keypointIndex, 2),
+      })),
+    })),
+  };
+}
+
+function buildWorldStaticImageRecording(
+  description: string,
+  path: number[],
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
+  const imageRecording = buildRecording(description, path, options);
   const staticWorldRecording = buildRecording(`${description} static world`, Array(path.length).fill(0));
   return {
     ...imageRecording,
@@ -316,6 +351,17 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(result.repTraces).toEqual([]);
   });
 
+  it('counts a noisy clean row without form feedback', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildNoisyRecording('synthetic noisy clean cable row', fullRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+  });
+
   it('counts a meaningful partial row and records ROM feedback', () => {
     const clean = replayRecording(cableRowDefinition, buildRecording('synthetic clean cable row', fullRepPath()));
     const result = replayRecording(cableRowDefinition, buildRecording('synthetic half cable row', halfRepPath()));
@@ -323,6 +369,37 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(result.feedbackMessages).toContain('Pull further back — squeeze your shoulder blades together.');
+  });
+
+  it('counts a short-extension row and records extension feedback', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic short-extension cable row', shortExtensionPath()),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Extend your arms fully — get a full stretch at the front.');
+    expect(diagnostics.metrics.extensionRatio.value ?? 1).toBeLessThan(0.92);
+    expect(diagnostics.cues['cable-row.row_extension'].triggered).toBe(true);
+  });
+
+  it('aligns pull-depth score penalties with the tunable feedback threshold', () => {
+    const lenientDefinition = cableRowDefinition.createVariant!({
+      formThresholds: { PULL_DEPTH_FAIL: 0.8 },
+    });
+    const defaultResult = replayRecording(
+      cableRowDefinition,
+      buildRecording('synthetic default-threshold half cable row', halfRepPath()),
+    );
+    const lenientResult = replayRecording(
+      lenientDefinition,
+      buildRecording('synthetic lenient-threshold half cable row', halfRepPath()),
+    );
+
+    expect(defaultResult.feedbackMessages).toContain('Pull further back — squeeze your shoulder blades together.');
+    expect(lenientResult.feedbackMessages).not.toContain('Pull further back — squeeze your shoulder blades together.');
+    expect(lenientResult.repScores[0]).toBeGreaterThan(defaultResult.repScores[0]);
   });
 
   it('keeps the visible side locked through a rep when visibility flips', () => {
@@ -540,7 +617,29 @@ describe('Cable Row synthetic replay coverage', () => {
     );
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.feedbackMessages).not.toContain('Pull further back — squeeze your shoulder blades together.');
+    expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('falls back to image form metrics when world landmarks are stale but image form is clean', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildWorldStaticImageRecording('synthetic stale-world clean cable row', fullRepPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('falls back to image form metrics when stale world landmarks hide torso lean', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      buildWorldStaticImageRecording('synthetic stale-world leaned cable row', fullRepPath(), {
+        posture: index => (index < 45 ? 'upright' : 'leaned'),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Stay upright — avoid leaning back during the pull.');
   });
 
   it('falls back to image landmarks for form metrics when world landmarks are invalid', () => {
@@ -555,18 +654,4 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Stay upright — avoid leaning back during the pull.');
   });
 
-  it('records smoothness and hold diagnostics for normal reps', () => {
-    const result = replayRecording(
-      cableRowDefinition,
-      buildRecording('synthetic diagnostic cable row', fullRepPath()),
-    );
-    const metrics = result.reps[0].diagnostics!.metrics;
-
-    expect(metrics.contractedHoldMs.value).not.toBeNull();
-    expect(metrics.maxPullVelocityRatioPerSec.value).not.toBeNull();
-    expect(metrics.pullVelocitySpikeRatio.value).not.toBeNull();
-    expect(metrics.contractedHoldMs.value ?? 0).toBeGreaterThanOrEqual(0);
-    expect(metrics.maxPullVelocityRatioPerSec.value ?? 0).toBeGreaterThan(0);
-    expect(metrics.pullVelocitySpikeRatio.value ?? 0).toBeGreaterThan(0);
-  });
 });

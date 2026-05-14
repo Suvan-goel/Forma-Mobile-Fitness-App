@@ -14,9 +14,9 @@ const VALID_CAPTURE_MACHINE_STYLES = ['seated_selectorized', 'kneeling', 'plate_
 const VALID_CAPTURE_VISIBLE_HANDLES = ['yes', 'no', 'partial', 'unknown'];
 const VALID_REVIEWER_VIEW_CONFIDENCES = ['good', 'usable', 'poor'];
 const VALID_REP_VIEWS = ['side', 'front', 'oblique', 'unknown'];
-const REVIEWED_REP_METADATA_REQUIRED_EXERCISES = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Standing Dumbbell Lateral Raises', 'Cable Row']);
-const REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row']);
-const REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Push-Up', 'Barbell Squat', 'Cable Row']);
+const REVIEWED_REP_METADATA_REQUIRED_EXERCISES = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Standing Dumbbell Lateral Raises', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions']);
+const REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions']);
+const REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions']);
 const REVIEWED_FRONT_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Standing Dumbbell Lateral Raises']);
 
 function isObject(value: unknown): value is Record<string, unknown> {

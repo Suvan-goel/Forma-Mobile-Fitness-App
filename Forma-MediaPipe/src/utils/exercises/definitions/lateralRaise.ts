@@ -99,6 +99,8 @@ const FORM_THRESHOLDS = {
   SAGITTAL_SWAY_WARN: 8,
   /** Hip center displacement threshold, normalized by torso height. */
   HIP_SWAY_WARN: 0.10,
+  /** Minimum observed wrist endpoint coverage before a rep can be form-scored. */
+  WRIST_ENDPOINT_SCORABLE_MIN_COVERAGE: 0.75,
   /** Minimum confident samples before per-frame form cues can trigger. */
   MIN_FORM_SAMPLES: 3,
 } as const;
@@ -201,7 +203,7 @@ LATERAL_RAISE_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'standing-dumbbell-lateral-raises.asymmetry', metricKey: 'topHeightAsymmetry', thresholdPath: 'formThresholds.ASYMMETRY_WARN', direction: 'above' },
   { issueId: 'standing-dumbbell-lateral-raises.tempo_down', metricKey: 'tLower', thresholdPath: 'formThresholds.TEMPO_LOWER_MIN', direction: 'below' },
   { issueId: 'standing-dumbbell-lateral-raises.shoulder_shrug', metricKey: 'shrugPct', thresholdPath: 'formThresholds.SHRUG_WARN', direction: 'above' },
-  { issueId: 'standing-dumbbell-lateral-raises.wrong_plane', metricKey: 'peakLateralReachRatio', thresholdPath: 'formThresholds.LATERAL_REACH_MIN', direction: 'below' },
+  { issueId: 'standing-dumbbell-lateral-raises.wrong_plane', metricKey: 'weakestPeakLateralReachRatio', thresholdPath: 'formThresholds.LATERAL_REACH_MIN', direction: 'below' },
   { issueId: 'standing-dumbbell-lateral-raises.tempo_up', metricKey: 'tRaise', thresholdPath: 'formThresholds.TEMPO_RAISE_MIN', direction: 'below' },
 ];
 
@@ -232,6 +234,12 @@ interface ViewAngleEstimate {
   skippedReason?: 'world_landmarks_unavailable' | 'insufficient_front_view_samples';
 }
 
+interface ShoulderHeadGapEstimate {
+  gap: number;
+  confidence: number;
+  source: string;
+}
+
 interface RepFrameMetrics {
   t: number;
   phase: LateralRaisePhase;
@@ -257,6 +265,7 @@ interface RepFrameMetrics {
   hipCenter: { x: number; y: number } | null;
   torsoHeight: number | null;
   shoulderHeadGap: number | null;
+  shoulderHeadSource: string | null;
   headShrugConf: number;
   viewAngle: ViewAngleEstimate;
 }
@@ -295,6 +304,8 @@ interface RepWindow {
   baselineTorsoHeight: number | null;
   /** Baseline shoulder-to-head gap at rep start/rest (for optional shrug support) */
   baselineShoulderHeadGap: number | null;
+  /** Head landmark used by baselineShoulderHeadGap. */
+  baselineShoulderHeadSource: string | null;
   /** Max shoulder shrug as percentage of torso height (already ratio-based) */
   maxShrugPct: number;
   /** Max head-relative shoulder shrug percentage when head landmarks are visible */
@@ -360,6 +371,8 @@ interface LateralRaiseState {
   restTorsoHeight: number | null;
   /** Shoulder/head gap captured during relaxed REST frames for optional shrug support. */
   restShoulderHeadGap: number | null;
+  /** Head landmark used by restShoulderHeadGap. */
+  restShoulderHeadSource: string | null;
   /** Current smoothed values (for debug) */
   smoothedLeftHeightRatio: number;
   smoothedRightHeightRatio: number;
@@ -439,6 +452,7 @@ function initializeState(): LateralRaiseState {
     warmedUp: false,
     restTorsoHeight: null,
     restShoulderHeadGap: null,
+    restShoulderHeadSource: null,
     smoothedLeftHeightRatio: 0,
     smoothedRightHeightRatio: 0,
     smoothedAvgHeightRatio: 0,
@@ -458,6 +472,7 @@ function initRepWindow(
   tStart: number,
   baselineTorsoHeight: number | null,
   baselineShoulderHeadGap: number | null,
+  baselineShoulderHeadSource: string | null,
   baselineSagittalTorsoAngle: number | null,
   baselineHipCenter: { x: number; y: number } | null,
 ): RepWindow {
@@ -480,6 +495,7 @@ function initRepWindow(
     baselineHipCenter,
     baselineTorsoHeight,
     baselineShoulderHeadGap,
+    baselineShoulderHeadSource,
     maxShrugPct: 0,
     maxHeadShrugPct: 0,
     maxLateralReachRatio: 0,
@@ -596,14 +612,13 @@ function computeArmStraightnessRatio(
 
 /**
  * Compute outward reach from the same-side shoulder, normalized by torso height.
- * Wrist reach is primary; elbow reach is doubled as a fallback approximation when
- * wrists are not visible.
+ * Wrist reach is required; wrist-dependent form cues are ineligible when wrists
+ * are not visible, while rep counting uses an elbow-estimated endpoint separately.
  */
 function computeLateralReachRatio(
   side: 'left' | 'right',
   shoulder: Keypoint,
-  elbow: Keypoint,
-  wrist: Keypoint | null,
+  wrist: Keypoint,
   leftHip: Keypoint,
   rightHip: Keypoint,
   leftShoulder: Keypoint,
@@ -616,9 +631,7 @@ function computeLateralReachRatio(
   const outward = shoulder.x === midShoulderX
     ? side === 'left' ? -1 : 1
     : Math.sign(shoulder.x - midShoulderX);
-  const wristReach = wrist ? Math.max(0, (wrist.x - shoulder.x) * outward) / torsoHeight : NaN;
-  const elbowReach = Math.max(0, (elbow.x - shoulder.x) * outward) / torsoHeight;
-  return Number.isFinite(wristReach) ? wristReach : elbowReach * 2;
+  return Math.max(0, (wrist.x - shoulder.x) * outward) / torsoHeight;
 }
 
 function computeHipCenter(leftHip: Keypoint, rightHip: Keypoint): { x: number; y: number } {
@@ -628,20 +641,26 @@ function computeHipCenter(leftHip: Keypoint, rightHip: Keypoint): { x: number; y
   };
 }
 
-function computeShoulderHeadGap(keypoints: Keypoint[]): number | null {
+function computeShoulderHeadGap(keypoints: Keypoint[]): ShoulderHeadGapEstimate | null {
   const ls = getKeypoint(keypoints, 'left_shoulder');
   const rs = getKeypoint(keypoints, 'right_shoulder');
   if (!isVisible(ls, VISIBILITY_THRESHOLD) || !isVisible(rs, VISIBILITY_THRESHOLD)) return null;
 
   const headCandidates = ['nose', 'left_ear', 'right_ear']
-    .map((name) => getKeypoint(keypoints, name))
-    .filter((point): point is Keypoint => isVisible(point, VISIBILITY_THRESHOLD));
+    .map((name) => ({ name, point: getKeypoint(keypoints, name) }))
+    .filter((candidate): candidate is { name: string; point: Keypoint } =>
+      isVisible(candidate.point, VISIBILITY_THRESHOLD)
+    );
   if (headCandidates.length === 0) return null;
 
   const midShoulderY = (ls.y + rs.y) / 2;
-  const headY = headCandidates.reduce((best, point) => Math.min(best, point.y), headCandidates[0].y);
-  const gap = Math.abs(midShoulderY - headY);
-  return gap > 0.01 ? gap : null;
+  const selectedHead = headCandidates.reduce((best, candidate) => (
+    candidate.point.y < best.point.y ? candidate : best
+  ), headCandidates[0]);
+  const gap = Math.abs(midShoulderY - selectedHead.point.y);
+  return gap > 0.01
+    ? { gap, confidence: Math.min(ls.score, rs.score, selectedHead.point.score), source: selectedHead.name }
+    : null;
 }
 
 function computeSagittalTorsoAngle(worldKeypoints: Keypoint[] | undefined): number | null {
@@ -730,14 +749,35 @@ function hasEnoughViewAngleSamples(repWindow: RepWindow): boolean {
   return repWindow.viewAngleSampleCount >= FRONT_VIEW_MIN_SAMPLES;
 }
 
-function isLateralRaiseRepScorable(repWindow: RepWindow): boolean {
+function hasScorableFrontView(repWindow: RepWindow): boolean {
   const ratio = nonFrontViewSampleRatio(repWindow);
-  if (!hasEnoughViewAngleSamples(repWindow) || ratio === null) return true;
+  if (!hasEnoughViewAngleSamples(repWindow) || ratio === null) return false;
   return ratio < FRONT_VIEW_WARN_SAMPLE_RATIO;
 }
 
+function wristEndpointCoverage(repWindow: RepWindow): number | null {
+  if (repWindow.wristEndpointSampleCount === 0) return null;
+  return repWindow.wristEndpointObservedCount / repWindow.wristEndpointSampleCount;
+}
+
+function hasScorableWristCoverage(repWindow: RepWindow): boolean {
+  const coverage = wristEndpointCoverage(repWindow);
+  return coverage !== null && coverage >= FORM_THRESHOLDS.WRIST_ENDPOINT_SCORABLE_MIN_COVERAGE;
+}
+
+function isLateralRaiseRepScorable(repWindow: RepWindow): boolean {
+  return hasScorableFrontView(repWindow) && hasScorableWristCoverage(repWindow);
+}
+
 function lateralRaiseQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
-  return isLateralRaiseRepScorable(repWindow) ? [] : ['front_view_uncertain'];
+  const warnings: FrameworkRepResult['qualityWarnings'] = [];
+  if (!hasScorableFrontView(repWindow)) warnings.push('front_view_uncertain');
+  if (!hasScorableWristCoverage(repWindow)) warnings.push('arms_hidden');
+  return warnings;
+}
+
+function weakestPeakLateralReachRatio(repWindow: RepWindow): number {
+  return Math.min(repWindow.maxLeftLateralReachRatio, repWindow.maxRightLateralReachRatio);
 }
 
 function diagnosticView(repWindow: RepWindow): ViewDiagnostic {
@@ -935,18 +975,25 @@ function accumulateRepWindowFrame(repWindow: RepWindow, metrics: RepFrameMetrics
     repWindow.shrugSampleCount++;
   }
 
-  if (metrics.shoulderHeadGap !== null && metrics.headShrugConf >= FORM_CONFIDENCE_MIN) {
+  if (
+    metrics.shoulderHeadGap !== null &&
+    metrics.shoulderHeadSource !== null &&
+    metrics.headShrugConf >= FORM_CONFIDENCE_MIN
+  ) {
     if (repWindow.baselineShoulderHeadGap === null) {
       repWindow.baselineShoulderHeadGap = metrics.shoulderHeadGap;
+      repWindow.baselineShoulderHeadSource = metrics.shoulderHeadSource;
     }
-    const headShrug = (repWindow.baselineShoulderHeadGap - metrics.shoulderHeadGap) / repWindow.baselineShoulderHeadGap * 100;
-    if (headShrug > 0) {
-      repWindow.maxHeadShrugPct = Math.max(repWindow.maxHeadShrugPct, headShrug);
+    if (repWindow.baselineShoulderHeadSource === metrics.shoulderHeadSource) {
+      const headShrug = (repWindow.baselineShoulderHeadGap - metrics.shoulderHeadGap) / repWindow.baselineShoulderHeadGap * 100;
+      if (headShrug > 0) {
+        repWindow.maxHeadShrugPct = Math.max(repWindow.maxHeadShrugPct, headShrug);
+      }
+      if (headShrug > FORM_THRESHOLDS.SHRUG_WARN) {
+        repWindow.headShrugWarnSampleCount++;
+      }
+      repWindow.headShrugSampleCount++;
     }
-    if (headShrug > FORM_THRESHOLDS.SHRUG_WARN) {
-      repWindow.headShrugWarnSampleCount++;
-    }
-    repWindow.headShrugSampleCount++;
   }
 
   if (metrics.viewAngle.smoothedAngleDeg !== null) {
@@ -1041,7 +1088,7 @@ function computeRepWindowScore(repWindow: RepWindow): number {
 
   // 8. Wrong plane — height without enough outward reach is a front/scaption raise.
   if (hasEnoughSamples(repWindow.lateralReachSampleCount)) {
-    const lateralReachShortfall = Math.max(0, FORM_THRESHOLDS.LATERAL_REACH_MIN - repWindow.maxLateralReachRatio);
+    const lateralReachShortfall = Math.max(0, FORM_THRESHOLDS.LATERAL_REACH_MIN - weakestPeakLateralReachRatio(repWindow));
     addPenalty(lateralReachShortfall, PENALTY_CONFIGS.LATERAL_PATH);
   }
 
@@ -1110,7 +1157,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   // 9. Wrong plane
   if (
     hasEnoughSamples(repWindow.lateralReachSampleCount) &&
-    repWindow.maxLateralReachRatio < FORM_THRESHOLDS.LATERAL_REACH_MIN
+    weakestPeakLateralReachRatio(repWindow) < FORM_THRESHOLDS.LATERAL_REACH_MIN
   ) {
     messages.push('Raise out to your sides \u2014 avoid turning it into a front raise.');
   }
@@ -1144,9 +1191,7 @@ function buildLateralRaiseDiagnostics(
   const hasHipSway = hasEnoughSamples(repWindow.hipSwaySampleCount);
   const hasShrug = hasEnoughSamples(repWindow.shrugSampleCount) || hasEnoughSamples(repWindow.headShrugSampleCount);
   const hasWristEndpointSamples = repWindow.wristEndpointSampleCount > 0;
-  const wristEndpointCoverage = hasWristEndpointSamples
-    ? repWindow.wristEndpointObservedCount / repWindow.wristEndpointSampleCount
-    : null;
+  const wristEndpointCoverageValue = wristEndpointCoverage(repWindow);
   const hasViewAngle = hasEnoughViewAngleSamples(repWindow);
   const hasAnyViewAngle = repWindow.viewAngleSampleCount > 0;
   const viewSkippedReason = hasAnyViewAngle
@@ -1182,6 +1227,12 @@ function buildLateralRaiseDiagnostics(
         sampleCount: repWindow.lateralReachSampleCount,
         skippedReason: 'insufficient_lateral_path_samples',
       }),
+      diagnosticMetric('weakestPeakLateralReachRatio', weakestPeakLateralReachRatio(repWindow), {
+        unit: 'ratio',
+        eligible: hasLateralReach,
+        sampleCount: repWindow.lateralReachSampleCount,
+        skippedReason: 'insufficient_lateral_path_samples',
+      }),
       diagnosticMetric('leftPeakLateralReachRatio', repWindow.maxLeftLateralReachRatio, {
         unit: 'ratio',
         eligible: hasLateralReach,
@@ -1200,7 +1251,7 @@ function buildLateralRaiseDiagnostics(
         sampleCount: repWindow.straightnessSampleCount,
         skippedReason: 'wrist_landmarks_unavailable',
       }),
-      diagnosticMetric('wristEndpointCoverage', wristEndpointCoverage, {
+      diagnosticMetric('wristEndpointCoverage', wristEndpointCoverageValue, {
         unit: 'ratio',
         eligible: hasWristEndpointSamples,
         sampleCount: repWindow.wristEndpointSampleCount,
@@ -1365,13 +1416,13 @@ function buildLateralRaiseDiagnostics(
       }),
       diagnosticCue({
         issueId: 'standing-dumbbell-lateral-raises.wrong_plane',
-        metricKeys: ['peakLateralReachRatio'],
+        metricKeys: ['weakestPeakLateralReachRatio'],
         direction: 'below',
-        value: repWindow.maxLateralReachRatio,
+        value: weakestPeakLateralReachRatio(repWindow),
         thresholdPath: 'formThresholds.LATERAL_REACH_MIN',
         thresholdValue: FORM_THRESHOLDS.LATERAL_REACH_MIN,
         eligible: hasLateralReach,
-        triggered: hasLateralReach && repWindow.maxLateralReachRatio < FORM_THRESHOLDS.LATERAL_REACH_MIN,
+        triggered: hasLateralReach && weakestPeakLateralReachRatio(repWindow) < FORM_THRESHOLDS.LATERAL_REACH_MIN,
         support: repWindow.lateralReachSampleCount,
         skippedReason: 'insufficient_lateral_path_samples',
       }),
@@ -1438,10 +1489,10 @@ function updateLateralRaiseState(
   const rawLeftHeightRatio = computeArmHeightRatio(leftWristEndpoint, lh!, rh!, ls!, rs!);
   const rawRightHeightRatio = computeArmHeightRatio(rightWristEndpoint, lh!, rh!, ls!, rs!);
   const rawLeftLateralReach = leftWristVisible
-    ? computeLateralReachRatio('left', ls!, le!, lw!, lh!, rh!, ls!, rs!)
+    ? computeLateralReachRatio('left', ls!, lw!, lh!, rh!, ls!, rs!)
     : NaN;
   const rawRightLateralReach = rightWristVisible
-    ? computeLateralReachRatio('right', rs!, re!, rw!, lh!, rh!, ls!, rs!)
+    ? computeLateralReachRatio('right', rs!, rw!, lh!, rh!, ls!, rs!)
     : NaN;
 
   // Arm straightness ratio (only when wrist visible)
@@ -1466,7 +1517,9 @@ function updateLateralRaiseState(
   const rawSagittalTorsoAngle = computeSagittalTorsoAngle(worldKeypoints);
   const rawHipCenter = allTorsoVisible ? computeHipCenter(lh!, rh!) : null;
   const rawTorsoHeight = allTorsoVisible ? computeTorsoHeight(lh!, rh!, ls!, rs!) : null;
-  const rawShoulderHeadGap = computeShoulderHeadGap(imageKeypoints);
+  const rawShoulderHeadGapEstimate = computeShoulderHeadGap(imageKeypoints);
+  const rawShoulderHeadGap = rawShoulderHeadGapEstimate?.gap ?? null;
+  const rawShoulderHeadSource = rawShoulderHeadGapEstimate?.source ?? null;
   const viewAngle = estimateFrontViewAngle(worldKeypoints, state.viewAngleSmoothedDeg);
   if (viewAngle.smoothedAngleDeg !== null) {
     state.viewAngleSmoothedDeg = viewAngle.smoothedAngleDeg;
@@ -1487,9 +1540,7 @@ function updateLateralRaiseState(
     'left_shoulder', 'right_shoulder', 'left_hip', 'right_hip',
   ]);
   const lateralReachConf = leftWristVisible && rightWristVisible ? Math.min(leftHeightConf, rightHeightConf) : 0;
-  const headShrugConf = rawShoulderHeadGap !== null
-    ? minKeypointConfidence(imageKeypoints, ['nose', 'left_shoulder', 'right_shoulder'])
-    : 0;
+  const headShrugConf = rawShoulderHeadGapEstimate?.confidence ?? 0;
   const worldTorsoConf = worldKeypoints
     ? minKeypointConfidence(worldKeypoints, ['left_shoulder', 'right_shoulder', 'left_hip', 'right_hip'])
     : 0;
@@ -1549,9 +1600,10 @@ function updateLateralRaiseState(
         : Math.min(state.restTorsoHeight, torsoH);
     }
     if (rawShoulderHeadGap !== null && headShrugConf >= FORM_CONFIDENCE_MIN) {
-      state.restShoulderHeadGap = state.restShoulderHeadGap === null
-        ? rawShoulderHeadGap
-        : Math.max(state.restShoulderHeadGap, rawShoulderHeadGap);
+      if (state.restShoulderHeadGap === null || rawShoulderHeadGap > state.restShoulderHeadGap) {
+        state.restShoulderHeadGap = rawShoulderHeadGap;
+        state.restShoulderHeadSource = rawShoulderHeadSource;
+      }
     }
   }
 
@@ -1562,6 +1614,7 @@ function updateLateralRaiseState(
       t,
       state.restTorsoHeight,
       state.restShoulderHeadGap,
+      state.restShoulderHeadSource,
       rawSagittalTorsoAngle,
       rawHipCenter,
     );
@@ -1599,6 +1652,7 @@ function updateLateralRaiseState(
       hipCenter: rawHipCenter,
       torsoHeight: rawTorsoHeight,
       shoulderHeadGap: rawShoulderHeadGap,
+      shoulderHeadSource: rawShoulderHeadSource,
       headShrugConf,
       viewAngle,
     });
@@ -1802,6 +1856,7 @@ function validateLateralRaiseHeuristicConfig(config: ExerciseHeuristicConfig): s
     'formThresholds.LATERAL_REACH_MIN',
     'formThresholds.SAGITTAL_SWAY_WARN',
     'formThresholds.HIP_SWAY_WARN',
+    'formThresholds.WRIST_ENDPOINT_SCORABLE_MIN_COVERAGE',
   ]) {
     requireNonNegative(config, issues, path);
   }
@@ -1809,6 +1864,11 @@ function validateLateralRaiseHeuristicConfig(config: ExerciseHeuristicConfig): s
   const elbowStraightness = configNumber(config, 'formThresholds.ELBOW_STRAIGHTNESS_WARN', issues);
   if (elbowStraightness !== null && elbowStraightness > 1) {
     issues.push('Lateral Raise config "formThresholds.ELBOW_STRAIGHTNESS_WARN" must be at most 1.');
+  }
+
+  const wristCoverage = configNumber(config, 'formThresholds.WRIST_ENDPOINT_SCORABLE_MIN_COVERAGE', issues);
+  if (wristCoverage !== null && wristCoverage > 1) {
+    issues.push('Lateral Raise config "formThresholds.WRIST_ENDPOINT_SCORABLE_MIN_COVERAGE" must be at most 1.');
   }
 
   requirePositiveInteger(config, issues, 'formThresholds.MIN_FORM_SAMPLES');

@@ -75,6 +75,14 @@ function fastPullPath(): number[] {
   ];
 }
 
+function twoRepPathWithTopTimeout(): number[] {
+  return [
+    ...fullRepPath(),
+    ...Array(40).fill(EXTENDED_ELBOW_Y),
+    ...fullRepPath(),
+  ];
+}
+
 function wristYForElbow(elbowY: number): number {
   const p = Math.max(0, Math.min(1, (elbowY - EXTENDED_ELBOW_Y) / (BOTTOM_ELBOW_Y - EXTENDED_ELBOW_Y)));
   return EXTENDED_WRIST_Y + (BOTTOM_WRIST_Y - EXTENDED_WRIST_Y) * p;
@@ -215,9 +223,13 @@ function buildRecording(
   };
 }
 
-function buildWorldStaticImageRecording(description: string, elbowPath: number[]): LandmarkRecording {
+function buildWorldStaticImageRecording(
+  description: string,
+  elbowPath: number[],
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
   const staticWorld = buildRecording(`${description} static world`, Array(elbowPath.length).fill(EXTENDED_ELBOW_Y));
-  const movingImage = buildRecording(`${description} moving image`, elbowPath);
+  const movingImage = buildRecording(`${description} moving image`, elbowPath, options);
   return {
     ...movingImage,
     metadata: {
@@ -232,6 +244,85 @@ function buildWorldStaticImageRecording(description: string, elbowPath: number[]
     })),
   };
 }
+
+function mapRecordingKeypointSources(
+  recording: LandmarkRecording,
+  transform: (keypoints: Keypoint[], frameIndex: number) => Keypoint[],
+): LandmarkRecording {
+  return {
+    ...recording,
+    frames: recording.frames.map((frame, frameIndex) => {
+      const nextFrame = {
+        ...frame,
+        keypoints: transform(frame.keypoints, frameIndex),
+      };
+      if (frame.worldKeypoints) {
+        nextFrame.worldKeypoints = transform(frame.worldKeypoints, frameIndex);
+      }
+      if (frame.imageKeypoints) {
+        nextFrame.imageKeypoints = transform(frame.imageKeypoints, frameIndex);
+      }
+      return nextFrame;
+    }),
+  };
+}
+
+function withKeypointScore(
+  recording: LandmarkRecording,
+  keypointName: string,
+  score: number,
+  startFrame: number,
+): LandmarkRecording {
+  return mapRecordingKeypointSources(recording, (keypoints, frameIndex) =>
+    keypoints.map(keypoint =>
+      frameIndex >= startFrame && keypoint.name === keypointName
+        ? { ...keypoint, score }
+        : keypoint,
+    ),
+  );
+}
+
+function withDegenerateTorsoHeightExcept(
+  recording: LandmarkRecording,
+  side: Side,
+  validFrameIndexes: number[],
+): LandmarkRecording {
+  const validFrames = new Set(validFrameIndexes);
+  return mapRecordingKeypointSources(recording, (keypoints, frameIndex) => {
+    if (validFrames.has(frameIndex)) return keypoints;
+    const shoulderY = keypoints.find(keypoint => keypoint.name === `${side}_shoulder`)?.y;
+    if (shoulderY === undefined) return keypoints;
+    return keypoints.map(keypoint =>
+      keypoint.name === `${side}_hip`
+        ? { ...keypoint, y: shoulderY }
+        : keypoint,
+    );
+  });
+}
+
+const TORSO_ONLY_SCORING_DEFINITION = latPulldownDefinition.createVariant!({
+  penaltyConfigs: {
+    PULL_ROM: { cap: 0 },
+    EXTENSION_ROM: { cap: 0 },
+    ELBOW_DRIVE: { cap: 0 },
+    SHOULDER_SHRUG: { cap: 0 },
+    TEMPO_PULL: { cap: 0 },
+    TEMPO_RETURN: { cap: 0 },
+  },
+});
+
+const SHOULDER_ONLY_SCORING_DEFINITION = latPulldownDefinition.createVariant!({
+  penaltyConfigs: {
+    PULL_ROM: { cap: 0 },
+    EXTENSION_ROM: { cap: 0 },
+    ELBOW_DRIVE: { cap: 0 },
+    TORSO_LEAN: { cap: 0 },
+    TORSO_ABSOLUTE: { cap: 0 },
+    TORSO_ROCK: { cap: 0 },
+    TEMPO_PULL: { cap: 0 },
+    TEMPO_RETURN: { cap: 0 },
+  },
+});
 
 describe('Lat Pulldown synthetic replay coverage', () => {
   it.each<Orientation>(['front', 'mirrored'])(
@@ -334,6 +425,42 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.feedbackMessages).toEqual([]);
   });
 
+  it('keeps stale-world clean image form clean', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildWorldStaticImageRecording('synthetic clean image lat pulldown with stale world', fullRepPath(), {
+        posture: 'upright',
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('uses image torso lean when world landmarks are stale', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildWorldStaticImageRecording('synthetic leaned image lat pulldown with stale world', fullRepPath(), {
+        posture: 'leaned',
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Stay upright — avoid leaning back excessively.');
+  });
+
+  it('uses image torso rocking when world landmarks are stale', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildWorldStaticImageRecording('synthetic rocking image lat pulldown with stale world', fullRepPath(), {
+        torsoRock: true,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your torso steady through the pulldown.');
+  });
+
   it('counts but marks front-ish pulldowns unscorable when side-view confidence is too low', () => {
     const result = replayRecording(
       latPulldownDefinition,
@@ -353,7 +480,7 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
 
-  it('records unknown side-view quality without blocking scoring when the far side is hidden', () => {
+  it('infers side-view quality from the selected side when the far side is hidden', () => {
     const result = replayRecording(
       latPulldownDefinition,
       buildRecording('synthetic single-side visible lat pulldown', fullRepPath()),
@@ -362,10 +489,33 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(true);
     expect(result.reps[0].qualityWarnings).not.toContain('side_view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('side');
+    expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('side_confirmed');
+    expect(result.reps[0].diagnostics?.metrics.sideViewConfirmed.value).toBe(1);
+    expect(result.reps[0].diagnostics?.metrics.viewUnknown.value).toBe(0);
+    expect(result.reps[0].diagnostics?.metrics.selectedSideSampleCount.value).toBeGreaterThanOrEqual(5);
+    expect(result.reps[0].diagnostics?.metrics.bilateralRomAsymmetry.eligible).toBe(false);
+  });
+
+  it('counts but marks unknown-view pulldowns unscorable when selected-side support is insufficient', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      withKeypointScore(
+        buildRecording('synthetic unknown-view lat pulldown with weak selected-side hip', fullRepPath()),
+        'right_hip',
+        0.23,
+        0,
+      ),
+      { confidenceGating: true },
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.reps[0].diagnostics?.view).toBe('unknown');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('view_unknown');
     expect(result.reps[0].diagnostics?.metrics.viewUnknown.value).toBe(1);
-    expect(result.reps[0].diagnostics?.metrics.bilateralRomAsymmetry.eligible).toBe(false);
+    expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
 
   it('records side-confirmed view quality and passive bilateral ROM diagnostics when both arms are visible', () => {
@@ -404,6 +554,20 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Extend fully — reach all the way up at the top.');
   });
 
+  it('counts repeated short-extension reps after the top timeout', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildRecording('synthetic repeated short extension lat pulldown', twoRepPathWithTopTimeout(), {
+        armPath: 'short-extension',
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(2);
+    expect(
+      result.feedbackMessages.filter(message => message === 'Extend fully — reach all the way up at the top.'),
+    ).toHaveLength(2);
+  });
+
   it('flags arm-dominant pulls with poor elbow drive', () => {
     const result = replayRecording(
       latPulldownDefinition,
@@ -416,6 +580,36 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Drive your elbows down — pull with your lats, not just your arms.');
   });
 
+  it('keeps elbow-drive cue ineligible when active-side hip confidence drops after warmup', () => {
+    let recording = withKeypointScore(
+      buildRecording('synthetic lat pulldown with weak active hip for drive', fullRepPath(), {
+        sideGap: 0.04,
+      }),
+      'right_hip',
+      0.23,
+      14,
+    );
+    for (const keypointName of ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip']) {
+      recording = withKeypointScore(recording, keypointName, 0.99, 40);
+    }
+
+    const result = replayRecording(
+      latPulldownDefinition,
+      recording,
+    );
+
+    const metrics = result.reps[0].diagnostics?.metrics;
+    const cues = result.reps[0].diagnostics?.cues;
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].diagnostics?.scorable).toBe(true);
+    expect(result.feedbackMessages).not.toContain('Drive your elbows down — pull with your lats, not just your arms.');
+    expect(metrics?.upperArmDriveDelta.eligible).toBe(false);
+    expect(metrics?.upperArmDriveDelta.sampleCount).toBeLessThan(3);
+    expect(metrics?.upperArmDriveDelta.skippedReason).toBe('insufficient_upper_arm_drive_samples');
+    expect(cues?.['cable-lat-pulldowns.elbow_drive'].eligible).toBe(false);
+    expect(cues?.['cable-lat-pulldowns.elbow_drive'].triggered).toBe(false);
+  });
+
   it('flags shrugging during the pull', () => {
     const result = replayRecording(
       latPulldownDefinition,
@@ -426,6 +620,30 @@ describe('Lat Pulldown synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain('Keep your shoulders down as you pull.');
+  });
+
+  it('keeps shoulder-shrug cue ineligible and unpenalized with too few valid shrug samples', () => {
+    const result = replayRecording(
+      SHOULDER_ONLY_SCORING_DEFINITION,
+      withDegenerateTorsoHeightExcept(
+        buildRecording('synthetic shrugging lat pulldown with sparse shrug samples', fullRepPath(), {
+          shoulderShrug: true,
+        }),
+        'right',
+        [22, 23],
+      ),
+    );
+
+    const metrics = result.reps[0].diagnostics?.metrics;
+    const cues = result.reps[0].diagnostics?.cues;
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBe(100);
+    expect(result.feedbackMessages).not.toContain('Keep your shoulders down as you pull.');
+    expect(metrics?.shoulderShrugRatio.eligible).toBe(false);
+    expect(metrics?.shoulderShrugRatio.sampleCount).toBeLessThan(3);
+    expect(metrics?.shoulderShrugRatio.skippedReason).toBe('insufficient_shoulder_shrug_samples');
+    expect(cues?.['cable-lat-pulldowns.shoulder_shrug'].eligible).toBe(false);
+    expect(cues?.['cable-lat-pulldowns.shoulder_shrug'].triggered).toBe(false);
   });
 
   it('flags torso rocking separately from a stable slight lean', () => {
@@ -445,6 +663,36 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(stableLean.feedbackMessages).not.toContain('Keep your torso steady through the pulldown.');
     expect(rocking.finalRepCount).toBe(1);
     expect(rocking.feedbackMessages).toContain('Keep your torso steady through the pulldown.');
+  });
+
+  it('keeps torso cues ineligible and unpenalized with insufficient torso samples', () => {
+    const result = replayRecording(
+      TORSO_ONLY_SCORING_DEFINITION,
+      withKeypointScore(
+        buildRecording('synthetic rocking lat pulldown with unavailable torso samples', fullRepPath(), {
+          torsoRock: true,
+        }),
+        'right_hip',
+        0.05,
+        14,
+      ),
+    );
+
+    const metrics = result.reps[0].diagnostics?.metrics;
+    const cues = result.reps[0].diagnostics?.cues;
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBe(100);
+    expect(result.feedbackMessages).not.toContain('Stay upright — avoid leaning back excessively.');
+    expect(result.feedbackMessages).not.toContain('Keep your torso steady through the pulldown.');
+    expect(metrics?.torsoLeanBackDelta.eligible).toBe(false);
+    expect(metrics?.torsoRockDelta.eligible).toBe(false);
+    expect(metrics?.torsoAbsoluteBackLean.eligible).toBe(false);
+    expect(metrics?.torsoRockDelta.sampleCount).toBeLessThan(3);
+    expect(metrics?.torsoRockDelta.skippedReason).toBe('insufficient_torso_deviation_samples');
+    expect(cues?.['cable-lat-pulldowns.torso_warn'].eligible).toBe(false);
+    expect(cues?.['cable-lat-pulldowns.torso_warn'].triggered).toBe(false);
+    expect(cues?.['cable-lat-pulldowns.torso_rocking'].eligible).toBe(false);
+    expect(cues?.['cable-lat-pulldowns.torso_rocking'].triggered).toBe(false);
   });
 
   it('flags a fast pull', () => {

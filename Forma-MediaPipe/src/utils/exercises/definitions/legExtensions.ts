@@ -438,6 +438,7 @@ interface RepWindow {
   sideViewConfidenceSamples: number;
   sideViewConfidenceSum: number;
   sideViewConfidenceMin: number;
+  selectedSideSamples: number;
   tEnd: number;
   /** Frame count */
   frameCount: number;
@@ -480,6 +481,8 @@ interface LegExtensionState {
   visibleSide: 'left' | 'right';
   /** Minimum smoothed ratio observed in REST before the current rep starts */
   restMinRatio: number;
+  /** True once we have observed a bent/rest setup after state creation */
+  hasSeenBentRest: boolean;
   preWindowLockoutStreakCount: number;
   preWindowLockoutStreakStart: number | null;
   baselineSamples: Record<'left' | 'right', BaselineSamples>;
@@ -566,6 +569,7 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
     sideViewConfidenceSamples: 0,
     sideViewConfidenceSum: 0,
     sideViewConfidenceMin: Infinity,
+    selectedSideSamples: 0,
     tEnd: tStart,
     frameCount: 0,
     frameSamples: [],
@@ -601,6 +605,7 @@ function initializeLegExtensionState(): LegExtensionState {
     lastFeedbackTime: 0,
     visibleSide: 'left',
     restMinRatio: Infinity,
+    hasSeenBentRest: false,
     preWindowLockoutStreakCount: 0,
     preWindowLockoutStreakStart: null,
     baselineSamples: {
@@ -881,7 +886,8 @@ interface FSMUpdateResult {
 function updateFSM(
   currentFSM: LegExtensionFSM,
   ratio: number,
-  t: number
+  t: number,
+  allowStart: boolean,
 ): FSMUpdateResult {
   const fsm = { ...currentFSM };
   let repCompleted = false;
@@ -890,13 +896,13 @@ function updateFSM(
     case 'REST':
       // Waiting for extension to begin. When ratio exceeds threshold,
       // transition to EXTENDING.
-      if (ratio > THRESHOLDS.EXTEND_CLOCK_START) {
+      if (allowStart && ratio > THRESHOLDS.EXTEND_CLOCK_START) {
         fsm.tExtendStart ??= t;
       } else {
         fsm.tExtendStart = null;
       }
 
-      if (ratio > THRESHOLDS.EXTENDING_ENTER) {
+      if (allowStart && ratio > THRESHOLDS.EXTENDING_ENTER) {
         fsm.phase = 'EXTENDING';
         fsm.tRepStart = fsm.tExtendStart ?? t;
         fsm.tExtended = null;
@@ -974,12 +980,14 @@ function buildLegExtensionViewQuality(repWindow: RepWindow): RepViewQualityDiagn
   const hasEnoughSamples =
     repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES &&
     averageConfidence !== null;
-  const sideConfirmed = Boolean(
+  const bilateralSideConfirmed = Boolean(
     hasEnoughSamples &&
     averageConfidence! >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
     repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN,
   );
-  const frontishConfirmed = Boolean(hasEnoughSamples && !sideConfirmed);
+  const selectedSideConfirmed = repWindow.selectedSideSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES;
+  const sideConfirmed = bilateralSideConfirmed || (!hasEnoughSamples && selectedSideConfirmed);
+  const frontishConfirmed = Boolean(hasEnoughSamples && !bilateralSideConfirmed);
   return {
     status: sideConfirmed
       ? 'side_confirmed'
@@ -993,7 +1001,7 @@ function buildLegExtensionViewQuality(repWindow: RepWindow): RepViewQualityDiagn
     minSideViewConfidence: repWindow.sideViewConfidenceSamples > 0
       ? repWindow.sideViewConfidenceMin
       : null,
-    sampleCount: repWindow.sideViewConfidenceSamples,
+    sampleCount: hasEnoughSamples ? repWindow.sideViewConfidenceSamples : repWindow.selectedSideSamples,
   };
 }
 
@@ -1004,7 +1012,7 @@ function diagnosticsViewFor(viewQuality: RepViewQualityDiagnostic): NonNullable<
 }
 
 function sideViewIsScorable(repWindow: RepWindow): boolean {
-  return !buildLegExtensionViewQuality(repWindow).frontishConfirmed;
+  return buildLegExtensionViewQuality(repWindow).sideConfirmed;
 }
 
 function legExtensionQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
@@ -1012,7 +1020,6 @@ function legExtensionQualityWarnings(repWindow: RepWindow): FrameworkRepResult['
 }
 
 function isLockoutShort(repWindow: RepWindow): boolean {
-  if (repWindow.tLockout !== null) return false;
   const ratioShort = repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL;
   const kneeShortOrUnavailable =
     !hasKneeExtensionMetric(repWindow) ||
@@ -1112,7 +1119,7 @@ function computeLegExtensionScore(repWindow: RepWindow): number {
   }
 
   const hold = topHoldSeconds(repWindow);
-  if (hold !== null && hold < FORM_THRESHOLDS.TOP_HOLD_MIN) {
+  if (hold !== null && !isLockoutShort(repWindow) && hold < FORM_THRESHOLDS.TOP_HOLD_MIN) {
     const deficit = FORM_THRESHOLDS.TOP_HOLD_MIN - hold;
     penalties.push({ value: deficit, config: PENALTY_CONFIGS.TOP_HOLD });
   }
@@ -1279,6 +1286,7 @@ function buildLegExtensionDiagnostics(
         skippedReason: 'torso_chain_unavailable',
       }),
       diagnosticMetric('hipDelta', repWindow.maxHipDelta, { unit: 'degrees' }),
+      diagnosticMetric('hipDeltaRaw', repWindow.rawMaxHipDelta, { unit: 'degrees' }),
       diagnosticMetric('hipRiseRatio', hasHipRise ? repWindow.maxHipRiseRatio : null, {
         unit: 'ratio',
         eligible: hasHipRise,
@@ -1326,8 +1334,11 @@ function buildLegExtensionDiagnostics(
         metricKeys: ['extensionRatio', 'kneeExtensionAngle'],
         direction: 'below',
         value: repWindow.maxRatio,
-        thresholdPath: 'formThresholds.EXTENSION_FAIL',
-        thresholdValue: FORM_THRESHOLDS.EXTENSION_FAIL,
+        thresholdPath: ['formThresholds.EXTENSION_FAIL', 'formThresholds.KNEE_EXTENSION_FAIL'],
+        thresholdValue: {
+          extensionRatio: FORM_THRESHOLDS.EXTENSION_FAIL,
+          kneeExtensionAngle: FORM_THRESHOLDS.KNEE_EXTENSION_FAIL,
+        },
         triggered: lockoutShort,
       }),
       diagnosticCue({
@@ -1335,8 +1346,11 @@ function buildLegExtensionDiagnostics(
         metricKeys: ['flexionRatio', 'kneeFlexionAngle'],
         direction: 'above',
         value: repWindow.minRatio,
-        thresholdPath: 'formThresholds.FLEXION_FAIL',
-        thresholdValue: FORM_THRESHOLDS.FLEXION_FAIL,
+        thresholdPath: ['formThresholds.FLEXION_FAIL', 'formThresholds.KNEE_FLEXION_FAIL'],
+        thresholdValue: {
+          flexionRatio: FORM_THRESHOLDS.FLEXION_FAIL,
+          kneeFlexionAngle: FORM_THRESHOLDS.KNEE_FLEXION_FAIL,
+        },
         triggered: flexionShort,
       }),
       diagnosticCue({
@@ -1551,6 +1565,16 @@ function recordFrameInWindow(args: {
     window.sideViewConfidenceSamples++;
   }
 
+  const selectedSideConfidence = minKeypointConfidence(signalKeypoints, [
+    `${visibleSide}_shoulder`,
+    `${visibleSide}_hip`,
+    `${visibleSide}_knee`,
+    `${visibleSide}_ankle`,
+  ]);
+  if (selectedSideConfidence >= FORM_CONFIDENCE_MIN) {
+    window.selectedSideSamples++;
+  }
+
   if (rawKneeAngle !== null) {
     window.rawMinKneeAngle = Math.min(window.rawMinKneeAngle, rawKneeAngle);
     window.rawMaxKneeAngle = Math.max(window.rawMaxKneeAngle, rawKneeAngle);
@@ -1709,7 +1733,11 @@ function updateLegExtensionState(
     return newState;
   }
 
-  if (currentState.fsm.phase === 'REST' && fastRatio <= THRESHOLDS.EXTEND_CLOCK_START) {
+  const validBentRestSetup =
+    currentState.fsm.phase === 'REST' &&
+    fastRatio <= THRESHOLDS.EXTENDING_ENTER;
+  if (validBentRestSetup) {
+    newState.hasSeenBentRest = true;
     recordRestBaselineSample(newState, visibleSide, rawTorsoDev, rawHip, hip?.y ?? null);
   }
 
@@ -1725,7 +1753,7 @@ function updateLegExtensionState(
   }
 
   // Update FSM
-  const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
+  const fsmResult = updateFSM(currentState.fsm, fastRatio, t, newState.hasSeenBentRest);
   newState.fsm = fsmResult.fsm;
 
   const returnedPartial =

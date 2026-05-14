@@ -589,8 +589,8 @@ const styles = StyleSheet.create({
   composerEdge: {
     borderRadius: 8,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
     paddingHorizontal: 14,
     paddingTop: 13,
     paddingBottom: 10,
@@ -636,8 +636,8 @@ const styles = StyleSheet.create({
   attachmentEdge: {
     borderRadius: 8,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.065)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderTopColor: 'rgba(255, 255, 255, 0.13)',
     padding: 14,
   },
   attachmentRow: {

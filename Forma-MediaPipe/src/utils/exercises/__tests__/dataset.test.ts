@@ -74,7 +74,7 @@ describe('dataset label validation', () => {
     ]));
   });
 
-  it.each(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row'])(
+  it.each(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions'])(
     'requires view and scorable on reviewed %s reps but not drafts',
     exerciseName => {
       const reviewedLabel = {
@@ -105,7 +105,13 @@ describe('dataset label validation', () => {
           { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'front', scorable: true },
         ],
       });
-      if (exerciseName === 'Push-Up' || exerciseName === 'Barbell Squat' || exerciseName === 'Cable Row') {
+      if (
+        exerciseName === 'Push-Up' ||
+        exerciseName === 'Barbell Squat' ||
+        exerciseName === 'Cable Row' ||
+        exerciseName === 'Cable Lat Pulldowns' ||
+        exerciseName === 'Leg Extensions'
+      ) {
         expect(knownViewIssues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
           expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
         ]));
@@ -220,6 +226,70 @@ describe('dataset label validation', () => {
     },
   );
 
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'rejects reviewed scorable Cable Lat Pulldowns reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Cable Lat Pulldowns',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
+        ],
+      }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+      ]));
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'allows reviewed unscorable Cable Lat Pulldowns reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Cable Lat Pulldowns',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'rejects reviewed scorable Leg Extensions reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Leg Extensions',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
+        ],
+      }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+      ]));
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'allows reviewed unscorable Leg Extensions reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Leg Extensions',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
   it('includes reviewed-ready view and scorable metadata in the push-up label template', () => {
     const template = JSON.parse(
       readFileSync(
@@ -324,6 +394,67 @@ describe('dataset label validation', () => {
     expect(template.labelingGuidance).toEqual(expect.arrayContaining([
       expect.stringContaining('Side-view Cable Row reps are the v1 full-form scoring target'),
       expect.stringContaining('Do not label row-target height, hold, or velocity diagnostics'),
+    ]));
+  });
+
+  it('lists production-hardening cable-lat-pulldown issues in the label template', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/cable-lat-pulldowns.template.json'),
+        'utf8',
+      ),
+    ) as {
+      availableIssues: Array<{ issueId: string }>;
+      reps: Array<{ view?: string; scorable?: boolean }>;
+      labelingGuidance?: string[];
+    };
+
+    expect(template.reps[0]?.view).toBe('side');
+    expect(template.reps[0]?.scorable).toBe(true);
+    expect(template.availableIssues.map((issue) => issue.issueId)).toEqual(expect.arrayContaining([
+      'cable-lat-pulldowns.rom_short',
+      'cable-lat-pulldowns.lockout_short',
+      'cable-lat-pulldowns.elbow_drive',
+      'cable-lat-pulldowns.torso_warn',
+      'cable-lat-pulldowns.torso_rocking',
+      'cable-lat-pulldowns.shoulder_shrug',
+      'cable-lat-pulldowns.tempo_down',
+      'cable-lat-pulldowns.tempo_up',
+    ]));
+    expect(template.labelingGuidance).toEqual(expect.arrayContaining([
+      expect.stringContaining('Side-view Cable Lat Pulldowns reps are the v1 full-form scoring target'),
+      expect.stringContaining('Usable side-diagonal Cable Lat Pulldowns captures should be marked view=side'),
+      expect.stringContaining('Do not label bar path or handle path as separate issues in v1'),
+    ]));
+  });
+
+  it('includes reviewed-ready view, scorable metadata, and guidance in the leg-extension label template', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/leg-extensions.template.json'),
+        'utf8',
+      ),
+    ) as {
+      availableIssues: Array<{ issueId: string }>;
+      reps: Array<{ view?: string; scorable?: boolean }>;
+      labelingGuidance?: string[];
+    };
+
+    expect(template.reps[0]?.view).toBe('side');
+    expect(template.reps[0]?.scorable).toBe(true);
+    expect(template.availableIssues.map((issue) => issue.issueId)).toEqual(expect.arrayContaining([
+      'leg-extensions.lockout_short',
+      'leg-extensions.rom_short_leg_ext',
+      'leg-extensions.hip_lift',
+      'leg-extensions.top_hold_short',
+      'leg-extensions.tempo_up',
+      'leg-extensions.tempo_down',
+    ]));
+    expect(template.labelingGuidance).toEqual(expect.arrayContaining([
+      expect.stringContaining('Side-view Leg Extensions reps are the v1 full-form scoring target'),
+      expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+      expect.stringContaining('Label lockout, bottom range, hip lift, torso movement, top hold, and tempo'),
+      expect.stringContaining('Reviewed scorable Leg Extensions reps must use view=side'),
     ]));
   });
 

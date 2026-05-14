@@ -6,8 +6,8 @@
 export const COLORS = {
   // Backgrounds — lifted neutral graphite, close to the reference without skewing blue
   background: '#151A1D',
-  cardBackground: 'rgba(29, 34, 38, 0.60)',
-  cardBackgroundLight: 'rgba(33, 38, 42, 0.60)',
+  cardBackground: 'rgba(29, 34, 38, 0.80)',
+  cardBackgroundLight: 'rgba(33, 38, 42, 0.80)',
 
   // Primary Actions — Forma Violet
   primary: '#7A55FF',
@@ -30,8 +30,8 @@ export const COLORS = {
   textTertiary: '#6B7176',
 
   // UI Elements
-  border: 'rgba(255, 255, 255, 0.07)',
-  borderStrong: 'rgba(255, 255, 255, 0.10)',
+  border: 'rgba(255, 255, 255, 0.09)',
+  borderStrong: 'rgba(255, 255, 255, 0.13)',
   inactive: '#383E43',
 
   // Chart colors
@@ -53,9 +53,9 @@ export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
 /** Glass card surface gradient — matches the homepage card treatment */
 export const CARD_GRADIENT_COLORS: readonly [string, string, string] = [
-  'rgba(29, 34, 38, 0.60)',
-  'rgba(32, 37, 41, 0.60)',
-  'rgba(35, 40, 44, 0.60)',
+  'rgba(29, 34, 38, 0.80)',
+  'rgba(32, 37, 41, 0.80)',
+  'rgba(35, 40, 44, 0.80)',
 ];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
@@ -71,10 +71,10 @@ export const CARD_VERTICAL_GAP = 10;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: 'rgba(29, 34, 38, 0.60)',
+  backgroundColor: 'rgba(29, 34, 38, 0.80)',
   borderWidth: 0.5,
-  borderColor: 'rgba(255, 255, 255, 0.07)',
-  borderTopColor: 'rgba(255, 255, 255, 0.09)',
+  borderColor: 'rgba(255, 255, 255, 0.09)',
+  borderTopColor: 'rgba(255, 255, 255, 0.13)',
   borderRadius: CARD_RADIUS,
 } as const;
 

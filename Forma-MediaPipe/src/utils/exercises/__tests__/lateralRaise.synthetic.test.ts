@@ -89,6 +89,7 @@ function sidePoints(
   posture: Posture,
   armStyle: ArmStyle,
   armPlane: ArmPlane,
+  bodyShiftX: number,
 ) {
   const mirror = orientation === 'mirrored' ? -1 : 1;
   const sideSign = side === 'left' ? -1 : 1;
@@ -97,11 +98,11 @@ function sidePoints(
   const leanX = posture === 'leaned' ? 0.08 * mirror : 0;
   const shrugY = posture === 'shrug' ? -0.1 : 0;
   const shoulder = {
-    x: shoulderBaseX + leanX,
+    x: shoulderBaseX + leanX + bodyShiftX,
     y: SHOULDER_Y + shrugY,
   };
   const hip = {
-    x: hipBaseX,
+    x: hipBaseX + bodyShiftX,
     y: HIP_Y,
   };
   const lateralOffset = armPlane === 'front'
@@ -132,17 +133,25 @@ function makeFrame(
     orientation: Orientation;
     posture: Posture;
     armStyle: ArmStyle;
-    armPlane: ArmPlane;
+    leftArmPlane: ArmPlane;
+    rightArmPlane: ArmPlane;
     leftWristScore: number;
     rightWristScore: number;
+    bodyShiftX: number;
+    noseScore: number;
+    leftEarScore: number;
+    rightEarScore: number;
   },
 ): LandmarkRecording['frames'][number] {
-  const left = sidePoints('left', leftRatio, options.orientation, options.posture, options.armStyle, options.armPlane);
-  const right = sidePoints('right', rightRatio, options.orientation, options.posture, options.armStyle, options.armPlane);
+  const left = sidePoints('left', leftRatio, options.orientation, options.posture, options.armStyle, options.leftArmPlane, options.bodyShiftX);
+  const right = sidePoints('right', rightRatio, options.orientation, options.posture, options.armStyle, options.rightArmPlane, options.bodyShiftX);
 
   return {
     timestamp,
     keypoints: [
+      kp('nose', options.bodyShiftX, 0.18, options.noseScore),
+      kp('left_ear', options.bodyShiftX - 0.08, 0.22, options.leftEarScore),
+      kp('right_ear', options.bodyShiftX + 0.08, 0.22, options.rightEarScore),
       kp('left_shoulder', left.shoulder.x, left.shoulder.y),
       kp('left_elbow', left.elbow.x, left.elbow.y),
       kp('left_wrist', left.wrist.x, left.wrist.y, options.leftWristScore),
@@ -163,9 +172,15 @@ function buildRecording(
     posture?: Posture | ((index: number) => Posture);
     armStyle?: ArmStyle | ((index: number) => ArmStyle);
     armPlane?: ArmPlane | ((index: number) => ArmPlane);
+    leftArmPlane?: ArmPlane | ((index: number) => ArmPlane);
+    rightArmPlane?: ArmPlane | ((index: number) => ArmPlane);
     rightScale?: number | ((index: number) => number);
     leftWristScore?: number | ((index: number) => number);
     rightWristScore?: number | ((index: number) => number);
+    bodyShiftX?: number | ((index: number) => number);
+    noseScore?: number | ((index: number) => number);
+    leftEarScore?: number | ((index: number) => number);
+    rightEarScore?: number | ((index: number) => number);
   } = {},
 ): LandmarkRecording {
   const {
@@ -173,9 +188,15 @@ function buildRecording(
     posture = 'upright',
     armStyle = 'straight',
     armPlane = 'lateral',
+    leftArmPlane,
+    rightArmPlane,
     rightScale = 1,
     leftWristScore = 0.99,
     rightWristScore = 0.99,
+    bodyShiftX = 0,
+    noseScore = 0.99,
+    leftEarScore = 0.99,
+    rightEarScore = 0.99,
   } = options;
 
   return {
@@ -191,16 +212,31 @@ function buildRecording(
       const framePosture = typeof posture === 'function' ? posture(index) : posture;
       const frameArmStyle = typeof armStyle === 'function' ? armStyle(index) : armStyle;
       const frameArmPlane = typeof armPlane === 'function' ? armPlane(index) : armPlane;
+      const frameLeftArmPlane = leftArmPlane === undefined
+        ? frameArmPlane
+        : typeof leftArmPlane === 'function' ? leftArmPlane(index) : leftArmPlane;
+      const frameRightArmPlane = rightArmPlane === undefined
+        ? frameArmPlane
+        : typeof rightArmPlane === 'function' ? rightArmPlane(index) : rightArmPlane;
       const frameRightScale = typeof rightScale === 'function' ? rightScale(index) : rightScale;
       const frameLeftWristScore = typeof leftWristScore === 'function' ? leftWristScore(index) : leftWristScore;
       const frameRightWristScore = typeof rightWristScore === 'function' ? rightWristScore(index) : rightWristScore;
+      const frameBodyShiftX = typeof bodyShiftX === 'function' ? bodyShiftX(index) : bodyShiftX;
+      const frameNoseScore = typeof noseScore === 'function' ? noseScore(index) : noseScore;
+      const frameLeftEarScore = typeof leftEarScore === 'function' ? leftEarScore(index) : leftEarScore;
+      const frameRightEarScore = typeof rightEarScore === 'function' ? rightEarScore(index) : rightEarScore;
       return makeFrame(index * FRAME_MS, heightRatio, heightRatio * frameRightScale, {
         orientation,
         posture: framePosture,
         armStyle: frameArmStyle,
-        armPlane: frameArmPlane,
+        leftArmPlane: frameLeftArmPlane,
+        rightArmPlane: frameRightArmPlane,
         leftWristScore: frameLeftWristScore,
         rightWristScore: frameRightWristScore,
+        bodyShiftX: frameBodyShiftX,
+        noseScore: frameNoseScore,
+        leftEarScore: frameLeftEarScore,
+        rightEarScore: frameRightEarScore,
       });
     }),
   };
@@ -330,15 +366,16 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.view).toBe('front');
   });
 
-  it('keeps image-only captures scorable and marks view-angle diagnostics ineligible', () => {
+  it('counts image-only captures but marks view-angle diagnostics ineligible and unscorable', () => {
     const result = replayRecording(
       lateralRaiseDefinition,
       buildRecording('synthetic image-only lateral raise', fullRepPath()),
     );
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.reps[0].scorable).toBe(true);
-    expect(result.reps[0].qualityWarnings).not.toContain('front_view_uncertain');
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('front_view_uncertain');
+    expect(result.reps[0].diagnostics?.scorable).toBe(false);
     expect(result.reps[0].diagnostics?.view).toBe('unknown');
     expect(result.reps[0].diagnostics?.metrics.viewAngleDeg.eligible).toBe(false);
     expect(result.reps[0].diagnostics?.metrics.viewAngleDeg.skippedReason).toBe('world_landmarks_unavailable');
@@ -389,19 +426,44 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Raise out to your sides — avoid turning it into a front raise.');
   });
 
+  it('flags the wrong movement plane when only one arm turns into a front raise', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      withWorldContext(
+        buildRecording('synthetic one-sided front raise lateral raise', fullRepPath(), {
+          rightArmPlane: 'front',
+        }),
+      ),
+    );
+
+    const metrics = result.reps[0].diagnostics?.metrics;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toContain('Raise out to your sides — avoid turning it into a front raise.');
+    expect(metrics?.weakestPeakLateralReachRatio.value).toBeLessThan(0.45);
+    expect(metrics?.leftPeakLateralReachRatio.value).toBeGreaterThan(metrics?.rightPeakLateralReachRatio.value ?? 0);
+  });
+
   it('counts with estimated endpoints when wrists are missing but makes wrist-dependent cues ineligible', () => {
     const activeWristScore = (index: number) => (index >= 18 && index <= 96 ? 0.05 : 0.99);
     const result = replayRecording(
       lateralRaiseDefinition,
-      buildRecording('synthetic missing-wrist lateral raise', fullRepPath(), {
-        leftWristScore: activeWristScore,
-        rightWristScore: activeWristScore,
-      }),
+      withWorldContext(
+        buildRecording('synthetic missing-wrist lateral raise', fullRepPath(), {
+          leftWristScore: activeWristScore,
+          rightWristScore: activeWristScore,
+        }),
+      ),
     );
 
     const diagnostics = result.reps[0].diagnostics!;
 
     expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('arms_hidden');
+    expect(result.reps[0].qualityWarnings).not.toContain('front_view_uncertain');
+    expect(diagnostics.scorable).toBe(false);
     expect(result.feedbackMessages).not.toContain('Keep your arms straighter — avoid excessive elbow bend.');
     expect(result.feedbackMessages).not.toContain('Raise out to your sides — avoid turning it into a front raise.');
     expect(diagnostics.metrics.wristEndpointCoverage.value).toBeLessThan(0.25);
@@ -415,15 +477,19 @@ describe('Lateral Raise synthetic replay coverage', () => {
     const oneFrameDropout = (index: number) => (index === 53 ? 0.05 : 0.99);
     const result = replayRecording(
       lateralRaiseDefinition,
-      buildRecording('synthetic one-frame wrist dropout lateral raise', fullRepPath(), {
-        leftWristScore: oneFrameDropout,
-        rightWristScore: oneFrameDropout,
-      }),
+      withWorldContext(
+        buildRecording('synthetic one-frame wrist dropout lateral raise', fullRepPath(), {
+          leftWristScore: oneFrameDropout,
+          rightWristScore: oneFrameDropout,
+        }),
+      ),
     );
 
     const diagnostics = result.reps[0].diagnostics!;
 
     expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].qualityWarnings).not.toContain('arms_hidden');
     expect(result.feedbackMessages).toEqual([]);
     expect(diagnostics.metrics.wristEndpointCoverage.value).toBeGreaterThan(0.95);
     expect(diagnostics.metrics.minStraightnessRatio.eligible).toBe(true);
@@ -471,6 +537,28 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(clean.feedbackMessages).not.toContain('Stay upright — avoid swaying or leaning.');
     expect(leaned.finalRepCount).toBe(1);
     expect(leaned.feedbackMessages).toContain('Stay upright — avoid swaying or leaning.');
+  });
+
+  it('flags sustained hip sway as one torso warning without requiring lateral torso lean', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      withWorldContext(
+        buildRecording('synthetic hip-shift lateral raise', fullRepPath(), {
+          bodyShiftX: index => (index >= 45 && index <= 70 ? 0.08 : 0),
+        }),
+      ),
+    );
+
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toContain('Stay upright — avoid swaying or leaning.');
+    expect(result.reps[0].messages.filter(message => message === 'Stay upright — avoid swaying or leaning.')).toHaveLength(1);
+    expect(diagnostics.metrics.torsoLean.value).toBeLessThan(1);
+    expect(diagnostics.metrics.hipSwayRatio.eligible).toBe(true);
+    expect(diagnostics.metrics.hipSwayRatio.value).toBeGreaterThan(0.1);
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.torso_warn'].triggered).toBe(true);
   });
 
   it('groups combined torso-family score penalties under one torso cue', () => {
@@ -590,6 +678,43 @@ describe('Lateral Raise synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).not.toContain("Relax your traps — don't shrug the weight up.");
+  });
+
+  it('uses visible ear landmarks for head-relative shrug confidence when the nose is missing', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      withWorldContext(
+        buildRecording('synthetic ear-only head-relative shrug lateral raise', fullRepPath(), {
+          posture: index => (index < 18 ? 'upright' : 'shrug'),
+          noseScore: 0.05,
+        }),
+      ),
+    );
+
+    const headShrug = result.reps[0].diagnostics?.metrics.headShrugPct;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(headShrug?.eligible).toBe(true);
+    expect(headShrug?.sampleCount).toBeGreaterThanOrEqual(3);
+    expect(headShrug?.value).toBeGreaterThan(12);
+  });
+
+  it('does not treat nose dropout as a head-relative shrug', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      withWorldContext(
+        buildRecording('synthetic relaxed lateral raise with nose dropout', fullRepPath(), {
+          noseScore: index => (index < 18 ? 0.99 : 0.05),
+        }),
+      ),
+    );
+
+    const headShrug = result.reps[0].diagnostics?.metrics.headShrugPct;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain("Relax your traps — don't shrug the weight up.");
+    expect(headShrug?.eligible).toBe(false);
+    expect(headShrug?.sampleCount).toBe(0);
   });
 
   it('flags over-raising above shoulder height without punishing shoulder-level reps', () => {

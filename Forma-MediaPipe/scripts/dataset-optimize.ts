@@ -34,6 +34,7 @@ import type {
   ExerciseHeuristicConfig,
   NumericTunable,
   RepCueDiagnostic,
+  TunableSpec,
 } from '../src/utils/exercises/types';
 import {
   DATASET_ROOT,
@@ -293,6 +294,13 @@ function sourceBreakdownFor(candidates: EvaluatedCandidateSummary[]): Record<Can
     result[candidate.source] += 1;
   }
   return result;
+}
+
+function issueOptimizerSearchSpec(spec: TunableSpec): TunableSpec {
+  return {
+    ...spec,
+    tunables: spec.tunables.filter((tunable) => tunable.kind !== 'scoring'),
+  };
 }
 
 function changedTunablePaths(
@@ -795,6 +803,10 @@ function generateDiagnosticCandidates(
       fallbackReasons.push(`${entry.issueId} threshold ${entry.thresholdPath} is not tunable.`);
       continue;
     }
+    if (tunable.kind === 'scoring') {
+      fallbackReasons.push(`${entry.issueId} threshold ${entry.thresholdPath} is score-only and is not tuned by the issue optimizer.`);
+      continue;
+    }
     const currentValue = getConfigValue(definition.heuristicConfig, entry.thresholdPath);
     if (typeof currentValue !== 'number' || !Number.isFinite(currentValue)) {
       fallbackReasons.push(`${entry.issueId} threshold ${entry.thresholdPath} is not numeric.`);
@@ -962,7 +974,7 @@ export function searchExercise(
     return emptyResult;
   }
 
-  const spec = definition.tunableSpec;
+  const spec = issueOptimizerSearchSpec(definition.tunableSpec);
   const specIssues = validateTunableSpec(definition.heuristicConfig, spec);
   if (specIssues.length > 0) {
     return { ...emptyResult, specIssues };

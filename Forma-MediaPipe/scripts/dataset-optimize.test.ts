@@ -381,6 +381,33 @@ describe('dataset optimiser scaling helpers', () => {
     expect(result.candidates[0].evaluation).toHaveProperty('metrics');
   });
 
+  it('does not vary score-only tunables during issue-optimizer search', () => {
+    const definition = makeSyntheticExercise('Scoring Tunable Synthetic Candidate', {
+      thresholds: { COMPLETE_AT: 0.7 },
+      penaltyConfigs: { SCORE_ONLY: { cap: 5 } },
+    });
+    definition.tunableSpec = {
+      ...syntheticSpec,
+      exerciseName: definition.name,
+      tunables: [
+        ...syntheticSpec.tunables,
+        { path: 'penaltyConfigs.SCORE_ONLY.cap', min: 0, max: 10, step: 1, kind: 'scoring' },
+      ],
+    };
+
+    const result = searchExercise(definition, [syntheticCase(definition.name, 'train')], {
+      randomCandidates: 8,
+      refinementRounds: 1,
+      survivorCount: 4,
+      seed: 1,
+    });
+
+    expect(result.candidates.length).toBeGreaterThan(0);
+    for (const candidate of result.candidates) {
+      expect(getConfigValue(candidate.config, 'penaltyConfigs.SCORE_ONLY.cap')).toBe(5);
+    }
+  });
+
   it('generates diagnostic-derived threshold candidates from labelled metric distributions', () => {
     const definition = makeDiagnosticSyntheticExercise('Diagnostic Synthetic Threshold', {
       thresholds: { COMPLETE_AT: 0.5 },

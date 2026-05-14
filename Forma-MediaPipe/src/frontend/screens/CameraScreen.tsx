@@ -1624,7 +1624,6 @@ export const CameraScreen: React.FC = () => {
                     {'  '}Shrug: {d.shoulderShrugRatio != null ? (d.shoulderShrugRatio * 100).toFixed(1) + '%' : '–'}
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Pull ≤0.60 | Extend ≥0.90 | Elbow drive ≥30° | Shrug ≤6%</Text>
               </View>
             </View>
             );

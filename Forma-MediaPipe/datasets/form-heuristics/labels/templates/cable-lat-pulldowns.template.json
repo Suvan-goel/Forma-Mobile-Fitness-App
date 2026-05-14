@@ -17,6 +17,8 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "view": "side",
+      "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",
       "suggestedIssueIds": [],
       "suggestedFeedbackMessages": [],
@@ -24,6 +26,12 @@
     }
   ],
   "notes": "Draft label template. Copy to a real label file, review timings/issues, then set reviewStatus to reviewed.",
+  "labelingGuidance": [
+    "Side-view Cable Lat Pulldowns reps are the v1 full-form scoring target.",
+    "Usable side-diagonal Cable Lat Pulldowns captures should be marked view=side for v1; front, oblique, or unknown-view reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.",
+    "Label pull depth, top extension, elbow drive, torso lean, torso rocking, shoulder shrug, and tempo only when a clear side view supports the cue.",
+    "Do not label bar path or handle path as separate issues in v1."
+  ],
   "availableIssues": [
     {
       "issueId": "cable-lat-pulldowns.rom_short",
