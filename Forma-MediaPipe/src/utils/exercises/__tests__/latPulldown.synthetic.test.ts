@@ -88,6 +88,20 @@ function wristYForElbow(elbowY: number): number {
   return EXTENDED_WRIST_Y + (BOTTOM_WRIST_Y - EXTENDED_WRIST_Y) * p;
 }
 
+function torsoRockZForFrame(elbowPath: number[], index: number): number {
+  const current = elbowPath[index] ?? EXTENDED_ELBOW_Y;
+  if (current <= EXTENDED_ELBOW_Y + 0.02) return 0;
+
+  const previous = elbowPath[Math.max(0, index - 1)] ?? current;
+  const next = elbowPath[Math.min(elbowPath.length - 1, index + 1)] ?? current;
+  const direction = next - previous;
+  if (direction > 0.001 && current < 0.69) return 0;
+  if (direction < -0.001) {
+    return current > 0.62 ? -0.13 : 0.13;
+  }
+  return -0.13;
+}
+
 function sideKeypoints(
   side: Side,
   elbowY: number,
@@ -99,6 +113,7 @@ function sideKeypoints(
     sideGap?: number;
     shoulderShrug?: boolean;
     torsoRock?: boolean;
+    torsoRockZ?: number;
   } = {},
 ): Keypoint[] {
   const mirror = orientation === 'mirrored' ? -1 : 1;
@@ -118,7 +133,7 @@ function sideKeypoints(
   const wristY = armPath === 'arm-dominant'
     ? EXTENDED_WRIST_Y + (BOTTOM_WRIST_Y - EXTENDED_WRIST_Y) * p
     : wristYForElbow(elbowY);
-  const shoulderZ = options.torsoRock ? 0.26 * p : 0;
+  const shoulderZ = options.torsoRockZ ?? 0;
 
   return [
     kp(`${side}_shoulder`, shoulderX, shoulderY, score, shoulderZ),
@@ -140,6 +155,7 @@ function makeFrame(
     sideGap?: number;
     shoulderShrug?: boolean;
     torsoRock?: boolean;
+    torsoRockZ?: number;
   } = {},
 ): LandmarkRecording['frames'][number] {
   const otherSide: Side = side === 'left' ? 'right' : 'left';
@@ -164,6 +180,7 @@ function makeFrameWithScores(
     sideGap?: number;
     shoulderShrug?: boolean;
     torsoRock?: boolean;
+    torsoRockZ?: number;
   } = {},
 ): LandmarkRecording['frames'][number] {
   return {
@@ -213,12 +230,14 @@ function buildRecording(
       expectedScoreRange: [0, 100],
     },
     frames: elbowPath.map((elbowY, index) => {
+      const torsoRockZ = torsoRock ? torsoRockZForFrame(elbowPath, index) : undefined;
+      const indexedFrameOptions = { ...frameOptions, torsoRockZ };
       if (sideSwitchFrame !== undefined && index >= sideSwitchFrame) {
         return side === 'left'
-          ? makeFrameWithScores(index * FRAME_MS, elbowY, orientation, posture, 0.7, 0.99, frameOptions)
-          : makeFrameWithScores(index * FRAME_MS, elbowY, orientation, posture, 0.99, 0.7, frameOptions);
+          ? makeFrameWithScores(index * FRAME_MS, elbowY, orientation, posture, 0.7, 0.99, indexedFrameOptions)
+          : makeFrameWithScores(index * FRAME_MS, elbowY, orientation, posture, 0.99, 0.7, indexedFrameOptions);
       }
-      return makeFrame(index * FRAME_MS, elbowY, side, orientation, posture, hiddenSideScore, frameOptions);
+      return makeFrame(index * FRAME_MS, elbowY, side, orientation, posture, hiddenSideScore, indexedFrameOptions);
     }),
   };
 }
@@ -321,6 +340,22 @@ const SHOULDER_ONLY_SCORING_DEFINITION = latPulldownDefinition.createVariant!({
     TORSO_ROCK: { cap: 0 },
     TEMPO_PULL: { cap: 0 },
     TEMPO_RETURN: { cap: 0 },
+  },
+});
+
+const LOOSE_TEMPO_SCORING_DEFINITION = latPulldownDefinition.createVariant!({
+  formThresholds: {
+    TEMPO_PULL_MIN: 0.05,
+    TEMPO_RETURN_MIN: 0.05,
+  },
+  penaltyConfigs: {
+    PULL_ROM: { cap: 0 },
+    EXTENSION_ROM: { cap: 0 },
+    ELBOW_DRIVE: { cap: 0 },
+    TORSO_LEAN: { cap: 0 },
+    TORSO_ABSOLUTE: { cap: 0 },
+    TORSO_ROCK: { cap: 0 },
+    SHOULDER_SHRUG: { cap: 0 },
   },
 });
 
@@ -477,6 +512,31 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
     expect(result.reps[0].diagnostics?.metrics.frontishViewConfirmed.value).toBe(1);
+    expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
+  });
+
+  it('does not treat one-arm visible front-ish geometry as a scorable side view', () => {
+    let recording = buildRecording('synthetic one-arm visible front-ish lat pulldown', fullRepPath(), {
+      side: 'right',
+      hiddenSideScore: 0.99,
+      sideGap: 0.36,
+    });
+    recording = withKeypointScore(recording, 'left_elbow', 0.05, 0);
+    recording = withKeypointScore(recording, 'left_wrist', 0.05, 0);
+
+    const result = replayRecording(
+      latPulldownDefinition,
+      recording,
+      { confidenceGating: true },
+    );
+
+    const metrics = result.reps[0].diagnostics?.metrics;
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].diagnostics?.view).toBe('front');
+    expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
+    expect(metrics?.bilateralSampleCount.value).toBe(0);
+    expect(metrics?.frontishViewConfirmed.value).toBe(1);
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
 
@@ -661,8 +721,10 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     );
 
     expect(stableLean.feedbackMessages).not.toContain('Keep your torso steady through the pulldown.');
+    expect(stableLean.reps[0].diagnostics?.metrics.torsoRockDelta.value).toBe(0);
     expect(rocking.finalRepCount).toBe(1);
     expect(rocking.feedbackMessages).toContain('Keep your torso steady through the pulldown.');
+    expect(rocking.feedbackMessages).not.toContain('Stay upright — avoid leaning back excessively.');
   });
 
   it('keeps torso cues ineligible and unpenalized with insufficient torso samples', () => {
@@ -703,5 +765,16 @@ describe('Lat Pulldown synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain('Slow down the pull — control the descent.');
+  });
+
+  it('scores tempo from the tuned tempo thresholds instead of fixed penalty deadzones', () => {
+    const result = replayRecording(
+      LOOSE_TEMPO_SCORING_DEFINITION,
+      buildRecording('synthetic loose-tempo lat pulldown', fastReturnPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBe(100);
+    expect(result.feedbackMessages).not.toContain('Control the return — resist the weight on the way up.');
   });
 });

@@ -1679,19 +1679,30 @@ export const CameraScreen: React.FC = () => {
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Knee: {d.knee != null ? d.knee.toFixed(1) + '°' : '–'}
-                  {'  '}Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                  Ratio: {d.fastRatio != null ? d.fastRatio.toFixed(3) : d.ratio != null ? d.ratio.toFixed(3) : '–'}
+                  {'  '}Knee: {d.kneeAngle != null ? d.kneeAngle.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                  {'  '}Hip rise: {d.hipRiseRatio != null ? d.hipRiseRatio.toFixed(3) : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
                   Torso dev: {d.torsoDev != null ? d.torsoDev.toFixed(1) + '°' : '–'}
                 </Text>
-                {d.kneeMin != null && (
+                {d.kneeAngleMin != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Knee: {d.kneeMin.toFixed(1)}°–{d.kneeMax != null ? d.kneeMax.toFixed(1) : '–'}°
-                    {'  '}Hip Δ: {d.hipDelta != null ? d.hipDelta.toFixed(1) : '–'}°
+                    Rep ratio: {d.ratioMin != null ? d.ratioMin.toFixed(3) : '–'}–{d.ratioMax != null ? d.ratioMax.toFixed(3) : '–'}
+                    {'  '}Knee: {d.kneeAngleMin.toFixed(1)}°–{d.kneeAngleMax != null ? d.kneeAngleMax.toFixed(1) : '–'}°
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Extend &gt;155° | Start &lt;105° | Hip lift warn 18°</Text>
+                {(d.hipDelta != null || d.hipRiseMax != null || d.topHoldMs != null) && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Hip Δ: {d.hipDelta != null ? d.hipDelta.toFixed(1) : '–'}°
+                    {'  '}Hip rise max: {d.hipRiseMax != null ? d.hipRiseMax.toFixed(3) : '–'}
+                    {'  '}Hold: {d.topHoldMs != null ? Math.round(d.topHoldMs) + 'ms' : '–'}
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Side view required for form scoring</Text>
               </View>
             </View>
             );

@@ -127,6 +127,7 @@ const FORM_METRIC_MIN_SAMPLES = 3;
 const SIDE_VIEW_MIN_SAMPLES = 5;
 const BILATERAL_MIN_SAMPLES = 5;
 const WORLD_IMAGE_REACH_RATIO_MAX_DELTA = 0.2;
+const WORLD_IMAGE_TORSO_DEV_MAX_DELTA = 12;
 
 const DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -606,6 +607,30 @@ function calculateSelectedSideTorsoDeviation(
   return Math.atan2(vz, Math.abs(vy)) * 57.29577951308232;
 }
 
+function torsoDeviationForSource(
+  keypoints: Keypoint[],
+  side: 'left' | 'right',
+): number | null {
+  return calculateSagittalTorsoDeviation(keypoints) ?? calculateSelectedSideTorsoDeviation(keypoints, side);
+}
+
+function sourceMatchesImageTorsoDeviation(
+  source: LandmarkSource,
+  frameContext: ExerciseFrameContext | undefined,
+  side: 'left' | 'right',
+): boolean {
+  if (source.name !== 'world') return true;
+
+  const imageKeypoints = frameContext?.imageKeypoints;
+  if (!imageKeypoints) return true;
+
+  const imageTorsoDev = torsoDeviationForSource(imageKeypoints, side);
+  const sourceTorsoDev = torsoDeviationForSource(source.keypoints, side);
+  if (imageTorsoDev === null || sourceTorsoDev === null) return true;
+
+  return Math.abs(sourceTorsoDev - imageTorsoDev) <= WORLD_IMAGE_TORSO_DEV_MAX_DELTA;
+}
+
 function calculateTorsoDeviationSample(
   frameContext: ExerciseFrameContext | undefined,
   fallbackKeypoints: Keypoint[],
@@ -614,6 +639,7 @@ function calculateTorsoDeviationSample(
   const sources = landmarkSources(frameContext, fallbackKeypoints);
   for (const source of sources) {
     if (!sourceMatchesImageReach(source, frameContext, side)) continue;
+    if (!sourceMatchesImageTorsoDeviation(source, frameContext, side)) continue;
     const value = calculateSagittalTorsoDeviation(source.keypoints);
     if (isFiniteMetric(value)) {
       return { value, source: source.name, keypoints: source.keypoints, method: 'sagittal' };
@@ -622,6 +648,7 @@ function calculateTorsoDeviationSample(
 
   for (const source of sources) {
     if (!sourceMatchesImageReach(source, frameContext, side)) continue;
+    if (!sourceMatchesImageTorsoDeviation(source, frameContext, side)) continue;
     const value = calculateSelectedSideTorsoDeviation(source.keypoints, side);
     if (isFiniteMetric(value)) {
       return { value, source: source.name, keypoints: source.keypoints, method: 'selected_side' };
@@ -789,6 +816,13 @@ function hasAnyTorsoWarnDiagnostics(repWindow: RepWindow): boolean {
   return hasTorsoDeviationDiagnostics(repWindow) || hasTorsoLeanDiagnostics(repWindow);
 }
 
+function torsoRockDelta(repWindow: RepWindow): number {
+  if (repWindow.maxTorsoLeanBackDelta <= 0 || repWindow.maxTorsoForwardDelta <= 0) {
+    return 0;
+  }
+  return repWindow.maxTorsoLeanBackDelta + repWindow.maxTorsoForwardDelta;
+}
+
 function torsoWarnValue(repWindow: RepWindow): number | null {
   const values: number[] = [];
   if (hasTorsoDeviationDiagnostics(repWindow)) values.push(repWindow.maxTorsoLeanBackDelta);
@@ -896,7 +930,7 @@ function computeLatPulldownScore(repWindow: RepWindow): number {
   // 4. Torso and shoulder mechanics.
   if (hasTorsoDeviationDiagnostics(repWindow)) {
     penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
-    penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_ROCK });
+    penalties.push({ value: torsoRockDelta(repWindow), config: PENALTY_CONFIGS.TORSO_ROCK });
   }
   if (hasTorsoLeanDiagnostics(repWindow)) {
     penalties.push({ value: repWindow.maxTorsoAbsoluteBackLean, config: PENALTY_CONFIGS.TORSO_ABSOLUTE });
@@ -910,12 +944,12 @@ function computeLatPulldownScore(repWindow: RepWindow): number {
     const tPull = repWindow.tBottom - repWindow.tStart;
     const tReturn = repWindow.tEnd - repWindow.tBottom;
 
-    if (tPull > 0 && tPull < PENALTY_CONFIGS.TEMPO_PULL.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_PULL.deadzone - tPull;
+    if (tPull > 0 && tPull < FORM_THRESHOLDS.TEMPO_PULL_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_PULL_MIN - tPull;
       penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_PULL, deadzone: 0 } });
     }
-    if (tReturn > 0 && tReturn < PENALTY_CONFIGS.TEMPO_RETURN.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_RETURN.deadzone - tReturn;
+    if (tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_RETURN_MIN - tReturn;
       penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_RETURN, deadzone: 0 } });
     }
   }
@@ -951,7 +985,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
 
   if (
     hasTorsoDeviationDiagnostics(repWindow) &&
-    repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN
+    torsoRockDelta(repWindow) > FORM_THRESHOLDS.TORSO_ROCK_WARN
   ) {
     messages.push('Keep your torso steady through the pulldown.');
   }
@@ -1026,7 +1060,7 @@ function buildLatPulldownDiagnostics(
         sampleCount: repWindow.torsoDevSamples,
         skippedReason: 'insufficient_torso_deviation_samples',
       }),
-      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoDev, {
+      diagnosticMetric('torsoRockDelta', torsoRockDelta(repWindow), {
         unit: 'degrees',
         eligible: hasTorsoDeviation,
         sampleCount: repWindow.torsoDevSamples,
@@ -1168,11 +1202,11 @@ function buildLatPulldownDiagnostics(
         issueId: 'cable-lat-pulldowns.torso_rocking',
         metricKeys: ['torsoRockDelta'],
         direction: 'above',
-        value: repWindow.maxTorsoDev,
+        value: torsoRockDelta(repWindow),
         thresholdPath: 'formThresholds.TORSO_ROCK_WARN',
         thresholdValue: FORM_THRESHOLDS.TORSO_ROCK_WARN,
         eligible: hasTorsoDeviation,
-        triggered: hasTorsoDeviation && repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        triggered: hasTorsoDeviation && torsoRockDelta(repWindow) > FORM_THRESHOLDS.TORSO_ROCK_WARN,
         support: repWindow.torsoDevSamples,
         skippedReason: 'insufficient_torso_deviation_samples',
       }),
@@ -1541,7 +1575,7 @@ function getDebugInfo(state: LatPulldownState): LatPulldownDebugInfo {
     upperArmDriveDelta: w ? fmt(w.maxUpperArmDriveDelta) : null,
     torsoLeanBackDelta: w ? fmt(w.maxTorsoLeanBackDelta) : null,
     torsoForwardDelta: w ? fmt(w.maxTorsoForwardDelta) : null,
-    torsoRockDelta: w ? fmt(w.maxTorsoDev) : null,
+    torsoRockDelta: w ? fmt(torsoRockDelta(w)) : null,
     torsoAbsoluteBackLean: w ? fmt(w.maxTorsoAbsoluteBackLean) : null,
     shoulderShrugRatio: w ? fmt(w.maxShoulderShrugRatio) : null,
     sideViewConfidence: w ? fmt(averageSideViewConfidence(w)) : null,

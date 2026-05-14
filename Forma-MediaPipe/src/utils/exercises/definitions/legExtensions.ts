@@ -27,7 +27,7 @@ import {
 
 import { SmoothedAngleTracker } from '../shared/SmoothedAngleTracker';
 import { WarmupGate } from '../shared/WarmupGate';
-import { computeScore, type PenaltyConfig } from '../shared/scoring';
+import { computePenaltyPoints, computeScoreFromPenaltyPoints, type PenaltyConfig } from '../shared/scoring';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
@@ -253,7 +253,8 @@ const FORM_THRESHOLDS = {
  * | Tempo extend         | 8   | 0               | 60    | concentric time deficit               |
  * | Tempo return         | 10  | 0               | 40    | eccentric time deficit                |
  *
- * Max total penalty: 128 -> worst possible rep = 0.
+ * Ratio+knee ROM and hip-angle+hip-rise support metrics are grouped when
+ * scoring so one visible issue does not stack duplicate penalties.
  */
 const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 45, deadzone: 0, scale: 800 } as PenaltyConfig,
@@ -307,12 +308,13 @@ function upsertLegExtensionTunable(tunable: NumericTunable): void {
   { path: 'formThresholds.TOP_HOLD_MAX_RATIO_VELOCITY', min: 0.05, max: 0.6, step: 0.05, kind: 'feedback' },
   { path: 'formThresholds.TOP_HOLD_MAX_KNEE_VELOCITY', min: 20, max: 160, step: 10, kind: 'feedback' },
   { path: 'formThresholds.KNEE_EXTENSION_FAIL', min: 140, max: 175, step: 1, kind: 'feedback' },
-  { path: 'formThresholds.KNEE_EXTENSION_IDEAL', min: 150, max: 180, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_EXTENSION_IDEAL', min: 150, max: 180, step: 1, kind: 'scoring' },
   { path: 'formThresholds.KNEE_FLEXION_FAIL', min: 80, max: 130, step: 1, kind: 'feedback' },
   { path: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', min: 0.2, max: 0.75, step: 0.05, kind: 'feedback' },
   { path: 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', min: 0.1, max: 0.5, step: 0.05, kind: 'feedback' },
   { path: 'formThresholds.SIDE_VIEW_MIN_SAMPLES', min: 3, max: 12, step: 1, kind: 'feedback' },
   { path: 'thresholds.MIN_PARTIAL_KNEE_ROM', min: 8, max: 45, step: 1, kind: 'fsm' },
+  { path: 'thresholds.ROBUST_EXTREMA_MIN_SAMPLES', min: 2, max: 6, step: 1, kind: 'fsm' },
   { path: 'thresholds.LOCKOUT_CONFIRM_MS', min: 30, max: 200, step: 10, kind: 'fsm' },
   { path: 'thresholds.RETURN_CONFIRM_MS', min: 30, max: 200, step: 10, kind: 'fsm' },
   { path: 'thresholds.BASELINE_MIN_SAMPLES', min: 1, max: 12, step: 1, kind: 'fsm' },
@@ -1089,39 +1091,54 @@ function isMeaningfulLegExtensionPartialRep(repWindow: RepWindow, duration: numb
 }
 
 function computeLegExtensionScore(repWindow: RepWindow): number {
-  const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
+  const penaltyPoints: number[] = [];
+  const pushPenalty = (value: number, config: PenaltyConfig) => {
+    penaltyPoints.push(computePenaltyPoints(value, config));
+  };
 
   // 1. ROM -- extension: ideal maxRatio is 0.97+. Shortfall = max(0, 0.97 - maxRatio)
   const extensionShortfall = Math.max(0, 0.97 - repWindow.maxRatio);
-  penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  let extensionPenalty = computePenaltyPoints(extensionShortfall, PENALTY_CONFIGS.EXTENSION_ROM);
   if (hasKneeExtensionMetric(repWindow)) {
     const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.maxKneeAngle);
-    penalties.push({ value: kneeExtensionShortfall, config: PENALTY_CONFIGS.KNEE_EXTENSION_ROM });
+    extensionPenalty = Math.max(
+      extensionPenalty,
+      computePenaltyPoints(kneeExtensionShortfall, PENALTY_CONFIGS.KNEE_EXTENSION_ROM),
+    );
   }
+  penaltyPoints.push(extensionPenalty);
 
   // 2. ROM -- flexion: ideal minRatio is 0.58 or below. Excess = max(0, minRatio - 0.58)
   const flexionExcess = Math.max(0, repWindow.minRatio - 0.58);
-  penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
+  let flexionPenalty = computePenaltyPoints(flexionExcess, PENALTY_CONFIGS.FLEXION_ROM);
   if (hasKneeFlexionMetric(repWindow)) {
     const kneeFlexionExcess = Math.max(0, repWindow.minKneeAngle - KNEE_FLEXION_IDEAL);
-    penalties.push({ value: kneeFlexionExcess, config: PENALTY_CONFIGS.KNEE_FLEXION_ROM });
+    flexionPenalty = Math.max(
+      flexionPenalty,
+      computePenaltyPoints(kneeFlexionExcess, PENALTY_CONFIGS.KNEE_FLEXION_ROM),
+    );
   }
+  penaltyPoints.push(flexionPenalty);
 
   // 3. Torso lean
   if (hasTorsoMetric(repWindow)) {
-    penalties.push({ value: repWindow.maxTorsoDev, config: PENALTY_CONFIGS.TORSO_LEAN });
+    pushPenalty(repWindow.maxTorsoDev, PENALTY_CONFIGS.TORSO_LEAN);
   }
 
   // 4. Hip lift (hip angle delta from baseline)
-  penalties.push({ value: repWindow.maxHipDelta, config: PENALTY_CONFIGS.HIP_LIFT });
+  let hipLiftPenalty = computePenaltyPoints(repWindow.maxHipDelta, PENALTY_CONFIGS.HIP_LIFT);
   if (hasHipRiseMetric(repWindow)) {
-    penalties.push({ value: repWindow.maxHipRiseRatio, config: PENALTY_CONFIGS.HIP_RISE });
+    hipLiftPenalty = Math.max(
+      hipLiftPenalty,
+      computePenaltyPoints(repWindow.maxHipRiseRatio, PENALTY_CONFIGS.HIP_RISE),
+    );
   }
+  penaltyPoints.push(hipLiftPenalty);
 
   const hold = topHoldSeconds(repWindow);
   if (hold !== null && !isLockoutShort(repWindow) && hold < FORM_THRESHOLDS.TOP_HOLD_MIN) {
     const deficit = FORM_THRESHOLDS.TOP_HOLD_MIN - hold;
-    penalties.push({ value: deficit, config: PENALTY_CONFIGS.TOP_HOLD });
+    pushPenalty(deficit, PENALTY_CONFIGS.TOP_HOLD);
   }
 
   // 5. Tempo
@@ -1131,15 +1148,15 @@ function computeLegExtensionScore(repWindow: RepWindow): number {
     // Penalize if too fast using the same thresholds that drive feedback.
     if (tExtend > 0 && tExtend < FORM_THRESHOLDS.TEMPO_EXTEND_MIN) {
       const deficit = FORM_THRESHOLDS.TEMPO_EXTEND_MIN - tExtend;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_EXTEND });
+      pushPenalty(deficit, PENALTY_CONFIGS.TEMPO_EXTEND);
     }
     if (tReturn > 0 && tReturn < FORM_THRESHOLDS.TEMPO_RETURN_MIN) {
       const deficit = FORM_THRESHOLDS.TEMPO_RETURN_MIN - tReturn;
-      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_RETURN });
+      pushPenalty(deficit, PENALTY_CONFIGS.TEMPO_RETURN);
     }
   }
 
-  return computeScore(penalties);
+  return computeScoreFromPenaltyPoints(penaltyPoints);
 }
 
 // ============================================================================
@@ -1664,7 +1681,10 @@ function updateLegExtensionState(
   currentState: LegExtensionState,
   frameContext?: ExerciseFrameContext,
 ): LegExtensionState {
-  const t = Date.now() / 1000;
+  const timestampMs = typeof frameContext?.timestampMs === 'number' && Number.isFinite(frameContext.timestampMs)
+    ? frameContext.timestampMs
+    : Date.now();
+  const t = timestampMs / 1000;
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate
@@ -1709,13 +1729,13 @@ function updateLegExtensionState(
   }
 
   // Smooth values
-  const smoothedRatio = currentState.ratioTracker.push(rawRatio);
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio, undefined, timestampMs);
   const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedHip = rawHip !== null
-    ? currentState.hipTracker.push(rawHip)
+    ? currentState.hipTracker.push(rawHip, undefined, timestampMs)
     : currentState.hipTracker.value;
   const smoothedTorso = rawTorsoDev !== null
-    ? currentState.torsoTracker.push(rawTorsoDev)
+    ? currentState.torsoTracker.push(rawTorsoDev, undefined, timestampMs)
     : currentState.torsoTracker.value;
 
   const newState: LegExtensionState = {
