@@ -300,6 +300,12 @@ export function formatEvaluationSummary(evaluation: DatasetEvaluation): string {
     `View accuracy: ${formatMetricPercent(evaluation.metrics.viewAccuracy)} (${evaluation.totals.viewCorrectReps}/${evaluation.totals.viewEvaluatedReps})`,
     `Scorable accuracy: ${formatMetricPercent(evaluation.metrics.scorableAccuracy)} (${evaluation.totals.scorableCorrectReps}/${evaluation.totals.scorableEvaluatedReps})`,
   ];
+  if (evaluation.totals.scoreEvaluatedReps > 0) {
+    lines.push(
+      `Score in expected range: ${formatMetricPercent(evaluation.metrics.scoreInRangeRate)} (${evaluation.totals.scoreInRangeReps}/${evaluation.totals.scoreEvaluatedReps})`,
+      `Score mean absolute miss: ${evaluation.metrics.scoreMeanAbsoluteMiss.toFixed(2)}`,
+    );
+  }
   if (evaluation.qualityCoverage) {
     lines.push(
       `Quality scorable reps: ${evaluation.qualityCoverage.scoredReps}/${evaluation.qualityCoverage.totalReps} (${formatMetricPercent(evaluation.qualityCoverage.scorableRate)})`,

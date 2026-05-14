@@ -291,6 +291,25 @@ export function validateLabelFile(
         message: 'suggestedScore must be a number between 0 and 100.',
       });
     }
+    if (rep.expectedScoreRange !== undefined) {
+      const range = rep.expectedScoreRange;
+      const min = Array.isArray(range) ? range[0] : undefined;
+      const max = Array.isArray(range) ? range[1] : undefined;
+      const validRange =
+        Array.isArray(range) &&
+        range.length === 2 &&
+        isFiniteNumber(min) &&
+        isFiniteNumber(max) &&
+        min >= 0 &&
+        max <= 100 &&
+        min <= max;
+      if (!validRange) {
+        issues.push({
+          path: `${path}.expectedScoreRange`,
+          message: 'expectedScoreRange must be an ordered [min, max] number range within 0..100.',
+        });
+      }
+    }
   });
 
   return issues;

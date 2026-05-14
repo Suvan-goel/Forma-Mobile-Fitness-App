@@ -2,6 +2,7 @@ import { latPulldownDefinition } from '../definitions/latPulldown';
 import { replayRecording, replayRecordingVerbose } from './replayRunner';
 import type { LandmarkRecording } from './types';
 import type { Keypoint } from '../../poseAnalysis';
+import type { ExerciseDefinition, ExerciseState } from '../types';
 
 type Side = 'left' | 'right';
 type Orientation = 'front' | 'mirrored';
@@ -240,6 +241,42 @@ function buildRecording(
       return makeFrame(index * FRAME_MS, elbowY, side, orientation, posture, hiddenSideScore, indexedFrameOptions);
     }),
   };
+}
+
+function withFrameTimestamps(
+  recording: LandmarkRecording,
+  timestampForFrame: (frame: LandmarkRecording['frames'][number], index: number) => number,
+): LandmarkRecording {
+  return {
+    ...recording,
+    frames: recording.frames.map((frame, index) => ({
+      ...frame,
+      timestamp: timestampForFrame(frame, index),
+    })),
+  };
+}
+
+function runDefinitionDirect(
+  definition: ExerciseDefinition,
+  recording: LandmarkRecording,
+  dateNowForFrame: (frame: LandmarkRecording['frames'][number], index: number) => number,
+): ExerciseState {
+  const originalDateNow = Date.now;
+  let state = definition.createState();
+  try {
+    recording.frames.forEach((frame, index) => {
+      Date.now = () => dateNowForFrame(frame, index);
+      state = definition.update(frame.keypoints, state, {
+        imageKeypoints: frame.imageKeypoints ?? frame.keypoints,
+        worldKeypoints: frame.worldKeypoints,
+        primarySource: frame.worldKeypoints ? 'world' : 'image',
+        timestampMs: frame.timestamp,
+      });
+    });
+  } finally {
+    Date.now = originalDateNow;
+  }
+  return state;
 }
 
 function buildWorldStaticImageRecording(
@@ -512,6 +549,7 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
     expect(result.reps[0].diagnostics?.metrics.frontishViewConfirmed.value).toBe(1);
+    expect(result.reps[0].issueIds).toEqual([]);
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
 
@@ -537,6 +575,7 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
     expect(metrics?.bilateralSampleCount.value).toBe(0);
     expect(metrics?.frontishViewConfirmed.value).toBe(1);
+    expect(result.reps[0].issueIds).toEqual([]);
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
 
@@ -575,6 +614,7 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.view).toBe('unknown');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('view_unknown');
     expect(result.reps[0].diagnostics?.metrics.viewUnknown.value).toBe(1);
+    expect(result.reps[0].issueIds).toEqual([]);
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
 
@@ -765,6 +805,33 @@ describe('Lat Pulldown synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain('Slow down the pull — control the descent.');
+  });
+
+  it('uses native frame timestamps for rep timing when Date.now is frozen', () => {
+    const state = runDefinitionDirect(
+      latPulldownDefinition,
+      buildRecording('synthetic native-timestamp lat pulldown', fullRepPath()),
+      () => 123456,
+    );
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.messages).not.toContain('Slow down the pull — control the descent.');
+    expect(state.lastRepResult?.messages).not.toContain('Control the return — resist the weight on the way up.');
+  });
+
+  it('uses irregular native frame intervals for tempo feedback', () => {
+    const recording = withFrameTimestamps(
+      buildRecording('synthetic stretched-return native-timestamp lat pulldown', fastReturnPath()),
+      (_frame, index) => (index <= 35 ? index * FRAME_MS : 35 * FRAME_MS + (index - 35) * 300),
+    );
+    const state = runDefinitionDirect(
+      latPulldownDefinition,
+      recording,
+      (_frame, index) => index * FRAME_MS,
+    );
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.messages).not.toContain('Control the return — resist the weight on the way up.');
   });
 
   it('scores tempo from the tuned tempo thresholds instead of fixed penalty deadzones', () => {

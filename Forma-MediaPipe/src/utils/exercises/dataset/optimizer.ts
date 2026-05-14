@@ -12,7 +12,7 @@ import type {
 } from '../types';
 import type { DatasetEvaluation } from './types';
 
-type EvaluationScoringInput = Pick<DatasetEvaluation, 'metrics'>;
+type EvaluationScoringInput = Pick<DatasetEvaluation, 'metrics' | 'totals'>;
 
 export interface CandidateConfig {
   id: string;
@@ -180,7 +180,9 @@ export function refineCandidate(
 export function scoreEvaluation(evaluation: EvaluationScoringInput): number {
   return (
     evaluation.metrics.repCountAccuracy * 10000 +
-    evaluation.metrics.issueF1 * 100 -
+    evaluation.metrics.issueF1 * 100 +
+    evaluation.metrics.scoreInRangeRate * 3 -
+    evaluation.metrics.scoreMeanAbsoluteMiss * 0.1 -
     evaluation.metrics.cleanRepFalsePositiveRate +
     evaluation.metrics.scorableAccuracy * 10 +
     evaluation.metrics.viewAccuracy * 5
@@ -191,6 +193,8 @@ export function compareEvaluations(a: EvaluationScoringInput, b: EvaluationScori
   return (
     a.metrics.repCountAccuracy - b.metrics.repCountAccuracy ||
     a.metrics.issueF1 - b.metrics.issueF1 ||
+    a.metrics.scoreInRangeRate - b.metrics.scoreInRangeRate ||
+    b.metrics.scoreMeanAbsoluteMiss - a.metrics.scoreMeanAbsoluteMiss ||
     a.metrics.scorableAccuracy - b.metrics.scorableAccuracy ||
     a.metrics.viewAccuracy - b.metrics.viewAccuracy ||
     b.metrics.cleanRepFalsePositiveRate - a.metrics.cleanRepFalsePositiveRate
@@ -284,6 +288,54 @@ export function shouldApplyWinningConfig(args: {
       return {
         shouldApply: false,
         reason: `Rejected: test scorable accuracy regressed by ${scorableRegression.toFixed(4)}.`,
+      };
+    }
+
+    const maxScoreInRangeRegression = gates.maxTestScoreInRangeRegression ?? 0.05;
+    const scoreInRangeRegression =
+      args.baselineTest.metrics.scoreInRangeRate - args.winnerTest.metrics.scoreInRangeRate;
+    if (scoreInRangeRegression > maxScoreInRangeRegression) {
+      return {
+        shouldApply: false,
+        reason: `Rejected: test score in-range rate regressed by ${scoreInRangeRegression.toFixed(4)}.`,
+      };
+    }
+
+    const maxScoreMeanMissRegression = gates.maxTestScoreMeanMissRegression ?? 2.5;
+    const scoreMeanMissRegression =
+      args.winnerTest.metrics.scoreMeanAbsoluteMiss - args.baselineTest.metrics.scoreMeanAbsoluteMiss;
+    if (scoreMeanMissRegression > maxScoreMeanMissRegression) {
+      return {
+        shouldApply: false,
+        reason: `Rejected: test score mean miss regressed by ${scoreMeanMissRegression.toFixed(4)}.`,
+      };
+    }
+
+    const minScoreEvaluatedReps = gates.minTestScoreEvaluatedReps ?? 0;
+    if (args.winnerTest.totals.scoreEvaluatedReps < minScoreEvaluatedReps) {
+      return {
+        shouldApply: false,
+        reason: `Rejected: test score labels ${args.winnerTest.totals.scoreEvaluatedReps}/${minScoreEvaluatedReps}.`,
+      };
+    }
+
+    if (
+      gates.minTestScoreInRangeRate !== undefined &&
+      args.winnerTest.metrics.scoreInRangeRate < gates.minTestScoreInRangeRate
+    ) {
+      return {
+        shouldApply: false,
+        reason: `Rejected: test score in-range rate ${args.winnerTest.metrics.scoreInRangeRate.toFixed(4)} < ${gates.minTestScoreInRangeRate}.`,
+      };
+    }
+
+    if (
+      gates.maxTestScoreMeanAbsoluteMiss !== undefined &&
+      args.winnerTest.metrics.scoreMeanAbsoluteMiss > gates.maxTestScoreMeanAbsoluteMiss
+    ) {
+      return {
+        shouldApply: false,
+        reason: `Rejected: test score mean miss ${args.winnerTest.metrics.scoreMeanAbsoluteMiss.toFixed(4)} > ${gates.maxTestScoreMeanAbsoluteMiss}.`,
       };
     }
   }

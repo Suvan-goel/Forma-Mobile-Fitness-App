@@ -45,6 +45,7 @@ import type {
   ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
+  NumericTunable,
   RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
@@ -144,6 +145,33 @@ const LAT_PULLDOWN_TUNABLE_SPEC = createDefaultTunableSpec(
   'Cable Lat Pulldowns',
   DEFAULT_LAT_PULLDOWN_HEURISTIC_CONFIG,
 );
+
+function upsertLatPulldownTunable(tunable: NumericTunable): void {
+  const index = LAT_PULLDOWN_TUNABLE_SPEC.tunables.findIndex((entry) => entry.path === tunable.path);
+  if (index >= 0) LAT_PULLDOWN_TUNABLE_SPEC.tunables[index] = tunable;
+  else LAT_PULLDOWN_TUNABLE_SPEC.tunables.push(tunable);
+}
+
+[
+  { path: 'penaltyConfigs.PULL_ROM.cap', min: 0, max: 50, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.EXTENSION_ROM.cap', min: 0, max: 35, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.ELBOW_DRIVE.cap', min: 0, max: 30, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_LEAN.cap', min: 0, max: 30, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_ABSOLUTE.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TORSO_ROCK.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.SHOULDER_SHRUG.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_PULL.cap', min: 0, max: 20, step: 1, kind: 'scoring' },
+  { path: 'penaltyConfigs.TEMPO_RETURN.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
+].forEach((tunable) => upsertLatPulldownTunable(tunable as NumericTunable));
+LAT_PULLDOWN_TUNABLE_SPEC.search = {
+  ...LAT_PULLDOWN_TUNABLE_SPEC.search,
+  applyGates: {
+    ...LAT_PULLDOWN_TUNABLE_SPEC.search?.applyGates,
+    minTestScoreEvaluatedReps: 1,
+    minTestScoreInRangeRate: 0.85,
+    maxTestScoreMeanAbsoluteMiss: 7.5,
+  },
+};
 LAT_PULLDOWN_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'cable-lat-pulldowns.rom_short', metricKey: 'pullDepthRatio', thresholdPath: 'formThresholds.PULL_ROM_FAIL', direction: 'above' },
   { issueId: 'cable-lat-pulldowns.lockout_short', metricKey: 'extensionRatio', thresholdPath: 'formThresholds.EXTENSION_ROM_FAIL', direction: 'below' },
@@ -1276,7 +1304,11 @@ function updateLatPulldownState(
   state: LatPulldownState,
   frameContext?: ExerciseFrameContext,
 ): LatPulldownState {
-  const t = Date.now() / 1000;
+  const timestampMs =
+    typeof frameContext?.timestampMs === 'number' && Number.isFinite(frameContext.timestampMs)
+      ? frameContext.timestampMs
+      : Date.now();
+  const t = timestampMs / 1000;
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // -- Warmup gate --
@@ -1335,16 +1367,16 @@ function updateLatPulldownState(
   }
 
   // -- Smooth values --
-  const smoothedRatio = state.ratioTracker.push(rawRatio, armConf);
+  const smoothedRatio = state.ratioTracker.push(rawRatio, armConf, timestampMs);
   const fastRatio = state.ratioTracker.medianValue;
   const smoothedTorsoLean = rawTorsoLean !== null
-    ? state.torsoLeanTracker.push(rawTorsoLean, torsoConf)
+    ? state.torsoLeanTracker.push(rawTorsoLean, torsoConf, timestampMs)
     : state.torsoLeanTracker.value;
   const smoothedUpperArmDrive = rawUpperArmDrive !== null
-    ? state.upperArmDriveTracker.push(rawUpperArmDrive)
+    ? state.upperArmDriveTracker.push(rawUpperArmDrive, undefined, timestampMs)
     : state.upperArmDriveTracker.value;
   const smoothedTorsoDev = rawTorsoDev !== null
-    ? state.torsoDevTracker.push(rawTorsoDev)
+    ? state.torsoDevTracker.push(rawTorsoDev, undefined, timestampMs)
     : state.torsoDevTracker.value;
 
   if (isNaN(fastRatio)) return state;

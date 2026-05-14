@@ -200,6 +200,11 @@ export interface TunableSpec {
       maxTestCleanFalsePositiveRegression?: number;
       maxTestViewAccuracyRegression?: number;
       maxTestScorableAccuracyRegression?: number;
+      maxTestScoreInRangeRegression?: number;
+      maxTestScoreMeanMissRegression?: number;
+      minTestScoreEvaluatedReps?: number;
+      minTestScoreInRangeRate?: number;
+      maxTestScoreMeanAbsoluteMiss?: number;
     };
   };
 }

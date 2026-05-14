@@ -74,6 +74,34 @@ describe('dataset label validation', () => {
     ]));
   });
 
+  it('accepts optional score ranges and rejects malformed score ranges', () => {
+    expect(validateLabelFile(
+      {
+        ...baseLabel,
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], expectedScoreRange: [70, 90] },
+        ],
+      },
+      new Set(['demo-exercise.depth_short']),
+    )).toEqual([]);
+
+    for (const expectedScoreRange of [[90, 70], [-1, 90], [70, 101], [70, 'high'], [70]] as unknown[]) {
+      expect(validateLabelFile(
+        {
+          ...baseLabel,
+          expectedReps: 1,
+          reps: [
+            { index: 1, startMs: 0, endMs: 1000, issueIds: [], expectedScoreRange },
+          ],
+        },
+        new Set(['demo-exercise.depth_short']),
+      ).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        'expectedScoreRange must be an ordered [min, max] number range within 0..100.',
+      ]));
+    }
+  });
+
   it.each(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions'])(
     'requires view and scorable on reviewed %s reps but not drafts',
     exerciseName => {
@@ -685,6 +713,72 @@ describe('dataset evaluator', () => {
     expect(evaluation.totals.scorableEvaluatedReps).toBe(2);
     expect(evaluation.totals.scorableCorrectReps).toBe(1);
     expect(summary.metrics.scorableAccuracy).toBe(0.5);
+  });
+
+  it('reports score range metrics for matched scorable reps with expected ranges', () => {
+    const evaluation = evaluateCase(
+      {
+        label: {
+          ...baseLabel,
+          expectedReps: 3,
+          reps: [
+            { index: 1, startMs: 0, endMs: 1000, issueIds: [], expectedScoreRange: [80, 90] },
+            { index: 2, startMs: 1100, endMs: 2000, issueIds: [], expectedScoreRange: [90, 100] },
+            {
+              index: 3,
+              startMs: 2100,
+              endMs: 3000,
+              issueIds: [],
+              scorable: false,
+              expectedScoreRange: [90, 100],
+            },
+          ],
+        },
+        recording: { exerciseName: 'Demo Exercise', metadata: {}, frames: [] },
+      },
+      {
+        finalRepCount: 3,
+        reps: [
+          {
+            repIndex: 1,
+            score: 75,
+            messages: [],
+            issueIds: [],
+            startedAt: 0,
+            completedAt: 1000,
+          },
+          {
+            repIndex: 2,
+            score: 95,
+            messages: [],
+            issueIds: [],
+            startedAt: 1100,
+            completedAt: 2000,
+          },
+          {
+            repIndex: 3,
+            score: 40,
+            messages: [],
+            issueIds: [],
+            scorable: false,
+            startedAt: 2100,
+            completedAt: 3000,
+          },
+        ],
+      },
+    );
+    const summary = summarizeEvaluations([evaluation]);
+
+    expect(evaluation.matchedReps[0]).toMatchObject({
+      predictedScore: 75,
+      scoreInExpectedRange: false,
+      scoreRangeMiss: 5,
+    });
+    expect(evaluation.totals.scoreEvaluatedReps).toBe(2);
+    expect(evaluation.totals.scoreInRangeReps).toBe(1);
+    expect(evaluation.totals.scoreRangeMissTotal).toBe(5);
+    expect(summary.metrics.scoreInRangeRate).toBe(0.5);
+    expect(summary.metrics.scoreMeanAbsoluteMiss).toBe(2.5);
   });
 
   it('scores all matched issues on the same rep as true positives', () => {

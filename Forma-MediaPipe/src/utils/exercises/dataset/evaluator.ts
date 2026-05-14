@@ -29,6 +29,9 @@ function emptyTotals(): EvaluationTotals {
     viewCorrectReps: 0,
     scorableEvaluatedReps: 0,
     scorableCorrectReps: 0,
+    scoreEvaluatedReps: 0,
+    scoreInRangeReps: 0,
+    scoreRangeMissTotal: 0,
   };
 }
 
@@ -55,6 +58,12 @@ interface RepMatch {
   completionDeltaMs: number;
 }
 
+function scoreMissFromExpectedRange(score: number, [min, max]: [number, number]): number {
+  if (score < min) return min - score;
+  if (score > max) return score - max;
+  return 0;
+}
+
 function evaluateRep(
   expected: string[],
   predicted: string[],
@@ -65,9 +74,18 @@ function evaluateRep(
     expectedScorable?: boolean;
     expectedScorableExplicit?: boolean;
     expectedView?: RepEvaluation['expectedView'];
+    expectedScoreRange?: [number, number];
   } = {},
 ): RepEvaluation {
   const expectedScorable = options.expectedScorable ?? true;
+  const predictedScore =
+    typeof prediction?.score === 'number' && Number.isFinite(prediction.score)
+      ? prediction.score
+      : undefined;
+  const scoreRangeMiss =
+    expectedScorable && options.expectedScoreRange && predictedScore !== undefined
+      ? scoreMissFromExpectedRange(predictedScore, options.expectedScoreRange)
+      : null;
   const expectedSet = new Set(unique(expected));
   const predictedSet = new Set(unique(predicted));
   const truePositives: string[] = [];
@@ -100,6 +118,10 @@ function evaluateRep(
     predictedView: prediction?.diagnostics?.view,
     expectedClean: expectedSet.size === 0,
     predictedClean: predictedSet.size === 0,
+    expectedScoreRange: options.expectedScoreRange,
+    predictedScore,
+    scoreInExpectedRange: scoreRangeMiss === null ? undefined : scoreRangeMiss === 0,
+    scoreRangeMiss,
   };
 }
 
@@ -116,6 +138,11 @@ function addRepToTotals(totals: EvaluationTotals, rep: RepEvaluation): void {
   }
 
   if (!rep.expectedScorable) return;
+  if (rep.matchStatus === 'matched' && rep.expectedScoreRange && rep.scoreRangeMiss !== null && rep.scoreRangeMiss !== undefined) {
+    totals.scoreEvaluatedReps += 1;
+    if (rep.scoreInExpectedRange) totals.scoreInRangeReps += 1;
+    totals.scoreRangeMissTotal += rep.scoreRangeMiss;
+  }
   totals.truePositives += rep.truePositives.length;
   totals.falsePositives += rep.falsePositives.length;
   totals.falseNegatives += rep.falseNegatives.length;
@@ -197,6 +224,10 @@ function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
       totals.viewEvaluatedReps === 0 ? 1 : totals.viewCorrectReps / totals.viewEvaluatedReps,
     scorableAccuracy:
       totals.scorableEvaluatedReps === 0 ? 1 : totals.scorableCorrectReps / totals.scorableEvaluatedReps,
+    scoreInRangeRate:
+      totals.scoreEvaluatedReps === 0 ? 1 : totals.scoreInRangeReps / totals.scoreEvaluatedReps,
+    scoreMeanAbsoluteMiss:
+      totals.scoreEvaluatedReps === 0 ? 0 : totals.scoreRangeMissTotal / totals.scoreEvaluatedReps,
   };
 }
 
@@ -467,6 +498,7 @@ export function evaluateCase(
         expectedScorable: expectedRep.scorable ?? true,
         expectedScorableExplicit: typeof expectedRep.scorable === 'boolean',
         expectedView: expectedRep.view,
+        expectedScoreRange: expectedRep.expectedScoreRange,
       });
       reps.push(rep);
       addRepToTotals(totals, rep);
@@ -494,6 +526,7 @@ export function evaluateCase(
         expectedScorable: expectedRep.scorable ?? true,
         expectedScorableExplicit: typeof expectedRep.scorable === 'boolean',
         expectedView: expectedRep.view,
+        expectedScoreRange: expectedRep.expectedScoreRange,
       },
     );
     reps.push(rep);
@@ -559,6 +592,9 @@ function addCaseTotals(totals: EvaluationTotals, caseEvaluation: CaseEvaluation)
   totals.viewCorrectReps += caseEvaluation.totals.viewCorrectReps;
   totals.scorableEvaluatedReps += caseEvaluation.totals.scorableEvaluatedReps;
   totals.scorableCorrectReps += caseEvaluation.totals.scorableCorrectReps;
+  totals.scoreEvaluatedReps += caseEvaluation.totals.scoreEvaluatedReps;
+  totals.scoreInRangeReps += caseEvaluation.totals.scoreInRangeReps;
+  totals.scoreRangeMissTotal += caseEvaluation.totals.scoreRangeMissTotal;
 }
 
 export function summarizeEvaluations(cases: CaseEvaluation[]): DatasetEvaluation {

@@ -42,6 +42,7 @@ export interface RepLabel {
   suggestedIssueIds?: string[];
   suggestedFeedbackMessages?: string[];
   suggestedScore?: number;
+  expectedScoreRange?: [number, number];
 }
 
 export interface ExerciseLabelFile {
@@ -98,6 +99,10 @@ export interface RepEvaluation {
   predictedView?: RepViewLabel;
   expectedClean: boolean;
   predictedClean: boolean;
+  expectedScoreRange?: [number, number];
+  predictedScore?: number;
+  scoreInExpectedRange?: boolean;
+  scoreRangeMiss?: number | null;
 }
 
 export interface CaseEvaluation {
@@ -130,6 +135,9 @@ export interface EvaluationTotals {
   viewCorrectReps: number;
   scorableEvaluatedReps: number;
   scorableCorrectReps: number;
+  scoreEvaluatedReps: number;
+  scoreInRangeReps: number;
+  scoreRangeMissTotal: number;
 }
 
 export interface EvaluationMetrics {
@@ -140,6 +148,8 @@ export interface EvaluationMetrics {
   cleanRepFalsePositiveRate: number;
   viewAccuracy: number;
   scorableAccuracy: number;
+  scoreInRangeRate: number;
+  scoreMeanAbsoluteMiss: number;
 }
 
 export interface DatasetEvaluation {

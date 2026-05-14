@@ -26,7 +26,7 @@ import {
   runDatasetOptimize,
   searchExercise,
 } from './dataset-optimize';
-import { discoverReviewedDatasetExercises } from './dataset-common';
+import { discoverReviewedDatasetExercises, formatEvaluationSummary } from './dataset-common';
 
 function writeJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -335,6 +335,21 @@ describe('dataset optimiser scaling helpers', () => {
     });
   });
 
+  it('prints score metrics only when reviewed score ranges exist', () => {
+    const definition = makeSyntheticExercise('Scaling Synthetic Score Summary', {
+      thresholds: { COMPLETE_AT: 0.5 },
+    });
+    const noScoreEvaluation = evaluateCasesCompact(definition, [syntheticCase(definition.name, 'train')]);
+    expect(noScoreEvaluation).not.toBeNull();
+    expect(formatEvaluationSummary({ cases: [], ...noScoreEvaluation! })).not.toContain('Score in expected range');
+
+    const scoreCase = syntheticCase(definition.name, 'train');
+    scoreCase.label.reps[0].expectedScoreRange = [90, 100];
+    const scoreEvaluation = evaluateCasesCompact(definition, [scoreCase]);
+    expect(scoreEvaluation).not.toBeNull();
+    expect(formatEvaluationSummary({ cases: [], ...scoreEvaluation! })).toContain('Score in expected range');
+  });
+
   it('evaluates optimizer cases with confidence gating enabled by default', () => {
     const feedbackMessage = 'Synthetic form warning';
     const definition = makeSyntheticExercise(
@@ -406,6 +421,34 @@ describe('dataset optimiser scaling helpers', () => {
     for (const candidate of result.candidates) {
       expect(getConfigValue(candidate.config, 'penaltyConfigs.SCORE_ONLY.cap')).toBe(5);
     }
+  });
+
+  it('allows score-only tunables during search when reviewed score ranges exist', () => {
+    const definition = makeSyntheticExercise('Scoring Range Tunable Synthetic Candidate', {
+      thresholds: { COMPLETE_AT: 0.7 },
+      penaltyConfigs: { SCORE_ONLY: { cap: 5 } },
+    });
+    definition.tunableSpec = {
+      ...syntheticSpec,
+      exerciseName: definition.name,
+      tunables: [
+        ...syntheticSpec.tunables,
+        { path: 'penaltyConfigs.SCORE_ONLY.cap', min: 0, max: 10, step: 1, kind: 'scoring' },
+      ],
+    };
+    const scoreCase = syntheticCase(definition.name, 'train');
+    scoreCase.label.reps[0].expectedScoreRange = [90, 100];
+
+    const result = searchExercise(definition, [scoreCase], {
+      randomCandidates: 20,
+      refinementRounds: 0,
+      survivorCount: 20,
+      seed: 1,
+    });
+
+    expect(result.candidates.some((candidate) =>
+      getConfigValue(candidate.config, 'penaltyConfigs.SCORE_ONLY.cap') !== 5,
+    )).toBe(true);
   });
 
   it('generates diagnostic-derived threshold candidates from labelled metric distributions', () => {

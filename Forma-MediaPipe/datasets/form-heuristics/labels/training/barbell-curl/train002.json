@@ -4,7 +4,7 @@
   "sourceVideo": "videos/training/barbell-curl/train002.mp4",
   "landmarkFile": "landmarks/training/barbell-curl/train002.json",
   "split": "train",
-  "reviewStatus": "reviewed",
+  "reviewStatus": "draft",
   "expectedReps": 8,
   "reps": [
     {

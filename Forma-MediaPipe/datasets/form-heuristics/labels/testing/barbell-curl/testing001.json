@@ -4,7 +4,7 @@
   "sourceVideo": "videos/testing/barbell-curl/testing001.mp4",
   "landmarkFile": "landmarks/testing/barbell-curl/testing001.json",
   "split": "test",
-  "reviewStatus": "reviewed",
+  "reviewStatus": "draft",
   "expectedReps": 6,
   "reps": [
     {

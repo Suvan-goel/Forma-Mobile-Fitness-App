@@ -191,6 +191,9 @@ function emptyTotals(): EvaluationTotals {
     viewCorrectReps: 0,
     scorableEvaluatedReps: 0,
     scorableCorrectReps: 0,
+    scoreEvaluatedReps: 0,
+    scoreInRangeReps: 0,
+    scoreRangeMissTotal: 0,
   };
 }
 
@@ -208,6 +211,9 @@ function addTotals(target: EvaluationTotals, source: EvaluationTotals): void {
   target.viewCorrectReps += source.viewCorrectReps;
   target.scorableEvaluatedReps += source.scorableEvaluatedReps;
   target.scorableCorrectReps += source.scorableCorrectReps;
+  target.scoreEvaluatedReps += source.scoreEvaluatedReps;
+  target.scoreInRangeReps += source.scoreInRangeReps;
+  target.scoreRangeMissTotal += source.scoreRangeMissTotal;
 }
 
 function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
@@ -232,13 +238,19 @@ function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
       totals.viewEvaluatedReps === 0 ? 1 : totals.viewCorrectReps / totals.viewEvaluatedReps,
     scorableAccuracy:
       totals.scorableEvaluatedReps === 0 ? 1 : totals.scorableCorrectReps / totals.scorableEvaluatedReps,
+    scoreInRangeRate:
+      totals.scoreEvaluatedReps === 0 ? 1 : totals.scoreInRangeReps / totals.scoreEvaluatedReps,
+    scoreMeanAbsoluteMiss:
+      totals.scoreEvaluatedReps === 0 ? 0 : totals.scoreRangeMissTotal / totals.scoreEvaluatedReps,
   };
 }
 
 function scoreLegacyEvaluationSummary(evaluation: EvaluationSummary): number {
   return (
     evaluation.metrics.repCountAccuracy * 10000 +
-    evaluation.metrics.issueF1 * 100 -
+    evaluation.metrics.issueF1 * 100 +
+    evaluation.metrics.scoreInRangeRate * 3 -
+    evaluation.metrics.scoreMeanAbsoluteMiss * 0.1 -
     evaluation.metrics.cleanRepFalsePositiveRate +
     evaluation.metrics.scorableAccuracy * 10 +
     evaluation.metrics.viewAccuracy * 5
@@ -255,7 +267,9 @@ function scoreDiagnosticEvaluationSummary(evaluation: EvaluationSummary): number
   const scorableRate = evaluation.qualityCoverage?.scorableRate ?? 1;
   return (
     evaluation.metrics.repCountAccuracy * 10000 +
-    diagnosticIssueF1 * 125 -
+    diagnosticIssueF1 * 125 +
+    evaluation.metrics.scoreInRangeRate * 3 -
+    evaluation.metrics.scoreMeanAbsoluteMiss * 0.1 -
     evaluation.metrics.cleanRepFalsePositiveRate * 5 -
     nearThresholdRate * 10 +
     scorableRate * 5 +
@@ -301,6 +315,12 @@ function issueOptimizerSearchSpec(spec: TunableSpec): TunableSpec {
     ...spec,
     tunables: spec.tunables.filter((tunable) => tunable.kind !== 'scoring'),
   };
+}
+
+function hasScoreRangeLabels(cases: DatasetCase[]): boolean {
+  return cases.some((datasetCase) =>
+    datasetCase.label.reps.some((rep) => rep.scorable !== false && rep.expectedScoreRange),
+  );
 }
 
 function changedTunablePaths(
@@ -974,7 +994,9 @@ export function searchExercise(
     return emptyResult;
   }
 
-  const spec = issueOptimizerSearchSpec(definition.tunableSpec);
+  const spec = hasScoreRangeLabels(searchCases)
+    ? definition.tunableSpec
+    : issueOptimizerSearchSpec(definition.tunableSpec);
   const specIssues = validateTunableSpec(definition.heuristicConfig, spec);
   if (specIssues.length > 0) {
     return { ...emptyResult, specIssues };

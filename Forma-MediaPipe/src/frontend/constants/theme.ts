@@ -64,9 +64,9 @@ export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
 export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = CARD_GRADIENT_COLORS;
 
 /** Card radius — moderate rounding for compact pro look */
-export const CARD_RADIUS = 14;
-export const CARD_RADIUS_SM = 10;
-export const CARD_RADIUS_LG = 18;
+export const CARD_RADIUS = 12;
+export const CARD_RADIUS_SM = 8;
+export const CARD_RADIUS_LG = 16;
 export const CARD_VERTICAL_GAP = 10;
 
 /** Glass card flat surface (no gradient) */

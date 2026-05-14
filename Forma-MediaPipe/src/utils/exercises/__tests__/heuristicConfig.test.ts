@@ -72,6 +72,14 @@ function summarizeCaseEvaluation(caseEvaluation: ReturnType<typeof evaluateCase>
         caseEvaluation.totals.scorableEvaluatedReps === 0
           ? 1
           : caseEvaluation.totals.scorableCorrectReps / caseEvaluation.totals.scorableEvaluatedReps,
+      scoreInRangeRate:
+        caseEvaluation.totals.scoreEvaluatedReps === 0
+          ? 1
+          : caseEvaluation.totals.scoreInRangeReps / caseEvaluation.totals.scoreEvaluatedReps,
+      scoreMeanAbsoluteMiss:
+        caseEvaluation.totals.scoreEvaluatedReps === 0
+          ? 0
+          : caseEvaluation.totals.scoreRangeMissTotal / caseEvaluation.totals.scoreEvaluatedReps,
     },
   };
 }
@@ -80,8 +88,17 @@ function makeEvaluation(
   repCountAccuracy: number,
   issueF1: number,
   cleanRate: number,
-  options: { viewAccuracy?: number; scorableAccuracy?: number } = {},
+  options: {
+    viewAccuracy?: number;
+    scorableAccuracy?: number;
+    scoreEvaluatedReps?: number;
+    scoreInRangeRate?: number;
+    scoreMeanAbsoluteMiss?: number;
+  } = {},
 ): DatasetEvaluation {
+  const scoreEvaluatedReps = options.scoreEvaluatedReps ?? 0;
+  const scoreInRangeRate = options.scoreInRangeRate ?? 1;
+  const scoreMeanAbsoluteMiss = options.scoreMeanAbsoluteMiss ?? 0;
   return {
     cases: [],
     totals: {
@@ -98,6 +115,9 @@ function makeEvaluation(
       viewCorrectReps: 0,
       scorableEvaluatedReps: 0,
       scorableCorrectReps: 0,
+      scoreEvaluatedReps,
+      scoreInRangeReps: Math.round(scoreEvaluatedReps * scoreInRangeRate),
+      scoreRangeMissTotal: scoreEvaluatedReps * scoreMeanAbsoluteMiss,
     },
     metrics: {
       repCountAccuracy,
@@ -107,6 +127,8 @@ function makeEvaluation(
       cleanRepFalsePositiveRate: cleanRate,
       viewAccuracy: options.viewAccuracy ?? 1,
       scorableAccuracy: options.scorableAccuracy ?? 1,
+      scoreInRangeRate,
+      scoreMeanAbsoluteMiss,
     },
   };
 }
@@ -442,8 +464,15 @@ describe('heuristic config helpers', () => {
       expect.arrayContaining([
         'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
         'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+        'penaltyConfigs.PULL_ROM.cap',
+        'penaltyConfigs.TEMPO_RETURN.cap',
       ]),
     );
+    expect(latPulldownDefinition.tunableSpec?.search?.applyGates).toMatchObject({
+      minTestScoreEvaluatedReps: 1,
+      minTestScoreInRangeRate: 0.85,
+      maxTestScoreMeanAbsoluteMiss: 7.5,
+    });
   });
 
   it('rejects invalid lat-pulldown thresholds and penalty configs', () => {
@@ -950,6 +979,89 @@ describe('automatic heuristic optimiser helpers', () => {
         spec,
       }).shouldApply,
     ).toBe(false);
+  });
+
+  it('gates application on held-out score labels and score regressions', () => {
+    const spec: TunableSpec = {
+      exerciseName: 'Demo',
+      tunables: [],
+      search: {
+        applyGates: {
+          minValidationImprovement: 0.001,
+          maxTestScoreInRangeRegression: 0.01,
+          maxTestScoreMeanMissRegression: 1,
+          minTestScoreEvaluatedReps: 1,
+          minTestScoreInRangeRate: 0.85,
+          maxTestScoreMeanAbsoluteMiss: 7.5,
+        },
+      },
+    };
+
+    const baseArgs = {
+      baselineSelection: makeEvaluation(0, 1, 0),
+      winnerSelection: makeEvaluation(1, 1, 0),
+      spec,
+    };
+
+    expect(
+      shouldApplyWinningConfig({
+        ...baseArgs,
+        baselineTest: makeEvaluation(1, 1, 0, {
+          scoreEvaluatedReps: 1,
+          scoreInRangeRate: 1,
+          scoreMeanAbsoluteMiss: 0,
+        }),
+        winnerTest: makeEvaluation(1, 1, 0),
+      }).reason,
+    ).toContain('test score labels');
+
+    expect(
+      shouldApplyWinningConfig({
+        ...baseArgs,
+        baselineTest: makeEvaluation(1, 1, 0, {
+          scoreEvaluatedReps: 2,
+          scoreInRangeRate: 1,
+          scoreMeanAbsoluteMiss: 0,
+        }),
+        winnerTest: makeEvaluation(1, 1, 0, {
+          scoreEvaluatedReps: 2,
+          scoreInRangeRate: 0.5,
+          scoreMeanAbsoluteMiss: 0,
+        }),
+      }).reason,
+    ).toContain('score in-range rate');
+
+    expect(
+      shouldApplyWinningConfig({
+        ...baseArgs,
+        baselineTest: makeEvaluation(1, 1, 0, {
+          scoreEvaluatedReps: 2,
+          scoreInRangeRate: 1,
+          scoreMeanAbsoluteMiss: 0,
+        }),
+        winnerTest: makeEvaluation(1, 1, 0, {
+          scoreEvaluatedReps: 2,
+          scoreInRangeRate: 1,
+          scoreMeanAbsoluteMiss: 9,
+        }),
+      }).reason,
+    ).toContain('score mean miss');
+
+    expect(
+      shouldApplyWinningConfig({
+        ...baseArgs,
+        baselineTest: makeEvaluation(1, 1, 0, {
+          scoreEvaluatedReps: 2,
+          scoreInRangeRate: 0.95,
+          scoreMeanAbsoluteMiss: 1,
+        }),
+        winnerTest: makeEvaluation(1, 1, 0, {
+          scoreEvaluatedReps: 2,
+          scoreInRangeRate: 0.95,
+          scoreMeanAbsoluteMiss: 1,
+        }),
+      }).shouldApply,
+    ).toBe(true);
   });
 
   it('requires validation and test data when production apply gates are enabled', () => {

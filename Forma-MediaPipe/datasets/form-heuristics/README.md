@@ -142,6 +142,18 @@ Run this after reviewing labels:
 npm run dataset:evaluate
 ```
 
+Evaluate only Cable Lat Pulldowns while building the side-view v1 dataset:
+
+```sh
+FORMA_DATASET_EXERCISE="Cable Lat Pulldowns" npm run dataset:evaluate
+```
+
+Add optional split filtering when checking one held-out slice:
+
+```sh
+FORMA_DATASET_EXERCISE="Cable Lat Pulldowns" FORMA_DATASET_SPLITS="test" npm run dataset:evaluate
+```
+
 This validates the dataset and reports current heuristic performance. It checks:
 
 - label JSON shape
@@ -149,6 +161,7 @@ This validates the dataset and reports current heuristic performance. It checks:
 - `expectedReps` matches `reps.length`
 - rep windows are ordered and non-overlapping
 - issue ids are valid
+- optional per-rep `expectedScoreRange` values are finite ordered ranges in `0..100`
 - landmark files exist
 
 It also reports skipped templates and draft labels. Draft labels stay skipped
@@ -204,6 +217,7 @@ The optimiser writes `src/utils/exercises/definitions/tuned/*.json` only when:
 - the winner improves validation metrics enough
 - test rep-count accuracy does not regress beyond the exercise gate
 - test clean-rep false-positive rate does not regress beyond the exercise gate
+- test view, scorable, and score-range metrics pass the exercise gates when configured
 - `--dry-run` is not set
 
 Tuned JSON files are tracked source. Review them and their reports before
@@ -227,7 +241,10 @@ Minimal reviewed label example:
       "index": 1,
       "startMs": 850,
       "endMs": 2850,
-      "issueIds": []
+      "issueIds": [],
+      "view": "side",
+      "scorable": true,
+      "expectedScoreRange": [90, 100]
     },
     {
       "index": 2,
