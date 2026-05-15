@@ -6,8 +6,8 @@
 export const COLORS = {
   // Backgrounds — lifted neutral graphite, close to the reference without skewing blue
   background: '#151A1D',
-  cardBackground: 'rgba(34, 40, 45, 0.74)',
-  cardBackgroundLight: 'rgba(39, 45, 50, 0.74)',
+  cardBackground: 'rgba(36, 42, 47, 0.73)',
+  cardBackgroundLight: 'rgba(41, 47, 52, 0.73)',
 
   // Primary Actions — Forma Violet
   primary: '#7A55FF',
@@ -53,9 +53,9 @@ export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
 /** Glass card surface gradient — matches the homepage card treatment */
 export const CARD_GRADIENT_COLORS: readonly [string, string, string] = [
-  'rgba(33, 39, 44, 0.74)',
-  'rgba(35, 41, 46, 0.74)',
-  'rgba(38, 44, 49, 0.74)',
+  'rgba(35, 41, 46, 0.73)',
+  'rgba(37, 43, 48, 0.73)',
+  'rgba(40, 46, 51, 0.73)',
 ];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
@@ -71,20 +71,16 @@ export const CARD_VERTICAL_GAP = 12;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: 'rgba(34, 40, 45, 0.74)',
+  backgroundColor: 'rgba(36, 42, 47, 0.73)',
   borderWidth: 0.5,
   borderColor: 'rgba(255, 255, 255, 0.10)',
   borderTopColor: 'rgba(255, 255, 255, 0.14)',
   borderRadius: CARD_RADIUS,
 } as const;
 
-/** Card surfaces avoid legacy shadows because clipped Android elevation can render as a black inset while content mounts. */
+/** Subtle card lift without the heavy inset look from legacy native shadows. */
 export const CARD_SHADOW = {
-  shadowColor: 'transparent',
-  shadowOffset: { width: 0, height: 0 },
-  shadowOpacity: 0,
-  shadowRadius: 0,
-  elevation: 0,
+  boxShadow: '0 8px 18px rgba(0, 0, 0, 0.20)',
 } as const;
 
 export const getScoreColor = (score: number): string => {
