@@ -1,8 +1,11 @@
 import { createDraftLabelFromReplay, getAvailableIssues } from '../dataset';
 import { barbellCurlDefinition } from '../definitions/barbellCurl';
+import { cablePushdownDefinition } from '../definitions/cablePushdown';
 import { cableRowDefinition } from '../definitions/cableRow';
 import { lateralRaiseDefinition } from '../definitions/lateralRaise';
 import { legExtensionsDefinition } from '../definitions/legExtensions';
+import { lyingLegCurlDefinition } from '../definitions/lyingLegCurl';
+import { machineAbCrunchDefinition } from '../definitions/machineAbCrunch';
 import { pushupDefinition } from '../definitions/pushup';
 import { squatDefinition } from '../definitions/squat';
 import type { ExerciseDefinition, RepDiagnostics } from '../types';
@@ -174,6 +177,94 @@ describe('draft label generation', () => {
     );
   });
 
+  it('excludes setup and view-quality diagnostics from available ground-truth issues', () => {
+    expect(getAvailableIssues(pushupDefinition).map((issue) => issue.issueId)).not.toContain('push-up.camera_setup');
+    expect(getAvailableIssues(lyingLegCurlDefinition).map((issue) => issue.issueId)).not.toContain('lying-leg-curl.side_view_uncertain');
+    expect(getAvailableIssues(machineAbCrunchDefinition).map((issue) => issue.issueId)).not.toContain('machine-ab-crunches.side_view_uncertain');
+  });
+
+  it('filters draft suggestedIssueIds through the exercise label policy', () => {
+    const pushupReplay: ReplayResultVerbose = {
+      ...replay,
+      repTraces: replay.repTraces.map(trace => ({
+        ...trace,
+        issueIds: ['push-up.camera_setup', 'push-up.depth_short'],
+        messages: [
+          'Set the camera side-on with your full body in frame.',
+          'Go deeper — aim for elbows at 90 degrees.',
+        ],
+        diagnostics: {
+          exerciseName: 'Push-Up',
+          repIndex: 1,
+          view: 'side',
+          selectedSide: 'left',
+          scorable: true,
+          metrics: {},
+          cues: {},
+        } satisfies RepDiagnostics,
+      })),
+    };
+
+    const label = createDraftLabelFromReplay({
+      definition: pushupDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Push-Up',
+      },
+      replay: pushupReplay,
+      sourceVideo: 'videos/push-up/pushup_001.mp4',
+      landmarkFile: 'landmarks/push-up/pushup_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.reps[0]?.suggestedIssueIds).toEqual(['push-up.depth_short']);
+    expect(label.reps[0]?.suggestedFeedbackMessages).toEqual([
+      'Set the camera side-on with your full body in frame.',
+      'Go deeper — aim for elbows at 90 degrees.',
+    ]);
+  });
+
+  it('filters Barbell Curl side-view draft suggestions to visible-arm labels', () => {
+    const barbellCurlReplay: ReplayResultVerbose = {
+      ...replay,
+      repTraces: replay.repTraces.map(trace => ({
+        ...trace,
+        issueIds: [
+          'barbell-curl.shoulder_warn',
+          'barbell-curl.asymmetry',
+          'barbell-curl.elbow_flare',
+        ],
+        diagnostics: {
+          exerciseName: 'Barbell Curl',
+          repIndex: 1,
+          view: 'side',
+          selectedSide: 'left',
+          scorable: true,
+          metrics: {},
+          cues: {},
+        } satisfies RepDiagnostics,
+      })),
+    };
+
+    const label = createDraftLabelFromReplay({
+      definition: barbellCurlDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Barbell Curl',
+      },
+      replay: barbellCurlReplay,
+      sourceVideo: 'videos/barbell-curl/barbell_curl_001.mp4',
+      landmarkFile: 'landmarks/barbell-curl/barbell_curl_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.reps[0]?.suggestedIssueIds).toEqual(['barbell-curl.shoulder_warn']);
+  });
+
   it('adds side-view Barbell Squat labeling guidance to draft labels', () => {
     const label = createDraftLabelFromReplay({
       definition: squatDefinition,
@@ -192,7 +283,7 @@ describe('draft label generation', () => {
     expect(label.labelingGuidance).toEqual(
       expect.arrayContaining([
         expect.stringContaining('Side-view Barbell Squat reps are the v1 full-form scoring target'),
-        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('Set scorable=false for front, oblique, unknown'),
         expect.stringContaining('Use barbell-squat.incomplete_rom only as the fallback ROM issue'),
         expect.stringContaining('Do not label knee valgus in v1'),
       ]),
@@ -226,6 +317,36 @@ describe('draft label generation', () => {
     expect(label.reps[0]?.view).toBe('unknown');
     expect(label.reps[0]?.scorable).toBe(true);
     expect(label.availableIssues?.map((issue) => issue.issueId) ?? []).not.toContain('cable-row.row_target_high');
+  });
+
+  it('adds side-view Cable Pushdowns labeling guidance to draft labels', () => {
+    const label = createDraftLabelFromReplay({
+      definition: cablePushdownDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Cable Pushdowns',
+      },
+      replay,
+      sourceVideo: 'videos/cable-pushdowns/pushdown_001.mp4',
+      landmarkFile: 'landmarks/cable-pushdowns/pushdown_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Side-view Cable Pushdowns reps are the v1 full-form scoring target'),
+        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('Label lockout, top range, elbow drift, forward elbow setup'),
+        expect.stringContaining('Reviewed scorable Cable Pushdowns reps must use view=side'),
+      ]),
+    );
+    expect(label.reps[0]?.view).toBe('unknown');
+    expect(label.reps[0]?.scorable).toBe(true);
+    expect(label.availableIssues?.map((issue) => issue.issueId) ?? []).toEqual(
+      expect.arrayContaining(['cable-pushdowns.elbow_forward', 'cable-pushdowns.torso_rocking']),
+    );
   });
 
   it('adds side-view Leg Extensions labeling guidance and inferred rep metadata to draft labels', () => {
@@ -270,6 +391,101 @@ describe('draft label generation', () => {
     );
     expect(label.reps[0]?.view).toBe('side');
     expect(label.reps[0]?.scorable).toBe(true);
+  });
+
+  it('adds side-view Lying Leg Curl labeling guidance and inferred rep metadata to draft labels', () => {
+    const diagnostics: RepDiagnostics = {
+      exerciseName: 'Lying Leg Curl',
+      repIndex: 1,
+      view: 'side',
+      selectedSide: 'left',
+      scorable: true,
+      metrics: {},
+      cues: {},
+    };
+    const lyingLegCurlReplay: ReplayResultVerbose = {
+      ...replay,
+      repTraces: replay.repTraces.map(trace => ({
+        ...trace,
+        diagnostics,
+        scorable: true,
+      })),
+    };
+    const label = createDraftLabelFromReplay({
+      definition: lyingLegCurlDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Lying Leg Curl',
+      },
+      replay: lyingLegCurlReplay,
+      sourceVideo: 'videos/lying-leg-curl/leg_curl_001.mp4',
+      landmarkFile: 'landmarks/lying-leg-curl/leg_curl_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Side-view Lying Leg Curl reps are the v1 full-form scoring target'),
+        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('same-side hip, knee, and lower-leg endpoint'),
+        expect.stringContaining('Reviewed scorable Lying Leg Curl reps must use view=side'),
+      ]),
+    );
+    expect(label.reps[0]?.view).toBe('side');
+    expect(label.reps[0]?.scorable).toBe(true);
+    expect(label.availableIssues?.map((issue) => issue.issueId) ?? []).toEqual(
+      expect.arrayContaining(['lying-leg-curl.hip_lift', 'lying-leg-curl.thigh_movement']),
+    );
+  });
+
+  it('adds side-view Machine Ab Crunch labeling guidance and inferred rep metadata to draft labels', () => {
+    const diagnostics: RepDiagnostics = {
+      exerciseName: 'Machine Ab Crunches',
+      repIndex: 1,
+      view: 'side',
+      selectedSide: 'left',
+      scorable: true,
+      metrics: {},
+      cues: {},
+    };
+    const machineAbCrunchReplay: ReplayResultVerbose = {
+      ...replay,
+      repTraces: replay.repTraces.map(trace => ({
+        ...trace,
+        diagnostics,
+        scorable: true,
+      })),
+    };
+    const label = createDraftLabelFromReplay({
+      definition: machineAbCrunchDefinition,
+      recording: {
+        ...recording,
+        exerciseName: 'Machine Ab Crunches',
+      },
+      replay: machineAbCrunchReplay,
+      sourceVideo: 'videos/machine-ab-crunches/ab_crunch_001.mp4',
+      landmarkFile: 'landmarks/machine-ab-crunches/ab_crunch_001.json',
+      split: 'train',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      generator: 'test',
+    });
+
+    expect(label.labelingGuidance).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Side-view Machine Ab Crunches reps are the v1 full-form scoring target'),
+        expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+        expect.stringContaining('meaningful range of motion'),
+        expect.stringContaining('same-side shoulder, hip, and knee'),
+        expect.stringContaining('Reviewed scorable Machine Ab Crunches reps must use view=side'),
+      ]),
+    );
+    expect(label.reps[0]?.view).toBe('side');
+    expect(label.reps[0]?.scorable).toBe(true);
+    expect(label.availableIssues?.map((issue) => issue.issueId) ?? []).toEqual(
+      expect.arrayContaining(['machine-ab-crunches.neck_forward', 'machine-ab-crunches.hips_moving']),
+    );
   });
 
   it('adds front-view lateral-raise labeling guidance to draft labels', () => {

@@ -6,8 +6,8 @@
 export const COLORS = {
   // Backgrounds — lifted neutral graphite, close to the reference without skewing blue
   background: '#151A1D',
-  cardBackground: 'rgba(29, 34, 38, 0.80)',
-  cardBackgroundLight: 'rgba(33, 38, 42, 0.80)',
+  cardBackground: 'rgba(34, 40, 45, 0.74)',
+  cardBackgroundLight: 'rgba(39, 45, 50, 0.74)',
 
   // Primary Actions — Forma Violet
   primary: '#7A55FF',
@@ -53,9 +53,9 @@ export const SCREEN_GRADIENT_END = { x: 0.5, y: 1 } as const;
 
 /** Glass card surface gradient — matches the homepage card treatment */
 export const CARD_GRADIENT_COLORS: readonly [string, string, string] = [
-  'rgba(29, 34, 38, 0.80)',
-  'rgba(32, 37, 41, 0.80)',
-  'rgba(35, 40, 44, 0.80)',
+  'rgba(33, 39, 44, 0.74)',
+  'rgba(35, 41, 46, 0.74)',
+  'rgba(38, 44, 49, 0.74)',
 ];
 export const CARD_GRADIENT_START = { x: 0.5, y: 1 } as const;
 export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
@@ -63,18 +63,18 @@ export const CARD_GRADIENT_END = { x: 0.5, y: 0 } as const;
 /** Elevated surfaces use the same card treatment for a flatter, unified UI. */
 export const CARD_GRADIENT_ELEVATED: readonly [string, string, string] = CARD_GRADIENT_COLORS;
 
-/** Card radius — moderate rounding for compact pro look */
-export const CARD_RADIUS = 12;
-export const CARD_RADIUS_SM = 8;
-export const CARD_RADIUS_LG = 16;
-export const CARD_VERTICAL_GAP = 10;
+/** Card radius — flatter corners for a compact pro look */
+export const CARD_RADIUS = 10;
+export const CARD_RADIUS_SM = 7;
+export const CARD_RADIUS_LG = 14;
+export const CARD_VERTICAL_GAP = 12;
 
 /** Glass card flat surface (no gradient) */
 export const CARD_STYLE = {
-  backgroundColor: 'rgba(29, 34, 38, 0.80)',
+  backgroundColor: 'rgba(34, 40, 45, 0.74)',
   borderWidth: 0.5,
-  borderColor: 'rgba(255, 255, 255, 0.09)',
-  borderTopColor: 'rgba(255, 255, 255, 0.13)',
+  borderColor: 'rgba(255, 255, 255, 0.10)',
+  borderTopColor: 'rgba(255, 255, 255, 0.14)',
   borderRadius: CARD_RADIUS,
 } as const;
 

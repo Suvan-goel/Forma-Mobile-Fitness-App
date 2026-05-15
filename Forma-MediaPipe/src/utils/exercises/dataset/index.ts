@@ -5,6 +5,21 @@ export {
   summarizeEvaluations,
 } from './evaluator';
 export {
+  buildLabelingGuidance,
+  formatScorableViewRequirement,
+  getExerciseLabelPolicy,
+  getLabelableIssues,
+  isIssueLabelableForView,
+  isIssueLabelableInAnyScoringView,
+  isIssueNonGroundTruth,
+  isViewScorable,
+  listExerciseLabelPolicies,
+} from './labelPolicy';
+export type {
+  ExerciseLabelPolicy,
+  ScoreRangePolicy,
+} from './labelPolicy';
+export {
   createDraftLabelFromReplay,
   getAvailableIssues,
 } from './draftLabels';

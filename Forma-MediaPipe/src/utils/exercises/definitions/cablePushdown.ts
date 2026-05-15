@@ -16,6 +16,7 @@
 import {
   Keypoint,
   calculateAngle,
+  calculateAngle2D,
   calculateSignedVerticalAngleSagittal,
   getKeypoint,
   isVisible,
@@ -35,6 +36,7 @@ import {
 import {
   buildRepDiagnostics,
   diagnosticCue,
+  diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
 import tunedConfig from './tuned/cablePushdown.json';
@@ -45,6 +47,7 @@ import type {
   ExerciseHeuristicConfig,
   ExerciseState,
   NumericTunable,
+  RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
 
@@ -161,6 +164,12 @@ const FORM_THRESHOLDS = {
   TEMPO_PUSH_SPIKE_WARN: 2.8,
   /** Velocity spike ratio above which the return snapped back */
   TEMPO_RETURN_SPIKE_WARN: 2.8,
+  /** Average side-view confidence below which a counted rep is marked unscorable */
+  SIDE_VIEW_AVG_CONFIDENCE_MIN: 0.45,
+  /** Minimum side-view confidence below which a counted rep is marked unscorable */
+  SIDE_VIEW_MIN_CONFIDENCE_MIN: 0.25,
+  /** Minimum side-view samples required before classifying a rep's view quality */
+  SIDE_VIEW_MIN_SAMPLES: 5,
 } as const;
 
 /**
@@ -179,7 +188,8 @@ const FORM_THRESHOLDS = {
  * | Tempo return         | 8   | 0.4s               | 40    | eccentric time deficit            |
  * | Push/return spike    | 8/10| 2.8x               | 2     | robust velocity spike ratio       |
  *
- * Max total penalty: 120 -> worst possible rep = 0.
+ * Penalty caps sum above 100, and `computeScore` clamps the final score
+ * to 0..100 so multiple severe faults cannot produce negative scores.
  */
 const PENALTY_CONFIGS = {
   EXTENSION_ROM: { cap: 30, deadzone: 0, scale: 300 } as PenaltyConfig,
@@ -197,12 +207,11 @@ const PENALTY_CONFIGS = {
 
 const VISIBILITY_THRESHOLD = 0.15;
 const FORM_CONFIDENCE_MIN = 0.3;
-const SIDE_VIEW_AVG_CONFIDENCE_MIN = 0.45;
-const SIDE_VIEW_MIN_CONFIDENCE_MIN = 0.25;
-const SIDE_VIEW_MIN_SAMPLES = 5;
 const SETUP_SIDE_VIEW_MIN_SAMPLES = 8;
 const FEEDBACK_COOLDOWN_SECONDS = 2.0;
 const VELOCITY_SPIKE_MIN_SAMPLES = 4;
+const WORLD_IMAGE_REACH_RATIO_MAX_DELTA = 0.2;
+const ONE_SIDE_SIDE_VIEW_CONFIDENCE = 0.6;
 const SIDE_VIEW_SETUP_FEEDBACK = 'Turn side-on so I can judge your pushdown.';
 
 const DEFAULT_CABLE_PUSHDOWN_HEURISTIC_CONFIG = {
@@ -231,6 +240,9 @@ function upsertCablePushdownTunable(tunable: NumericTunable): void {
 }
 
 ([
+  { path: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', min: 0.25, max: 0.75, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', min: 0.10, max: 0.55, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_MIN_SAMPLES', min: 3, max: 10, step: 1, kind: 'feedback' },
   { path: 'formThresholds.LOCKOUT_GAP_TOLERANCE_MS', min: 0, max: 180, step: 10, kind: 'feedback' },
   { path: 'penaltyConfigs.EXTENSION_ROM.cap', min: 0, max: 50, step: 1, kind: 'scoring' },
   { path: 'penaltyConfigs.EXTENSION_ROM.deadzone', min: 0, max: 0.08, step: 0.01, kind: 'scoring' },
@@ -325,16 +337,20 @@ interface RepWindow {
   maxShoulderDelta: number;
   /** Starting shoulder angle used to catch elbows that begin too far forward */
   elbowForwardAngleAtStart: number | null;
-  /** Max observed shoulder angle during the rep */
-  maxElbowForwardAngle: number;
+  /** Shoulder metric support */
+  shoulderAngleConfidenceSum: number;
+  shoulderAngleSampleCount: number;
+  shoulderSourceCounts: Record<LandmarkSourceName, number>;
   /** Signed torso deviation baseline */
   torsoDevBaseline: number | null;
   /** Max absolute torso deviation from vertical during rep */
   maxTorsoAbsoluteDev: number;
-  /** Max torso movement from the starting baseline */
-  maxTorsoDeltaFromBaseline: number;
   /** Max total torso movement from baseline */
   maxTorsoRockDelta: number;
+  /** Torso metric support */
+  torsoDevConfidenceSum: number;
+  torsoDevSampleCount: number;
+  torsoSourceCounts: Record<LandmarkSourceName, number>;
   /** Sum/min/sample count for side-view confidence */
   sideViewConfidenceSum: number;
   sideViewConfidenceMin: number;
@@ -416,85 +432,6 @@ interface CablePushdownDebugInfo {
   returnVelocitySpikeRatio: number | null;
 }
 
-// ============================================================================
-// ANGLE CALCULATION (shoulder angle & torso — kept as angles, already camera-invariant deltas)
-// ============================================================================
-
-/**
- * Calculate the upper arm angle relative to the torso (hip-shoulder-elbow) in 2D.
- * This measures how much the upper arm deviates from being pinned to the torso.
- * When elbows are properly pinned, this angle stays relatively constant.
- */
-function calculateShoulderAngle(
-  keypoints: Keypoint[],
-  side: 'left' | 'right'
-): number | null {
-  const hip = getKeypoint(keypoints, `${side}_hip`);
-  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
-  const elbow = getKeypoint(keypoints, `${side}_elbow`);
-
-  if (
-    !hip || !shoulder || !elbow ||
-    !isVisible(hip, VISIBILITY_THRESHOLD) ||
-    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
-    !isVisible(elbow, VISIBILITY_THRESHOLD)
-  ) {
-    return null;
-  }
-
-  const hipPt = getPoint(hip)!;
-  const shoulderPt = getPoint(shoulder)!;
-  const elbowPt = getPoint(elbow)!;
-
-  // Vectors from shoulder
-  const v1x = hipPt.x - shoulderPt.x;
-  const v1y = hipPt.y - shoulderPt.y;
-  const v2x = elbowPt.x - shoulderPt.x;
-  const v2y = elbowPt.y - shoulderPt.y;
-
-  const dot = v1x * v2x + v1y * v2y;
-  const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
-  const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
-
-  if (len1 < 1e-8 || len2 < 1e-8) return null;
-
-  const cosTheta = Math.max(-1, Math.min(1, dot / (len1 * len2)));
-  return Math.acos(cosTheta) * (180 / Math.PI);
-}
-
-/**
- * Calculate torso deviation from vertical using the shoulder-hip line.
- * Returns the absolute angle from vertical in degrees (0 = perfectly upright).
- */
-function calculateTorsoDeviation(
-  keypoints: Keypoint[],
-  side: 'left' | 'right'
-): number | null {
-  const shoulder = getKeypoint(keypoints, `${side}_shoulder`);
-  const hip = getKeypoint(keypoints, `${side}_hip`);
-
-  if (
-    !shoulder || !hip ||
-    !isVisible(shoulder, VISIBILITY_THRESHOLD) ||
-    !isVisible(hip, VISIBILITY_THRESHOLD)
-  ) {
-    return null;
-  }
-
-  // Torso vector: hip -> shoulder (should point roughly upward)
-  const dx = shoulder.x - hip.x;
-  const dy = shoulder.y - hip.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 1e-8) return null;
-
-  // In screen coords, Y points down. Straight up = (0, -1).
-  // cos(theta) = dot((dx,dy), (0,-1)) / len = -dy / len
-  const cosTheta = -dy / len;
-  const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosTheta))) * (180 / Math.PI);
-
-  return angleDeg;
-}
-
 function isFiniteMetric(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -549,12 +486,29 @@ function signalSourceKeypoints(
   return frameContext?.imageKeypoints ?? fallbackKeypoints;
 }
 
+function sourceMatchesImageReach(
+  source: { name: LandmarkSourceName; keypoints: Keypoint[] },
+  frameContext: ExerciseFrameContext | undefined,
+  side: 'left' | 'right',
+): boolean {
+  if (source.name !== 'world') return true;
+  const imageKeypoints = frameContext?.imageKeypoints;
+  if (!imageKeypoints) return true;
+
+  const imageReachRatio = computeReachRatio(imageKeypoints, side);
+  const sourceReachRatio = computeReachRatio(source.keypoints, side);
+  if (!isFiniteMetric(imageReachRatio) || !isFiniteMetric(sourceReachRatio)) return true;
+
+  return Math.abs(sourceReachRatio - imageReachRatio) <= WORLD_IMAGE_REACH_RATIO_MAX_DELTA;
+}
+
 function calculateShoulderAngleSample(
   frameContext: ExerciseFrameContext | undefined,
   fallbackKeypoints: Keypoint[],
   side: 'left' | 'right',
 ): MetricSample | null {
   for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    if (!sourceMatchesImageReach(source, frameContext, side)) continue;
     if (minKeypointConfidence(source.keypoints, [`${side}_hip`, `${side}_shoulder`, `${side}_elbow`]) < FORM_CONFIDENCE_MIN) {
       continue;
     }
@@ -562,7 +516,9 @@ function calculateShoulderAngleSample(
     const shoulder = getKeypoint(source.keypoints, `${side}_shoulder`);
     const elbow = getKeypoint(source.keypoints, `${side}_elbow`);
     if (!hip || !shoulder || !elbow) continue;
-    const value = calculateAngle(hip, shoulder, elbow);
+    const value = source.name === 'world'
+      ? calculateAngle(hip, shoulder, elbow)
+      : calculateAngle2D(hip, shoulder, elbow);
     if (isFiniteMetric(value) && value >= 0 && value < 179) {
       return { value, source: source.name, keypoints: source.keypoints };
     }
@@ -600,12 +556,13 @@ function calculateSagittalTorsoDeviation(keypoints: Keypoint[]): number | null {
 function calculateSelectedSideTorsoDeviation(
   keypoints: Keypoint[],
   side: 'left' | 'right',
+  useDepth = false,
 ): number | null {
   const shoulder = visibleKeypoint(keypoints, `${side}_shoulder`, FORM_CONFIDENCE_MIN);
   const hip = visibleKeypoint(keypoints, `${side}_hip`, FORM_CONFIDENCE_MIN);
   if (!shoulder || !hip) return null;
 
-  if (keypoints.some(keypoint => Math.abs(keypoint.z ?? 0) > 1e-6)) {
+  if (useDepth && keypoints.some(keypoint => Math.abs(keypoint.z ?? 0) > 1e-6)) {
     const vy = shoulder.y - hip.y;
     const vz = (shoulder.z ?? 0) - (hip.z ?? 0);
     const mag = Math.sqrt(vy * vy + vz * vz);
@@ -625,9 +582,10 @@ function calculateTorsoDeviationSample(
   side: 'left' | 'right',
 ): MetricSample | null {
   for (const source of landmarkSources(frameContext, fallbackKeypoints)) {
+    if (!sourceMatchesImageReach(source, frameContext, side)) continue;
     const value = source.name === 'world'
-      ? calculateSagittalTorsoDeviation(source.keypoints) ?? calculateSelectedSideTorsoDeviation(source.keypoints, side)
-      : calculateSelectedSideTorsoDeviation(source.keypoints, side);
+      ? calculateSagittalTorsoDeviation(source.keypoints) ?? calculateSelectedSideTorsoDeviation(source.keypoints, side, true)
+      : calculateSelectedSideTorsoDeviation(source.keypoints, side, false);
     if (isFiniteMetric(value)) {
       return { value, source: source.name, keypoints: source.keypoints };
     }
@@ -635,12 +593,40 @@ function calculateTorsoDeviationSample(
   return null;
 }
 
-function calculateSideViewConfidence(keypoints: Keypoint[]): number | null {
+function calculateSideViewConfidence(
+  keypoints: Keypoint[],
+  selectedSide?: 'left' | 'right',
+): number | null {
   const leftShoulder = visibleKeypoint(keypoints, 'left_shoulder');
   const rightShoulder = visibleKeypoint(keypoints, 'right_shoulder');
   const leftHip = visibleKeypoint(keypoints, 'left_hip');
   const rightHip = visibleKeypoint(keypoints, 'right_hip');
-  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+    if (!selectedSide) return null;
+    const selectedShoulder = visibleKeypoint(keypoints, `${selectedSide}_shoulder`);
+    const selectedHip = visibleKeypoint(keypoints, `${selectedSide}_hip`);
+    const selectedElbow = visibleKeypoint(keypoints, `${selectedSide}_elbow`);
+    const selectedWrist = visibleKeypoint(keypoints, `${selectedSide}_wrist`);
+    const oppositeSide = selectedSide === 'left' ? 'right' : 'left';
+    const oppositeShoulder = visibleKeypoint(keypoints, `${oppositeSide}_shoulder`);
+    const oppositeHip = visibleKeypoint(keypoints, `${oppositeSide}_hip`);
+    const selectedTorsoHeight = selectedShoulder && selectedHip
+      ? Math.abs(selectedHip.y - selectedShoulder.y)
+      : 0;
+
+    if (
+      selectedShoulder &&
+      selectedHip &&
+      selectedElbow &&
+      selectedWrist &&
+      selectedTorsoHeight > 1e-6 &&
+      (!oppositeShoulder || !oppositeHip)
+    ) {
+      return ONE_SIDE_SIDE_VIEW_CONFIDENCE;
+    }
+
+    return null;
+  }
 
   const leftTorso = Math.abs(leftHip.y - leftShoulder.y);
   const rightTorso = Math.abs(rightHip.y - rightShoulder.y);
@@ -658,14 +644,44 @@ function averageSideViewConfidence(repWindow: RepWindow): number | null {
   return repWindow.sideViewConfidenceSum / repWindow.sideViewConfidenceSamples;
 }
 
-function isCablePushdownRepScorable(repWindow: RepWindow): boolean {
-  if (repWindow.sideViewConfidenceSamples < SIDE_VIEW_MIN_SAMPLES) return true;
+function buildCablePushdownViewQuality(repWindow: RepWindow): RepViewQualityDiagnostic {
   const averageConfidence = averageSideViewConfidence(repWindow);
-  if (averageConfidence === null) return true;
-  return (
-    averageConfidence >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
-    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN
+  const hasEnoughSamples =
+    repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES &&
+    averageConfidence !== null;
+  const sideConfirmed = Boolean(
+    hasEnoughSamples &&
+    averageConfidence! >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN,
   );
+  const frontishConfirmed = Boolean(hasEnoughSamples && !sideConfirmed);
+  return {
+    status: sideConfirmed
+      ? 'side_confirmed'
+      : frontishConfirmed
+        ? 'frontish_confirmed'
+        : 'view_unknown',
+    sideConfirmed,
+    frontishConfirmed,
+    viewUnknown: !sideConfirmed && !frontishConfirmed,
+    averageSideViewConfidence: averageConfidence,
+    minSideViewConfidence: repWindow.sideViewConfidenceMin === Infinity
+      ? null
+      : repWindow.sideViewConfidenceMin,
+    sampleCount: repWindow.sideViewConfidenceSamples,
+  };
+}
+
+function diagnosticsViewFor(
+  viewQuality: RepViewQualityDiagnostic,
+): NonNullable<FrameworkRepResult['diagnostics']>['view'] {
+  if (viewQuality.sideConfirmed) return 'side';
+  if (viewQuality.frontishConfirmed) return 'front';
+  return 'unknown';
+}
+
+function isCablePushdownRepScorable(repWindow: RepWindow): boolean {
+  return buildCablePushdownViewQuality(repWindow).sideConfirmed;
 }
 
 function cablePushdownQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
@@ -691,7 +707,10 @@ function shouldShowSetupSideViewFeedback(state: CablePushdownState, t: number): 
   return (
     averageConfidence !== null &&
     minConfidence !== null &&
-    (averageConfidence < SIDE_VIEW_AVG_CONFIDENCE_MIN || minConfidence < SIDE_VIEW_MIN_CONFIDENCE_MIN)
+    (
+      averageConfidence < FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN ||
+      minConfidence < FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN
+    )
   );
 }
 
@@ -725,6 +744,22 @@ function returnVelocitySpikeRatio(repWindow: RepWindow): number | null {
   return velocitySpikeRatio(repWindow.returnVelocityValues);
 }
 
+function initialSourceCounts(): Record<LandmarkSourceName, number> {
+  return { world: 0, image: 0, fallback: 0 };
+}
+
+function dominantSourceLabel(counts: Record<LandmarkSourceName, number>): LandmarkSourceName | null {
+  let bestSource: LandmarkSourceName | null = null;
+  let bestCount = 0;
+  for (const source of ['world', 'image', 'fallback'] as const) {
+    if (counts[source] > bestCount) {
+      bestSource = source;
+      bestCount = counts[source];
+    }
+  }
+  return bestSource;
+}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -747,11 +782,15 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
     shoulderAngleBaseline: null,
     maxShoulderDelta: 0,
     elbowForwardAngleAtStart: null,
-    maxElbowForwardAngle: 0,
+    shoulderAngleConfidenceSum: 0,
+    shoulderAngleSampleCount: 0,
+    shoulderSourceCounts: initialSourceCounts(),
     torsoDevBaseline: null,
     maxTorsoAbsoluteDev: 0,
-    maxTorsoDeltaFromBaseline: 0,
     maxTorsoRockDelta: 0,
+    torsoDevConfidenceSum: 0,
+    torsoDevSampleCount: 0,
+    torsoSourceCounts: initialSourceCounts(),
     sideViewConfidenceSum: 0,
     sideViewConfidenceMin: Infinity,
     sideViewConfidenceSamples: 0,
@@ -926,15 +965,19 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
   penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
 
   // 3. Elbow drift (shoulder angle delta)
-  penalties.push({ value: repWindow.maxShoulderDelta, config: PENALTY_CONFIGS.ELBOW_DRIFT });
-  penalties.push({
-    value: repWindow.elbowForwardAngleAtStart ?? 0,
-    config: PENALTY_CONFIGS.ELBOW_FORWARD,
-  });
+  if (repWindow.shoulderAngleSampleCount > 0) {
+    penalties.push({ value: repWindow.maxShoulderDelta, config: PENALTY_CONFIGS.ELBOW_DRIFT });
+    penalties.push({
+      value: repWindow.elbowForwardAngleAtStart ?? 0,
+      config: PENALTY_CONFIGS.ELBOW_FORWARD,
+    });
+  }
 
   // 4. Torso mechanics
-  penalties.push({ value: repWindow.maxTorsoAbsoluteDev, config: PENALTY_CONFIGS.TORSO_LEAN });
-  penalties.push({ value: repWindow.maxTorsoRockDelta, config: PENALTY_CONFIGS.TORSO_ROCK });
+  if (repWindow.torsoDevSampleCount > 0) {
+    penalties.push({ value: repWindow.maxTorsoAbsoluteDev, config: PENALTY_CONFIGS.TORSO_LEAN });
+    penalties.push({ value: repWindow.maxTorsoRockDelta, config: PENALTY_CONFIGS.TORSO_ROCK });
+  }
 
   const holdMs = lockoutHoldMs(repWindow);
   if (holdMs !== null && repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL) {
@@ -1043,45 +1086,71 @@ function buildCablePushdownDiagnostics(
     ? repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended)
     : null;
   const sideViewConfidence = averageSideViewConfidence(repWindow);
-  const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= SIDE_VIEW_MIN_SAMPLES;
-  const sideConfirmed = hasSideViewConfidence &&
-    sideViewConfidence !== null &&
-    sideViewConfidence >= SIDE_VIEW_AVG_CONFIDENCE_MIN &&
-    repWindow.sideViewConfidenceMin >= SIDE_VIEW_MIN_CONFIDENCE_MIN;
+  const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES;
+  const viewQuality = buildCablePushdownViewQuality(repWindow);
   const holdMs = lockoutHoldMs(repWindow);
   const shortLockoutHold = holdMs !== null &&
     repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL &&
     holdMs < FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS;
   const pushSpikeRatio = pushVelocitySpikeRatio(repWindow);
   const returnSpikeRatio = returnVelocitySpikeRatio(repWindow);
+  const hasShoulderMetric = repWindow.shoulderAngleSampleCount > 0;
+  const hasTorsoMetric = repWindow.torsoDevSampleCount > 0;
+  const shoulderConfidence = hasShoulderMetric
+    ? repWindow.shoulderAngleConfidenceSum / repWindow.shoulderAngleSampleCount
+    : undefined;
+  const torsoConfidence = hasTorsoMetric
+    ? repWindow.torsoDevConfidenceSum / repWindow.torsoDevSampleCount
+    : undefined;
+  const shoulderSource = hasShoulderMetric ? dominantSourceLabel(repWindow.shoulderSourceCounts) : null;
+  const torsoSource = hasTorsoMetric ? dominantSourceLabel(repWindow.torsoSourceCounts) : null;
   return buildRepDiagnostics({
     exerciseName: 'Cable Pushdowns',
     repIndex,
-    view: 'side',
+    view: diagnosticsViewFor(viewQuality),
     selectedSide: visibleSide,
-    scorable: isCablePushdownRepScorable(repWindow),
-    viewQuality: {
-      status: hasSideViewConfidence
-        ? sideConfirmed
-          ? 'side_confirmed'
-          : 'frontish_confirmed'
-        : 'view_unknown',
-      sideConfirmed,
-      frontishConfirmed: hasSideViewConfidence && !sideConfirmed,
-      viewUnknown: !hasSideViewConfidence,
-      averageSideViewConfidence: sideViewConfidence,
-      minSideViewConfidence: repWindow.sideViewConfidenceMin === Infinity ? null : repWindow.sideViewConfidenceMin,
-      sampleCount: repWindow.sideViewConfidenceSamples,
-    },
+    scorable: viewQuality.sideConfirmed,
+    viewQuality,
     metrics: [
       diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
       diagnosticMetric('flexionRatio', repWindow.minRatio, { unit: 'ratio' }),
       diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
-      diagnosticMetric('elbowDriftDelta', repWindow.maxShoulderDelta, { unit: 'degrees' }),
-      diagnosticMetric('elbowForwardAngle', repWindow.elbowForwardAngleAtStart, { unit: 'degrees' }),
-      diagnosticMetric('torsoAbsoluteDeviation', repWindow.maxTorsoAbsoluteDev, { unit: 'degrees' }),
-      diagnosticMetric('torsoDeltaFromBaseline', repWindow.maxTorsoDeltaFromBaseline, { unit: 'degrees' }),
-      diagnosticMetric('torsoRockDelta', repWindow.maxTorsoRockDelta, { unit: 'degrees' }),
+      diagnosticMetric('elbowDriftDelta', hasShoulderMetric ? repWindow.maxShoulderDelta : null, {
+        unit: 'degrees',
+        eligible: hasShoulderMetric,
+        confidence: shoulderConfidence,
+        sampleCount: repWindow.shoulderAngleSampleCount,
+        skippedReason: 'shoulder_angle_unavailable',
+      }),
+      diagnosticMetric('elbowForwardAngle', hasShoulderMetric ? repWindow.elbowForwardAngleAtStart : null, {
+        unit: 'degrees',
+        eligible: hasShoulderMetric,
+        confidence: shoulderConfidence,
+        sampleCount: repWindow.shoulderAngleSampleCount,
+        skippedReason: 'shoulder_angle_unavailable',
+      }),
+      diagnosticLabelMetric('shoulderMetricSource', shoulderSource, {
+        sampleCount: repWindow.shoulderAngleSampleCount,
+        skippedReason: 'shoulder_angle_unavailable',
+      }),
+      diagnosticMetric('torsoAbsoluteDeviation', hasTorsoMetric ? repWindow.maxTorsoAbsoluteDev : null, {
+        unit: 'degrees',
+        eligible: hasTorsoMetric,
+        confidence: torsoConfidence,
+        sampleCount: repWindow.torsoDevSampleCount,
+        skippedReason: 'torso_chain_unavailable',
+      }),
+      diagnosticMetric('torsoRockDelta', hasTorsoMetric ? repWindow.maxTorsoRockDelta : null, {
+        unit: 'degrees',
+        eligible: hasTorsoMetric,
+        confidence: torsoConfidence,
+        sampleCount: repWindow.torsoDevSampleCount,
+        skippedReason: 'torso_chain_unavailable',
+      }),
+      diagnosticLabelMetric('torsoMetricSource', torsoSource, {
+        sampleCount: repWindow.torsoDevSampleCount,
+        skippedReason: 'torso_chain_unavailable',
+      }),
       diagnosticMetric('lockoutHoldMs', holdMs, {
         unit: 'milliseconds',
         eligible: holdMs !== null,
@@ -1134,37 +1203,45 @@ function buildCablePushdownDiagnostics(
         issueId: 'cable-pushdowns.elbow_drift',
         metricKeys: ['elbowDriftDelta'],
         direction: 'above',
-        value: repWindow.maxShoulderDelta,
+        value: hasShoulderMetric ? repWindow.maxShoulderDelta : null,
         thresholdPath: 'formThresholds.ELBOW_DRIFT_WARN',
         thresholdValue: FORM_THRESHOLDS.ELBOW_DRIFT_WARN,
-        triggered: repWindow.maxShoulderDelta > FORM_THRESHOLDS.ELBOW_DRIFT_WARN,
+        eligible: hasShoulderMetric,
+        triggered: hasShoulderMetric && repWindow.maxShoulderDelta > FORM_THRESHOLDS.ELBOW_DRIFT_WARN,
+        skippedReason: 'shoulder_angle_unavailable',
       }),
       diagnosticCue({
         issueId: 'cable-pushdowns.elbow_forward',
         metricKeys: ['elbowForwardAngle'],
         direction: 'above',
-        value: repWindow.elbowForwardAngleAtStart,
+        value: hasShoulderMetric ? repWindow.elbowForwardAngleAtStart : null,
         thresholdPath: 'formThresholds.ELBOW_FORWARD_WARN',
         thresholdValue: FORM_THRESHOLDS.ELBOW_FORWARD_WARN,
-        triggered: (repWindow.elbowForwardAngleAtStart ?? 0) > FORM_THRESHOLDS.ELBOW_FORWARD_WARN,
+        eligible: hasShoulderMetric,
+        triggered: hasShoulderMetric && (repWindow.elbowForwardAngleAtStart ?? 0) > FORM_THRESHOLDS.ELBOW_FORWARD_WARN,
+        skippedReason: 'shoulder_angle_unavailable',
       }),
       diagnosticCue({
         issueId: 'cable-pushdowns.torso_warn',
         metricKeys: ['torsoAbsoluteDeviation'],
         direction: 'above',
-        value: repWindow.maxTorsoAbsoluteDev,
+        value: hasTorsoMetric ? repWindow.maxTorsoAbsoluteDev : null,
         thresholdPath: 'formThresholds.TORSO_LEAN_WARN',
         thresholdValue: FORM_THRESHOLDS.TORSO_LEAN_WARN,
-        triggered: repWindow.maxTorsoAbsoluteDev > FORM_THRESHOLDS.TORSO_LEAN_WARN,
+        eligible: hasTorsoMetric,
+        triggered: hasTorsoMetric && repWindow.maxTorsoAbsoluteDev > FORM_THRESHOLDS.TORSO_LEAN_WARN,
+        skippedReason: 'torso_chain_unavailable',
       }),
       diagnosticCue({
         issueId: 'cable-pushdowns.torso_rocking',
         metricKeys: ['torsoRockDelta'],
         direction: 'above',
-        value: repWindow.maxTorsoRockDelta,
+        value: hasTorsoMetric ? repWindow.maxTorsoRockDelta : null,
         thresholdPath: 'formThresholds.TORSO_ROCK_WARN',
         thresholdValue: FORM_THRESHOLDS.TORSO_ROCK_WARN,
-        triggered: repWindow.maxTorsoRockDelta > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        eligible: hasTorsoMetric,
+        triggered: hasTorsoMetric && repWindow.maxTorsoRockDelta > FORM_THRESHOLDS.TORSO_ROCK_WARN,
+        skippedReason: 'torso_chain_unavailable',
       }),
       diagnosticCue({
         issueId: 'cable-pushdowns.tempo_down',
@@ -1209,9 +1286,9 @@ function buildCablePushdownRepResult(
   repIndex: number,
   visibleSide: 'left' | 'right',
 ): RepResult {
-  const score = computeCablePushdownScore(repWindow);
-  const messages = generateFormMessages(repWindow);
   const scorable = isCablePushdownRepScorable(repWindow);
+  const score = scorable ? computeCablePushdownScore(repWindow) : 0;
+  const messages = scorable ? generateFormMessages(repWindow) : [];
   return {
     repIndex,
     score,
@@ -1228,8 +1305,12 @@ function recordRepWindowFrame(
     t: number;
     rawRatio: number;
     smoothedRatio: number;
-    rawShoulder: number | null;
-    rawTorsoDev: number | null;
+    shoulderAngle: number | null;
+    shoulderSource: LandmarkSourceName | null;
+    rawShoulderConfidence: number | null;
+    torsoDev: number | null;
+    torsoSource: LandmarkSourceName | null;
+    rawTorsoConfidence: number | null;
     sideViewConfidence: number | null;
     previousPhase: CablePushdownPhase;
     nextPhase: CablePushdownPhase;
@@ -1239,8 +1320,12 @@ function recordRepWindowFrame(
     t,
     rawRatio,
     smoothedRatio,
-    rawShoulder,
-    rawTorsoDev,
+    shoulderAngle,
+    shoulderSource,
+    rawShoulderConfidence,
+    torsoDev,
+    torsoSource,
+    rawTorsoConfidence,
     sideViewConfidence,
     previousPhase,
     nextPhase,
@@ -1277,23 +1362,27 @@ function recordRepWindowFrame(
     window.sideViewConfidenceSamples++;
   }
 
-  if (rawShoulder !== null) {
+  if (shoulderAngle !== null) {
+    window.shoulderAngleSampleCount++;
+    if (shoulderSource) window.shoulderSourceCounts[shoulderSource]++;
+    window.shoulderAngleConfidenceSum += rawShoulderConfidence ?? FORM_CONFIDENCE_MIN;
     if (window.shoulderAngleBaseline === null) {
-      window.shoulderAngleBaseline = rawShoulder;
-      window.elbowForwardAngleAtStart = rawShoulder;
+      window.shoulderAngleBaseline = shoulderAngle;
+      window.elbowForwardAngleAtStart = shoulderAngle;
     }
-    const delta = Math.abs(rawShoulder - window.shoulderAngleBaseline);
+    const delta = Math.abs(shoulderAngle - window.shoulderAngleBaseline);
     window.maxShoulderDelta = Math.max(window.maxShoulderDelta, delta);
-    window.maxElbowForwardAngle = Math.max(window.maxElbowForwardAngle, rawShoulder);
   }
 
-  if (rawTorsoDev !== null) {
+  if (torsoDev !== null) {
+    window.torsoDevSampleCount++;
+    if (torsoSource) window.torsoSourceCounts[torsoSource]++;
+    window.torsoDevConfidenceSum += rawTorsoConfidence ?? FORM_CONFIDENCE_MIN;
     if (window.torsoDevBaseline === null) {
-      window.torsoDevBaseline = rawTorsoDev;
+      window.torsoDevBaseline = torsoDev;
     }
-    const torsoDelta = Math.abs(rawTorsoDev - window.torsoDevBaseline);
-    window.maxTorsoAbsoluteDev = Math.max(window.maxTorsoAbsoluteDev, Math.abs(rawTorsoDev));
-    window.maxTorsoDeltaFromBaseline = Math.max(window.maxTorsoDeltaFromBaseline, torsoDelta);
+    const torsoDelta = Math.abs(torsoDev - window.torsoDevBaseline);
+    window.maxTorsoAbsoluteDev = Math.max(window.maxTorsoAbsoluteDev, Math.abs(torsoDev));
     window.maxTorsoRockDelta = Math.max(window.maxTorsoRockDelta, torsoDelta);
   }
 
@@ -1365,7 +1454,15 @@ function updateCablePushdownState(
   const torsoSample = calculateTorsoDeviationSample(frameContext, keypoints, visibleSide);
   const rawShoulder = shoulderSample?.value ?? null;
   const rawTorsoDev = torsoSample?.value ?? null;
-  const sideViewConfidence = calculateSideViewConfidence(signalKeypoints);
+  const rawShoulderSource = shoulderSample?.source ?? null;
+  const rawTorsoSource = torsoSample?.source ?? null;
+  const rawShoulderConfidence = shoulderSample
+    ? minKeypointConfidence(shoulderSample.keypoints, [`${visibleSide}_hip`, `${visibleSide}_shoulder`, `${visibleSide}_elbow`])
+    : null;
+  const rawTorsoConfidence = torsoSample
+    ? minKeypointConfidence(torsoSample.keypoints, [`${visibleSide}_hip`, `${visibleSide}_shoulder`])
+    : null;
+  const sideViewConfidence = calculateSideViewConfidence(signalKeypoints, visibleSide);
   const ratioConf = minKeypointConfidence(signalKeypoints, [
     `${visibleSide}_shoulder`, `${visibleSide}_elbow`, `${visibleSide}_wrist`,
   ]);
@@ -1391,6 +1488,8 @@ function updateCablePushdownState(
   const smoothedTorso = rawTorsoDev !== null
     ? currentState.torsoTracker.push(rawTorsoDev)
     : currentState.torsoTracker.value;
+  const medianShoulder = currentState.shoulderTracker.medianValue;
+  const medianTorso = currentState.torsoTracker.medianValue;
 
   const newState: CablePushdownState = {
     ...currentState,
@@ -1404,6 +1503,13 @@ function updateCablePushdownState(
   if (isNaN(fastRatio)) {
     return newState;
   }
+
+  const shoulderAngleForForm = rawShoulder !== null && isFiniteMetric(medianShoulder)
+    ? medianShoulder
+    : null;
+  const torsoDevForForm = rawTorsoDev !== null && isFiniteMetric(medianTorso)
+    ? medianTorso
+    : null;
 
   if (currentState.fsm.phase === 'REST' && currentState.repWindow === null && sideViewConfidence !== null) {
     const setupSamples = [...currentState.setupSideViewConfidences, sideViewConfidence].slice(-SETUP_SIDE_VIEW_MIN_SAMPLES);
@@ -1442,8 +1548,12 @@ function updateCablePushdownState(
       t,
       rawRatio,
       smoothedRatio,
-      rawShoulder,
-      rawTorsoDev,
+      shoulderAngle: shoulderAngleForForm,
+      shoulderSource: rawShoulderSource,
+      rawShoulderConfidence,
+      torsoDev: torsoDevForForm,
+      torsoSource: rawTorsoSource,
+      rawTorsoConfidence,
       sideViewConfidence,
       previousPhase: currentState.fsm.phase,
       nextPhase: newState.fsm.phase,
@@ -1461,7 +1571,11 @@ function updateCablePushdownState(
       const repResult = buildCablePushdownRepResult(window, newState.repCount, visibleSide);
       const messages = repResult.messages;
       newState.lastRepResult = repResult;
-      newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+      newState.feedback = repResult.scorable === false
+        ? SIDE_VIEW_SETUP_FEEDBACK
+        : messages.length > 0
+          ? messages.join('\n')
+          : 'Good rep.';
       newState.lastFeedbackTime = t;
     } else if (actualRom > 0) {
       newState.feedback = LOW_ROM_FEEDBACK;
@@ -1490,8 +1604,12 @@ function updateCablePushdownState(
       t,
       rawRatio,
       smoothedRatio,
-      rawShoulder,
-      rawTorsoDev,
+      shoulderAngle: shoulderAngleForForm,
+      shoulderSource: rawShoulderSource,
+      rawShoulderConfidence,
+      torsoDev: torsoDevForForm,
+      torsoSource: rawTorsoSource,
+      rawTorsoConfidence,
       sideViewConfidence,
       previousPhase: currentState.fsm.phase,
       nextPhase: newState.fsm.phase,
@@ -1504,8 +1622,12 @@ function updateCablePushdownState(
       t,
       rawRatio,
       smoothedRatio,
-      rawShoulder,
-      rawTorsoDev,
+      shoulderAngle: shoulderAngleForForm,
+      shoulderSource: rawShoulderSource,
+      rawShoulderConfidence,
+      torsoDev: torsoDevForForm,
+      torsoSource: rawTorsoSource,
+      rawTorsoConfidence,
       sideViewConfidence,
       previousPhase: currentState.fsm.phase,
       nextPhase: newState.fsm.phase,
@@ -1519,6 +1641,8 @@ function updateCablePushdownState(
 
     if (messages.length > 0) {
       newState.feedback = messages.join('\n');
+    } else if (repResult.scorable === false) {
+      newState.feedback = SIDE_VIEW_SETUP_FEEDBACK;
     } else {
       newState.feedback = 'Great rep!';
     }
@@ -1633,10 +1757,35 @@ function validateCablePushdownHeuristicConfig(config: ExerciseHeuristicConfig): 
   const issues: string[] = [];
 
   requireOrdered(config, issues, 'thresholds.PUSH_CLOCK_START', 'thresholds.EXTENDING_ENTER', true);
+  requireOrdered(config, issues, 'thresholds.PUSH_CLOCK_DELTA', 'thresholds.MOVEMENT_START_DELTA', true);
+  requireOrdered(config, issues, 'thresholds.REST_REENTER', 'thresholds.EXTENDING_ENTER', true);
   requireOrdered(config, issues, 'thresholds.EXTENDING_ENTER', 'thresholds.EXTENDED_EXIT');
   requireOrdered(config, issues, 'thresholds.EXTENDED_EXIT', 'thresholds.EXTENDED_ENTER');
   requireOrdered(config, issues, 'thresholds.RETURN_COMPLETE_BUFFER', 'thresholds.EXTENDING_ENTER');
   requireOrdered(config, issues, 'thresholds.MIN_PARTIAL_ROM', 'thresholds.EXTENDING_ENTER');
+  requireOrdered(config, issues, 'thresholds.REST_REENTER', 'formThresholds.FLEXION_FAIL', true);
+  requireOrdered(config, issues, 'formThresholds.FLEXION_FAIL', 'thresholds.EXTENDED_ENTER');
+  requireOrdered(config, issues, 'thresholds.EXTENDED_EXIT', 'formThresholds.EXTENSION_FAIL', true);
+  requireOrdered(config, issues, 'thresholds.EXTENDED_ENTER', 'formThresholds.EXTENSION_FAIL', true);
+  requireOrdered(
+    config,
+    issues,
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    true,
+  );
+
+  const minPartialRom = configNumber(config, 'thresholds.MIN_PARTIAL_ROM', issues);
+  const extendedEnter = configNumber(config, 'thresholds.EXTENDED_ENTER', issues);
+  const restReenter = configNumber(config, 'thresholds.REST_REENTER', issues);
+  if (minPartialRom !== null && extendedEnter !== null && restReenter !== null) {
+    const fullRom = extendedEnter - restReenter;
+    if (minPartialRom <= 0 || minPartialRom >= fullRom) {
+      issues.push(
+        `Cable Pushdowns config "thresholds.MIN_PARTIAL_ROM" (${minPartialRom}) must be greater than 0 and less than EXTENDED_ENTER - REST_REENTER (${fullRom}).`,
+      );
+    }
+  }
 
   for (const path of [
     'thresholds.PUSH_CLOCK_START',
@@ -1650,10 +1799,12 @@ function validateCablePushdownHeuristicConfig(config: ExerciseHeuristicConfig): 
     'thresholds.MIN_PARTIAL_ROM',
     'formThresholds.EXTENSION_FAIL',
     'formThresholds.FLEXION_FAIL',
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
   ]) {
     const value = configNumber(config, path, issues);
-    if (value !== null && (value < 0 || value > 1.2)) {
-      issues.push(`Cable Pushdowns config "${path}" must be between 0 and 1.2.`);
+    if (value !== null && (value < 0 || value > 1)) {
+      issues.push(`Cable Pushdowns config "${path}" must be between 0 and 1.`);
     }
   }
 
@@ -1678,6 +1829,14 @@ function validateCablePushdownHeuristicConfig(config: ExerciseHeuristicConfig): 
   const lockoutGap = configNumber(config, 'formThresholds.LOCKOUT_GAP_TOLERANCE_MS', issues);
   if (lockoutGap !== null && lockoutGap < 0) {
     issues.push('Cable Pushdowns config "formThresholds.LOCKOUT_GAP_TOLERANCE_MS" must be greater than or equal to 0.');
+  }
+
+  const sideViewMinSamples = configNumber(config, 'formThresholds.SIDE_VIEW_MIN_SAMPLES', issues);
+  if (
+    sideViewMinSamples !== null &&
+    (!Number.isInteger(sideViewMinSamples) || sideViewMinSamples <= 0)
+  ) {
+    issues.push('Cable Pushdowns config "formThresholds.SIDE_VIEW_MIN_SAMPLES" must be a positive integer.');
   }
 
   validatePenaltyConfigs(config, issues);

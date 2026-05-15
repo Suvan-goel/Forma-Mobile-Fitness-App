@@ -2,6 +2,7 @@
   "_templateNotes": [
     "Copy this file to a new label file such as pushdown_001.json, then edit the paths, split, expectedReps, and reps.",
     "Use issueIds from availableIssues. Use an empty issueIds array for a clean rep.",
+    "Elbow, torso, and tempo diagnostics support the listed issues; label the visible coaching issue, not the underlying metric name.",
     "Files named _template.json or *.template.json are ignored by dataset:evaluate and dataset:optimize."
   ],
   "schemaVersion": 1,
@@ -17,6 +18,8 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "view": "side",
+      "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",
       "suggestedIssueIds": [],
       "suggestedFeedbackMessages": [],
@@ -24,6 +27,13 @@
     }
   ],
   "notes": "Draft label template. Copy to a real label file, review timings/issues, then set reviewStatus to reviewed.",
+  "labelingGuidance": [
+    "Side-view Cable Pushdowns reps are the v1 full-form scoring target.",
+    "Front, oblique, or unknown-view Cable Pushdowns reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.",
+    "Label lockout, top range, elbow drift, forward elbow setup, torso lean, torso rocking, and tempo only when a clear side view supports the cue.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives.",
+    "Reviewed scorable Cable Pushdowns reps must use view=side; use scorable=false for front, oblique, or unknown views."
+  ],
   "availableIssues": [
     {
       "issueId": "cable-pushdowns.lockout_short",

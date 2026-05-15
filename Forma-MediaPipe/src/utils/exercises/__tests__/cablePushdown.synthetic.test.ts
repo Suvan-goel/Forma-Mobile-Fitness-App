@@ -211,6 +211,7 @@ function buildRecording(
     elbowPosition?: ElbowPosition | ((index: number) => ElbowPosition);
     sideSwitchFrame?: number;
     sideGap?: number;
+    hiddenSideScore?: number;
   } = {},
 ): LandmarkRecording {
   const {
@@ -220,6 +221,7 @@ function buildRecording(
     elbowPosition = 'pinned',
     sideSwitchFrame,
     sideGap = 0.03,
+    hiddenSideScore = 0.3,
   } = options;
 
   return {
@@ -239,7 +241,7 @@ function buildRecording(
           ? makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, frameElbowPosition, 0.7, 0.99, sideGap)
           : makeFrameWithScores(index * FRAME_MS, progress, orientation, framePosture, frameElbowPosition, 0.99, 0.7, sideGap);
       }
-      return makeFrame(index * FRAME_MS, progress, side, orientation, framePosture, frameElbowPosition, 0.3, sideGap);
+      return makeFrame(index * FRAME_MS, progress, side, orientation, framePosture, frameElbowPosition, hiddenSideScore, sideGap);
     }),
   };
 }
@@ -258,6 +260,67 @@ function buildWorldImageMismatchRecording(): LandmarkRecording {
       keypoints: staticWorld.frames[index].keypoints,
       worldKeypoints: staticWorld.frames[index].keypoints,
       imageKeypoints: frame.keypoints,
+    })),
+  };
+}
+
+function buildWorldStaticImageBadFormRecording(): LandmarkRecording {
+  const dynamicImage = buildRecording('synthetic bad-form image cable pushdown', fullRepPath(), {
+    posture: index => (index < 16 ? 'upright' : 'leaned'),
+    elbowPosition: index => (index >= 20 && index < 50 ? 'drifted' : 'pinned'),
+  });
+  const staticWorld = buildRecording('synthetic stale clean world cable pushdown', Array(fullRepPath().length).fill(0));
+  return {
+    ...dynamicImage,
+    metadata: {
+      ...dynamicImage.metadata,
+      description: 'synthetic stale-world image-bad-form cable pushdown',
+    },
+    frames: dynamicImage.frames.map((frame, index) => ({
+      timestamp: frame.timestamp,
+      keypoints: staticWorld.frames[index].keypoints,
+      worldKeypoints: staticWorld.frames[index].keypoints,
+      imageKeypoints: frame.keypoints,
+    })),
+  };
+}
+
+function buildImageZBadFormRecording(): LandmarkRecording {
+  const recording = buildWorldStaticImageBadFormRecording();
+  return {
+    ...recording,
+    metadata: {
+      ...recording.metadata,
+      description: 'synthetic image-z bad-form cable pushdown',
+    },
+    frames: recording.frames.map((frame, frameIndex) => ({
+      ...frame,
+      imageKeypoints: frame.imageKeypoints?.map(point => {
+        const extraElbowDrift =
+          frameIndex >= 20 &&
+          frameIndex < 50 &&
+          (point.name.endsWith('_elbow') || point.name.endsWith('_wrist'))
+            ? 0.18
+            : 0;
+        return { ...point, x: point.x + extraElbowDrift, z: 0.2 };
+      }),
+    })),
+  };
+}
+
+function buildMildlyNoisyCleanRecording(): LandmarkRecording {
+  const recording = buildRecording('synthetic mildly noisy clean cable pushdown', fullRepPath());
+  const noise = [-0.0015, 0.001, -0.0005, 0.0015, -0.001];
+  return {
+    ...recording,
+    frames: recording.frames.map((frame, frameIndex) => ({
+      ...frame,
+      keypoints: frame.keypoints.map((point, pointIndex) => ({
+        ...point,
+        x: point.x + noise[(frameIndex + pointIndex) % noise.length],
+        y: point.y + noise[(frameIndex * 2 + pointIndex) % noise.length],
+        score: 0.99,
+      })),
     })),
   };
 }
@@ -343,6 +406,53 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     expect(result.frameTraces.some(trace => trace.feedback === 'Turn side-on so I can judge your pushdown.')).toBe(true);
     expect(result.reps[0].scorable).toBe(false);
     expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('front');
+    expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
+    expect(result.reps[0].issueIds).toEqual([]);
+  });
+
+  it('keeps one-side-only side captures scorable when the selected side chain is clear', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildRecording('synthetic one-side-only cable pushdown', fullRepPath(), {
+        hiddenSideScore: 0.01,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].qualityWarnings ?? []).not.toContain('side_view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('side');
+    expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('side_confirmed');
+    expect(result.reps[0].diagnostics?.metrics.sideViewConfidence.value).toBeGreaterThanOrEqual(0.45);
+  });
+
+  it('does not leak form feedback or praise for poor side-view reps without replay gating', () => {
+    const result = replayRecordingVerbose(
+      cablePushdownDefinition,
+      buildRecording('synthetic ungated poor side view cable pushdown', fullRepPath(), {
+        sideGap: 0.42,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].score).toBe(0);
+    expect(result.reps[0].messages).toEqual([]);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.frameTraces.some(trace => trace.feedback === 'Turn side-on so I can judge your pushdown.')).toBe(true);
+    expect(result.frameTraces.every(trace => trace.feedback !== 'Great rep!')).toBe(true);
+    expect(result.frameTraces.every(trace => trace.feedback !== 'Good rep.')).toBe(true);
+  });
+
+  it('counts a mildly noisy clean pushdown without form feedback', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildMildlyNoisyCleanRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toEqual([]);
   });
 
   it('uses image-space motion when world landmarks are static', () => {
@@ -350,6 +460,44 @@ describe('Cable Pushdown synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+  });
+
+  it('uses image-space form metrics when world landmarks are stale', () => {
+    const result = replayRecording(cablePushdownDefinition, buildWorldStaticImageBadFormRecording());
+    const metrics = result.reps[0].diagnostics?.metrics;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Stay upright — avoid leaning into the pushdown.');
+    expect(metrics?.elbowDriftDelta.eligible).toBe(true);
+    expect(metrics?.elbowDriftDelta.sampleCount).toBeGreaterThan(0);
+    expect(metrics?.shoulderMetricSource?.label).toBe('image');
+    expect(metrics?.torsoAbsoluteDeviation.eligible).toBe(true);
+    expect(metrics?.torsoAbsoluteDeviation.sampleCount).toBeGreaterThan(0);
+    expect(metrics?.torsoMetricSource?.label).toBe('image');
+  });
+
+  it('keeps image-space form metrics 2D when image landmarks include z', () => {
+    const result = replayRecording(cablePushdownDefinition, buildImageZBadFormRecording());
+    const metrics = result.reps[0].diagnostics?.metrics;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your elbows pinned to your sides — avoid letting them drift.');
+    expect(result.feedbackMessages).toContain('Stay upright — avoid leaning into the pushdown.');
+    expect(metrics?.elbowDriftDelta.eligible).toBe(true);
+    expect(metrics?.torsoAbsoluteDeviation.value).toBeGreaterThan(14);
+  });
+
+  it('counts two clean pushdowns in sequence', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildRecording('synthetic two clean cable pushdowns', [
+        ...fullRepPath(),
+        ...fullRepPath(),
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(2);
+    expect(result.feedbackMessages).toEqual([]);
   });
 
   it('flags elbow drift without punishing pinned elbows', () => {
@@ -431,6 +579,44 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).not.toContain('Keep your elbows pinned to your sides — avoid letting them drift.');
     expect(result.feedbackMessages).not.toContain('Stay upright — avoid leaning into the pushdown.');
+    expect(result.reps[0].diagnostics?.metrics.elbowDriftDelta).toMatchObject({
+      eligible: false,
+      sampleCount: 0,
+      skippedReason: 'shoulder_angle_unavailable',
+    });
+    expect(result.reps[0].diagnostics?.metrics.torsoAbsoluteDeviation).toMatchObject({
+      eligible: false,
+      sampleCount: 0,
+      skippedReason: 'torso_chain_unavailable',
+    });
+    expect(result.reps[0].diagnostics?.cues['cable-pushdowns.elbow_drift']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'shoulder_angle_unavailable',
+    });
+    expect(result.reps[0].diagnostics?.cues['cable-pushdowns.torso_warn']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'torso_chain_unavailable',
+    });
+  });
+
+  it('ignores a one-frame high-confidence elbow and torso spike', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildRecording('synthetic one-frame form spike cable pushdown', fullRepPath(), {
+        posture: index => (index === 35 ? 'leaned' : 'upright'),
+        elbowPosition: index => (index === 35 ? 'drifted' : 'pinned'),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Keep your elbows pinned to your sides — avoid letting them drift.');
+    expect(result.feedbackMessages).not.toContain('Stay upright — avoid leaning into the pushdown.');
+    expect(result.feedbackMessages).not.toContain('Keep your torso steady through the pushdown.');
+    expect(result.reps[0].diagnostics?.cues['cable-pushdowns.elbow_drift'].triggered).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['cable-pushdowns.torso_warn'].triggered).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['cable-pushdowns.torso_rocking'].triggered).toBe(false);
   });
 
   it('still flags a true fast return', () => {
@@ -468,8 +654,9 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     );
     const metrics = result.reps[0].diagnostics?.metrics ?? {};
 
-    expect(metrics.torsoDeltaFromBaseline).toBeDefined();
+    expect(metrics.torsoDeltaFromBaseline).toBeUndefined();
     expect(metrics.torsoForwardDelta).toBeUndefined();
+    expect(metrics.torsoRockDelta).toBeDefined();
     expect(metrics.pushVelocitySpikeRatio.sampleCount).toBeGreaterThanOrEqual(4);
     expect(metrics.returnVelocitySpikeRatio.sampleCount).toBeGreaterThanOrEqual(4);
   });

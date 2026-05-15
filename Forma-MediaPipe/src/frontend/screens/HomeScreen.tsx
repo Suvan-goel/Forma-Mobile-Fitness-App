@@ -355,8 +355,14 @@ export const HomeScreen: React.FC = () => {
           >
             <View style={styles.readinessEdge}>
               <View style={[styles.cardLabelRow, styles.readinessLabelRow]}>
-                <Text style={[styles.cardLabel, styles.snapshotLabel]}>FORM READINESS</Text>
-                <Info size={13} color={COLORS.textTertiary} strokeWidth={1.8} />
+                <Text style={[styles.cardLabel, styles.snapshotLabel]}>
+                  FORM READINESS
+                </Text>
+                <Info
+                  size={13}
+                  color={COLORS.textTertiary}
+                  strokeWidth={1.8}
+                />
               </View>
 
               <View style={styles.readinessBody}>
@@ -769,11 +775,6 @@ const styles = StyleSheet.create({
   startBtnOuter: {
     borderRadius: 9,
     overflow: 'hidden',
-    shadowColor: '#7A55FF',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 4,
   },
   startBtn: {
     flexDirection: 'row',
@@ -813,8 +814,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: CARD_RADIUS,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.085)',
-    borderTopColor: 'rgba(255, 255, 255, 0.13)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
   },
   actionBtnText: {
     fontFamily: FONTS.ui.regular,
@@ -832,8 +833,8 @@ const styles = StyleSheet.create({
   weeklyEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.085)',
-    borderTopColor: 'rgba(255, 255, 255, 0.13)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
     padding: 16,
     gap: 10,
   },
@@ -874,8 +875,8 @@ const styles = StyleSheet.create({
   rewardsEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.085)',
-    borderTopColor: 'rgba(255, 255, 255, 0.13)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
     padding: 16,
     gap: 10,
   },
@@ -954,8 +955,8 @@ const styles = StyleSheet.create({
   challengesEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.085)',
-    borderTopColor: 'rgba(255, 255, 255, 0.13)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
     padding: 14,
   },
   challengeCount: {

@@ -58,10 +58,6 @@
       "feedbackMessage": "Even it out — raise both arms to the same height."
     },
     {
-      "issueId": "standing-dumbbell-lateral-raises.wrong_plane",
-      "feedbackMessage": "Raise out to your sides — avoid turning it into a front raise."
-    },
-    {
       "issueId": "standing-dumbbell-lateral-raises.tempo_up",
       "feedbackMessage": "Lift with control — avoid swinging the weights up."
     },
@@ -72,6 +68,10 @@
     {
       "issueId": "standing-dumbbell-lateral-raises.shoulder_shrug",
       "feedbackMessage": "Relax your traps — don't shrug the weight up."
+    },
+    {
+      "issueId": "standing-dumbbell-lateral-raises.wrong_plane",
+      "feedbackMessage": "Raise out to your sides — avoid turning it into a front raise."
     }
   ],
   "draftMetadata": {

@@ -18,11 +18,12 @@
     "reviewerViewConfidence": "usable"
   },
   "labelingGuidance": [
-    "Count a rep when the leg-curl movement is clear, even if the side view or distal landmarks are too poor to judge form.",
-    "Use lying-leg-curl.side_view_uncertain when the rep is countable but side-view geometry is not reliable enough for form scoring.",
-    "Use lying-leg-curl.thigh_movement when the knee or thigh visibly lifts, slides, or swings instead of staying planted on the pad.",
+    "Side-view Lying Leg Curl reps are the v1 full-form scoring target.",
+    "Front, oblique, or unknown-view Lying Leg Curl reps may still count movement, but mark them scorable=false and do not label clean negatives for side-only form cues.",
+    "Keep the same-side hip, knee, and lower-leg endpoint visible so rep count and scoring signals are reviewable.",
+    "Label curl depth, bottom extension, hip lift, thigh movement, top hold, tempo, and jerkiness only when a clear side view supports the cue.",
     "Note whether the ankle, heel, or foot index is the clearest lower-leg endpoint when the roller pad hides the ankle.",
-    "Use issueIds from availableIssues only for visible form faults; leave issueIds empty for clean reps."
+    "Reviewed scorable Lying Leg Curl reps must use view=side; use scorable=false for front, oblique, or unknown views."
   ],
   "expectedReps": 1,
   "reps": [
@@ -31,6 +32,8 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "view": "side",
+      "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",
       "suggestedIssueIds": [],
       "suggestedFeedbackMessages": [],
@@ -52,10 +55,6 @@
       "feedbackMessage": "Keep your hips down — avoid lifting off the pad."
     },
     {
-      "issueId": "lying-leg-curl.thigh_movement",
-      "feedbackMessage": "Keep your thighs down — only your lower legs should move."
-    },
-    {
       "issueId": "lying-leg-curl.tempo_up",
       "feedbackMessage": "Slow down the curl — control the contraction."
     },
@@ -72,8 +71,8 @@
       "feedbackMessage": "Move smoothly — avoid bouncing the weight."
     },
     {
-      "issueId": "lying-leg-curl.side_view_uncertain",
-      "feedbackMessage": "Turn fully side-on so I can judge your leg curl."
+      "issueId": "lying-leg-curl.thigh_movement",
+      "feedbackMessage": "Keep your thighs down — only your lower legs should move."
     }
   ],
   "draftMetadata": {

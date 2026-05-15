@@ -228,6 +228,18 @@ function buildRecording(
   };
 }
 
+function hideSide(recording: LandmarkRecording, side: 'left' | 'right'): LandmarkRecording {
+  return {
+    ...recording,
+    frames: recording.frames.map(frame => ({
+      ...frame,
+      keypoints: frame.keypoints.map(point => (
+        point.name?.startsWith(`${side}_`) ? { ...point, score: 0.05 } : point
+      )),
+    })),
+  };
+}
+
 describe('Machine Ab Crunch synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -240,8 +252,30 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
       expect(result.finalRepCount).toBe(1);
       expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
       expect(result.feedbackMessages).toEqual([]);
+      expect(result.reps[0].diagnostics?.view).toBe('side');
+      expect(result.reps[0].diagnostics?.viewQuality?.sideConfirmed).toBe(true);
+      expect(result.reps[0].diagnostics?.metrics.sideViewMinConfidence.value).not.toBeNull();
     },
   );
+
+  it('counts one-side-visible movement but marks side-view form unscorable', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      hideSide(buildRecording('synthetic far-side-hidden machine ab crunch', fullRepPath()), 'right'),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.feedbackMessages).toEqual(['Turn fully side-on so I can judge your crunch.']);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings ?? []).toContain('side_view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('unknown');
+    expect(result.reps[0].diagnostics?.scorable).toBe(false);
+    expect(result.reps[0].diagnostics?.viewQuality?.sideConfirmed).toBe(false);
+    expect(result.reps[0].diagnostics?.viewQuality?.viewUnknown).toBe(true);
+    expect(result.reps[0].diagnostics?.metrics.sideViewConfidence.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.hipChainConfidence.value).toBeGreaterThan(0.9);
+  });
 
   it('does not count a tiny crunch pulse', () => {
     const result = replayRecordingVerbose(
@@ -290,10 +324,16 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     );
 
     expect(clean.feedbackMessages).not.toContain('Keep your neck neutral — avoid pulling with your head.');
+    expect(clean.reps[0].diagnostics?.metrics.neckForward.eligible).toBe(true);
+    expect(clean.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].eligible).toBe(true);
+    expect(clean.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].triggered).toBe(false);
     expect(forward.finalRepCount).toBe(1);
     expect(forward.feedbackMessages).toContain('Keep your neck neutral — avoid pulling with your head.');
+    expect(forward.reps[0].diagnostics?.metrics.neckForward.eligible).toBe(true);
     expect(forward.reps[0].diagnostics?.metrics.neckForwardP90.value).toBeGreaterThan(45);
     expect(forward.reps[0].diagnostics?.metrics.neckForwardOverThresholdFrames.value).toBeGreaterThan(0);
+    expect(forward.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].eligible).toBe(true);
+    expect(forward.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].triggered).toBe(true);
   });
 
   it('does not create neck-forward feedback from low-confidence ear frames', () => {
@@ -313,6 +353,75 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).not.toContain('Keep your neck neutral — avoid pulling with your head.');
+    expect(result.reps[0].diagnostics?.metrics.neckForward.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.neckForward.value).toBeNull();
+    expect(result.reps[0].diagnostics?.metrics.neckForward.skippedReason).toBe('insufficient_neck_samples');
+    expect(result.reps[0].diagnostics?.metrics.neckForwardP90.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.neckForwardP90.value).toBeNull();
+    expect(result.reps[0].diagnostics?.metrics.neckForwardOverThresholdFrames.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.neckForwardOverThresholdFrames.value).toBeNull();
+    expect(result.reps[0].diagnostics?.metrics.neckForwardOverThresholdFrameRatio.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.neckForwardOverThresholdFrameRatio.value).toBeNull();
+    expect(result.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].triggered).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].skippedReason).toBe('insufficient_neck_samples');
+  });
+
+  it('does not penalize score for neck-forward samples when the neck cue is ineligible', () => {
+    const hiddenNeutral = buildRecording('synthetic hidden neutral neck machine ab crunch', fullRepPath());
+    hiddenNeutral.frames = hiddenNeutral.frames.map(frame => ({
+      ...frame,
+      keypoints: frame.keypoints.map(point => (
+        point.name?.endsWith('_ear') ? { ...point, score: 0.25 } : point
+      )),
+    }));
+
+    const transientForward = buildRecording('synthetic sparse neck-forward machine ab crunch', fullRepPath(), {
+      neck: index => (index >= 30 && index <= 32 ? 'forward' : 'neutral'),
+    });
+    transientForward.frames = transientForward.frames.map((frame, index) => ({
+      ...frame,
+      keypoints: frame.keypoints.map(point => (
+        point.name?.endsWith('_ear')
+          ? { ...point, score: index >= 30 && index <= 32 ? 0.99 : 0.25 }
+          : point
+      )),
+    }));
+
+    const baseline = replayRecording(machineAbCrunchDefinition, hiddenNeutral);
+    const result = replayRecording(machineAbCrunchDefinition, transientForward);
+
+    expect(baseline.finalRepCount).toBe(1);
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBe(baseline.repScores[0]);
+    expect(result.feedbackMessages).not.toContain('Keep your neck neutral — avoid pulling with your head.');
+    expect(result.reps[0].diagnostics?.metrics.neckForward.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.cues['machine-ab-crunches.neck_forward'].triggered).toBe(false);
+  });
+
+  it('ignores single-frame auxiliary form spikes for robust cues', () => {
+    const spikeFrame = 58;
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildRecording('synthetic one-frame auxiliary spike machine ab crunch', fullRepPath(), {
+        neck: index => (index === spikeFrame ? 'forward' : 'neutral'),
+        armPull: index => index === spikeFrame,
+        hipShift: index => index === spikeFrame,
+      }),
+    );
+    const diagnostics = result.reps[0].diagnostics;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Keep your neck neutral — avoid pulling with your head.');
+    expect(result.feedbackMessages).not.toContain('Use your abs, not your arms — keep the handles light.');
+    expect(result.feedbackMessages).not.toContain('Keep your hips planted — flex from your waist.');
+    expect(diagnostics?.metrics.armPullRatio.value).toBeGreaterThan(0.25);
+    expect(diagnostics?.metrics.armPullP90Ratio.value).toBeLessThanOrEqual(0.25);
+    expect(diagnostics?.metrics.hipShiftRatio.value).toBeGreaterThan(0.12);
+    expect(diagnostics?.metrics.hipShiftP90Ratio.value).toBeLessThanOrEqual(0.12);
+    expect(diagnostics?.cues['machine-ab-crunches.neck_forward'].triggered).toBe(false);
+    expect(diagnostics?.cues['machine-ab-crunches.arm_pull'].triggered).toBe(false);
+    expect(diagnostics?.cues['machine-ab-crunches.hips_moving'].triggered).toBe(false);
   });
 
   it('still flags a true fast return', () => {
@@ -332,9 +441,30 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     );
 
     expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBe(0);
     expect(result.feedbackMessages).toContain('Turn fully side-on so I can judge your crunch.');
     expect(result.reps[0].scorable).toBe(false);
     expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(result.reps[0].diagnostics?.view).toBe('front');
+    expect(result.reps[0].diagnostics?.viewQuality?.sideConfirmed).toBe(false);
+    expect(result.reps[0].diagnostics?.viewQuality?.frontishConfirmed).toBe(true);
+    expect(result.reps[0].diagnostics?.cues['machine-ab-crunches.side_view_uncertain'].metricKeys).toEqual([
+      'sideViewConfidence',
+      'sideViewMinConfidence',
+    ]);
+  });
+
+  it('suppresses form-specific feedback when the side view is unscorable', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildRecording('synthetic front fast-return machine ab crunch', fastReturnPath(), { sideView: 'front' }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.feedbackMessages).toEqual(['Turn fully side-on so I can judge your crunch.']);
+    expect(result.feedbackMessages).not.toContain('Control the return — resist on the way back.');
   });
 
   it('keeps the selected side locked when the opposite side gets noisy mid-rep', () => {
@@ -382,6 +512,8 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toContain('Move smoothly — avoid jerking the weight.');
+    expect(result.reps[0].diagnostics?.metrics.velocitySpikeRatio.value).toBeGreaterThan(4);
+    expect(result.reps[0].diagnostics?.cues['machine-ab-crunches.tempo_jerk'].triggered).toBe(true);
     expect(result.reps[0].diagnostics?.metrics.angularVelocityP95DegPerSec.value).toBeGreaterThan(0);
     expect(result.reps[0].diagnostics?.metrics.angularVelocityOverThresholdFrames.value).toBeGreaterThan(0);
   });
@@ -420,6 +552,19 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     expect(unreliableResult.feedbackMessages).not.toContain('Use your abs, not your arms — keep the handles light.');
   });
 
+  it('flags arm pulling that starts before the active rep window opens', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildRecording('synthetic early arm-pull machine ab crunch', fullRepPath(), {
+        armPull: index => index >= 24 && index <= 120,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Use your abs, not your arms — keep the handles light.');
+    expect(result.reps[0].diagnostics?.metrics.armPullRatio.value).toBeGreaterThan(0.25);
+  });
+
   it('flags hip movement only when the hip shift is high and reliable', () => {
     const stable = replayRecording(
       machineAbCrunchDefinition,
@@ -437,5 +582,18 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     expect(shifting.feedbackMessages).toContain('Keep your hips planted — flex from your waist.');
     expect(shifting.reps[0].diagnostics?.metrics.hipShiftP90Ratio.value).toBeGreaterThan(0.12);
     expect(shifting.reps[0].diagnostics?.metrics.hipShiftOverThresholdFrames.value).toBeGreaterThan(0);
+  });
+
+  it('flags hip movement that starts before the active rep window opens', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildRecording('synthetic early hip-shift machine ab crunch', fullRepPath(), {
+        hipShift: index => index >= 24 && index <= 120,
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your hips planted — flex from your waist.');
+    expect(result.reps[0].diagnostics?.metrics.hipShiftRatio.value).toBeGreaterThan(0.12);
   });
 });

@@ -55,6 +55,16 @@ function noTopHoldPath(): number[] {
   ];
 }
 
+function longTopHoldPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 1, 32),
+    ...Array(64).fill(1),
+    ...interpolate(1, 0, 48),
+    ...Array(8).fill(0),
+  ];
+}
+
 function partialPath(): number[] {
   return [
     ...Array(16).fill(0),
@@ -77,6 +87,16 @@ function halfRepWithOneFrameFullCurlSpikePath(): number[] {
   const path = halfRepPath();
   path[26] = 1;
   return path;
+}
+
+function shortReturnPath(): number[] {
+  return [
+    ...Array(16).fill(0),
+    ...interpolate(0, 1, 32),
+    ...Array(4).fill(1),
+    ...interpolate(1, 0.48, 48),
+    ...Array(12).fill(0.48),
+  ];
 }
 
 function fastLowerPath(): number[] {
@@ -350,6 +370,17 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.metrics.kneeExtensionAngle.value).not.toBeNull();
   });
 
+  it('flags short return extension using the lowering phase instead of the starting posture', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      buildRecording('synthetic short-return lying leg curl', shortReturnPath()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Extend fully — straighten your legs at the bottom.');
+    expect(result.reps[0].diagnostics?.metrics.extensionRatio.value).toBeLessThan(0.93);
+  });
+
   it('keeps the visible side locked through a rep when visibility flips', () => {
     const result = replayRecordingVerbose(
       lyingLegCurlDefinition,
@@ -379,6 +410,19 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(clean.feedbackMessages).not.toContain('Keep your hips down — avoid lifting off the pad.');
     expect(hipLift.finalRepCount).toBe(1);
     expect(hipLift.feedbackMessages).toContain('Keep your hips down — avoid lifting off the pad.');
+  });
+
+  it('flags hip lift that starts with the curl by using the REST baseline', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      buildRecording('synthetic early hip lift lying leg curl', fullRepPath(), {
+        posture: index => (index >= 32 ? 'hip-lift' : 'flat'),
+      }),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your hips down — avoid lifting off the pad.');
+    expect(result.reps[0].diagnostics?.metrics.hipRiseRatio.value).toBeGreaterThan(0.04);
   });
 
   it('uses normalized hip rise as a second hip-lift signal', () => {
@@ -434,6 +478,23 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.metrics.thighDriftRatio.value).toBeGreaterThan(0.06);
   });
 
+  it('flags thigh movement that starts with the curl by using the REST baseline', () => {
+    const drift = mapRecordingKeypoints(
+      buildRecording('synthetic early thigh drift lying leg curl', fullRepPath()),
+      (point, index) => (
+        index >= 32 && point.name.endsWith('_knee')
+          ? { ...point, y: point.y - 0.09 }
+          : point
+      ),
+    );
+
+    const result = replayRecording(lyingLegCurlDefinition, drift);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).toContain('Keep your thighs down — only your lower legs should move.');
+    expect(result.reps[0].diagnostics?.metrics.thighDriftRatio.value).toBeGreaterThan(0.06);
+  });
+
   it('does not create hip-lift feedback from low-confidence hip-chain frames', () => {
     const noisy = buildRecording('synthetic low-confidence hip lift lying leg curl', fullRepPath(), {
       posture: index => (index >= 24 && index < 68 ? 'hip-lift' : 'flat'),
@@ -446,6 +507,36 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).not.toContain('Keep your hips down — avoid lifting off the pad.');
+  });
+
+  it('marks hip-angle diagnostics ineligible when no confident hip-angle samples exist', () => {
+    const noisy = buildRecording('synthetic missing hip-angle lying leg curl', fullRepPath());
+    noisy.frames = noisy.frames.map((frame, index) => index >= 16
+      ? { ...frame, keypoints: frame.keypoints.map(point => ({ ...point, score: 0.25 })) }
+      : frame);
+
+    const result = replayRecording(lyingLegCurlDefinition, noisy);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].diagnostics?.metrics.hipDelta.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.metrics.hipDelta.skippedReason).toBe('insufficient_hip_angle_samples');
+  });
+
+  it('keeps lower-body-scorable reps scorable when shoulders are hidden', () => {
+    const recording = setKeypointScores(
+      buildRecording('synthetic shoulder-hidden lying leg curl', fullRepPath()),
+      ['left_shoulder', 'right_shoulder'],
+      0.05,
+    );
+
+    const result = replayRecording(lyingLegCurlDefinition, recording);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).not.toBe(false);
+    expect(result.reps[0].qualityWarnings ?? []).not.toContain('missing_required_joints');
+    expect(result.feedbackMessages).not.toContain('Keep your hips, knees, and lower legs visible so I can judge your curl.');
+    expect(result.reps[0].diagnostics?.metrics.hipDelta.eligible).toBe(false);
+    expect(result.reps[0].diagnostics?.view).toBe('side');
   });
 
   it('uses heel fallback when the ankle is hidden by the roller pad', () => {
@@ -513,6 +604,32 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(result.feedbackMessages).not.toContain('Keep your hips down — avoid lifting off the pad.');
   });
 
+  it('marks counted reps unscorable when the distal endpoint drops out mid-rep', () => {
+    const distalEndpoints = new Set([
+      'left_ankle',
+      'right_ankle',
+      'left_heel',
+      'right_heel',
+      'left_foot_index',
+      'right_foot_index',
+    ]);
+    const dropout = mapRecordingKeypoints(
+      buildRecording('synthetic distal-endpoint dropout lying leg curl', longTopHoldPath()),
+      (point, index) => (
+        index >= 52 && index < 104 && distalEndpoints.has(point.name)
+          ? { ...point, score: 0.05 }
+          : point
+      ),
+    );
+
+    const result = replayRecording(lyingLegCurlDefinition, dropout);
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].qualityWarnings).toContain('missing_required_joints');
+    expect(result.feedbackMessages).toContain('Keep your hips, knees, and lower legs visible so I can judge your curl.');
+  });
+
   it('counts a front-ish view but marks it unscorable for side-view uncertainty', () => {
     const result = replayRecording(
       lyingLegCurlDefinition,
@@ -529,7 +646,7 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
   });
 
-  it('keeps reps scorable when side-view evidence is missing rather than clearly front-ish', () => {
+  it('treats one-side-only captures as side-view scorable when not clearly front-ish', () => {
     const result = replayRecording(
       lyingLegCurlDefinition,
       buildRecording('synthetic one-side-only lying leg curl', fullRepPath(), {
@@ -540,7 +657,8 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).not.toBe(false);
     expect(result.reps[0].qualityWarnings ?? []).not.toContain('side_view_uncertain');
-    expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('view_unknown');
+    expect(result.reps[0].diagnostics?.view).toBe('side');
+    expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('side_confirmed');
   });
 
   it('flags a missing top squeeze when the user reverses immediately', () => {

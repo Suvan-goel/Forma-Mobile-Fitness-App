@@ -4,7 +4,16 @@ import type {
   ExerciseLabelFile,
   RepLabel,
   ValidationIssue,
+  RepViewLabel,
 } from './types';
+import {
+  formatScorableViewRequirement,
+  getExerciseLabelPolicy,
+  isIssueLabelableInAnyScoringView,
+  isIssueLabelableForView,
+  isIssueNonGroundTruth,
+  isViewScorable,
+} from './labelPolicy';
 
 const VALID_SPLITS: DatasetSplit[] = ['train', 'validation', 'test'];
 const VALID_REVIEW_STATUSES = ['draft', 'reviewed'];
@@ -14,10 +23,6 @@ const VALID_CAPTURE_MACHINE_STYLES = ['seated_selectorized', 'kneeling', 'plate_
 const VALID_CAPTURE_VISIBLE_HANDLES = ['yes', 'no', 'partial', 'unknown'];
 const VALID_REVIEWER_VIEW_CONFIDENCES = ['good', 'usable', 'poor'];
 const VALID_REP_VIEWS = ['side', 'front', 'oblique', 'unknown'];
-const REVIEWED_REP_METADATA_REQUIRED_EXERCISES = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Standing Dumbbell Lateral Raises', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions']);
-const REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions']);
-const REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions']);
-const REVIEWED_FRONT_VIEW_REQUIRED_WHEN_SCORABLE = new Set(['Standing Dumbbell Lateral Raises']);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -33,10 +38,6 @@ function isStringArray(value: unknown): value is string[] {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-function exerciseList(exercises: Set<string>): string {
-  return Array.from(exercises).join(' or ');
 }
 
 export function validateLabelFile(
@@ -55,6 +56,8 @@ export function validateLabelFile(
   if (typeof value.exerciseName !== 'string' || value.exerciseName.trim() === '') {
     issues.push({ path: '$.exerciseName', message: 'exerciseName is required.' });
   }
+  const exerciseName = typeof value.exerciseName === 'string' ? value.exerciseName : '';
+  const labelPolicy = getExerciseLabelPolicy(exerciseName);
   if (typeof value.sourceVideo !== 'string' || value.sourceVideo.trim() === '') {
     issues.push({ path: '$.sourceVideo', message: 'sourceVideo is required.' });
   }
@@ -124,6 +127,11 @@ export function validateLabelFile(
           issues.push({ path: `${path}.issueId`, message: 'issueId is required.' });
         } else if (knownIssueIds && !knownIssueIds.has(issue.issueId)) {
           issues.push({ path: `${path}.issueId`, message: `Unknown issue id "${issue.issueId}".` });
+        } else if (labelPolicy && !isIssueLabelableInAnyScoringView(labelPolicy, issue.issueId)) {
+          const message = isIssueNonGroundTruth(labelPolicy, issue.issueId)
+            ? `Issue id "${issue.issueId}" is not a reviewed ground-truth form issue for ${exerciseName}; keep setup, view, and tracking diagnostics out of availableIssues.`
+            : `Issue id "${issue.issueId}" is not labelable from any scorable view for ${exerciseName}.`;
+          issues.push({ path: `${path}.issueId`, message });
         }
         if (typeof issue.feedbackMessage !== 'string' || issue.feedbackMessage.trim() === '') {
           issues.push({ path: `${path}.feedbackMessage`, message: 'feedbackMessage is required.' });
@@ -147,10 +155,7 @@ export function validateLabelFile(
   let previousEndMs = -Infinity;
   const seenIndexes = new Set<number>();
 
-  const requiresReviewedRepMetadata =
-    value.reviewStatus === 'reviewed' &&
-    typeof value.exerciseName === 'string' &&
-    REVIEWED_REP_METADATA_REQUIRED_EXERCISES.has(value.exerciseName);
+  const requiresReviewedRepMetadata = value.reviewStatus === 'reviewed' && labelPolicy !== undefined;
 
   value.reps.forEach((rep: unknown, zeroBasedIndex: number) => {
     const path = `$.reps[${zeroBasedIndex}]`;
@@ -205,61 +210,56 @@ export function validateLabelFile(
       }
     }
 
+    const repView = VALID_REP_VIEWS.includes(rep.view as string)
+      ? (rep.view as RepViewLabel)
+      : undefined;
+    const repIssueIds = isStringArray(rep.issueIds) ? rep.issueIds : [];
+
     if (requiresReviewedRepMetadata && rep.view === undefined) {
       issues.push({
         path: `${path}.view`,
-        message: `reviewed ${exerciseList(REVIEWED_REP_METADATA_REQUIRED_EXERCISES)} reps must include view.`,
+        message: `reviewed ${exerciseName} reps must include view.`,
       });
     }
     if (rep.view !== undefined && !VALID_REP_VIEWS.includes(rep.view as string)) {
       issues.push({ path: `${path}.view`, message: 'view must be side, front, oblique, or unknown.' });
     }
     if (
-      value.reviewStatus === 'reviewed' &&
-      typeof value.exerciseName === 'string' &&
-      REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE.has(value.exerciseName) &&
+      requiresReviewedRepMetadata &&
+      labelPolicy &&
       rep.scorable === true &&
-      rep.view === 'unknown'
+      repView &&
+      !isViewScorable(labelPolicy, repView)
     ) {
       issues.push({
         path: `${path}.view`,
-        message: `reviewed scorable ${exerciseList(REVIEWED_KNOWN_VIEW_REQUIRED_WHEN_SCORABLE)} reps must use front, side, or oblique view; use scorable=false when view is unknown.`,
-      });
-    }
-    if (
-      value.reviewStatus === 'reviewed' &&
-      typeof value.exerciseName === 'string' &&
-      REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE.has(value.exerciseName) &&
-      rep.scorable === true &&
-      rep.view !== undefined &&
-      rep.view !== 'side'
-    ) {
-      issues.push({
-        path: `${path}.view`,
-        message: `reviewed scorable ${exerciseList(REVIEWED_SIDE_VIEW_REQUIRED_WHEN_SCORABLE)} reps must use side view; use scorable=false for front, oblique, or unknown views.`,
-      });
-    }
-    if (
-      value.reviewStatus === 'reviewed' &&
-      typeof value.exerciseName === 'string' &&
-      REVIEWED_FRONT_VIEW_REQUIRED_WHEN_SCORABLE.has(value.exerciseName) &&
-      rep.scorable === true &&
-      rep.view !== undefined &&
-      rep.view !== 'front'
-    ) {
-      issues.push({
-        path: `${path}.view`,
-        message: `reviewed scorable ${exerciseList(REVIEWED_FRONT_VIEW_REQUIRED_WHEN_SCORABLE)} reps must use front view; use scorable=false for side, oblique, or unknown views.`,
+        message: `reviewed scorable ${exerciseName} reps must use ${formatScorableViewRequirement(labelPolicy)}; use scorable=false for unsupported or unknown views.`,
       });
     }
     if (requiresReviewedRepMetadata && rep.scorable === undefined) {
       issues.push({
         path: `${path}.scorable`,
-        message: `reviewed ${exerciseList(REVIEWED_REP_METADATA_REQUIRED_EXERCISES)} reps must include scorable.`,
+        message: `reviewed ${exerciseName} reps must include scorable.`,
       });
     }
     if (rep.scorable !== undefined && typeof rep.scorable !== 'boolean') {
       issues.push({ path: `${path}.scorable`, message: 'scorable must be a boolean when provided.' });
+    }
+
+    if (requiresReviewedRepMetadata && labelPolicy && rep.scorable === false && repIssueIds.length > 0) {
+      issues.push({
+        path: `${path}.issueIds`,
+        message: `reviewed unscorable ${exerciseName} reps should not include issueIds; leave issueIds empty and use notes for context.`,
+      });
+    }
+    if (requiresReviewedRepMetadata && labelPolicy && rep.scorable !== false && repView) {
+      for (const issueId of repIssueIds) {
+        if (isIssueLabelableForView(labelPolicy, issueId, repView)) continue;
+        const message = isIssueNonGroundTruth(labelPolicy, issueId)
+          ? `Issue id "${issueId}" is not a reviewed ground-truth form issue for ${exerciseName}; use scorable=false for setup, view, or tracking problems.`
+          : `Issue id "${issueId}" is not labelable from ${repView} view for ${exerciseName}.`;
+        issues.push({ path: `${path}.issueIds`, message });
+      }
     }
 
     if (rep.suggestedIssueIds !== undefined) {
@@ -307,6 +307,15 @@ export function validateLabelFile(
         issues.push({
           path: `${path}.expectedScoreRange`,
           message: 'expectedScoreRange must be an ordered [min, max] number range within 0..100.',
+        });
+      } else if (
+        requiresReviewedRepMetadata &&
+        labelPolicy?.scoreRangePolicy === 'optional_scorable_only' &&
+        rep.scorable === false
+      ) {
+        issues.push({
+          path: `${path}.expectedScoreRange`,
+          message: 'expectedScoreRange is only allowed on reviewed scorable reps.',
         });
       }
     }

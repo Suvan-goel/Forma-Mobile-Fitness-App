@@ -42,6 +42,7 @@ import type {
   ExerciseFrameContext,
   ExerciseHeuristicConfig,
   ExerciseState,
+  RepDiagnostics,
   RepResult as FrameworkRepResult,
 } from '../types';
 
@@ -126,6 +127,7 @@ const SIDE_VIEW_MIN_SAMPLES = 5;
 const SETUP_SIDE_VIEW_MIN_SAMPLES = 8;
 const FEEDBACK_COOLDOWN_SECONDS = 2.0;
 const AUX_METRIC_MIN_SAMPLES = 5;
+const NECK_FORWARD_MIN_SAMPLES = 5;
 
 const FEEDBACK = {
   DEPTH_SHORT: 'Crunch deeper — bring your chest closer to your knees.',
@@ -159,16 +161,20 @@ MACHINE_AB_CRUNCH_TUNABLE_SPEC.tunables.push(
   { path: 'scoreTargets.CRUNCH_IDEAL', min: 80, max: 138, step: 1, kind: 'scoring' },
   { path: 'scoreTargets.EXTENSION_IDEAL', min: 90, max: 160, step: 1, kind: 'scoring' },
 );
+MACHINE_AB_CRUNCH_TUNABLE_SPEC.tunables = MACHINE_AB_CRUNCH_TUNABLE_SPEC.tunables.filter(
+  (tunable) => tunable.path !== 'formThresholds.TEMPO_JERK_VELOCITY_WARN',
+);
 MACHINE_AB_CRUNCH_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'machine-ab-crunches.depth_short', metricKey: 'crunchDepthAngle', thresholdPath: 'formThresholds.CRUNCH_ROM_FAIL', direction: 'above' },
   { issueId: 'machine-ab-crunches.lockout_short', metricKey: 'extensionAngle', thresholdPath: 'formThresholds.EXTENSION_ROM_FAIL', direction: 'below' },
-  { issueId: 'machine-ab-crunches.neck_forward', metricKey: 'neckForward', thresholdPath: 'formThresholds.NECK_FORWARD_WARN', direction: 'above' },
+  { issueId: 'machine-ab-crunches.neck_forward', metricKey: 'neckForwardP90', thresholdPath: 'formThresholds.NECK_FORWARD_WARN', direction: 'above' },
   { issueId: 'machine-ab-crunches.side_view_uncertain', metricKey: 'sideViewConfidence', thresholdPath: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', direction: 'below' },
+  { issueId: 'machine-ab-crunches.side_view_uncertain', metricKey: 'sideViewMinConfidence', thresholdPath: 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', direction: 'below' },
   { issueId: 'machine-ab-crunches.tempo_down', metricKey: 'tCrunch', thresholdPath: 'formThresholds.TEMPO_CRUNCH_MIN', direction: 'below' },
   { issueId: 'machine-ab-crunches.tempo_up', metricKey: 'tReturn', thresholdPath: 'formThresholds.TEMPO_RETURN_MIN', direction: 'below' },
   { issueId: 'machine-ab-crunches.tempo_jerk', metricKey: 'velocitySpikeRatio', thresholdPath: 'formThresholds.TEMPO_JERK_SPIKE_WARN', direction: 'above' },
-  { issueId: 'machine-ab-crunches.arm_pull', metricKey: 'armPullRatio', thresholdPath: 'formThresholds.ARM_PULL_WARN', direction: 'above' },
-  { issueId: 'machine-ab-crunches.hips_moving', metricKey: 'hipShiftRatio', thresholdPath: 'formThresholds.HIP_SHIFT_WARN', direction: 'above' },
+  { issueId: 'machine-ab-crunches.arm_pull', metricKey: 'armPullP90Ratio', thresholdPath: 'formThresholds.ARM_PULL_WARN', direction: 'above' },
+  { issueId: 'machine-ab-crunches.hips_moving', metricKey: 'hipShiftP90Ratio', thresholdPath: 'formThresholds.HIP_SHIFT_WARN', direction: 'above' },
 ];
 
 const MACHINE_AB_CRUNCH_CONFIG_BINDINGS = [
@@ -200,6 +206,12 @@ interface Point2D {
 interface RelativePoint {
   x: number;
   y: number;
+}
+
+interface AuxBaselines {
+  elbowRel: RelativePoint | null;
+  wristRel: RelativePoint | null;
+  hipRelToKnee: RelativePoint | null;
 }
 
 interface HipAngleSample {
@@ -282,6 +294,8 @@ interface AbCrunchState {
   selectedSide: AbCrunchSide | null;
   /** Setup side-view samples */
   setupSideViewConfidences: number[];
+  /** Top/rest baselines used by auxiliary form proxies */
+  restAuxBaselines: Record<AbCrunchSide, AuxBaselines>;
   /** Current smoothed values (for debug) */
   smoothedHipAngle: number;
   fastHipAngle: number;
@@ -314,6 +328,14 @@ interface AbCrunchDebugInfo {
 // INITIALIZATION
 // ============================================================================
 
+function emptyAuxBaselines(): AuxBaselines {
+  return {
+    elbowRel: null,
+    wristRel: null,
+    hipRelToKnee: null,
+  };
+}
+
 function initializeState(): AbCrunchState {
   return {
     phase: 'REST',
@@ -337,6 +359,10 @@ function initializeState(): AbCrunchState {
     restMaxHipAngle: -Infinity,
     selectedSide: null,
     setupSideViewConfidences: [],
+    restAuxBaselines: {
+      left: emptyAuxBaselines(),
+      right: emptyAuxBaselines(),
+    },
     smoothedHipAngle: 170,
     fastHipAngle: 170,
     smoothedNeckAngle: 0,
@@ -642,9 +668,9 @@ function hasSideViewEvidence(repWindow: RepWindow): boolean {
 }
 
 function sideViewIsScorable(repWindow: RepWindow): boolean {
-  if (!hasSideViewEvidence(repWindow)) return true;
+  if (!hasSideViewEvidence(repWindow)) return false;
   const averageConfidence = averageSideViewConfidence(repWindow);
-  if (averageConfidence === null) return true;
+  if (averageConfidence === null) return false;
   return (
     averageConfidence >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
     repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN
@@ -671,11 +697,7 @@ function abCrunchQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qual
 
 function tempoJerkTriggered(repWindow: RepWindow): boolean {
   const spikeRatio = velocitySpikeRatio(repWindow);
-  return (
-    repWindow.maxCrunchVelocity > FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN ||
-    repWindow.maxReturnVelocity > FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN ||
-    (spikeRatio !== null && spikeRatio > FORM_THRESHOLDS.TEMPO_JERK_SPIKE_WARN)
-  );
+  return spikeRatio !== null && spikeRatio > FORM_THRESHOLDS.TEMPO_JERK_SPIKE_WARN;
 }
 
 function armPullEligible(repWindow: RepWindow): boolean {
@@ -684,6 +706,62 @@ function armPullEligible(repWindow: RepWindow): boolean {
 
 function hipShiftEligible(repWindow: RepWindow): boolean {
   return repWindow.hipShiftSamples >= AUX_METRIC_MIN_SAMPLES;
+}
+
+function neckForwardEligible(repWindow: RepWindow): boolean {
+  return repWindow.neckForwardSamples.length >= NECK_FORWARD_MIN_SAMPLES;
+}
+
+function neckForwardCueValue(repWindow: RepWindow): number | null {
+  return neckForwardEligible(repWindow)
+    ? percentile(repWindow.neckForwardSamples, 0.9)
+    : null;
+}
+
+function armPullCueValue(repWindow: RepWindow): number | null {
+  return armPullEligible(repWindow)
+    ? percentile(repWindow.armPullRatioSamples, 0.9)
+    : null;
+}
+
+function hipShiftCueValue(repWindow: RepWindow): number | null {
+  return hipShiftEligible(repWindow)
+    ? percentile(repWindow.hipShiftRatioSamples, 0.9)
+    : null;
+}
+
+function minSideViewConfidence(repWindow: RepWindow): number | null {
+  return repWindow.sideViewConfidenceSamples > 0 && Number.isFinite(repWindow.sideViewConfidenceMin)
+    ? repWindow.sideViewConfidenceMin
+    : null;
+}
+
+function buildAbCrunchViewQuality(repWindow: RepWindow): NonNullable<RepDiagnostics['viewQuality']> {
+  const hasSamples = hasSideViewEvidence(repWindow);
+  const averageConfidence = averageSideViewConfidence(repWindow);
+  const minConfidence = minSideViewConfidence(repWindow);
+  const sideConfirmed = hasSamples && sideViewIsScorable(repWindow);
+  const frontishConfirmed = hasSamples && !sideConfirmed;
+
+  return {
+    status: sideConfirmed
+      ? 'side_confirmed'
+      : frontishConfirmed
+        ? 'frontish_confirmed'
+        : 'view_unknown',
+    sideConfirmed,
+    frontishConfirmed,
+    viewUnknown: !sideConfirmed && !frontishConfirmed,
+    averageSideViewConfidence: averageConfidence,
+    minSideViewConfidence: minConfidence,
+    sampleCount: hasSamples ? repWindow.sideViewConfidenceSamples : repWindow.hipConfidenceSamples,
+  };
+}
+
+function diagnosticsViewFor(viewQuality: NonNullable<RepDiagnostics['viewQuality']>): RepDiagnostics['view'] {
+  if (viewQuality.sideConfirmed) return 'side';
+  if (viewQuality.frontishConfirmed) return 'front';
+  return 'unknown';
 }
 
 function computeAbCrunchScore(repWindow: RepWindow): number {
@@ -695,17 +773,22 @@ function computeAbCrunchScore(repWindow: RepWindow): number {
   const extensionShortfall = Math.max(0, SCORE_TARGETS.EXTENSION_IDEAL - returnExtensionAngle(repWindow));
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
-  penalties.push({ value: repWindow.maxNeckForward, config: PENALTY_CONFIGS.NECK_FORWARD });
+  const neckForward = neckForwardCueValue(repWindow);
+  if (neckForward !== null) {
+    penalties.push({ value: neckForward, config: PENALTY_CONFIGS.NECK_FORWARD });
+  }
 
   const spikeRatio = velocitySpikeRatio(repWindow);
   if (spikeRatio !== null) {
     penalties.push({ value: spikeRatio, config: PENALTY_CONFIGS.TEMPO_JERK });
   }
-  if (armPullEligible(repWindow)) {
-    penalties.push({ value: repWindow.maxArmPullRatio, config: PENALTY_CONFIGS.ARM_PULL });
+  const armPull = armPullCueValue(repWindow);
+  if (armPull !== null) {
+    penalties.push({ value: armPull, config: PENALTY_CONFIGS.ARM_PULL });
   }
-  if (hipShiftEligible(repWindow)) {
-    penalties.push({ value: repWindow.maxHipShiftRatio, config: PENALTY_CONFIGS.HIP_SHIFT });
+  const hipShift = hipShiftCueValue(repWindow);
+  if (hipShift !== null) {
+    penalties.push({ value: hipShift, config: PENALTY_CONFIGS.HIP_SHIFT });
   }
 
   if (repWindow.tBottom !== null) {
@@ -725,19 +808,20 @@ function computeAbCrunchScore(repWindow: RepWindow): number {
   return computeScore(penalties);
 }
 
+function generateUnscorableMessages(repWindow: RepWindow): string[] {
+  return !sideViewIsScorable(repWindow) ? [FEEDBACK.SIDE_VIEW] : [];
+}
+
 function generateFormMessages(repWindow: RepWindow): string[] {
   const messages: string[] = [];
-
   if (repWindow.crunchDepthAngle > FORM_THRESHOLDS.CRUNCH_ROM_FAIL) {
     messages.push(FEEDBACK.DEPTH_SHORT);
   }
   if (returnExtensionAngle(repWindow) < FORM_THRESHOLDS.EXTENSION_ROM_FAIL) {
     messages.push(FEEDBACK.LOCKOUT_SHORT);
   }
-  if (!sideViewIsScorable(repWindow)) {
-    messages.push(FEEDBACK.SIDE_VIEW);
-  }
-  if (repWindow.maxNeckForward > FORM_THRESHOLDS.NECK_FORWARD_WARN) {
+  const neckForward = neckForwardCueValue(repWindow);
+  if (neckForward !== null && neckForward > FORM_THRESHOLDS.NECK_FORWARD_WARN) {
     messages.push(FEEDBACK.NECK_FORWARD);
   }
 
@@ -756,10 +840,12 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   if (tempoJerkTriggered(repWindow)) {
     messages.push(FEEDBACK.TEMPO_JERK);
   }
-  if (armPullEligible(repWindow) && repWindow.maxArmPullRatio > FORM_THRESHOLDS.ARM_PULL_WARN) {
+  const armPull = armPullCueValue(repWindow);
+  if (armPull !== null && armPull > FORM_THRESHOLDS.ARM_PULL_WARN) {
     messages.push(FEEDBACK.ARM_PULL);
   }
-  if (hipShiftEligible(repWindow) && repWindow.maxHipShiftRatio > FORM_THRESHOLDS.HIP_SHIFT_WARN) {
+  const hipShift = hipShiftCueValue(repWindow);
+  if (hipShift !== null && hipShift > FORM_THRESHOLDS.HIP_SHIFT_WARN) {
     messages.push(FEEDBACK.HIPS_MOVING);
   }
 
@@ -774,10 +860,13 @@ function buildAbCrunchDiagnostics(
   const tCrunch = repWindow.tBottom !== null ? repWindow.tBottom - repWindow.tStart : null;
   const tReturn = repWindow.tBottom !== null ? repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tBottom) : null;
   const sideViewConfidence = averageSideViewConfidence(repWindow);
+  const sideViewMinConfidence = minSideViewConfidence(repWindow);
   const hasSideViewConfidence = hasSideViewEvidence(repWindow);
+  const viewQuality = buildAbCrunchViewQuality(repWindow);
   const spikeRatio = velocitySpikeRatio(repWindow);
   const hasArmPull = armPullEligible(repWindow);
   const hasHipShift = hipShiftEligible(repWindow);
+  const hasNeckForward = neckForwardEligible(repWindow);
   const neckForwardP90 = percentile(repWindow.neckForwardSamples, 0.9);
   const neckForwardSupportFrames = countAbove(repWindow.neckForwardSamples, FORM_THRESHOLDS.NECK_FORWARD_WARN);
   const neckForwardSupportRatio = ratioAbove(repWindow.neckForwardSamples, FORM_THRESHOLDS.NECK_FORWARD_WARN);
@@ -794,9 +883,10 @@ function buildAbCrunchDiagnostics(
   return buildRepDiagnostics({
     exerciseName: 'Machine Ab Crunches',
     repIndex,
-    view: 'side',
+    view: diagnosticsViewFor(viewQuality),
     selectedSide: repWindow.selectedSide,
     scorable: isAbCrunchRepScorable(repWindow),
+    viewQuality,
     metrics: [
       diagnosticMetric('startExtensionAngle', repWindow.startExtensionAngle, { unit: 'degrees' }),
       diagnosticMetric('crunchDepthAngle', repWindow.crunchDepthAngle, { unit: 'degrees' }),
@@ -804,24 +894,37 @@ function buildAbCrunchDiagnostics(
       diagnosticMetric('returnDeficitAngle', returnDeficitAngle(repWindow), { unit: 'degrees' }),
       diagnosticMetric('returnCompletionRatio', returnCompletionRatio(repWindow), { unit: 'ratio' }),
       diagnosticMetric('romAngle', romAngle(repWindow), { unit: 'degrees' }),
-      diagnosticMetric('neckForward', repWindow.maxNeckForward, { unit: 'degrees' }),
-      diagnosticMetric('neckForwardP90', neckForwardP90, {
+      diagnosticMetric('neckForward', hasNeckForward ? repWindow.maxNeckForward : null, {
         unit: 'degrees',
+        eligible: hasNeckForward,
         sampleCount: repWindow.neckForwardSamples.length,
         skippedReason: 'insufficient_neck_samples',
       }),
-      diagnosticMetric('neckForwardOverThresholdFrames', neckForwardSupportFrames, {
+      diagnosticMetric('neckForwardP90', hasNeckForward ? neckForwardP90 : null, {
+        unit: 'degrees',
+        eligible: hasNeckForward,
+        sampleCount: repWindow.neckForwardSamples.length,
+        skippedReason: 'insufficient_neck_samples',
+      }),
+      diagnosticMetric('neckForwardOverThresholdFrames', hasNeckForward ? neckForwardSupportFrames : null, {
         unit: 'count',
-        eligible: repWindow.neckForwardSamples.length > 0,
+        eligible: hasNeckForward,
         sampleCount: repWindow.neckForwardSamples.length,
         skippedReason: 'insufficient_neck_samples',
       }),
-      diagnosticMetric('neckForwardOverThresholdFrameRatio', neckForwardSupportRatio, {
+      diagnosticMetric('neckForwardOverThresholdFrameRatio', hasNeckForward ? neckForwardSupportRatio : null, {
         unit: 'ratio',
+        eligible: hasNeckForward,
         sampleCount: repWindow.neckForwardSamples.length,
         skippedReason: 'insufficient_neck_samples',
       }),
       diagnosticMetric('sideViewConfidence', sideViewConfidence, {
+        unit: 'ratio',
+        eligible: hasSideViewConfidence,
+        sampleCount: repWindow.sideViewConfidenceSamples,
+        skippedReason: 'insufficient_side_view_samples',
+      }),
+      diagnosticMetric('sideViewMinConfidence', sideViewMinConfidence, {
         unit: 'ratio',
         eligible: hasSideViewConfidence,
         sampleCount: repWindow.sideViewConfidenceSamples,
@@ -927,24 +1030,32 @@ function buildAbCrunchDiagnostics(
       }),
       diagnosticCue({
         issueId: 'machine-ab-crunches.side_view_uncertain',
-        metricKeys: ['sideViewConfidence'],
+        metricKeys: ['sideViewConfidence', 'sideViewMinConfidence'],
         direction: 'below',
         value: sideViewConfidence,
-        thresholdPath: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
-        thresholdValue: FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN,
+        thresholdPath: [
+          'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+          'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+        ],
+        thresholdValue: {
+          SIDE_VIEW_AVG_CONFIDENCE_MIN: FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN,
+          SIDE_VIEW_MIN_CONFIDENCE_MIN: FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN,
+        },
         eligible: hasSideViewConfidence,
         triggered: hasSideViewConfidence && !sideViewIsScorable(repWindow),
         skippedReason: 'insufficient_side_view_samples',
       }),
       diagnosticCue({
         issueId: 'machine-ab-crunches.neck_forward',
-        metricKeys: ['neckForward'],
+        metricKeys: ['neckForwardP90', 'neckForward'],
         direction: 'above',
-        value: repWindow.maxNeckForward,
+        value: hasNeckForward ? neckForwardP90 : null,
         thresholdPath: 'formThresholds.NECK_FORWARD_WARN',
         thresholdValue: FORM_THRESHOLDS.NECK_FORWARD_WARN,
-        support: neckForwardSupportRatio ?? undefined,
-        triggered: repWindow.maxNeckForward > FORM_THRESHOLDS.NECK_FORWARD_WARN,
+        eligible: hasNeckForward,
+        support: hasNeckForward ? neckForwardSupportRatio ?? undefined : undefined,
+        triggered: hasNeckForward && neckForwardP90 !== null && neckForwardP90 > FORM_THRESHOLDS.NECK_FORWARD_WARN,
+        skippedReason: 'insufficient_neck_samples',
       }),
       diagnosticCue({
         issueId: 'machine-ab-crunches.tempo_down',
@@ -982,26 +1093,26 @@ function buildAbCrunchDiagnostics(
       }),
       diagnosticCue({
         issueId: 'machine-ab-crunches.arm_pull',
-        metricKeys: ['armPullRatio'],
+        metricKeys: ['armPullP90Ratio', 'armPullRatio'],
         direction: 'above',
-        value: repWindow.maxArmPullRatio,
+        value: hasArmPull ? armPullP90 : null,
         thresholdPath: 'formThresholds.ARM_PULL_WARN',
         thresholdValue: FORM_THRESHOLDS.ARM_PULL_WARN,
         eligible: hasArmPull,
         support: armPullSupportRatio ?? undefined,
-        triggered: hasArmPull && repWindow.maxArmPullRatio > FORM_THRESHOLDS.ARM_PULL_WARN,
+        triggered: hasArmPull && armPullP90 !== null && armPullP90 > FORM_THRESHOLDS.ARM_PULL_WARN,
         skippedReason: 'insufficient_arm_samples',
       }),
       diagnosticCue({
         issueId: 'machine-ab-crunches.hips_moving',
-        metricKeys: ['hipShiftRatio'],
+        metricKeys: ['hipShiftP90Ratio', 'hipShiftRatio'],
         direction: 'above',
-        value: repWindow.maxHipShiftRatio,
+        value: hasHipShift ? hipShiftP90 : null,
         thresholdPath: 'formThresholds.HIP_SHIFT_WARN',
         thresholdValue: FORM_THRESHOLDS.HIP_SHIFT_WARN,
         eligible: hasHipShift,
         support: hipShiftSupportRatio ?? undefined,
-        triggered: hasHipShift && repWindow.maxHipShiftRatio > FORM_THRESHOLDS.HIP_SHIFT_WARN,
+        triggered: hasHipShift && hipShiftP90 !== null && hipShiftP90 > FORM_THRESHOLDS.HIP_SHIFT_WARN,
         skippedReason: 'insufficient_hip_shift_samples',
       }),
     ],
@@ -1009,9 +1120,9 @@ function buildAbCrunchDiagnostics(
 }
 
 function buildAbCrunchRepResult(repWindow: RepWindow, repIndex: number): RepResult {
-  const score = computeAbCrunchScore(repWindow);
-  const messages = generateFormMessages(repWindow);
   const scorable = isAbCrunchRepScorable(repWindow);
+  const score = scorable ? computeAbCrunchScore(repWindow) : 0;
+  const messages = scorable ? generateFormMessages(repWindow) : generateUnscorableMessages(repWindow);
   const qualityWarnings = abCrunchQualityWarnings(repWindow);
   return {
     repIndex,
@@ -1058,8 +1169,35 @@ function ensureRepWindow(
       ? Math.max(state.restMaxHipAngle, initialAngle)
       : initialAngle;
     state.repWindow = initRepWindow(tStart, selectedSide, startExtensionAngle);
+    const baselines = state.restAuxBaselines[selectedSide];
+    state.repWindow.baselineElbowRel = baselines.elbowRel;
+    state.repWindow.baselineWristRel = baselines.wristRel;
+    state.repWindow.baselineHipRelToKnee = baselines.hipRelToKnee;
   }
   return state.repWindow;
+}
+
+function updateRestAuxBaselines(
+  state: AbCrunchState,
+  keypoints: Keypoint[],
+  side: AbCrunchSide,
+): void {
+  const elbowRel = relativeToShoulder(keypoints, side, 'elbow');
+  const wristRel = relativeToShoulder(keypoints, side, 'wrist');
+  const hipRel = relativeToKnee(keypoints, side);
+  if (!elbowRel && !wristRel && !hipRel) return;
+
+  const baselines = state.restAuxBaselines[side];
+  if (!baselines.elbowRel && elbowRel) baselines.elbowRel = elbowRel;
+  if (!baselines.wristRel && wristRel) baselines.wristRel = wristRel;
+  if (!baselines.hipRelToKnee && hipRel) baselines.hipRelToKnee = hipRel;
+}
+
+function resetRestAuxBaselines(state: AbCrunchState): void {
+  state.restAuxBaselines = {
+    left: emptyAuxBaselines(),
+    right: emptyAuxBaselines(),
+  };
 }
 
 function updateRepWindowMetrics(
@@ -1185,13 +1323,14 @@ function finalizeRep(state: AbCrunchState, repWindow: RepWindow, t: number): voi
   state.feedback = state.lastRepResult.messages.length > 0
     ? state.lastRepResult.messages.join('\n')
     : state.lastRepResult.scorable === false
-      ? FEEDBACK.SIDE_VIEW
+      ? null
       : 'Great rep!';
   state.lastFeedbackTime = t;
   state.repWindow = null;
   state.tRepStart = null;
   state.tCrunchStart = null;
   state.setupSideViewConfidences = [];
+  resetRestAuxBaselines(state);
 }
 
 function updateAbCrunchState(
@@ -1247,6 +1386,9 @@ function updateAbCrunchState(
 
   if (state.phase === 'REST') {
     state.restMaxHipAngle = Math.max(state.restMaxHipAngle, smoothedHipAngle);
+    if (!state.repWindow && rawHipSample.angle >= THRESHOLDS.CRUNCH_CLOCK_START) {
+      updateRestAuxBaselines(state, analysisKeypoints, rawHipSample.side);
+    }
     if (state.fastHipAngle < THRESHOLDS.CRUNCH_CLOCK_START) {
       state.tCrunchStart ??= t;
     } else {
@@ -1460,7 +1602,9 @@ function validateMachineAbCrunchHeuristicConfig(config: ExerciseHeuristicConfig)
   requireOrdered(config, issues, 'thresholds.CRUNCHING_ENTER', 'thresholds.REST_REENTER', true);
   requireOrdered(config, issues, 'thresholds.REST_REENTER', 'thresholds.CRUNCHING_EXIT', true);
   requireOrdered(config, issues, 'thresholds.CRUNCHING_EXIT', 'thresholds.CRUNCH_CLOCK_START');
-  requireOrdered(config, issues, 'thresholds.MIN_PARTIAL_ROM', 'formThresholds.EXTENSION_ROM_FAIL');
+  requireOrdered(config, issues, 'scoreTargets.CRUNCH_IDEAL', 'formThresholds.CRUNCH_ROM_FAIL', true);
+  requireOrdered(config, issues, 'formThresholds.CRUNCH_ROM_FAIL', 'formThresholds.EXTENSION_ROM_FAIL');
+  requireOrdered(config, issues, 'formThresholds.EXTENSION_ROM_FAIL', 'scoreTargets.EXTENSION_IDEAL', true);
   requireOrdered(config, issues, 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', true);
 
   for (const path of [

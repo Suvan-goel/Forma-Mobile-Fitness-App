@@ -70,10 +70,6 @@
     {
       "issueId": "push-up.shoulder_stack",
       "feedbackMessage": "Stack your shoulders over your hands."
-    },
-    {
-      "issueId": "push-up.camera_setup",
-      "feedbackMessage": "Set the camera side-on with your full body in frame."
     }
   ],
   "draftMetadata": {

@@ -1534,19 +1534,26 @@ export const CameraScreen: React.FC = () => {
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Elbow: {d.elbow != null ? d.elbow.toFixed(1) + '°' : '–'}
-                  {'  '}Shoulder: {d.shoulderAngle != null ? d.shoulderAngle.toFixed(1) + '°' : '–'}
+                  Ratio: {d.ratio != null ? d.ratio.toFixed(3) : '–'}
+                  {'  '}Fast: {d.fastRatio != null ? d.fastRatio.toFixed(3) : '–'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Torso dev: {d.torsoDev != null ? d.torsoDev.toFixed(1) + '°' : '–'}
+                  Shoulder: {d.shoulderAngle != null ? d.shoulderAngle.toFixed(1) + '°' : '–'}
+                  {'  '}Δ: {d.shoulderDelta != null ? d.shoulderDelta.toFixed(1) + '°' : '–'}
                 </Text>
-                {d.elbowMin != null && (
+                <Text style={styles.torsoDebugText}>
+                  Torso: {d.torsoDev != null ? d.torsoDev.toFixed(1) + '°' : '–'}
+                  {'  '}Rock: {d.torsoRockDelta != null ? d.torsoRockDelta.toFixed(1) + '°' : '–'}
+                </Text>
+                <Text style={styles.torsoDebugText}>
+                  Side view: {d.sideViewConfidence != null ? Math.round(d.sideViewConfidence * 100) + '%' : '–'}
+                </Text>
+                {d.ratioMin != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Elbow: {d.elbowMin.toFixed(1)}°–{d.elbowMax != null ? d.elbowMax.toFixed(1) : '–'}°
-                    {'  '}Shoulder Δ: {d.shoulderDelta != null ? d.shoulderDelta.toFixed(1) : '–'}°
+                    Rep ratio: {d.ratioMin.toFixed(3)}–{d.ratioMax != null ? d.ratioMax.toFixed(3) : '–'}
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Push &gt;155° | Start &lt;100° | Drift warn 20° | Torso warn 12°</Text>
+                <Text style={styles.torsoDebugHint}>Reach ratio scores reps | Top ≤0.68 | Lockout ≥0.95 | Side view scores form</Text>
               </View>
             </View>
             );
@@ -1721,16 +1728,29 @@ export const CameraScreen: React.FC = () => {
                   {d.phase} | Side: {d.side} | {d.warmedUp ? 'ready' : 'warming up'}
                 </Text>
                 <Text style={styles.torsoDebugText}>
-                  Knee: {d.knee != null ? d.knee.toFixed(1) + '°' : '–'}
-                  {'  '}Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                  Ratio: {d.ratio != null ? d.ratio.toFixed(3) : '–'}
+                  {'  '}Fast: {d.fastRatio != null ? d.fastRatio.toFixed(3) : '–'}
+                  {'  '}Knee: {d.kneeAngle != null ? d.kneeAngle.toFixed(1) + '°' : '–'}
                 </Text>
-                {d.kneeMin != null && (
+                <Text style={styles.torsoDebugText}>
+                  Hip: {d.hipAngle != null ? d.hipAngle.toFixed(1) + '°' : '–'}
+                  {'  '}Hip rise: {d.hipRiseRatio != null ? d.hipRiseRatio.toFixed(3) : '–'}
+                  {'  '}Side: {d.sideViewConfidence != null ? Math.round(d.sideViewConfidence * 100) + '%' : '–'}
+                </Text>
+                {d.kneeAngleMin != null && (
                   <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
-                    Rep Knee: {d.kneeMin.toFixed(1)}°–{d.kneeMax != null ? d.kneeMax.toFixed(1) : '–'}°
-                    {'  '}Hip Δ: {d.hipDelta != null ? d.hipDelta.toFixed(1) : '–'}°
+                    Rep knee: {d.kneeAngleMin.toFixed(1)}°–{d.kneeAngleMax != null ? d.kneeAngleMax.toFixed(1) : '–'}°
+                    {'  '}Ratio: {d.ratioMin != null ? d.ratioMin.toFixed(3) : '–'}–{d.ratioMax != null ? d.ratioMax.toFixed(3) : '–'}
                   </Text>
                 )}
-                <Text style={styles.torsoDebugHint}>Curl &lt;80° | Extend &gt;140° | Hip lift warn 12°</Text>
+                {(d.hipRiseMax != null || d.thighDriftRatio != null || d.scorable != null) && (
+                  <Text style={[styles.torsoDebugText, { marginTop: 4 }]}>
+                    Hip rise max: {d.hipRiseMax != null ? d.hipRiseMax.toFixed(3) : '–'}
+                    {'  '}Thigh drift: {d.thighDriftRatio != null ? d.thighDriftRatio.toFixed(3) : '–'}
+                    {'  '}Scorable: {d.scorable == null ? '–' : d.scorable ? 'yes' : 'no'}
+                  </Text>
+                )}
+                <Text style={styles.torsoDebugHint}>Side view required for form scoring</Text>
               </View>
             </View>
             );

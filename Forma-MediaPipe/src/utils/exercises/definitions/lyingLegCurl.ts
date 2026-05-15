@@ -33,6 +33,7 @@ import { computeScore, type PenaltyConfig } from '../shared/scoring';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   createDefaultTunableSpec,
+  getConfigValue,
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
@@ -102,6 +103,22 @@ function average(values: number[]): number {
   let sum = 0;
   for (const value of values) sum += value;
   return sum / values.length;
+}
+
+function averageFiniteOrNull(values: number[]): number | null {
+  const finite = values.filter((value) => Number.isFinite(value));
+  return finite.length > 0 ? average(finite) : null;
+}
+
+function averagePoint(values: Point2D[]): Point2D | null {
+  if (values.length === 0) return null;
+  let x = 0;
+  let y = 0;
+  for (const value of values) {
+    x += value.x;
+    y += value.y;
+  }
+  return { x: x / values.length, y: y / values.length };
 }
 
 function sortedFinite(values: number[]): number[] {
@@ -219,8 +236,8 @@ const FORM_THRESHOLDS = {
  * | Hip rise          | 15  | 0.03     | 20000 | normalized upward hip movement        |
  * | Thigh movement    | 12  | 0.04     | 5000  | normalized hip-knee vector drift       |
  * | Top hold          | 5   | 0        | 160   | top-hold time deficit                 |
- * | Tempo curl        | 15  | 0.5s     | 80    | concentric time deficit              |
- * | Tempo lower       | 15  | 0.8s     | 45    | eccentric time deficit               |
+ * | Tempo curl        | 15  | 0        | 80    | concentric time deficit              |
+ * | Tempo lower       | 15  | 0        | 45    | eccentric time deficit               |
  * | Tempo jerk        | 10  | 0        | 8     | velocity spike/absolute excess        |
  *
  * Max total penalty: 199 -> worst possible rep = 0.
@@ -234,8 +251,8 @@ const PENALTY_CONFIGS = {
   HIP_RISE:            { cap: 15, deadzone: 0.03, scale: 20000 } as PenaltyConfig,
   THIGH_MOVEMENT:      { cap: 12, deadzone: 0.04, scale: 5000 } as PenaltyConfig,
   TOP_HOLD:            { cap: 5, deadzone: 0, scale: 160 } as PenaltyConfig,
-  TEMPO_CURL:          { cap: 15, deadzone: 0.5, scale: 80 } as PenaltyConfig,
-  TEMPO_LOWER:         { cap: 15, deadzone: 0.8, scale: 45 } as PenaltyConfig,
+  TEMPO_CURL:          { cap: 15, deadzone: 0, scale: 80 } as PenaltyConfig,
+  TEMPO_LOWER:         { cap: 15, deadzone: 0, scale: 45 } as PenaltyConfig,
   TEMPO_JERK:          { cap: 10, deadzone: 0, scale: 8 } as PenaltyConfig,
 } as const;
 
@@ -268,10 +285,11 @@ function upsertLyingLegCurlTunable(tunable: NumericTunable): void {
 }
 
 ([
+  { path: 'thresholds.ROBUST_EXTREMA_MIN_SAMPLES', min: 1, max: 5, step: 1, kind: 'fsm' },
   { path: 'formThresholds.KNEE_FLEXION_FAIL', min: 90, max: 135, step: 1, kind: 'feedback' },
-  { path: 'formThresholds.KNEE_FLEXION_IDEAL', min: 70, max: 115, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_FLEXION_IDEAL', min: 70, max: 115, step: 1, kind: 'scoring' },
   { path: 'formThresholds.KNEE_EXTENSION_FAIL', min: 145, max: 175, step: 1, kind: 'feedback' },
-  { path: 'formThresholds.KNEE_EXTENSION_IDEAL', min: 155, max: 180, step: 1, kind: 'feedback' },
+  { path: 'formThresholds.KNEE_EXTENSION_IDEAL', min: 155, max: 180, step: 1, kind: 'scoring' },
   { path: 'formThresholds.FLEXION_IDEAL_RATIO', min: 0.30, max: 0.60, step: 0.01, kind: 'scoring' },
   { path: 'formThresholds.EXTENSION_IDEAL_RATIO', min: 0.90, max: 1.05, step: 0.01, kind: 'scoring' },
   { path: 'formThresholds.HIP_RISE_RATIO_WARN', min: 0.01, max: 0.12, step: 0.01, kind: 'feedback' },
@@ -285,6 +303,7 @@ function upsertLyingLegCurlTunable(tunable: NumericTunable): void {
   { path: 'formThresholds.VELOCITY_SAMPLE_MIN', min: 0.01, max: 0.20, step: 0.01, kind: 'feedback' },
   { path: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', min: 0.2, max: 0.75, step: 0.05, kind: 'feedback' },
   { path: 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', min: 0.1, max: 0.5, step: 0.05, kind: 'feedback' },
+  { path: 'formThresholds.SIDE_VIEW_MIN_SAMPLES', min: 3, max: 10, step: 1, kind: 'feedback' },
   { path: 'formThresholds.LOW_CONFIDENCE_MAX_RATE', min: 0.15, max: 0.6, step: 0.05, kind: 'feedback' },
   { path: 'formThresholds.KNEE_METRIC_MIN_SAMPLES', min: 1, max: 12, step: 1, kind: 'feedback' },
   { path: 'formThresholds.KNEE_METRIC_MIN_SAMPLE_RATE', min: 0.1, max: 0.8, step: 0.05, kind: 'feedback' },
@@ -313,10 +332,8 @@ function upsertLyingLegCurlTunable(tunable: NumericTunable): void {
   { path: 'penaltyConfigs.TOP_HOLD.deadzone', min: 0, max: 0.10, step: 0.01, kind: 'scoring' },
   { path: 'penaltyConfigs.TOP_HOLD.scale', min: 40, max: 300, step: 20, kind: 'scoring' },
   { path: 'penaltyConfigs.TEMPO_CURL.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
-  { path: 'penaltyConfigs.TEMPO_CURL.deadzone', min: 0.15, max: 1.2, step: 0.05, kind: 'scoring' },
   { path: 'penaltyConfigs.TEMPO_CURL.scale', min: 20, max: 160, step: 10, kind: 'scoring' },
   { path: 'penaltyConfigs.TEMPO_LOWER.cap', min: 0, max: 25, step: 1, kind: 'scoring' },
-  { path: 'penaltyConfigs.TEMPO_LOWER.deadzone', min: 0.2, max: 1.8, step: 0.05, kind: 'scoring' },
   { path: 'penaltyConfigs.TEMPO_LOWER.scale', min: 15, max: 120, step: 5, kind: 'scoring' },
   { path: 'penaltyConfigs.TEMPO_JERK.cap', min: 0, max: 20, step: 1, kind: 'scoring' },
   { path: 'penaltyConfigs.TEMPO_JERK.deadzone', min: 0, max: 3, step: 0.1, kind: 'scoring' },
@@ -336,6 +353,7 @@ LYING_LEG_CURL_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'lying-leg-curl.tempo_down', metricKey: 'tLower', thresholdPath: 'formThresholds.TEMPO_LOWER_MIN', direction: 'below' },
   { issueId: 'lying-leg-curl.tempo_jerk', metricKey: 'velocitySpikeRatio', thresholdPath: 'formThresholds.TEMPO_JERK_SPIKE_WARN', direction: 'above' },
   { issueId: 'lying-leg-curl.side_view_uncertain', metricKey: 'sideViewConfidence', thresholdPath: 'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN', direction: 'below' },
+  { issueId: 'lying-leg-curl.side_view_uncertain', metricKey: 'sideViewConfidenceMin', thresholdPath: 'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN', direction: 'below' },
 ];
 
 const LYING_LEG_CURL_CONFIG_BINDINGS = [
@@ -382,6 +400,13 @@ interface RepWindow {
   kneeAngleSamples: number[];
   kneeAngleSampleCount: number;
   kneeAngleConfidenceSum: number;
+  /** Return/lowering phase extension samples. Starting extension must not mask a short return. */
+  returnRatioSamples: number[];
+  returnMaxRatio: number;
+  returnKneeAngleSamples: number[];
+  returnMaxKneeAngle: number;
+  returnKneeAngleSampleCount: number;
+  returnKneeAngleConfidenceSum: number;
   /** Hip angle at rep start (baseline for detecting lift) */
   hipAngleBaseline: number | null;
   /** Max absolute hip angle delta from baseline during rep */
@@ -433,10 +458,17 @@ interface RepResult {
   diagnostics?: FrameworkRepResult['diagnostics'];
 }
 
+interface PendingCompletedRep {
+  window: RepWindow;
+  visibleSide: 'left' | 'right';
+  completedAt: number;
+}
+
 interface LyingLegCurlState {
   fsm: LyingLegCurlFSM;
   repCount: number;
   repWindow: RepWindow | null;
+  pendingCompletedRep: PendingCompletedRep | null;
   lastRepResult: RepResult | null;
   /** Smoothed trackers */
   ratioTracker: SmoothedAngleTracker;
@@ -462,6 +494,9 @@ interface LyingLegCurlState {
   restMaxKneeAngle: number;
   restRatioSamples: number[];
   restKneeAngleSamples: number[];
+  restHipAngleSamples: number[];
+  restHipYSamples: number[];
+  restThighVectorSamples: Point2D[];
 }
 
 interface LyingLegCurlDebugInfo {
@@ -517,6 +552,12 @@ function initRepWindow(
     kneeAngleSamples: [],
     kneeAngleSampleCount: 0,
     kneeAngleConfidenceSum: 0,
+    returnRatioSamples: [],
+    returnMaxRatio: -Infinity,
+    returnKneeAngleSamples: [],
+    returnMaxKneeAngle: -Infinity,
+    returnKneeAngleSampleCount: 0,
+    returnKneeAngleConfidenceSum: 0,
     hipAngleBaseline: null,
     maxHipDelta: 0,
     hipDeltaSamples: [],
@@ -561,6 +602,7 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
     fsm: initFSM(),
     repCount: 0,
     repWindow: null,
+    pendingCompletedRep: null,
     lastRepResult: null,
     ratioTracker: new SmoothedAngleTracker(),
     hipTracker: new SmoothedAngleTracker(),
@@ -585,7 +627,20 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
     restMaxKneeAngle: -Infinity,
     restRatioSamples: [],
     restKneeAngleSamples: [],
+    restHipAngleSamples: [],
+    restHipYSamples: [],
+    restThighVectorSamples: [],
   };
+}
+
+function resetRestBaselines(state: LyingLegCurlState): void {
+  state.restMaxRatio = -Infinity;
+  state.restMaxKneeAngle = -Infinity;
+  state.restRatioSamples = [];
+  state.restKneeAngleSamples = [];
+  state.restHipAngleSamples = [];
+  state.restHipYSamples = [];
+  state.restThighVectorSamples = [];
 }
 
 // ============================================================================
@@ -898,9 +953,29 @@ function hasKneeAngleSamples(repWindow: RepWindow): boolean {
     Number.isFinite(repWindow.maxKneeAngle);
 }
 
+function returnExtensionRatio(repWindow: RepWindow): number {
+  return Number.isFinite(repWindow.returnMaxRatio)
+    ? repWindow.returnMaxRatio
+    : repWindow.maxRatio;
+}
+
+function hasReturnKneeAngleSamples(repWindow: RepWindow): boolean {
+  const sampleRate = repWindow.returnRatioSamples.length > 0
+    ? repWindow.returnKneeAngleSampleCount / repWindow.returnRatioSamples.length
+    : 0;
+  return repWindow.returnKneeAngleSampleCount >= FORM_THRESHOLDS.KNEE_METRIC_MIN_SAMPLES &&
+    sampleRate >= FORM_THRESHOLDS.KNEE_METRIC_MIN_SAMPLE_RATE &&
+    Number.isFinite(repWindow.returnMaxKneeAngle);
+}
+
 function averageKneeAngleConfidence(repWindow: RepWindow): number | null {
   if (repWindow.kneeAngleSampleCount === 0) return null;
   return repWindow.kneeAngleConfidenceSum / repWindow.kneeAngleSampleCount;
+}
+
+function averageReturnKneeAngleConfidence(repWindow: RepWindow): number | null {
+  if (repWindow.returnKneeAngleSampleCount === 0) return null;
+  return repWindow.returnKneeAngleConfidenceSum / repWindow.returnKneeAngleSampleCount;
 }
 
 function averageSideViewConfidence(repWindow: RepWindow): number | null {
@@ -942,8 +1017,8 @@ function curlDepthShort(repWindow: RepWindow): boolean {
 
 function extensionShort(repWindow: RepWindow): boolean {
   return (
-    repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL ||
-    (hasKneeAngleSamples(repWindow) && repWindow.maxKneeAngle < FORM_THRESHOLDS.KNEE_EXTENSION_FAIL)
+    returnExtensionRatio(repWindow) < FORM_THRESHOLDS.EXTENSION_FAIL ||
+    (hasReturnKneeAngleSamples(repWindow) && repWindow.returnMaxKneeAngle < FORM_THRESHOLDS.KNEE_EXTENSION_FAIL)
   );
 }
 
@@ -1004,12 +1079,14 @@ function buildLyingLegCurlViewQuality(repWindow: RepWindow): RepViewQualityDiagn
   const hasEnoughSamples =
     repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES &&
     averageConfidence !== null;
-  const sideConfirmed = Boolean(
+  const bilateralSideConfirmed = Boolean(
     hasEnoughSamples &&
     averageConfidence! >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
     repWindow.sideViewConfidenceMin >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN,
   );
-  const frontishConfirmed = Boolean(hasEnoughSamples && !sideConfirmed);
+  const frontishConfirmed = Boolean(hasEnoughSamples && !bilateralSideConfirmed);
+  const singleSideConfirmed = Boolean(!hasEnoughSamples && primaryConfidenceIsScorable(repWindow));
+  const sideConfirmed = bilateralSideConfirmed || singleSideConfirmed;
   return {
     status: sideConfirmed
       ? 'side_confirmed'
@@ -1034,15 +1111,17 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
   const flexionExcess = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.FLEXION_IDEAL_RATIO);
   penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
 
-  // 2. ROM -- extension: ideal maxRatio is configurable. Shortfall = max(0, ideal - maxRatio)
-  const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_IDEAL_RATIO - repWindow.maxRatio);
+  // 2. ROM -- extension: use return-phase extension so starting posture cannot hide a short return.
+  const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_IDEAL_RATIO - returnExtensionRatio(repWindow));
   penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
 
   if (hasKneeAngleSamples(repWindow)) {
     const kneeFlexionExcess = Math.max(0, repWindow.minKneeAngle - FORM_THRESHOLDS.KNEE_FLEXION_IDEAL);
     penalties.push({ value: kneeFlexionExcess, config: PENALTY_CONFIGS.KNEE_FLEXION_ROM });
+  }
 
-    const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.maxKneeAngle);
+  if (hasReturnKneeAngleSamples(repWindow)) {
+    const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.returnMaxKneeAngle);
     penalties.push({ value: kneeExtensionShortfall, config: PENALTY_CONFIGS.KNEE_EXTENSION_ROM });
   }
 
@@ -1062,14 +1141,14 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
     const tCurl = repWindow.tCurled - repWindow.tStart;    // concentric (curl up)
     const tLower = repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled); // eccentric (lower down)
 
-    // Penalize if too fast (deficit is pre-computed, so pass with deadzone: 0)
-    if (tCurl > 0 && tCurl < PENALTY_CONFIGS.TEMPO_CURL.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_CURL.deadzone - tCurl;
-      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_CURL, deadzone: 0 } });
+    // Penalize against the same thresholds that drive feedback.
+    if (tCurl > 0 && tCurl < FORM_THRESHOLDS.TEMPO_CURL_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_CURL_MIN - tCurl;
+      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_CURL });
     }
-    if (tLower > 0 && tLower < PENALTY_CONFIGS.TEMPO_LOWER.deadzone) {
-      const deficit = PENALTY_CONFIGS.TEMPO_LOWER.deadzone - tLower;
-      penalties.push({ value: deficit, config: { ...PENALTY_CONFIGS.TEMPO_LOWER, deadzone: 0 } });
+    if (tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN) {
+      const deficit = FORM_THRESHOLDS.TEMPO_LOWER_MIN - tLower;
+      penalties.push({ value: deficit, config: PENALTY_CONFIGS.TEMPO_LOWER });
     }
   }
 
@@ -1149,12 +1228,16 @@ function buildLyingLegCurlDiagnostics(
   const tCurl = repWindow.tCurled !== null ? repWindow.tCurled - repWindow.tStart : null;
   const tLower = repWindow.tCurled !== null ? repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled) : null;
   const hasKnee = hasKneeAngleSamples(repWindow);
+  const hasReturnKnee = hasReturnKneeAngleSamples(repWindow);
+  const hasHipAngle = repWindow.hipDeltaSamples.length > 0;
+  const hasHipRise = repWindow.hipRiseSampleCount > 0;
   const hasSideViewConfidence = repWindow.sideViewConfidenceSamples >= FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES;
   const sideViewConfidence = averageSideViewConfidence(repWindow);
   const spikeRatio = velocitySpikeRatio(repWindow);
   const hold = topHoldSeconds(repWindow);
   const viewQuality = buildLyingLegCurlViewQuality(repWindow);
   const distalEndpoint = mostUsedDistalEndpoint(repWindow);
+  const extensionRatio = returnExtensionRatio(repWindow);
   return buildRepDiagnostics({
     exerciseName: 'Lying Leg Curl',
     repIndex,
@@ -1164,7 +1247,10 @@ function buildLyingLegCurlDiagnostics(
     viewQuality,
     metrics: [
       diagnosticMetric('curlDepthRatio', repWindow.minRatio, { unit: 'ratio' }),
-      diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
+      diagnosticMetric('extensionRatio', extensionRatio, {
+        unit: 'ratio',
+        sampleCount: repWindow.returnRatioSamples.length,
+      }),
       diagnosticMetric('romRatio', repWindow.maxRatio - repWindow.minRatio, { unit: 'ratio' }),
       diagnosticLabelMetric('distalEndpoint', distalEndpoint, {
         sampleCount: Object.values(repWindow.distalEndpointCounts).reduce((sum, count) => sum + count, 0),
@@ -1177,17 +1263,22 @@ function buildLyingLegCurlDiagnostics(
         sampleCount: repWindow.kneeAngleSampleCount,
         skippedReason: 'insufficient_knee_angle_samples',
       }),
-      diagnosticMetric('kneeExtensionAngle', hasKnee ? repWindow.maxKneeAngle : null, {
+      diagnosticMetric('kneeExtensionAngle', hasReturnKnee ? repWindow.returnMaxKneeAngle : null, {
         unit: 'degrees',
-        eligible: hasKnee,
-        confidence: averageKneeAngleConfidence(repWindow) ?? undefined,
-        sampleCount: repWindow.kneeAngleSampleCount,
-        skippedReason: 'insufficient_knee_angle_samples',
+        eligible: hasReturnKnee,
+        confidence: averageReturnKneeAngleConfidence(repWindow) ?? undefined,
+        sampleCount: repWindow.returnKneeAngleSampleCount,
+        skippedReason: 'insufficient_return_knee_angle_samples',
       }),
-      diagnosticMetric('hipDelta', repWindow.maxHipDelta, { unit: 'degrees' }),
+      diagnosticMetric('hipDelta', hasHipAngle ? repWindow.maxHipDelta : null, {
+        unit: 'degrees',
+        eligible: hasHipAngle,
+        sampleCount: repWindow.hipDeltaSamples.length,
+        skippedReason: 'insufficient_hip_angle_samples',
+      }),
       diagnosticMetric('hipRiseRatio', repWindow.maxHipRiseRatio, {
         unit: 'ratio',
-        eligible: repWindow.hipRiseSampleCount > 0,
+        eligible: hasHipRise,
         sampleCount: repWindow.hipRiseSampleCount,
         skippedReason: 'insufficient_hip_rise_samples',
       }),
@@ -1241,7 +1332,7 @@ function buildLyingLegCurlDiagnostics(
         issueId: 'lying-leg-curl.rom_extend_short',
         metricKeys: ['extensionRatio', 'kneeExtensionAngle'],
         direction: 'below',
-        value: repWindow.maxRatio,
+        value: extensionRatio,
         thresholdPath: ['formThresholds.EXTENSION_FAIL', 'formThresholds.KNEE_EXTENSION_FAIL'],
         thresholdValue: {
           EXTENSION_FAIL: FORM_THRESHOLDS.EXTENSION_FAIL,
@@ -1259,7 +1350,9 @@ function buildLyingLegCurlDiagnostics(
           HIP_LIFT_WARN: FORM_THRESHOLDS.HIP_LIFT_WARN,
           HIP_RISE_RATIO_WARN: FORM_THRESHOLDS.HIP_RISE_RATIO_WARN,
         },
+        eligible: hasHipAngle || hasHipRise,
         triggered: hipLiftTriggered(repWindow),
+        skippedReason: 'insufficient_hip_lift_samples',
       }),
       diagnosticCue({
         issueId: 'lying-leg-curl.thigh_movement',
@@ -1367,6 +1460,12 @@ function refreshRepWindowMetrics(window: RepWindow): void {
   if (minKneeAngle !== null) window.minKneeAngle = minKneeAngle;
   if (maxKneeAngle !== null) window.maxKneeAngle = maxKneeAngle;
 
+  const returnMaxRatio = robustHigh(window.returnRatioSamples);
+  if (returnMaxRatio !== null) window.returnMaxRatio = returnMaxRatio;
+
+  const returnMaxKneeAngle = robustHigh(window.returnKneeAngleSamples);
+  if (returnMaxKneeAngle !== null) window.returnMaxKneeAngle = returnMaxKneeAngle;
+
   const maxHipDelta = robustHigh(window.hipDeltaSamples);
   if (maxHipDelta !== null) window.maxHipDelta = maxHipDelta;
 
@@ -1386,6 +1485,36 @@ function refreshRepWindowMetrics(window: RepWindow): void {
   if (maxLowerVelocity !== null) window.maxLowerVelocity = maxLowerVelocity;
 }
 
+function updateRepWindowReturnExtension(window: RepWindow, sample: RepFrameMetrics): void {
+  if (window.tLowerStart === null) return;
+
+  window.returnRatioSamples.push(sample.velocityRatio);
+  window.returnMaxRatio = Math.max(window.returnMaxRatio, sample.velocityRatio);
+  if (sample.kneeAngle !== null && sample.kneeConfidence >= FORM_CONFIDENCE_MIN) {
+    window.returnKneeAngleSamples.push(sample.kneeAngle);
+    window.returnMaxKneeAngle = Math.max(window.returnMaxKneeAngle, sample.kneeAngle);
+    window.returnKneeAngleSampleCount++;
+    window.returnKneeAngleConfidenceSum += sample.kneeConfidence;
+  }
+
+  refreshRepWindowMetrics(window);
+}
+
+function markRepWindowLowConfidenceDropout(
+  window: RepWindow,
+  t: number,
+  sideViewConfidence: number | null,
+): void {
+  window.tEnd = t;
+  window.frameCount++;
+  window.lowConfidenceFrames++;
+  if (sideViewConfidence !== null) {
+    window.sideViewConfidenceSamples++;
+    window.sideViewConfidenceSum += sideViewConfidence;
+    window.sideViewConfidenceMin = Math.min(window.sideViewConfidenceMin, sideViewConfidence);
+  }
+}
+
 function updateRepWindowMetrics(window: RepWindow, sample: RepFrameMetrics): void {
   window.tEnd = sample.t;
   window.frameCount++;
@@ -1399,7 +1528,6 @@ function updateRepWindowMetrics(window: RepWindow, sample: RepFrameMetrics): voi
   const lowConfidenceSample =
     sample.ratioConfidence < FORM_THRESHOLDS.PRIMARY_CONFIDENCE_MIN ||
     sample.kneeConfidence < FORM_THRESHOLDS.PRIMARY_CONFIDENCE_MIN ||
-    sample.hipConfidence < FORM_THRESHOLDS.PRIMARY_CONFIDENCE_MIN ||
     sample.kneeAngle === null;
   if (lowConfidenceSample) {
     window.lowConfidenceFrames++;
@@ -1411,6 +1539,10 @@ function updateRepWindowMetrics(window: RepWindow, sample: RepFrameMetrics): voi
     window.maxKneeAngle = Math.max(window.maxKneeAngle, sample.kneeAngle);
     window.kneeAngleSampleCount++;
     window.kneeAngleConfidenceSum += sample.kneeConfidence;
+  }
+
+  if (window.tLowerStart !== null) {
+    updateRepWindowReturnExtension(window, sample);
   }
 
   if (sample.hipAngle !== null && sample.hipConfidence >= FORM_CONFIDENCE_MIN) {
@@ -1528,7 +1660,10 @@ function updateLyingLegCurlState(
   currentState: LyingLegCurlState,
   frameContext?: ExerciseFrameContext,
 ): LyingLegCurlState {
-  const t = Date.now() / 1000;
+  const timestampMs = typeof frameContext?.timestampMs === 'number' && Number.isFinite(frameContext.timestampMs)
+    ? frameContext.timestampMs
+    : Date.now();
+  const t = timestampMs / 1000;
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate
@@ -1564,9 +1699,10 @@ function updateLyingLegCurlState(
   const thighVector = calculateThighVector(signalKeypoints, visibleSide);
   const sideViewConfidence = calculateSideViewConfidence(frameContext?.imageKeypoints ?? signalKeypoints);
 
-  // If we can't even compute the ratio, bail out
+  // If we can't even compute the ratio, keep the rep alive but account for
+  // the missing form-critical signal in the active rep's scorable gate.
   if (rawRatio === null) {
-    return {
+    const newState: LyingLegCurlState = {
       ...currentState,
       visibleSide,
       smoothedRatio: null,
@@ -1575,13 +1711,28 @@ function updateLyingLegCurlState(
       currentHipRiseRatio: null,
       smoothedHip: null,
     };
+    const dropoutWindow = newState.repWindow ?? newState.pendingCompletedRep?.window ?? null;
+    if (dropoutWindow) {
+      markRepWindowLowConfidenceDropout(dropoutWindow, t, sideViewConfidence);
+    }
+    if (
+      newState.pendingCompletedRep &&
+      t - newState.pendingCompletedRep.completedAt + 1e-6 >= THRESHOLDS.MIN_REP_TIME
+    ) {
+      const pending = newState.pendingCompletedRep;
+      completeRep(newState, pending.window, pending.visibleSide, 'Great rep!', t);
+      newState.pendingCompletedRep = null;
+    }
+    return {
+      ...newState,
+    };
   }
 
   // Smooth values through tracker pipeline
-  const smoothedRatio = currentState.ratioTracker.push(rawRatio, primaryRatioConf);
+  const smoothedRatio = currentState.ratioTracker.push(rawRatio, primaryRatioConf, timestampMs);
   const fastRatio = currentState.ratioTracker.medianValue;
   const smoothedHip = rawHip !== null
-    ? currentState.hipTracker.push(rawHip, hipConf)
+    ? currentState.hipTracker.push(rawHip, hipConf, timestampMs)
     : currentState.hipTracker.value;
 
   const newState: LyingLegCurlState = {
@@ -1598,6 +1749,45 @@ function updateLyingLegCurlState(
     return newState;
   }
 
+  if (!inActiveRep && currentState.visibleSide !== visibleSide) {
+    resetRestBaselines(newState);
+  }
+
+  if (newState.pendingCompletedRep) {
+    const pending = newState.pendingCompletedRep;
+    const startingNextRep = fastRatio < THRESHOLDS.CURLING_ENTER;
+    const pendingSample: RepFrameMetrics = {
+      ratio: smoothedRatio,
+      fastRatio,
+      velocityRatio: rawRatio,
+      kneeAngle: rawKneeAngle,
+      kneeConfidence: kneeConf,
+      hipAngle: isNaN(smoothedHip) ? null : smoothedHip,
+      hipConfidence: hipConf,
+      ratioConfidence: primaryRatioConf,
+      hipY: hip?.y ?? null,
+      legChainLength,
+      thighVector,
+      distalEndpoint: distalEndpoint?.name ?? null,
+      sideViewConfidence,
+      phase: newState.fsm.phase,
+      t,
+    };
+
+    if (!startingNextRep) {
+      updateRepWindowReturnExtension(pending.window, pendingSample);
+    }
+
+    if (
+      startingNextRep ||
+      !extensionShort(pending.window) ||
+      t - pending.completedAt + 1e-6 >= THRESHOLDS.MIN_REP_TIME
+    ) {
+      completeRep(newState, pending.window, pending.visibleSide, 'Great rep!', t);
+      newState.pendingCompletedRep = null;
+    }
+  }
+
   // Update FSM
   const fsmResult = updateFSM(currentState.fsm, fastRatio, t);
   newState.fsm = fsmResult.fsm;
@@ -1611,26 +1801,38 @@ function updateLyingLegCurlState(
       newState.restKneeAngleSamples = [...newState.restKneeAngleSamples, rawKneeAngle]
         .slice(-THRESHOLDS.REST_SAMPLE_WINDOW_FRAMES);
     }
+    if (!isNaN(smoothedHip) && hipConf >= FORM_CONFIDENCE_MIN) {
+      newState.restHipAngleSamples = [...newState.restHipAngleSamples, smoothedHip]
+        .slice(-THRESHOLDS.REST_SAMPLE_WINDOW_FRAMES);
+    }
+    if (hip && hipConf >= FORM_CONFIDENCE_MIN) {
+      newState.restHipYSamples = [...newState.restHipYSamples, hip.y]
+        .slice(-THRESHOLDS.REST_SAMPLE_WINDOW_FRAMES);
+    }
+    if (thighVector !== null) {
+      newState.restThighVectorSamples = [...newState.restThighVectorSamples, thighVector]
+        .slice(-THRESHOLDS.REST_SAMPLE_WINDOW_FRAMES);
+    }
   }
 
   // Track rep window while actively in a rep (not REST)
   const inRep = newState.fsm.phase !== 'REST';
   if (inRep && !currentState.repWindow) {
     newState.repWindow = initRepWindow(newState.fsm.tRepStart ?? t, rawRatio, rawKneeAngle);
-    newState.repWindow.ratioSamples.push(...currentState.restRatioSamples);
-    newState.repWindow.kneeAngleSamples.push(...currentState.restKneeAngleSamples);
-    newState.repWindow.kneeAngleSampleCount += currentState.restKneeAngleSamples.length;
-    newState.repWindow.kneeAngleConfidenceSum += currentState.restKneeAngleSamples.length * FORM_CONFIDENCE_MIN;
-    if (currentState.restMaxRatio !== -Infinity) {
-      newState.repWindow.maxRatio = currentState.restMaxRatio;
+    newState.repWindow.ratioSamples.push(...newState.restRatioSamples);
+    newState.repWindow.kneeAngleSamples.push(...newState.restKneeAngleSamples);
+    newState.repWindow.kneeAngleSampleCount += newState.restKneeAngleSamples.length;
+    newState.repWindow.kneeAngleConfidenceSum += newState.restKneeAngleSamples.length * FORM_CONFIDENCE_MIN;
+    if (newState.restMaxRatio !== -Infinity) {
+      newState.repWindow.maxRatio = newState.restMaxRatio;
     }
-    if (currentState.restMaxKneeAngle !== -Infinity) {
-      newState.repWindow.maxKneeAngle = currentState.restMaxKneeAngle;
+    if (newState.restMaxKneeAngle !== -Infinity) {
+      newState.repWindow.maxKneeAngle = newState.restMaxKneeAngle;
     }
-    newState.restMaxRatio = -Infinity;
-    newState.restMaxKneeAngle = -Infinity;
-    newState.restRatioSamples = [];
-    newState.restKneeAngleSamples = [];
+    newState.repWindow.hipAngleBaseline = averageFiniteOrNull(newState.restHipAngleSamples);
+    newState.repWindow.hipYBaseline = averageFiniteOrNull(newState.restHipYSamples);
+    newState.repWindow.thighVectorBaseline = averagePoint(newState.restThighVectorSamples);
+    resetRestBaselines(newState);
   }
 
   const returnedPartial =
@@ -1700,11 +1902,20 @@ function updateLyingLegCurlState(
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
-    completeRep(newState, newState.repWindow, visibleSide, 'Great rep!', t);
+    const completedWindow = newState.repWindow;
 
     // Reset rep window and FSM
     newState.repWindow = null;
     newState.fsm = initFSM();
+    if (extensionShort(completedWindow)) {
+      newState.pendingCompletedRep = {
+        window: completedWindow,
+        visibleSide,
+        completedAt: t,
+      };
+    } else {
+      completeRep(newState, completedWindow, visibleSide, 'Great rep!', t);
+    }
   }
 
   // Clear feedback after 2 seconds
@@ -1728,7 +1939,7 @@ function getDebugInfo(state: LyingLegCurlState): LyingLegCurlDebugInfo {
     return Math.round(v * 1000) / 1000; // 3 decimal places for ratios
   };
 
-  const repWin = state.repWindow;
+  const repWin = state.repWindow ?? state.pendingCompletedRep?.window ?? null;
 
   return {
     phase: state.fsm.phase,
@@ -1752,6 +1963,197 @@ function getDebugInfo(state: LyingLegCurlState): LyingLegCurlDebugInfo {
     sideViewConfidence: repWin ? fmt(averageSideViewConfidence(repWin)) : null,
     scorable: repWin ? isLyingLegCurlRepScorable(repWin) : null,
   };
+}
+
+// ============================================================================
+// CONFIG VALIDATION
+// ============================================================================
+
+function configNumber(config: ExerciseHeuristicConfig, path: string, issues: string[]): number | null {
+  const value = getConfigValue(config, path);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    issues.push(`Lying Leg Curl config "${path}" must be a finite number.`);
+    return null;
+  }
+  return value;
+}
+
+function requireOrdered(
+  config: ExerciseHeuristicConfig,
+  issues: string[],
+  firstPath: string,
+  secondPath: string,
+  allowEqual = false,
+): void {
+  const first = configNumber(config, firstPath, issues);
+  const second = configNumber(config, secondPath, issues);
+  if (first === null || second === null) return;
+  const valid = allowEqual ? first <= second : first < second;
+  if (!valid) {
+    issues.push(
+      `Lying Leg Curl config ordering invalid: "${firstPath}" (${first}) must be ${allowEqual ? '<=' : '<'} "${secondPath}" (${second}).`,
+    );
+  }
+}
+
+function validatePositiveInteger(config: ExerciseHeuristicConfig, issues: string[], path: string): number | null {
+  const value = configNumber(config, path, issues);
+  if (value === null) return null;
+  if (!Number.isInteger(value) || value <= 0) {
+    issues.push(`Lying Leg Curl config "${path}" must be a positive integer.`);
+  }
+  return value;
+}
+
+function validatePenaltyConfigs(config: ExerciseHeuristicConfig, issues: string[]): void {
+  const penaltyConfigs = getConfigValue(config, 'penaltyConfigs');
+  if (penaltyConfigs === null || typeof penaltyConfigs !== 'object' || Array.isArray(penaltyConfigs)) {
+    issues.push('Lying Leg Curl config "penaltyConfigs" must be an object.');
+    return;
+  }
+
+  for (const [penaltyName, penaltyConfig] of Object.entries(penaltyConfigs)) {
+    if (penaltyConfig === null || typeof penaltyConfig !== 'object' || Array.isArray(penaltyConfig)) {
+      issues.push(`Lying Leg Curl penalty config "${penaltyName}" must be an object.`);
+      continue;
+    }
+
+    const fields = penaltyConfig as Record<string, unknown>;
+    const cap = fields.cap;
+    const deadzone = fields.deadzone;
+    const scale = fields.scale;
+    const pathPrefix = `penaltyConfigs.${penaltyName}`;
+
+    if (typeof cap !== 'number' || !Number.isFinite(cap)) {
+      issues.push(`Lying Leg Curl config "${pathPrefix}.cap" must be a finite number.`);
+    } else if (cap < 0) {
+      issues.push(`Lying Leg Curl config "${pathPrefix}.cap" must be greater than or equal to 0.`);
+    }
+
+    if (typeof deadzone !== 'number' || !Number.isFinite(deadzone)) {
+      issues.push(`Lying Leg Curl config "${pathPrefix}.deadzone" must be a finite number.`);
+    } else if (deadzone < 0) {
+      issues.push(`Lying Leg Curl config "${pathPrefix}.deadzone" must be greater than or equal to 0.`);
+    }
+
+    if (typeof scale !== 'number' || !Number.isFinite(scale)) {
+      issues.push(`Lying Leg Curl config "${pathPrefix}.scale" must be a finite number.`);
+    } else if (scale < 0 || (scale === 0 && cap !== 0)) {
+      issues.push(`Lying Leg Curl config "${pathPrefix}.scale" must be greater than 0 unless cap is 0.`);
+    }
+  }
+}
+
+function validateLyingLegCurlHeuristicConfig(config: ExerciseHeuristicConfig): string[] {
+  const issues: string[] = [];
+
+  requireOrdered(config, issues, 'thresholds.CURLED_ENTER', 'thresholds.CURLED_EXIT');
+  requireOrdered(config, issues, 'thresholds.CURLED_EXIT', 'thresholds.CURLING_ENTER');
+  requireOrdered(config, issues, 'thresholds.CURLING_ENTER', 'thresholds.CURL_CLOCK_START');
+  requireOrdered(config, issues, 'thresholds.CURLING_ENTER', 'thresholds.REST_REENTER', true);
+  requireOrdered(config, issues, 'formThresholds.FLEXION_IDEAL_RATIO', 'formThresholds.FLEXION_FAIL', true);
+  requireOrdered(config, issues, 'formThresholds.EXTENSION_FAIL', 'formThresholds.EXTENSION_IDEAL_RATIO', true);
+  requireOrdered(
+    config,
+    issues,
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    true,
+  );
+  requireOrdered(config, issues, 'formThresholds.KNEE_FLEXION_IDEAL', 'formThresholds.KNEE_FLEXION_FAIL', true);
+  requireOrdered(config, issues, 'formThresholds.KNEE_EXTENSION_FAIL', 'formThresholds.KNEE_EXTENSION_IDEAL', true);
+
+  const minPartialRom = configNumber(config, 'thresholds.MIN_PARTIAL_ROM', issues);
+  const curlingEnter = configNumber(config, 'thresholds.CURLING_ENTER', issues);
+  const curledEnter = configNumber(config, 'thresholds.CURLED_ENTER', issues);
+  if (
+    minPartialRom !== null &&
+    curlingEnter !== null &&
+    curledEnter !== null &&
+    minPartialRom >= curlingEnter - curledEnter
+  ) {
+    issues.push(
+      'Lying Leg Curl config "thresholds.MIN_PARTIAL_ROM" must be less than CURLING_ENTER - CURLED_ENTER.',
+    );
+  }
+
+  for (const path of [
+    'thresholds.CURL_CLOCK_START',
+    'thresholds.CURLING_ENTER',
+    'thresholds.CURLED_ENTER',
+    'thresholds.CURLED_EXIT',
+    'thresholds.REST_REENTER',
+    'thresholds.MIN_PARTIAL_ROM',
+    'formThresholds.FLEXION_FAIL',
+    'formThresholds.FLEXION_IDEAL_RATIO',
+    'formThresholds.EXTENSION_FAIL',
+    'formThresholds.EXTENSION_IDEAL_RATIO',
+    'formThresholds.HIP_RISE_RATIO_WARN',
+    'formThresholds.THIGH_DRIFT_RATIO_WARN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 1.2)) {
+      issues.push(`Lying Leg Curl config "${path}" must be greater than 0 and at most 1.2.`);
+    }
+  }
+
+  for (const path of [
+    'thresholds.MIN_REP_TIME',
+    'formThresholds.TOP_HOLD_MIN',
+    'formThresholds.TEMPO_CURL_MIN',
+    'formThresholds.TEMPO_LOWER_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && value < 0) {
+      issues.push(`Lying Leg Curl config "${path}" must be greater than or equal to 0.`);
+    }
+  }
+
+  for (const path of [
+    'formThresholds.TOP_HOLD_VELOCITY_MAX',
+    'formThresholds.TEMPO_JERK_SPIKE_WARN',
+    'formThresholds.TEMPO_JERK_VELOCITY_WARN',
+    'formThresholds.VELOCITY_SAMPLE_MIN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && value <= 0) {
+      issues.push(`Lying Leg Curl config "${path}" must be greater than 0.`);
+    }
+  }
+
+  for (const path of [
+    'formThresholds.SIDE_VIEW_AVG_CONFIDENCE_MIN',
+    'formThresholds.SIDE_VIEW_MIN_CONFIDENCE_MIN',
+    'formThresholds.PRIMARY_CONFIDENCE_MIN',
+    'formThresholds.LOW_CONFIDENCE_MAX_RATE',
+    'formThresholds.KNEE_METRIC_MIN_SAMPLE_RATE',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value < 0 || value > 1)) {
+      issues.push(`Lying Leg Curl config "${path}" must be between 0 and 1.`);
+    }
+  }
+
+  for (const path of [
+    'formThresholds.KNEE_FLEXION_FAIL',
+    'formThresholds.KNEE_FLEXION_IDEAL',
+    'formThresholds.KNEE_EXTENSION_FAIL',
+    'formThresholds.KNEE_EXTENSION_IDEAL',
+    'formThresholds.HIP_LIFT_WARN',
+  ]) {
+    const value = configNumber(config, path, issues);
+    if (value !== null && (value <= 0 || value > 180)) {
+      issues.push(`Lying Leg Curl config "${path}" must be greater than 0 and at most 180.`);
+    }
+  }
+
+  validatePositiveInteger(config, issues, 'thresholds.ROBUST_EXTREMA_MIN_SAMPLES');
+  validatePositiveInteger(config, issues, 'thresholds.REST_SAMPLE_WINDOW_FRAMES');
+  validatePositiveInteger(config, issues, 'formThresholds.SIDE_VIEW_MIN_SAMPLES');
+  validatePositiveInteger(config, issues, 'formThresholds.KNEE_METRIC_MIN_SAMPLES');
+
+  validatePenaltyConfigs(config, issues);
+  return issues;
 }
 
 // ============================================================================
@@ -1800,7 +2202,7 @@ export function createLyingLegCurlDefinition(
       feedback: newInternal.feedback,
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
-      repQualityWindowActive: newInternal.repWindow !== null,
+      repQualityWindowActive: newInternal.repWindow !== null || newInternal.pendingCompletedRep !== null,
       _internal: newInternal,
     };
   },
@@ -1810,6 +2212,7 @@ export function createLyingLegCurlDefinition(
   tunedConfigPath: 'src/utils/exercises/definitions/tuned/lyingLegCurl.json',
   createVariant: (variantConfig) =>
     createLyingLegCurlDefinition(mergeHeuristicConfig(config, variantConfig)),
+  validateHeuristicConfig: validateLyingLegCurlHeuristicConfig,
 
   ttsConfig: {
     feedbackToIssue: {

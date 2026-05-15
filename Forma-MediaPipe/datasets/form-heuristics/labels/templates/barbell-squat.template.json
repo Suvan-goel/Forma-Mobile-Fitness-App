@@ -48,16 +48,16 @@
       "feedbackMessage": "Incomplete rep — use a full range of motion."
     },
     {
-      "issueId": "barbell-squat.heel_lift",
-      "feedbackMessage": "Keep your heels planted — drive through your mid-foot."
-    },
-    {
       "issueId": "barbell-squat.torso_fail",
       "feedbackMessage": "Too much forward lean — keep your chest up."
     },
     {
       "issueId": "barbell-squat.torso_warn",
       "feedbackMessage": "Stay more upright — brace your core."
+    },
+    {
+      "issueId": "barbell-squat.heel_lift",
+      "feedbackMessage": "Keep your heels planted — drive through your mid-foot."
     },
     {
       "issueId": "barbell-squat.tempo_up",

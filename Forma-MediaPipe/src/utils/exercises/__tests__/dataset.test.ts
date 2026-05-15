@@ -1,8 +1,17 @@
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import type { Keypoint } from '../../poseAnalysis';
 import type { ExerciseDefinition, ExerciseState, RepDiagnostics } from '../types';
-import { evaluateCase, summarizeEvaluations } from '../dataset';
+import '../definitions/register';
+import { ExerciseRegistry } from '../ExerciseRegistry';
+import {
+  buildLabelingGuidance,
+  evaluateCase,
+  getExerciseLabelPolicy,
+  getLabelableIssues,
+  listExerciseLabelPolicies,
+  summarizeEvaluations,
+} from '../dataset';
 import { validateLabelFile } from '../dataset/validation';
 import { replayRecordingVerbose, type LandmarkRecording } from '../replay';
 
@@ -17,6 +26,12 @@ const baseLabel = {
     { index: 2, startMs: 1100, endMs: 2000, issueIds: ['demo-exercise.depth_short'] },
   ],
 };
+
+const templateDir = join(process.cwd(), 'datasets/form-heuristics/labels/templates');
+
+function readTemplate(fileName: string): unknown {
+  return JSON.parse(readFileSync(join(templateDir, fileName), 'utf8'));
+}
 
 describe('dataset label validation', () => {
   it('rejects missing reps, overlapping windows, invalid issue ids, and out-of-order indexes', () => {
@@ -102,7 +117,130 @@ describe('dataset label validation', () => {
     }
   });
 
-  it.each(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions'])(
+  it('has exactly one label policy for every registered exercise', () => {
+    const registeredExerciseNames = ExerciseRegistry.list().sort();
+    const policyNames = listExerciseLabelPolicies().map((policy) => policy.exerciseName).sort();
+
+    expect(new Set(policyNames).size).toBe(policyNames.length);
+    expect(policyNames).toEqual(registeredExerciseNames);
+  });
+
+  it('keeps every label template aligned with the central label policy', () => {
+    const templateFiles = readdirSync(templateDir)
+      .filter((fileName) => fileName.endsWith('.template.json'))
+      .sort();
+
+    expect(templateFiles).toHaveLength(ExerciseRegistry.list().length);
+
+    for (const fileName of templateFiles) {
+      const template = readTemplate(fileName) as {
+        exerciseName: string;
+        reps: Array<{ view?: string; scorable?: boolean }>;
+        labelingGuidance?: string[];
+        availableIssues?: Array<{ issueId: string }>;
+      };
+      const definition = ExerciseRegistry.get(template.exerciseName);
+      const policy = getExerciseLabelPolicy(template.exerciseName);
+
+      expect(definition).toBeDefined();
+      expect(policy).toBeDefined();
+      expect(template.reps[0]?.view).toBeDefined();
+      expect(template.reps[0]?.scorable).toBeDefined();
+      expect(template.labelingGuidance).toEqual(buildLabelingGuidance(template.exerciseName));
+      expect(template.availableIssues?.map((issue) => issue.issueId)).toEqual(
+        getLabelableIssues(definition as ExerciseDefinition).map((issue) => issue.issueId),
+      );
+    }
+  });
+
+  it('rejects non-ground-truth setup and view-quality issue ids in reviewed labels', () => {
+    const issues = validateLabelFile({
+      ...baseLabel,
+      exerciseName: 'Lying Leg Curl',
+      reviewStatus: 'reviewed',
+      expectedReps: 1,
+      reps: [
+        {
+          index: 1,
+          startMs: 0,
+          endMs: 1000,
+          issueIds: ['lying-leg-curl.side_view_uncertain'],
+          view: 'side',
+          scorable: true,
+        },
+      ],
+    });
+
+    expect(issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      expect.stringContaining('not a reviewed ground-truth form issue for Lying Leg Curl'),
+    ]));
+  });
+
+  it('rejects issueIds and expectedScoreRange on reviewed unscorable reps', () => {
+    const issues = validateLabelFile({
+      ...baseLabel,
+      exerciseName: 'Push-Up',
+      reviewStatus: 'reviewed',
+      expectedReps: 1,
+      reps: [
+        {
+          index: 1,
+          startMs: 0,
+          endMs: 1000,
+          issueIds: ['push-up.depth_short'],
+          view: 'front',
+          scorable: false,
+          expectedScoreRange: [80, 90],
+        },
+      ],
+    });
+
+    expect(issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'reviewed unscorable Push-Up reps should not include issueIds; leave issueIds empty and use notes for context.',
+      'expectedScoreRange is only allowed on reviewed scorable reps.',
+    ]));
+  });
+
+  it('applies Barbell Curl partial-view issue policy without blocking visible-arm labels', () => {
+    expect(validateLabelFile({
+      ...baseLabel,
+      exerciseName: 'Barbell Curl',
+      reviewStatus: 'reviewed',
+      expectedReps: 1,
+      reps: [
+        {
+          index: 1,
+          startMs: 0,
+          endMs: 1000,
+          issueIds: ['barbell-curl.shoulder_warn', 'barbell-curl.torso_warn'],
+          view: 'side',
+          scorable: true,
+        },
+      ],
+    })).toEqual([]);
+
+    expect(validateLabelFile({
+      ...baseLabel,
+      exerciseName: 'Barbell Curl',
+      reviewStatus: 'reviewed',
+      expectedReps: 1,
+      reps: [
+        {
+          index: 1,
+          startMs: 0,
+          endMs: 1000,
+          issueIds: ['barbell-curl.asymmetry', 'barbell-curl.elbow_flare'],
+          view: 'oblique',
+          scorable: true,
+        },
+      ],
+    }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'Issue id "barbell-curl.asymmetry" is not labelable from oblique view for Barbell Curl.',
+      'Issue id "barbell-curl.elbow_flare" is not labelable from oblique view for Barbell Curl.',
+    ]));
+  });
+
+  it.each(['Barbell Curl', 'Push-Up', 'Barbell Squat', 'Cable Row', 'Cable Lat Pulldowns', 'Leg Extensions', 'Cable Pushdowns', 'Machine Ab Crunches', 'Lying Leg Curl'])(
     'requires view and scorable on reviewed %s reps but not drafts',
     exerciseName => {
       const reviewedLabel = {
@@ -138,14 +276,21 @@ describe('dataset label validation', () => {
         exerciseName === 'Barbell Squat' ||
         exerciseName === 'Cable Row' ||
         exerciseName === 'Cable Lat Pulldowns' ||
-        exerciseName === 'Leg Extensions'
+        exerciseName === 'Leg Extensions' ||
+        exerciseName === 'Cable Pushdowns' ||
+        exerciseName === 'Machine Ab Crunches' ||
+        exerciseName === 'Lying Leg Curl'
       ) {
         expect(knownViewIssues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
-          expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+          expect.stringContaining('reps must use side view; use scorable=false for unsupported or unknown views.'),
         ]));
       } else {
         expect(knownViewIssues).toEqual([]);
       }
+
+      const expectedScorableViewText = exerciseName === 'Barbell Curl'
+        ? 'front, side, or oblique view'
+        : 'side view';
 
       expect(validateLabelFile({
         ...reviewedLabel,
@@ -153,7 +298,7 @@ describe('dataset label validation', () => {
           { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'unknown', scorable: true },
         ],
       }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
-        expect.stringContaining('reps must use front, side, or oblique view; use scorable=false when view is unknown.'),
+        expect.stringContaining(`reps must use ${expectedScorableViewText}; use scorable=false for unsupported or unknown views.`),
       ]));
 
       expect(validateLabelFile({
@@ -196,7 +341,7 @@ describe('dataset label validation', () => {
         { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'oblique', scorable: true },
       ],
     }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
-      'reviewed scorable Standing Dumbbell Lateral Raises reps must use front view; use scorable=false for side, oblique, or unknown views.',
+      'reviewed scorable Standing Dumbbell Lateral Raises reps must use front view; use scorable=false for unsupported or unknown views.',
     ]));
 
     expect(validateLabelFile({
@@ -234,7 +379,7 @@ describe('dataset label validation', () => {
           { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
         ],
       }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
-        expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+        expect.stringContaining('reps must use side view; use scorable=false for unsupported or unknown views.'),
       ]));
     },
   );
@@ -266,7 +411,7 @@ describe('dataset label validation', () => {
           { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
         ],
       }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
-        expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+        expect.stringContaining('reps must use side view; use scorable=false for unsupported or unknown views.'),
       ]));
     },
   );
@@ -277,6 +422,38 @@ describe('dataset label validation', () => {
       expect(validateLabelFile({
         ...baseLabel,
         exerciseName: 'Cable Lat Pulldowns',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'rejects reviewed scorable Cable Pushdowns reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Cable Pushdowns',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
+        ],
+      }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining('reps must use side view; use scorable=false for unsupported or unknown views.'),
+      ]));
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'allows reviewed unscorable Cable Pushdowns reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Cable Pushdowns',
         reviewStatus: 'reviewed',
         expectedReps: 1,
         reps: [
@@ -298,7 +475,7 @@ describe('dataset label validation', () => {
           { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
         ],
       }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
-        expect.stringContaining('reps must use side view; use scorable=false for front, oblique, or unknown views.'),
+        expect.stringContaining('reps must use side view; use scorable=false for unsupported or unknown views.'),
       ]));
     },
   );
@@ -309,6 +486,70 @@ describe('dataset label validation', () => {
       expect(validateLabelFile({
         ...baseLabel,
         exerciseName: 'Leg Extensions',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'rejects reviewed scorable Machine Ab Crunches reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Machine Ab Crunches',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
+        ],
+      }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining('reps must use side view; use scorable=false for unsupported or unknown views.'),
+      ]));
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'allows reviewed unscorable Machine Ab Crunches reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Machine Ab Crunches',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: false },
+        ],
+      })).toEqual([]);
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'rejects reviewed scorable Lying Leg Curl reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Lying Leg Curl',
+        reviewStatus: 'reviewed',
+        expectedReps: 1,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view, scorable: true },
+        ],
+      }).map((issue) => issue.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining('reps must use side view; use scorable=false for unsupported or unknown views.'),
+      ]));
+    },
+  );
+
+  it.each(['front', 'oblique', 'unknown'] as const)(
+    'allows reviewed unscorable Lying Leg Curl reps with %s view',
+    view => {
+      expect(validateLabelFile({
+        ...baseLabel,
+        exerciseName: 'Lying Leg Curl',
         reviewStatus: 'reviewed',
         expectedReps: 1,
         reps: [
@@ -486,17 +727,49 @@ describe('dataset label validation', () => {
     ]));
   });
 
+  it('includes reviewed-ready view, scorable metadata, and guidance in the machine-ab-crunch label template', () => {
+    const template = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'datasets/form-heuristics/labels/templates/machine-ab-crunches.template.json'),
+        'utf8',
+      ),
+    ) as {
+      reps: Array<{ view?: string; scorable?: boolean }>;
+      labelingGuidance?: string[];
+    };
+
+    expect(template.reps[0]?.view).toBe('side');
+    expect(template.reps[0]?.scorable).toBe(true);
+    expect(template.labelingGuidance).toEqual(expect.arrayContaining([
+      expect.stringContaining('Side-view Machine Ab Crunches reps are the v1 full-form scoring target'),
+      expect.stringContaining('meaningful range of motion'),
+      expect.stringContaining('same-side shoulder, hip, and knee'),
+      expect.stringContaining('Reviewed scorable Machine Ab Crunches reps must use view=side'),
+    ]));
+  });
+
   it('lists production-hardening cable-pushdown issues in the label template', () => {
     const template = JSON.parse(
       readFileSync(
         join(process.cwd(), 'datasets/form-heuristics/labels/templates/cable-pushdowns.template.json'),
         'utf8',
       ),
-    ) as { availableIssues: Array<{ issueId: string }> };
+    ) as {
+      availableIssues: Array<{ issueId: string }>;
+      reps: Array<{ view?: string; scorable?: boolean }>;
+      labelingGuidance?: string[];
+    };
 
+    expect(template.reps[0]?.view).toBe('side');
+    expect(template.reps[0]?.scorable).toBe(true);
     expect(template.availableIssues.map((issue) => issue.issueId)).toEqual(expect.arrayContaining([
       'cable-pushdowns.elbow_forward',
       'cable-pushdowns.torso_rocking',
+    ]));
+    expect(template.labelingGuidance).toEqual(expect.arrayContaining([
+      expect.stringContaining('Side-view Cable Pushdowns reps are the v1 full-form scoring target'),
+      expect.stringContaining('mark them scorable=false and do not label clean negatives'),
+      expect.stringContaining('Reviewed scorable Cable Pushdowns reps must use view=side'),
     ]));
   });
 });

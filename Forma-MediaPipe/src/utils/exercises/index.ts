@@ -15,11 +15,15 @@ export {
   slugifyExerciseName,
 } from './replay';
 export {
+  buildLabelingGuidance,
   evaluateCase,
   createDraftLabelFromReplay,
   evaluateDataset,
   formatMetricPercent,
   getAvailableIssues,
+  getExerciseLabelPolicy,
+  getLabelableIssues,
+  isIssueLabelableForView,
   summarizeEvaluations,
   validateCandidateConfig,
   validateDatasetCase,
@@ -70,6 +74,8 @@ export type {
   RepMatchStatus,
   RepLabel,
   ValidationIssue,
+  ExerciseLabelPolicy,
+  ScoreRangePolicy,
 } from './dataset';
 export {
   POSE_QUALITY_LATENCY_TARGET_MS,

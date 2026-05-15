@@ -91,7 +91,7 @@ export const EXERCISE_SETUP_DATA: Record<string, ExerciseSetupData> = {
     reasonText: 'Tracks torso flexion angle and neck position from the side.',
     cameraTips: [
       'Place the phone to the side at roughly chest height while you sit.',
-      'Frame from the top of your head to your hips so the crunch arc is clear.',
+      'Frame from the top of your head through your knees so the same-side shoulder, hip, and knee stay visible.',
       'Angle slightly toward your chest so neck and upper‑back position stay visible.',
     ],
   },
