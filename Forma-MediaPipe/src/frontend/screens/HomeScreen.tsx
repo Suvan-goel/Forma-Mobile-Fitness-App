@@ -225,6 +225,7 @@ export const HomeScreen: React.FC = () => {
   const score = homeData.formScore;
   const scoreColor = getScoreColor(score);
   const hasWorkouts = score > 0;
+  const statusColor = hasWorkouts ? scoreColor : getScoreColor(90);
 
   // Status text & guidance for the readiness card
   const statusText = !hasWorkouts
@@ -369,7 +370,7 @@ export const HomeScreen: React.FC = () => {
                 <ScoreRing score={hasWorkouts ? score : 0} />
                 <View style={styles.readinessTextWrap}>
                   <Text
-                    style={[styles.readinessStatus, { color: scoreColor }]}
+                    style={[styles.readinessStatus, { color: statusColor }]}
                   >
                     {statusText}
                   </Text>
