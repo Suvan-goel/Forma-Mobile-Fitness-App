@@ -737,6 +737,22 @@ function shouldShowSetupSideViewFeedback(state: CableRowState, t: number): boole
   );
 }
 
+function cableRowSetupQualityWarnings(state: CableRowState): FrameworkRepResult['qualityWarnings'] {
+  if (state.setupSideViewConfidences.length < SETUP_SIDE_VIEW_MIN_SAMPLES) return [];
+  const averageConfidence = averageSetupSideViewConfidence(state);
+  const minConfidence = minSetupSideViewConfidence(state);
+  return (
+    averageConfidence !== null &&
+    minConfidence !== null &&
+    (
+      averageConfidence < FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN ||
+      minConfidence < FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN
+    )
+  )
+    ? ['side_view_uncertain']
+    : [];
+}
+
 function highRowTriggered(repWindow: RepWindow): boolean {
   return (
     repWindow.maxElbowAboveShoulderRatio > FORM_THRESHOLDS.HIGH_ROW_WARN ||
@@ -1563,6 +1579,7 @@ export function createCableRowDefinition(
     feedbackTimestamp: null,
     debugInfo: {},
     repQualityWindowActive: false,
+    liveQualityWarnings: [],
     _internal: withCableRowConfig(config, () => initializeCableRowState()),
   }),
 
@@ -1582,8 +1599,14 @@ export function createCableRowDefinition(
           scorable: newInternal.lastRepResult.scorable,
           qualityWarnings: newInternal.lastRepResult.qualityWarnings,
           diagnostics: newInternal.lastRepResult.diagnostics,
-        }
+      }
       : null;
+    const completedNewRep = newInternal.repCount > state.repCount;
+    const liveQualityWarnings = newInternal.repWindow
+      ? cableRowQualityWarnings(newInternal.repWindow)
+      : completedNewRep
+        ? (lastRepResult?.qualityWarnings ?? [])
+        : cableRowSetupQualityWarnings(newInternal);
 
     return {
       repCount: newInternal.repCount,
@@ -1592,6 +1615,7 @@ export function createCableRowDefinition(
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
       repQualityWindowActive: newInternal.repWindow !== null,
+      liveQualityWarnings,
       _internal: newInternal,
     };
   },

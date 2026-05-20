@@ -35,6 +35,8 @@ export interface ExerciseState {
    * Omitted by legacy definitions to preserve whole-window accumulation.
    */
   repQualityWindowActive?: boolean;
+  /** Display-only live setup/view warnings for the camera tracking pill. */
+  liveQualityWarnings?: PoseQualityWarning[];
   /** Opaque internal state — only the exercise's own update() reads/writes this */
   _internal: unknown;
 }

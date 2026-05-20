@@ -352,6 +352,29 @@ function expectStaysIdle(recording: LandmarkRecording) {
   return result;
 }
 
+function collectLiveWarnings(recording: LandmarkRecording): string[] {
+  let state = pushupDefinition.createState();
+  const warnings = new Set<string>();
+  const originalDateNow = Date.now;
+
+  try {
+    for (const frame of recording.frames) {
+      Date.now = () => frame.timestamp;
+      state = pushupDefinition.update(frame.keypoints, state, {
+        worldKeypoints: frame.worldKeypoints,
+        imageKeypoints: frame.imageKeypoints ?? frame.keypoints,
+        primarySource: frame.worldKeypoints ? 'world' : 'image',
+        timestampMs: frame.timestamp,
+      });
+      state.liveQualityWarnings?.forEach(warning => warnings.add(warning));
+    }
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  return [...warnings];
+}
+
 describe('Push-Up synthetic replay coverage', () => {
   it.each<PushupOrientation>(['facing-right', 'facing-left'])(
     'counts a clean side-view full rep when %s',
@@ -426,15 +449,17 @@ describe('Push-Up synthetic replay coverage', () => {
   });
 
   it('does not leave idle when setup is not side-on enough', () => {
-    const result = expectStaysIdle(buildRecording('synthetic front-ish pushup setup', fullRepPath(), {
+    const recording = buildRecording('synthetic front-ish pushup setup', fullRepPath(), {
       hiddenSideScore: 0.99,
       sideOffset: 0.14,
-    }));
+    });
+    const result = expectStaysIdle(recording);
 
     expect(result.frameTraces.some(trace => (
       Array.isArray(trace.debugInfo.setupWarnings) &&
       trace.debugInfo.setupWarnings.includes('not_side_view')
     ))).toBe(true);
+    expect(collectLiveWarnings(recording)).toContain('side_view_uncertain');
   });
 
   it('ignores low-confidence opposite-side width when checking side-view setup', () => {

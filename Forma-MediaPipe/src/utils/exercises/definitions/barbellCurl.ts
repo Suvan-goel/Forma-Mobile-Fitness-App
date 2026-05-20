@@ -191,6 +191,7 @@ const BARBELL_CURL_CONFIG_BINDINGS = [
 const BARBELL_CURL_QUALITY_PROFILE: NonNullable<ExerciseDefinition['qualityProfile']> = {
   exerciseName: 'Barbell Curl',
   requiredView: 'front',
+  framingScope: 'key_joints',
   requiredJointGroups: [
     {
       id: 'front_bilateral',
@@ -2440,6 +2441,7 @@ export function createBarbellCurlDefinition(
     feedbackTimestamp: null,
     debugInfo: {},
     repQualityWindowActive: false,
+    liveQualityWarnings: [],
     _internal: withBarbellCurlConfig(config, () => initializeBarbellCurlState()),
   }),
 
@@ -2461,6 +2463,15 @@ export function createBarbellCurlDefinition(
           diagnostics: newInternal.lastRepResult.diagnostics,
         }
       : null;
+    const completedNewRep = newInternal.repCount > state.repCount;
+    const liveQualityWarnings = newInternal.repWindow
+      ? getBarbellCurlQualityWarnings(
+          buildBarbellCurlViewQuality(newInternal.repWindow, newInternal.viewAngle),
+          newInternal.viewAngle,
+        )
+      : completedNewRep
+        ? (lastRepResult?.qualityWarnings ?? [])
+        : [];
 
     return {
       repCount: newInternal.repCount,
@@ -2469,6 +2480,7 @@ export function createBarbellCurlDefinition(
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getBarbellCurlDebugInfo(newInternal) as Record<string, unknown>,
       repQualityWindowActive: newInternal.repWindow !== null,
+      liveQualityWarnings,
       _internal: newInternal,
     };
   },

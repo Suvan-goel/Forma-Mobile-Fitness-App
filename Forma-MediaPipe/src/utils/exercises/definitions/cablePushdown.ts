@@ -714,6 +714,22 @@ function shouldShowSetupSideViewFeedback(state: CablePushdownState, t: number): 
   );
 }
 
+function cablePushdownSetupQualityWarnings(state: CablePushdownState): FrameworkRepResult['qualityWarnings'] {
+  if (state.setupSideViewConfidences.length < SETUP_SIDE_VIEW_MIN_SAMPLES) return [];
+  const averageConfidence = averageSetupSideViewConfidence(state);
+  const minConfidence = minSetupSideViewConfidence(state);
+  return (
+    averageConfidence !== null &&
+    minConfidence !== null &&
+    (
+      averageConfidence < FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN ||
+      minConfidence < FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN
+    )
+  )
+    ? ['side_view_uncertain']
+    : [];
+}
+
 function lockoutHoldMs(repWindow: RepWindow): number | null {
   return repWindow.lockoutSampleCount > 0 ? repWindow.bestLockoutHoldMs : null;
 }
@@ -1861,6 +1877,7 @@ export function createCablePushdownDefinition(
       feedbackTimestamp: null,
       debugInfo: {},
       repQualityWindowActive: false,
+      liveQualityWarnings: [],
       _internal: withCablePushdownConfig(config, () => initializeCablePushdownState()),
     }),
 
@@ -1880,8 +1897,14 @@ export function createCablePushdownDefinition(
             scorable: newInternal.lastRepResult.scorable,
             qualityWarnings: newInternal.lastRepResult.qualityWarnings,
             diagnostics: newInternal.lastRepResult.diagnostics,
-          }
+        }
         : null;
+      const completedNewRep = newInternal.repCount > state.repCount;
+      const liveQualityWarnings = newInternal.repWindow
+        ? cablePushdownQualityWarnings(newInternal.repWindow)
+        : completedNewRep
+          ? (lastRepResult?.qualityWarnings ?? [])
+          : cablePushdownSetupQualityWarnings(newInternal);
 
       return {
         repCount: newInternal.repCount,
@@ -1890,6 +1913,7 @@ export function createCablePushdownDefinition(
         feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
         debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
         repQualityWindowActive: newInternal.repWindow !== null,
+        liveQualityWarnings,
         _internal: newInternal,
       };
     },

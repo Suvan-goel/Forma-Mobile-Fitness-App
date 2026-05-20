@@ -3346,6 +3346,7 @@ export function createSquatDefinition(
       feedbackTimestamp: null,
       debugInfo: {},
       repQualityWindowActive: false,
+      liveQualityWarnings: [],
       _internal: withSquatConfig(config, () => initializeSquatState()),
     }),
 
@@ -3363,6 +3364,12 @@ export function createSquatDefinition(
             diagnostics: newInternal.lastRepResult.diagnostics,
           }
         : null;
+      const completedNewRep = newInternal.repCount > state.repCount;
+      const liveQualityWarnings = newInternal.repWindow
+        ? squatQualityWarnings(analyzeSquatRep(newInternal.repWindow))
+        : completedNewRep
+          ? (lastRepResult?.qualityWarnings ?? [])
+          : [];
 
       return {
         repCount: newInternal.repCount,
@@ -3371,6 +3378,7 @@ export function createSquatDefinition(
         feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
         debugInfo: getSquatDebugInfo(newInternal) as unknown as Record<string, unknown>,
         repQualityWindowActive: newInternal.repWindow !== null,
+        liveQualityWarnings,
         _internal: newInternal,
       };
     },

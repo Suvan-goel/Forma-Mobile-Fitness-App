@@ -37,6 +37,10 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# python
+__pycache__/
+*.pyc
+
 # generated native folders
 /ios
 /android
@@ -46,3 +50,4 @@ modules/expo-pose-detection/android/build/
 
 # local datasets
 datasets/RepCount/
+datasets/form-heuristics/ml/

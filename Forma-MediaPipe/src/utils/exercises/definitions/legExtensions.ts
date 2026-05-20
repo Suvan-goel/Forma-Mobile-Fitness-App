@@ -2160,6 +2160,7 @@ export function createLegExtensionsDefinition(
     feedbackTimestamp: null,
     debugInfo: {},
     repQualityWindowActive: false,
+    liveQualityWarnings: [],
     _internal: withLegExtensionsConfig(config, () => initializeLegExtensionState()),
   }),
 
@@ -2179,8 +2180,14 @@ export function createLegExtensionsDefinition(
           scorable: newInternal.lastRepResult.scorable,
           qualityWarnings: newInternal.lastRepResult.qualityWarnings,
           diagnostics: newInternal.lastRepResult.diagnostics,
-        }
+      }
       : null;
+    const completedNewRep = newInternal.repCount > state.repCount;
+    const liveQualityWarnings = newInternal.repWindow
+      ? legExtensionQualityWarnings(newInternal.repWindow)
+      : completedNewRep
+        ? (lastRepResult?.qualityWarnings ?? [])
+        : [];
 
     return {
       repCount: newInternal.repCount,
@@ -2189,6 +2196,7 @@ export function createLegExtensionsDefinition(
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
       repQualityWindowActive: newInternal.repWindow !== null,
+      liveQualityWarnings,
       _internal: newInternal,
     };
   },

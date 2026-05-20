@@ -429,6 +429,29 @@ function buildFrontRecording(
   };
 }
 
+function collectLiveWarnings(recording: LandmarkRecording): string[] {
+  let state = squatDefinition.createState();
+  const warnings = new Set<string>();
+  const originalDateNow = Date.now;
+
+  try {
+    for (const frame of recording.frames) {
+      Date.now = () => frame.timestamp;
+      state = squatDefinition.update(frame.keypoints, state, {
+        worldKeypoints: frame.worldKeypoints,
+        imageKeypoints: frame.imageKeypoints ?? frame.keypoints,
+        primarySource: frame.worldKeypoints ? 'world' : 'image',
+        timestampMs: frame.timestamp,
+      });
+      state.liveQualityWarnings?.forEach(warning => warnings.add(warning));
+    }
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  return [...warnings];
+}
+
 describe('Barbell Squat synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -477,10 +500,8 @@ describe('Barbell Squat synthetic replay coverage', () => {
   });
 
   it('counts a clean front-view squat but marks it unscorable for side-view form scoring', () => {
-    const result = replayRecordingVerbose(
-      squatDefinition,
-      buildFrontRecording('synthetic clean front squat', fullRepPath()),
-    );
+    const recording = buildFrontRecording('synthetic clean front squat', fullRepPath());
+    const result = replayRecordingVerbose(squatDefinition, recording);
 
     const rep = result.reps[0];
     expect(result.finalRepCount).toBe(1);
@@ -498,6 +519,7 @@ describe('Barbell Squat synthetic replay coverage', () => {
     expect(rep.diagnostics?.cues['barbell-squat.heel_lift'].eligible).toBe(false);
     expect(rep.diagnostics?.cues['barbell-squat.heel_lift'].skippedReason).toBe('not_side_view');
     expect(rep.diagnostics?.cues['barbell-squat.knee_valgus']).toBeUndefined();
+    expect(collectLiveWarnings(recording)).toContain('side_view_uncertain');
   });
 
   it('counts front-view world-z knee travel but keeps form scoring disabled', () => {

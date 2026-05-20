@@ -13,7 +13,9 @@ export type PoseQualityWarning =
   | 'arms_hidden'
   | 'torso_hidden'
   | 'move_camera_back'
+  | 'move_camera_closer'
   | 'keep_full_body_in_frame'
+  | 'keep_key_joints_in_frame'
   | 'side_view_uncertain'
   | 'front_view_uncertain'
   | 'view_uncertain'
@@ -31,6 +33,9 @@ export interface ExerciseQualityProfile {
   requiredJoints?: string[];
   requiredJointGroups?: RequiredJointGroup[];
   importantJoints?: string[];
+  framingScope?: 'full_body' | 'key_joints';
+  framingJoints?: string[];
+  tooSmallBoxThreshold?: number;
   minRequiredVisibility?: number;
   minImportantVisibility?: number;
   windowSize?: number;
@@ -100,6 +105,7 @@ const DEFAULT_MIN_IMPORTANT_VISIBILITY = 0.16;
 const DEFAULT_WINDOW_SIZE = 15;
 const JITTER_WARNING_THRESHOLD = 0.16;
 const LOW_REP_FRAME_RATE_LIMIT = 0.4;
+const DEFAULT_TOO_SMALL_BOX_THRESHOLD = 0.18;
 
 const SIDE_CHAIN_LEFT = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip'];
 const SIDE_CHAIN_RIGHT = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip'];
@@ -136,14 +142,17 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
   'Barbell Curl': {
     ...DEFAULT_FRONT_PROFILE,
     exerciseName: 'Barbell Curl',
+    framingScope: 'key_joints',
   },
   'Standing Dumbbell Lateral Raises': {
     ...DEFAULT_FRONT_PROFILE,
     exerciseName: 'Standing Dumbbell Lateral Raises',
+    framingScope: 'key_joints',
   },
   'Barbell Squat': {
     requiredView: 'any',
     exerciseName: 'Barbell Squat',
+    framingScope: 'full_body',
     requiredJointGroups: [
       { id: 'left_side', label: 'left side', joints: ['left_shoulder', ...LOWER_CHAIN_LEFT] },
       { id: 'right_side', label: 'right side', joints: ['right_shoulder', ...LOWER_CHAIN_RIGHT] },
@@ -167,6 +176,7 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
   'Push-Up': {
     requiredView: 'side',
     exerciseName: 'Push-Up',
+    framingScope: 'full_body',
     requiredJointGroups: [
       { id: 'left_side', label: 'left side', joints: PUSHUP_SIDE_LEFT },
       { id: 'right_side', label: 'right side', joints: PUSHUP_SIDE_RIGHT },
@@ -175,6 +185,7 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
   'Leg Extensions': {
     requiredView: 'side',
     exerciseName: 'Leg Extensions',
+    framingScope: 'key_joints',
     requiredJointGroups: [
       { id: 'left_leg', label: 'left leg', joints: ['left_shoulder', ...LOWER_CHAIN_LEFT] },
       { id: 'right_leg', label: 'right leg', joints: ['right_shoulder', ...LOWER_CHAIN_RIGHT] },
@@ -184,6 +195,7 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
   'Lying Leg Curl': {
     requiredView: 'side',
     exerciseName: 'Lying Leg Curl',
+    framingScope: 'key_joints',
     requiredJointGroups: [
       { id: 'left_leg', label: 'left leg', joints: ['left_hip', 'left_knee'] },
       { id: 'right_leg', label: 'right leg', joints: ['right_hip', 'right_knee'] },
@@ -202,6 +214,7 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
   'Machine Ab Crunches': {
     requiredView: 'side',
     exerciseName: 'Machine Ab Crunches',
+    framingScope: 'key_joints',
     requiredJointGroups: [
       { id: 'left_side', label: 'left side', joints: ['left_shoulder', 'left_hip', 'left_knee'] },
       { id: 'right_side', label: 'right side', joints: ['right_shoulder', 'right_hip', 'right_knee'] },
@@ -211,14 +224,17 @@ const EXERCISE_QUALITY_PROFILES: Record<string, ExerciseQualityProfile> = {
   'Cable Pushdowns': {
     ...DEFAULT_SIDE_PROFILE,
     exerciseName: 'Cable Pushdowns',
+    framingScope: 'key_joints',
   },
   'Cable Row': {
     ...DEFAULT_SIDE_PROFILE,
     exerciseName: 'Cable Row',
+    framingScope: 'key_joints',
   },
   'Cable Lat Pulldowns': {
     ...DEFAULT_SIDE_PROFILE,
     exerciseName: 'Cable Lat Pulldowns',
+    framingScope: 'key_joints',
   },
 };
 
@@ -230,7 +246,9 @@ const WARNING_MESSAGES: Record<PoseQualityWarning, string> = {
   arms_hidden: 'Keep your arms visible.',
   torso_hidden: 'Keep your torso visible.',
   move_camera_back: 'Move the camera back.',
+  move_camera_closer: 'Move the camera closer.',
   keep_full_body_in_frame: 'Keep your full body inside the frame.',
+  keep_key_joints_in_frame: 'Keep your key joints inside the frame.',
   side_view_uncertain: 'Turn side-on so I can judge your form.',
   front_view_uncertain: 'Face the camera so I can judge your form.',
   view_uncertain: 'Use a clear side or front view so I can judge your squat.',
@@ -240,7 +258,9 @@ const WARNING_MESSAGES: Record<PoseQualityWarning, string> = {
 const ACTIONABLE_WARNING_PRIORITY: PoseQualityWarning[] = [
   'tracking_lost',
   'move_camera_back',
+  'move_camera_closer',
   'keep_full_body_in_frame',
+  'keep_key_joints_in_frame',
   'side_view_uncertain',
   'front_view_uncertain',
   'view_uncertain',
@@ -330,9 +350,35 @@ function looksLikeNormalizedImageCoordinates(keypoints: Keypoint[]): boolean {
   ));
 }
 
-function frameBoundsWarnings(keypoints: Keypoint[]): PoseQualityWarning[] {
-  if (!looksLikeNormalizedImageCoordinates(keypoints)) return [];
+function keypointsForFraming(
+  keypoints: Keypoint[],
+  profile: ExerciseQualityProfile,
+  selectedGroup: RequiredJointGroup,
+): Keypoint[] {
   const visible = keypoints.filter((keypoint) => keypoint.score > 0.2);
+  if ((profile.framingScope ?? 'full_body') === 'full_body') return visible;
+
+  const keypointMap = getKeypointMap(keypoints);
+  const framingJoints = profile.framingJoints && profile.framingJoints.length > 0
+    ? profile.framingJoints
+    : Array.from(new Set([
+        ...selectedGroup.joints,
+        ...(profile.importantJoints ?? []),
+      ]));
+
+  return framingJoints
+    .map((joint) => keypointMap.get(joint))
+    .filter((keypoint): keypoint is Keypoint => Boolean(keypoint && keypoint.score > 0.2));
+}
+
+function frameBoundsWarnings(
+  keypoints: Keypoint[],
+  profile: ExerciseQualityProfile,
+  selectedGroup: RequiredJointGroup,
+): PoseQualityWarning[] {
+  if (!looksLikeNormalizedImageCoordinates(keypoints)) return [];
+  const framingScope = profile.framingScope ?? 'full_body';
+  const visible = keypointsForFraming(keypoints, profile, selectedGroup);
   if (visible.length === 0) return [];
 
   let minX = 1;
@@ -348,10 +394,15 @@ function frameBoundsWarnings(keypoints: Keypoint[]): PoseQualityWarning[] {
 
   const warnings = new Set<PoseQualityWarning>();
   if (minX < 0.03 || maxX > 0.97 || minY < 0.03 || maxY > 0.97) {
-    warnings.add('keep_full_body_in_frame');
+    warnings.add(framingScope === 'key_joints' ? 'keep_key_joints_in_frame' : 'keep_full_body_in_frame');
   }
   if (maxX - minX > 0.86 || maxY - minY > 0.92) {
     warnings.add('move_camera_back');
+  }
+  const boxSize = Math.max(maxX - minX, maxY - minY);
+  const tooSmallBoxThreshold = profile.tooSmallBoxThreshold ?? DEFAULT_TOO_SMALL_BOX_THRESHOLD;
+  if (boxSize < tooSmallBoxThreshold) {
+    warnings.add('move_camera_closer');
   }
   return Array.from(warnings);
 }
@@ -414,7 +465,7 @@ function frameQuality(
     : 1;
 
   const warnings = new Set<PoseQualityWarning>(warningForMissingJoints(missingRequiredJoints));
-  for (const warning of frameBoundsWarnings(frameBoundsKeypoints ?? keypoints)) warnings.add(warning);
+  for (const warning of frameBoundsWarnings(frameBoundsKeypoints ?? keypoints, profile, group)) warnings.add(warning);
 
   const trackedJoints = Array.from(new Set([...group.joints, ...importantJoints]));
   const displacements: number[] = [];
@@ -467,6 +518,36 @@ export function getPoseQualityMessage(snapshot: Pick<PoseQualitySnapshot | RepTr
   if (snapshot.status === 'medium') return 'Tracking okay';
   if (snapshot.status === 'low') return 'Tracking uncertain';
   return 'Tracking was lost.';
+}
+
+function uniqueWarnings(warnings: PoseQualityWarning[]): PoseQualityWarning[] {
+  return Array.from(new Set(warnings));
+}
+
+function hasActionableWarning(warnings: PoseQualityWarning[]): boolean {
+  return warnings.some((warning) => ACTIONABLE_WARNING_PRIORITY.includes(warning));
+}
+
+export function buildDisplayedPoseQuality(
+  baseQuality: PoseQualitySnapshot,
+  additionalWarnings: PoseQualityWarning[] = [],
+): PoseQualitySnapshot {
+  const warnings = uniqueWarnings([...baseQuality.warnings, ...additionalWarnings]);
+  const status =
+    baseQuality.status === 'high' && hasActionableWarning(warnings)
+      ? 'medium'
+      : baseQuality.status;
+
+  const displayed: PoseQualitySnapshot = {
+    ...baseQuality,
+    status,
+    warnings,
+    message: '',
+    canJudgeForm: status === 'high' || status === 'medium',
+    canScoreRep: status === 'high' || status === 'medium',
+  };
+  displayed.message = getPoseQualityMessage(displayed);
+  return displayed;
 }
 
 export function getUnscoredRepFeedback(repQuality: Pick<RepTrackingQuality, 'status' | 'warnings'>): string {

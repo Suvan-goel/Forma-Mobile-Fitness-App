@@ -280,6 +280,29 @@ function withWorldContext(
   };
 }
 
+function collectLiveWarnings(recording: LandmarkRecording): string[] {
+  let state = lateralRaiseDefinition.createState();
+  const warnings = new Set<string>();
+  const originalDateNow = Date.now;
+
+  try {
+    for (const frame of recording.frames) {
+      Date.now = () => frame.timestamp;
+      state = lateralRaiseDefinition.update(frame.keypoints, state, {
+        worldKeypoints: frame.worldKeypoints,
+        imageKeypoints: frame.imageKeypoints ?? frame.keypoints,
+        primarySource: frame.worldKeypoints ? 'world' : 'image',
+        timestampMs: frame.timestamp,
+      });
+      state.liveQualityWarnings?.forEach(warning => warnings.add(warning));
+    }
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  return [...warnings];
+}
+
 describe('Lateral Raise synthetic replay coverage', () => {
   it.each<Orientation>(['front', 'mirrored'])(
     'counts a clean full rep in %s orientation',
@@ -336,6 +359,7 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.scorable).toBe(false);
     expect(result.reps[0].diagnostics?.view).toBe('oblique');
     expect(result.feedbackMessages[0]).toContain('Face the camera so I can judge your form.');
+    expect(collectLiveWarnings(recording)).toContain('front_view_uncertain');
   });
 
   it('keeps clean front world-landmark captures scorable', () => {

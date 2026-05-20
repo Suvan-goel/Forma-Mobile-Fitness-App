@@ -1,6 +1,11 @@
 # Exercise card images
 
-Place one image per exercise here to show on the Choose Exercise screen. Then update `EXERCISE_IMAGE_MAP` in `src/screens/ChooseExerciseScreen.tsx` to use them.
+Place one image per exercise here to show on the Choose Exercise screen. Then update `EXERCISE_IMAGE_MAP` in `src/frontend/screens/ChooseExerciseScreen.tsx` to use them.
+
+These are static UI assets only. Replay dataset videos for labelling and
+heuristic tuning belong under `datasets/form-heuristics/videos/<split-folder>/<exercise-slug>/`;
+see `datasets/form-heuristics/README.md` for the current preparation and
+labelling workflow.
 
 ## Suggested filenames (match to exercise name)
 
@@ -19,7 +24,7 @@ Place one image per exercise here to show on the Choose Exercise screen. Then up
 
 ## How to wire them up
 
-In `src/screens/ChooseExerciseScreen.tsx`, change each entry in `EXERCISE_IMAGE_MAP` from the category fallback to your image, for example:
+In `src/frontend/screens/ChooseExerciseScreen.tsx`, change each entry in `EXERCISE_IMAGE_MAP` from the category fallback to your image, for example:
 
 ```ts
 'Push-Up': require('../assets/exercises/push_up.png'),

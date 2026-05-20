@@ -83,6 +83,7 @@ export {
   RepQualityAccumulator,
   RepQualityWindowAccumulator,
   UNSCORED_REP_FEEDBACK,
+  buildDisplayedPoseQuality,
   getPoseQualityMessage,
   getPoseQualityStatusLabel,
   getUnscoredRepFeedback,

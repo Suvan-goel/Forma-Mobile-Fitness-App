@@ -21,6 +21,7 @@ import {
   ExerciseRegistry,
   PoseQualityTracker,
   RepQualityWindowAccumulator,
+  buildDisplayedPoseQuality,
   getUnscoredRepFeedback,
   getPoseQualityMessage,
   resolveExerciseQualityProfile,
@@ -87,6 +88,8 @@ const LANDMARK_RECORDING_UPLOAD_PORT = 8765;
 const CAMERA_RELEASE_BEFORE_NAVIGATE_MS = 150;
 const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
 const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
+const TOP_PILL_WARNING_STABLE_FRAMES = 3;
+const TOP_PILL_WARNING_HOLD_MS = 1000;
 
 function getTrackingQualityTone(status: PoseQualitySnapshot['status'] | RepTrackingQuality['status'] | SetTrackingQualitySummary['status']) {
   if (status === 'high') {
@@ -361,6 +364,11 @@ export const CameraScreen: React.FC = () => {
   const completedRepCountRef = useRef(0);
   const poseQualityTrackerRef = useRef(new PoseQualityTracker());
   const repQualityAccumulatorRef = useRef(new RepQualityWindowAccumulator());
+  const topPillWarningHoldRef = useRef<{ warnings: PoseQualityWarning[]; updatedAt: number }>({
+    warnings: [],
+    updatedAt: 0,
+  });
+  const topPillWarningSmoothingRef = useRef<Partial<Record<PoseQualityWarning, number>>>({});
 
   // Sync refs with state
   useEffect(() => {
@@ -409,6 +417,8 @@ export const CameraScreen: React.FC = () => {
     angleBufferRef.current = {};
     setVarianceStats(null);
     setTrackingQuality(null);
+    topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
+    topPillWarningSmoothingRef.current = {};
     lastTTSFeedbackTimestampRef.current = null;
     poseQualityTrackerRef.current.reset();
     repQualityAccumulatorRef.current.reset();
@@ -610,13 +620,42 @@ export const CameraScreen: React.FC = () => {
       const repScore = newState.lastRepResult?.score ?? 0;
       const completedNewTrackedRep = newState.repCount > completedRepCountRef.current;
       const repQuality = repQualityAccumulatorRef.current.recordFrame(quality, newState);
+      const currentLiveWarnings = mergeTrackingWarnings(newState.liveQualityWarnings ?? []);
+      const liveWarningSet = new Set(currentLiveWarnings);
+      const smoothing = topPillWarningSmoothingRef.current;
+      const stableLiveWarnings = currentLiveWarnings.filter((warning) => {
+        const count = (smoothing[warning] ?? 0) + 1;
+        smoothing[warning] = Math.min(count, TOP_PILL_WARNING_STABLE_FRAMES);
+        return count >= TOP_PILL_WARNING_STABLE_FRAMES;
+      });
+      for (const warning of Object.keys(smoothing) as PoseQualityWarning[]) {
+        if (!liveWarningSet.has(warning)) {
+          delete smoothing[warning];
+        }
+      }
+      const liveWarnings = mergeTrackingWarnings(
+        stableLiveWarnings,
+        completedNewTrackedRep ? (newState.lastRepResult?.qualityWarnings ?? []) : [],
+      );
+      let stableTopPillWarnings = liveWarnings;
+      if (liveWarnings.length > 0) {
+        topPillWarningHoldRef.current = { warnings: liveWarnings, updatedAt: now };
+      } else if (
+        topPillWarningHoldRef.current.warnings.length > 0 &&
+        now - topPillWarningHoldRef.current.updatedAt <= TOP_PILL_WARNING_HOLD_MS
+      ) {
+        stableTopPillWarnings = topPillWarningHoldRef.current.warnings;
+      } else {
+        topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
+      }
+      const displayedQuality = buildDisplayedPoseQuality(quality, stableTopPillWarnings);
 
       // Accumulate UI updates — don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
       pending.repCount = newState.repCount;
       pending.feedback = newState.feedback;
       pending.exerciseDebug = newState.debugInfo;
-      pending.quality = quality;
+      pending.quality = displayedQuality;
 
       const feedbackTimestamp = newState.feedbackTimestamp;
 
@@ -694,10 +733,10 @@ export const CameraScreen: React.FC = () => {
       } else if (
         isTTSEnabledRef.current &&
         isRecordingRef.current &&
-        !quality.canJudgeForm &&
-        quality.lowConfidenceFrameCount >= TRACKING_TTS_LOW_FRAME_THRESHOLD
+        !displayedQuality.canJudgeForm &&
+        displayedQuality.lowConfidenceFrameCount >= TRACKING_TTS_LOW_FRAME_THRESHOLD
       ) {
-        ttsOnTrackingQualityWarning(quality.message).catch(() => {});
+        ttsOnTrackingQualityWarning(displayedQuality.message).catch(() => {});
       }
       pendingUIStateRef.current = pending;
 
@@ -968,6 +1007,8 @@ export const CameraScreen: React.FC = () => {
       poseQualityTrackerRef.current.reset();
       repQualityAccumulatorRef.current.reset();
       setTrackingQuality(null);
+      topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
+      topPillWarningSmoothingRef.current = {};
       ttsResetCoach();
 
       // Start landmark recording when debug mode is on (works in Release builds too)

@@ -1,22 +1,51 @@
-# Form Heuristics Dataset
+# Form Heuristics Replay Dataset
 
 Desktop workflow for improving the app's deterministic exercise heuristics with
-prerecorded videos, generated landmarks, and human-reviewed per-rep labels.
+prerecorded videos, generated MediaPipe landmarks, replay output, and
+human-reviewed per-rep labels.
 
-This pipeline tunes threshold/config JSON for the existing heuristics. It does
-not train model weights.
+This pipeline tunes threshold/config JSON for existing heuristics. It does not
+train model weights. Replay feeds each landmark frame through the same
+`ExerciseDefinition.update()` implementation used by live workouts, so dataset
+evaluation is the offline version of the app's real analysis path.
+
+The reviewer policy lives in
+`src/utils/exercises/dataset/labelPolicy.ts`. It is the source of truth for
+scorable views, labelable issue IDs, non-ground-truth diagnostics, and reviewer
+guidance.
+
+## Current Scope
+
+There are 10 registered exercises and 10 matching label templates:
+
+| Exercise | Scorable reviewed view | Labelling notes |
+| --- | --- | --- |
+| Barbell Curl | `front`, plus partial `side`/`oblique` | Front is full scoring. Side/oblique may label only visible-arm ROM, shoulder involvement, torso swing, and tempo. Do not label asymmetry or elbow flare from side/oblique. |
+| Push-Up | `side` | Camera/setup diagnostics are not reviewed form issue labels. |
+| Barbell Squat | `side` | Runtime keeps `requiredView: "any"` for compatibility, but reviewed dataset scoring is side-view only. |
+| Standing Dumbbell Lateral Raises | `front` | Side, oblique, or unknown views can count reps but should be `scorable=false`. |
+| Cable Row | `side` | Side-view full-form scoring target. |
+| Cable Lat Pulldowns | `side` | Usable side-diagonal captures should be labelled `view="side"` for v1. |
+| Cable Pushdowns | `side` | Side-view full-form scoring target. |
+| Leg Extensions | `side` | Side-view full-form scoring target. |
+| Lying Leg Curl | `side` | `lying-leg-curl.side_view_uncertain` is a runtime/replay diagnostic, not ground truth. |
+| Machine Ab Crunches | `side` | `machine-ab-crunches.side_view_uncertain` is a runtime/replay diagnostic, not ground truth. |
+
+Consistent reviewer rule: count reps consistently, always label reviewed reps
+with `view` and `scorable`, and only add form `issueIds` when that rep is
+judgeable under the exercise's supported scoring view.
 
 ## Folder Layout
 
-- `videos/<split>/<exercise-slug>/` raw source videos. Ignored by Git.
-- `landmarks/<split>/<exercise-slug>/` generated MediaPipe landmark JSON. Ignored by Git.
-- `labels/<split>/<exercise-slug>/` reviewed label JSON files.
+- `videos/<split-folder>/<exercise-slug>/` raw source videos. Ignored by Git.
+- `landmarks/<split-folder>/<exercise-slug>/` generated MediaPipe landmark JSON. Ignored by Git.
+- `labels/<split-folder>/<exercise-slug>/` reviewed label JSON files.
 - `labels/templates/` exercise label templates named `<exercise-slug>.template.json`.
-- `reports/` generated evaluation/optimisation reports. Ignored by Git.
+- `reports/` generated evaluation/optimization reports. Ignored by Git.
 - `candidates/` optional local scratch space. Ignored by Git.
 
-Each `labels/templates/<exercise-slug>.template.json` file has the exact
-exercise name and copyable issue ids/messages for that exercise.
+Each template has the exact exercise name, policy-generated guidance, and the
+allowed ground-truth form issue IDs for that exercise.
 
 The split folder names are:
 
@@ -32,11 +61,35 @@ Install the Python dependencies used by video landmark extraction:
 python3 -m pip install -r scripts/requirements-dataset.txt
 ```
 
+## Recording Videos
+
+Use short, single-exercise clips. A good default is 3-8 reps per clip with a
+small buffer before the first rep and after the last rep.
+
+For each exercise, collect:
+
+- clean examples
+- common form-fault examples for each available issue ID
+- a mix of people, body sizes, clothing, machines/benches, lighting, and camera distances
+- train, validation, and test clips recorded independently
+
+Capture requirements:
+
+- Use the scorable view from the table above.
+- Keep all form-critical joints visible for the whole rep.
+- Keep the camera stable and avoid zoom/pan changes mid-set.
+- Avoid mixed-exercise clips.
+- Avoid clipping the start/end of reps.
+- Do not rely on unsupported views for clean-negative form labels.
+
+Unsupported or uncertain views are still useful for rep-count robustness, but
+review those reps as `scorable=false` with empty `issueIds`.
+
 ## Add A New Video
 
 Example for Barbell Squat:
 
-1. Put the video in the matching exercise folder.
+1. Put the video in the matching exercise/split folder.
 
 ```text
 datasets/form-heuristics/videos/training/barbell-squat/squat_001.mp4
@@ -73,35 +126,33 @@ npm run dataset:draft-label -- \
 
 ## Review The Draft Label
 
-Generated labels start as:
-
-```json
-{
-  "reviewStatus": "draft",
-  "expectedReps": 5,
-  "reps": []
-}
-```
-
+Draft labels are generated from replay and start as `reviewStatus: "draft"`.
 Draft labels are ignored by `dataset:evaluate` and `dataset:optimize`.
 
 Open the generated label and review:
 
 - `expectedReps`: total real reps in the video.
-- `reps[]`: one entry per real rep.
+- `reps[]`: exactly one entry per real rep.
 - `startMs` / `endMs`: rep windows from the video timeline.
-- `issueIds`: ground-truth form issues for that rep.
+- `view`: `side`, `front`, `oblique`, or `unknown`.
+- `scorable`: `true` only when the rep is judgeable under the exercise policy.
+- `issueIds`: reviewed ground-truth form issues for that rep.
 
-Generated feedback appears only as suggestions:
+Generated replay output appears only as suggestions:
 
 - `suggestedIssueIds`
 - `suggestedFeedbackMessages`
 - `suggestedScore`
 
-Keep `issueIds: []` for clean reps. Copy only correct suggestions into
-`issueIds`, or copy another valid issue id from `availableIssues`. If one rep
-has multiple visible form issues, include every correct issue id in that same
-rep's `issueIds` array.
+Reviewer rules:
+
+- Keep `issueIds: []` for clean reps.
+- Copy only correct suggestions into `issueIds`.
+- If one rep has multiple visible form issues, include every correct issue ID.
+- If `scorable=false`, keep `issueIds: []`.
+- Do not copy setup, view-quality, or tracking diagnostics into reviewed `issueIds`.
+- Use `expectedScoreRange` only when a scorable rep's score range is genuinely judgeable.
+- Add `notes` for context when a rep is unscorable or ambiguous.
 
 When the file is correct, change:
 
@@ -131,7 +182,7 @@ Default auto-apply minimums are:
 - validation: 1 reviewed case
 - test: 1 reviewed case
 
-The optimiser can still write reports below these counts, but it will not write
+The optimizer can still write reports below these counts, but it will not write
 production tuned configs.
 
 ## Validate And Evaluate
@@ -142,7 +193,7 @@ Run this after reviewing labels:
 npm run dataset:evaluate
 ```
 
-Evaluate only Cable Lat Pulldowns while building the side-view v1 dataset:
+Evaluate only one exercise while building a dataset:
 
 ```sh
 FORMA_DATASET_EXERCISE="Cable Lat Pulldowns" npm run dataset:evaluate
@@ -154,28 +205,32 @@ Add optional split filtering when checking one held-out slice:
 FORMA_DATASET_EXERCISE="Cable Lat Pulldowns" FORMA_DATASET_SPLITS="test" npm run dataset:evaluate
 ```
 
-This validates the dataset and reports current heuristic performance. It checks:
+Validation checks:
 
 - label JSON shape
 - exercise name matches the landmark recording
 - `expectedReps` matches `reps.length`
 - rep windows are ordered and non-overlapping
-- issue ids are valid
+- reviewed reps include `view` and `scorable`
+- reviewed scorable reps use the exercise's supported view
+- unscorable reps do not carry reviewed `issueIds`
+- issue IDs are valid and labelable from that rep's view
+- non-ground-truth setup/view/tracking diagnostics are not used as reviewed labels
 - optional per-rep `expectedScoreRange` values are finite ordered ranges in `0..100`
 - landmark files exist
 
 It also reports skipped templates and draft labels. Draft labels stay skipped
 until you mark them as `"reviewed"`.
 
-## Optimise Heuristics
+## Optimize Heuristics
 
-Optimise all exercises with reviewed data:
+Optimize all exercises with reviewed data:
 
 ```sh
 npm run dataset:optimize
 ```
 
-Optimise one exercise only:
+Optimize one exercise only:
 
 ```sh
 npm run dataset:optimize:exercise -- --exercise "Barbell Squat"
@@ -210,7 +265,7 @@ not every per-video result.
 
 ## Auto-Apply Rules
 
-The optimiser writes `src/utils/exercises/definitions/tuned/*.json` only when:
+The optimizer writes `src/utils/exercises/definitions/tuned/*.json` only when:
 
 - the exercise supports config variants and tunable ranges
 - minimum train/validation/test case counts are met
@@ -254,37 +309,54 @@ Minimal reviewed label example:
         "barbell-squat.depth_short",
         "barbell-squat.torso_fail"
       ],
-      "notes": "Did not reach depth and leaned too far forward"
+      "view": "side",
+      "scorable": true,
+      "notes": "Did not reach depth and leaned too far forward."
     }
   ]
 }
 ```
 
+Unscorable reviewed rep example:
+
+```json
+{
+  "index": 3,
+  "startMs": 5600,
+  "endMs": 7100,
+  "issueIds": [],
+  "view": "front",
+  "scorable": false,
+  "notes": "Rep counted, but front view is not judgeable for Barbell Squat side-view form cues."
+}
+```
+
 Rep issue scoring matches predicted reps to labelled timing windows before
-comparing issue ids. Good `startMs` and `endMs` labels matter because missed,
+comparing issue IDs. Good `startMs` and `endMs` labels matter because missed,
 extra, or shifted reps can otherwise make feedback metrics noisy.
 
 ## Exercise Slugs
 
 Current dataset folders:
 
-- `barbell-squat`
-- `push-up`
 - `barbell-curl`
-- `cable-row`
-- `cable-pushdowns`
+- `barbell-squat`
 - `cable-lat-pulldowns`
+- `cable-pushdowns`
+- `cable-row`
 - `leg-extensions`
 - `lying-leg-curl`
 - `machine-ab-crunches`
+- `push-up`
 - `standing-dumbbell-lateral-raises`
 
 ## Full Loop
 
 ```text
-add video
+record one exercise video in the correct view
+-> place it under videos/<split-folder>/<exercise-slug>/
 -> npm run dataset:prepare
--> review label timings and issueIds
+-> review rep count, timing, view, scorable, and issueIds
 -> mark reviewStatus as reviewed
 -> npm run dataset:evaluate
 -> npm run dataset:optimize:exercise -- --exercise "<Exercise Name>" --dry-run

@@ -1895,6 +1895,7 @@ export function createLateralRaiseDefinition(
     feedbackTimestamp: null,
     debugInfo: {},
     repQualityWindowActive: false,
+    liveQualityWarnings: [],
     _internal: withLateralRaiseConfig(config, () => initializeState()),
   }),
 
@@ -1913,6 +1914,12 @@ export function createLateralRaiseDefinition(
 	          diagnostics: internal.lastRepResult.diagnostics,
 	        }
       : null;
+    const completedNewRep = internal.repCount > state.repCount;
+    const liveQualityWarnings = internal.repWindow
+      ? lateralRaiseQualityWarnings(internal.repWindow)
+      : completedNewRep
+        ? (lastRepResult?.qualityWarnings ?? [])
+        : [];
 
     return {
       repCount: internal.repCount,
@@ -1921,6 +1928,7 @@ export function createLateralRaiseDefinition(
       feedbackTimestamp: internal.lastFeedbackTime > 0 ? internal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
       repQualityWindowActive: internal.repWindow !== null,
+      liveQualityWarnings,
       _internal: internal,
     };
   },

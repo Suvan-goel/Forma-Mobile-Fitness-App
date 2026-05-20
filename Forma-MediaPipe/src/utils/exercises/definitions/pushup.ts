@@ -1012,6 +1012,34 @@ function pushupQualityWarnings(repWindow: PushupRepWindow): FrameworkRepResult['
   }
 }
 
+function pushupSetupQualityWarnings(setupQuality: PushupSetupQuality | null | undefined): FrameworkRepResult['qualityWarnings'] {
+  if (!setupQuality || setupQuality.acceptable) return [];
+  const warnings = new Set<NonNullable<FrameworkRepResult['qualityWarnings']>[number]>();
+  for (const warning of setupQuality.warnings) {
+    switch (warning) {
+      case 'not_side_view':
+      case 'body_not_horizontal':
+        warnings.add('side_view_uncertain');
+        break;
+      case 'full_body_not_visible':
+        warnings.add('keep_full_body_in_frame');
+        break;
+      case 'camera_too_close':
+        warnings.add('move_camera_back');
+        break;
+      case 'arm_chain_hidden':
+        warnings.add('arms_hidden');
+        break;
+      case 'lower_body_hidden':
+        warnings.add('feet_hidden');
+        break;
+      default:
+        break;
+    }
+  }
+  return Array.from(warnings);
+}
+
 function pushupDiagnosticView(repWindow: PushupRepWindow): NonNullable<FrameworkRepResult['diagnostics']>['view'] {
   return setupWarningRate(repWindow) > 0.4 ? 'unknown' : 'side';
 }
@@ -1798,6 +1826,7 @@ export function createPushupDefinition(
       feedbackTimestamp: null,
       debugInfo: {},
       repQualityWindowActive: false,
+      liveQualityWarnings: [],
       _internal: withPushupConfig(config, () => initializePushupState()),
     }),
 
@@ -1814,8 +1843,17 @@ export function createPushupDefinition(
             scorable: newInternal.lastRepResult.scorable,
             qualityWarnings: newInternal.lastRepResult.qualityWarnings,
             diagnostics: newInternal.lastRepResult.diagnostics,
-          }
+        }
         : null;
+      const completedNewRep = newInternal.repCount > state.repCount;
+      const liveQualityWarnings = Array.from(new Set([
+        ...(pushupSetupQualityWarnings(newInternal.lastSetupQuality) ?? []),
+        ...(newInternal.repWindow
+          ? (pushupQualityWarnings(newInternal.repWindow) ?? [])
+          : completedNewRep
+            ? (lastRepResult?.qualityWarnings ?? [])
+            : []),
+      ]));
 
       return {
         repCount: newInternal.repCount,
@@ -1824,6 +1862,7 @@ export function createPushupDefinition(
         feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
         debugInfo: getPushupDebugInfo(newInternal) as unknown as Record<string, unknown>,
         repQualityWindowActive: newInternal.repWindow !== null,
+        liveQualityWarnings,
         _internal: newInternal,
       };
     },

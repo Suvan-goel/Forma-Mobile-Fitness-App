@@ -5,6 +5,7 @@ import {
   PoseQualityTracker,
   RepQualityAccumulator,
   RepQualityWindowAccumulator,
+  buildDisplayedPoseQuality,
   getPoseQualityMessage,
   resolveExerciseQualityProfile,
   summarizeSetTrackingQuality,
@@ -156,7 +157,7 @@ describe('PoseQualityTracker', () => {
 
   it('uses image keypoints for frame-bound warnings while scoring world keypoints', () => {
     const tracker = new PoseQualityTracker();
-    const profile = resolveExerciseQualityProfile(definition('Barbell Curl', 'front'));
+    const profile = resolveExerciseQualityProfile(definition('Barbell Squat', 'any'));
     const worldFrame = keypoints(0.99, Object.fromEntries(
       JOINTS.map((joint, index) => [joint, { x: index * 0.04, y: 0.2 + index * 0.01, z: index * 0.02 }]),
     ));
@@ -179,6 +180,52 @@ describe('PoseQualityTracker', () => {
     expect(snapshot.warnings).toContain('move_camera_back');
   });
 
+  it('warns when the tracked subject is too small in frame', () => {
+    const tracker = new PoseQualityTracker();
+    const profile = resolveExerciseQualityProfile(definition('Barbell Curl', 'front'));
+    const worldFrame = keypoints();
+    const imageFrame = keypoints(0.99, Object.fromEntries(
+      JOINTS.map((joint, index) => [
+        joint,
+        {
+          x: 0.48 + (index % 2) * 0.02,
+          y: 0.48 + Math.floor(index / 2) * 0.004,
+        },
+      ]),
+    ));
+    let snapshot = tracker.update(worldFrame, profile, { frameBoundsKeypoints: imageFrame });
+    for (let i = 0; i < 17; i++) {
+      snapshot = tracker.update(worldFrame, profile, { frameBoundsKeypoints: imageFrame });
+    }
+
+    expect(snapshot.warnings).toContain('move_camera_closer');
+    expect(getPoseQualityMessage(snapshot)).toBe('Move the camera closer.');
+  });
+
+  it('uses key-joint framing for non-full-body profiles', () => {
+    const tracker = new PoseQualityTracker();
+    const profile = {
+      ...resolveExerciseQualityProfile(definition('Cable Row', 'side')),
+      framingScope: 'key_joints' as const,
+      framingJoints: ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip'],
+    };
+    const worldFrame = keypoints();
+    const imageFrame = keypoints(0.99, {
+      left_shoulder: { x: 0.01, y: 0.35 },
+      left_elbow: { x: 0.03, y: 0.42 },
+      left_wrist: { x: 0.06, y: 0.49 },
+      left_hip: { x: 0.08, y: 0.58 },
+    });
+    let snapshot = tracker.update(worldFrame, profile, { frameBoundsKeypoints: imageFrame });
+    for (let i = 0; i < 17; i++) {
+      snapshot = tracker.update(worldFrame, profile, { frameBoundsKeypoints: imageFrame });
+    }
+
+    expect(snapshot.warnings).toContain('keep_key_joints_in_frame');
+    expect(snapshot.warnings).not.toContain('keep_full_body_in_frame');
+    expect(getPoseQualityMessage(snapshot)).toBe('Keep your key joints inside the frame.');
+  });
+
   it('surfaces actionable warnings before generic high-confidence messaging', () => {
     const message = getPoseQualityMessage({
       status: 'high',
@@ -186,6 +233,18 @@ describe('PoseQualityTracker', () => {
     });
 
     expect(message).toBe('Move the camera back.');
+  });
+
+  it('builds displayed quality from merged exercise warnings without changing clean quality', () => {
+    const clean = qualitySnapshot('high', 0.96);
+    const unchanged = buildDisplayedPoseQuality(clean);
+    const displayed = buildDisplayedPoseQuality(clean, ['side_view_uncertain']);
+
+    expect(unchanged.status).toBe('high');
+    expect(getPoseQualityMessage(unchanged)).toBe('Tracking good');
+    expect(displayed.status).toBe('medium');
+    expect(displayed.warnings).toContain('side_view_uncertain');
+    expect(getPoseQualityMessage(displayed)).toBe('Turn side-on so I can judge your form.');
   });
 
   it('maps side-view uncertainty to generic setup guidance', () => {

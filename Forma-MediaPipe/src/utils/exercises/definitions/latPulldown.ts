@@ -1790,6 +1790,7 @@ export function createLatPulldownDefinition(
     feedbackTimestamp: null,
     debugInfo: {},
     repQualityWindowActive: false,
+    liveQualityWarnings: [],
     _internal: withLatPulldownConfig(config, () => initializeState()),
   }),
 
@@ -1805,8 +1806,14 @@ export function createLatPulldownDefinition(
           scorable: internal.lastRepResult.scorable,
           qualityWarnings: internal.lastRepResult.qualityWarnings,
           diagnostics: internal.lastRepResult.diagnostics,
-        }
+      }
       : null;
+    const completedNewRep = internal.repCount > state.repCount;
+    const liveQualityWarnings = internal.repWindow
+      ? latPulldownQualityWarnings(internal.repWindow)
+      : completedNewRep
+        ? (lastRepResult?.qualityWarnings ?? [])
+        : [];
 
     return {
       repCount: internal.repCount,
@@ -1815,6 +1822,7 @@ export function createLatPulldownDefinition(
       feedbackTimestamp: internal.lastFeedbackTime > 0 ? internal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
       repQualityWindowActive: internal.repWindow !== null,
+      liveQualityWarnings,
       _internal: internal,
     };
   },

@@ -1675,6 +1675,7 @@ export function createMachineAbCrunchDefinition(
     feedbackTimestamp: null,
     debugInfo: {},
     repQualityWindowActive: false,
+    liveQualityWarnings: [],
     _internal: withMachineAbCrunchConfig(config, () => initializeState()),
   }),
 
@@ -1690,8 +1691,14 @@ export function createMachineAbCrunchDefinition(
           scorable: internal.lastRepResult.scorable,
           qualityWarnings: internal.lastRepResult.qualityWarnings,
           diagnostics: internal.lastRepResult.diagnostics,
-        }
+      }
       : null;
+    const completedNewRep = internal.repCount > state.repCount;
+    const liveQualityWarnings = internal.repWindow
+      ? abCrunchQualityWarnings(internal.repWindow)
+      : completedNewRep
+        ? (lastRepResult?.qualityWarnings ?? [])
+        : [];
 
     return {
       repCount: internal.repCount,
@@ -1700,6 +1707,7 @@ export function createMachineAbCrunchDefinition(
       feedbackTimestamp: internal.lastFeedbackTime > 0 ? internal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
       repQualityWindowActive: internal.repWindow !== null,
+      liveQualityWarnings,
       _internal: internal,
     };
   },

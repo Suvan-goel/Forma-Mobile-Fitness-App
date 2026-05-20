@@ -2174,6 +2174,7 @@ export function createLyingLegCurlDefinition(
     feedbackTimestamp: null,
     debugInfo: {},
     repQualityWindowActive: false,
+    liveQualityWarnings: [],
     _internal: withLyingLegCurlConfig(config, () => initializeLyingLegCurlState()),
   }),
 
@@ -2193,8 +2194,14 @@ export function createLyingLegCurlDefinition(
           scorable: newInternal.lastRepResult.scorable,
           qualityWarnings: newInternal.lastRepResult.qualityWarnings,
           diagnostics: newInternal.lastRepResult.diagnostics,
-        }
+      }
       : null;
+    const completedNewRep = newInternal.repCount > state.repCount;
+    const liveQualityWarnings = newInternal.repWindow
+      ? lyingLegCurlQualityWarnings(newInternal.repWindow)
+      : completedNewRep
+        ? (lastRepResult?.qualityWarnings ?? [])
+        : [];
 
     return {
       repCount: newInternal.repCount,
@@ -2203,6 +2210,7 @@ export function createLyingLegCurlDefinition(
       feedbackTimestamp: newInternal.lastFeedbackTime > 0 ? newInternal.lastFeedbackTime : null,
       debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
       repQualityWindowActive: newInternal.repWindow !== null || newInternal.pendingCompletedRep !== null,
+      liveQualityWarnings,
       _internal: newInternal,
     };
   },
