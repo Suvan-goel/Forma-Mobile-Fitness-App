@@ -64,6 +64,8 @@
       "assets/**/*"
     ],
     "plugins": [
+      "expo-audio",
+      "expo-video",
       "expo-font",
       "expo-web-browser",
       "expo-image-picker",

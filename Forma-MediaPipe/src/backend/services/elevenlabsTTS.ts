@@ -7,14 +7,14 @@
 
 import { supabase } from './supabase/client';
 
-let Audio: any = null;
+let ExpoAudio: any = null;
 let FileSystem: any = null;
 let nativeModulesAvailable = false;
 
 try {
-  Audio = require('expo-av').Audio;
+  ExpoAudio = require('expo-audio');
   FileSystem = require('expo-file-system');
-  nativeModulesAvailable = true;
+  nativeModulesAvailable = !!ExpoAudio?.createAudioPlayer && !!ExpoAudio?.setAudioModeAsync;
 } catch (error) {
   console.warn('ElevenLabs TTS: Failed to load native modules:', error);
   nativeModulesAvailable = false;
@@ -54,7 +54,7 @@ export function setActiveVoiceSettings(settings: ActiveVoiceSettings): void {
 let audioInstance: any = null;
 let isInitialized = false;
 let speechGeneration = 0; // Incremented on every speakWithElevenLabs call; used to cancel stale fetches
-let activePlaybackSound: any = null;
+let activePlaybackSubscription: { remove?: () => void } | null = null;
 let activePlaybackResolve: (() => void) | null = null;
 
 // Audio cache: maps "voiceId:text" → file URI to avoid re-generating identical phrases.
@@ -89,18 +89,17 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
  * This prevents conflicts between audio playback and camera recording.
  */
 async function initializeAudio(): Promise<void> {
-  if (!nativeModulesAvailable || !Audio) return;
+  if (!nativeModulesAvailable || !ExpoAudio) return;
   if (isInitialized) return;
 
   try {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      interruptionModeIOS: 1, // MixWithOthers — prevents camera session interruption
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      interruptionModeAndroid: 2, // DuckOthers
-      playThroughEarpieceAndroid: false,
+    await ExpoAudio.setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      interruptionMode: 'mixWithOthers',
+      shouldPlayInBackground: false,
+      interruptionModeAndroid: 'duckOthers',
+      shouldRouteThroughEarpiece: false,
     });
     isInitialized = true;
   } catch (error) {
@@ -234,33 +233,48 @@ async function cleanupOldAudioFiles(): Promise<void> {
   }
 }
 
-function resolveActivePlayback(sound?: any): void {
-  if (sound && activePlaybackSound && activePlaybackSound !== sound) return;
+function releaseAudioPlayer(player: any): void {
+  try {
+    player.pause?.();
+  } catch {}
+
+  try {
+    const seekResult = player.seekTo?.(0);
+    if (seekResult?.catch) seekResult.catch(() => {});
+  } catch {}
+
+  try {
+    player.remove?.();
+  } catch {}
+}
+
+function resolveActivePlayback(player?: any): void {
+  if (player && audioInstance && audioInstance !== player) return;
 
   const resolve = activePlaybackResolve;
-  activePlaybackSound = null;
+  const subscription = activePlaybackSubscription;
+  activePlaybackSubscription = null;
   activePlaybackResolve = null;
+  if (!player || audioInstance === player) audioInstance = null;
+
+  try {
+    subscription?.remove?.();
+  } catch {}
+
   if (resolve) resolve();
 }
 
 async function stopActiveAudio(): Promise<void> {
-  const sound = audioInstance;
+  const player = audioInstance;
   audioInstance = null;
 
-  if (!sound) {
+  if (!player) {
     resolveActivePlayback();
     return;
   }
 
-  try {
-    await sound.stopAsync();
-  } catch {}
-
-  try {
-    await sound.unloadAsync();
-  } catch {}
-
-  resolveActivePlayback(sound);
+  releaseAudioPlayer(player);
+  resolveActivePlayback(player);
 }
 
 /**
@@ -270,7 +284,7 @@ async function stopActiveAudio(): Promise<void> {
 export async function speakWithElevenLabs(text: string): Promise<void> {
   if (!text?.trim()) return;
 
-  if (!nativeModulesAvailable || !Audio) {
+  if (!nativeModulesAvailable || !ExpoAudio) {
     console.warn('ElevenLabs TTS: Native modules not available.');
     return;
   }
@@ -295,41 +309,28 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
     cleanupOldAudioFiles().catch(() => {});
 
     // Load the audio, then resolve this function only after playback completes.
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: audioUri },
-      { shouldPlay: false, volume: 1.0 }
-    );
+    const player = ExpoAudio.createAudioPlayer({ uri: audioUri }, 250);
+    player.volume = 1.0;
 
     // A newer speakWithElevenLabs call may have arrived while this audio loaded.
     if (generation !== speechGeneration) {
-      await sound.unloadAsync().catch(() => {});
+      releaseAudioPlayer(player);
       return;
     }
 
     const playbackFinished = new Promise<void>((resolve) => {
-      activePlaybackSound = sound;
+      audioInstance = player;
       activePlaybackResolve = resolve;
 
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (!status.isLoaded) {
-          if (status.error) {
-            if (audioInstance === sound) audioInstance = null;
-            sound.unloadAsync().catch(() => {});
-            resolveActivePlayback(sound);
-          }
-          return;
-        }
-
+      activePlaybackSubscription = player.addListener?.('playbackStatusUpdate', (status: any) => {
         if (status.didJustFinish) {
-          if (audioInstance === sound) audioInstance = null;
-          sound.unloadAsync().catch(() => {});
-          resolveActivePlayback(sound);
+          releaseAudioPlayer(player);
+          resolveActivePlayback(player);
         }
       });
     });
 
-    audioInstance = sound;
-    await sound.playAsync();
+    player.play();
     await playbackFinished;
   } catch (error) {
     console.error('ElevenLabs TTS error:', error);

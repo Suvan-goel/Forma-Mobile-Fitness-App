@@ -3,7 +3,6 @@ import {
   Animated,
   FlatList,
   Image,
-  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -30,6 +29,7 @@ import {
 } from '../constants/theme';
 import { EmptyState } from '../components/ui/EmptyState';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { RecordingPlaybackModal } from '../components/ui/RecordingPlaybackModal';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { MonoText } from '../components/typography/MonoText';
@@ -38,13 +38,6 @@ import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
 import { useWorkouts } from '../../backend/hooks/useWorkouts';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
-
-let VideoComponent: any = null;
-try {
-  VideoComponent = require('expo-av').Video;
-} catch {
-  // expo-av Video not available
-}
 
 type FilterMode = 'all' | 'exercise' | 'workout' | 'date';
 type DateRange = 'all' | 'today' | 'week' | 'month';
@@ -512,31 +505,12 @@ export const VideoLibraryScreen: React.FC = () => {
         />
       </Animated.View>
 
-      {playingVideo && VideoComponent && (
-        <Modal
-          visible={!!playingVideo}
-          animationType="fade"
-          onRequestClose={() => setPlayingVideo(null)}
-        >
-          <View style={styles.playerContainer}>
-            <VideoComponent
-              source={{ uri: playingVideo.videoPath }}
-              style={styles.player}
-              useNativeControls
-              shouldPlay
-              resizeMode="contain"
-              onPlaybackStatusUpdate={(status: any) => {
-                if (status.didJustFinish) setPlayingVideo(null);
-              }}
-            />
-            <TouchableOpacity
-              style={[styles.playerClose, { top: insets.top + 10 }]}
-              onPress={() => setPlayingVideo(null)}
-            >
-              <Text style={styles.playerCloseText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
+      {playingVideo && (
+        <RecordingPlaybackModal
+          key={playingVideo.videoPath}
+          videoPath={playingVideo.videoPath}
+          onClose={() => setPlayingVideo(null)}
+        />
       )}
     </ScreenBackground>
   );
@@ -771,26 +745,5 @@ const styles = StyleSheet.create({
   },
   filteredEmpty: {
     paddingTop: 70,
-  },
-  playerContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-  },
-  player: {
-    flex: 1,
-  },
-  playerClose: {
-    position: 'absolute',
-    right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  playerCloseText: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
   },
 });

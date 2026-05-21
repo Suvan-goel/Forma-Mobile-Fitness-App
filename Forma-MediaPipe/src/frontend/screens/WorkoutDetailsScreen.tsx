@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated, Modal } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,18 +36,12 @@ import { useWorkoutDetails } from '../../backend/hooks/useWorkouts';
 import { useVideoLibrary } from '../../backend/hooks/useVideoLibrary';
 import { ErrorState } from '../components/ui/ErrorState';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { RecordingPlaybackModal } from '../components/ui/RecordingPlaybackModal';
 import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { WorkoutExercise } from '../../backend/services/api';
 import type { VideoRecord } from '../../backend/services/videoLibrary';
 import { useAlert } from '../contexts/AlertContext';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
-
-let VideoComponent: any = null;
-try {
-  VideoComponent = require('expo-av').Video;
-} catch {
-  // expo-av Video not available
-}
 
 type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetails'>;
 type WorkoutDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetails'>;
@@ -469,32 +463,12 @@ export const WorkoutDetailsScreen: React.FC = () => {
         </Animated.View>
       </ScrollView>
 
-      {/* Video Playback Modal */}
-      {playingVideo && VideoComponent && (
-        <Modal
-          visible={!!playingVideo}
-          animationType="fade"
-          onRequestClose={() => setPlayingVideo(null)}
-        >
-          <View style={styles.playerContainer}>
-            <VideoComponent
-              source={{ uri: playingVideo.videoPath }}
-              style={styles.player}
-              useNativeControls
-              shouldPlay
-              resizeMode="contain"
-              onPlaybackStatusUpdate={(status: any) => {
-                if (status.didJustFinish) setPlayingVideo(null);
-              }}
-            />
-            <TouchableOpacity
-              style={[styles.playerClose, { top: insets.top + 10 }]}
-              onPress={() => setPlayingVideo(null)}
-            >
-              <Text style={styles.playerCloseText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
+      {playingVideo && (
+        <RecordingPlaybackModal
+          key={playingVideo.videoPath}
+          videoPath={playingVideo.videoPath}
+          onClose={() => setPlayingVideo(null)}
+        />
       )}
     </ScreenBackground>
   );
@@ -904,28 +878,5 @@ const styles = StyleSheet.create({
   },
   videoButtonDisabled: {
     backgroundColor: 'rgba(255, 255, 255, 0.025)',
-  },
-
-  /* ── Video Player Modal ────────────────────── */
-  playerContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center' as const,
-  },
-  player: {
-    flex: 1,
-  },
-  playerClose: {
-    position: 'absolute' as const,
-    right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  playerCloseText: {
-    fontSize: 16,
-    fontFamily: FONTS.ui.regular,
-    color: COLORS.text,
   },
 });
