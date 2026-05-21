@@ -68,8 +68,14 @@ import { useAlert } from '../contexts/AlertContext';
 
 const CAMERA_SETUP_SEEN_KEY = '@forma_camera_setup_seen';
 const CAPTURE_HORIZONTAL_PADDING = 14;
+const CAPTURE_SECTION_GAP = 22;
 const TEMPLATE_CARD_GAP = 9;
-const WORKOUT_CARD_HEIGHT = 176;
+const CAPTURE_CARD_HEIGHT = 188;
+const CAPTURE_CARD_HEIGHT_TALL = 200;
+const CAPTURE_CARD_HORIZONTAL_PADDING = 15;
+const CAPTURE_CARD_VERTICAL_PADDING = 18;
+const BODY_VISUAL_WIDTH = 112;
+const BODY_VISUAL_HEIGHT = 146;
 const ACTIVE_SECONDARY_ACTIONS_WIDTH = 152;
 const CAPTURE_CARD_RADIUS = CARD_RADIUS - 2;
 const START_SESSION_CARD_GRADIENT: readonly [string, string, string] = [
@@ -237,10 +243,20 @@ export const RecordLandingScreen: React.FC = () => {
   } = useCurrentWorkout();
   const navigationBarHeight = getTabScreenBottomPadding(insets.bottom, 24);
   const compactHeight = windowHeight < 740;
-  const sectionGap = compactHeight ? 20 : 30;
+  const captureCardHeight = Math.min(
+    CAPTURE_CARD_HEIGHT_TALL,
+    Math.max(CAPTURE_CARD_HEIGHT, Math.round(windowHeight * 0.22)),
+  );
+  const bodyVisualHeight = captureCardHeight - CAPTURE_CARD_VERTICAL_PADDING * 2;
+  const bodyVisualWidth = Math.round(
+    BODY_VISUAL_WIDTH * (bodyVisualHeight / BODY_VISUAL_HEIGHT),
+  );
   const templateCardWidth =
     (windowWidth - CAPTURE_HORIZONTAL_PADDING * 2 - TEMPLATE_CARD_GAP * 2) / 3;
-  const templateThumbHeight = Math.min(templateCardWidth + 6, compactHeight ? 84 : 112);
+  const templateThumbHeight = Math.min(
+    templateCardWidth + 6,
+    compactHeight ? 92 : 122,
+  );
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -408,13 +424,13 @@ export const RecordLandingScreen: React.FC = () => {
           style={[
             styles.contentStack,
             {
-              gap: sectionGap,
+              gap: CAPTURE_SECTION_GAP,
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
             },
           ]}
         >
-          <View style={[styles.screenSection, styles.heroSection]}>
+          <View style={styles.screenSection}>
             <Text style={styles.dateLine}>{formatDateLine()}</Text>
 
             {workoutInProgress ? (
@@ -426,7 +442,13 @@ export const RecordLandingScreen: React.FC = () => {
                   end={CARD_GRADIENT_END}
                   style={styles.activeGradient}
                 >
-                  <View style={[styles.activeEdge, styles.activeWorkoutEdge]}>
+                  <View
+                    style={[
+                      styles.activeEdge,
+                      styles.activeWorkoutEdge,
+                      { height: captureCardHeight },
+                    ]}
+                  >
                     <View style={styles.activeDashboardTop}>
                       <View style={styles.activeTitleBlock}>
                         <Text style={styles.activeEyebrow}>IN PROGRESS</Text>
@@ -554,27 +576,43 @@ export const RecordLandingScreen: React.FC = () => {
                   end={CARD_GRADIENT_END}
                   style={styles.activeGradient}
                 >
-                  <View style={[styles.activeEdge, styles.idleEdge]}>
-                    <View style={styles.idleCardContent}>
+                  <View
+                    style={[
+                      styles.activeEdge,
+                      styles.idleEdge,
+                      { height: captureCardHeight },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.idleCardContent,
+                        {
+                          minHeight:
+                            captureCardHeight - CAPTURE_CARD_VERTICAL_PADDING * 2,
+                        },
+                      ]}
+                    >
                       <View style={styles.idleTextWrap}>
-                        <Text style={styles.cardLabel}>READY TO TRAIN</Text>
-                        <Text style={styles.idleTitle}>Start a Session</Text>
-                        <View style={styles.idleMetaRow}>
-                          <View style={styles.metaIconRow}>
-                            <Dumbbell
-                              size={12}
-                              color={COLORS.textTertiary}
-                              strokeWidth={1.6}
-                            />
-                            <Text style={styles.metaText}>Any workout</Text>
-                          </View>
-                          <View style={styles.metaIconRow}>
-                            <Clock
-                              size={12}
-                              color={COLORS.textTertiary}
-                              strokeWidth={1.6}
-                            />
-                            <Text style={styles.metaText}>Any length</Text>
+                        <View style={styles.idleCopyBlock}>
+                          <Text style={styles.cardLabel}>READY TO TRAIN</Text>
+                          <Text style={styles.idleTitle}>Start a Session</Text>
+                          <View style={styles.idleMetaRow}>
+                            <View style={styles.metaIconRow}>
+                              <Dumbbell
+                                size={12}
+                                color={COLORS.textTertiary}
+                                strokeWidth={1.6}
+                              />
+                              <Text style={styles.metaText}>Any workout</Text>
+                            </View>
+                            <View style={styles.metaIconRow}>
+                              <Clock
+                                size={12}
+                                color={COLORS.textTertiary}
+                                strokeWidth={1.6}
+                              />
+                              <Text style={styles.metaText}>Any length</Text>
+                            </View>
                           </View>
                         </View>
 
@@ -601,7 +639,12 @@ export const RecordLandingScreen: React.FC = () => {
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
-                      <View style={styles.bodyVisual}>
+                      <View
+                        style={[
+                          styles.bodyVisual,
+                          { width: bodyVisualWidth, height: bodyVisualHeight },
+                        ]}
+                      >
                         <Image
                           source={require('../assets/generated/workout-card-figure.png')}
                           style={styles.bodyVisualImage}
@@ -616,14 +659,14 @@ export const RecordLandingScreen: React.FC = () => {
           </View>
 
           {/* ── TOOLS ───────────────────────────────── */}
-          <View style={[styles.screenSection, styles.toolsSection]}>
+          <View style={styles.screenSection}>
             <Text style={styles.sectionLabel}>TOOLS</Text>
             <View style={styles.toolsCardOuter}>
               <LinearGradient
                 colors={[...TOOLS_CARD_GRADIENT]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
-                style={styles.toolsCard}
+                style={[styles.toolsCard, { height: captureCardHeight }]}
               >
                 <ToolRow
                   icon={
@@ -664,12 +707,7 @@ export const RecordLandingScreen: React.FC = () => {
           </View>
 
           {/* ── RECENT / FAVOURITE TEMPLATES ───────── */}
-          <View
-            style={[
-              styles.screenSection,
-              styles.templatesBlock,
-            ]}
-          >
+          <View style={styles.screenSection}>
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionLabel, styles.sectionHeaderLabel]}>
                 {templatesLabel}
@@ -682,7 +720,12 @@ export const RecordLandingScreen: React.FC = () => {
                 <Text style={styles.viewAllLink}>View all</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.templatesRow}>
+            <View
+              style={[
+                styles.templatesRow,
+                { height: captureCardHeight },
+              ]}
+            >
               {recentTemplates.slice(0, 3).map((tmpl) => (
                 <TouchableOpacity
                   key={tmpl.id}
@@ -821,19 +864,10 @@ const styles = StyleSheet.create({
   contentStack: {
     flexGrow: 1,
     paddingBottom: 7,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   screenSection: {
-    justifyContent: 'center',
-    flexShrink: 1,
-  },
-  heroSection: {
-    flex: 1.1,
-    minHeight: 0,
-  },
-  toolsSection: {
-    flex: 0.72,
-    minHeight: 0,
+    justifyContent: 'flex-start',
   },
 
   dateLine: {
@@ -863,37 +897,35 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   activeEdge: {
-    height: WORKOUT_CARD_HEIGHT,
     borderRadius: CAPTURE_CARD_RADIUS,
     borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.085)',
     borderTopColor: 'rgba(255, 255, 255, 0.13)',
-    paddingHorizontal: 15,
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingHorizontal: CAPTURE_CARD_HORIZONTAL_PADDING,
+    paddingVertical: CAPTURE_CARD_VERTICAL_PADDING,
   },
   activeWorkoutEdge: {
     justifyContent: 'space-between',
-    paddingTop: 15,
-    paddingBottom: 15,
   },
 
   /* Idle body */
   idleEdge: {
-    paddingRight: 7,
     overflow: 'hidden',
   },
   idleCardContent: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     minHeight: 128,
   },
   idleTextWrap: {
     flex: 1,
     alignSelf: 'stretch',
-    justifyContent: 'center',
-    gap: 9,
+    justifyContent: 'space-between',
+    gap: 12,
     paddingRight: 10,
+  },
+  idleCopyBlock: {
+    gap: 9,
   },
   idleTitle: {
     fontFamily: FONTS.display.medium,
@@ -906,11 +938,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     flexWrap: 'wrap',
-    marginBottom: 12,
   },
   bodyVisual: {
-    width: 112,
-    height: 146,
     marginRight: -1,
     overflow: 'hidden',
     alignItems: 'center',
@@ -1123,6 +1152,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   toolRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -1161,11 +1191,6 @@ const styles = StyleSheet.create({
     gap: TEMPLATE_CARD_GAP,
     alignItems: 'stretch',
     minHeight: 132,
-  },
-  templatesBlock: {
-    flex: 1.05,
-    minHeight: 0,
-    justifyContent: 'center',
   },
   templateCard: {
     borderRadius: CAPTURE_CARD_RADIUS,

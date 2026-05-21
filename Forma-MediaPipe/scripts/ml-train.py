@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Train offline feature-based ML baselines from exported Forma rep features."""
+"""Train offline feature-based ML experiments from exported Forma rep features."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ from typing import Any
 try:
     import joblib
     import pandas as pd
-    from sklearn.ensemble import HistGradientBoostingClassifier
+    from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
     from sklearn.impute import SimpleImputer
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
@@ -32,17 +33,27 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exercise", default="barbell-curl", help="Exercise slug.")
     parser.add_argument("--ml-dir", default="datasets/form-heuristics/ml", help="Root ML artifact directory.")
-    parser.add_argument("--threshold", type=float, default=0.5, help="Probability threshold for binary predictions.")
+    parser.add_argument("--experiment-id", help="Stable experiment id. Defaults to UTC timestamp.")
+    parser.add_argument("--target", default="all", help="Target issue id/column, or all.")
+    parser.add_argument("--default-threshold", type=float, default=0.5, help="Fallback probability threshold.")
+    parser.add_argument("--min-recall", type=float, default=0.65, help="Minimum validation recall when tuning thresholds.")
+    parser.add_argument("--feature-allow-regex", help="Only include feature columns matching this regex.")
+    parser.add_argument("--feature-block-regex", help="Exclude feature columns matching this regex.")
+    parser.add_argument("--require-holdout", action="store_true", help="Exit non-zero if validation/test splits are missing.")
     parser.add_argument(
         "--model-kinds",
         default="logistic,hist_gradient",
-        help="Comma-separated model kinds: logistic,hist_gradient.",
+        help="Comma-separated model kinds: logistic,random_forest,hist_gradient,xgboost,lightgbm.",
     )
     return parser.parse_args()
 
 
 def now_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+
+
+def safe_column_part(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
 def binary_metrics(y_true: list[int], y_pred: list[int]) -> dict[str, float | int]:
@@ -53,6 +64,7 @@ def binary_metrics(y_true: list[int], y_pred: list[int]) -> dict[str, float | in
     precision = 1.0 if tp + fp == 0 else tp / (tp + fp)
     recall = 1.0 if tp + fn == 0 else tp / (tp + fn)
     f1 = 0.0 if precision + recall == 0 else (2 * precision * recall) / (precision + recall)
+    false_positive_rate = 0.0 if fp + tn == 0 else fp / (fp + tn)
     return {
         "count": len(y_true),
         "truePositives": tp,
@@ -62,7 +74,32 @@ def binary_metrics(y_true: list[int], y_pred: list[int]) -> dict[str, float | in
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "falsePositiveRate": false_positive_rate,
     }
+
+
+def calibration_buckets(y_true: list[int], probabilities: list[float], bucket_count: int = 10) -> list[dict[str, Any]]:
+    buckets: list[dict[str, Any]] = []
+    for bucket in range(bucket_count):
+        low = bucket / bucket_count
+        high = (bucket + 1) / bucket_count
+        indexes = [
+            index for index, probability in enumerate(probabilities)
+            if probability >= low and (probability < high or bucket == bucket_count - 1)
+        ]
+        if not indexes:
+            buckets.append({"low": low, "high": high, "count": 0, "meanProbability": None, "positiveRate": None})
+            continue
+        bucket_probs = [probabilities[index] for index in indexes]
+        bucket_true = [y_true[index] for index in indexes]
+        buckets.append({
+            "low": low,
+            "high": high,
+            "count": len(indexes),
+            "meanProbability": sum(bucket_probs) / len(bucket_probs),
+            "positiveRate": sum(bucket_true) / len(bucket_true),
+        })
+    return buckets
 
 
 def make_model(kind: str) -> Pipeline:
@@ -71,25 +108,43 @@ def make_model(kind: str) -> Pipeline:
             steps=[
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scaler", StandardScaler()),
-                (
-                    "classifier",
-                    LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42),
-                ),
+                ("classifier", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
+            ],
+        )
+    if kind == "random_forest":
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("classifier", RandomForestClassifier(n_estimators=250, min_samples_leaf=2, class_weight="balanced", random_state=42)),
             ],
         )
     if kind == "hist_gradient":
         return Pipeline(
             steps=[
                 ("imputer", SimpleImputer(strategy="median")),
-                (
-                    "classifier",
-                    HistGradientBoostingClassifier(
-                        max_iter=200,
-                        learning_rate=0.05,
-                        l2_regularization=0.01,
-                        random_state=42,
-                    ),
-                ),
+                ("classifier", HistGradientBoostingClassifier(max_iter=200, learning_rate=0.05, l2_regularization=0.01, random_state=42)),
+            ],
+        )
+    if kind == "xgboost":
+        try:
+            from xgboost import XGBClassifier  # type: ignore
+        except ModuleNotFoundError as exc:
+            raise ValueError("xgboost model requested but xgboost is not installed.") from exc
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("classifier", XGBClassifier(n_estimators=250, max_depth=3, learning_rate=0.05, eval_metric="logloss", random_state=42)),
+            ],
+        )
+    if kind == "lightgbm":
+        try:
+            from lightgbm import LGBMClassifier  # type: ignore
+        except ModuleNotFoundError as exc:
+            raise ValueError("lightgbm model requested but lightgbm is not installed.") from exc
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("classifier", LGBMClassifier(n_estimators=250, learning_rate=0.05, class_weight="balanced", random_state=42)),
             ],
         )
     raise ValueError(f"Unknown model kind: {kind}")
@@ -111,11 +166,78 @@ def feature_importance(model: Pipeline, feature_columns: list[str]) -> list[dict
             values = values[0]
     if values is None:
         return []
-    pairs = [
-        {"feature": feature, "importance": float(abs(value))}
-        for feature, value in zip(feature_columns, values)
-    ]
+    pairs = [{"feature": feature, "importance": float(abs(value))} for feature, value in zip(feature_columns, values)]
     return sorted(pairs, key=lambda item: item["importance"], reverse=True)[:50]
+
+
+def select_feature_columns(columns: list[str], allow_regex: str | None, block_regex: str | None) -> list[str]:
+    features = [column for column in columns if column.startswith("feature__")]
+    if allow_regex:
+        allow = re.compile(allow_regex)
+        features = [column for column in features if allow.search(column)]
+    if block_regex:
+        block = re.compile(block_regex)
+        features = [column for column in features if not block.search(column)]
+    return features
+
+
+def select_targets(label_columns: list[str], target_arg: str) -> list[str]:
+    if target_arg == "all":
+        return label_columns + ["target__has_issue"]
+    candidates = [target_arg]
+    if not target_arg.startswith("label_issue__") and target_arg != "target__has_issue":
+        candidates.append(f"label_issue__{safe_column_part(target_arg)}")
+    for candidate in candidates:
+        if candidate in label_columns or candidate == "target__has_issue":
+            return [candidate]
+    raise SystemExit(f"Target not found: {target_arg}. Available targets: {', '.join(label_columns)}")
+
+
+def tune_threshold(y_true: list[int], probabilities: list[float], default_threshold: float, min_recall: float) -> dict[str, Any]:
+    if len(y_true) == 0:
+        return {"threshold": default_threshold, "reason": "no_validation_rows", "metrics": None}
+    if sum(y_true) == 0:
+        best = min((threshold for threshold in [index / 100 for index in range(5, 96, 5)]), key=lambda t: sum(1 for p in probabilities if p >= t))
+        return {"threshold": best, "reason": "validation_has_no_positives", "metrics": binary_metrics(y_true, [1 if p >= best else 0 for p in probabilities])}
+
+    candidates: list[tuple[float, dict[str, float | int]]] = []
+    for index in range(5, 96, 5):
+        threshold = index / 100
+        metrics = binary_metrics(y_true, [1 if probability >= threshold else 0 for probability in probabilities])
+        candidates.append((threshold, metrics))
+    eligible = [(threshold, metrics) for threshold, metrics in candidates if float(metrics["recall"]) >= min_recall]
+    pool = eligible or candidates
+    threshold, metrics = sorted(
+        pool,
+        key=lambda item: (
+            float(item[1]["falsePositiveRate"]),
+            -float(item[1]["f1"]),
+            -float(item[1]["recall"]),
+            item[0],
+        ),
+    )[0]
+    return {
+        "threshold": threshold,
+        "reason": "validation_min_recall_met" if eligible else "no_threshold_met_min_recall",
+        "metrics": metrics,
+    }
+
+
+def split_metrics(df: pd.DataFrame, target: str, y_all: pd.Series, probabilities: list[float], threshold: float) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    prob_series = pd.Series(probabilities, index=df.index)
+    for split in ["train", "validation", "test"]:
+        split_mask = df["split"] == split
+        if int(split_mask.sum()) == 0:
+            continue
+        y_true = [int(value) for value in y_all[split_mask].tolist()]
+        split_probs = [float(value) for value in prob_series[split_mask].tolist()]
+        y_pred = [1 if value >= threshold else 0 for value in split_probs]
+        result[split] = {
+            **binary_metrics(y_true, y_pred),
+            "calibrationBuckets": calibration_buckets(y_true, split_probs),
+        }
+    return result
 
 
 def main() -> int:
@@ -130,30 +252,50 @@ def main() -> int:
     if df.empty:
         raise SystemExit(f"Feature CSV has no rows: {csv_path}")
 
-    feature_columns = [column for column in df.columns if column.startswith("feature__")]
+    feature_columns = select_feature_columns(list(df.columns), args.feature_allow_regex, args.feature_block_regex)
     label_columns = [column for column in df.columns if column.startswith("label_issue__")]
     if not feature_columns:
-        raise SystemExit("No feature__ columns found in exported CSV.")
+        raise SystemExit("No usable feature__ columns found in exported CSV.")
+    if not label_columns:
+        raise SystemExit("No label_issue__ columns found in exported CSV.")
 
     df["target__has_issue"] = 1 - pd.to_numeric(df["label_clean"], errors="coerce").fillna(1).astype(int)
-    target_columns = label_columns + ["target__has_issue"]
+    target_columns = select_targets(label_columns, args.target)
     x_all = df[feature_columns].apply(pd.to_numeric, errors="coerce")
     train_mask = df["split"] == "train"
+    validation_mask = df["split"] == "validation"
+    test_mask = df["split"] == "test"
+    holdout_valid = int(validation_mask.sum()) > 0 and int(test_mask.sum()) > 0
     if int(train_mask.sum()) == 0:
         raise SystemExit("No train split rows found. Export reviewed train labels first.")
+    if args.require_holdout and not holdout_valid:
+        raise SystemExit("Validation and test splits are required for production-oriented ML claims.")
 
     model_kinds = [kind.strip() for kind in args.model_kinds.split(",") if kind.strip()]
-    model_dir = exercise_dir / "models" / now_slug()
+    experiment_id = args.experiment_id or now_slug()
+    model_dir = exercise_dir / "models" / experiment_id
     model_dir.mkdir(parents=True, exist_ok=True)
     predictions = df.copy()
     report: dict[str, Any] = {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "experimentId": experiment_id,
         "exercise": args.exercise,
         "featuresCsv": str(csv_path),
         "manifest": str(manifest_path),
-        "threshold": args.threshold,
+        "config": {
+            "target": args.target,
+            "defaultThreshold": args.default_threshold,
+            "minRecall": args.min_recall,
+            "modelKinds": model_kinds,
+            "featureAllowRegex": args.feature_allow_regex,
+            "featureBlockRegex": args.feature_block_regex,
+        },
+        "productionClaimValid": holdout_valid,
+        "productionClaimBlockers": [] if holdout_valid else ["validation_or_test_split_missing"],
         "featureCount": len(feature_columns),
         "rowCount": len(df),
+        "splitCounts": {split: int((df["split"] == split).sum()) for split in ["train", "validation", "test"]},
+        "targets": target_columns,
         "models": {},
     }
 
@@ -171,26 +313,31 @@ def main() -> int:
                 }
                 continue
 
-            model = make_model(kind)
+            try:
+                model = make_model(kind)
+            except ValueError as error:
+                report["models"][kind][target] = {"trained": False, "reason": str(error)}
+                continue
+
             model.fit(x_all[train_mask], y_train)
             probabilities = predict_probability(model, x_all)
+            validation_probs = [float(value) for value in pd.Series(probabilities, index=df.index)[validation_mask].tolist()]
+            validation_truth = [int(value) for value in y_all[validation_mask].tolist()]
+            threshold_report = tune_threshold(validation_truth, validation_probs, args.default_threshold, args.min_recall)
+            threshold = float(threshold_report["threshold"])
             pred_column = f"ml__{kind}__{target}__pred"
             prob_column = f"ml__{kind}__{target}__prob"
             predictions[prob_column] = probabilities
-            predictions[pred_column] = [1 if value >= args.threshold else 0 for value in probabilities]
+            predictions[pred_column] = [1 if value >= threshold else 0 for value in probabilities]
 
             target_report: dict[str, Any] = {
                 "trained": True,
                 "positiveTrainRows": int(y_train.sum()),
                 "trainRows": int(len(y_train)),
-                "metrics": {},
+                "threshold": threshold_report,
+                "metrics": split_metrics(df, target, y_all, probabilities, threshold),
                 "topFeatures": feature_importance(model, feature_columns),
             }
-            for split in sorted(df["split"].dropna().unique()):
-                split_mask = df["split"] == split
-                y_true = [int(value) for value in y_all[split_mask].tolist()]
-                y_pred = [int(value) for value in predictions.loc[split_mask, pred_column].tolist()]
-                target_report["metrics"][split] = binary_metrics(y_true, y_pred)
 
             model_path = model_dir / f"{kind}__{target}.joblib"
             joblib.dump(
@@ -199,7 +346,8 @@ def main() -> int:
                     "modelKind": kind,
                     "target": target,
                     "featureColumns": feature_columns,
-                    "threshold": args.threshold,
+                    "threshold": threshold,
+                    "experimentId": experiment_id,
                 },
                 model_path,
             )
@@ -208,8 +356,10 @@ def main() -> int:
 
     predictions_path = model_dir / "predictions.csv"
     metrics_path = model_dir / "metrics.json"
+    config_path = model_dir / "config.json"
     predictions.to_csv(predictions_path, index=False)
     metrics_path.write_text(json.dumps(report, indent=2) + "\n")
+    config_path.write_text(json.dumps(report["config"], indent=2) + "\n")
 
     latest_predictions = exercise_dir / "models" / "latest_predictions.csv"
     latest_metrics = exercise_dir / "models" / "latest_metrics.json"
@@ -218,6 +368,8 @@ def main() -> int:
 
     print(f"Rows: {len(df)}")
     print(f"Features: {len(feature_columns)}")
+    print(f"Experiment: {experiment_id}")
+    print(f"Production claim valid: {report['productionClaimValid']}")
     print(f"Model dir: {model_dir}")
     print(f"Predictions: {predictions_path}")
     print(f"Metrics: {metrics_path}")

@@ -9,6 +9,10 @@ export {
   mlExampleBaseColumns,
   mlExampleToCsvRow,
 } from './exportDataset';
+export {
+  buildMlLabelAuditReport,
+  buildMlSplitAuditReport,
+} from './audits';
 export type {
   BuildMlRepExamplesOptions,
   BuildMlRepExamplesResult,
@@ -27,3 +31,12 @@ export type {
   MlRepExample,
   MlRepTiming,
 } from './types';
+export type {
+  LabelFileReference,
+  MlAuditFinding,
+  MlAuditLevel,
+  MlLabelAuditOptions,
+  MlLabelAuditReport,
+  MlSplitAuditOptions,
+  MlSplitAuditReport,
+} from './audits';

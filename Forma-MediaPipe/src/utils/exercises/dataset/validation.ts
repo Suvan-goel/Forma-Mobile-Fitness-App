@@ -22,7 +22,11 @@ const VALID_CAPTURE_CAMERA_VIEWS = ['front', 'frontish', 'oblique', 'side', 'unk
 const VALID_CAPTURE_MACHINE_STYLES = ['seated_selectorized', 'kneeling', 'plate_loaded', 'unknown'];
 const VALID_CAPTURE_VISIBLE_HANDLES = ['yes', 'no', 'partial', 'unknown'];
 const VALID_REVIEWER_VIEW_CONFIDENCES = ['good', 'usable', 'poor'];
+const VALID_COLLECTION_MODES = ['staged', 'trainer_demo', 'natural_user', 'unknown'];
+const VALID_LIGHTING_CONDITIONS = ['bright', 'mixed', 'dim', 'backlit', 'unknown'];
+const VALID_REVIEWER_CONFIDENCES = ['high', 'medium', 'low', 'unknown'];
 const VALID_REP_VIEWS = ['side', 'front', 'oblique', 'unknown'];
+const VALID_ISSUE_SEVERITIES = ['none', 'mild', 'moderate', 'severe'];
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -81,6 +85,29 @@ export function validateLabelFile(
       issues.push({ path: '$.captureMetadata', message: 'captureMetadata must be an object.' });
     } else {
       const metadata = value.captureMetadata;
+      for (const key of ['subjectId', 'participantId', 'sessionId', 'cameraSetupId', 'environmentId', 'deviceModel', 'reviewerId']) {
+        if (metadata[key] !== undefined && (typeof metadata[key] !== 'string' || (metadata[key] as string).trim() === '')) {
+          issues.push({ path: `$.captureMetadata.${key}`, message: `${key} must be a non-empty string when provided.` });
+        }
+      }
+      if (
+        metadata.collectionMode !== undefined &&
+        !VALID_COLLECTION_MODES.includes(metadata.collectionMode as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.collectionMode', message: 'collectionMode must be staged, trainer_demo, natural_user, or unknown.' });
+      }
+      if (
+        metadata.lightingCondition !== undefined &&
+        !VALID_LIGHTING_CONDITIONS.includes(metadata.lightingCondition as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.lightingCondition', message: 'lightingCondition must be bright, mixed, dim, backlit, or unknown.' });
+      }
+      if (
+        metadata.reviewerConfidence !== undefined &&
+        !VALID_REVIEWER_CONFIDENCES.includes(metadata.reviewerConfidence as string)
+      ) {
+        issues.push({ path: '$.captureMetadata.reviewerConfidence', message: 'reviewerConfidence must be high, medium, low, or unknown.' });
+      }
       if (
         metadata.cameraSide !== undefined &&
         !VALID_CAPTURE_CAMERA_SIDES.includes(metadata.cameraSide as string)
@@ -317,6 +344,24 @@ export function validateLabelFile(
           path: `${path}.expectedScoreRange`,
           message: 'expectedScoreRange is only allowed on reviewed scorable reps.',
         });
+      }
+    }
+
+    if (rep.issueSeverities !== undefined) {
+      if (!isObject(rep.issueSeverities)) {
+        issues.push({ path: `${path}.issueSeverities`, message: 'issueSeverities must be an object keyed by issue id.' });
+      } else {
+        for (const [issueId, severity] of Object.entries(rep.issueSeverities)) {
+          if (knownIssueIds && !knownIssueIds.has(issueId)) {
+            issues.push({ path: `${path}.issueSeverities.${issueId}`, message: `Unknown issue id "${issueId}".` });
+          }
+          if (!VALID_ISSUE_SEVERITIES.includes(severity as string)) {
+            issues.push({
+              path: `${path}.issueSeverities.${issueId}`,
+              message: 'issue severity must be none, mild, moderate, or severe.',
+            });
+          }
+        }
       }
     }
   });

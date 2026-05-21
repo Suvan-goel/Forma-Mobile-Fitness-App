@@ -12,6 +12,7 @@ import {
   ML_FEATURE_SCHEMA_VERSION,
   type MlDatasetManifest,
   type MlDatasetSummaryBucket,
+  type MlFeatureStatistics,
   type MlRepExample,
 } from './types';
 
@@ -62,8 +63,61 @@ function incrementCounts(counts: Record<string, number>, values: string[]): void
   }
 }
 
+function incrementCount(counts: Record<string, number>, value: string | null | undefined): void {
+  const key = value && value.trim() !== '' ? value : 'unknown';
+  counts[key] = (counts[key] ?? 0) + 1;
+}
+
 function heuristicConfigVersion(definition: ExerciseDefinition): string {
   return definition.tunedConfigPath ?? `${slugifyExerciseName(definition.name)}:embedded`;
+}
+
+type FeatureStatsCore = Omit<MlFeatureStatistics, 'bySplit'>;
+
+function featureStatsCore(values: Array<number | null | undefined>): FeatureStatsCore {
+  const numeric = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const nullCount = values.length - numeric.length;
+  if (numeric.length === 0) {
+    return {
+      count: values.length,
+      nullCount,
+      nullRate: values.length === 0 ? 0 : nullCount / values.length,
+      min: null,
+      max: null,
+      mean: null,
+      std: null,
+    };
+  }
+  const sum = numeric.reduce((total, value) => total + value, 0);
+  const mean = sum / numeric.length;
+  const variance = numeric.reduce((total, value) => total + (value - mean) ** 2, 0) / numeric.length;
+  return {
+    count: values.length,
+    nullCount,
+    nullRate: values.length === 0 ? 0 : nullCount / values.length,
+    min: Math.min(...numeric),
+    max: Math.max(...numeric),
+    mean,
+    std: Math.sqrt(variance),
+  };
+}
+
+function featureStatistics(examples: MlRepExample[], featureNames: string[]): Record<string, MlFeatureStatistics> {
+  const result: Record<string, MlFeatureStatistics> = {};
+  for (const featureName of featureNames) {
+    const bySplit: MlFeatureStatistics['bySplit'] = {};
+    for (const split of ['train', 'validation', 'test'] as const) {
+      const splitExamples = examples.filter((example) => example.split === split);
+      if (splitExamples.length > 0) {
+        bySplit[split] = featureStatsCore(splitExamples.map((example) => example.features[featureName]));
+      }
+    }
+    result[featureName] = {
+      ...featureStatsCore(examples.map((example) => example.features[featureName])),
+      bySplit,
+    };
+  }
+  return result;
 }
 
 export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResult {
@@ -72,6 +126,12 @@ export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResu
   const splitBuckets: Partial<Record<DatasetSplit, MlDatasetSummaryBucket>> = {};
   const issueCounts: Record<string, number> = {};
   const heuristicIssueCounts: Record<string, number> = {};
+  const issueSupportBySplit: MlDatasetManifest['issueSupportBySplit'] = {};
+  const viewCounts: Record<string, number> = {};
+  const scorableCounts: Record<string, number> = {};
+  const subjectCounts: Record<string, number> = {};
+  const sessionCounts: Record<string, number> = {};
+  const cameraSetupCounts: Record<string, number> = {};
   let skippedMissingMatchedPrediction = 0;
   let skippedMissingDiagnostics = 0;
 
@@ -99,10 +159,19 @@ export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResu
     for (const example of built.examples) {
       incrementCounts(issueCounts, example.labels.issueIds);
       incrementCounts(heuristicIssueCounts, example.heuristic.issueIds);
+      incrementCount(viewCounts, example.labels.view);
+      incrementCount(scorableCounts, example.labels.scorable ? 'scorable' : 'unscorable');
+      incrementCount(subjectCounts, example.grouping.subjectId ?? example.grouping.participantId);
+      incrementCount(sessionCounts, example.grouping.sessionId);
+      incrementCount(cameraSetupCounts, example.grouping.cameraSetupId);
+      const splitIssueCounts = issueSupportBySplit[example.split] ?? {};
+      issueSupportBySplit[example.split] = splitIssueCounts;
+      incrementCounts(splitIssueCounts, example.labels.issueIds);
     }
   }
 
   const featureNames = collectFeatureNames(examples);
+  const stats = featureStatistics(examples, featureNames);
   const labelColumns = Object.fromEntries(
     Object.keys(issueCounts)
       .sort()
@@ -128,8 +197,24 @@ export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResu
     splits: splitBuckets,
     issueCounts,
     heuristicIssueCounts,
+    issueSupportBySplit,
+    viewCounts,
+    scorableCounts,
+    subjectCounts,
+    sessionCounts,
+    cameraSetupCounts,
     featureNames,
+    featureStatistics: stats,
+    excludedFeatureNames: Object.entries(stats)
+      .filter(([, stat]) => stat.nullRate > 0.8)
+      .map(([featureName]) => featureName)
+      .sort(),
     labelColumns,
+    audit: {
+      notes: [
+        'Split and label audit commands provide authoritative pass/fail status.',
+      ],
+    },
   };
 
   summarizeEvaluations(caseEvaluations);
@@ -146,6 +231,16 @@ export function mlExampleBaseColumns(): string[] {
     'landmark_file',
     'label_file',
     'recording_file',
+    'subject_id',
+    'participant_id',
+    'session_id',
+    'camera_setup_id',
+    'environment_id',
+    'collection_mode',
+    'device_model',
+    'lighting_condition',
+    'reviewer_id',
+    'reviewer_confidence',
     'rep_index',
     'expected_start_ms',
     'expected_end_ms',
@@ -159,6 +254,7 @@ export function mlExampleBaseColumns(): string[] {
     'label_scorable',
     'label_view',
     'label_issue_ids',
+    'label_issue_severities',
     'heuristic_clean',
     'heuristic_scorable',
     'heuristic_view',
@@ -208,11 +304,26 @@ export function mlExampleToCsvRow(
     heuristic_quality_warnings: example.heuristic.qualityWarnings.join(';'),
     heuristic_issue_ids: example.heuristic.issueIds.join(';'),
     heuristic_messages: example.heuristic.messages.join(' | '),
+    subject_id: example.grouping.subjectId ?? '',
+    participant_id: example.grouping.participantId ?? '',
+    session_id: example.grouping.sessionId ?? '',
+    camera_setup_id: example.grouping.cameraSetupId ?? '',
+    environment_id: example.grouping.environmentId ?? '',
+    collection_mode: example.grouping.collectionMode ?? '',
+    device_model: example.grouping.deviceModel ?? '',
+    lighting_condition: example.grouping.lightingCondition ?? '',
+    reviewer_id: example.grouping.reviewerId ?? '',
+    reviewer_confidence: example.grouping.reviewerConfidence ?? '',
+    label_issue_severities: Object.entries(example.labels.issueSeverities ?? {})
+      .map(([issueId, severity]) => `${issueId}:${severity}`)
+      .join(';'),
   };
 
   const labelSet = new Set(example.labels.issueIds);
   for (const [issueId, column] of Object.entries(labelColumns)) {
     row[column] = labelSet.has(issueId) ? 1 : 0;
+    row[`label_issue_scorable__${safeColumnPart(issueId)}`] = example.labels.issueScorable[issueId] ? 1 : 0;
+    row[`label_issue_severity__${safeColumnPart(issueId)}`] = example.labels.issueSeverities?.[issueId] ?? '';
   }
 
   const heuristicSet = new Set(example.heuristic.issueIds);

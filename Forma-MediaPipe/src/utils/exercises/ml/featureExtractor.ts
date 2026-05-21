@@ -1,5 +1,12 @@
 import type { Keypoint } from '../../poseAnalysis';
+import { calculateAngle } from '../../poseAnalysis';
 import type { CaseEvaluation, DatasetCase, RepEvaluation } from '../dataset';
+import {
+  getExerciseLabelPolicy,
+  getLabelableIssues,
+  isIssueLabelableForView,
+} from '../dataset/labelPolicy';
+import type { RepLabel, RepViewLabel } from '../dataset/types';
 import type { ReplayRepPrediction, ReplayResultVerbose } from '../replay';
 import { slugifyExerciseName } from '../replay';
 import type { ExerciseDefinition, RepCueDiagnostic, RepMetricDiagnostic } from '../types';
@@ -22,6 +29,7 @@ const IMPORTANT_JOINTS = [
 ];
 
 const POSE_QUALITY_STATUSES = ['high', 'medium', 'low', 'lost'];
+const VISIBILITY_THRESHOLD = 0.5;
 
 export interface BuildMlRepExamplesOptions {
   definition: ExerciseDefinition;
@@ -108,6 +116,16 @@ function distance(a: Keypoint, b: Keypoint): number {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + dz ** 2);
 }
 
+function midpoint(a: Keypoint, b: Keypoint): Keypoint {
+  return {
+    name: 'midpoint',
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+    z: ((a.z ?? 0) + (b.z ?? 0)) / 2,
+    score: Math.min(a.score, b.score),
+  };
+}
+
 function addKeypointStats(
   features: MlFeatureVector,
   frames: DatasetCase['recording']['frames'],
@@ -117,14 +135,19 @@ function addKeypointStats(
     const ys: number[] = [];
     const zs: number[] = [];
     const scores: number[] = [];
+    let dropoutFrames = 0;
 
     for (const frame of frames) {
       const keypoint = keypointByName(frameKeypoints(frame), joint);
-      if (!keypoint) continue;
+      if (!keypoint) {
+        dropoutFrames += 1;
+        continue;
+      }
       if (Number.isFinite(keypoint.x)) xs.push(keypoint.x);
       if (Number.isFinite(keypoint.y)) ys.push(keypoint.y);
       if (Number.isFinite(keypoint.z)) zs.push(keypoint.z as number);
       if (Number.isFinite(keypoint.score)) scores.push(keypoint.score);
+      if (!Number.isFinite(keypoint.score) || keypoint.score < VISIBILITY_THRESHOLD) dropoutFrames += 1;
     }
 
     const prefix = `landmark.${joint}`;
@@ -133,6 +156,7 @@ function addKeypointStats(
     addStats(features, `${prefix}.z`, zs);
     addStats(features, `${prefix}.score`, scores);
     setFeature(features, `${prefix}.visible_rate`, frames.length === 0 ? null : scores.length / frames.length);
+    setFeature(features, `${prefix}.dropout_rate`, frames.length === 0 ? null : dropoutFrames / frames.length);
   }
 }
 
@@ -160,6 +184,141 @@ function addVelocityStats(
   const prefix = `kinematic.${joint}`;
   addStats(features, `${prefix}.velocity`, velocities);
   setFeature(features, `${prefix}.displacement`, first && last ? distance(first, last) : null);
+  const average = mean(velocities);
+  const deviation = std(velocities, average);
+  const spikeThreshold = average !== null && deviation !== null ? average + 2 * deviation : null;
+  setFeature(
+    features,
+    `${prefix}.velocity_spike_count`,
+    spikeThreshold === null ? null : velocities.filter((velocity) => velocity > spikeThreshold).length,
+  );
+}
+
+function addAngleStats(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+  side: 'left' | 'right',
+): void {
+  const elbowAngles: number[] = [];
+  const shoulderAngles: number[] = [];
+  for (const frame of frames) {
+    const keypoints = frameKeypoints(frame);
+    const shoulder = keypointByName(keypoints, `${side}_shoulder`);
+    const elbow = keypointByName(keypoints, `${side}_elbow`);
+    const wrist = keypointByName(keypoints, `${side}_wrist`);
+    const hip = keypointByName(keypoints, `${side}_hip`);
+    if (shoulder && elbow && wrist) elbowAngles.push(calculateAngle(shoulder, elbow, wrist));
+    if (elbow && shoulder && hip) shoulderAngles.push(calculateAngle(elbow, shoulder, hip));
+  }
+  addStats(features, `biomech.${side}.elbow_angle`, elbowAngles);
+  addStats(features, `biomech.${side}.shoulder_angle`, shoulderAngles);
+}
+
+function addTorsoStats(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+): void {
+  const torsoLeanDeg: number[] = [];
+  const shoulderXs: number[] = [];
+  const hipXs: number[] = [];
+  for (const frame of frames) {
+    const keypoints = frameKeypoints(frame);
+    const leftShoulder = keypointByName(keypoints, 'left_shoulder');
+    const rightShoulder = keypointByName(keypoints, 'right_shoulder');
+    const leftHip = keypointByName(keypoints, 'left_hip');
+    const rightHip = keypointByName(keypoints, 'right_hip');
+    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) continue;
+    const shoulderMid = midpoint(leftShoulder, rightShoulder);
+    const hipMid = midpoint(leftHip, rightHip);
+    shoulderXs.push(shoulderMid.x);
+    hipXs.push(hipMid.x);
+    const dx = shoulderMid.x - hipMid.x;
+    const dy = shoulderMid.y - hipMid.y;
+    torsoLeanDeg.push(Math.atan2(dx, Math.abs(dy) || 0.001) * (180 / Math.PI));
+  }
+  addStats(features, 'biomech.torso.lean_deg', torsoLeanDeg);
+  addStats(features, 'biomech.torso.shoulder_mid_x', shoulderXs);
+  addStats(features, 'biomech.torso.hip_mid_x', hipXs);
+}
+
+function addSymmetryStats(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+): void {
+  const elbowAngleDiffs: number[] = [];
+  const wristYDiffs: number[] = [];
+  for (const frame of frames) {
+    const keypoints = frameKeypoints(frame);
+    const leftShoulder = keypointByName(keypoints, 'left_shoulder');
+    const leftElbow = keypointByName(keypoints, 'left_elbow');
+    const leftWrist = keypointByName(keypoints, 'left_wrist');
+    const rightShoulder = keypointByName(keypoints, 'right_shoulder');
+    const rightElbow = keypointByName(keypoints, 'right_elbow');
+    const rightWrist = keypointByName(keypoints, 'right_wrist');
+    if (leftShoulder && leftElbow && leftWrist && rightShoulder && rightElbow && rightWrist) {
+      elbowAngleDiffs.push(
+        Math.abs(
+          calculateAngle(leftShoulder, leftElbow, leftWrist) -
+          calculateAngle(rightShoulder, rightElbow, rightWrist),
+        ),
+      );
+      wristYDiffs.push(Math.abs(leftWrist.y - rightWrist.y));
+    }
+  }
+  addStats(features, 'biomech.symmetry.elbow_angle_abs_diff', elbowAngleDiffs);
+  addStats(features, 'biomech.symmetry.wrist_y_abs_diff', wristYDiffs);
+}
+
+function addPhaseTimingFeatures(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+): void {
+  const wristYSeries = frames
+    .map((frame) => {
+      const keypoints = frameKeypoints(frame);
+      const left = keypointByName(keypoints, 'left_wrist');
+      const right = keypointByName(keypoints, 'right_wrist');
+      if (left && right) return { timestamp: frame.timestamp, y: (left.y + right.y) / 2 };
+      if (left) return { timestamp: frame.timestamp, y: left.y };
+      if (right) return { timestamp: frame.timestamp, y: right.y };
+      return null;
+    })
+    .filter((sample): sample is { timestamp: number; y: number } => sample !== null);
+
+  if (wristYSeries.length < 2) {
+    setFeature(features, 'phase.first_segment_ms', null);
+    setFeature(features, 'phase.second_segment_ms', null);
+    setFeature(features, 'phase.wrist_y_range', null);
+    return;
+  }
+
+  const ys = wristYSeries.map((sample) => sample.y);
+  const minIndex = ys.indexOf(Math.min(...ys));
+  const maxIndex = ys.indexOf(Math.max(...ys));
+  const extremeIndex = Math.min(minIndex, maxIndex);
+  const start = wristYSeries[0].timestamp;
+  const end = wristYSeries[wristYSeries.length - 1].timestamp;
+  const extreme = wristYSeries[extremeIndex].timestamp;
+  setFeature(features, 'phase.first_segment_ms', Math.max(0, extreme - start));
+  setFeature(features, 'phase.second_segment_ms', Math.max(0, end - extreme));
+  setFeature(features, 'phase.wrist_y_range', Math.max(...ys) - Math.min(...ys));
+}
+
+function issueScorableMask(
+  definition: ExerciseDefinition,
+  label: RepLabel,
+  fallbackView?: RepViewLabel,
+): Record<string, boolean> {
+  const policy = getExerciseLabelPolicy(definition.name);
+  const view = label.view ?? fallbackView ?? 'unknown';
+  const baseScorable = label.scorable ?? true;
+  const issues = getLabelableIssues(definition);
+  return Object.fromEntries(
+    issues.map((issue) => [
+      issue.issueId,
+      baseScorable && (!policy || isIssueLabelableForView(policy, issue.issueId, view)),
+    ]),
+  );
 }
 
 function addDiagnosticMetricFeatures(features: MlFeatureVector, metric: RepMetricDiagnostic): void {
@@ -187,7 +346,9 @@ function framesForRep(datasetCase: DatasetCase, rep: RepEvaluation): DatasetCase
 }
 
 function buildFeatures(
+  definition: ExerciseDefinition,
   datasetCase: DatasetCase,
+  label: RepLabel,
   rep: RepEvaluation,
   prediction: ReplayRepPrediction,
 ): MlFeatureVector {
@@ -201,6 +362,8 @@ function buildFeatures(
   setFeature(features, 'rep.fps_estimate', durationMs > 0 ? (frames.length * 1000) / durationMs : null);
   setFeature(features, 'rep.overlap_ms', rep.overlapMs);
   setFeature(features, 'rep.completion_delta_ms', rep.completionDeltaMs);
+  setFeature(features, 'rep.start_confidence', frames[0] ? mean(frameKeypoints(frames[0]).map((keypoint) => keypoint.score)) : null);
+  setFeature(features, 'rep.end_confidence', frames[frames.length - 1] ? mean(frameKeypoints(frames[frames.length - 1]).map((keypoint) => keypoint.score)) : null);
 
   setFeature(features, 'heuristic.score', prediction.score);
   setFeature(features, 'heuristic.issue_count', prediction.issueIds.length);
@@ -239,6 +402,16 @@ function buildFeatures(
   addKeypointStats(features, frames);
   for (const joint of ['left_wrist', 'right_wrist', 'left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder']) {
     addVelocityStats(features, frames, joint);
+  }
+  addAngleStats(features, frames, 'left');
+  addAngleStats(features, frames, 'right');
+  addTorsoStats(features, frames);
+  addSymmetryStats(features, frames);
+  addPhaseTimingFeatures(features, frames);
+
+  const mask = issueScorableMask(definition, label, rep.predictedView);
+  for (const [issueId, scorable] of Object.entries(mask)) {
+    setBooleanFeature(features, `scorable.issue.${safeFeaturePart(issueId)}`, scorable);
   }
 
   return features;
@@ -304,6 +477,8 @@ export function buildMlRepExamples(options: BuildMlRepExamplesOptions): BuildMlR
         scorable: rep.expectedScorable,
         view: rep.expectedView,
         expectedScoreRange: rep.expectedScoreRange,
+        issueSeverities: label.issueSeverities,
+        issueScorable: issueScorableMask(options.definition, label, rep.predictedView),
       },
       heuristic: {
         issueIds: predictedIssueIds,
@@ -316,7 +491,19 @@ export function buildMlRepExamples(options: BuildMlRepExamplesOptions): BuildMlR
         qualityStatus: prediction.qualityStatus,
         qualityWarnings: prediction.qualityWarnings ?? [],
       },
-      features: buildFeatures(options.datasetCase, rep, prediction),
+      features: buildFeatures(options.definition, options.datasetCase, label, rep, prediction),
+      grouping: {
+        subjectId: options.datasetCase.label.captureMetadata?.subjectId,
+        participantId: options.datasetCase.label.captureMetadata?.participantId,
+        sessionId: options.datasetCase.label.captureMetadata?.sessionId,
+        cameraSetupId: options.datasetCase.label.captureMetadata?.cameraSetupId,
+        environmentId: options.datasetCase.label.captureMetadata?.environmentId,
+        collectionMode: options.datasetCase.label.captureMetadata?.collectionMode,
+        deviceModel: options.datasetCase.label.captureMetadata?.deviceModel,
+        lightingCondition: options.datasetCase.label.captureMetadata?.lightingCondition,
+        reviewerId: options.datasetCase.label.captureMetadata?.reviewerId,
+        reviewerConfidence: options.datasetCase.label.captureMetadata?.reviewerConfidence,
+      },
       metadata: {
         captureMetadata: options.datasetCase.label.captureMetadata,
         recordingMetadata: options.datasetCase.recording.metadata,

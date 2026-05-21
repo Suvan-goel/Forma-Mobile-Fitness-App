@@ -159,9 +159,17 @@ export function runMlExportDatasetCommand(argv = process.argv.slice(2)): void {
     ]),
   ).sort();
   const heuristicIssueColumns = heuristicIssueIds.map((issueId) => `heuristic_issue__${safeColumnPart(issueId)}`);
+  const labelIssueScorableColumns = Object.keys(labelColumns)
+    .sort()
+    .map((issueId) => `label_issue_scorable__${safeColumnPart(issueId)}`);
+  const labelIssueSeverityColumns = Object.keys(labelColumns)
+    .sort()
+    .map((issueId) => `label_issue_severity__${safeColumnPart(issueId)}`);
   const csvColumns = [
     ...mlExampleBaseColumns(),
     ...Object.values(labelColumns),
+    ...labelIssueScorableColumns,
+    ...labelIssueSeverityColumns,
     ...heuristicIssueColumns,
     ...featureNames.map((featureName) => `feature__${featureName}`),
   ];

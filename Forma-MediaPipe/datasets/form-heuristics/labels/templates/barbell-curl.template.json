@@ -13,8 +13,17 @@
   "split": "train",
   "reviewStatus": "draft",
   "captureMetadata": {
+    "subjectId": "subject-anonymous-id",
+    "sessionId": "session-anonymous-id",
+    "cameraSetupId": "camera-setup-anonymous-id",
+    "environmentId": "environment-anonymous-id",
+    "collectionMode": "unknown",
+    "deviceModel": "unknown",
     "cameraView": "front",
     "cameraSide": "unknown",
+    "lightingCondition": "unknown",
+    "reviewerId": "reviewer-anonymous-id",
+    "reviewerConfidence": "unknown",
     "reviewerViewConfidence": "good"
   },
   "labelingGuidance": [
@@ -32,6 +41,7 @@
       "startMs": 0,
       "endMs": 1000,
       "issueIds": [],
+      "issueSeverities": {},
       "view": "front",
       "scorable": true,
       "notes": "Clean rep or describe the visible form issue.",

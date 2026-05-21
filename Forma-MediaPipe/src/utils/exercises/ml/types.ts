@@ -1,5 +1,11 @@
 import type { DatasetSplit } from '../dataset';
-import type { RepViewLabel } from '../dataset/types';
+import type {
+  CollectionMode,
+  LightingCondition,
+  RepIssueSeverity,
+  RepViewLabel,
+  ReviewerConfidence,
+} from '../dataset/types';
 import type { PoseQualityStatus, PoseQualityWarning } from '../shared/poseQuality';
 
 export const ML_REP_EXAMPLE_SCHEMA_VERSION = 1;
@@ -25,6 +31,8 @@ export interface MlLabelVector {
   scorable: boolean;
   view?: RepViewLabel;
   expectedScoreRange?: [number, number];
+  issueSeverities?: Record<string, RepIssueSeverity>;
+  issueScorable: Record<string, boolean>;
 }
 
 export interface MlHeuristicVector {
@@ -55,6 +63,7 @@ export interface MlRepExample {
   labels: MlLabelVector;
   heuristic: MlHeuristicVector;
   features: MlFeatureVector;
+  grouping: MlGroupingMetadata;
   metadata: {
     captureMetadata?: object;
     recordingMetadata?: object;
@@ -62,6 +71,19 @@ export interface MlRepExample {
     poseModelName?: string;
     poseModelPath?: string;
   };
+}
+
+export interface MlGroupingMetadata {
+  subjectId?: string;
+  participantId?: string;
+  sessionId?: string;
+  cameraSetupId?: string;
+  environmentId?: string;
+  collectionMode?: CollectionMode;
+  deviceModel?: string;
+  lightingCondition?: LightingCondition;
+  reviewerId?: string;
+  reviewerConfidence?: ReviewerConfidence;
 }
 
 export interface MlDatasetSummaryBucket {
@@ -95,6 +117,30 @@ export interface MlDatasetManifest {
   splits: Partial<Record<DatasetSplit, MlDatasetSummaryBucket>>;
   issueCounts: Record<string, number>;
   heuristicIssueCounts: Record<string, number>;
+  issueSupportBySplit: Partial<Record<DatasetSplit, Record<string, number>>>;
+  viewCounts: Record<string, number>;
+  scorableCounts: Record<string, number>;
+  subjectCounts: Record<string, number>;
+  sessionCounts: Record<string, number>;
+  cameraSetupCounts: Record<string, number>;
   featureNames: string[];
+  featureStatistics: Record<string, MlFeatureStatistics>;
+  excludedFeatureNames: string[];
   labelColumns: Record<string, string>;
+  audit?: {
+    splitLeakagePassed?: boolean;
+    labelAuditPassed?: boolean;
+    notes?: string[];
+  };
+}
+
+export interface MlFeatureStatistics {
+  count: number;
+  nullCount: number;
+  nullRate: number;
+  min: number | null;
+  max: number | null;
+  mean: number | null;
+  std: number | null;
+  bySplit: Partial<Record<DatasetSplit, Omit<MlFeatureStatistics, 'bySplit'>>>;
 }

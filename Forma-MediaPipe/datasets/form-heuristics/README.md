@@ -63,27 +63,275 @@ python3 -m pip install -r scripts/requirements-dataset.txt
 
 ## Recording Videos
 
-Use short, single-exercise clips. A good default is 3-8 reps per clip with a
-small buffer before the first rep and after the last rep.
+Use short, single-exercise clips with a small buffer before the first rep and
+after the last rep. Most clips below are 5 reps; some validation/mixed clips are
+8-12 reps so one recording can cover multiple issue IDs without making you film
+one clip per fault.
 
-For each exercise, collect:
+The target below is the compact v1 dataset target. Do not collect more until
+`dataset:evaluate` or `dataset:optimize` shows a specific gap. Existing clips
+count only when their label is reviewed, has correct `view`/`scorable` values,
+has matching landmark JSON, and has visible issue labels. The current Barbell
+Curl labels in this repo are `draft`, so they do not count until reviewed.
 
-- clean examples
-- common form-fault examples for each available issue ID
-- a mix of people, body sizes, clothing, machines/benches, lighting, and camera distances
-- train, validation, and test clips recorded independently
+### Why these counts
 
-Capture requirements:
+Replay does not train a neural network. It extracts MediaPipe landmarks from
+video, feeds those landmarks through the same `ExerciseDefinition.update()` code
+used in live workouts, and compares the replayed per-rep predictions with
+reviewed label JSON.
 
-- Use the scorable view from the table above.
-- Keep all form-critical joints visible for the whole rep.
-- Keep the camera stable and avoid zoom/pan changes mid-set.
-- Avoid mixed-exercise clips.
-- Avoid clipping the start/end of reps.
-- Do not rely on unsupported views for clean-negative form labels.
+The optimizer uses:
 
-Unsupported or uncertain views are still useful for rep-count robustness, but
-review those reps as `scorable=false` with empty `issueIds`.
+- `train` clips to discover candidate FSM and feedback thresholds.
+- `validation` clips to select the winning threshold config.
+- `test` clips only for held-out regression checks.
+- per-rep diagnostics to tune individual issue thresholds. For a threshold to
+  be safely changed, the diagnostic path needs both positive reps with that
+  issue and negative reps without that issue. Aim for at least 2 positive
+  reps per issue in both `train` and `validation`.
+- optional `expectedScoreRange` labels for score calibration. If no score
+  ranges are reviewed, score-only tunables are skipped and the optimizer focuses
+  on rep count, issue IDs, view, and scorable gating.
+
+This is why the plan uses a clean clip, grouped issue clips, and a small
+unsupported-view clip for each exercise instead of many random sets.
+
+### Global capture rules
+
+- Film train, validation, and test independently. Do not split one take into
+  multiple splits.
+- Keep the camera fixed for a clip; do not pan, zoom, or switch sides mid-set.
+- Use the listed scorable view for form clips. Unsupported-view clips are for
+  rep-count/view/scorable robustness only.
+- Keep form-critical joints visible for the whole rep. For side-view exercises,
+  the same-side shoulder/hip/knee/ankle or wrist should remain visible.
+- Keep reps deliberate. For issue clips, isolate the requested issue unless the
+  line explicitly asks for a combined fault.
+- Label only what is visible. If the view does not support a cue, use
+  `scorable=false` and `issueIds: []`.
+- Do not label non-ground-truth diagnostics as form faults:
+  `push-up.camera_setup`, `lying-leg-curl.side_view_uncertain`, and
+  `machine-ab-crunches.side_view_uncertain`.
+
+### Target counts
+
+| Exercise | Train | Validation | Test | Total recordings | Scorable form view |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Barbell Curl | 6 | 5 | 3 | 14 | front full scoring; side/oblique partial only |
+| Push-Up | 5 | 4 | 2 | 11 | side |
+| Barbell Squat | 5 | 4 | 2 | 11 | side |
+| Standing Dumbbell Lateral Raises | 5 | 4 | 2 | 11 | front |
+| Cable Row | 5 | 4 | 2 | 11 | side |
+| Cable Lat Pulldowns | 5 | 4 | 2 | 11 | side or usable side-diagonal |
+| Cable Pushdowns | 5 | 4 | 2 | 11 | side |
+| Leg Extensions | 5 | 4 | 2 | 11 | side |
+| Lying Leg Curl | 5 | 4 | 2 | 11 | side |
+| Machine Ab Crunches | 5 | 4 | 2 | 11 | side |
+
+Total target: 113 recordings. Stop there, run the evaluation/optimizer, and add
+more only for issues the report says are weak.
+
+### Barbell Curl
+
+Primary heuristic signals: curl top/bottom ROM, total ROM, shoulder movement,
+torso swing, left/right asymmetry or sync, elbow flare, and concentric/eccentric
+tempo. Front view is required for full scoring. Side/oblique clips may label
+only visible-arm ROM, shoulder involvement, torso swing, and tempo.
+
+- `train01-clean-front`: front, 5 reps, all clean.
+- `train02-rom-front`: front, 8 reps. Reps 1 and 8 clean; reps 2-3 stop short at the top (`barbell-curl.incomplete_flex`); reps 4-5 do not fully extend at the bottom (`barbell-curl.incomplete_extend`); reps 6-7 are short half-curls (`barbell-curl.incomplete_rom`).
+- `train03-shoulder-torso-front`: front, 10 reps. Rep 1 clean; reps 2-3 mild upper-arm drift (`barbell-curl.shoulder_warn`); reps 4-5 obvious shoulder heave (`barbell-curl.shoulder_fail`); reps 6-7 mild torso swing (`barbell-curl.torso_warn`); reps 8-9 obvious body swing (`barbell-curl.torso_fail`); rep 10 clean.
+- `train04-symmetry-elbow-front`: front, 7 reps. Rep 1 clean; reps 2-5 uneven height, one arm lagging, or one arm doing less ROM (`barbell-curl.asymmetry`); reps 6-7 elbows flare outward (`barbell-curl.elbow_flare`).
+- `train05-tempo-front`: front, 6 reps. Reps 1 and 6 clean; reps 2-3 curl up too fast (`barbell-curl.tempo_up`); reps 4-5 drop the bar down too fast (`barbell-curl.tempo_down`).
+- `train06-side-oblique-partial`: side or oblique, 5 reps. Rep 1 clean visible-arm curl; rep 2 top-short visible arm; rep 3 bottom-short visible arm; rep 4 torso swing; rep 5 fast tempo. Do not label asymmetry or elbow flare from this clip.
+- `val01-clean-front`: front, 5 clean reps, different session/person/camera distance from train.
+- `val02-rom-front`: front, 8 reps, same issue pattern as `train02`.
+- `val03-shoulder-torso-front`: front, 10 reps, same issue pattern as `train03`.
+- `val04-symmetry-elbow-tempo-front`: front, 10 reps. Rep 1 clean; reps 2-3 asymmetry; reps 4-5 elbow flare; reps 6-7 fast curl up; reps 8-9 fast lowering; rep 10 clean.
+- `val05-side-oblique-partial`: side or oblique, 5 reps, same visible-arm partial-label pattern as `train06`.
+- `test01-clean-front`: front, 5 clean reps.
+- `test02-mixed-rom-body-front`: front, 8 reps. Include one clean rep, then one each of top-short, bottom-short, half-curl, shoulder warn, shoulder fail, torso warn, torso fail.
+- `test03-mixed-symmetry-tempo-front`: front, 8 reps. Reps 1 and 8 clean; reps 2-3 asymmetry; reps 4-5 elbow flare; rep 6 fast curl up; rep 7 fast lowering.
+
+### Push-Up
+
+Primary heuristic signals: side-view elbow depth, top lockout, total ROM, hip
+sag, hip pike, head/neck alignment, shoulder-over-wrist setup, and tempo.
+`push-up.camera_setup` is a runtime setup diagnostic, not a labelable form
+fault.
+
+- `train01-clean-side`: side, 5 clean reps, full body visible.
+- `train02-rom-side`: side, 8 reps. Reps 1 and 8 clean; reps 2-3 shallow depth (`push-up.depth_short`); reps 4-5 no full lockout (`push-up.lockout_short`); reps 6-7 short half-reps (`push-up.incomplete_rom`).
+- `train03-body-side`: side, 10 reps. Rep 1 clean; reps 2-3 hip sag; reps 4-5 hip pike; reps 6-7 head not neutral; reps 8-9 shoulders set too far from wrists; rep 10 clean.
+- `train04-tempo-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 push up too fast; reps 4-5 drop into the descent too fast.
+- `train05-view-frontish`: front/oblique or deliberately poor side setup, 3 reps. Keep it safe, count reps if visible, label `scorable=false` and no issues.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-rom-tempo-side`: side, 12 reps. Reps 1 and 12 clean; two reps each for depth short, lockout short, incomplete ROM, fast push, and fast descent.
+- `val03-body-side`: side, 10 reps, same issue pattern as `train03`.
+- `val04-view-frontish`: front/oblique, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 10 reps. Rep 1 clean; rep 2 depth short; rep 3 lockout short; rep 4 incomplete ROM; rep 5 hip sag; rep 6 hip pike; rep 7 head position; rep 8 shoulder stack; rep 9 fast push; rep 10 fast descent.
+
+### Barbell Squat
+
+Primary heuristic signals: side-view depth, top lockout, total ROM, torso lean
+warn/fail, heel lift, and ascent/descent tempo. Runtime still allows any view,
+but reviewed form scoring is side-view only.
+
+- `train01-clean-side`: side, 5 clean reps, full body and both feet visible.
+- `train02-rom-side`: side, 8 reps. Reps 1 and 8 clean; reps 2-3 squat high (`barbell-squat.depth_short`); reps 4-5 do not fully stand tall (`barbell-squat.lockout_short`); reps 6-7 short partial ROM (`barbell-squat.incomplete_rom`).
+- `train03-torso-heel-side`: side, 8 reps. Rep 1 clean; reps 2-3 mild forward lean (`barbell-squat.torso_warn`); reps 4-5 excessive forward lean (`barbell-squat.torso_fail`); reps 6-7 heels lift; rep 8 clean.
+- `train04-tempo-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 bounce/stand up too fast; reps 4-5 descend too fast.
+- `train05-view-front-oblique`: front or oblique, 3 reps, `scorable=false`.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-rom-tempo-side`: side, 12 reps. Reps 1 and 12 clean; two reps each for depth short, lockout short, incomplete ROM, fast ascent, and fast descent.
+- `val03-torso-heel-side`: side, 8 reps, same issue pattern as `train03`.
+- `val04-view-front-oblique`: front/oblique, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 9 reps. Include one clean rep, then depth short, lockout short, incomplete ROM, torso warn, torso fail, heel lift, fast ascent, and fast descent.
+
+### Standing Dumbbell Lateral Raises
+
+Primary heuristic signals: front-view raise height, over-raise, elbow bend,
+torso sway, left/right asymmetry, wrong plane/front-raise drift, shoulder shrug,
+and tempo.
+
+- `train01-clean-front`: front, 5 clean reps, both arms and wrists visible.
+- `train02-height-plane-front`: front, 8 reps. Reps 1 and 8 clean; reps 2-3 stop below shoulder height; reps 4-5 raise above shoulder height; reps 6-7 drift forward into a front raise.
+- `train03-arms-traps-front`: front, 8 reps. Rep 1 clean; reps 2-3 excessive elbow bend; reps 4-5 asymmetric arm height; reps 6-7 shoulder shrug; rep 8 clean.
+- `train04-torso-tempo-front`: front, 8 reps. Rep 1 clean; reps 2-3 torso lean/sway; reps 4-5 swing the weights up too fast; reps 6-7 drop them down too fast; rep 8 clean.
+- `train05-view-side-oblique`: side or oblique, 3 reps, `scorable=false`.
+- `val01-clean-front`: front, 5 clean reps.
+- `val02-height-plane-tempo-front`: front, 12 reps. Reps 1 and 12 clean; two reps each for low raise, over-raise, wrong plane, fast raise, and fast lower.
+- `val03-arms-traps-torso-front`: front, 10 reps. Rep 1 clean; two reps each for elbow bend, asymmetry, shoulder shrug, and torso sway; rep 10 clean.
+- `val04-view-side-oblique`: side/oblique, 3 reps, `scorable=false`.
+- `test01-clean-front`: front, 5 clean reps.
+- `test02-mixed-front`: front, 10 reps. Include one clean rep, then one rep each for low raise, over-raise, elbow bend, torso sway, asymmetry, fast raise, fast lower, shoulder shrug, and wrong plane.
+
+### Cable Row
+
+Primary heuristic signals: side-view pull depth, front stretch/extension,
+shoulder retraction, torso lean, torso rocking, high row path, shoulder shrug,
+and pull/return tempo.
+
+- `train01-clean-side`: side, 5 clean reps, torso, shoulders, elbows, and handles visible.
+- `train02-rom-retraction-side`: side, 8 reps. Reps 1 and 8 clean; reps 2-3 do not pull far enough; reps 4-5 do not fully extend forward; reps 6-7 pull without enough shoulder retraction.
+- `train03-body-path-side`: side, 10 reps. Rep 1 clean; reps 2-3 lean back; reps 4-5 rock torso; reps 6-7 row too high; reps 8-9 shrug shoulders; rep 10 clean.
+- `train04-tempo-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 pull too fast; reps 4-5 let the return snap forward.
+- `train05-view-front-oblique`: front or oblique, 3 reps, `scorable=false`.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-rom-retraction-tempo-side`: side, 12 reps. Reps 1 and 12 clean; two reps each for pull depth, extension, shoulder retraction, fast pull, and fast return.
+- `val03-body-path-side`: side, 10 reps, same issue pattern as `train03`.
+- `val04-view-front-oblique`: front/oblique, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 10 reps. Include one clean rep, then one rep each for row depth, row extension, shoulder retraction, torso lean, torso rocking, high row, shoulder shrug, fast pull, and fast return.
+
+### Cable Lat Pulldowns
+
+Primary heuristic signals: side or side-diagonal pull depth, top extension,
+elbow drive, torso lean, torso rocking, shoulder shrug, and pull/return tempo.
+
+- `train01-clean-side`: side or usable side-diagonal, 5 clean reps.
+- `train02-rom-elbow-side`: side, 8 reps. Reps 1 and 8 clean; reps 2-3 do not pull to upper chest; reps 4-5 do not reach all the way up; reps 6-7 pull mostly with arms instead of driving elbows down.
+- `train03-body-shrug-side`: side, 8 reps. Rep 1 clean; reps 2-3 lean back excessively; reps 4-5 rock torso; reps 6-7 shrug shoulders; rep 8 clean.
+- `train04-tempo-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 pull down too fast; reps 4-5 let the return snap up.
+- `train05-view-front-oblique`: front or steep oblique, 3 reps, `scorable=false`.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-rom-elbow-tempo-side`: side, 12 reps. Reps 1 and 12 clean; two reps each for pull depth, top extension, elbow drive, fast pull, and fast return.
+- `val03-body-shrug-side`: side, 8 reps, same issue pattern as `train03`.
+- `val04-view-front-oblique`: front/oblique, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 9 reps. Include one clean rep, then one rep each for pull depth, top extension, elbow drive, torso lean, torso rocking, shoulder shrug, fast pull, and fast return.
+
+### Cable Pushdowns
+
+Primary heuristic signals: side-view bottom lockout, top flexion/start depth,
+elbow drift, elbows set too far forward, torso lean, torso rocking, and
+push/return tempo.
+
+- `train01-clean-side`: side, 5 clean reps, elbow, wrist/handle, shoulder, and torso visible.
+- `train02-range-setup-side`: side, 8 reps. Reps 1 and 8 clean; reps 2-3 do not lock out at the bottom; reps 4-5 start without enough elbow bend at the top; reps 6-7 start with elbows too far forward.
+- `train03-elbow-torso-side`: side, 8 reps. Rep 1 clean; reps 2-3 elbows drift away from sides; reps 4-5 lean into the pushdown; reps 6-7 rock torso; rep 8 clean.
+- `train04-tempo-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 push down too fast; reps 4-5 let the return snap up.
+- `train05-view-front-oblique`: front or oblique, 3 reps, `scorable=false`.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-range-setup-tempo-side`: side, 12 reps. Reps 1 and 12 clean; two reps each for bottom lockout, top ROM, elbow-forward setup, fast push, and fast return.
+- `val03-elbow-torso-side`: side, 8 reps, same issue pattern as `train03`.
+- `val04-view-front-oblique`: front/oblique, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 9 reps. Include one clean rep, then one rep each for lockout short, top ROM short, elbow drift, elbow-forward setup, torso lean, torso rocking, fast push, and fast return.
+
+### Leg Extensions
+
+Primary heuristic signals: side-view top lockout, bottom/deep knee bend, torso
+movement off the pad, hip lift, top hold, and extension/return tempo.
+
+- `train01-clean-side`: side, 5 clean reps, same-side hip, knee, ankle/roller, and torso visible.
+- `train02-rom-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 do not fully straighten at the top; reps 4-5 do not lower into a deep enough bend.
+- `train03-posture-hold-side`: side, 8 reps. Rep 1 clean; reps 2-3 torso/back leaves the pad; reps 4-5 hips lift; reps 6-7 skip the brief top pause; rep 8 clean.
+- `train04-tempo-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 extend too fast; reps 4-5 drop the weight too fast.
+- `train05-view-front-oblique`: front or oblique, 3 reps, `scorable=false`.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-rom-tempo-side`: side, 10 reps. Reps 1 and 10 clean; two reps each for lockout short, bottom ROM short, fast extension, and fast return.
+- `val03-posture-hold-side`: side, 8 reps, same issue pattern as `train03`.
+- `val04-view-front-oblique`: front/oblique, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 8 reps. Include one clean rep, then one rep each for lockout short, bottom ROM short, torso movement, hip lift, top hold short, fast extension, and fast return.
+
+### Lying Leg Curl
+
+Primary heuristic signals: side-view curl depth, bottom extension, hip lift,
+thigh movement, top hold, curl/lower tempo, and jerkiness. Keep the same-side
+hip, knee, and lower-leg endpoint visible; the roller may hide the ankle, so
+make sure the heel or foot is visible.
+
+- `train01-clean-side`: side, 5 clean reps.
+- `train02-rom-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 do not curl high enough; reps 4-5 do not extend fully at the bottom.
+- `train03-hip-thigh-hold-side`: side, 8 reps. Rep 1 clean; reps 2-3 hips lift; reps 4-5 thighs move instead of staying pinned; reps 6-7 skip the top hold; rep 8 clean.
+- `train04-tempo-jerk-side`: side, 8 reps. Rep 1 clean; reps 2-3 curl too fast; reps 4-5 lower too fast; reps 6-7 move jerkily/bounce; rep 8 clean.
+- `train05-view-uncertain`: front, oblique, or side with the lower-leg endpoint hidden, 3 reps, `scorable=false`; do not label `lying-leg-curl.side_view_uncertain`.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-rom-tempo-jerk-side`: side, 12 reps. Reps 1 and 12 clean; two reps each for curl depth short, extension short, fast curl, fast lower, and jerkiness.
+- `val03-hip-thigh-hold-side`: side, 8 reps, same issue pattern as `train03`.
+- `val04-view-uncertain`: unsupported/uncertain view, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 9 reps. Include one clean rep, then one rep each for curl depth short, extension short, hip lift, thigh movement, top hold short, fast curl, fast lower, and jerkiness.
+
+### Machine Ab Crunches
+
+Primary heuristic signals: side-view crunch depth, upright return, neck
+position, crunch/return tempo, jerkiness, arm pulling, and hip shifting. Keep
+same-side shoulder, hip, and knee visible.
+
+- `train01-clean-side`: side, 5 clean reps.
+- `train02-rom-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 do not crunch deep enough; reps 4-5 do not return upright enough.
+- `train03-neck-arms-hips-side`: side, 10 reps. Rep 1 clean; reps 2-3 neck/head pulls forward; reps 4-5 pull hard with arms; reps 6-7 hips shift/lift; reps 8-9 jerky motion; rep 10 clean.
+- `train04-tempo-side`: side, 6 reps. Reps 1 and 6 clean; reps 2-3 crunch too fast; reps 4-5 return too fast.
+- `train05-view-uncertain`: front, oblique, or side with shoulder/hip/knee obscured, 3 reps, `scorable=false`; do not label `machine-ab-crunches.side_view_uncertain`.
+- `val01-clean-side`: side, 5 clean reps.
+- `val02-rom-tempo-side`: side, 10 reps. Reps 1 and 10 clean; two reps each for crunch depth short, upright return short, fast crunch, and fast return.
+- `val03-neck-arms-hips-jerk-side`: side, 10 reps, same issue pattern as `train03`.
+- `val04-view-uncertain`: unsupported/uncertain view, 3 reps, `scorable=false`.
+- `test01-clean-side`: side, 5 clean reps.
+- `test02-mixed-side`: side, 9 reps. Include one clean rep, then one rep each for crunch depth short, upright return short, neck forward, fast crunch, fast return, jerkiness, arm pull, and hips moving.
+
+### When to collect more
+
+After the target set is reviewed, run:
+
+```sh
+npm run dataset:evaluate
+npm run dataset:optimize -- --dry-run --include-case-details
+```
+
+Collect more only when the report points to a concrete gap:
+
+- missed reps or extra reps: add 2-3 clean/partial-ROM clips for that exercise.
+- low issue recall: add one 5-rep clip with 2-3 obvious positives for the missed issue.
+- high clean false positives: add one clean clip from a different person/body size/camera distance.
+- poor view/scorable accuracy: add one 3-rep unsupported-view clip and one clean scorable-view clip.
+- weak score calibration: review `expectedScoreRange` for already-collected clean, mild-fault, and severe-fault reps before filming new clips.
 
 ## Add A New Video
 

@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "severityScale": ["none", "mild", "moderate", "severe"],
+  "cameraRequirements": {
+    "fullScoringViews": ["front"],
+    "partialScoringViews": ["side", "oblique"],
+    "notes": [
+      "Use front view for bilateral issues such as asymmetry and elbow flare.",
+      "Use side or oblique only for visible-arm ROM, shoulder involvement, torso swing, and tempo when the relevant joints are visible.",
+      "Mark an issue unscorable when the camera view, occlusion, or landmark quality prevents a safe judgement."
+    ]
+  },
+  "issues": [
+    {
+      "issueId": "barbell-curl.torso_warn",
+      "family": "torso_swing",
+      "label": "Torso swing",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "Torso stays mostly upright with no meaningful swing used to move the weight.",
+        "mild": "Small torso movement appears but does not dominate the rep.",
+        "moderate": "Clear lean or swing assists the upward phase.",
+        "severe": "Large body swing or repeated momentum clearly cheats the rep."
+      }
+    },
+    {
+      "issueId": "barbell-curl.torso_fail",
+      "family": "torso_swing",
+      "label": "Excessive torso swing",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "No excessive body swing.",
+        "mild": "Use torso_warn instead unless the swing is clearly excessive.",
+        "moderate": "Torso movement is large enough to materially assist the curl.",
+        "severe": "The rep is primarily driven by body momentum."
+      }
+    },
+    {
+      "issueId": "barbell-curl.shoulder_warn",
+      "family": "shoulder_compensation",
+      "label": "Shoulder compensation",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "Upper arms stay controlled with elbows mostly pinned.",
+        "mild": "Small upper-arm drift or shoulder rise.",
+        "moderate": "Upper arms move noticeably to help finish the rep.",
+        "severe": "Shoulder heave dominates the top half of the curl."
+      }
+    },
+    {
+      "issueId": "barbell-curl.shoulder_fail",
+      "family": "shoulder_compensation",
+      "label": "Excessive shoulder compensation",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "No excessive shoulder involvement.",
+        "mild": "Use shoulder_warn unless the shoulder involvement is clearly excessive.",
+        "moderate": "Clear shoulder heave assists the rep.",
+        "severe": "The rep is completed mostly by shoulder movement rather than elbow flexion."
+      }
+    },
+    {
+      "issueId": "barbell-curl.elbow_flare",
+      "family": "elbow_drift",
+      "label": "Elbow flare or drift",
+      "judgeableViews": ["front"],
+      "severity": {
+        "none": "Elbows remain close and stable from the front view.",
+        "mild": "Small outward flare or drift that remains controlled.",
+        "moderate": "Clear elbow flare changes the arm path.",
+        "severe": "Large flare or drift makes the rep materially different from a strict curl."
+      }
+    },
+    {
+      "issueId": "barbell-curl.incomplete_flex",
+      "family": "partial_rom",
+      "label": "Incomplete top range",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "Rep reaches a clear top position.",
+        "mild": "Slightly short at the top.",
+        "moderate": "Clearly misses the expected top range.",
+        "severe": "Stops far below the top position."
+      }
+    },
+    {
+      "issueId": "barbell-curl.incomplete_extend",
+      "family": "partial_rom",
+      "label": "Incomplete bottom extension",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "Rep returns to a clear extended bottom position.",
+        "mild": "Slightly short at the bottom.",
+        "moderate": "Clearly fails to extend near the bottom.",
+        "severe": "Uses a very short bottom range or repeated partial pulses."
+      }
+    },
+    {
+      "issueId": "barbell-curl.incomplete_rom",
+      "family": "partial_rom",
+      "label": "Partial range of motion",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "Rep covers full practical curl range.",
+        "mild": "Minor total ROM reduction.",
+        "moderate": "Clearly short total ROM.",
+        "severe": "Half-rep or very short pulse."
+      }
+    },
+    {
+      "issueId": "barbell-curl.tempo_up",
+      "family": "tempo",
+      "label": "Concentric too fast",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "Upward phase is controlled.",
+        "mild": "Slightly rushed upward phase.",
+        "moderate": "Clearly rushed upward phase.",
+        "severe": "Explosive or momentum-driven upward phase."
+      }
+    },
+    {
+      "issueId": "barbell-curl.tempo_down",
+      "family": "tempo",
+      "label": "Eccentric too fast",
+      "judgeableViews": ["front", "side", "oblique"],
+      "severity": {
+        "none": "Lowering phase is controlled.",
+        "mild": "Slightly rushed lowering.",
+        "moderate": "Clearly drops or loses control on the way down.",
+        "severe": "Weight falls rapidly with little eccentric control."
+      }
+    },
+    {
+      "issueId": "barbell-curl.asymmetry",
+      "family": "asymmetry",
+      "label": "Uneven reps",
+      "judgeableViews": ["front"],
+      "severity": {
+        "none": "Both arms move through similar range and timing.",
+        "mild": "Small side-to-side difference.",
+        "moderate": "Clear difference in height, timing, or range.",
+        "severe": "One side substantially lags or performs a different rep."
+      }
+    }
+  ]
+}

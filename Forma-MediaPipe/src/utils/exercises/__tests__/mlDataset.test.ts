@@ -99,6 +99,11 @@ const datasetCase: DatasetCase = {
       },
     ],
     captureMetadata: {
+      subjectId: 'subject-a',
+      sessionId: 'session-a',
+      cameraSetupId: 'camera-a',
+      reviewerConfidence: 'high',
+      collectionMode: 'staged',
       cameraView: 'side',
       cameraSide: 'left',
     },
@@ -186,6 +191,12 @@ describe('ML rep dataset export', () => {
         score: 82,
         scorable: true,
       },
+      grouping: {
+        subjectId: 'subject-a',
+        sessionId: 'session-a',
+        cameraSetupId: 'camera-a',
+        reviewerConfidence: 'high',
+      },
       metadata: {
         heuristicConfigVersion: 'demo-config',
         poseModelName: 'pose_landmarker_heavy',
@@ -226,11 +237,31 @@ describe('ML rep dataset export', () => {
       issueCounts: {
         'demo-exercise.depth_short': 1,
       },
+      issueSupportBySplit: {
+        train: {
+          'demo-exercise.depth_short': 1,
+        },
+      },
+      viewCounts: {
+        side: 1,
+      },
+      scorableCounts: {
+        scorable: 1,
+      },
+      subjectCounts: {
+        'subject-a': 1,
+      },
       labelColumns: {
         'demo-exercise.depth_short': 'label_issue__demo_exercise_depth_short',
       },
     });
     expect(result.manifest.featureNames).toContain('heuristic.score');
+    expect(result.manifest.featureStatistics['heuristic.score']).toMatchObject({
+      count: 1,
+      nullCount: 0,
+      min: 82,
+      max: 82,
+    });
 
     const row = mlExampleToCsvRow(
       result.examples[0],
@@ -239,7 +270,9 @@ describe('ML rep dataset export', () => {
       Object.keys(result.manifest.issueCounts),
     );
     expect(row.label_issue__demo_exercise_depth_short).toBe(1);
+    expect(row.label_issue_scorable__demo_exercise_depth_short).toBe(1);
     expect(row.heuristic_issue__demo_exercise_depth_short).toBe(1);
     expect(row['feature__heuristic.score']).toBe(82);
+    expect(row.subject_id).toBe('subject-a');
   });
 });

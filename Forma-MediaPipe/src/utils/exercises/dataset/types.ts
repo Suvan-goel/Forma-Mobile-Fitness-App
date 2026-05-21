@@ -22,8 +22,22 @@ export type CaptureCameraView = 'front' | 'frontish' | 'oblique' | 'side' | 'unk
 export type CaptureMachineStyle = 'seated_selectorized' | 'kneeling' | 'plate_loaded' | 'unknown';
 export type CaptureVisibleHandles = 'yes' | 'no' | 'partial' | 'unknown';
 export type ReviewerViewConfidence = 'good' | 'usable' | 'poor';
+export type CollectionMode = 'staged' | 'trainer_demo' | 'natural_user' | 'unknown';
+export type LightingCondition = 'bright' | 'mixed' | 'dim' | 'backlit' | 'unknown';
+export type ReviewerConfidence = 'high' | 'medium' | 'low' | 'unknown';
+export type RepIssueSeverity = 'none' | 'mild' | 'moderate' | 'severe';
 
 export interface ExerciseCaptureMetadata {
+  subjectId?: string;
+  participantId?: string;
+  sessionId?: string;
+  cameraSetupId?: string;
+  environmentId?: string;
+  collectionMode?: CollectionMode;
+  deviceModel?: string;
+  lightingCondition?: LightingCondition;
+  reviewerId?: string;
+  reviewerConfidence?: ReviewerConfidence;
   cameraSide?: CaptureCameraSide;
   cameraView?: CaptureCameraView;
   machineStyle?: CaptureMachineStyle;
@@ -43,6 +57,7 @@ export interface RepLabel {
   suggestedFeedbackMessages?: string[];
   suggestedScore?: number;
   expectedScoreRange?: [number, number];
+  issueSeverities?: Record<string, RepIssueSeverity>;
 }
 
 export interface ExerciseLabelFile {
