@@ -1,0 +1,370 @@
+{
+  "schemaVersion": 1,
+  "id": "reliable-v1",
+  "description": "Product v1 recording plan for reliable form-feedback tuning and future hybrid/model training.",
+  "target": {
+    "recordingsPerExercise": 50,
+    "totalExercises": 10,
+    "totalRecordings": 500,
+    "participants": "3-5",
+    "splits": {
+      "train": 30,
+      "validation": 10,
+      "test": 10
+    },
+    "minimumReviewedRepsPerExercise": 316,
+    "minimumCleanScorableRepsPerExercise": 40,
+    "minimumUnscorableRepsPerExercise": 12,
+    "minimumIssuePositiveRepsPerSplit": {
+      "train": 6,
+      "validation": 2,
+      "test": 1
+    }
+  },
+  "recordingTypes": [
+    {
+      "id": "clean_baseline",
+      "counts": { "train": 5, "validation": 1, "test": 2 },
+      "reps": 5,
+      "description": "All reps clean, scorable, and labelled with issueIds: []."
+    },
+    {
+      "id": "issue_focus",
+      "counts": { "train": 16, "validation": 4, "test": 2 },
+      "reps": 6,
+      "description": "Rep 1 clean; reps 2-3 mild target issue; reps 4-5 clear target issue; rep 6 clean."
+    },
+    {
+      "id": "multi_issue",
+      "counts": { "train": 4, "validation": 2, "test": 2 },
+      "reps": 10,
+      "description": "Reps 1 and 10 clean; four target issue IDs, two reps each."
+    },
+    {
+      "id": "hard_negative_clean",
+      "counts": { "train": 3, "validation": 1, "test": 2 },
+      "reps": 6,
+      "description": "Acceptable near-threshold form. Label every rep clean unless the issue is truly visible."
+    },
+    {
+      "id": "combined_realistic_faults",
+      "counts": { "train": 1, "validation": 0, "test": 1 },
+      "reps": 8,
+      "description": "Reps 1 and 8 clean; reps 2-7 contain the listed two visible issues per rep."
+    },
+    {
+      "id": "view_quality_robustness",
+      "counts": { "train": 1, "validation": 2, "test": 1 },
+      "reps": 3,
+      "description": "Unsupported view, poor setup, or occlusion. Label scorable=false and issueIds: []."
+    }
+  ],
+  "exercises": [
+    {
+      "name": "Barbell Curl",
+      "slug": "barbell-curl",
+      "scorableView": "front full scoring; side/oblique partial visible-arm scoring only",
+      "notes": "Use two view-quality clips as side/oblique partial-scorable clips with 5 reps. Label only visible-arm ROM, shoulder involvement, torso swing, and tempo.",
+      "detailedProtocol": "barbell-curl-reliable-v1-recordings.md",
+      "recordingTypeCounts": {
+        "clean_baseline": { "train": 4, "validation": 1, "test": 1 },
+        "issue_focus": { "train": 17, "validation": 4, "test": 4 },
+        "multi_issue": { "train": 4, "validation": 2, "test": 2 },
+        "hard_negative_clean": { "train": 1, "validation": 1, "test": 1 },
+        "combined_realistic_faults": { "train": 1, "validation": 0, "test": 1 },
+        "view_quality_robustness": { "train": 3, "validation": 2, "test": 1 }
+      },
+      "partialViewCounts": { "train": 1, "validation": 1, "test": 0 },
+      "issueFocusAllocation": {
+        "barbell-curl.incomplete_flex": { "train": 2, "validation": 0, "test": 1 },
+        "barbell-curl.incomplete_extend": { "train": 2, "validation": 0, "test": 1 },
+        "barbell-curl.incomplete_rom": { "train": 1, "validation": 1, "test": 0 },
+        "barbell-curl.shoulder_warn": { "train": 1, "validation": 0, "test": 1 },
+        "barbell-curl.shoulder_fail": { "train": 2, "validation": 0, "test": 0 },
+        "barbell-curl.torso_warn": { "train": 1, "validation": 0, "test": 1 },
+        "barbell-curl.torso_fail": { "train": 2, "validation": 0, "test": 0 },
+        "barbell-curl.elbow_flare": { "train": 2, "validation": 1, "test": 0 },
+        "barbell-curl.tempo_up": { "train": 1, "validation": 1, "test": 0 },
+        "barbell-curl.tempo_down": { "train": 1, "validation": 0, "test": 0 },
+        "barbell-curl.asymmetry": { "train": 2, "validation": 1, "test": 0 }
+      },
+      "multiIssueRecipes": {
+        "A": ["barbell-curl.incomplete_flex", "barbell-curl.incomplete_extend", "barbell-curl.incomplete_rom", "barbell-curl.tempo_down"],
+        "B": ["barbell-curl.shoulder_warn", "barbell-curl.shoulder_fail", "barbell-curl.torso_warn", "barbell-curl.torso_fail"],
+        "C": ["barbell-curl.asymmetry", "barbell-curl.elbow_flare", "barbell-curl.tempo_up", "barbell-curl.tempo_down"],
+        "D": ["barbell-curl.incomplete_rom", "barbell-curl.shoulder_fail", "barbell-curl.torso_fail", "barbell-curl.asymmetry"]
+      },
+      "combinedFaultPairs": [
+        ["barbell-curl.incomplete_rom", "barbell-curl.tempo_down"],
+        ["barbell-curl.shoulder_fail", "barbell-curl.torso_warn"],
+        ["barbell-curl.torso_fail", "barbell-curl.tempo_up"],
+        ["barbell-curl.asymmetry", "barbell-curl.incomplete_extend"],
+        ["barbell-curl.elbow_flare", "barbell-curl.shoulder_warn"],
+        ["barbell-curl.incomplete_flex", "barbell-curl.torso_warn"]
+      ]
+    },
+    {
+      "name": "Push-Up",
+      "slug": "push-up",
+      "scorableView": "side",
+      "issueFocusAllocation": {
+        "push-up.depth_short": { "train": 2, "validation": 1, "test": 0 },
+        "push-up.lockout_short": { "train": 2, "validation": 1, "test": 0 },
+        "push-up.incomplete_rom": { "train": 1, "validation": 1, "test": 0 },
+        "push-up.hip_sag": { "train": 2, "validation": 0, "test": 1 },
+        "push-up.hip_pike": { "train": 1, "validation": 1, "test": 0 },
+        "push-up.head_position": { "train": 1, "validation": 0, "test": 1 },
+        "push-up.shoulder_stack": { "train": 2, "validation": 0, "test": 0 },
+        "push-up.tempo_up": { "train": 2, "validation": 0, "test": 0 },
+        "push-up.tempo_down": { "train": 3, "validation": 0, "test": 0 }
+      },
+      "multiIssueRecipes": {
+        "A": ["push-up.depth_short", "push-up.lockout_short", "push-up.incomplete_rom", "push-up.tempo_down"],
+        "B": ["push-up.hip_sag", "push-up.hip_pike", "push-up.head_position", "push-up.shoulder_stack"],
+        "C": ["push-up.depth_short", "push-up.hip_sag", "push-up.shoulder_stack", "push-up.tempo_down"],
+        "D": ["push-up.lockout_short", "push-up.hip_pike", "push-up.head_position", "push-up.tempo_up"]
+      },
+      "combinedFaultPairs": [
+        ["push-up.depth_short", "push-up.hip_sag"],
+        ["push-up.lockout_short", "push-up.shoulder_stack"],
+        ["push-up.incomplete_rom", "push-up.tempo_down"],
+        ["push-up.hip_pike", "push-up.head_position"],
+        ["push-up.depth_short", "push-up.tempo_up"],
+        ["push-up.hip_sag", "push-up.shoulder_stack"]
+      ]
+    },
+    {
+      "name": "Barbell Squat",
+      "slug": "barbell-squat",
+      "scorableView": "side",
+      "issueFocusAllocation": {
+        "barbell-squat.depth_short": { "train": 3, "validation": 1, "test": 0 },
+        "barbell-squat.lockout_short": { "train": 2, "validation": 1, "test": 0 },
+        "barbell-squat.incomplete_rom": { "train": 2, "validation": 1, "test": 0 },
+        "barbell-squat.heel_lift": { "train": 2, "validation": 0, "test": 1 },
+        "barbell-squat.torso_warn": { "train": 2, "validation": 1, "test": 0 },
+        "barbell-squat.torso_fail": { "train": 2, "validation": 0, "test": 0 },
+        "barbell-squat.tempo_up": { "train": 2, "validation": 0, "test": 0 },
+        "barbell-squat.tempo_down": { "train": 1, "validation": 0, "test": 1 }
+      },
+      "multiIssueRecipes": {
+        "A": ["barbell-squat.depth_short", "barbell-squat.lockout_short", "barbell-squat.incomplete_rom", "barbell-squat.tempo_down"],
+        "B": ["barbell-squat.torso_warn", "barbell-squat.torso_fail", "barbell-squat.heel_lift", "barbell-squat.tempo_up"],
+        "C": ["barbell-squat.depth_short", "barbell-squat.torso_warn", "barbell-squat.heel_lift", "barbell-squat.tempo_down"],
+        "D": ["barbell-squat.lockout_short", "barbell-squat.torso_fail", "barbell-squat.incomplete_rom", "barbell-squat.tempo_up"]
+      },
+      "combinedFaultPairs": [
+        ["barbell-squat.depth_short", "barbell-squat.torso_warn"],
+        ["barbell-squat.lockout_short", "barbell-squat.heel_lift"],
+        ["barbell-squat.incomplete_rom", "barbell-squat.tempo_down"],
+        ["barbell-squat.torso_fail", "barbell-squat.tempo_up"],
+        ["barbell-squat.depth_short", "barbell-squat.heel_lift"],
+        ["barbell-squat.lockout_short", "barbell-squat.torso_warn"]
+      ]
+    },
+    {
+      "name": "Standing Dumbbell Lateral Raises",
+      "slug": "standing-dumbbell-lateral-raises",
+      "scorableView": "front",
+      "issueFocusAllocation": {
+        "standing-dumbbell-lateral-raises.rom_height": { "train": 2, "validation": 1, "test": 0 },
+        "standing-dumbbell-lateral-raises.over_raise": { "train": 2, "validation": 0, "test": 0 },
+        "standing-dumbbell-lateral-raises.elbow_bend": { "train": 2, "validation": 1, "test": 0 },
+        "standing-dumbbell-lateral-raises.torso_warn": { "train": 1, "validation": 1, "test": 0 },
+        "standing-dumbbell-lateral-raises.asymmetry": { "train": 2, "validation": 0, "test": 1 },
+        "standing-dumbbell-lateral-raises.tempo_down": { "train": 2, "validation": 0, "test": 0 },
+        "standing-dumbbell-lateral-raises.shoulder_shrug": { "train": 3, "validation": 0, "test": 0 },
+        "standing-dumbbell-lateral-raises.wrong_plane": { "train": 1, "validation": 1, "test": 0 },
+        "standing-dumbbell-lateral-raises.tempo_up": { "train": 1, "validation": 0, "test": 1 }
+      },
+      "multiIssueRecipes": {
+        "A": ["standing-dumbbell-lateral-raises.rom_height", "standing-dumbbell-lateral-raises.over_raise", "standing-dumbbell-lateral-raises.wrong_plane", "standing-dumbbell-lateral-raises.tempo_up"],
+        "B": ["standing-dumbbell-lateral-raises.elbow_bend", "standing-dumbbell-lateral-raises.asymmetry", "standing-dumbbell-lateral-raises.shoulder_shrug", "standing-dumbbell-lateral-raises.tempo_down"],
+        "C": ["standing-dumbbell-lateral-raises.torso_warn", "standing-dumbbell-lateral-raises.tempo_up", "standing-dumbbell-lateral-raises.tempo_down", "standing-dumbbell-lateral-raises.wrong_plane"],
+        "D": ["standing-dumbbell-lateral-raises.rom_height", "standing-dumbbell-lateral-raises.elbow_bend", "standing-dumbbell-lateral-raises.shoulder_shrug", "standing-dumbbell-lateral-raises.asymmetry"]
+      },
+      "combinedFaultPairs": [
+        ["standing-dumbbell-lateral-raises.rom_height", "standing-dumbbell-lateral-raises.elbow_bend"],
+        ["standing-dumbbell-lateral-raises.over_raise", "standing-dumbbell-lateral-raises.shoulder_shrug"],
+        ["standing-dumbbell-lateral-raises.wrong_plane", "standing-dumbbell-lateral-raises.tempo_up"],
+        ["standing-dumbbell-lateral-raises.asymmetry", "standing-dumbbell-lateral-raises.torso_warn"],
+        ["standing-dumbbell-lateral-raises.tempo_down", "standing-dumbbell-lateral-raises.shoulder_shrug"],
+        ["standing-dumbbell-lateral-raises.rom_height", "standing-dumbbell-lateral-raises.torso_warn"]
+      ]
+    },
+    {
+      "name": "Cable Row",
+      "slug": "cable-row",
+      "scorableView": "side",
+      "issueFocusAllocation": {
+        "cable-row.row_depth": { "train": 2, "validation": 1, "test": 0 },
+        "cable-row.row_extension": { "train": 2, "validation": 1, "test": 0 },
+        "cable-row.shoulder_retraction": { "train": 2, "validation": 1, "test": 0 },
+        "cable-row.torso_warn": { "train": 2, "validation": 0, "test": 0 },
+        "cable-row.torso_rocking": { "train": 1, "validation": 1, "test": 0 },
+        "cable-row.high_row": { "train": 1, "validation": 0, "test": 1 },
+        "cable-row.shoulder_shrug": { "train": 3, "validation": 0, "test": 0 },
+        "cable-row.tempo_down": { "train": 2, "validation": 0, "test": 0 },
+        "cable-row.tempo_up": { "train": 1, "validation": 0, "test": 1 }
+      },
+      "multiIssueRecipes": {
+        "A": ["cable-row.row_depth", "cable-row.row_extension", "cable-row.shoulder_retraction", "cable-row.tempo_down"],
+        "B": ["cable-row.torso_warn", "cable-row.torso_rocking", "cable-row.high_row", "cable-row.shoulder_shrug"],
+        "C": ["cable-row.row_depth", "cable-row.tempo_down", "cable-row.tempo_up", "cable-row.torso_warn"],
+        "D": ["cable-row.row_extension", "cable-row.shoulder_retraction", "cable-row.high_row", "cable-row.shoulder_shrug"]
+      },
+      "combinedFaultPairs": [
+        ["cable-row.row_depth", "cable-row.shoulder_retraction"],
+        ["cable-row.row_extension", "cable-row.tempo_up"],
+        ["cable-row.torso_warn", "cable-row.torso_rocking"],
+        ["cable-row.high_row", "cable-row.shoulder_shrug"],
+        ["cable-row.row_depth", "cable-row.tempo_down"],
+        ["cable-row.row_extension", "cable-row.torso_warn"]
+      ]
+    },
+    {
+      "name": "Cable Lat Pulldowns",
+      "slug": "cable-lat-pulldowns",
+      "scorableView": "side or usable side-diagonal marked as side",
+      "issueFocusAllocation": {
+        "cable-lat-pulldowns.rom_short": { "train": 2, "validation": 1, "test": 0 },
+        "cable-lat-pulldowns.lockout_short": { "train": 2, "validation": 1, "test": 0 },
+        "cable-lat-pulldowns.elbow_drive": { "train": 3, "validation": 1, "test": 0 },
+        "cable-lat-pulldowns.torso_warn": { "train": 2, "validation": 0, "test": 1 },
+        "cable-lat-pulldowns.torso_rocking": { "train": 1, "validation": 1, "test": 0 },
+        "cable-lat-pulldowns.shoulder_shrug": { "train": 3, "validation": 0, "test": 0 },
+        "cable-lat-pulldowns.tempo_down": { "train": 2, "validation": 0, "test": 0 },
+        "cable-lat-pulldowns.tempo_up": { "train": 1, "validation": 0, "test": 1 }
+      },
+      "multiIssueRecipes": {
+        "A": ["cable-lat-pulldowns.rom_short", "cable-lat-pulldowns.lockout_short", "cable-lat-pulldowns.elbow_drive", "cable-lat-pulldowns.tempo_down"],
+        "B": ["cable-lat-pulldowns.torso_warn", "cable-lat-pulldowns.torso_rocking", "cable-lat-pulldowns.shoulder_shrug", "cable-lat-pulldowns.tempo_up"],
+        "C": ["cable-lat-pulldowns.rom_short", "cable-lat-pulldowns.torso_warn", "cable-lat-pulldowns.elbow_drive", "cable-lat-pulldowns.tempo_down"],
+        "D": ["cable-lat-pulldowns.lockout_short", "cable-lat-pulldowns.torso_rocking", "cable-lat-pulldowns.shoulder_shrug", "cable-lat-pulldowns.tempo_up"]
+      },
+      "combinedFaultPairs": [
+        ["cable-lat-pulldowns.rom_short", "cable-lat-pulldowns.elbow_drive"],
+        ["cable-lat-pulldowns.lockout_short", "cable-lat-pulldowns.tempo_up"],
+        ["cable-lat-pulldowns.torso_warn", "cable-lat-pulldowns.torso_rocking"],
+        ["cable-lat-pulldowns.shoulder_shrug", "cable-lat-pulldowns.tempo_down"],
+        ["cable-lat-pulldowns.rom_short", "cable-lat-pulldowns.torso_warn"],
+        ["cable-lat-pulldowns.elbow_drive", "cable-lat-pulldowns.shoulder_shrug"]
+      ]
+    },
+    {
+      "name": "Cable Pushdowns",
+      "slug": "cable-pushdowns",
+      "scorableView": "side",
+      "issueFocusAllocation": {
+        "cable-pushdowns.lockout_short": { "train": 2, "validation": 1, "test": 0 },
+        "cable-pushdowns.rom_short": { "train": 2, "validation": 1, "test": 0 },
+        "cable-pushdowns.elbow_drift": { "train": 3, "validation": 1, "test": 0 },
+        "cable-pushdowns.elbow_forward": { "train": 2, "validation": 0, "test": 1 },
+        "cable-pushdowns.torso_warn": { "train": 2, "validation": 1, "test": 0 },
+        "cable-pushdowns.torso_rocking": { "train": 1, "validation": 0, "test": 1 },
+        "cable-pushdowns.tempo_down": { "train": 2, "validation": 0, "test": 0 },
+        "cable-pushdowns.tempo_up": { "train": 2, "validation": 0, "test": 0 }
+      },
+      "multiIssueRecipes": {
+        "A": ["cable-pushdowns.lockout_short", "cable-pushdowns.rom_short", "cable-pushdowns.elbow_forward", "cable-pushdowns.tempo_down"],
+        "B": ["cable-pushdowns.elbow_drift", "cable-pushdowns.torso_warn", "cable-pushdowns.torso_rocking", "cable-pushdowns.tempo_up"],
+        "C": ["cable-pushdowns.lockout_short", "cable-pushdowns.elbow_drift", "cable-pushdowns.torso_warn", "cable-pushdowns.tempo_down"],
+        "D": ["cable-pushdowns.rom_short", "cable-pushdowns.elbow_forward", "cable-pushdowns.torso_rocking", "cable-pushdowns.tempo_up"]
+      },
+      "combinedFaultPairs": [
+        ["cable-pushdowns.lockout_short", "cable-pushdowns.elbow_drift"],
+        ["cable-pushdowns.rom_short", "cable-pushdowns.elbow_forward"],
+        ["cable-pushdowns.torso_warn", "cable-pushdowns.torso_rocking"],
+        ["cable-pushdowns.tempo_down", "cable-pushdowns.lockout_short"],
+        ["cable-pushdowns.tempo_up", "cable-pushdowns.rom_short"],
+        ["cable-pushdowns.elbow_drift", "cable-pushdowns.torso_warn"]
+      ]
+    },
+    {
+      "name": "Leg Extensions",
+      "slug": "leg-extensions",
+      "scorableView": "side",
+      "issueFocusAllocation": {
+        "leg-extensions.lockout_short": { "train": 3, "validation": 1, "test": 0 },
+        "leg-extensions.rom_short_leg_ext": { "train": 3, "validation": 1, "test": 0 },
+        "leg-extensions.torso_warn": { "train": 2, "validation": 1, "test": 0 },
+        "leg-extensions.hip_lift": { "train": 3, "validation": 0, "test": 1 },
+        "leg-extensions.top_hold_short": { "train": 2, "validation": 1, "test": 0 },
+        "leg-extensions.tempo_up": { "train": 2, "validation": 0, "test": 0 },
+        "leg-extensions.tempo_down": { "train": 1, "validation": 0, "test": 1 }
+      },
+      "multiIssueRecipes": {
+        "A": ["leg-extensions.lockout_short", "leg-extensions.rom_short_leg_ext", "leg-extensions.tempo_up", "leg-extensions.tempo_down"],
+        "B": ["leg-extensions.torso_warn", "leg-extensions.hip_lift", "leg-extensions.top_hold_short", "leg-extensions.lockout_short"],
+        "C": ["leg-extensions.lockout_short", "leg-extensions.hip_lift", "leg-extensions.top_hold_short", "leg-extensions.tempo_down"],
+        "D": ["leg-extensions.rom_short_leg_ext", "leg-extensions.torso_warn", "leg-extensions.tempo_up", "leg-extensions.hip_lift"]
+      },
+      "combinedFaultPairs": [
+        ["leg-extensions.lockout_short", "leg-extensions.top_hold_short"],
+        ["leg-extensions.rom_short_leg_ext", "leg-extensions.tempo_down"],
+        ["leg-extensions.torso_warn", "leg-extensions.hip_lift"],
+        ["leg-extensions.tempo_up", "leg-extensions.lockout_short"],
+        ["leg-extensions.hip_lift", "leg-extensions.top_hold_short"],
+        ["leg-extensions.rom_short_leg_ext", "leg-extensions.torso_warn"]
+      ]
+    },
+    {
+      "name": "Lying Leg Curl",
+      "slug": "lying-leg-curl",
+      "scorableView": "side",
+      "issueFocusAllocation": {
+        "lying-leg-curl.rom_curl_short": { "train": 2, "validation": 1, "test": 0 },
+        "lying-leg-curl.rom_extend_short": { "train": 2, "validation": 1, "test": 0 },
+        "lying-leg-curl.hip_lift": { "train": 3, "validation": 0, "test": 1 },
+        "lying-leg-curl.thigh_movement": { "train": 2, "validation": 1, "test": 0 },
+        "lying-leg-curl.top_hold_short": { "train": 2, "validation": 1, "test": 0 },
+        "lying-leg-curl.tempo_up": { "train": 2, "validation": 0, "test": 0 },
+        "lying-leg-curl.tempo_down": { "train": 2, "validation": 0, "test": 0 },
+        "lying-leg-curl.tempo_jerk": { "train": 1, "validation": 0, "test": 1 }
+      },
+      "multiIssueRecipes": {
+        "A": ["lying-leg-curl.rom_curl_short", "lying-leg-curl.rom_extend_short", "lying-leg-curl.tempo_up", "lying-leg-curl.tempo_down"],
+        "B": ["lying-leg-curl.hip_lift", "lying-leg-curl.thigh_movement", "lying-leg-curl.top_hold_short", "lying-leg-curl.tempo_jerk"],
+        "C": ["lying-leg-curl.rom_curl_short", "lying-leg-curl.hip_lift", "lying-leg-curl.top_hold_short", "lying-leg-curl.tempo_up"],
+        "D": ["lying-leg-curl.rom_extend_short", "lying-leg-curl.thigh_movement", "lying-leg-curl.tempo_down", "lying-leg-curl.tempo_jerk"]
+      },
+      "combinedFaultPairs": [
+        ["lying-leg-curl.rom_curl_short", "lying-leg-curl.tempo_up"],
+        ["lying-leg-curl.rom_extend_short", "lying-leg-curl.tempo_down"],
+        ["lying-leg-curl.hip_lift", "lying-leg-curl.thigh_movement"],
+        ["lying-leg-curl.top_hold_short", "lying-leg-curl.tempo_jerk"],
+        ["lying-leg-curl.rom_curl_short", "lying-leg-curl.hip_lift"],
+        ["lying-leg-curl.rom_extend_short", "lying-leg-curl.thigh_movement"]
+      ]
+    },
+    {
+      "name": "Machine Ab Crunches",
+      "slug": "machine-ab-crunches",
+      "scorableView": "side",
+      "issueFocusAllocation": {
+        "machine-ab-crunches.depth_short": { "train": 3, "validation": 1, "test": 0 },
+        "machine-ab-crunches.lockout_short": { "train": 2, "validation": 1, "test": 0 },
+        "machine-ab-crunches.neck_forward": { "train": 2, "validation": 0, "test": 1 },
+        "machine-ab-crunches.arm_pull": { "train": 2, "validation": 1, "test": 0 },
+        "machine-ab-crunches.hips_moving": { "train": 2, "validation": 1, "test": 0 },
+        "machine-ab-crunches.tempo_down": { "train": 2, "validation": 0, "test": 0 },
+        "machine-ab-crunches.tempo_up": { "train": 2, "validation": 0, "test": 0 },
+        "machine-ab-crunches.tempo_jerk": { "train": 1, "validation": 0, "test": 1 }
+      },
+      "multiIssueRecipes": {
+        "A": ["machine-ab-crunches.depth_short", "machine-ab-crunches.lockout_short", "machine-ab-crunches.tempo_down", "machine-ab-crunches.tempo_up"],
+        "B": ["machine-ab-crunches.neck_forward", "machine-ab-crunches.arm_pull", "machine-ab-crunches.hips_moving", "machine-ab-crunches.tempo_jerk"],
+        "C": ["machine-ab-crunches.depth_short", "machine-ab-crunches.neck_forward", "machine-ab-crunches.arm_pull", "machine-ab-crunches.tempo_down"],
+        "D": ["machine-ab-crunches.lockout_short", "machine-ab-crunches.hips_moving", "machine-ab-crunches.tempo_up", "machine-ab-crunches.tempo_jerk"]
+      },
+      "combinedFaultPairs": [
+        ["machine-ab-crunches.depth_short", "machine-ab-crunches.tempo_down"],
+        ["machine-ab-crunches.lockout_short", "machine-ab-crunches.tempo_up"],
+        ["machine-ab-crunches.neck_forward", "machine-ab-crunches.arm_pull"],
+        ["machine-ab-crunches.hips_moving", "machine-ab-crunches.tempo_jerk"],
+        ["machine-ab-crunches.depth_short", "machine-ab-crunches.neck_forward"],
+        ["machine-ab-crunches.arm_pull", "machine-ab-crunches.hips_moving"]
+      ]
+    }
+  ]
+}

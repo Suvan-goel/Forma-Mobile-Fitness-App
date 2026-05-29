@@ -18,6 +18,7 @@
     "dataset:evaluate": "FORMA_RUN_DATASET_EVALUATE=1 jest scripts/dataset-evaluate.ts --runInBand --no-coverage --verbose",
     "dataset:optimize": "tsx scripts/dataset-optimize-cli.ts",
     "dataset:optimize:exercise": "tsx scripts/dataset-optimize-cli.ts",
+    "dataset:recording-plan": "tsx scripts/dataset-recording-plan.ts",
     "ml:export": "tsx scripts/ml-export-dataset.ts",
     "ml:audit-labels": "tsx scripts/ml-audit-labels.ts",
     "ml:audit-splits": "tsx scripts/ml-audit-splits.ts",

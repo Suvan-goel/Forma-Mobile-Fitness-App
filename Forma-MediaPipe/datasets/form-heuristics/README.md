@@ -64,15 +64,60 @@ python3 -m pip install -r scripts/requirements-dataset.txt
 ## Recording Videos
 
 Use short, single-exercise clips with a small buffer before the first rep and
-after the last rep. Most clips below are 5 reps; some validation/mixed clips are
-8-12 reps so one recording can cover multiple issue IDs without making you film
-one clip per fault.
+after the last rep. Most clips should be 5-6 reps; mixed clips can be 8-10 reps
+so one recording can cover multiple issue IDs without making you film one clip
+per fault.
 
-The target below is the compact v1 dataset target. Do not collect more until
-`dataset:evaluate` or `dataset:optimize` shows a specific gap. Existing clips
-count only when their label is reviewed, has correct `view`/`scorable` values,
-has matching landmark JSON, and has visible issue labels. The current Barbell
-Curl labels in this repo are `draft`, so they do not count until reviewed.
+For reliable product work, use
+`datasets/form-heuristics/recording-plan.reliable-v1.json` as the source of
+truth. Existing clips count only when their label is reviewed, has correct
+`view`/`scorable` values, has matching landmark JSON, and has visible issue
+labels. The current Barbell Curl labels in this repo are `draft`, so they do
+not count until reviewed.
+
+The first fully expanded exercise protocol is
+`datasets/form-heuristics/barbell-curl-reliable-v1-recordings.md`, which lays
+out all 50 Barbell Curl recordings rep by rep.
+
+### Reliable Product Target
+
+The reliable-v1 target is **50 reviewed recordings per exercise**: 30 train, 10
+validation, and 10 test. Across the 10 registered exercises this is **500
+recordings** and roughly **3,160+ reviewed reps**.
+
+For exercises without a detailed per-recording protocol yet, collect this default
+shape:
+
+| Recording type | Train | Validation | Test | Total | Reps each | Purpose |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Clean baseline | 5 | 1 | 2 | 8 | 5 | Clean negatives with normal technique. |
+| Issue-focus | 16 | 4 | 2 | 22 | 6 | One target issue per clip, mild and clear examples. |
+| Multi-issue | 4 | 2 | 2 | 8 | 10 | Four issue IDs per clip, two reps each. |
+| Hard-negative clean | 3 | 1 | 2 | 6 | 6 | Near-threshold but acceptable reps to reduce false positives. |
+| Combined realistic faults | 1 | 0 | 1 | 2 | 8 | Realistic two-issue reps. |
+| View/quality robustness | 1 | 2 | 1 | 4 | 3 | Unsupported view, occlusion, or poor setup; `scorable=false`. |
+
+The Barbell Curl detailed protocol uses a stronger issue-focused distribution
+than the default shape: 17 train issue-focus clips, 4 validation issue-focus
+clips, 4 test issue-focus clips, 2 partial side/oblique clips, and 4 unscorable
+clips.
+
+Use the audit command to check collection progress:
+
+```sh
+npm run dataset:recording-plan
+```
+
+Generate a filming checklist CSV when coordinating recordings:
+
+```sh
+npm run --silent dataset:recording-plan -- --checklist > reliable-v1-checklist.csv
+```
+
+The audit requires every exercise to reach 50 reviewed recordings, every split
+target, at least 316 reviewed reps, at least 40 clean scorable reps, at least 12
+unscorable/view-quality reps, and positive examples for every planned issue in
+train, validation, and test.
 
 ### Why these counts
 
@@ -94,8 +139,9 @@ The optimizer uses:
   ranges are reviewed, score-only tunables are skipped and the optimizer focuses
   on rep count, issue IDs, view, and scorable gating.
 
-This is why the plan uses a clean clip, grouped issue clips, and a small
-unsupported-view clip for each exercise instead of many random sets.
+This is why the plan uses clean clips, issue-focus clips, grouped issue clips,
+hard negatives, combined faults, and unsupported-view clips instead of many
+random sets.
 
 ### Global capture rules
 
@@ -114,7 +160,10 @@ unsupported-view clip for each exercise instead of many random sets.
   `push-up.camera_setup`, `lying-leg-curl.side_view_uncertain`, and
   `machine-ab-crunches.side_view_uncertain`.
 
-### Target counts
+### Compact v1 Target Counts
+
+The compact target below is retained for quick smoke testing and early threshold
+tuning only. It is not the reliable-product collection target.
 
 | Exercise | Train | Validation | Test | Total recordings | Scorable form view |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -129,8 +178,8 @@ unsupported-view clip for each exercise instead of many random sets.
 | Lying Leg Curl | 5 | 4 | 2 | 11 | side |
 | Machine Ab Crunches | 5 | 4 | 2 | 11 | side |
 
-Total target: 113 recordings. Stop there, run the evaluation/optimizer, and add
-more only for issues the report says are weak.
+Compact target: 113 recordings. Use it only when you need a small smoke/tuning
+set before committing to reliable-v1 collection.
 
 ### Barbell Curl
 
