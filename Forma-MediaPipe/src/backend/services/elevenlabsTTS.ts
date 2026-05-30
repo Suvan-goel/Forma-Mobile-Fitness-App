@@ -1,8 +1,8 @@
 /**
  * ElevenLabs Text-to-Speech
  *
- * Provides high-quality TTS using ElevenLabs API with proper audio session
- * configuration to avoid conflicts with the camera.
+ * Provides high-quality TTS using a Supabase Edge Function proxy, with
+ * deterministic local caching and cancellation-aware playback.
  */
 
 import { supabase } from './supabase/client';
@@ -20,22 +20,72 @@ try {
   nativeModulesAvailable = false;
 }
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-let activeVoiceId = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default: Rachel
-
-interface ActiveVoiceSettings {
+export type ElevenLabsVoiceSettings = {
   speed: number;
   stability: number;
   similarity: number;
   styleExaggeration: number;
-}
+};
 
-let activeVoiceSettings: ActiveVoiceSettings = {
+export type VoiceSnapshot = {
+  voiceId: string;
+  voiceSettings: ElevenLabsVoiceSettings;
+  modelId: 'eleven_flash_v2_5';
+};
+
+export type SpeechPurpose = 'trainer-preview' | 'set-start' | 'coach' | 'summary' | 'prefetch';
+
+export type SpeechOptions = {
+  purpose?: SpeechPurpose;
+  interrupt?: boolean;
+  timeoutMs?: number;
+  maxPlaybackDelayMs?: number;
+};
+
+export type PreparedSpeech = {
+  uri: string;
+  cacheKey: string;
+  text: string;
+  snapshot: VoiceSnapshot;
+  generatedAt: number;
+};
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const TTS_MODEL_ID: VoiceSnapshot['modelId'] = 'eleven_flash_v2_5';
+const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+const TTS_CACHE_DIR_NAME = 'tts-cache/';
+const TTS_CACHE_MAX_FILES = 120;
+const TTS_CACHE_MAX_BYTES = 30 * 1024 * 1024;
+const DEFAULT_PLAYBACK_WATCHDOG_MS = 12000;
+
+const PURPOSE_TIMEOUT_MS: Record<SpeechPurpose, number> = {
+  'trainer-preview': 6000,
+  'set-start': 5000,
+  coach: 8000,
+  summary: 8000,
+  prefetch: 12000,
+};
+
+let activeVoiceId = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
+let activeVoiceSettings: ElevenLabsVoiceSettings = {
   speed: 0.9,
   stability: 0.45,
   similarity: 0.8,
   styleExaggeration: 0.0,
 };
+
+let audioInstance: any = null;
+let activePlaybackPurpose: SpeechPurpose | null = null;
+let isInitialized = false;
+let activePlaybackSubscription: { remove?: () => void } | null = null;
+let activePlaybackResolve: (() => void) | null = null;
+let cleanupScheduled = false;
+let cacheDirectoryReady: Promise<string> | null = null;
+
+const purposeGenerations = new Map<SpeechPurpose, number>();
+const activeRequestControllers = new Map<SpeechPurpose, Set<AbortController>>();
+const inFlightSpeech = new Map<string, Promise<PreparedSpeech>>();
+const cacheAccessTimes = new Map<string, number>();
 
 /**
  * Override the active voice ID at runtime (e.g. when the user selects a trainer).
@@ -47,19 +97,24 @@ export function setActiveVoiceId(id: string): void {
 /**
  * Override the active voice settings at runtime (e.g. when the user selects a trainer).
  */
-export function setActiveVoiceSettings(settings: ActiveVoiceSettings): void {
-  activeVoiceSettings = settings;
+export function setActiveVoiceSettings(settings: ElevenLabsVoiceSettings): void {
+  activeVoiceSettings = { ...settings };
 }
 
-let audioInstance: any = null;
-let isInitialized = false;
-let speechGeneration = 0; // Incremented on every speakWithElevenLabs call; used to cancel stale fetches
-let activePlaybackSubscription: { remove?: () => void } | null = null;
-let activePlaybackResolve: (() => void) | null = null;
+export function createVoiceSnapshot(
+  voiceId = activeVoiceId,
+  voiceSettings: ElevenLabsVoiceSettings = activeVoiceSettings
+): VoiceSnapshot {
+  return {
+    voiceId,
+    voiceSettings: { ...voiceSettings },
+    modelId: TTS_MODEL_ID,
+  };
+}
 
-// Audio cache: maps "voiceId:text" → file URI to avoid re-generating identical phrases.
-// Coaching message pools are small and fixed (~50 phrases), so cache stays bounded.
-const audioCache = new Map<string, string>();
+export function getActiveVoiceSnapshot(): VoiceSnapshot {
+  return createVoiceSnapshot(activeVoiceId, activeVoiceSettings);
+}
 
 /**
  * Pure-JS base64 encoder for Uint8Array.
@@ -86,7 +141,6 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 
 /**
  * Initialize audio session with camera-compatible settings.
- * This prevents conflicts between audio playback and camera recording.
  */
 async function initializeAudio(): Promise<void> {
   if (!nativeModulesAvailable || !ExpoAudio) return;
@@ -107,23 +161,171 @@ async function initializeAudio(): Promise<void> {
   }
 }
 
-/**
- * Call ElevenLabs API and save audio to a temporary file.
- * Returns the file URI for playback.
- */
-async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const response = await fetch(url, options);
-    if (response.ok) return response;
-    if (response.status !== 429 && response.status !== 503) {
-      throw new Error(await formatTtsError(response));
-    }
-    if (attempt < retries) {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 500 * Math.pow(2, attempt)));
-    } else {
-      throw new Error(await formatTtsError(response));
-    }
+function normalizeText(text: string): string {
+  return text.trim().replace(/\s+/g, ' ');
+}
+
+function normalizeVoiceSettings(settings: ElevenLabsVoiceSettings): ElevenLabsVoiceSettings {
+  return {
+    speed: Number(settings.speed.toFixed(3)),
+    stability: Number(settings.stability.toFixed(3)),
+    similarity: Number(settings.similarity.toFixed(3)),
+    styleExaggeration: Number(settings.styleExaggeration.toFixed(3)),
+  };
+}
+
+function stableHash(input: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
+  return (hash >>> 0).toString(36);
+}
+
+function getCacheKey(text: string, snapshot: VoiceSnapshot): string {
+  const payload = JSON.stringify({
+    text: normalizeText(text),
+    modelId: snapshot.modelId,
+    voiceId: snapshot.voiceId,
+    voiceSettings: normalizeVoiceSettings(snapshot.voiceSettings),
+  });
+  return `tts_${stableHash(payload)}`;
+}
+
+async function ensureCacheDirectory(): Promise<string> {
+  if (!nativeModulesAvailable || !FileSystem?.cacheDirectory) {
+    throw new Error('Native modules not available - rebuild development client');
+  }
+
+  if (!cacheDirectoryReady) {
+    const dir = `${FileSystem.cacheDirectory}${TTS_CACHE_DIR_NAME}`;
+    cacheDirectoryReady = (async () => {
+      try {
+        await FileSystem.makeDirectoryAsync?.(dir, { intermediates: true });
+      } catch {
+        // Directory may already exist or the platform may not need explicit creation.
+      }
+      return dir;
+    })();
+  }
+  return cacheDirectoryReady;
+}
+
+function getCacheUri(cacheDir: string, cacheKey: string): string {
+  return `${cacheDir}${cacheKey}.mp3`;
+}
+
+function registerRequestController(purpose: SpeechPurpose, controller: AbortController): void {
+  const existing = activeRequestControllers.get(purpose) ?? new Set<AbortController>();
+  existing.add(controller);
+  activeRequestControllers.set(purpose, existing);
+}
+
+function unregisterRequestController(purpose: SpeechPurpose, controller: AbortController): void {
+  const existing = activeRequestControllers.get(purpose);
+  if (!existing) return;
+  existing.delete(controller);
+  if (existing.size === 0) activeRequestControllers.delete(purpose);
+}
+
+function abortRequests(purpose?: SpeechPurpose): void {
+  const entries = purpose
+    ? [[purpose, activeRequestControllers.get(purpose)] as const]
+    : Array.from(activeRequestControllers.entries());
+
+  for (const [, controllers] of entries) {
+    controllers?.forEach((controller) => {
+      try {
+        controller.abort();
+      } catch {}
+    });
+    controllers?.clear();
+  }
+  if (purpose) activeRequestControllers.delete(purpose);
+  else activeRequestControllers.clear();
+}
+
+function bumpGeneration(purpose: SpeechPurpose): number {
+  const next = (purposeGenerations.get(purpose) ?? 0) + 1;
+  purposeGenerations.set(purpose, next);
+  return next;
+}
+
+function getGeneration(purpose: SpeechPurpose): number {
+  return purposeGenerations.get(purpose) ?? 0;
+}
+
+function abortError(message = 'TTS request aborted'): Error {
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      signal.removeEventListener?.('abort', onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+
+    signal.addEventListener?.('abort', onAbort, { once: true });
+  });
+}
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  purpose: SpeechPurpose,
+  timeoutMs: number,
+  retries = 2
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  registerRequestController(purpose, controller);
+
+  try {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (controller.signal.aborted) throw abortError();
+
+      let response: Response;
+      try {
+        response = await fetch(url, { ...options, signal: controller.signal });
+      } catch (error) {
+        if (controller.signal.aborted || isAbortError(error)) throw abortError();
+        throw error;
+      }
+
+      if (response.ok) return response;
+      if (response.status !== 429 && response.status !== 503) {
+        throw new Error(await formatTtsError(response));
+      }
+
+      if (attempt < retries) {
+        await abortableDelay(500 * Math.pow(2, attempt), controller.signal);
+      } else {
+        throw new Error(await formatTtsError(response));
+      }
+    }
+  } finally {
+    clearTimeout(timeout);
+    unregisterRequestController(purpose, controller);
+  }
+
   throw new Error('TTS request failed');
 }
 
@@ -138,24 +340,22 @@ async function formatTtsError(response: Response): Promise<string> {
   }
 }
 
-async function generateSpeech(text: string): Promise<string> {
-  if (!nativeModulesAvailable || !FileSystem) {
-    throw new Error('Native modules not available - rebuild development client');
-  }
-
+async function fetchAndCacheSpeech(
+  text: string,
+  snapshot: VoiceSnapshot,
+  options: Required<Pick<SpeechOptions, 'purpose' | 'timeoutMs'>>
+): Promise<PreparedSpeech> {
   if (!SUPABASE_URL) {
     throw new Error('Supabase URL not configured');
   }
 
-  // Check cache — same voice + same text = identical audio, skip the API call
-  const cacheKey = `${activeVoiceId}:${text}`;
-  const cached = audioCache.get(cacheKey);
-  if (cached) {
-    try {
-      const info = await FileSystem.getInfoAsync(cached);
-      if (info.exists) return cached;
-    } catch {}
-    audioCache.delete(cacheKey); // File was cleaned up — re-generate
+  const cacheDir = await ensureCacheDirectory();
+  const cacheKey = getCacheKey(text, snapshot);
+  const fileUri = getCacheUri(cacheDir, cacheKey);
+  const cached = await FileSystem.getInfoAsync(fileUri);
+  if (cached?.exists) {
+    cacheAccessTimes.set(cacheKey, Date.now());
+    return { uri: fileUri, cacheKey, text, snapshot, generatedAt: Date.now() };
   }
 
   const { data: { session } } = await supabase.auth.getSession();
@@ -163,7 +363,6 @@ async function generateSpeech(text: string): Promise<string> {
     throw new Error('Not authenticated');
   }
 
-  // Proxy through Supabase Edge Function — ElevenLabs key stays server-side
   const response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/tts`, {
     method: 'POST',
     headers: {
@@ -173,64 +372,78 @@ async function generateSpeech(text: string): Promise<string> {
     },
     body: JSON.stringify({
       text,
-      voiceId: activeVoiceId,
+      voiceId: snapshot.voiceId,
       voiceSettings: {
-        stability: activeVoiceSettings.stability,
-        similarity_boost: activeVoiceSettings.similarity,
-        speed: activeVoiceSettings.speed,
-        style: activeVoiceSettings.styleExaggeration,
+        stability: snapshot.voiceSettings.stability,
+        similarity_boost: snapshot.voiceSettings.similarity,
+        speed: snapshot.voiceSettings.speed,
+        style: snapshot.voiceSettings.styleExaggeration,
       },
     }),
-  });
+  }, options.purpose, options.timeoutMs);
 
-  // Convert response to base64 via arrayBuffer + pure JS encoder
-  // (FileReader.readAsDataURL hangs indefinitely on JSC with binary blobs)
   const arrayBuffer = await response.arrayBuffer();
   const base64Audio = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
-  const fileUri = `${FileSystem.cacheDirectory}tts_${Date.now()}.mp3`;
-
-  // Write to temporary file
   await FileSystem.writeAsStringAsync(fileUri, base64Audio, {
     encoding: FileSystem.EncodingType.Base64,
   });
 
-  // Cache the result for future identical requests
-  audioCache.set(cacheKey, fileUri);
+  cacheAccessTimes.set(cacheKey, Date.now());
+  scheduleCacheCleanup();
 
-  return fileUri;
+  return { uri: fileUri, cacheKey, text, snapshot, generatedAt: Date.now() };
 }
 
-/**
- * Clean up old TTS audio files from cache.
- */
-async function cleanupOldAudioFiles(): Promise<void> {
-  if (!nativeModulesAvailable || !FileSystem) return;
+function resolvePurpose(options?: SpeechOptions): SpeechPurpose {
+  return options?.purpose ?? 'coach';
+}
 
-  try {
-    const cacheDir = FileSystem.cacheDirectory;
-    if (!cacheDir) return;
+function resolveTimeoutMs(purpose: SpeechPurpose, options?: SpeechOptions): number {
+  return options?.timeoutMs ?? PURPOSE_TIMEOUT_MS[purpose];
+}
 
-    const files = await FileSystem.readDirectoryAsync(cacheDir);
-    const ttsFiles = files.filter((f: string) => f.startsWith('tts_') && f.endsWith('.mp3'));
-
-    // Build set of filenames currently in the cache so we don't delete them
-    const cachedFilenames = new Set<string>();
-    for (const uri of audioCache.values()) {
-      const parts = uri.split('/');
-      cachedFilenames.add(parts[parts.length - 1]);
-    }
-
-    // Delete uncached files beyond the 3 most recent
-    const uncached = ttsFiles.filter((f: string) => !cachedFilenames.has(f));
-    if (uncached.length > 3) {
-      const sorted = uncached.sort().reverse(); // Descending by timestamp
-      for (let i = 3; i < sorted.length; i++) {
-        await FileSystem.deleteAsync(`${cacheDir}${sorted[i]}`, { idempotent: true });
-      }
-    }
-  } catch (error) {
-    // Ignore cleanup errors
+export async function prepareSpeech(
+  text: string,
+  snapshot: VoiceSnapshot = getActiveVoiceSnapshot(),
+  options: SpeechOptions = {}
+): Promise<PreparedSpeech> {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText) throw new Error('TTS text is empty');
+  if (!nativeModulesAvailable || !FileSystem) {
+    throw new Error('Native modules not available - rebuild development client');
   }
+
+  const frozenSnapshot: VoiceSnapshot = {
+    voiceId: snapshot.voiceId,
+    voiceSettings: normalizeVoiceSettings(snapshot.voiceSettings),
+    modelId: snapshot.modelId,
+  };
+  const purpose = resolvePurpose(options);
+  const timeoutMs = resolveTimeoutMs(purpose, options);
+  const cacheKey = getCacheKey(normalizedText, frozenSnapshot);
+  const existing = inFlightSpeech.get(cacheKey);
+  if (existing) return existing;
+
+  const promise = fetchAndCacheSpeech(normalizedText, frozenSnapshot, { purpose, timeoutMs })
+    .finally(() => {
+      inFlightSpeech.delete(cacheKey);
+    });
+
+  inFlightSpeech.set(cacheKey, promise);
+  return promise;
+}
+
+export async function prefetchSpeech(
+  text: string,
+  snapshot: VoiceSnapshot = getActiveVoiceSnapshot(),
+  options: SpeechOptions = {}
+): Promise<void> {
+  await prepareSpeech(text, snapshot, { ...options, purpose: options.purpose ?? 'prefetch' });
+}
+
+function estimatePlaybackWatchdogMs(text: string): number {
+  const estimated = normalizeText(text).length * 90 + 3000;
+  return Math.min(20000, Math.max(DEFAULT_PLAYBACK_WATCHDOG_MS, estimated));
 }
 
 function releaseAudioPlayer(player: any): void {
@@ -255,7 +468,10 @@ function resolveActivePlayback(player?: any): void {
   const subscription = activePlaybackSubscription;
   activePlaybackSubscription = null;
   activePlaybackResolve = null;
-  if (!player || audioInstance === player) audioInstance = null;
+  if (!player || audioInstance === player) {
+    audioInstance = null;
+    activePlaybackPurpose = null;
+  }
 
   try {
     subscription?.remove?.();
@@ -264,77 +480,131 @@ function resolveActivePlayback(player?: any): void {
   if (resolve) resolve();
 }
 
-async function stopActiveAudio(): Promise<void> {
+async function stopActiveAudio(purpose?: SpeechPurpose): Promise<void> {
+  if (purpose && activePlaybackPurpose !== purpose) return;
+
   const player = audioInstance;
   audioInstance = null;
+  activePlaybackPurpose = null;
 
   if (!player) {
     resolveActivePlayback();
     return;
   }
 
-  releaseAudioPlayer(player);
-  resolveActivePlayback(player);
+  if (activePlaybackResolve) {
+    resolveActivePlayback(player);
+  } else {
+    releaseAudioPlayer(player);
+    resolveActivePlayback(player);
+  }
+}
+
+export async function cancelSpeech(purpose?: SpeechPurpose): Promise<void> {
+  if (purpose) {
+    bumpGeneration(purpose);
+  } else {
+    (['trainer-preview', 'set-start', 'coach', 'summary', 'prefetch'] as SpeechPurpose[]).forEach(bumpGeneration);
+  }
+  abortRequests(purpose);
+  await stopActiveAudio(purpose);
+}
+
+export async function playPreparedSpeech(
+  asset: PreparedSpeech,
+  options: SpeechOptions = {}
+): Promise<void> {
+  const purpose = resolvePurpose(options);
+  if (!nativeModulesAvailable || !ExpoAudio) {
+    console.warn('ElevenLabs TTS: Native modules not available.');
+    return;
+  }
+
+  await initializeAudio();
+
+  if (purpose === 'set-start') {
+    await stopActiveAudio('trainer-preview');
+  }
+  if (options.interrupt || purpose === 'trainer-preview') {
+    await stopActiveAudio(purpose);
+  }
+
+  const player = ExpoAudio.createAudioPlayer({ uri: asset.uri }, 250);
+  player.volume = 1.0;
+
+  const playbackFinished = new Promise<void>((resolve) => {
+    let didResolve = false;
+    const finish = () => {
+      if (didResolve) return;
+      didResolve = true;
+      clearTimeout(watchdog);
+      releaseAudioPlayer(player);
+      resolveActivePlayback(player);
+      resolve();
+    };
+
+    audioInstance = player;
+    activePlaybackPurpose = purpose;
+    activePlaybackResolve = finish;
+
+    activePlaybackSubscription = player.addListener?.('playbackStatusUpdate', (status: any) => {
+      if (status.didJustFinish) finish();
+    });
+
+    const watchdog = setTimeout(finish, estimatePlaybackWatchdogMs(asset.text));
+  });
+
+  player.play();
+  await playbackFinished;
+}
+
+async function resolveWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(null), timeoutMs);
+    promise.then((value) => {
+      clearTimeout(timeout);
+      resolve(value);
+    }).catch(() => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+  });
 }
 
 /**
  * Speak the given text using ElevenLabs TTS.
- * Configures audio session to avoid conflicts with camera.
  */
-export async function speakWithElevenLabs(text: string): Promise<void> {
-  if (!text?.trim()) return;
+export async function speakWithElevenLabs(text: string, options: SpeechOptions = {}): Promise<void> {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText) return;
 
   if (!nativeModulesAvailable || !ExpoAudio) {
     console.warn('ElevenLabs TTS: Native modules not available.');
     return;
   }
 
-  // Claim this generation; any in-flight fetch with an older generation will be discarded
-  const generation = ++speechGeneration;
+  const purpose = resolvePurpose(options);
+  const shouldInterrupt = options.interrupt ?? purpose === 'trainer-preview';
+  if (shouldInterrupt) {
+    await cancelSpeech(purpose);
+  } else if (purpose === 'set-start') {
+    await cancelSpeech('trainer-preview');
+  }
 
+  const generation = bumpGeneration(purpose);
   try {
-    // Initialize audio session
-    await initializeAudio();
+    const preparedPromise = prepareSpeech(normalizedText, getActiveVoiceSnapshot(), options);
+    const asset = options.maxPlaybackDelayMs !== undefined
+      ? await resolveWithin(preparedPromise, options.maxPlaybackDelayMs)
+      : await preparedPromise;
 
-    // Stop any currently playing audio and resolve its pending speech promise.
-    await stopActiveAudio();
-
-    // Generate speech from ElevenLabs (downloads to temp file)
-    const audioUri = await generateSpeech(text.trim());
-
-    // A newer speakWithElevenLabs call was made while we were fetching — discard this result
-    if (generation !== speechGeneration) return;
-
-    // Cleanup old files asynchronously (don't block playback)
-    cleanupOldAudioFiles().catch(() => {});
-
-    // Load the audio, then resolve this function only after playback completes.
-    const player = ExpoAudio.createAudioPlayer({ uri: audioUri }, 250);
-    player.volume = 1.0;
-
-    // A newer speakWithElevenLabs call may have arrived while this audio loaded.
-    if (generation !== speechGeneration) {
-      releaseAudioPlayer(player);
-      return;
-    }
-
-    const playbackFinished = new Promise<void>((resolve) => {
-      audioInstance = player;
-      activePlaybackResolve = resolve;
-
-      activePlaybackSubscription = player.addListener?.('playbackStatusUpdate', (status: any) => {
-        if (status.didJustFinish) {
-          releaseAudioPlayer(player);
-          resolveActivePlayback(player);
-        }
-      });
-    });
-
-    player.play();
-    await playbackFinished;
+    if (!asset || generation !== getGeneration(purpose)) return;
+    await playPreparedSpeech(asset, options);
   } catch (error) {
-    console.error('ElevenLabs TTS error:', error);
-    await stopActiveAudio();
+    if (!isAbortError(error)) {
+      console.error('ElevenLabs TTS error:', error);
+    }
+    await stopActiveAudio(purpose);
     throw error;
   }
 }
@@ -343,9 +613,8 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
  * Stop any currently playing speech.
  */
 export async function stopSpeech(): Promise<void> {
-  speechGeneration++; // Cancel any in-flight fetch
   if (!nativeModulesAvailable) return;
-  await stopActiveAudio();
+  await cancelSpeech();
 }
 
 /**
@@ -353,4 +622,52 @@ export async function stopSpeech(): Promise<void> {
  */
 export function isElevenLabsAvailable(): boolean {
   return nativeModulesAvailable && !!SUPABASE_URL;
+}
+
+function scheduleCacheCleanup(): void {
+  if (cleanupScheduled) return;
+  cleanupScheduled = true;
+  setTimeout(() => {
+    cleanupScheduled = false;
+    cleanupOldAudioFiles().catch(() => {});
+  }, 0);
+}
+
+async function cleanupOldAudioFiles(): Promise<void> {
+  if (!nativeModulesAvailable || !FileSystem) return;
+
+  try {
+    const cacheDir = await ensureCacheDirectory();
+    const files = await FileSystem.readDirectoryAsync(cacheDir);
+    const mp3Files = files.filter((f: string) => f.startsWith('tts_') && f.endsWith('.mp3'));
+
+    const entries: Array<{ file: string; uri: string; size: number; accessedAt: number }> = [];
+    for (const file of mp3Files) {
+      const uri = `${cacheDir}${file}`;
+      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      const cacheKey = file.replace(/\.mp3$/, '');
+      entries.push({
+        file,
+        uri,
+        size: typeof info?.size === 'number' ? info.size : 0,
+        accessedAt: cacheAccessTimes.get(cacheKey) ?? info?.modificationTime ?? 0,
+      });
+    }
+
+    let totalBytes = entries.reduce((sum, entry) => sum + entry.size, 0);
+    const sortedOldestFirst = entries.sort((a, b) => a.accessedAt - b.accessedAt);
+
+    while (
+      sortedOldestFirst.length > TTS_CACHE_MAX_FILES ||
+      totalBytes > TTS_CACHE_MAX_BYTES
+    ) {
+      const next = sortedOldestFirst.shift();
+      if (!next) break;
+      totalBytes -= next.size;
+      cacheAccessTimes.delete(next.file.replace(/\.mp3$/, ''));
+      await FileSystem.deleteAsync(next.uri, { idempotent: true });
+    }
+  } catch {
+    // Ignore cleanup errors.
+  }
 }

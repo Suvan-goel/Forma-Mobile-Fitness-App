@@ -1,6 +1,7 @@
 jest.mock('../elevenlabsTTS', () => ({
   isElevenLabsAvailable: jest.fn(() => true),
   speakWithElevenLabs: jest.fn(async () => {}),
+  playPreparedSpeech: jest.fn(async () => {}),
 }));
 
 import {
@@ -31,12 +32,41 @@ describe('ttsCoach reliability warnings', () => {
     await onUnscoredRep(`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`);
 
     expect(speakMock).toHaveBeenCalledTimes(1);
-    expect(speakMock).toHaveBeenCalledWith('Move the camera back.');
+    expect(speakMock).toHaveBeenCalledWith('Move the camera back.', { purpose: 'coach' });
 
     nowSpy.mockReturnValue(11050);
     await onUnscoredRep(`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`);
 
     expect(speakMock).toHaveBeenCalledTimes(2);
-    expect(speakMock).toHaveBeenLastCalledWith(`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`);
+    expect(speakMock).toHaveBeenLastCalledWith(`${UNSCORED_REP_FEEDBACK} Keep your full body inside the frame.`, { purpose: 'coach' });
+  });
+
+  it('clears speaking state after a failed speech request', async () => {
+    speakMock
+      .mockRejectedValueOnce(new Error('network timeout'))
+      .mockResolvedValueOnce(undefined);
+
+    await onTrackingQualityWarning('Move the camera back.');
+    nowSpy.mockReturnValue(11050);
+    await onTrackingQualityWarning('Keep your full body inside the frame.');
+
+    expect(speakMock).toHaveBeenCalledTimes(2);
+    expect(speakMock).toHaveBeenLastCalledWith('Keep your full body inside the frame.', { purpose: 'coach' });
+  });
+
+  it('drops overlapping coach messages while speech is in progress', async () => {
+    let resolveSpeech!: () => void;
+    speakMock.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resolveSpeech = resolve;
+    }));
+
+    const first = onTrackingQualityWarning('Move the camera back.');
+    await Promise.resolve();
+    nowSpy.mockReturnValue(11050);
+    await onTrackingQualityWarning('Keep your full body inside the frame.');
+
+    expect(speakMock).toHaveBeenCalledTimes(1);
+    resolveSpeech();
+    await first;
   });
 });

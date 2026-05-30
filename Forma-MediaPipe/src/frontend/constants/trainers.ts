@@ -20,6 +20,7 @@ export interface Trainer {
   gender: TrainerGender;
   voiceId: string;
   voiceSettings: TrainerVoiceSettings;
+  previewGreeting?: string;
   greeting: string;
 }
 
@@ -34,6 +35,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'female',
     voiceId: '8N2ng9i2uiUWqstgmWlH',
     voiceSettings: { speed: 0.96, stability: 0.56, similarity: 0.86, styleExaggeration: 0.08 },
+    previewGreeting: "Hey, I'm Maya. Find your rhythm, and I'll keep the reps clean.",
     greeting: "Hey, I'm Maya. I'm glad you're here. Take the first few reps easy, find your rhythm, and I'll keep you moving well.",
   },
   {
@@ -45,6 +47,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'female',
     voiceId: 'l4Coq6695JDX9xtLqXDE',
     voiceSettings: { speed: 1.07, stability: 0.48, similarity: 0.84, styleExaggeration: 0.18 },
+    previewGreeting: "Hey, I'm Jess. Let's get strong and make these reps count.",
     greeting: "Hey, I'm Jess. Let's settle in, get strong, and make these reps count. I'll nudge you when something needs cleaning up.",
   },
   {
@@ -56,6 +59,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'female',
     voiceId: 'uJCs8Cm3vdGWEkXI6wUX',
     voiceSettings: { speed: 0.98, stability: 0.64, similarity: 0.88, styleExaggeration: 0.04 },
+    previewGreeting: "Hi, I'm Sofia. We'll keep this smart, steady, and controlled.",
     greeting: "Hi, I'm Sofia. We'll keep this smart and steady. Move well first, then we can build from there.",
   },
   // Male trainers
@@ -68,6 +72,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'male',
     voiceId: 'c6SfcYrb2t09NHXiT80T',
     voiceSettings: { speed: 0.97, stability: 0.62, similarity: 0.87, styleExaggeration: 0.06 },
+    previewGreeting: "Hey, I'm Marcus. Stay controlled, and I'll keep your reps sharp.",
     greeting: "Hey, I'm Marcus. Good to have you here. Stay controlled, listen for the small fixes, and we'll get some solid work in.",
   },
   {
@@ -79,6 +84,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'male',
     voiceId: 'l30f87tf05uxyknGdDw6',
     voiceSettings: { speed: 1.08, stability: 0.5, similarity: 0.84, styleExaggeration: 0.16 },
+    previewGreeting: "Hey, I'm Jake. Bring the energy, and I'll keep things sharp.",
     greeting: "Hey, I'm Jake. Glad you're training today. Bring a bit of energy, and I'll help you keep the reps sharp.",
   },
   {
@@ -90,6 +96,7 @@ export const TRAINERS: Trainer[] = [
     gender: 'male',
     voiceId: 'MdeqL1TMyZWz86QOELK8',
     voiceSettings: { speed: 0.94, stability: 0.65, similarity: 0.88, styleExaggeration: 0.05 },
+    previewGreeting: "Hey, I'm Owen. Clean reps, steady effort, no rushing.",
     greeting: "Hey, I'm Owen. Let's keep this simple: clean reps, steady effort, and no rushing. I'll talk you through it.",
   },
 ];

@@ -17,6 +17,12 @@ const TREND_CHART_CARD_GRADIENT: readonly [string, string, string] = [
   'rgba(40, 45, 49, 0.80)',
   'rgba(44, 49, 53, 0.80)',
 ];
+const TREND_LINE_GLOW_WIDTH = 5.2;
+const TREND_LINE_SOFT_WIDTH = 3.2;
+const TREND_LINE_WIDTH = 1.6;
+const TREND_POINT_RADIUS = 4.4;
+const TREND_POINT_ACTIVE_RADIUS = 5.1;
+const TREND_POINT_STROKE_WIDTH = 2;
 
 interface TrendChartProps {
   title: string;
@@ -304,25 +310,25 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                 <Path
                   d={svgContent.linePath}
                   stroke={accent}
-                  strokeWidth={7.5}
+                  strokeWidth={TREND_LINE_GLOW_WIDTH}
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  opacity={0.12}
+                  opacity={0.10}
                 />
                 <Path
                   d={svgContent.linePath}
                   stroke={accent}
-                  strokeWidth={4.5}
+                  strokeWidth={TREND_LINE_SOFT_WIDTH}
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  opacity={0.18}
+                  opacity={0.14}
                 />
                 <Path
                   d={svgContent.linePath}
                   stroke={accent}
-                  strokeWidth={2.4}
+                  strokeWidth={TREND_LINE_WIDTH}
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -335,10 +341,10 @@ export const TrendChart: React.FC<TrendChartProps> = memo(({
                     <Circle
                       cx={pt.x}
                       cy={pt.y}
-                      r={isActive ? 7 : 6.2}
+                      r={isActive ? TREND_POINT_ACTIVE_RADIUS : TREND_POINT_RADIUS}
                       fill="#F4FFF9"
                       stroke={accent}
-                      strokeWidth={3}
+                      strokeWidth={TREND_POINT_STROKE_WIDTH}
                     />
                   </G>
                   );

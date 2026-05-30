@@ -44,6 +44,10 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const requestStartedAt = performance.now();
+  let authMs = 0;
+  let elevenLabsMs = 0;
+
   try {
     if (req.method !== 'POST') {
       return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -60,7 +64,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
+    const authStartedAt = performance.now();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    authMs = Math.round(performance.now() - authStartedAt);
     if (authError || !user) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
@@ -81,6 +87,7 @@ serve(async (req) => {
       return jsonResponse({ error: 'TTS service not configured' }, 503);
     }
 
+    const elevenLabsStartedAt = performance.now();
     const elevenLabsRes = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
       {
@@ -97,21 +104,41 @@ serve(async (req) => {
         }),
       }
     );
+    elevenLabsMs = Math.round(performance.now() - elevenLabsStartedAt);
 
     if (!elevenLabsRes.ok) {
       const upstreamBody = await elevenLabsRes.text().catch(() => '');
       console.warn('ElevenLabs TTS request failed', {
         status: elevenLabsRes.status,
+        authMs,
+        elevenLabsMs,
+        totalMs: Math.round(performance.now() - requestStartedAt),
+        textLength: text.trim().length,
+        voiceId,
         body: upstreamBody.slice(0, 500),
       });
       return jsonResponse({ error: `ElevenLabs error: ${elevenLabsRes.status}` }, elevenLabsRes.status);
     }
 
+    console.log('ElevenLabs TTS request complete', {
+      status: elevenLabsRes.status,
+      authMs,
+      elevenLabsMs,
+      totalMs: Math.round(performance.now() - requestStartedAt),
+      textLength: text.trim().length,
+      voiceId,
+    });
+
     return new Response(elevenLabsRes.body, {
       headers: { ...corsHeaders, 'Content-Type': 'audio/mpeg' },
     });
   } catch (e) {
-    console.error('TTS function failed', e);
+    console.error('TTS function failed', {
+      error: e,
+      authMs,
+      elevenLabsMs,
+      totalMs: Math.round(performance.now() - requestStartedAt),
+    });
     return jsonResponse({ error: 'Internal server error' }, 500);
   }
 });

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircleUserRound, UserRound, Volume2, VolumeX } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import {
   COLORS,
   FONTS,
@@ -24,11 +24,22 @@ import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { TRAINERS, type Trainer } from '../constants/trainers';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
-import { setActiveVoiceId, setActiveVoiceSettings, speakWithElevenLabs } from '../../backend/services/elevenlabsTTS';
+import {
+  cancelSpeech,
+  createVoiceSnapshot,
+  prefetchSpeech,
+  setActiveVoiceId,
+  setActiveVoiceSettings,
+  speakWithElevenLabs,
+} from '../../backend/services/elevenlabsTTS';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');
 const FEMALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'female');
+
+function getTrainerPreviewGreeting(trainer: Trainer): string {
+  return trainer.previewGreeting ?? trainer.greeting;
+}
 
 export const TrainerPickerScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -53,14 +64,57 @@ export const TrainerPickerScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const warmTrainerPreviews = async () => {
+        const selectedTrainer = TRAINERS.find((trainer) => trainer.id === selectedTrainerId);
+        const trainersToWarm = [
+          ...(selectedTrainer ? [selectedTrainer] : []),
+          ...TRAINERS.filter((trainer) => trainer.id !== selectedTrainerId),
+        ];
+
+        for (const trainer of trainersToWarm) {
+          if (cancelled) break;
+          await prefetchSpeech(
+            getTrainerPreviewGreeting(trainer),
+            createVoiceSnapshot(trainer.voiceId, trainer.voiceSettings),
+            { purpose: 'prefetch' }
+          ).catch(() => {});
+        }
+      };
+
+      warmTrainerPreviews();
+
+      return () => {
+        cancelled = true;
+        cancelSpeech('trainer-preview').catch(() => {});
+      };
+    }, [selectedTrainerId])
+  );
+
   const handleSelectTrainer = (trainer: Trainer) => {
     if (trainer.id === selectedTrainerId) return;
     setSelectedTrainerId(trainer.id);
     setActiveVoiceId(trainer.voiceId);
     setActiveVoiceSettings(trainer.voiceSettings);
     if (greetingEnabled) {
-      speakWithElevenLabs(trainer.greeting).catch(() => {});
+      speakWithElevenLabs(getTrainerPreviewGreeting(trainer), {
+        purpose: 'trainer-preview',
+        interrupt: true,
+      }).catch(() => {});
     }
+  };
+
+  const handleToggleGreeting = () => {
+    setGreetingEnabled((enabled) => {
+      const next = !enabled;
+      if (!next) {
+        cancelSpeech('trainer-preview').catch(() => {});
+      }
+      return next;
+    });
   };
 
   const renderTrainerRow = (trainer: Trainer, index: number, total: number) => {
@@ -107,7 +161,7 @@ export const TrainerPickerScreen: React.FC = () => {
         rightSlot={(
           <TouchableOpacity
             style={styles.speakerBtn}
-            onPress={() => setGreetingEnabled((v) => !v)}
+            onPress={handleToggleGreeting}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >

@@ -1,17 +1,20 @@
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
+  reject: (error: unknown) => void;
 };
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
-async function drainMicrotasks(count = 8): Promise<void> {
+async function drainMicrotasks(count = 30): Promise<void> {
   for (let i = 0; i < count; i++) {
     await Promise.resolve();
   }
@@ -26,13 +29,34 @@ function audioResponse(bytes = [1, 2, 3]): Response {
 }
 
 function createFileSystemMock() {
+  const files = new Map<string, { content: string; size: number; modificationTime: number }>();
+  const directories = new Set<string>(['file://cache/']);
+
   return {
     cacheDirectory: 'file://cache/',
     EncodingType: { Base64: 'base64' },
-    getInfoAsync: jest.fn(async () => ({ exists: false })),
-    writeAsStringAsync: jest.fn(async () => {}),
-    readDirectoryAsync: jest.fn(async () => []),
-    deleteAsync: jest.fn(async () => {}),
+    makeDirectoryAsync: jest.fn(async (uri: string) => {
+      directories.add(uri);
+    }),
+    getInfoAsync: jest.fn(async (uri: string) => {
+      if (directories.has(uri)) return { exists: true, isDirectory: true };
+      const file = files.get(uri);
+      if (!file) return { exists: false };
+      return { exists: true, size: file.size, modificationTime: file.modificationTime };
+    }),
+    writeAsStringAsync: jest.fn(async (uri: string, content: string) => {
+      files.set(uri, { content, size: content.length, modificationTime: Date.now() / 1000 });
+    }),
+    readDirectoryAsync: jest.fn(async (uri: string) => {
+      const prefix = uri.endsWith('/') ? uri : `${uri}/`;
+      return Array.from(files.keys())
+        .filter((file) => file.startsWith(prefix))
+        .map((file) => file.slice(prefix.length));
+    }),
+    deleteAsync: jest.fn(async (uri: string) => {
+      files.delete(uri);
+    }),
+    files,
   };
 }
 
@@ -62,6 +86,7 @@ function createPlayerMock() {
 function loadTtsService(options: {
   audioAvailable?: boolean;
   fetchImpl?: jest.Mock;
+  getSessionImpl?: jest.Mock;
 } = {}) {
   jest.resetModules();
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://supabase.test';
@@ -76,7 +101,7 @@ function loadTtsService(options: {
     return player;
   });
   const fetchImpl = options.fetchImpl ?? jest.fn(async () => audioResponse());
-  const getSession = jest.fn(async () => ({
+  const getSession = options.getSessionImpl ?? jest.fn(async () => ({
     data: { session: { access_token: 'session-token' } },
   }));
 
@@ -126,6 +151,7 @@ describe('ElevenLabs TTS expo-audio playback', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     warnSpy.mockRestore();
     errorSpy.mockRestore();
     jest.restoreAllMocks();
@@ -158,12 +184,12 @@ describe('ElevenLabs TTS expo-audio playback', () => {
       })
     );
     expect(fileSystem.writeAsStringAsync).toHaveBeenCalledWith(
-      expect.stringMatching(/^file:\/\/cache\/tts_\d+\.mp3$/),
+      expect.stringMatching(/^file:\/\/cache\/tts-cache\/tts_[a-z0-9]+\.mp3$/),
       expect.any(String),
       { encoding: 'base64' }
     );
     expect(createAudioPlayer).toHaveBeenCalledWith(
-      { uri: expect.stringMatching(/^file:\/\/cache\/tts_\d+\.mp3$/) },
+      { uri: expect.stringMatching(/^file:\/\/cache\/tts-cache\/tts_[a-z0-9]+\.mp3$/) },
       250
     );
     expect(players[0].volume).toBe(1);
@@ -195,20 +221,24 @@ describe('ElevenLabs TTS expo-audio playback', () => {
     const firstFetch = deferred<Response>();
     const fetchImpl = jest
       .fn()
-      .mockImplementationOnce(() => firstFetch.promise)
+      .mockImplementationOnce((_url: string, options: RequestInit) => {
+        options.signal?.addEventListener?.('abort', () => {
+          firstFetch.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        });
+        return firstFetch.promise;
+      })
       .mockImplementationOnce(async () => audioResponse([4, 5, 6]));
     const { service, players, createAudioPlayer } = loadTtsService({ fetchImpl });
 
-    const staleSpeech = service.speakWithElevenLabs('Old cue.');
+    const staleSpeech = service.speakWithElevenLabs('Old cue.', { purpose: 'trainer-preview' }).catch(() => {});
     await drainMicrotasks();
-    const currentSpeech = service.speakWithElevenLabs('New cue.');
+    const currentSpeech = service.speakWithElevenLabs('New cue.', { purpose: 'trainer-preview' });
     await drainMicrotasks();
 
     expect(players).toHaveLength(1);
     players[0].emitStatus({ didJustFinish: true });
     await currentSpeech;
 
-    firstFetch.resolve(audioResponse([7, 8, 9]));
     await staleSpeech;
 
     expect(createAudioPlayer).toHaveBeenCalledTimes(1);
@@ -220,5 +250,135 @@ describe('ElevenLabs TTS expo-audio playback', () => {
 
     expect(service.isElevenLabsAvailable()).toBe(false);
     await expect(service.speakWithElevenLabs('Hello.')).resolves.toBeUndefined();
+  });
+
+  it('keeps the request voice snapshot stable across async session lookup', async () => {
+    const session = deferred<{ data: { session: { access_token: string } } }>();
+    const fetchImpl = jest.fn(async () => audioResponse());
+    const { service, players } = loadTtsService({
+      fetchImpl,
+      getSessionImpl: jest.fn(() => session.promise),
+    });
+
+    service.setActiveVoiceId('voice-a');
+    service.setActiveVoiceSettings({ speed: 0.91, stability: 0.41, similarity: 0.81, styleExaggeration: 0.11 });
+    const speech = service.speakWithElevenLabs('Snapshot cue.', { purpose: 'trainer-preview' });
+    await drainMicrotasks();
+    service.setActiveVoiceId('voice-b');
+    service.setActiveVoiceSettings({ speed: 1.11, stability: 0.61, similarity: 0.91, styleExaggeration: 0.21 });
+
+    session.resolve({ data: { session: { access_token: 'session-token' } } });
+    await drainMicrotasks();
+    expect(players).toHaveLength(1);
+    players[0].emitStatus({ didJustFinish: true });
+    await speech;
+
+    const firstFetchOptions = (fetchImpl.mock.calls as any)[0][1] as RequestInit;
+    const body = JSON.parse(String(firstFetchOptions.body));
+    expect(body.voiceId).toBe('voice-a');
+    expect(body.voiceSettings).toEqual({
+      speed: 0.91,
+      stability: 0.41,
+      similarity_boost: 0.81,
+      style: 0.11,
+    });
+  });
+
+  it('aborts stale trainer preview requests when a new preview starts', async () => {
+    const firstFetch = deferred<Response>();
+    const fetchImpl = jest
+      .fn()
+      .mockImplementationOnce((_url: string, options: RequestInit) => {
+        options.signal?.addEventListener?.('abort', () => {
+          firstFetch.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        });
+        return firstFetch.promise;
+      })
+      .mockImplementationOnce(async () => audioResponse([4, 5, 6]));
+    const { service, players } = loadTtsService({ fetchImpl });
+
+    const staleSpeech = service.speakWithElevenLabs('Old preview.', { purpose: 'trainer-preview' }).catch((error) => error);
+    await drainMicrotasks();
+    const currentSpeech = service.speakWithElevenLabs('New preview.', { purpose: 'trainer-preview' });
+    await drainMicrotasks();
+
+    expect(await staleSpeech).toBeInstanceOf(Error);
+    expect(players).toHaveLength(1);
+    players[0].emitStatus({ didJustFinish: true });
+    await currentSpeech;
+  });
+
+  it('prefetches audio without creating an audio player', async () => {
+    const { service, createAudioPlayer, fetchImpl, fileSystem } = loadTtsService();
+
+    await service.prefetchSpeech('Warm this cue.');
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fileSystem.writeAsStringAsync).toHaveBeenCalledTimes(1);
+    expect(createAudioPlayer).not.toHaveBeenCalled();
+  });
+
+  it('shares in-flight generation work for identical speech requests', async () => {
+    const fetchResult = deferred<Response>();
+    const fetchImpl = jest.fn(() => fetchResult.promise);
+    const { service } = loadTtsService({ fetchImpl });
+    const snapshot = service.createVoiceSnapshot('shared-voice', {
+      speed: 1,
+      stability: 0.5,
+      similarity: 0.8,
+      styleExaggeration: 0,
+    });
+
+    const first = service.prepareSpeech('Same cue.', snapshot);
+    const second = service.prepareSpeech('Same cue.', snapshot);
+    await drainMicrotasks();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    fetchResult.resolve(audioResponse());
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+  });
+
+  it('reuses deterministic cached audio files on later requests', async () => {
+    const { service, fetchImpl } = loadTtsService();
+
+    const first = await service.prepareSpeech('Cached cue.');
+    const second = await service.prepareSpeech('Cached cue.');
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(second.uri).toBe(first.uri);
+    expect(second.cacheKey).toBe(first.cacheKey);
+  });
+
+  it('times out slow requests and releases playback state', async () => {
+    jest.useFakeTimers();
+    const fetchImpl = jest.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
+      options.signal?.addEventListener?.('abort', () => {
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      });
+    }));
+    const { service } = loadTtsService({ fetchImpl });
+
+    const speech = service.speakWithElevenLabs('Slow cue.', {
+      purpose: 'trainer-preview',
+      timeoutMs: 100,
+    });
+    await drainMicrotasks();
+    jest.advanceTimersByTime(150);
+
+    await expect(speech).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('uses a playback watchdog when no finish event arrives', async () => {
+    jest.useFakeTimers();
+    const { service, players } = loadTtsService();
+
+    const speech = service.speakWithElevenLabs('No finish event.');
+    await drainMicrotasks();
+    expect(players).toHaveLength(1);
+
+    jest.advanceTimersByTime(13000);
+    await speech;
+
+    expect(players[0].remove).toHaveBeenCalledTimes(1);
   });
 });

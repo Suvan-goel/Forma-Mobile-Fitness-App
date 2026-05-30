@@ -39,8 +39,15 @@ import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { SetupGuideButton } from '../components/ui/SetupGuideButton';
-import { onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, onTrackingQualityWarning as ttsOnTrackingQualityWarning, onUnscoredRep as ttsOnUnscoredRep, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
-import { setActiveVoiceId, setActiveVoiceSettings } from '../../backend/services/elevenlabsTTS';
+import { getSetStartMessage, onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, onTrackingQualityWarning as ttsOnTrackingQualityWarning, onUnscoredRep as ttsOnUnscoredRep, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
+import {
+  createVoiceSnapshot,
+  prepareSpeech,
+  setActiveVoiceId,
+  setActiveVoiceSettings,
+  type PreparedSpeech,
+  type VoiceSnapshot,
+} from '../../backend/services/elevenlabsTTS';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
@@ -63,6 +70,13 @@ type PendingUIState = {
   exerciseDebug?: Record<string, unknown> | null;
   quality?: PoseQualitySnapshot;
   workoutUpdate?: PendingWorkoutUpdate;
+};
+
+type SetStartSpeechReservation = {
+  exerciseName: string;
+  message: string;
+  snapshot: VoiceSnapshot;
+  assetPromise: Promise<PreparedSpeech | null>;
 };
 
 type ConvertedLandmarks = {
@@ -106,6 +120,19 @@ function mergeTrackingWarnings(
   exerciseWarnings: PoseQualityWarning[] = [],
 ): PoseQualityWarning[] {
   return Array.from(new Set([...baseWarnings, ...exerciseWarnings]));
+}
+
+function resolveWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(null), timeoutMs);
+    promise.then((value) => {
+      clearTimeout(timeout);
+      resolve(value);
+    }).catch(() => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+  });
 }
 
 // Camera can be called from either the root stack or the record stack
@@ -327,15 +354,28 @@ export const CameraScreen: React.FC = () => {
     }, [isClosing, cameraPermissionGranted])
   );
 
-  // Speak set-start message as soon as camera screen loads (debug mode overrides TTS off)
+  // Warm the set-start cue on focus; playback happens only when the user starts recording.
   useFocusEffect(
     useCallback(() => {
-      if (!debugMode && isTTSEnabled && exerciseNameFromRoute) {
-        setActiveVoiceId(currentTrainer.voiceId);
-        setActiveVoiceSettings(currentTrainer.voiceSettings);
-        ttsResetCoach();
-        ttsOnSetStarted(exerciseNameFromRoute).catch(() => {});
+      setStartSpeechRef.current = null;
+
+      if (debugMode || !isTTSEnabled || !exerciseNameFromRoute) {
+        return;
       }
+
+      const snapshot = createVoiceSnapshot(currentTrainer.voiceId, currentTrainer.voiceSettings);
+      const message = getSetStartMessage(exerciseNameFromRoute);
+      const assetPromise = prepareSpeech(message, snapshot, {
+        purpose: 'prefetch',
+        timeoutMs: 12000,
+      }).catch(() => null);
+
+      setStartSpeechRef.current = {
+        exerciseName: exerciseNameFromRoute,
+        message,
+        snapshot,
+        assetPromise,
+      };
     }, [debugMode, isTTSEnabled, exerciseNameFromRoute, currentTrainer])
   );
 
@@ -352,6 +392,7 @@ export const CameraScreen: React.FC = () => {
   const lastDetectionTimeRef = useRef(0);
   const lastUIUpdateTimeRef = useRef(0);
   const lastTTSFeedbackTimestampRef = useRef<number | null>(null);
+  const setStartSpeechRef = useRef<SetStartSpeechReservation | null>(null);
   const pendingUIStateRef = useRef<PendingUIState | null>(null);
   const isRecordingRef = useRef(isRecording);
   const isPausedRef = useRef(isPaused);
@@ -825,6 +866,19 @@ export const CameraScreen: React.FC = () => {
     workoutDataRef.current = workoutData;
   }, [workoutData]);
 
+  const playReservedSetStartCue = useCallback(() => {
+    if (debugModeRef.current || !isTTSEnabledRef.current || !exerciseNameFromRoute) return;
+
+    const reservation = setStartSpeechRef.current;
+    if (!reservation || reservation.exerciseName !== exerciseNameFromRoute) return;
+    setStartSpeechRef.current = null;
+
+    resolveWithin(reservation.assetPromise, 2500).then((asset) => {
+      if (!asset) return;
+      ttsOnSetStarted(exerciseNameFromRoute, reservation.message, asset).catch(() => {});
+    }).catch(() => {});
+  }, [exerciseNameFromRoute]);
+
   const handleRecordPress = useCallback(async () => {
     if (isRecording) {
       // Read per-rep data from synchronous refs (immune to InteractionManager deferral)
@@ -1010,6 +1064,7 @@ export const CameraScreen: React.FC = () => {
       topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
       topPillWarningSmoothingRef.current = {};
       ttsResetCoach();
+      playReservedSetStartCue();
 
       // Start landmark recording when debug mode is on (works in Release builds too)
       if (debugModeRef.current) {
@@ -1031,7 +1086,7 @@ export const CameraScreen: React.FC = () => {
         });
       }
     }
-  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording, beginRecordingFinalization, endRecordingFinalization, setPendingRecording, sessionId]);
+  }, [isRecording, category, exerciseNameFromRoute, exerciseId, returnToCurrentWorkout, navigation, addSetToExercise, screenRecAvailable, startScreenRec, autoScreenRecording, beginRecordingFinalization, endRecordingFinalization, setPendingRecording, sessionId, playReservedSetStartCue]);
 
   const handleAutoRecToggle = useCallback(() => {
     const next = !autoScreenRecording;

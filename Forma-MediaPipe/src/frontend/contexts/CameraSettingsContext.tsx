@@ -61,7 +61,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         const saved = JSON.parse(raw);
         if (typeof saved.showFeedback === 'boolean') setShowFeedbackRaw(saved.showFeedback);
         if (typeof saved.isTTSEnabled === 'boolean') setIsTTSEnabledRaw(saved.isTTSEnabled);
-        if (DEV_FEATURES_ENABLED && typeof saved.showSkeletonOverlay === 'boolean') setShowSkeletonOverlayRaw(saved.showSkeletonOverlay);
+        if (typeof saved.showSkeletonOverlay === 'boolean') setShowSkeletonOverlayRaw(saved.showSkeletonOverlay);
         if (typeof saved.restTimerEnabled === 'boolean') setRestTimerEnabledRaw(saved.restTimerEnabled);
         if (typeof saved.restTimerDurationSeconds === 'number') setRestTimerDurationSecondsRaw(saved.restTimerDurationSeconds);
         if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
@@ -121,7 +121,7 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const contextValue = useMemo<CameraSettingsContextValue>(() => ({
     showFeedback,
     isTTSEnabled,
-    showSkeletonOverlay: DEV_FEATURES_ENABLED ? showSkeletonOverlay : false,
+    showSkeletonOverlay,
     debugMode: DEV_FEATURES_ENABLED ? debugMode : false,
     restTimerEnabled,
     restTimerDurationSeconds,

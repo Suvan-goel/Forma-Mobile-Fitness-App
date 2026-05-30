@@ -12,7 +12,13 @@
  * engine handles priority selection, throttling, and pool rotation.
  */
 
-import { speakWithElevenLabs, isElevenLabsAvailable } from './elevenlabsTTS';
+import {
+  speakWithElevenLabs,
+  isElevenLabsAvailable,
+  playPreparedSpeech,
+  type PreparedSpeech,
+  type SpeechOptions,
+} from './elevenlabsTTS';
 import {
   POSITIVE_POOLS,
   type FeedbackIssueCandidate,
@@ -182,7 +188,7 @@ export async function onSetEnded(
   await waitForSilence(3000); // max 3s wait
   state.isSpeaking = true;
   try {
-    await speakWithElevenLabs(summary);
+    await speakWithElevenLabs(summary, { purpose: 'summary' });
   } catch {
     // Swallow — TTS failure shouldn't block navigation
   } finally {
@@ -197,15 +203,23 @@ export function resetCoachState(): void {
   state = { ...DEFAULT_STATE };
 }
 
+export function getSetStartMessage(exerciseName: string): string {
+  return pickSetStartMessage(exerciseName);
+}
+
 /**
  * Call once when a new set begins (user taps record).
  * Speaks a short set-start cue with the exercise name.
  * Rotates across encouragement / form-reminder / neutral categories.
  */
-export async function onSetStarted(exerciseName: string): Promise<void> {
+export async function onSetStarted(
+  exerciseName: string,
+  messageOverride?: string,
+  preparedSpeech?: PreparedSpeech | null
+): Promise<void> {
   if (!isElevenLabsAvailable()) return;
-  const message = pickSetStartMessage(exerciseName);
-  await trySpeak(message);
+  const message = messageOverride ?? pickSetStartMessage(exerciseName);
+  await trySpeak(message, { purpose: 'set-start' }, preparedSpeech);
 }
 
 /**
@@ -223,12 +237,20 @@ export function stopCoach(): void {
 /**
  * Try to speak a message. If already speaking, drop the message (no interrupt).
  */
-async function trySpeak(text: string): Promise<void> {
+async function trySpeak(
+  text: string,
+  options: SpeechOptions = { purpose: 'coach' },
+  preparedSpeech?: PreparedSpeech | null
+): Promise<void> {
   if (!text || state.isSpeaking) return;
 
   state.isSpeaking = true;
   try {
-    await speakWithElevenLabs(text);
+    if (preparedSpeech) {
+      await playPreparedSpeech(preparedSpeech, options);
+    } else {
+      await speakWithElevenLabs(text, options);
+    }
   } catch {
     // Swallow — TTS failure shouldn't crash the app
   } finally {

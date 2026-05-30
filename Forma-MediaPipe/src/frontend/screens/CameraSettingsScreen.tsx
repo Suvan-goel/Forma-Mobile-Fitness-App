@@ -440,28 +440,24 @@ export const CameraSettingsScreen: React.FC = () => {
             style={styles.cardGradient}
           >
             <View style={styles.groupEdge}>
-              {DEV_FEATURES_ENABLED && (
-                <>
-                  <View style={styles.groupRow}>
-                    <IconBubble icon={Bone} />
-                    <View style={styles.rowLabelCol}>
-                      <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
-                      <Text style={styles.rowSubLabel}>Show pose landmarks on camera</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
-                    </TouchableOpacity>
-                    <Switch
-                      value={showSkeletonOverlay}
-                      onValueChange={setShowSkeletonOverlay}
-                      disabled={debugMode}
-                      trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
-                      thumbColor={showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
-                    />
-                  </View>
-                  <View style={styles.rowDivider} />
-                </>
-              )}
+              <View style={styles.groupRow}>
+                <IconBubble icon={Bone} />
+                <View style={styles.rowLabelCol}>
+                  <Text style={[styles.rowLabel, debugMode && styles.rowLabelDisabled]}>Skeleton Overlay</Text>
+                  <Text style={styles.rowSubLabel}>Show pose landmarks on camera</Text>
+                </View>
+                <TouchableOpacity onPress={() => setInfoModal('Skeleton Overlay')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
+                <Switch
+                  value={showSkeletonOverlay}
+                  onValueChange={setShowSkeletonOverlay}
+                  disabled={debugMode}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={showSkeletonOverlay ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                />
+              </View>
+              <View style={styles.rowDivider} />
               <View style={styles.groupRow}>
                 <IconBubble icon={Video} />
                 <View style={styles.rowLabelCol}>
