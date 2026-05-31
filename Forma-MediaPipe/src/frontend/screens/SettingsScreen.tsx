@@ -41,7 +41,6 @@ import { useWorkoutPreferences } from '../../backend/hooks/useWorkoutPreferences
 import { useAlert } from '../contexts/AlertContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 interface SettingsScreenProps {
@@ -60,6 +59,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
     showFeedback,
     isTTSEnabled,
     showSkeletonOverlay,
+    devFeaturesEnabled,
     selectedTrainerId,
     autoScreenRecording,
     setShowFeedback,
@@ -321,7 +321,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 onToggle={setIsTTSEnabled}
                 infoKey="Voice Coaching"
               />
-              {DEV_FEATURES_ENABLED && (
+              {devFeaturesEnabled && (
                 <>
                   <View style={styles.rowDivider} />
                   <ToggleRow

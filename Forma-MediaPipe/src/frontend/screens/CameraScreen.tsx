@@ -17,6 +17,10 @@ import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount } from '../../utils/poseAnalysis';
 import type { Keypoint } from '../../utils/poseAnalysis';
 import { parsePoseFrame, type ParsedPoseFrame } from '../../utils/pose/parsePoseFrame';
+import {
+  createPoseParserDiagnosticsAggregator,
+  formatPoseParserDiagnosticsSummary,
+} from '../../utils/pose/poseParserDiagnostics';
 import '../../utils/exercises/definitions/register';
 import {
   ExerciseRegistry,
@@ -99,6 +103,11 @@ const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
 const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
 const TOP_PILL_WARNING_STABLE_FRAMES = 3;
 const TOP_PILL_WARNING_HOLD_MS = 1000;
+const POSE_PARSER_DIAGNOSTICS_DEV_FLAG = process.env.EXPO_PUBLIC_POSE_PARSER_DIAGNOSTICS === '1';
+
+function shouldObservePoseParserDiagnostics(debugModeEnabled: boolean): boolean {
+  return __DEV__ && (debugModeEnabled || POSE_PARSER_DIAGNOSTICS_DEV_FLAG);
+}
 
 function getTrackingQualityTone(status: PoseQualitySnapshot['status'] | RepTrackingQuality['status'] | SetTrackingQualitySummary['status']) {
   if (status === 'high') {
@@ -286,6 +295,8 @@ export const CameraScreen: React.FC = () => {
   const landmarkBufferRef = useRef<LandmarkRecordingFrame[]>([]);
   const landmarkRecordingStartRef = useRef(0);
   const nativeLandmarkRecordingStartRef = useRef<number | null>(null);
+  const poseParserDiagnosticsRef = useRef(createPoseParserDiagnosticsAggregator());
+  const poseParserDiagnosticsActiveRef = useRef(false);
 
   const category = route.params?.category ?? 'Weightlifting';
   const exerciseNameFromRoute = route.params?.exerciseName;
@@ -432,6 +443,12 @@ export const CameraScreen: React.FC = () => {
   useEffect(() => {
     debugModeRef.current = debugMode;
   }, [debugMode]);
+  useEffect(() => {
+    poseParserDiagnosticsActiveRef.current = shouldObservePoseParserDiagnostics(debugMode);
+    if (!poseParserDiagnosticsActiveRef.current) {
+      poseParserDiagnosticsRef.current.reset();
+    }
+  }, [debugMode]);
 
   // Angle variance tracker — ring buffer of per-frame angle snapshots for static hold analysis
   const VARIANCE_WINDOW = 30; // ~1s at 30fps
@@ -454,6 +471,7 @@ export const CameraScreen: React.FC = () => {
     lastTTSFeedbackTimestampRef.current = null;
     poseQualityTrackerRef.current.reset();
     repQualityAccumulatorRef.current.reset();
+    poseParserDiagnosticsRef.current.reset();
     const def = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (def) {
       exerciseStateRef.current = def.createState();
@@ -564,7 +582,11 @@ export const CameraScreen: React.FC = () => {
     lastDetectionTimeRef.current = now;
 
     const converted = convertLandmarksToKeypoints(data);
-    if (!converted || converted.keypoints.length === 0) return;
+    if (!converted) return;
+    if (poseParserDiagnosticsActiveRef.current) {
+      poseParserDiagnosticsRef.current.observe(converted);
+    }
+    if (converted.keypoints.length === 0) return;
     const { keypoints, worldKeypoints, imageKeypoints, primarySource } = converted;
     const frameContext: ExerciseFrameContext = {
       worldKeypoints,
@@ -840,6 +862,10 @@ export const CameraScreen: React.FC = () => {
 
       setIsRecording(false);
       setExerciseDebug(null);
+      const parserDiagnosticsSummary = poseParserDiagnosticsActiveRef.current
+        ? poseParserDiagnosticsRef.current.snapshot()
+        : undefined;
+      let parserDiagnosticsLogged = false;
 
       // Save landmark recording when debug mode was on
       if (isRecordingLandmarksRef.current || landmarkBufferRef.current.length > 0) {
@@ -853,6 +879,7 @@ export const CameraScreen: React.FC = () => {
               description: `${repCount} reps`,
               expectedReps: repCount,
               expectedScoreRange: [0, 100],
+              ...(parserDiagnosticsSummary ? { parserDiagnostics: parserDiagnosticsSummary } : {}),
             },
             frames: landmarkBufferRef.current,
           };
@@ -867,6 +894,10 @@ export const CameraScreen: React.FC = () => {
             }
             console.log('=== LANDMARK_RECORDING_END ===');
             console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
+            if (parserDiagnosticsSummary) {
+              console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary));
+              parserDiagnosticsLogged = true;
+            }
           }
 
           const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -887,6 +918,12 @@ export const CameraScreen: React.FC = () => {
           })();
         }
         landmarkBufferRef.current = [];
+      }
+      if (__DEV__ && parserDiagnosticsSummary && parserDiagnosticsSummary.totalFrames > 0 && !parserDiagnosticsLogged) {
+        console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary));
+      }
+      if (poseParserDiagnosticsActiveRef.current) {
+        poseParserDiagnosticsRef.current.reset();
       }
 
       const formScores = accumulatedFormScoresRef.current;
@@ -1020,6 +1057,9 @@ export const CameraScreen: React.FC = () => {
       playReservedSetStartCue();
 
       // Start landmark recording when debug mode is on (works in Release builds too)
+      if (poseParserDiagnosticsActiveRef.current) {
+        poseParserDiagnosticsRef.current.reset();
+      }
       if (debugModeRef.current) {
         landmarkRecordingStartRef.current = Date.now();
         nativeLandmarkRecordingStartRef.current = null;

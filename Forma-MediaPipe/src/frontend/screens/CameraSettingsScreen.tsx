@@ -45,7 +45,6 @@ import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { MonoText } from '../components/typography/MonoText';
 import { TRAINERS } from '../constants/trainers';
-import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 /* ── Scroll Wheel Picker ─────────────────── */
@@ -213,6 +212,7 @@ export const CameraSettingsScreen: React.FC = () => {
     showFeedback,
     isTTSEnabled,
     showSkeletonOverlay,
+    devFeaturesEnabled,
     debugMode,
     restTimerEnabled,
     restTimerDurationSeconds,
@@ -222,6 +222,7 @@ export const CameraSettingsScreen: React.FC = () => {
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
+    setDevFeaturesEnabled,
     setDebugMode,
     setRestTimerEnabled,
     setRestTimerDurationSeconds,
@@ -251,6 +252,10 @@ export const CameraSettingsScreen: React.FC = () => {
     'Rest Timer': {
       title: 'Rest Timer',
       description: 'Automatically starts a countdown timer between sets so you can track your rest periods and stay on schedule.',
+    },
+    'Developer Features': {
+      title: 'Developer Features',
+      description: 'Unlocks internal camera diagnostics, debug overlays, and pose model controls for local testing.',
     },
     'Debug Mode': {
       title: 'Debug Mode',
@@ -522,22 +527,39 @@ export const CameraSettingsScreen: React.FC = () => {
             </View>
           </LinearGradient>
 
-          {DEV_FEATURES_ENABLED && (
-            <>
-              {/* ── DEVELOPER Section ─────────────────── */}
-              <View style={styles.sectionRow}>
-                <View style={styles.sectionLabelRow}>
-                  <Wrench size={13} color={COLORS.accent} strokeWidth={1.5} />
-                  <Text style={styles.sectionLabel}>DEVELOPER</Text>
+          {/* ── DEVELOPER Section ─────────────────── */}
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionLabelRow}>
+              <Wrench size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Text style={styles.sectionLabel}>DEVELOPER</Text>
+            </View>
+          </View>
+          <LinearGradient
+            colors={[...CARD_GRADIENT_COLORS]}
+            start={CARD_GRADIENT_START}
+            end={CARD_GRADIENT_END}
+            style={styles.cardGradient}
+          >
+            <View style={styles.groupEdge}>
+              <View style={styles.groupRow}>
+                <IconBubble icon={Wrench} color={devFeaturesEnabled ? COLORS.accent : COLORS.textSecondary} />
+                <View style={styles.rowLabelCol}>
+                  <Text style={[styles.rowLabel, devFeaturesEnabled && { color: COLORS.accent }]}>Developer Features</Text>
+                  <Text style={styles.rowSubLabel}>Unlock diagnostics and test controls</Text>
                 </View>
+                <TouchableOpacity onPress={() => setInfoModal('Developer Features')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Info size={16} color={COLORS.textTertiary} strokeWidth={1.5} />
+                </TouchableOpacity>
+                <Switch
+                  value={devFeaturesEnabled}
+                  onValueChange={setDevFeaturesEnabled}
+                  trackColor={{ false: 'rgba(255, 255, 255, 0.055)', true: 'rgba(139, 92, 246, 0.4)' }}
+                  thumbColor={devFeaturesEnabled ? COLORS.primary : 'rgba(255, 255, 255, 0.3)'}
+                />
               </View>
-              <LinearGradient
-                colors={[...CARD_GRADIENT_COLORS]}
-                start={CARD_GRADIENT_START}
-                end={CARD_GRADIENT_END}
-                style={styles.cardGradient}
-              >
-                <View style={styles.groupEdge}>
+              {devFeaturesEnabled && (
+                <>
+                  <View style={styles.rowDivider} />
                   <View style={styles.groupRow}>
                     <IconBubble icon={Bug} color={debugMode ? COLORS.orange : COLORS.textSecondary} />
                     <View style={styles.rowLabelCol}>
@@ -571,10 +593,10 @@ export const CameraSettingsScreen: React.FC = () => {
                       thumbColor={poseModel === 'pose_landmarker_heavy' ? '#60A5FA' : 'rgba(255, 255, 255, 0.3)'}
                     />
                   </View>
-                </View>
-              </LinearGradient>
-            </>
-          )}
+                </>
+              )}
+            </View>
+          </LinearGradient>
 
         </Animated.View>
       </ScrollView>

@@ -8,6 +8,7 @@ export type CameraSettings = {
   showFeedback: boolean;
   isTTSEnabled: boolean;
   showSkeletonOverlay: boolean;
+  devFeaturesEnabled: boolean;
   debugMode: boolean;
   restTimerEnabled: boolean;
   restTimerDurationSeconds: number;
@@ -20,6 +21,7 @@ type CameraSettingsContextValue = CameraSettings & {
   setShowFeedback: (value: boolean) => void;
   setIsTTSEnabled: (value: boolean) => void;
   setShowSkeletonOverlay: (value: boolean) => void;
+  setDevFeaturesEnabled: (value: boolean) => void;
   setDebugMode: (value: boolean) => void;
   setRestTimerEnabled: (value: boolean) => void;
   setRestTimerDurationSeconds: (value: number) => void;
@@ -32,6 +34,7 @@ const defaultSettings: CameraSettings = {
   showFeedback: true,
   isTTSEnabled: true,
   showSkeletonOverlay: false,
+  devFeaturesEnabled: DEV_FEATURES_ENABLED,
   debugMode: false,
   restTimerEnabled: false,
   restTimerDurationSeconds: 90,
@@ -46,7 +49,8 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const [showFeedback, setShowFeedbackRaw] = useState(defaultSettings.showFeedback);
   const [isTTSEnabled, setIsTTSEnabledRaw] = useState(defaultSettings.isTTSEnabled);
   const [showSkeletonOverlay, setShowSkeletonOverlayRaw] = useState(defaultSettings.showSkeletonOverlay);
-  const [debugMode, setDebugMode] = useState(defaultSettings.debugMode);
+  const [devFeaturesEnabled, setDevFeaturesEnabledRaw] = useState(defaultSettings.devFeaturesEnabled);
+  const [debugMode, setDebugModeRaw] = useState(defaultSettings.debugMode);
   const [restTimerEnabled, setRestTimerEnabledRaw] = useState(defaultSettings.restTimerEnabled);
   const [restTimerDurationSeconds, setRestTimerDurationSecondsRaw] = useState(defaultSettings.restTimerDurationSeconds);
   const [selectedTrainerId, setSelectedTrainerIdRaw] = useState(defaultSettings.selectedTrainerId);
@@ -62,21 +66,30 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         if (typeof saved.showFeedback === 'boolean') setShowFeedbackRaw(saved.showFeedback);
         if (typeof saved.isTTSEnabled === 'boolean') setIsTTSEnabledRaw(saved.isTTSEnabled);
         if (typeof saved.showSkeletonOverlay === 'boolean') setShowSkeletonOverlayRaw(saved.showSkeletonOverlay);
+        if (typeof saved.devFeaturesEnabled === 'boolean') setDevFeaturesEnabledRaw(saved.devFeaturesEnabled);
+        if (typeof saved.debugMode === 'boolean') setDebugModeRaw(saved.debugMode);
         if (typeof saved.restTimerEnabled === 'boolean') setRestTimerEnabledRaw(saved.restTimerEnabled);
         if (typeof saved.restTimerDurationSeconds === 'number') setRestTimerDurationSecondsRaw(saved.restTimerDurationSeconds);
         if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
         if (typeof saved.autoScreenRecording === 'boolean') setAutoScreenRecordingRaw(saved.autoScreenRecording);
-        if (DEV_FEATURES_ENABLED && (saved.poseModel === 'pose_landmarker_full' || saved.poseModel === 'pose_landmarker_heavy')) setPoseModelRaw(saved.poseModel);
+        if (
+          (DEV_FEATURES_ENABLED || saved.devFeaturesEnabled === true) &&
+          (saved.poseModel === 'pose_landmarker_full' || saved.poseModel === 'pose_landmarker_heavy')
+        ) setPoseModelRaw(saved.poseModel);
       } catch { /* ignore corrupt data */ }
     });
   }, []);
 
-  const persistSetting = useCallback((key: string, value: boolean | number | string) => {
+  const persistSettings = useCallback((values: Record<string, boolean | number | string>) => {
     AsyncStorage.getItem(CAMERA_SETTINGS_KEY).then((raw) => {
       const current = raw ? JSON.parse(raw) : {};
-      AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...current, [key]: value }));
+      AsyncStorage.setItem(CAMERA_SETTINGS_KEY, JSON.stringify({ ...current, ...values }));
     }).catch(() => { /* ignore write errors */ });
   }, []);
+
+  const persistSetting = useCallback((key: string, value: boolean | number | string) => {
+    persistSettings({ [key]: value });
+  }, [persistSettings]);
 
   const setShowFeedback = useCallback((value: boolean) => {
     setShowFeedbackRaw(value);
@@ -91,6 +104,19 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   const setShowSkeletonOverlay = useCallback((value: boolean) => {
     setShowSkeletonOverlayRaw(value);
     persistSetting('showSkeletonOverlay', value);
+  }, [persistSetting]);
+
+  const setDevFeaturesEnabled = useCallback((value: boolean) => {
+    setDevFeaturesEnabledRaw(value);
+    if (!value) {
+      setDebugModeRaw(false);
+    }
+    persistSettings(value ? { devFeaturesEnabled: value } : { devFeaturesEnabled: value, debugMode: false });
+  }, [persistSettings]);
+
+  const setDebugMode = useCallback((value: boolean) => {
+    setDebugModeRaw(value);
+    persistSetting('debugMode', value);
   }, [persistSetting]);
 
   const setRestTimerEnabled = useCallback((value: boolean) => {
@@ -122,15 +148,17 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     showFeedback,
     isTTSEnabled,
     showSkeletonOverlay,
-    debugMode: DEV_FEATURES_ENABLED ? debugMode : false,
+    devFeaturesEnabled,
+    debugMode: devFeaturesEnabled ? debugMode : false,
     restTimerEnabled,
     restTimerDurationSeconds,
     selectedTrainerId,
     autoScreenRecording,
-    poseModel: DEV_FEATURES_ENABLED ? poseModel : 'pose_landmarker_heavy',
+    poseModel: devFeaturesEnabled ? poseModel : 'pose_landmarker_heavy',
     setShowFeedback,
     setIsTTSEnabled,
     setShowSkeletonOverlay,
+    setDevFeaturesEnabled,
     setDebugMode,
     setRestTimerEnabled,
     setRestTimerDurationSeconds,
@@ -138,9 +166,9 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
     setAutoScreenRecording,
     setPoseModel,
   }), [
-    showFeedback, isTTSEnabled, showSkeletonOverlay, debugMode,
+    showFeedback, isTTSEnabled, showSkeletonOverlay, devFeaturesEnabled, debugMode,
     restTimerEnabled, restTimerDurationSeconds, selectedTrainerId, autoScreenRecording, poseModel,
-    setShowFeedback, setIsTTSEnabled, setShowSkeletonOverlay, setDebugMode,
+    setShowFeedback, setIsTTSEnabled, setShowSkeletonOverlay, setDevFeaturesEnabled, setDebugMode,
     setRestTimerEnabled, setRestTimerDurationSeconds, setSelectedTrainerId, setAutoScreenRecording, setPoseModel,
   ]);
 

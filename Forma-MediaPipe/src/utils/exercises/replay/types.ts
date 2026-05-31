@@ -7,6 +7,7 @@
  */
 
 import type { Keypoint } from '../../poseAnalysis';
+import type { PoseParserDiagnosticsSummary } from '../../pose/poseParserDiagnostics';
 import type { ExerciseFrameContext, ExerciseHeuristicConfig, RepDiagnostics } from '../types';
 import type {
   PoseQualitySnapshot,
@@ -30,6 +31,7 @@ export interface LandmarkRecording {
     fps?: number;
     frameCount?: number;
     processedFrameCount?: number;
+    parserDiagnostics?: PoseParserDiagnosticsSummary;
   };
   frames: Array<{
     timestamp: number;
