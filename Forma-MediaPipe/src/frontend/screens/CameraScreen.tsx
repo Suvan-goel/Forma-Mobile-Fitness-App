@@ -16,6 +16,7 @@ import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount } from '../../utils/poseAnalysis';
 import type { Keypoint } from '../../utils/poseAnalysis';
+import { parsePoseFrame, type ParsedPoseFrame } from '../../utils/pose/parsePoseFrame';
 import '../../utils/exercises/definitions/register';
 import {
   ExerciseRegistry,
@@ -81,14 +82,6 @@ type SetStartSpeechReservation = {
   assetPromise: Promise<PreparedSpeech | null>;
 };
 
-type ConvertedLandmarks = {
-  keypoints: Keypoint[];
-  worldKeypoints?: Keypoint[];
-  imageKeypoints?: Keypoint[];
-  primarySource: ExerciseFrameContext['primarySource'];
-  timestampMs?: number;
-};
-
 type LandmarkRecordingFrame = {
   timestamp: number;
   keypoints: Keypoint[];
@@ -140,19 +133,6 @@ function resolveWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | n
 // Camera can be called from either the root stack or the record stack
 type CameraScreenRouteProp = RouteProp<RootStackParamList, 'Camera'> | RouteProp<RecordStackParamList, 'Camera'>;
 type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList | RecordStackParamList>;
-
-// MediaPipe landmark names (33 landmarks)
-const MEDIAPIPE_LANDMARK_NAMES = [
-  'nose', 'left_eye_inner', 'left_eye', 'left_eye_outer',
-  'right_eye_inner', 'right_eye', 'right_eye_outer',
-  'left_ear', 'right_ear', 'mouth_left', 'mouth_right',
-  'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
-  'left_wrist', 'right_wrist', 'left_pinky', 'right_pinky',
-  'left_index', 'right_index', 'left_thumb', 'right_thumb',
-  'left_hip', 'right_hip', 'left_knee', 'right_knee',
-  'left_ankle', 'right_ankle', 'left_heel', 'right_heel',
-  'left_foot_index', 'right_foot_index'
-];
 
 function getLandmarkRecordingUploadUrl(): string | null {
   const configuredUrl = process.env.EXPO_PUBLIC_LANDMARK_RECORDING_UPLOAD_URL;
@@ -486,55 +466,8 @@ export const CameraScreen: React.FC = () => {
 
   // Convert MediaPipe landmark data to our Keypoint format.
   // Prefer worldLandmarks (3D body-centric coords) for view-angle-robust angle calculations.
-  const convertLandmarksToKeypoints = useCallback((landmarkData: any): ConvertedLandmarks | null => {
-    try {
-      let parsedData = landmarkData;
-      if (typeof landmarkData === 'string') {
-        parsedData = JSON.parse(landmarkData);
-      }
-
-      const worldLandmarksArray = parsedData?.worldLandmarks;
-      const imageLandmarksArray = parsedData?.landmarks || parsedData;
-      const rawTimestampMs = parsedData?.timestampMs ?? parsedData?.additionalData?.timestampMs;
-      const timestampMs = typeof rawTimestampMs === 'number' && Number.isFinite(rawTimestampMs)
-        ? rawTimestampMs
-        : undefined;
-
-      const hasWorld =
-        Array.isArray(worldLandmarksArray) &&
-        worldLandmarksArray.length >= 33 &&
-        typeof worldLandmarksArray[0]?.x === 'number';
-      const hasImage = Array.isArray(imageLandmarksArray) && imageLandmarksArray.length >= 33;
-      const landmarkToKeypoint = (landmark: any, index: number): Keypoint => ({
-        name: MEDIAPIPE_LANDMARK_NAMES[index] || `landmark_${index}`,
-        x: landmark.x ?? 0,
-        y: landmark.y ?? 0,
-        z: typeof landmark.z === 'number' ? landmark.z : 0,
-        score: landmark.visibility !== undefined ? landmark.visibility : 1.0,
-      });
-
-      const worldKeypoints = hasWorld
-        ? worldLandmarksArray.slice(0, 33).map(landmarkToKeypoint)
-        : null;
-      const imageKeypoints = hasImage
-        ? imageLandmarksArray.slice(0, 33).map(landmarkToKeypoint)
-        : null;
-      const keypoints = worldKeypoints ?? imageKeypoints;
-
-      if (!keypoints) {
-        return null;
-      }
-
-      return {
-        keypoints,
-        worldKeypoints: worldKeypoints ?? undefined,
-        imageKeypoints: imageKeypoints ?? undefined,
-        primarySource: worldKeypoints ? 'world' : 'image',
-        timestampMs,
-      };
-    } catch {
-      return null;
-    }
+  const convertLandmarksToKeypoints = useCallback((landmarkData: unknown): ParsedPoseFrame | null => {
+    return parsePoseFrame(landmarkData);
   }, []);
 
   // Flush pending UI updates to React state (throttled to avoid blocking main thread)
