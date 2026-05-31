@@ -257,6 +257,12 @@ const SET_START_POOLS: Record<SetStartCategory, MessagePool> = {
   },
 };
 
+export function getAllSetStartMessages(exerciseName: string): string[] {
+  return Object.values(SET_START_POOLS)
+    .flatMap((pool) => pool.messages)
+    .map((template) => template.replace('{exercise}', exerciseName));
+}
+
 /** All set-start categories in rotation order. */
 const SET_START_CATEGORIES: SetStartCategory[] = [
   'encouragement',

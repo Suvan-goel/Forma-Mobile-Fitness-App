@@ -20,12 +20,24 @@ async function drainMicrotasks(count = 30): Promise<void> {
   }
 }
 
-function audioResponse(bytes = [1, 2, 3]): Response {
+function audioResponse(bytes = [1, 2, 3], cacheStatus = 'generated'): Response {
   return {
     ok: true,
     status: 200,
+    headers: {
+      get: jest.fn((name: string) => name.toLowerCase() === 'x-tts-cache' ? cacheStatus : null),
+    },
     arrayBuffer: async () => new Uint8Array(bytes).buffer,
-  } as Response;
+  } as unknown as Response;
+}
+
+function httpResponse(status: number, body = ''): Response {
+  return {
+    ok: false,
+    status,
+    headers: { get: jest.fn(() => null) },
+    text: async () => body,
+  } as unknown as Response;
 }
 
 function createFileSystemMock() {
@@ -102,7 +114,7 @@ function loadTtsService(options: {
   });
   const fetchImpl = options.fetchImpl ?? jest.fn(async () => audioResponse());
   const getSession = options.getSessionImpl ?? jest.fn(async () => ({
-    data: { session: { access_token: 'session-token' } },
+    data: { session: { access_token: 'session-token', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
   }));
 
   jest.doMock('../supabase/client', () => ({
@@ -347,6 +359,67 @@ describe('ElevenLabs TTS expo-audio playback', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(second.uri).toBe(first.uri);
     expect(second.cacheKey).toBe(first.cacheKey);
+  });
+
+  it('maps server cache responses onto prepared speech metadata', async () => {
+    const { service } = loadTtsService({
+      fetchImpl: jest.fn(async () => audioResponse([8, 9, 10], 'storage-hit')),
+    });
+
+    const prepared = await service.prepareSpeech('Server cached cue.');
+
+    expect(prepared.source).toBe('server-cache');
+    expect(prepared.prepareDurationMs).toEqual(expect.any(Number));
+  });
+
+  it('memoizes auth tokens and refreshes once after a 401', async () => {
+    const getSession = jest
+      .fn()
+      .mockResolvedValueOnce({
+        data: { session: { access_token: 'stale-token', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
+      })
+      .mockResolvedValueOnce({
+        data: { session: { access_token: 'fresh-token', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
+      });
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(httpResponse(401, 'expired'))
+      .mockResolvedValueOnce(audioResponse([4, 5, 6]))
+      .mockResolvedValueOnce(audioResponse([7, 8, 9]));
+    const { service } = loadTtsService({ fetchImpl, getSessionImpl: getSession });
+
+    await service.prepareSpeech('Refresh me.');
+    await service.prepareSpeech('Use memoized token.');
+
+    expect(getSession).toHaveBeenCalledTimes(2);
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).headers).toEqual(expect.objectContaining({
+      Authorization: 'Bearer stale-token',
+    }));
+    expect((fetchImpl.mock.calls[1][1] as RequestInit).headers).toEqual(expect.objectContaining({
+      Authorization: 'Bearer fresh-token',
+    }));
+    expect((fetchImpl.mock.calls[2][1] as RequestInit).headers).toEqual(expect.objectContaining({
+      Authorization: 'Bearer fresh-token',
+    }));
+  });
+
+  it('suppresses prefetch network work while the failure circuit is open but still reuses local cache', async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(audioResponse([1, 2, 3]))
+      .mockResolvedValue(httpResponse(500, 'unavailable'));
+    const { service } = loadTtsService({ fetchImpl });
+
+    await service.prepareSpeech('Cached before failures.', undefined, { purpose: 'prefetch' });
+    await expect(service.prepareSpeech('Failure one.', undefined, { purpose: 'prefetch' })).rejects.toMatchObject({ status: 500 });
+    await expect(service.prepareSpeech('Failure two.', undefined, { purpose: 'prefetch' })).rejects.toMatchObject({ status: 500 });
+    await expect(service.prepareSpeech('Failure three.', undefined, { purpose: 'prefetch' })).rejects.toMatchObject({ status: 500 });
+
+    await expect(service.prefetchSpeech('Suppressed cue.')).resolves.toBeUndefined();
+    const cached = await service.prepareSpeech('Cached before failures.', undefined, { purpose: 'prefetch' });
+
+    expect(cached.source).toBe('local-cache');
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
   it('times out slow requests and releases playback state', async () => {

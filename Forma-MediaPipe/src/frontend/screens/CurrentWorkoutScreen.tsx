@@ -44,6 +44,8 @@ import { WeightInputModal } from '../components/ui/WeightInputModal';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { cleanupTempRecording } from '../../backend/services/screenRecording';
+import { warmTrainerCuePack } from '../../backend/services/ttsCuePack';
+import { DEFAULT_TRAINER_ID, TRAINERS } from '../constants/trainers';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 export type { LoggedSet };
@@ -455,7 +457,17 @@ export const CurrentWorkoutScreen: React.FC = () => {
   exercisesRef.current = exercises;
   const weightModalDataRef = useRef(weightModalData);
   weightModalDataRef.current = weightModalData;
-  const { restTimerEnabled, restTimerDurationSeconds } = useCameraSettings();
+  const {
+    restTimerEnabled,
+    restTimerDurationSeconds,
+    isTTSEnabled,
+    debugMode,
+    selectedTrainerId,
+  } = useCameraSettings();
+  const currentTrainer = useMemo(
+    () => TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ?? TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID)!,
+    [selectedTrainerId]
+  );
   isPausedRef.current = workoutPaused;
 
   /* ── Timer logic (interval lives inside WorkoutTimerDisplay) ──── */
@@ -594,13 +606,20 @@ export const CurrentWorkoutScreen: React.FC = () => {
   }, [navigation]);
 
   const handleAddSet = useCallback((exercise: { id: string; name: string; category: string }) => {
+    if (isTTSEnabled && !debugMode) {
+      warmTrainerCuePack({
+        trainer: currentTrainer,
+        exerciseName: exercise.name,
+        reason: 'exercise-selected',
+      }).catch(() => {});
+    }
     navigation.navigate('Camera', {
       exerciseName: exercise.name,
       category: exercise.category,
       exerciseId: exercise.id,
       returnToCurrentWorkout: true,
     });
-  }, [navigation]);
+  }, [currentTrainer, debugMode, isTTSEnabled, navigation]);
 
   const handleOpenManualSet = useCallback((exercise: { id: string; name: string; sets: LoggedSet[] }) => {
     const mostRecentUnit = [...exercise.sets].reverse().find((set) => set.weightUnit)?.weightUnit ?? 'kg';

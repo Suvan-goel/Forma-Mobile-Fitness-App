@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -13,6 +13,9 @@ import { CheckCircle2, Video, Lightbulb, Dumbbell, Activity, Move, Award, Chevro
 import { COLORS, SPACING, FONTS, CARD_STYLE, PAGE_TITLE_TEXT } from '../constants/theme';
 import { RootStackParamList } from '../app/RootNavigator';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
+import { useCameraSettings } from '../contexts/CameraSettingsContext';
+import { DEFAULT_TRAINER_ID, TRAINERS } from '../constants/trainers';
+import { warmTrainerCuePack } from '../../backend/services/ttsCuePack';
 
 type WorkoutExercisesRouteProp = RouteProp<RootStackParamList, 'WorkoutExercises'>;
 
@@ -67,11 +70,23 @@ export const WorkoutExercisesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { category, color, iconName } = route.params;
   const Icon = iconMap[iconName] || Dumbbell;
+  const { isTTSEnabled, debugMode, selectedTrainerId } = useCameraSettings();
+  const currentTrainer = useMemo(
+    () => TRAINERS.find((trainer) => trainer.id === selectedTrainerId) ?? TRAINERS.find((trainer) => trainer.id === DEFAULT_TRAINER_ID)!,
+    [selectedTrainerId]
+  );
 
   const exercises = workoutExercises[category] || [];
 
   const handleStartWorkout = () => {
     const singleExercise = exercises.length === 1 ? exercises[0] : undefined;
+    if (singleExercise && isTTSEnabled && !debugMode) {
+      warmTrainerCuePack({
+        trainer: currentTrainer,
+        exerciseName: singleExercise,
+        reason: 'exercise-selected',
+      }).catch(() => {});
+    }
     navigation.navigate('Camera', {
       category,
       exerciseName: singleExercise,

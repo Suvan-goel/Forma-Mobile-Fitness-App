@@ -6,6 +6,14 @@
  */
 
 import { supabase } from './supabase/client';
+import {
+  TTS_MODEL_ID,
+  buildTtsCacheKey,
+  normalizeTtsText,
+  normalizeTtsVoiceSettings,
+  type TtsVoiceSettings,
+  type TtsVoiceSnapshot,
+} from './ttsCacheKey';
 
 let ExpoAudio: any = null;
 let FileSystem: any = null;
@@ -20,20 +28,12 @@ try {
   nativeModulesAvailable = false;
 }
 
-export type ElevenLabsVoiceSettings = {
-  speed: number;
-  stability: number;
-  similarity: number;
-  styleExaggeration: number;
-};
+export type ElevenLabsVoiceSettings = TtsVoiceSettings;
 
-export type VoiceSnapshot = {
-  voiceId: string;
-  voiceSettings: ElevenLabsVoiceSettings;
-  modelId: 'eleven_flash_v2_5';
-};
+export type VoiceSnapshot = TtsVoiceSnapshot;
 
 export type SpeechPurpose = 'trainer-preview' | 'set-start' | 'coach' | 'summary' | 'prefetch';
+export type PreparedSpeechSource = 'local-cache' | 'server-cache' | 'generated' | 'unknown';
 
 export type SpeechOptions = {
   purpose?: SpeechPurpose;
@@ -48,15 +48,36 @@ export type PreparedSpeech = {
   text: string;
   snapshot: VoiceSnapshot;
   generatedAt: number;
+  source?: PreparedSpeechSource;
+  prepareDurationMs: number;
+};
+
+export type TtsTelemetryEvent = {
+  type: string;
+  purpose?: SpeechPurpose;
+  cacheKey?: string;
+  source?: PreparedSpeechSource;
+  durationMs?: number;
+  status?: number;
+  reason?: string;
+  trainerId?: string;
+  exerciseName?: string;
+  cueCount?: number;
+  skipped?: boolean;
+  errorName?: string;
 };
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const TTS_MODEL_ID: VoiceSnapshot['modelId'] = 'eleven_flash_v2_5';
 const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
 const TTS_CACHE_DIR_NAME = 'tts-cache/';
 const TTS_CACHE_MAX_FILES = 120;
 const TTS_CACHE_MAX_BYTES = 30 * 1024 * 1024;
 const DEFAULT_PLAYBACK_WATCHDOG_MS = 12000;
+const SESSION_REFRESH_MARGIN_MS = 60 * 1000;
+const DEFAULT_SESSION_TTL_MS = 5 * 60 * 1000;
+const CIRCUIT_FAILURE_WINDOW_MS = 60 * 1000;
+const CIRCUIT_FAILURE_THRESHOLD = 3;
+const CIRCUIT_OPEN_MS = 2 * 60 * 1000;
 
 const PURPOSE_TIMEOUT_MS: Record<SpeechPurpose, number> = {
   'trainer-preview': 6000,
@@ -81,11 +102,23 @@ let activePlaybackSubscription: { remove?: () => void } | null = null;
 let activePlaybackResolve: (() => void) | null = null;
 let cleanupScheduled = false;
 let cacheDirectoryReady: Promise<string> | null = null;
+let cachedAccessToken: { token: string; expiresAtMs: number } | null = null;
+let inFlightAccessToken: Promise<string> | null = null;
+let circuitOpenUntilMs = 0;
 
 const purposeGenerations = new Map<SpeechPurpose, number>();
 const activeRequestControllers = new Map<SpeechPurpose, Set<AbortController>>();
 const inFlightSpeech = new Map<string, Promise<PreparedSpeech>>();
 const cacheAccessTimes = new Map<string, number>();
+const recentFailureTimes: number[] = [];
+
+export function logTtsEvent(event: TtsTelemetryEvent): void {
+  if (process.env.NODE_ENV === 'test') return;
+  console.log('ElevenLabs TTS event', {
+    ...event,
+    at: new Date().toISOString(),
+  });
+}
 
 /**
  * Override the active voice ID at runtime (e.g. when the user selects a trainer).
@@ -161,38 +194,6 @@ async function initializeAudio(): Promise<void> {
   }
 }
 
-function normalizeText(text: string): string {
-  return text.trim().replace(/\s+/g, ' ');
-}
-
-function normalizeVoiceSettings(settings: ElevenLabsVoiceSettings): ElevenLabsVoiceSettings {
-  return {
-    speed: Number(settings.speed.toFixed(3)),
-    stability: Number(settings.stability.toFixed(3)),
-    similarity: Number(settings.similarity.toFixed(3)),
-    styleExaggeration: Number(settings.styleExaggeration.toFixed(3)),
-  };
-}
-
-function stableHash(input: string): string {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-function getCacheKey(text: string, snapshot: VoiceSnapshot): string {
-  const payload = JSON.stringify({
-    text: normalizeText(text),
-    modelId: snapshot.modelId,
-    voiceId: snapshot.voiceId,
-    voiceSettings: normalizeVoiceSettings(snapshot.voiceSettings),
-  });
-  return `tts_${stableHash(payload)}`;
-}
-
 async function ensureCacheDirectory(): Promise<string> {
   if (!nativeModulesAvailable || !FileSystem?.cacheDirectory) {
     throw new Error('Native modules not available - rebuild development client');
@@ -266,6 +267,95 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+function timeoutError(): Error {
+  const error = abortError('TTS request timed out');
+  (error as Error & { isTimeout?: boolean }).isTimeout = true;
+  return error;
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && (error as Error & { isTimeout?: boolean }).isTimeout === true;
+}
+
+class TtsHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'TtsHttpError';
+  }
+}
+
+class TtsCircuitOpenError extends Error {
+  constructor() {
+    super('TTS prefetch suppressed while failure circuit is open');
+    this.name = 'TtsCircuitOpenError';
+  }
+}
+
+function isCircuitOpen(): boolean {
+  return Date.now() < circuitOpenUntilMs;
+}
+
+function resetCircuitFailures(): void {
+  recentFailureTimes.length = 0;
+}
+
+function recordTtsFailure(error: unknown, purpose: SpeechPurpose): void {
+  const isServerFailure = error instanceof TtsHttpError && (error.status === 429 || error.status >= 500);
+  const isNetworkOrTimeout = !(error instanceof TtsHttpError) && (!isAbortError(error) || isTimeoutError(error));
+  if (!isServerFailure && !isNetworkOrTimeout) return;
+
+  const now = Date.now();
+  while (recentFailureTimes.length > 0 && now - recentFailureTimes[0] > CIRCUIT_FAILURE_WINDOW_MS) {
+    recentFailureTimes.shift();
+  }
+  recentFailureTimes.push(now);
+
+  if (recentFailureTimes.length >= CIRCUIT_FAILURE_THRESHOLD) {
+    circuitOpenUntilMs = now + CIRCUIT_OPEN_MS;
+    resetCircuitFailures();
+    logTtsEvent({
+      type: 'circuit-open',
+      purpose,
+      durationMs: CIRCUIT_OPEN_MS,
+      errorName: error instanceof Error ? error.name : 'Unknown',
+    });
+  }
+}
+
+async function getAccessToken(forceRefresh = false): Promise<string> {
+  const now = Date.now();
+  if (
+    !forceRefresh &&
+    cachedAccessToken &&
+    cachedAccessToken.expiresAtMs - now > SESSION_REFRESH_MARGIN_MS
+  ) {
+    return cachedAccessToken.token;
+  }
+
+  if (!inFlightAccessToken || forceRefresh) {
+    inFlightAccessToken = supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const expiresAtMs = typeof session.expires_at === 'number'
+        ? session.expires_at * 1000
+        : Date.now() + DEFAULT_SESSION_TTL_MS;
+      cachedAccessToken = { token: session.access_token, expiresAtMs };
+      return session.access_token;
+    }).finally(() => {
+      inFlightAccessToken = null;
+    });
+  }
+
+  return inFlightAccessToken;
+}
+
+function clearAccessTokenCache(): void {
+  cachedAccessToken = null;
+  inFlightAccessToken = null;
+}
+
 function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
@@ -295,7 +385,11 @@ async function fetchWithRetry(
   retries = 2
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let didTimeout = false;
+  const timeout = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
   registerRequestController(purpose, controller);
 
   try {
@@ -306,19 +400,21 @@ async function fetchWithRetry(
       try {
         response = await fetch(url, { ...options, signal: controller.signal });
       } catch (error) {
-        if (controller.signal.aborted || isAbortError(error)) throw abortError();
+        if (controller.signal.aborted || isAbortError(error)) {
+          throw didTimeout ? timeoutError() : abortError();
+        }
         throw error;
       }
 
       if (response.ok) return response;
       if (response.status !== 429 && response.status !== 503) {
-        throw new Error(await formatTtsError(response));
+        throw new TtsHttpError(await formatTtsError(response), response.status);
       }
 
       if (attempt < retries) {
         await abortableDelay(500 * Math.pow(2, attempt), controller.signal);
       } else {
-        throw new Error(await formatTtsError(response));
+        throw new TtsHttpError(await formatTtsError(response), response.status);
       }
     }
   } finally {
@@ -345,30 +441,58 @@ async function fetchAndCacheSpeech(
   snapshot: VoiceSnapshot,
   options: Required<Pick<SpeechOptions, 'purpose' | 'timeoutMs'>>
 ): Promise<PreparedSpeech> {
+  const prepareStartedAt = Date.now();
   if (!SUPABASE_URL) {
     throw new Error('Supabase URL not configured');
   }
 
   const cacheDir = await ensureCacheDirectory();
-  const cacheKey = getCacheKey(text, snapshot);
+  const cacheKey = buildTtsCacheKey(text, snapshot);
   const fileUri = getCacheUri(cacheDir, cacheKey);
   const cached = await FileSystem.getInfoAsync(fileUri);
   if (cached?.exists) {
+    const durationMs = Date.now() - prepareStartedAt;
     cacheAccessTimes.set(cacheKey, Date.now());
-    return { uri: fileUri, cacheKey, text, snapshot, generatedAt: Date.now() };
+    logTtsEvent({
+      type: 'prepare-complete',
+      purpose: options.purpose,
+      cacheKey,
+      source: 'local-cache',
+      durationMs,
+    });
+    return {
+      uri: fileUri,
+      cacheKey,
+      text,
+      snapshot,
+      generatedAt: Date.now(),
+      source: 'local-cache',
+      prepareDurationMs: durationMs,
+    };
   }
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
+  logTtsEvent({
+    type: 'local-cache-miss',
+    purpose: options.purpose,
+    cacheKey,
+  });
+
+  if (options.purpose === 'prefetch' && isCircuitOpen()) {
+    logTtsEvent({
+      type: 'prefetch-suppressed',
+      purpose: options.purpose,
+      cacheKey,
+      durationMs: Math.max(0, circuitOpenUntilMs - Date.now()),
+    });
+    throw new TtsCircuitOpenError();
   }
 
-  const response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/tts`, {
+  const buildRequest = (accessToken: string): RequestInit => ({
     method: 'POST',
     headers: {
       'Accept': 'audio/mpeg',
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
       text,
@@ -380,18 +504,99 @@ async function fetchAndCacheSpeech(
         style: snapshot.voiceSettings.styleExaggeration,
       },
     }),
-  }, options.purpose, options.timeoutMs);
+  });
+
+  const fetchStartedAt = Date.now();
+  let response: Response;
+  try {
+    const accessToken = await getAccessToken();
+    try {
+      response = await fetchWithRetry(
+        `${SUPABASE_URL}/functions/v1/tts`,
+        buildRequest(accessToken),
+        options.purpose,
+        options.timeoutMs
+      );
+    } catch (error) {
+      if (error instanceof TtsHttpError && error.status === 401) {
+        clearAccessTokenCache();
+        const refreshedToken = await getAccessToken(true);
+        response = await fetchWithRetry(
+          `${SUPABASE_URL}/functions/v1/tts`,
+          buildRequest(refreshedToken),
+          options.purpose,
+          options.timeoutMs
+        );
+      } else {
+        throw error;
+      }
+    }
+  } catch (error) {
+    recordTtsFailure(error, options.purpose);
+    logTtsEvent({
+      type: isTimeoutError(error) ? 'fetch-timeout' : 'fetch-failed',
+      purpose: options.purpose,
+      cacheKey,
+      durationMs: Date.now() - fetchStartedAt,
+      status: error instanceof TtsHttpError ? error.status : undefined,
+      errorName: error instanceof Error ? error.name : 'Unknown',
+    });
+    throw error;
+  }
+
+  const fetchDurationMs = Date.now() - fetchStartedAt;
+  resetCircuitFailures();
+  const serverCacheStatus = response.headers?.get?.('x-tts-cache') ?? null;
+  const source: PreparedSpeechSource =
+    serverCacheStatus === 'storage-hit'
+      ? 'server-cache'
+      : serverCacheStatus === 'generated'
+        ? 'generated'
+        : 'unknown';
+
+  logTtsEvent({
+    type: 'fetch-complete',
+    purpose: options.purpose,
+    cacheKey,
+    source,
+    durationMs: fetchDurationMs,
+    status: response.status,
+  });
 
   const arrayBuffer = await response.arrayBuffer();
   const base64Audio = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
+  const writeStartedAt = Date.now();
   await FileSystem.writeAsStringAsync(fileUri, base64Audio, {
     encoding: FileSystem.EncodingType.Base64,
   });
 
   cacheAccessTimes.set(cacheKey, Date.now());
   scheduleCacheCleanup();
+  const prepareDurationMs = Date.now() - prepareStartedAt;
+  logTtsEvent({
+    type: 'file-write-complete',
+    purpose: options.purpose,
+    cacheKey,
+    source,
+    durationMs: Date.now() - writeStartedAt,
+  });
+  logTtsEvent({
+    type: 'prepare-complete',
+    purpose: options.purpose,
+    cacheKey,
+    source,
+    durationMs: prepareDurationMs,
+  });
 
-  return { uri: fileUri, cacheKey, text, snapshot, generatedAt: Date.now() };
+  return {
+    uri: fileUri,
+    cacheKey,
+    text,
+    snapshot,
+    generatedAt: Date.now(),
+    source,
+    prepareDurationMs,
+  };
 }
 
 function resolvePurpose(options?: SpeechOptions): SpeechPurpose {
@@ -407,7 +612,7 @@ export async function prepareSpeech(
   snapshot: VoiceSnapshot = getActiveVoiceSnapshot(),
   options: SpeechOptions = {}
 ): Promise<PreparedSpeech> {
-  const normalizedText = normalizeText(text);
+  const normalizedText = normalizeTtsText(text);
   if (!normalizedText) throw new Error('TTS text is empty');
   if (!nativeModulesAvailable || !FileSystem) {
     throw new Error('Native modules not available - rebuild development client');
@@ -415,12 +620,12 @@ export async function prepareSpeech(
 
   const frozenSnapshot: VoiceSnapshot = {
     voiceId: snapshot.voiceId,
-    voiceSettings: normalizeVoiceSettings(snapshot.voiceSettings),
+    voiceSettings: normalizeTtsVoiceSettings(snapshot.voiceSettings),
     modelId: snapshot.modelId,
   };
   const purpose = resolvePurpose(options);
   const timeoutMs = resolveTimeoutMs(purpose, options);
-  const cacheKey = getCacheKey(normalizedText, frozenSnapshot);
+  const cacheKey = buildTtsCacheKey(normalizedText, frozenSnapshot);
   const existing = inFlightSpeech.get(cacheKey);
   if (existing) return existing;
 
@@ -438,11 +643,16 @@ export async function prefetchSpeech(
   snapshot: VoiceSnapshot = getActiveVoiceSnapshot(),
   options: SpeechOptions = {}
 ): Promise<void> {
-  await prepareSpeech(text, snapshot, { ...options, purpose: options.purpose ?? 'prefetch' });
+  try {
+    await prepareSpeech(text, snapshot, { ...options, purpose: options.purpose ?? 'prefetch' });
+  } catch (error) {
+    if (error instanceof TtsCircuitOpenError) return;
+    throw error;
+  }
 }
 
 function estimatePlaybackWatchdogMs(text: string): number {
-  const estimated = normalizeText(text).length * 90 + 3000;
+  const estimated = normalizeTtsText(text).length * 90 + 3000;
   return Math.min(20000, Math.max(DEFAULT_PLAYBACK_WATCHDOG_MS, estimated));
 }
 
@@ -514,6 +724,7 @@ export async function playPreparedSpeech(
   asset: PreparedSpeech,
   options: SpeechOptions = {}
 ): Promise<void> {
+  const playbackRequestedAt = Date.now();
   const purpose = resolvePurpose(options);
   if (!nativeModulesAvailable || !ExpoAudio) {
     console.warn('ElevenLabs TTS: Native modules not available.');
@@ -555,6 +766,13 @@ export async function playPreparedSpeech(
   });
 
   player.play();
+  logTtsEvent({
+    type: 'playback-start',
+    purpose,
+    cacheKey: asset.cacheKey,
+    source: asset.source,
+    durationMs: Date.now() - playbackRequestedAt,
+  });
   await playbackFinished;
 }
 
@@ -575,7 +793,7 @@ async function resolveWithin<T>(promise: Promise<T>, timeoutMs: number): Promise
  * Speak the given text using ElevenLabs TTS.
  */
 export async function speakWithElevenLabs(text: string, options: SpeechOptions = {}): Promise<void> {
-  const normalizedText = normalizeText(text);
+  const normalizedText = normalizeTtsText(text);
   if (!normalizedText) return;
 
   if (!nativeModulesAvailable || !ExpoAudio) {
@@ -598,7 +816,18 @@ export async function speakWithElevenLabs(text: string, options: SpeechOptions =
       ? await resolveWithin(preparedPromise, options.maxPlaybackDelayMs)
       : await preparedPromise;
 
-    if (!asset || generation !== getGeneration(purpose)) return;
+    if (!asset || generation !== getGeneration(purpose)) {
+      if (!asset && options.maxPlaybackDelayMs !== undefined) {
+        logTtsEvent({
+          type: 'playback-skipped',
+          purpose,
+          durationMs: options.maxPlaybackDelayMs,
+          reason: 'max-playback-delay',
+          skipped: true,
+        });
+      }
+      return;
+    }
     await playPreparedSpeech(asset, options);
   } catch (error) {
     if (!isAbortError(error)) {

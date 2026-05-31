@@ -26,12 +26,11 @@ import { TRAINERS, type Trainer } from '../constants/trainers';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import {
   cancelSpeech,
-  createVoiceSnapshot,
-  prefetchSpeech,
   setActiveVoiceId,
   setActiveVoiceSettings,
   speakWithElevenLabs,
 } from '../../backend/services/elevenlabsTTS';
+import { cancelTrainerCuePackWarming, warmTrainerCuePack } from '../../backend/services/ttsCuePack';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');
@@ -66,29 +65,16 @@ export const TrainerPickerScreen: React.FC = () => {
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-
-      const warmTrainerPreviews = async () => {
-        const selectedTrainer = TRAINERS.find((trainer) => trainer.id === selectedTrainerId);
-        const trainersToWarm = [
-          ...(selectedTrainer ? [selectedTrainer] : []),
-          ...TRAINERS.filter((trainer) => trainer.id !== selectedTrainerId),
-        ];
-
-        for (const trainer of trainersToWarm) {
-          if (cancelled) break;
-          await prefetchSpeech(
-            getTrainerPreviewGreeting(trainer),
-            createVoiceSnapshot(trainer.voiceId, trainer.voiceSettings),
-            { purpose: 'prefetch' }
-          ).catch(() => {});
-        }
-      };
-
-      warmTrainerPreviews();
+      const selectedTrainer = TRAINERS.find((trainer) => trainer.id === selectedTrainerId);
+      if (selectedTrainer) {
+        warmTrainerCuePack({
+          trainer: selectedTrainer,
+          reason: 'trainer-picker',
+        }).catch(() => {});
+      }
 
       return () => {
-        cancelled = true;
+        cancelTrainerCuePackWarming();
         cancelSpeech('trainer-preview').catch(() => {});
       };
     }, [selectedTrainerId])

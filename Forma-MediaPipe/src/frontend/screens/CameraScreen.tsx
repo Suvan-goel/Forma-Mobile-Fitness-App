@@ -42,12 +42,14 @@ import { SetupGuideButton } from '../components/ui/SetupGuideButton';
 import { getSetStartMessage, onFormFeedback as ttsOnFormFeedback, onRepCompleted as ttsOnRepCompleted, onSetEnded as ttsOnSetEnded, onSetStarted as ttsOnSetStarted, onTrackingQualityWarning as ttsOnTrackingQualityWarning, onUnscoredRep as ttsOnUnscoredRep, resetCoachState as ttsResetCoach, stopCoach as ttsStopCoach } from '../../backend/services/ttsCoach';
 import {
   createVoiceSnapshot,
+  logTtsEvent,
   prepareSpeech,
   setActiveVoiceId,
   setActiveVoiceSettings,
   type PreparedSpeech,
   type VoiceSnapshot,
 } from '../../backend/services/elevenlabsTTS';
+import { cancelTrainerCuePackWarming, warmTrainerCuePack } from '../../backend/services/ttsCuePack';
 import { TRAINERS, DEFAULT_TRAINER_ID } from '../constants/trainers';
 import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
@@ -369,12 +371,21 @@ export const CameraScreen: React.FC = () => {
         purpose: 'prefetch',
         timeoutMs: 12000,
       }).catch(() => null);
+      warmTrainerCuePack({
+        trainer: currentTrainer,
+        exerciseName: exerciseNameFromRoute,
+        reason: 'camera-focus',
+      }).catch(() => {});
 
       setStartSpeechRef.current = {
         exerciseName: exerciseNameFromRoute,
         message,
         snapshot,
         assetPromise,
+      };
+
+      return () => {
+        cancelTrainerCuePackWarming();
       };
     }, [debugMode, isTTSEnabled, exerciseNameFromRoute, currentTrainer])
   );
@@ -874,7 +885,16 @@ export const CameraScreen: React.FC = () => {
     setStartSpeechRef.current = null;
 
     resolveWithin(reservation.assetPromise, 2500).then((asset) => {
-      if (!asset) return;
+      if (!asset) {
+        logTtsEvent({
+          type: 'playback-skipped',
+          purpose: 'set-start',
+          reason: 'reserved-cue-not-ready',
+          durationMs: 2500,
+          skipped: true,
+        });
+        return;
+      }
       ttsOnSetStarted(exerciseNameFromRoute, reservation.message, asset).catch(() => {});
     }).catch(() => {});
   }, [exerciseNameFromRoute]);
