@@ -858,7 +858,15 @@ export const CameraScreen: React.FC = () => {
     if (isRecording) {
       // Read per-rep data from synchronous refs (immune to InteractionManager deferral)
       pendingUIStateRef.current = null;
-      const totalReps = Math.max(completedRepCountRef.current, exerciseStateRef.current?.repCount ?? 0, repCountRef.current);
+      const completedRepCount = completedRepCountRef.current;
+      const analyzerRepCount = exerciseStateRef.current?.repCount ?? 0;
+      const uiRepCount = repCountRef.current;
+      const totalReps = Math.max(completedRepCount, analyzerRepCount, uiRepCount);
+      const formScores = accumulatedFormScoresRef.current;
+      const repFormScores = accumulatedRepFormScoresRef.current;
+      const repFeedback = accumulatedRepFeedbackRef.current;
+      const repQualities = accumulatedRepQualitiesRef.current;
+      const trackingQualitySummary = summarizeSetTrackingQuality(repQualities);
 
       setIsRecording(false);
       setExerciseDebug(null);
@@ -876,9 +884,15 @@ export const CameraScreen: React.FC = () => {
             metadata: {
               recordedAt: new Date().toISOString(),
               duration: (Date.now() - landmarkRecordingStartRef.current) / 1000,
-              description: `${repCount} reps`,
-              expectedReps: repCount,
+              description: `${totalReps} reps`,
+              expectedReps: totalReps,
               expectedScoreRange: [0, 100],
+              liveRepCount: totalReps,
+              completedRepCount,
+              analyzerRepCount,
+              uiRepCount,
+              scoredRepCount: trackingQualitySummary.scoredReps,
+              unscoredRepCount: trackingQualitySummary.unscoredReps,
               ...(parserDiagnosticsSummary ? { parserDiagnostics: parserDiagnosticsSummary } : {}),
             },
             frames: landmarkBufferRef.current,
@@ -893,7 +907,7 @@ export const CameraScreen: React.FC = () => {
               console.log(json.slice(i, i + CHUNK));
             }
             console.log('=== LANDMARK_RECORDING_END ===');
-            console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${repCount} reps`);
+            console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${totalReps} reps`);
             if (parserDiagnosticsSummary) {
               console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary));
               parserDiagnosticsLogged = true;
@@ -926,11 +940,6 @@ export const CameraScreen: React.FC = () => {
         poseParserDiagnosticsRef.current.reset();
       }
 
-      const formScores = accumulatedFormScoresRef.current;
-      const repFormScores = accumulatedRepFormScoresRef.current;
-      const repFeedback = accumulatedRepFeedbackRef.current;
-      const repQualities = accumulatedRepQualitiesRef.current;
-      const trackingQualitySummary = summarizeSetTrackingQuality(repQualities);
       // Weighted average: bad reps weigh up to 3× more than perfect reps
       let avgFormScore = 0;
       if (formScores.length > 0) {

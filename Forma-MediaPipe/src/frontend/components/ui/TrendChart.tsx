@@ -17,12 +17,12 @@ const TREND_CHART_CARD_GRADIENT: readonly [string, string, string] = [
   'rgba(40, 45, 49, 0.80)',
   'rgba(44, 49, 53, 0.80)',
 ];
-const TREND_LINE_GLOW_WIDTH = 5.2;
-const TREND_LINE_SOFT_WIDTH = 3.2;
-const TREND_LINE_WIDTH = 1.6;
-const TREND_POINT_RADIUS = 4.4;
-const TREND_POINT_ACTIVE_RADIUS = 5.1;
-const TREND_POINT_STROKE_WIDTH = 2;
+const TREND_LINE_GLOW_WIDTH = 4.6;
+const TREND_LINE_SOFT_WIDTH = 2.8;
+const TREND_LINE_WIDTH = 1.3;
+const TREND_POINT_RADIUS = 3.8;
+const TREND_POINT_ACTIVE_RADIUS = 4.5;
+const TREND_POINT_STROKE_WIDTH = 1.6;
 
 interface TrendChartProps {
   title: string;

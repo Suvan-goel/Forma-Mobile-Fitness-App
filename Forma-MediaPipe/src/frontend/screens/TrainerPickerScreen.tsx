@@ -65,6 +65,15 @@ export const TrainerPickerScreen: React.FC = () => {
 
   useFocusEffect(
     useCallback(() => {
+      return () => {
+        cancelSpeech('trainer-preview').catch(() => {});
+      };
+    }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      cancelTrainerCuePackWarming();
       const selectedTrainer = TRAINERS.find((trainer) => trainer.id === selectedTrainerId);
       if (selectedTrainer) {
         warmTrainerCuePack({
@@ -75,14 +84,14 @@ export const TrainerPickerScreen: React.FC = () => {
 
       return () => {
         cancelTrainerCuePackWarming();
-        cancelSpeech('trainer-preview').catch(() => {});
       };
     }, [selectedTrainerId])
   );
 
   const handleSelectTrainer = (trainer: Trainer) => {
-    if (trainer.id === selectedTrainerId) return;
-    setSelectedTrainerId(trainer.id);
+    if (trainer.id !== selectedTrainerId) {
+      setSelectedTrainerId(trainer.id);
+    }
     setActiveVoiceId(trainer.voiceId);
     setActiveVoiceSettings(trainer.voiceSettings);
     if (greetingEnabled) {

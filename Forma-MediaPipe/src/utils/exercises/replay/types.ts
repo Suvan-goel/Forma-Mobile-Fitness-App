@@ -31,6 +31,12 @@ export interface LandmarkRecording {
     fps?: number;
     frameCount?: number;
     processedFrameCount?: number;
+    liveRepCount?: number;
+    completedRepCount?: number;
+    analyzerRepCount?: number;
+    uiRepCount?: number;
+    scoredRepCount?: number;
+    unscoredRepCount?: number;
     parserDiagnostics?: PoseParserDiagnosticsSummary;
   };
   frames: Array<{
