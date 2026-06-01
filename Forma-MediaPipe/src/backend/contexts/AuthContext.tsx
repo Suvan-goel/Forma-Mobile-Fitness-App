@@ -6,6 +6,7 @@ import {
   signInWithApple,
   signOut as supabaseSignOut,
 } from '../services/supabase/auth';
+import { setUserCache } from '../hooks/useUser';
 
 interface AuthContextValue {
   user: User | null;
@@ -42,6 +43,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
+      // Drop the shared user cache on sign-out so the next sign-in re-fetches
+      // from the right account instead of reusing the previous user's profile.
+      if (!s?.user) setUserCache(null);
     });
 
     return () => subscription.unsubscribe();

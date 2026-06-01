@@ -35,6 +35,7 @@ import { EXERCISE_SETUP_DATA } from '../constants/exerciseGuideData';
 import { useScreenRecording } from '../../backend/hooks/useScreenRecording';
 import { getBottomOverlayPadding, getBottomSafePadding } from '../utils/safeAreaSpacing';
 import { POSE_HEIGHT_PRIOR_KEY } from '../../utils/storageKeys';
+import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
 
 const MAX_FEED_ITEMS = 5;
 type FeedbackFeedItem = { id: number; text: string };
@@ -132,7 +133,7 @@ const CanonicalSkeletonDebugOverlay = React.memo(({
   height: number;
   timingStats: { p50: number; p99: number; count: number } | null;
 }) => {
-  if (!__DEV__ || !renderState) return null;
+  if (!DEV_FEATURES_ENABLED || !renderState) return null;
 
   const { frame } = renderState;
   const visibleJointCount = countVisibleDebugJoints(frame);
@@ -585,7 +586,7 @@ export const CameraScreen: React.FC = () => {
   // Sync TTS enabled state to ref (for use in handleLandmark without stale closures). Debug mode overrides TTS off.
   const isTTSEnabledRef = useRef(isTTSEnabled);
   const debugModeRef = useRef(debugMode);
-  const showCanonicalSkeletonRef = useRef(__DEV__ && (debugMode || showSkeletonOverlay));
+  const showCanonicalSkeletonRef = useRef(DEV_FEATURES_ENABLED && (debugMode || showSkeletonOverlay));
   useEffect(() => {
     isTTSEnabledRef.current = debugMode ? false : isTTSEnabled;
   }, [isTTSEnabled, debugMode]);
@@ -593,7 +594,7 @@ export const CameraScreen: React.FC = () => {
     debugModeRef.current = debugMode;
   }, [debugMode]);
   useEffect(() => {
-    showCanonicalSkeletonRef.current = __DEV__ && (debugMode || showSkeletonOverlay);
+    showCanonicalSkeletonRef.current = DEV_FEATURES_ENABLED && (debugMode || showSkeletonOverlay);
     if (!showCanonicalSkeletonRef.current) {
       setDebugSkeletonRenderState(null);
     }
@@ -786,7 +787,7 @@ export const CameraScreen: React.FC = () => {
   }, []);
 
   const recordFrameTiming = useCallback((durationMs: number) => {
-    if (!__DEV__ || !debugModeRef.current) return;
+    if (!DEV_FEATURES_ENABLED || !debugModeRef.current) return;
     const buffer = frameTimingBufferRef.current;
     buffer.push(durationMs);
     if (buffer.length > FRAME_TIMING_WINDOW) buffer.shift();
@@ -799,7 +800,7 @@ export const CameraScreen: React.FC = () => {
 
   const updateDebugSkeletonFrame = useCallback((frame: SkeletonFrame, now: number) => {
     latestActiveSkeletonFrameRef.current = frame;
-    if (!__DEV__ || !showCanonicalSkeletonRef.current) return;
+    if (!DEV_FEATURES_ENABLED || !showCanonicalSkeletonRef.current) return;
     if (frame.source !== activePoseBackendRef.current) return;
     if (now - lastDebugSkeletonUIUpdateRef.current < DEBUG_SKELETON_UI_INTERVAL_MS) return;
 
@@ -1332,7 +1333,7 @@ export const CameraScreen: React.FC = () => {
 
   // Memoize pose detection props
   const effectiveShowSkeleton = debugMode || showSkeletonOverlay;
-  const showCanonicalSkeletonOverlay = __DEV__ && effectiveShowSkeleton;
+  const showCanonicalSkeletonOverlay = DEV_FEATURES_ENABLED && effectiveShowSkeleton;
   const poseDetectionProps = useMemo(() => ({
     frameLimit: activePoseBackend === 'vision3d' ? 60 : 30,
     showSkeleton: effectiveShowSkeleton && !showCanonicalSkeletonOverlay,

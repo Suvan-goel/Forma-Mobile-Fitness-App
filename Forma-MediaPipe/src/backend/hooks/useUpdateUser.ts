@@ -6,6 +6,7 @@
 import { useState, useCallback } from 'react';
 import { userService } from '../services/api';
 import type { User } from '../services/api/types';
+import { setUserCache } from './useUser';
 
 export function useUpdateUser() {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -16,7 +17,11 @@ export function useUpdateUser() {
     setError(null);
     try {
       const response = await userService.updateUser(updates);
-      if (!response.success) setError(response.error ?? 'Update failed');
+      if (response.success) {
+        setUserCache(response.data);
+      } else {
+        setError(response.error ?? 'Update failed');
+      }
       return response;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
