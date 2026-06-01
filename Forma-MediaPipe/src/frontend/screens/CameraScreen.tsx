@@ -107,9 +107,14 @@ const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
 const TOP_PILL_WARNING_STABLE_FRAMES = 3;
 const TOP_PILL_WARNING_HOLD_MS = 1000;
 const POSE_PARSER_DIAGNOSTICS_DEV_FLAG = process.env.EXPO_PUBLIC_POSE_PARSER_DIAGNOSTICS === '1';
+const LANDMARK_RECORDING_DUMP_JSON_DEV_FLAG = process.env.EXPO_PUBLIC_LANDMARK_RECORDING_DUMP_JSON === '1';
 
 function shouldObservePoseParserDiagnostics(debugModeEnabled: boolean): boolean {
   return __DEV__ && (debugModeEnabled || POSE_PARSER_DIAGNOSTICS_DEV_FLAG);
+}
+
+function shouldDumpFullLandmarkRecordingJson(): boolean {
+  return __DEV__ && LANDMARK_RECORDING_DUMP_JSON_DEV_FLAG;
 }
 
 function getTrackingQualityTone(status: PoseQualitySnapshot['status'] | RepTrackingQuality['status'] | SetTrackingQualitySummary['status']) {
@@ -186,6 +191,51 @@ async function uploadLandmarkRecordingToDevServer(json: string, filename: string
   } catch (error: any) {
     console.warn('[LandmarkRecording] Dev upload failed:', error?.message ?? error);
   }
+}
+
+function hasPerFramePoseMetadata(frames: LandmarkRecordingFrame[]): boolean {
+  return frames.some((frame) => Boolean(frame.poseMetadata));
+}
+
+function hasPerFrameContext(frames: LandmarkRecordingFrame[]): boolean {
+  return frames.some((frame) => Boolean(frame.frameContext));
+}
+
+function logFullLandmarkRecordingJson(json: string): void {
+  console.log('=== LANDMARK_RECORDING_START ===');
+  const CHUNK = 4000;
+  for (let i = 0; i < json.length; i += CHUNK) {
+    console.log(json.slice(i, i + CHUNK));
+  }
+  console.log('=== LANDMARK_RECORDING_END ===');
+}
+
+function formatLandmarkRecordingSummary({
+  schemaVersion,
+  exerciseName,
+  frameCount,
+  repCount,
+  hasPoseMetadata,
+  hasFrameContext,
+  filename,
+}: {
+  schemaVersion: number;
+  exerciseName: string;
+  frameCount: number;
+  repCount: number;
+  hasPoseMetadata: boolean;
+  hasFrameContext: boolean;
+  filename: string;
+}): string {
+  return [
+    `[LandmarkRecording] schemaVersion=${schemaVersion}`,
+    `exercise="${exerciseName}"`,
+    `frames=${frameCount}`,
+    `reps=${repCount}`,
+    `poseMetadata=${hasPoseMetadata ? 'yes' : 'no'}`,
+    `frameContext=${hasFrameContext ? 'yes' : 'no'}`,
+    `file=${filename}`,
+  ].join(' ');
 }
 
 /* ── Self-contained Duration Display (memo'd to avoid re-rendering parent) ──── */
@@ -943,16 +993,23 @@ export const CameraScreen: React.FC = () => {
             frames: landmarkBufferRef.current,
           };
           const json = JSON.stringify(recording);
+          const ts = new Date().toISOString().replace(/[:.]/g, '-');
+          const safeName = (exerciseNameFromRoute || 'Unknown').replace(/\s+/g, '_');
+          const filename = `recording_${safeName}_${ts}.json`;
 
-          // Console dump only in dev (no Metro in Release)
           if (__DEV__) {
-            console.log('=== LANDMARK_RECORDING_START ===');
-            const CHUNK = 4000;
-            for (let i = 0; i < json.length; i += CHUNK) {
-              console.log(json.slice(i, i + CHUNK));
+            if (shouldDumpFullLandmarkRecordingJson()) {
+              logFullLandmarkRecordingJson(json);
             }
-            console.log('=== LANDMARK_RECORDING_END ===');
-            console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${totalReps} reps`);
+            console.log(formatLandmarkRecordingSummary({
+              schemaVersion: recording.schemaVersion,
+              exerciseName: recording.exerciseName,
+              frameCount: landmarkBufferRef.current.length,
+              repCount: totalReps,
+              hasPoseMetadata: hasPerFramePoseMetadata(landmarkBufferRef.current),
+              hasFrameContext: hasPerFrameContext(landmarkBufferRef.current),
+              filename,
+            }));
             if (parserDiagnosticsSummary) {
               console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary, parserDiagnosticsRepSummary));
               parserDiagnosticsLogged = true;
@@ -963,9 +1020,6 @@ export const CameraScreen: React.FC = () => {
             }
           }
 
-          const ts = new Date().toISOString().replace(/[:.]/g, '-');
-          const safeName = (exerciseNameFromRoute || 'Unknown').replace(/\s+/g, '_');
-          const filename = `recording_${safeName}_${ts}.json`;
           uploadLandmarkRecordingToDevServer(json, filename);
 
           // Write to device filesystem (works in Release builds too)
