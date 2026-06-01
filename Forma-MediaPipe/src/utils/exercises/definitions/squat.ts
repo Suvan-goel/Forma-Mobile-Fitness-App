@@ -498,6 +498,39 @@ function resetFSMToStanding(): SquatFSM {
   };
 }
 
+function emptyAngleHistory(): Record<keyof SquatAngles, number[]> {
+  return {
+    knee: [],
+    kneeRatio: [],
+    rawKneeRatio: [],
+    leftKneeRatio: [],
+    rightKneeRatio: [],
+    rawLeftKneeRatio: [],
+    rawRightKneeRatio: [],
+    leftKneeRatioConfidence: [],
+    rightKneeRatioConfidence: [],
+    leftKneeRatioSourceRank: [],
+    rightKneeRatioSourceRank: [],
+    torsoLean: [],
+    torsoLeanSigned: [],
+    rawTorsoLean: [],
+    rawTorsoLeanSigned: [],
+    hipAngle: [],
+    thighDepthAngle: [],
+    rawThighDepthAngle: [],
+    footPitch: [],
+    rawFootPitch: [],
+    sideViewWidthRatio: [],
+    kneeTrackingOffsetRatio: [],
+    viewAngleDeg: [],
+    viewConfidence: [],
+    viewClassRank: [],
+    kneeRatioSourceRank: [],
+    torsoSourceRank: [],
+    viewSourceRank: [],
+  };
+}
+
 function initRepWindow(
   tStart: number,
   initialKneeRatio?: number,
@@ -596,41 +629,27 @@ function initializeSquatState(): SquatState {
     repCount: 0,
     repWindow: null,
     lastRepResult: null,
-    angleHistory: {
-      knee: [],
-      kneeRatio: [],
-      rawKneeRatio: [],
-      leftKneeRatio: [],
-      rightKneeRatio: [],
-      rawLeftKneeRatio: [],
-      rawRightKneeRatio: [],
-      leftKneeRatioConfidence: [],
-      rightKneeRatioConfidence: [],
-      leftKneeRatioSourceRank: [],
-      rightKneeRatioSourceRank: [],
-      torsoLean: [],
-      torsoLeanSigned: [],
-      rawTorsoLean: [],
-      rawTorsoLeanSigned: [],
-      hipAngle: [],
-      thighDepthAngle: [],
-      rawThighDepthAngle: [],
-      footPitch: [],
-      rawFootPitch: [],
-      sideViewWidthRatio: [],
-      kneeTrackingOffsetRatio: [],
-      viewAngleDeg: [],
-      viewConfidence: [],
-      viewClassRank: [],
-      kneeRatioSourceRank: [],
-      torsoSourceRank: [],
-      viewSourceRank: [],
-    },
+    angleHistory: emptyAngleHistory(),
     smoothed: null,
     fast: null,
     feedback: null,
     lastFeedbackTime: 0,
     visibleSide: 'left',
+    standingKneeRatioPeak: -Infinity,
+    standingTorsoLeanBaseline: null,
+    standingTorsoLeanSignedBaseline: null,
+    standingFootPitchBaseline: null,
+  };
+}
+
+function resetSquatAfterTrackingInterruption(currentState: SquatState): SquatState {
+  return {
+    ...currentState,
+    fsm: initFSM(),
+    repWindow: null,
+    angleHistory: emptyAngleHistory(),
+    smoothed: null,
+    fast: null,
     standingKneeRatioPeak: -Infinity,
     standingTorsoLeanBaseline: null,
     standingTorsoLeanSignedBaseline: null,
@@ -2947,6 +2966,10 @@ function updateSquatState(
   const t = Date.now() / 1000;
   const imageKeypoints = frameContext?.imageKeypoints ?? keypoints;
   const metricKeypoints = frameContext?.worldKeypoints ?? keypoints;
+
+  if (frameContext?.trackingInterrupted) {
+    return resetSquatAfterTrackingInterruption(currentState);
+  }
 
   // Only update visible side in IDLE/STANDING — lock it during active rep phases
   // to prevent mid-rep side switching that corrupts angle measurements.

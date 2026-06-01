@@ -292,6 +292,105 @@ function buildRecording(
   };
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: {
+    side?: Side;
+    orientation?: Orientation;
+    posture?: TorsoPosture | ((index: number) => TorsoPosture);
+    sideSwitchFrame?: number;
+    poseProfile?: PoseProfile;
+    heelLift?: boolean | ((index: number, depth: number) => boolean);
+    footScore?: number | ((index: number, depth: number) => number);
+    hiddenSideScore?: number;
+    bilateralSpread?: number;
+  } = {},
+): LandmarkRecording {
+  const {
+    side = 'left',
+    orientation = 'facing-right',
+    posture = 'upright',
+    sideSwitchFrame,
+    poseProfile = 'clean',
+    heelLift = false,
+    footScore = 0.99,
+    hiddenSideScore = 0.05,
+    bilateralSpread = 0.015,
+  } = options;
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const depth of segment.path) {
+      const framePosture = typeof posture === 'function' ? posture(frameIndex) : posture;
+      const frameHeelLift = typeof heelLift === 'function' ? heelLift(frameIndex, depth) : heelLift;
+      const frameFootScore = typeof footScore === 'function' ? footScore(frameIndex, depth) : footScore;
+      if (sideSwitchFrame !== undefined && frameIndex >= sideSwitchFrame) {
+        frames.push(
+          side === 'left'
+            ? makeFrameWithScores(timestamp, depth, orientation, framePosture, 0.7, 0.99, poseProfile, frameHeelLift, frameFootScore, frameFootScore, bilateralSpread)
+            : makeFrameWithScores(timestamp, depth, orientation, framePosture, 0.99, 0.7, poseProfile, frameHeelLift, frameFootScore, frameFootScore, bilateralSpread),
+        );
+      } else {
+        frames.push(makeFrame(timestamp, depth, side, orientation, framePosture, hiddenSideScore, poseProfile, frameHeelLift, frameFootScore, bilateralSpread));
+      }
+
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Barbell Squat',
+    metadata: {
+      recordedAt: '2026-04-29T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep squat with recovery', [
+    {
+      path: [
+        ...Array(20).fill(0),
+        ...interpolate(0, 0.5, 16),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(20).fill(0),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 function frontImageKeypoints(
   depth: number,
   kneeValgus = false,
@@ -774,6 +873,55 @@ describe('Barbell Squat synthetic replay coverage', () => {
     expect(result.reps[0].messages).not.toContain('Incomplete rep — use a full range of motion.');
     expect(result.reps[0].issueIds).toContain('barbell-squat.depth_short');
     expect(result.reps[0].issueIds).not.toContain('barbell-squat.incomplete_rom');
+  });
+
+  it('keeps clean four-rep squats unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      squatDefinition,
+      buildMultiRepRecording('synthetic clean four squats', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps squat counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      squatDefinition,
+      buildMultiRepRecording(`synthetic four squats with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([1200, 6000])('does not add a false squat rep across a %sms silent gap between reps', (gapMs) => {
+    const result = replayRecording(
+      squatDefinition,
+      buildMultiRepRecording(`synthetic four squats with ${gapMs}ms walk-out gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active squat rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real squat after a long gap once stable standing frames rebuild', () => {
+    const result = replayRecording(
+      squatDefinition,
+      buildSegmentedRecording('synthetic long gap then clean squat', [
+        { path: Array(20).fill(0), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('uses incomplete ROM only as the low-ROM fallback when endpoints are not clearer', () => {
