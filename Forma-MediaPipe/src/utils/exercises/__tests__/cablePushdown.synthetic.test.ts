@@ -325,6 +325,85 @@ function buildMildlyNoisyCleanRecording(): LandmarkRecording {
   };
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: {
+    side?: Side;
+    orientation?: Orientation;
+    posture?: Posture;
+    elbowPosition?: ElbowPosition;
+    sideGap?: number;
+    hiddenSideScore?: number;
+  } = {},
+): LandmarkRecording {
+  const {
+    side = 'left',
+    orientation = 'facing-right',
+    posture = 'upright',
+    elbowPosition = 'pinned',
+    sideGap = 0.03,
+    hiddenSideScore = 0.3,
+  } = options;
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+
+  for (const segment of segments) {
+    for (const progress of segment.path) {
+      frames.push(makeFrame(timestamp, progress, side, orientation, posture, elbowPosition, hiddenSideScore, sideGap));
+      timestamp += FRAME_MS;
+    }
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Cable Pushdowns',
+    metadata: {
+      recordedAt: '2026-04-29T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep cable pushdown with recovery', [
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...interpolate(0, 1, 26),
+        ...Array(4).fill(1),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 describe('Cable Pushdown synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -498,6 +577,55 @@ describe('Cable Pushdown synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(2);
     expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('keeps clean four-rep pushdowns unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildMultiRepRecording('synthetic clean four cable pushdowns', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildMultiRepRecording(`synthetic four cable pushdowns with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not add a false rep across a long silent gap between pushdowns', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildMultiRepRecording('synthetic four cable pushdowns with walk-out gap', 4, { 1: 6000 }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      cablePushdownDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real pushdown after a long gap once stable frames rebuild', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      buildSegmentedRecording('synthetic long gap then clean cable pushdown', [
+        { path: Array(20).fill(0), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('flags elbow drift without punishing pinned elbows', () => {

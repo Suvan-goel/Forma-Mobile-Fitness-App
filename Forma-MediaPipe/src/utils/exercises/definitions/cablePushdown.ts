@@ -826,6 +826,38 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   };
 }
 
+function createCablePushdownWarmupGate(): WarmupGate {
+  return new WarmupGate({
+    requiredJoints: [
+      'left_shoulder', 'left_elbow', 'left_wrist', 'left_hip',
+      'right_shoulder', 'right_elbow', 'right_wrist', 'right_hip',
+    ],
+    requiredFrames: 10,
+    visibilityThreshold: 0.2,
+  });
+}
+
+function resetCablePushdownAfterTrackingInterruption(
+  currentState: CablePushdownState,
+): CablePushdownState {
+  return {
+    ...currentState,
+    fsm: initFSM(),
+    repWindow: null,
+    ratioTracker: new SmoothedAngleTracker(),
+    shoulderTracker: new SmoothedAngleTracker(),
+    torsoTracker: new SmoothedAngleTracker(),
+    warmupGate: createCablePushdownWarmupGate(),
+    warmedUp: false,
+    smoothedRatio: null,
+    fastRatio: null,
+    smoothedShoulder: null,
+    smoothedTorso: null,
+    restMinRatio: Infinity,
+    setupSideViewConfidences: [],
+  };
+}
+
 function initializeCablePushdownState(): CablePushdownState {
   return {
     fsm: initFSM(),
@@ -835,14 +867,7 @@ function initializeCablePushdownState(): CablePushdownState {
     ratioTracker: new SmoothedAngleTracker(),
     shoulderTracker: new SmoothedAngleTracker(),
     torsoTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_shoulder', 'left_elbow', 'left_wrist', 'left_hip',
-        'right_shoulder', 'right_elbow', 'right_wrist', 'right_hip',
-      ],
-      requiredFrames: 10,
-      visibilityThreshold: 0.2,
-    }),
+    warmupGate: createCablePushdownWarmupGate(),
     warmedUp: false,
     smoothedRatio: null,
     fastRatio: null,
@@ -1448,6 +1473,11 @@ function updateCablePushdownState(
   frameContext?: ExerciseFrameContext,
 ): CablePushdownState {
   const t = Date.now() / 1000;
+
+  if (frameContext?.trackingInterrupted) {
+    return resetCablePushdownAfterTrackingInterruption(currentState);
+  }
+
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate

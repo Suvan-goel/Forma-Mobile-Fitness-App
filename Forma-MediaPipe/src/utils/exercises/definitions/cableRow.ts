@@ -367,6 +367,35 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   };
 }
 
+function createCableRowWarmupGate(): WarmupGate {
+  return new WarmupGate({
+    requiredJoints: [
+      'left_shoulder', 'left_elbow', 'left_wrist', 'left_hip',
+      'right_shoulder', 'right_elbow', 'right_wrist', 'right_hip',
+    ],
+    requiredFrames: 10,
+    visibilityThreshold: 0.2,
+  });
+}
+
+function resetCableRowAfterTrackingInterruption(currentState: CableRowState): CableRowState {
+  return {
+    ...currentState,
+    fsm: initFSM(),
+    repWindow: null,
+    ratioTracker: new SmoothedAngleTracker(),
+    shoulderTracker: new SmoothedAngleTracker(),
+    torsoTracker: new SmoothedAngleTracker(),
+    warmupGate: createCableRowWarmupGate(),
+    warmedUp: false,
+    smoothedRatio: null,
+    fastRatio: null,
+    smoothedShoulder: null,
+    smoothedTorso: null,
+    setupSideViewConfidences: [],
+  };
+}
+
 function initializeCableRowState(): CableRowState {
   return {
     fsm: initFSM(),
@@ -376,14 +405,7 @@ function initializeCableRowState(): CableRowState {
     ratioTracker: new SmoothedAngleTracker(),
     shoulderTracker: new SmoothedAngleTracker(),
     torsoTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_shoulder', 'left_elbow', 'left_wrist', 'left_hip',
-        'right_shoulder', 'right_elbow', 'right_wrist', 'right_hip',
-      ],
-      requiredFrames: 10,
-      visibilityThreshold: 0.2,
-    }),
+    warmupGate: createCableRowWarmupGate(),
     warmedUp: false,
     smoothedRatio: null,
     fastRatio: null,
@@ -1120,6 +1142,11 @@ function updateCableRowState(
   frameContext?: ExerciseFrameContext,
 ): CableRowState {
   const t = Date.now() / 1000;
+
+  if (frameContext?.trackingInterrupted) {
+    return resetCableRowAfterTrackingInterruption(currentState);
+  }
+
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
 
   // Warmup gate
