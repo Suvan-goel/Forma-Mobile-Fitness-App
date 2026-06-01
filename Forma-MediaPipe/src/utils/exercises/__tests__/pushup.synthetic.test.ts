@@ -272,6 +272,89 @@ function buildRecording(
     };
   }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
+  const {
+    side = 'left',
+    orientation = 'facing-right',
+    posture = 'neutral',
+    headPosture = 'neutral',
+    sideSwitchFrame,
+    hiddenSideScore = 0.05,
+    sideOffset = 0.02,
+    wristShiftX = 0,
+  } = options;
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const elbowOffsetX of segment.path) {
+      if (sideSwitchFrame !== undefined && frameIndex >= sideSwitchFrame) {
+        frames.push(side === 'left'
+          ? makeFrameWithScores(timestamp, elbowOffsetX, orientation, posture, headPosture, 0.7, 0.99, sideOffset, wristShiftX)
+          : makeFrameWithScores(timestamp, elbowOffsetX, orientation, posture, headPosture, 0.99, 0.7, sideOffset, wristShiftX));
+      } else {
+        frames.push(makeFrame(timestamp, elbowOffsetX, side, orientation, posture, headPosture, hiddenSideScore, sideOffset, wristShiftX));
+      }
+
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Push-Up',
+    metadata: {
+      recordedAt: '2026-04-29T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep pushup with recovery', [
+    {
+      path: [
+        ...Array(22).fill(EXTENDED_ELBOW_X),
+        ...interpolate(EXTENDED_ELBOW_X, HALF_ELBOW_X, 18),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(22).fill(EXTENDED_ELBOW_X),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 function invalidSetupThenNearLockoutFullRepRecording(): LandmarkRecording {
   const invalidSetup = buildRecording(
     'synthetic invalid extended setup before near-lockout pushup',
@@ -518,6 +601,55 @@ describe('Push-Up synthetic replay coverage', () => {
     expectMetricRatioBounded(result.reps[0].diagnostics?.metrics.bodyJudgeableRate.value);
     expectMetricRatioBounded(result.reps[0].diagnostics?.metrics.headJudgeableRate.value);
     expectMetricRatioBounded(result.reps[0].diagnostics?.metrics.setupWarningRate.value);
+  });
+
+  it('keeps clean four-rep push-ups unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildMultiRepRecording('synthetic clean four pushups', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps push-up counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildMultiRepRecording(`synthetic four pushups with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not add a false push-up rep across a long silent gap between reps', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildMultiRepRecording('synthetic four pushups with walk-out gap', 4, { 1: 6000 }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active push-up rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      pushupDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real push-up after a long gap once stable plank frames rebuild', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      buildSegmentedRecording('synthetic long gap then clean pushup', [
+        { path: Array(22).fill(EXTENDED_ELBOW_X), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('uses the terminal completion frame for full-rep tempo diagnostics', () => {

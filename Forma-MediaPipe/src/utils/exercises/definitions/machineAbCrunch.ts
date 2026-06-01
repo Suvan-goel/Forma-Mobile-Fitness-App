@@ -336,6 +336,47 @@ function emptyAuxBaselines(): AuxBaselines {
   };
 }
 
+function createRestAuxBaselines(): Record<AbCrunchSide, AuxBaselines> {
+  return {
+    left: emptyAuxBaselines(),
+    right: emptyAuxBaselines(),
+  };
+}
+
+function createAbCrunchWarmupGate(): WarmupGate {
+  return new WarmupGate({
+    requiredJoints: [
+      'left_shoulder', 'right_shoulder',
+      'left_hip', 'right_hip',
+      'left_knee', 'right_knee',
+    ],
+    requiredFrames: 10,
+    visibilityThreshold: 0.2,
+  });
+}
+
+function resetAbCrunchAfterTrackingInterruption(state: AbCrunchState): AbCrunchState {
+  Object.assign(state, {
+    phase: 'REST',
+    tRepStart: null,
+    tCrunchStart: null,
+    repWindow: null,
+    hipAngleTracker: new SmoothedAngleTracker(),
+    neckAngleTracker: new SmoothedAngleTracker(),
+    warmupGate: createAbCrunchWarmupGate(),
+    warmedUp: false,
+    restMaxHipAngle: -Infinity,
+    selectedSide: null,
+    setupSideViewConfidences: [],
+    restAuxBaselines: createRestAuxBaselines(),
+    smoothedHipAngle: 170,
+    fastHipAngle: 170,
+    smoothedNeckAngle: 0,
+    currentSideViewConfidence: null,
+  });
+  return state;
+}
+
 function initializeState(): AbCrunchState {
   return {
     phase: 'REST',
@@ -346,23 +387,12 @@ function initializeState(): AbCrunchState {
     lastRepResult: null,
     hipAngleTracker: new SmoothedAngleTracker(),
     neckAngleTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_shoulder', 'right_shoulder',
-        'left_hip', 'right_hip',
-        'left_knee', 'right_knee',
-      ],
-      requiredFrames: 10,
-      visibilityThreshold: 0.2,
-    }),
+    warmupGate: createAbCrunchWarmupGate(),
     warmedUp: false,
     restMaxHipAngle: -Infinity,
     selectedSide: null,
     setupSideViewConfidences: [],
-    restAuxBaselines: {
-      left: emptyAuxBaselines(),
-      right: emptyAuxBaselines(),
-    },
+    restAuxBaselines: createRestAuxBaselines(),
     smoothedHipAngle: 170,
     fastHipAngle: 170,
     smoothedNeckAngle: 0,
@@ -1194,10 +1224,7 @@ function updateRestAuxBaselines(
 }
 
 function resetRestAuxBaselines(state: AbCrunchState): void {
-  state.restAuxBaselines = {
-    left: emptyAuxBaselines(),
-    right: emptyAuxBaselines(),
-  };
+  state.restAuxBaselines = createRestAuxBaselines();
 }
 
 function updateRepWindowMetrics(
@@ -1340,6 +1367,10 @@ function updateAbCrunchState(
 ): AbCrunchState {
   const t = Date.now() / 1000;
   const analysisKeypoints = signalKeypoints(frameContext, keypoints);
+
+  if (frameContext?.trackingInterrupted) {
+    return resetAbCrunchAfterTrackingInterruption(state);
+  }
 
   if (!state.warmedUp) {
     const stable = state.warmupGate.update(analysisKeypoints);

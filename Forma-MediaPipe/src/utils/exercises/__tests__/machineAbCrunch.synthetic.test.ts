@@ -228,6 +228,89 @@ function buildRecording(
   };
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
+  const {
+    orientation = 'facing-right',
+    neck = 'neutral',
+    sideView = 'side',
+    armPull = false,
+    hipShift = false,
+    oppositeNoise = false,
+    score = 0.99,
+  } = options;
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const progress of segment.path) {
+      const frameNeck = resolveOption(neck, frameIndex, progress);
+      frames.push(makeFrame(timestamp, progress, orientation, frameNeck, {
+        sideView: resolveOption(sideView, frameIndex, progress),
+        armPull: resolveOption(armPull, frameIndex, progress),
+        hipShift: resolveOption(hipShift, frameIndex, progress),
+        oppositeNoise: resolveOption(oppositeNoise, frameIndex, progress),
+        score: resolveOption(score, frameIndex, progress),
+      }));
+
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Machine Ab Crunches',
+    metadata: {
+      recordedAt: '2026-04-30T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep machine ab crunch with recovery', [
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...interpolate(0, 0.48, 18),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 function hideSide(recording: LandmarkRecording, side: 'left' | 'right'): LandmarkRecording {
   return {
     ...recording,
@@ -294,6 +377,55 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(result.feedbackMessages).toContain('Crunch deeper — bring your chest closer to your knees.');
+  });
+
+  it('keeps clean four-rep machine ab crunches unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildMultiRepRecording('synthetic clean four machine ab crunches', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps machine ab crunch counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildMultiRepRecording(`synthetic four machine ab crunches with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not add a false machine ab crunch rep across a long silent gap between reps', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildMultiRepRecording('synthetic four machine ab crunches with walk-out gap', 4, { 1: 6000 }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active machine ab crunch rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      machineAbCrunchDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real machine ab crunch after a long gap once stable frames rebuild', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      buildSegmentedRecording('synthetic long gap then clean machine ab crunch', [
+        { path: Array(20).fill(0), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('counts an incomplete return and records returned-extension feedback', () => {

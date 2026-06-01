@@ -402,6 +402,22 @@ function initializePushupState(): PushupState {
   };
 }
 
+function resetPushupAfterTrackingInterruption(currentState: PushupState): PushupState {
+  return {
+    ...currentState,
+    fsm: initFSM(),
+    repWindow: null,
+    angleHistory: emptyAngleHistory(),
+    smoothed: null,
+    fast: null,
+    displayAngles: null,
+    activeSide: null,
+    plankMaxElbowRatio: -Infinity,
+    lastTorsoInclination: null,
+    lastSetupQuality: null,
+  };
+}
+
 // ============================================================================
 // GEOMETRY HELPERS
 // ============================================================================
@@ -1424,6 +1440,10 @@ function updatePushupState(
   const t = timestampMs / 1000;
   const metricKeypoints = frameContext?.worldKeypoints ?? keypoints;
   const imageKeypoints = frameContext?.imageKeypoints ?? keypoints;
+
+  if (frameContext?.trackingInterrupted) {
+    return resetPushupAfterTrackingInterruption(currentState);
+  }
 
   const currentInRep = currentState.fsm.phase !== 'PLANK' && currentState.fsm.phase !== 'IDLE';
   const detectedSide = selectVisibleSide(imageKeypoints);
