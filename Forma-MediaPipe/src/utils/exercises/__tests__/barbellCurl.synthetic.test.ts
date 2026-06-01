@@ -243,6 +243,72 @@ function buildDualRecording(
   };
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  view: CurlView = 'front',
+): LandmarkRecording {
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const wristY of segment.path) {
+      frames.push(makeFrame(timestamp, wristY, view, frameIndex));
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Barbell Curl',
+    metadata: {
+      recordedAt: '2026-04-29T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep curl with recovery', [
+    {
+      path: [
+        ...Array(16).fill(EXTENDED_WRIST_Y),
+        ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 16),
+        ...Array(4).fill(TOP_WRIST_Y),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(16).fill(EXTENDED_WRIST_Y),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 function interpolate(from: number, to: number, frames: number): number[] {
   return Array.from({ length: frames }, (_, index) => {
     const p = frames <= 1 ? 1 : index / (frames - 1);
@@ -504,6 +570,55 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(state.lastRepResult?.messages).toEqual([]);
     expect(state.lastRepResult?.diagnostics?.metrics.tUp.value).toBeGreaterThan(0);
     expect(state.lastRepResult?.diagnostics?.metrics.tDown.value).toBeGreaterThan(0);
+  });
+
+  it('keeps a clean four-rep curl unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildMultiRepRecording('synthetic clean four front curls', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not add a false rep across a long silent gap between curls', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildMultiRepRecording('synthetic four curls with walk-out gap', 4, { 1: 6000 }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildMultiRepRecording(`synthetic four curls with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      barbellCurlDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real rep after a long gap once stable frames rebuild', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildSegmentedRecording('synthetic long gap then clean curl', [
+        { path: Array(20).fill(EXTENDED_WRIST_Y), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('re-arms counting after a scoring-clean bottom return', () => {

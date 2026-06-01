@@ -46,6 +46,9 @@ export interface ExerciseFrameContext {
   imageKeypoints?: Keypoint[];
   primarySource: 'world' | 'image';
   timestampMs?: number;
+  silentGapMs?: number;
+  trackingInterrupted?: boolean;
+  reacquisitionFrameIndex?: number;
 }
 
 // ============================================================================

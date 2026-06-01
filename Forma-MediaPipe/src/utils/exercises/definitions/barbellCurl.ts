@@ -925,6 +925,20 @@ function initRepWindow(tStart: number): RepWindow {
   };
 }
 
+function initAngleHistory(): BarbellCurlState['angleHistory'] {
+  return {
+    leftElbow: [],
+    rightElbow: [],
+    leftShoulder: [],
+    rightShoulder: [],
+    leftTorso: [],
+    rightTorso: [],
+    torso: [],
+    leftRatio: [],
+    rightRatio: [],
+  };
+}
+
 function initializeBarbellCurlState(): BarbellCurlState {
   return {
     leftArm: initArmFSM(),
@@ -932,17 +946,7 @@ function initializeBarbellCurlState(): BarbellCurlState {
     repCount: 0,
     repWindow: null,
     lastRepResult: null,
-    angleHistory: {
-      leftElbow: [],
-      rightElbow: [],
-      leftShoulder: [],
-      rightShoulder: [],
-      leftTorso: [],
-      rightTorso: [],
-      torso: [],
-      leftRatio: [],
-      rightRatio: [],
-    },
+    angleHistory: initAngleHistory(),
     smoothed: null,
     fast: null,
     displayAngles: null,
@@ -2019,7 +2023,13 @@ function updateBarbellCurlState(
   const ratioDistanceMode: RatioDistanceMode = landmarkSource === 'world' ? 'world_3d' : 'image_2d';
 
   // Estimate view angle
-  const viewAngle = estimateViewAngle(mechanicsKeypoints, currentState.viewAngle.smoothedAngleDeg);
+  const viewAngle = frameContext?.trackingInterrupted
+    ? estimateViewAngle(mechanicsKeypoints, 0)
+    : estimateViewAngle(mechanicsKeypoints, currentState.viewAngle.smoothedAngleDeg);
+
+  if (frameContext?.trackingInterrupted) {
+    return resetBarbellCurlAfterTrackingInterruption(currentState, viewAngle);
+  }
 
   // Calculate raw angles
   const rawResult = calculateJointAngles(mechanicsKeypoints, ratioDistanceMode);
@@ -2240,6 +2250,24 @@ function resetBarbellCurlRepTracking(newState: BarbellCurlState): void {
   newState.repWindow = null;
   newState.leftArm = initArmFSM();
   newState.rightArm = initArmFSM();
+}
+
+function resetBarbellCurlAfterTrackingInterruption(
+  currentState: BarbellCurlState,
+  viewAngle: ViewAngle,
+): BarbellCurlState {
+  return {
+    ...currentState,
+    repWindow: null,
+    leftArm: initArmFSM(),
+    rightArm: initArmFSM(),
+    angleHistory: initAngleHistory(),
+    smoothed: null,
+    fast: null,
+    displayAngles: null,
+    viewAngle,
+    warmupFrames: 0,
+  };
 }
 
 function completePartialRepIfMeaningful(

@@ -17,6 +17,7 @@ import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount } from '../../utils/poseAnalysis';
 import type { Keypoint } from '../../utils/poseAnalysis';
 import { parsePoseFrame, type ParsedPoseFrame } from '../../utils/pose/parsePoseFrame';
+import { createPoseFrameGapTracker } from '../../utils/pose/frameGapTracker';
 import {
   createPoseParserDiagnosticsAggregator,
   formatPoseParserDiagnosticsSummary,
@@ -295,6 +296,7 @@ export const CameraScreen: React.FC = () => {
   const landmarkBufferRef = useRef<LandmarkRecordingFrame[]>([]);
   const landmarkRecordingStartRef = useRef(0);
   const nativeLandmarkRecordingStartRef = useRef<number | null>(null);
+  const poseFrameGapTrackerRef = useRef(createPoseFrameGapTracker());
   const poseParserDiagnosticsRef = useRef(createPoseParserDiagnosticsAggregator());
   const poseParserDiagnosticsActiveRef = useRef(false);
 
@@ -471,6 +473,7 @@ export const CameraScreen: React.FC = () => {
     lastTTSFeedbackTimestampRef.current = null;
     poseQualityTrackerRef.current.reset();
     repQualityAccumulatorRef.current.reset();
+    poseFrameGapTrackerRef.current.reset();
     poseParserDiagnosticsRef.current.reset();
     const def = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (def) {
@@ -587,12 +590,14 @@ export const CameraScreen: React.FC = () => {
       poseParserDiagnosticsRef.current.observe(converted);
     }
     if (converted.keypoints.length === 0) return;
+    const frameGap = poseFrameGapTrackerRef.current.observe(converted.timestampMs ?? now);
     const { keypoints, worldKeypoints, imageKeypoints, primarySource } = converted;
     const frameContext: ExerciseFrameContext = {
       worldKeypoints,
       imageKeypoints,
       primarySource,
       timestampMs: converted.timestampMs,
+      ...frameGap,
     };
 
     // __DEV__-only: buffer keypoints for landmark recording
@@ -873,6 +878,16 @@ export const CameraScreen: React.FC = () => {
       const parserDiagnosticsSummary = poseParserDiagnosticsActiveRef.current
         ? poseParserDiagnosticsRef.current.snapshot()
         : undefined;
+      const parserDiagnosticsRepSummary = parserDiagnosticsSummary
+        ? {
+            totalReps,
+            completedRepCount,
+            analyzerRepCount,
+            uiRepCount,
+            scoredRepCount: trackingQualitySummary.scoredReps,
+            unscoredRepCount: trackingQualitySummary.unscoredReps,
+          }
+        : undefined;
       let parserDiagnosticsLogged = false;
 
       // Save landmark recording when debug mode was on
@@ -909,7 +924,7 @@ export const CameraScreen: React.FC = () => {
             console.log('=== LANDMARK_RECORDING_END ===');
             console.log(`[LandmarkRecording] ${landmarkBufferRef.current.length} frames, ${totalReps} reps`);
             if (parserDiagnosticsSummary) {
-              console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary));
+              console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary, parserDiagnosticsRepSummary));
               parserDiagnosticsLogged = true;
             }
           }
@@ -934,7 +949,7 @@ export const CameraScreen: React.FC = () => {
         landmarkBufferRef.current = [];
       }
       if (__DEV__ && parserDiagnosticsSummary && parserDiagnosticsSummary.totalFrames > 0 && !parserDiagnosticsLogged) {
-        console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary));
+        console.log(formatPoseParserDiagnosticsSummary(parserDiagnosticsSummary, parserDiagnosticsRepSummary));
       }
       if (poseParserDiagnosticsActiveRef.current) {
         poseParserDiagnosticsRef.current.reset();
@@ -1062,6 +1077,7 @@ export const CameraScreen: React.FC = () => {
       setTrackingQuality(null);
       topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
       topPillWarningSmoothingRef.current = {};
+      poseFrameGapTrackerRef.current.reset();
       ttsResetCoach();
       playReservedSetStartCue();
 

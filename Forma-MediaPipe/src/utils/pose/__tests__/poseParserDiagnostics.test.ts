@@ -132,6 +132,55 @@ describe('PoseParserDiagnosticsAggregator', () => {
     });
   });
 
+  it('tracks source-separated and primary-source-only confidence stats', () => {
+    const aggregator = createPoseParserDiagnosticsAggregator();
+
+    aggregator.observe(parsedFrame({
+      landmarks: rawLandmarks({
+        15: { visibility: 0.8, presence: 0.9 },
+      }),
+      worldLandmarks: rawLandmarks({
+        15: { visibility: 0.2, presence: 0.3 },
+      }),
+    }));
+
+    const summary = aggregator.snapshot();
+    expect(summary.primarySourceCounts).toEqual({ image: 0, world: 1 });
+
+    expect(summary.visibilityStatsByJoint.left_wrist).toEqual({
+      sampleCount: 2,
+      min: 0.2,
+      max: 0.8,
+      mean: 0.5,
+    });
+    expect(summary.jointStatsBySource.allSources.visibilityStatsByJoint.left_wrist).toEqual({
+      sampleCount: 2,
+      min: 0.2,
+      max: 0.8,
+      mean: 0.5,
+    });
+    expect(summary.jointStatsBySource.primarySource.visibilityStatsByJoint.left_wrist).toEqual({
+      sampleCount: 1,
+      min: 0.2,
+      max: 0.2,
+      mean: 0.2,
+    });
+    expect(summary.jointStatsBySource.world.visibilityStatsByJoint.left_wrist).toEqual({
+      sampleCount: 1,
+      min: 0.2,
+      max: 0.2,
+      mean: 0.2,
+    });
+    expect(summary.jointStatsBySource.image.visibilityStatsByJoint.left_wrist).toEqual({
+      sampleCount: 1,
+      min: 0.8,
+      max: 0.8,
+      mean: 0.8,
+    });
+    expect(summary.jointStatsBySource.primarySource.lowVisibilityByJoint.lt035.left_wrist).toBe(1);
+    expect(summary.jointStatsBySource.image.lowVisibilityByJoint.lt035.left_wrist).toBeUndefined();
+  });
+
   it('distinguishes missing visibility from present-but-low visibility', () => {
     const aggregator = createPoseParserDiagnosticsAggregator();
 
@@ -153,6 +202,27 @@ describe('PoseParserDiagnosticsAggregator', () => {
     expect(summary.lowPresenceByJoint.lt050.right_wrist).toBeUndefined();
     expect(summary.visibilityStatsByJoint.right_wrist).toBeUndefined();
     expect(summary.presenceStatsByJoint.right_wrist).toBeUndefined();
+  });
+
+  it('tracks timestamp gaps and possible silent tracking loss', () => {
+    const aggregator = createPoseParserDiagnosticsAggregator();
+
+    for (const timestampMs of [0, 33, 300, 900, 2200, 2250, 2300, 2350, 2400]) {
+      aggregator.observe(parsedFrame({ timestampMs, landmarks: rawLandmarks() }));
+    }
+
+    const summary = aggregator.snapshot();
+    expect(summary.timestampGaps.totalDurationMs).toBe(2400);
+    expect(summary.timestampGaps.intervalCount).toBe(8);
+    expect(summary.timestampGaps.minFrameIntervalMs).toBe(33);
+    expect(summary.timestampGaps.meanFrameIntervalMs).toBe(300);
+    expect(summary.timestampGaps.maxFrameIntervalMs).toBe(1300);
+    expect(summary.timestampGaps.gapsOver250Ms).toBe(3);
+    expect(summary.timestampGaps.gapsOver500Ms).toBe(2);
+    expect(summary.timestampGaps.gapsOver1000Ms).toBe(1);
+    expect(summary.timestampGaps.gapsOver2000Ms).toBe(0);
+    expect(summary.timestampGaps.possibleSilentTrackingLossCount).toBe(1);
+    expect(summary.timestampGaps.reacquisitionFrameCount).toBe(5);
   });
 
   it('tracks image and world landmark availability', () => {
@@ -180,17 +250,23 @@ describe('PoseParserDiagnosticsAggregator', () => {
     snapshot.unknownVisibilityByJoint.right_wrist = 99;
     snapshot.lowVisibilityByJoint.lt020.left_wrist = 99;
     snapshot.visibilityStatsByJoint.left_wrist.mean = 99;
+    snapshot.jointStatsBySource.allSources.lowVisibilityByJoint.lt020.left_wrist = 99;
+    snapshot.jointStatsBySource.allSources.visibilityStatsByJoint.left_wrist.mean = 99;
 
     expect(aggregator.snapshot().totalFrames).toBe(1);
     expect(aggregator.snapshot().unknownVisibilityByJoint.right_wrist).toBe(1);
     expect(aggregator.snapshot().lowVisibilityByJoint.lt020.left_wrist).toBe(1);
     expect(aggregator.snapshot().visibilityStatsByJoint.left_wrist.mean).toBe(0.1);
+    expect(aggregator.snapshot().jointStatsBySource.allSources.lowVisibilityByJoint.lt020.left_wrist).toBe(1);
+    expect(aggregator.snapshot().jointStatsBySource.allSources.visibilityStatsByJoint.left_wrist.mean).toBe(0.1);
 
     aggregator.reset();
     expect(aggregator.snapshot().totalFrames).toBe(0);
     expect(aggregator.snapshot().unknownVisibilityByJoint).toEqual({});
     expect(aggregator.snapshot().lowVisibilityByJoint.lt020).toEqual({});
     expect(aggregator.snapshot().visibilityStatsByJoint).toEqual({});
+    expect(aggregator.snapshot().jointStatsBySource.primarySource.visibilityStatsByJoint).toEqual({});
+    expect(aggregator.snapshot().timestampGaps.intervalCount).toBe(0);
   });
 
   it('formats a compact console summary without per-frame output', () => {
@@ -216,6 +292,22 @@ describe('PoseParserDiagnosticsAggregator', () => {
     );
     expect(formatPoseParserDiagnosticsSummary(aggregator.snapshot())).toContain(
       'wrists visibility left_wrist=n=1 min=0.12 mean=0.12 max=0.12 right_wrist=n/a',
+    );
+    expect(formatPoseParserDiagnosticsSummary(aggregator.snapshot())).toContain(
+      'primarySource wrists visibility left_wrist=n=1 min=0.12 mean=0.12 max=0.12 right_wrist=n/a',
+    );
+    expect(formatPoseParserDiagnosticsSummary(aggregator.snapshot())).toContain(
+      'timestampGaps gaps>250ms=0 gaps>500ms=0 gaps>1000ms=0 gaps>2000ms=0 possibleSilentTrackingLoss=0 reacquisitionFrames=0',
+    );
+    expect(formatPoseParserDiagnosticsSummary(aggregator.snapshot(), {
+      totalReps: 4,
+      completedRepCount: 4,
+      analyzerRepCount: 6,
+      uiRepCount: 6,
+      scoredRepCount: 3,
+      unscoredRepCount: 1,
+    })).toContain(
+      'reps total=4 completed=4 analyzer=6 ui=6 scored=3 unscored=1',
     );
   });
 });
