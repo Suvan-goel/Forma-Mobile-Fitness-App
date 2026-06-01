@@ -349,6 +349,43 @@ interface MetricSample {
 // INITIALIZATION
 // ============================================================================
 
+function createLatPulldownWarmupGate(): WarmupGate {
+  return new WarmupGate({
+    requiredJoints: [
+      'left_shoulder', 'right_shoulder',
+      'left_hip', 'right_hip',
+    ],
+    requiredFrames: 10,
+    visibilityThreshold: 0.15,
+  });
+}
+
+function resetLatPulldownAfterTrackingInterruption(state: LatPulldownState): LatPulldownState {
+  return {
+    ...state,
+    phase: 'REST',
+    tRepStart: null,
+    repWindow: null,
+    ratioTracker: new SmoothedAngleTracker(),
+    torsoLeanTracker: new SmoothedAngleTracker(),
+    upperArmDriveTracker: new SmoothedAngleTracker(),
+    torsoDevTracker: new SmoothedAngleTracker(),
+    warmupGate: createLatPulldownWarmupGate(),
+    warmedUp: false,
+    restMaxRatio: -Infinity,
+    tRestPeakRatio: null,
+    restUpperArmDriveBaseline: null,
+    restTorsoDevBaseline: null,
+    restShoulderYBaseline: null,
+    requireExtensionBeforeNextRep: false,
+    tRepCompleted: null,
+    smoothedRatio: 1.0,
+    smoothedTorsoLean: 0,
+    smoothedUpperArmDrive: null,
+    smoothedTorsoDev: null,
+  };
+}
+
 function initializeState(): LatPulldownState {
   return {
     phase: 'REST',
@@ -361,14 +398,7 @@ function initializeState(): LatPulldownState {
     torsoLeanTracker: new SmoothedAngleTracker(),
     upperArmDriveTracker: new SmoothedAngleTracker(),
     torsoDevTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_shoulder', 'right_shoulder',
-        'left_hip', 'right_hip',
-      ],
-      requiredFrames: 10,
-      visibilityThreshold: 0.15,
-    }),
+    warmupGate: createLatPulldownWarmupGate(),
     warmedUp: false,
     activeSide: 'right',
     restMaxRatio: -Infinity,
@@ -1310,6 +1340,10 @@ function updateLatPulldownState(
       : Date.now();
   const t = timestampMs / 1000;
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
+
+  if (frameContext?.trackingInterrupted) {
+    return resetLatPulldownAfterTrackingInterruption(state);
+  }
 
   // -- Warmup gate --
   if (!state.warmedUp) {

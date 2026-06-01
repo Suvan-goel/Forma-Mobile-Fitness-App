@@ -356,6 +356,86 @@ function withDegenerateTorsoHeightExcept(
   });
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
+  const {
+    side = 'right',
+    orientation = 'front',
+    posture = 'upright',
+    hiddenSideScore = 0.05,
+    sideGap,
+    armPath,
+    shoulderShrug,
+    torsoRock,
+  } = options;
+  const frameOptions = { armPath, sideGap, shoulderShrug, torsoRock };
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const elbowY of segment.path) {
+      const torsoRockZ = torsoRock ? torsoRockZForFrame(segment.path, frameIndex) : undefined;
+      frames.push(makeFrame(timestamp, elbowY, side, orientation, posture, hiddenSideScore, {
+        ...frameOptions,
+        torsoRockZ,
+      }));
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Cable Lat Pulldowns',
+    metadata: {
+      recordedAt: '2026-04-29T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep lat pulldown with recovery', [
+    {
+      path: [
+        ...Array(14).fill(EXTENDED_ELBOW_Y),
+        ...interpolate(EXTENDED_ELBOW_Y, PARTIAL_ELBOW_Y, 14),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(16).fill(EXTENDED_ELBOW_Y),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 const TORSO_ONLY_SCORING_DEFINITION = latPulldownDefinition.createVariant!({
   penaltyConfigs: {
     PULL_ROM: { cap: 0 },
@@ -460,6 +540,55 @@ describe('Lat Pulldown synthetic replay coverage', () => {
       return phase !== 'REST' && !phase.endsWith(':REST');
     });
     expect(activeFrames.every(trace => trace.debugInfo.activeSide === 'right')).toBe(true);
+  });
+
+  it('keeps clean four-rep pulldowns unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildMultiRepRecording('synthetic clean four lat pulldowns', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildMultiRepRecording(`synthetic four lat pulldowns with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not add a false rep across a long silent gap between pulldowns', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildMultiRepRecording('synthetic four lat pulldowns with walk-out gap', 4, { 1: 6000 }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      latPulldownDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real pulldown after a long gap once stable frames rebuild', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      buildSegmentedRecording('synthetic long gap then clean lat pulldown', [
+        { path: Array(20).fill(EXTENDED_ELBOW_Y), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('flags excessive lean without treating an upright setup as leaning', () => {
