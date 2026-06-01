@@ -8,7 +8,7 @@ export type PoseFrameInputKind =
   | 'nativeLandmarkArray'
   | 'legacyKeypointArray'
   | 'unknown';
-export type MetadataValueState = 'known' | 'unknown' | 'malformed';
+export type MetadataValueState = 'known' | 'unknown' | 'malformed' | 'unavailable';
 export type KeypointScoreSource = 'visibility' | 'legacyScore' | 'defaultVisibility';
 export type LandmarkSource = 'image' | 'world';
 

@@ -9,6 +9,24 @@ export {
   poseMetadataForRecording,
 } from './recordingSchema';
 export { replayRecording, replayRecordingVerbose } from './replayRunner';
+export {
+  formatLandmarkRecordingReliabilityReport,
+  parsedPoseFrameFromRecordingFrame,
+  poseStateFromLandmarkRecordingFrame,
+  summarizeLandmarkRecordingReliability,
+} from './reliabilityReport';
+export type {
+  LabelledRepReliabilityAggregateSummary,
+  LabelledRepReliabilityLabelInfo,
+  LabelledRepReliabilityReport,
+  LabelledRepReliabilitySummary,
+  LandmarkRecordingReliabilityReport,
+  LandmarkRecordingReliabilityOptions,
+  PoseStateFromRecordingFrameOptions,
+  RecordingReliabilityGapSummary,
+  RecordingReliabilityJointSummary,
+  RecordingReliabilityMetadataMode,
+} from './reliabilityReport';
 export type {
   FrameTrace,
   FsmTransition,

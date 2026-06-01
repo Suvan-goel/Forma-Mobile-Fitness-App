@@ -94,14 +94,25 @@ export function createPoseJoint(input: {
     pushUnique(reasons, 'malformed_presence');
   }
 
-  const visibility = metadata?.visibility ?? (keypoint && finite(keypoint.score) ? keypoint.score : null);
+  const visibility = metadata ? metadata.visibility : (keypoint && finite(keypoint.score) ? keypoint.score : null);
   const presence = metadata?.presence ?? null;
   const confidence = keypoint && finite(keypoint.score) ? keypoint.score : visibility;
 
-  if (keypoint && metadata && metadata.visibilityState !== 'known' && !metadata.malformedFields.includes('visibility')) {
+  if (
+    keypoint &&
+    metadata &&
+    metadata.visibilityState !== 'known' &&
+    !metadata.malformedFields.includes('visibility')
+  ) {
     pushUnique(reasons, 'visibility_unknown');
   }
-  if (keypoint && metadata && metadata.presenceState !== 'known' && !metadata.malformedFields.includes('presence')) {
+  if (
+    keypoint &&
+    metadata &&
+    metadata.presenceState !== 'known' &&
+    metadata.presenceState !== 'unavailable' &&
+    !metadata.malformedFields.includes('presence')
+  ) {
     pushUnique(reasons, 'presence_unknown');
   }
   if (visibility !== null && visibility < POSE_RELIABILITY_THRESHOLDS.lowVisibility) {
