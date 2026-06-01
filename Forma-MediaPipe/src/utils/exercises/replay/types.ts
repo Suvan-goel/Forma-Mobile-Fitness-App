@@ -18,7 +18,58 @@ import type {
   SetTrackingQualitySummary,
 } from '../shared/poseQuality';
 
+export type LandmarkRecordingSchemaVersion = 1 | 2;
+export type LandmarkRecordingFrameStatus = 'poseDetected' | 'noPose' | 'trackingLost';
+export type LandmarkRecordingPrimarySource = 'world' | 'image';
+export type LandmarkRecordingLandmarkSource = 'image' | 'world';
+export type LandmarkRecordingMetadataValueState =
+  | 'present'
+  | 'missing'
+  | 'unknown'
+  | 'unavailable';
+export type LandmarkRecordingScoreSource =
+  | 'visibility'
+  | 'presence'
+  | 'default'
+  | 'legacy'
+  | 'unknown';
+
+export interface LandmarkRecordingPoseLandmarkMetadata {
+  name: string;
+  source: LandmarkRecordingLandmarkSource;
+  visibility: number | null;
+  presence: number | null;
+  visibilityState: LandmarkRecordingMetadataValueState;
+  presenceState: LandmarkRecordingMetadataValueState;
+  scoreSource?: LandmarkRecordingScoreSource;
+  malformedFields?: string[];
+}
+
+export interface LandmarkRecordingPoseMetadata {
+  imageLandmarks?: LandmarkRecordingPoseLandmarkMetadata[];
+  worldLandmarks?: LandmarkRecordingPoseLandmarkMetadata[];
+}
+
+export interface LandmarkRecordingFrameContext {
+  silentGapMs?: number;
+  trackingInterrupted?: boolean;
+  reacquisitionFrameIndex?: number;
+}
+
+export interface LandmarkRecordingFrame {
+  timestamp: number;
+  timestampMs?: number;
+  status?: LandmarkRecordingFrameStatus;
+  keypoints: Keypoint[];
+  worldKeypoints?: Keypoint[];
+  imageKeypoints?: Keypoint[];
+  primarySource?: LandmarkRecordingPrimarySource;
+  frameContext?: LandmarkRecordingFrameContext;
+  poseMetadata?: LandmarkRecordingPoseMetadata;
+}
+
 export interface LandmarkRecording {
+  schemaVersion?: LandmarkRecordingSchemaVersion;
   exerciseName: string;
   metadata: {
     recordedAt?: string;
@@ -32,6 +83,10 @@ export interface LandmarkRecording {
     fps?: number;
     frameCount?: number;
     processedFrameCount?: number;
+    emittedPoseFrameCount?: number;
+    noPoseFrameCount?: number;
+    skippedFrameCount?: number;
+    frameStride?: number;
     liveRepCount?: number;
     completedRepCount?: number;
     analyzerRepCount?: number;
@@ -41,12 +96,7 @@ export interface LandmarkRecording {
     parserDiagnostics?: PoseParserDiagnosticsSummary;
     poseStateDiagnostics?: PoseStateReliabilitySummary;
   };
-  frames: Array<{
-    timestamp: number;
-    keypoints: Keypoint[];
-    worldKeypoints?: Keypoint[];
-    imageKeypoints?: Keypoint[];
-  }>;
+  frames: LandmarkRecordingFrame[];
 }
 
 export interface ReplayRepPrediction {

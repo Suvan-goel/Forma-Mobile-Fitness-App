@@ -15,7 +15,6 @@ import PauseIcon from '../components/icons/PauseIcon';
 import { MonoText } from '../components/typography/MonoText';
 import { RootStackParamList, RecordStackParamList } from '../app/RootNavigator';
 import { detectExercise, updateRepCount } from '../../utils/poseAnalysis';
-import type { Keypoint } from '../../utils/poseAnalysis';
 import { parsePoseFrame, type ParsedPoseFrame } from '../../utils/pose/parsePoseFrame';
 import { createPoseFrameGapTracker } from '../../utils/pose/frameGapTracker';
 import {
@@ -47,6 +46,10 @@ import type {
   RepTrackingQuality,
   SetTrackingQualitySummary,
 } from '../../utils/exercises';
+import {
+  createLandmarkRecordingFrame,
+  type LandmarkRecordingFrame,
+} from '../../utils/exercises/replay';
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -91,13 +94,6 @@ type SetStartSpeechReservation = {
   message: string;
   snapshot: VoiceSnapshot;
   assetPromise: Promise<PreparedSpeech | null>;
-};
-
-type LandmarkRecordingFrame = {
-  timestamp: number;
-  keypoints: Keypoint[];
-  worldKeypoints?: Keypoint[];
-  imageKeypoints?: Keypoint[];
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -638,12 +634,11 @@ export const CameraScreen: React.FC = () => {
         }
         frameTimestamp = converted.timestampMs - nativeLandmarkRecordingStartRef.current;
       }
-      const frame: LandmarkRecordingFrame = {
+      const frame = createLandmarkRecordingFrame({
+        parsedFrame: converted,
         timestamp: frameTimestamp,
-        keypoints,
-      };
-      if (worldKeypoints) frame.worldKeypoints = worldKeypoints;
-      if (imageKeypoints) frame.imageKeypoints = imageKeypoints;
+        frameContext: frameGap,
+      });
       landmarkBufferRef.current.push(frame);
     }
 
@@ -928,6 +923,7 @@ export const CameraScreen: React.FC = () => {
         isRecordingLandmarksRef.current = false;
         if (landmarkBufferRef.current.length > 0) {
           const recording = {
+            schemaVersion: 2,
             exerciseName: exerciseNameFromRoute || 'Unknown',
             metadata: {
               recordedAt: new Date().toISOString(),

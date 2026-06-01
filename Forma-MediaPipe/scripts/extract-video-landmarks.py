@@ -12,7 +12,7 @@ import json
 import math
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 MEDIAPIPE_LANDMARK_NAMES = [
     "nose", "left_eye_inner", "left_eye", "left_eye_outer",
@@ -50,17 +50,69 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def landmark_to_keypoint(landmark: Any, index: int) -> dict[str, Any]:
-    visibility = 1.0
-    if getattr(landmark, "visibility", None) is not None:
-        visibility_value = landmark.visibility
-        visibility = float(visibility_value) if visibility_value is not None else 0.0
+def finite_float(value: Any) -> Optional[float]:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if math.isfinite(numeric) else None
+
+
+def metadata_value(landmark: Any, field: str) -> tuple[Optional[float], str]:
+    if not hasattr(landmark, field):
+        return None, "unavailable"
+    value = getattr(landmark, field)
+    if value is None:
+        return None, "missing"
+    numeric = finite_float(value)
+    if numeric is None:
+        return None, "unknown"
+    return numeric, "present"
+
+
+def coordinate_value(landmark: Any, field: str, fallback: float = 0.0) -> tuple[float, bool]:
+    value = getattr(landmark, field, None)
+    numeric = finite_float(value)
+    if numeric is None:
+        return fallback, True
+    return numeric, False
+
+
+def landmark_metadata(landmark: Any, index: int, source: str) -> dict[str, Any]:
+    visibility, visibility_state = metadata_value(landmark, "visibility")
+    presence, presence_state = metadata_value(landmark, "presence")
+    malformed_fields: list[str] = []
+    for field in ["x", "y", "z"]:
+        _, malformed = coordinate_value(landmark, field)
+        if malformed:
+            malformed_fields.append(field)
+    if visibility_state == "unknown":
+        malformed_fields.append("visibility")
+    if presence_state == "unknown":
+        malformed_fields.append("presence")
     return {
         "name": MEDIAPIPE_LANDMARK_NAMES[index] if index < len(MEDIAPIPE_LANDMARK_NAMES) else f"landmark_{index}",
-        "x": float(landmark.x),
-        "y": float(landmark.y),
-        "z": float(getattr(landmark, "z", 0.0) or 0.0),
-        "score": visibility,
+        "source": source,
+        "visibility": visibility,
+        "presence": presence,
+        "visibilityState": visibility_state,
+        "presenceState": presence_state,
+        "scoreSource": "visibility" if visibility_state == "present" else "default",
+        **({"malformedFields": malformed_fields} if malformed_fields else {}),
+    }
+
+
+def landmark_to_keypoint(landmark: Any, index: int) -> dict[str, Any]:
+    visibility, visibility_state = metadata_value(landmark, "visibility")
+    x, _ = coordinate_value(landmark, "x")
+    y, _ = coordinate_value(landmark, "y")
+    z, _ = coordinate_value(landmark, "z")
+    return {
+        "name": MEDIAPIPE_LANDMARK_NAMES[index] if index < len(MEDIAPIPE_LANDMARK_NAMES) else f"landmark_{index}",
+        "x": x,
+        "y": y,
+        "z": z,
+        "score": visibility if visibility_state == "present" and visibility is not None else 1.0,
     }
 
 
@@ -104,6 +156,7 @@ def main() -> int:
 
     frames: list[dict[str, Any]] = []
     processed_frame_count = 0
+    no_pose_frame_count = 0
     frame_index = 0
 
     with vision.PoseLandmarker.create_from_options(options) as landmarker:
@@ -122,26 +175,41 @@ def main() -> int:
             processed_frame_count += 1
 
             if not result.pose_landmarks:
+                no_pose_frame_count += 1
                 frame_index += 1
                 continue
 
             image_landmarks = result.pose_landmarks[0]
             world_landmarks = result.pose_world_landmarks[0] if result.pose_world_landmarks else None
             primary_landmarks = world_landmarks if world_landmarks else image_landmarks
+            primary_source = "world" if world_landmarks else "image"
             frame = {
                 "timestamp": timestamp_ms,
+                "timestampMs": timestamp_ms,
+                "status": "poseDetected",
                 "keypoints": [
                     landmark_to_keypoint(landmark, index)
                     for index, landmark in enumerate(primary_landmarks)
                 ],
+                "primarySource": primary_source,
                 "imageKeypoints": [
                     landmark_to_keypoint(landmark, index)
                     for index, landmark in enumerate(image_landmarks)
                 ],
+                "poseMetadata": {
+                    "imageLandmarks": [
+                        landmark_metadata(landmark, index, "image")
+                        for index, landmark in enumerate(image_landmarks)
+                    ],
+                },
             }
             if world_landmarks:
                 frame["worldKeypoints"] = [
                     landmark_to_keypoint(landmark, index)
+                    for index, landmark in enumerate(world_landmarks)
+                ]
+                frame["poseMetadata"]["worldLandmarks"] = [
+                    landmark_metadata(landmark, index, "world")
                     for index, landmark in enumerate(world_landmarks)
                 ]
             frames.append(frame)
@@ -151,6 +219,7 @@ def main() -> int:
 
     duration = 0.0 if source_frame_count <= 0 else source_frame_count / fps
     recording = {
+        "schemaVersion": 2,
         "exerciseName": args.exercise,
         "metadata": {
             "recordedAt": datetime.now(timezone.utc).isoformat(),
@@ -164,6 +233,10 @@ def main() -> int:
             "fps": fps,
             "frameCount": source_frame_count,
             "processedFrameCount": processed_frame_count,
+            "emittedPoseFrameCount": len(frames),
+            "noPoseFrameCount": no_pose_frame_count,
+            "skippedFrameCount": max(0, source_frame_count - processed_frame_count),
+            "frameStride": args.frame_stride,
         },
         "frames": frames,
     }

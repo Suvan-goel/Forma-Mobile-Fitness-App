@@ -13,7 +13,9 @@ import * as path from 'path';
 import { replayRecording } from './replayRunner';
 import '../definitions/register';
 import { ExerciseRegistry } from '../ExerciseRegistry';
+import { parsePoseFrame, type RawPoseLandmark } from '../../pose/parsePoseFrame';
 import { UNSCORED_REP_FEEDBACK } from '../shared/poseQuality';
+import { createLandmarkRecordingFrame } from '../replay';
 import type { ExerciseDefinition, ExerciseState } from '../types';
 import type { LandmarkRecording } from './types';
 
@@ -39,6 +41,21 @@ function frame(timestamp: number, score: number): LandmarkRecording['frames'][nu
     timestamp,
     keypoints: [{ name: 'left_shoulder', x: 0.5, y: 0.5, z: 0, score }],
   };
+}
+
+function rawLandmark(index: number, overrides: Partial<RawPoseLandmark> = {}): RawPoseLandmark {
+  return {
+    x: 0.1 + index * 0.01,
+    y: 0.2 + index * 0.01,
+    z: index * 0.001,
+    visibility: 0.9,
+    presence: 0.8,
+    ...overrides,
+  };
+}
+
+function rawLandmarks(overrides: Record<number, Partial<RawPoseLandmark>> = {}): RawPoseLandmark[] {
+  return Array.from({ length: 33 }, (_, index) => rawLandmark(index, overrides[index]));
 }
 
 function replayTestDefinition(activeUntilFrame: number): ExerciseDefinition {
@@ -80,6 +97,133 @@ function replayTestDefinition(activeUntilFrame: number): ExerciseDefinition {
 }
 
 describe('Replay quality windows', () => {
+  it('creates v2 recording frames with primary source, frame context, and pose metadata', () => {
+    const parsed = parsePoseFrame({
+      timestampMs: 1234,
+      landmarks: rawLandmarks({
+        0: { visibility: undefined, presence: undefined },
+        1: { visibility: 1.0, presence: 0.25 },
+      }),
+    });
+
+    expect(parsed).not.toBeNull();
+    const recordingFrame = createLandmarkRecordingFrame({
+      parsedFrame: parsed!,
+      timestamp: 0,
+      frameContext: {
+        silentGapMs: 1200,
+        trackingInterrupted: true,
+        reacquisitionFrameIndex: 0,
+      },
+    });
+
+    expect(recordingFrame).toMatchObject({
+      timestamp: 0,
+      timestampMs: 1234,
+      status: 'poseDetected',
+      primarySource: 'image',
+      frameContext: {
+        silentGapMs: 1200,
+        trackingInterrupted: true,
+        reacquisitionFrameIndex: 0,
+      },
+    });
+    expect(recordingFrame.keypoints[0].score).toBe(1.0);
+    expect(recordingFrame.poseMetadata?.imageLandmarks?.[0]).toMatchObject({
+      name: 'nose',
+      visibility: null,
+      presence: null,
+      visibilityState: 'missing',
+      presenceState: 'missing',
+      scoreSource: 'default',
+    });
+    expect(recordingFrame.poseMetadata?.imageLandmarks?.[1]).toMatchObject({
+      name: 'left_eye_inner',
+      visibility: 1.0,
+      presence: 0.25,
+      visibilityState: 'present',
+      presenceState: 'present',
+      scoreSource: 'visibility',
+    });
+  });
+
+  it('replays v2 recordings while recomputing frame gap context from timestamps', () => {
+    const seenTrackingInterrupted: boolean[] = [];
+    const definition: ExerciseDefinition = {
+      ...replayTestDefinition(999),
+      name: 'Replay V2 Compatibility Test',
+      update: (_keypoints, state, frameContext) => {
+        seenTrackingInterrupted.push(frameContext?.trackingInterrupted === true);
+        const internal = state._internal as { frameIndex: number };
+        return {
+          ...state,
+          _internal: { frameIndex: internal.frameIndex + 1 },
+        };
+      },
+    };
+    const recording: LandmarkRecording = {
+      schemaVersion: 2,
+      exerciseName: 'Replay V2 Compatibility Test',
+      metadata: {},
+      frames: [
+        {
+          ...frame(0, 0.99),
+          status: 'poseDetected',
+          primarySource: 'image',
+          frameContext: { trackingInterrupted: true, silentGapMs: 5000 },
+        },
+        {
+          ...frame(33, 0.99),
+          status: 'poseDetected',
+          primarySource: 'image',
+          frameContext: { trackingInterrupted: true, silentGapMs: 5000 },
+        },
+      ],
+    };
+
+    const result = replayRecording(definition, recording);
+
+    expect(result.finalRepCount).toBe(0);
+    expect(seenTrackingInterrupted).toEqual([false, false]);
+  });
+
+  it('skips explicit v2 noPose and trackingLost frames during current replay', () => {
+    const seen: Array<{ timestampMs: number | undefined; trackingInterrupted: boolean }> = [];
+    const definition: ExerciseDefinition = {
+      ...replayTestDefinition(999),
+      name: 'Replay Lost Frame Compatibility Test',
+      update: (_keypoints, state, frameContext) => {
+        seen.push({
+          timestampMs: frameContext?.timestampMs,
+          trackingInterrupted: frameContext?.trackingInterrupted === true,
+        });
+        const internal = state._internal as { frameIndex: number };
+        return {
+          ...state,
+          _internal: { frameIndex: internal.frameIndex + 1 },
+        };
+      },
+    };
+    const recording: LandmarkRecording = {
+      schemaVersion: 2,
+      exerciseName: 'Replay Lost Frame Compatibility Test',
+      metadata: {},
+      frames: [
+        { ...frame(0, 0.99), status: 'poseDetected', primarySource: 'image' },
+        { timestamp: 500, status: 'noPose', keypoints: [], primarySource: 'image' },
+        { timestamp: 1000, status: 'trackingLost', keypoints: [], primarySource: 'image' },
+        { ...frame(2001, 0.99), status: 'poseDetected', primarySource: 'image' },
+      ],
+    };
+
+    replayRecording(definition, recording);
+
+    expect(seen).toEqual([
+      { timestampMs: 0, trackingInterrupted: false },
+      { timestampMs: 2001, trackingInterrupted: true },
+    ]);
+  });
+
   it('passes image and world frame context into exercise updates', () => {
     const seen: Array<{
       keypointX: number;

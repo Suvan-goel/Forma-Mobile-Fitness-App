@@ -119,6 +119,14 @@ function frameContextForReplay(
   };
 }
 
+function shouldSkipFrameForCurrentReplay(frame: LandmarkRecording['frames'][number]): boolean {
+  return frame.status === 'noPose' || frame.status === 'trackingLost';
+}
+
+function firstReplayableFrameTimestamp(recording: LandmarkRecording): number | null {
+  return recording.frames.find((frame) => !shouldSkipFrameForCurrentReplay(frame))?.timestamp ?? null;
+}
+
 export function replayRecording(
   definition: ExerciseDefinition,
   recording: LandmarkRecording,
@@ -135,7 +143,7 @@ export function replayRecording(
   const reps: ReplayRepPrediction[] = [];
   let lastRepCount = 0;
   let repStartedAt: number | null =
-    state.repQualityWindowActive === undefined ? (recording.frames[0]?.timestamp ?? null) : null;
+    state.repQualityWindowActive === undefined ? firstReplayableFrameTimestamp(recording) : null;
   let previousQualityWindowActive = false;
   const originalDateNow = Date.now;
   const frameGapTracker = createPoseFrameGapTracker();
@@ -145,6 +153,7 @@ export function replayRecording(
 
   try {
     for (const frame of recording.frames) {
+      if (shouldSkipFrameForCurrentReplay(frame)) continue;
       Date.now = () => timestampToDateNow(baseTimeMs, frame.timestamp);
       const frameContext = frameContextForReplay(frame, frameGapTracker.observe(frame.timestamp));
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
@@ -266,7 +275,7 @@ export function replayRecordingVerbose(
   let lastPhase = extractPhase(state.debugInfo);
   let pendingTransitions: FsmTransition[] = [];
   let repStartedAt: number | null =
-    state.repQualityWindowActive === undefined ? (recording.frames[0]?.timestamp ?? null) : null;
+    state.repQualityWindowActive === undefined ? firstReplayableFrameTimestamp(recording) : null;
   let previousQualityWindowActive = false;
   const baseTimeMs = 0;
   const frameGapTracker = createPoseFrameGapTracker();
@@ -274,6 +283,7 @@ export function replayRecordingVerbose(
   try {
     for (let i = 0; i < recording.frames.length; i++) {
       const frame = recording.frames[i];
+      if (shouldSkipFrameForCurrentReplay(frame)) continue;
       Date.now = () => timestampToDateNow(baseTimeMs, frame.timestamp);
       const frameContext = frameContextForReplay(frame, frameGapTracker.observe(frame.timestamp));
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
