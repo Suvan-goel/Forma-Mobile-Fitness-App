@@ -427,6 +427,17 @@ interface LateralRaiseDebugInfo {
 // INITIALIZATION
 // ============================================================================
 
+function createLateralRaiseWarmupGate(): WarmupGate {
+  return new WarmupGate({
+    requiredJoints: [
+      'left_shoulder', 'right_shoulder',
+      'left_elbow', 'right_elbow',
+      'left_hip', 'right_hip',
+      'left_wrist', 'right_wrist',
+    ],
+  });
+}
+
 function initializeState(): LateralRaiseState {
   return {
     phase: 'REST',
@@ -441,14 +452,7 @@ function initializeState(): LateralRaiseState {
     leftLateralReachTracker: new SmoothedAngleTracker(),
     rightLateralReachTracker: new SmoothedAngleTracker(),
     torsoLeanTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_shoulder', 'right_shoulder',
-        'left_elbow', 'right_elbow',
-        'left_hip', 'right_hip',
-        'left_wrist', 'right_wrist',
-      ],
-    }),
+    warmupGate: createLateralRaiseWarmupGate(),
     warmedUp: false,
     restTorsoHeight: null,
     restShoulderHeadGap: null,
@@ -466,6 +470,34 @@ function initializeState(): LateralRaiseState {
     feedback: null,
     lastFeedbackTime: 0,
   };
+}
+
+function resetLateralRaiseAfterTrackingInterruption(state: LateralRaiseState): void {
+  state.phase = 'REST';
+  state.tRepStart = null;
+  state.repWindow = null;
+  state.leftHeightRatioTracker = new SmoothedAngleTracker();
+  state.rightHeightRatioTracker = new SmoothedAngleTracker();
+  state.leftStraightnessTracker = new SmoothedAngleTracker();
+  state.rightStraightnessTracker = new SmoothedAngleTracker();
+  state.leftLateralReachTracker = new SmoothedAngleTracker();
+  state.rightLateralReachTracker = new SmoothedAngleTracker();
+  state.torsoLeanTracker = new SmoothedAngleTracker();
+  state.warmupGate = createLateralRaiseWarmupGate();
+  state.warmedUp = false;
+  state.restTorsoHeight = null;
+  state.restShoulderHeadGap = null;
+  state.restShoulderHeadSource = null;
+  state.smoothedLeftHeightRatio = 0;
+  state.smoothedRightHeightRatio = 0;
+  state.smoothedAvgHeightRatio = 0;
+  state.smoothedLeftStraightness = 1.0;
+  state.smoothedRightStraightness = 1.0;
+  state.smoothedLeftLateralReach = 0;
+  state.smoothedRightLateralReach = 0;
+  state.smoothedAvgLateralReach = 0;
+  state.smoothedTorsoLean = 0;
+  state.viewAngleSmoothedDeg = null;
 }
 
 function initRepWindow(
@@ -1442,6 +1474,11 @@ function updateLateralRaiseState(
   const t = Date.now() / 1000;
   const imageKeypoints = frameContext?.imageKeypoints ?? keypoints;
   const worldKeypoints = frameContext?.worldKeypoints;
+
+  if (frameContext?.trackingInterrupted) {
+    resetLateralRaiseAfterTrackingInterruption(state);
+    return state;
+  }
 
   // -- Warmup gate --
   if (!state.warmedUp) {

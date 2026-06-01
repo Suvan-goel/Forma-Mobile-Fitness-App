@@ -242,6 +242,129 @@ function buildRecording(
   };
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: {
+    orientation?: Orientation;
+    posture?: Posture | ((index: number) => Posture);
+    armStyle?: ArmStyle | ((index: number) => ArmStyle);
+    armPlane?: ArmPlane | ((index: number) => ArmPlane);
+    leftArmPlane?: ArmPlane | ((index: number) => ArmPlane);
+    rightArmPlane?: ArmPlane | ((index: number) => ArmPlane);
+    rightScale?: number | ((index: number) => number);
+    leftWristScore?: number | ((index: number) => number);
+    rightWristScore?: number | ((index: number) => number);
+    bodyShiftX?: number | ((index: number) => number);
+    noseScore?: number | ((index: number) => number);
+    leftEarScore?: number | ((index: number) => number);
+    rightEarScore?: number | ((index: number) => number);
+  } = {},
+): LandmarkRecording {
+  const {
+    orientation = 'front',
+    posture = 'upright',
+    armStyle = 'straight',
+    armPlane = 'lateral',
+    leftArmPlane,
+    rightArmPlane,
+    rightScale = 1,
+    leftWristScore = 0.99,
+    rightWristScore = 0.99,
+    bodyShiftX = 0,
+    noseScore = 0.99,
+    leftEarScore = 0.99,
+    rightEarScore = 0.99,
+  } = options;
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const heightRatio of segment.path) {
+      const framePosture = typeof posture === 'function' ? posture(frameIndex) : posture;
+      const frameArmStyle = typeof armStyle === 'function' ? armStyle(frameIndex) : armStyle;
+      const frameArmPlane = typeof armPlane === 'function' ? armPlane(frameIndex) : armPlane;
+      const frameLeftArmPlane = leftArmPlane === undefined
+        ? frameArmPlane
+        : typeof leftArmPlane === 'function' ? leftArmPlane(frameIndex) : leftArmPlane;
+      const frameRightArmPlane = rightArmPlane === undefined
+        ? frameArmPlane
+        : typeof rightArmPlane === 'function' ? rightArmPlane(frameIndex) : rightArmPlane;
+      const frameRightScale = typeof rightScale === 'function' ? rightScale(frameIndex) : rightScale;
+      const frameLeftWristScore = typeof leftWristScore === 'function' ? leftWristScore(frameIndex) : leftWristScore;
+      const frameRightWristScore = typeof rightWristScore === 'function' ? rightWristScore(frameIndex) : rightWristScore;
+      const frameBodyShiftX = typeof bodyShiftX === 'function' ? bodyShiftX(frameIndex) : bodyShiftX;
+      const frameNoseScore = typeof noseScore === 'function' ? noseScore(frameIndex) : noseScore;
+      const frameLeftEarScore = typeof leftEarScore === 'function' ? leftEarScore(frameIndex) : leftEarScore;
+      const frameRightEarScore = typeof rightEarScore === 'function' ? rightEarScore(frameIndex) : rightEarScore;
+      frames.push(makeFrame(timestamp, heightRatio, heightRatio * frameRightScale, {
+        orientation,
+        posture: framePosture,
+        armStyle: frameArmStyle,
+        leftArmPlane: frameLeftArmPlane,
+        rightArmPlane: frameRightArmPlane,
+        leftWristScore: frameLeftWristScore,
+        rightWristScore: frameRightWristScore,
+        bodyShiftX: frameBodyShiftX,
+        noseScore: frameNoseScore,
+        leftEarScore: frameLeftEarScore,
+        rightEarScore: frameRightEarScore,
+      }));
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Standing Dumbbell Lateral Raises',
+    metadata: {
+      recordedAt: '2026-04-29T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep lateral raise with recovery', [
+    {
+      path: [
+        ...Array(18).fill(0),
+        ...interpolate(0, 0.58, 16),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(18).fill(0),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 function toWorldYUp(point: Keypoint, sagittalShoulderShift = 0, yawShoulderDepth = 0): Keypoint {
   const isShoulder = point.name === 'left_shoulder' || point.name === 'right_shoulder';
   const yawDepth = point.name === 'left_shoulder'
@@ -422,6 +545,55 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(result.feedbackMessages).toContain('Raise higher — aim for shoulder level.');
+  });
+
+  it('keeps clean four-rep lateral raises unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      buildMultiRepRecording('synthetic clean four lateral raises', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps lateral raise counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      buildMultiRepRecording(`synthetic four lateral raises with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([1200, 6000])('does not add a false lateral raise rep across a %sms silent gap between reps', (gapMs) => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      buildMultiRepRecording(`synthetic four lateral raises with ${gapMs}ms walk-out gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active lateral raise rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      lateralRaiseDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real lateral raise after a long gap once stable setup frames rebuild', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      buildSegmentedRecording('synthetic long gap then clean lateral raise', [
+        { path: Array(18).fill(0), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('accumulates full form samples for meaningful partial reps', () => {
