@@ -578,6 +578,51 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
   };
 }
 
+function createLegExtensionWarmupGate(): WarmupGate {
+  return new WarmupGate({
+    requiredJoints: [
+      'left_hip', 'left_knee', 'left_ankle',
+      'right_hip', 'right_knee', 'right_ankle',
+      'left_shoulder', 'right_shoulder',
+    ],
+    requiredFrames: 10,
+    visibilityThreshold: 0.2,
+  });
+}
+
+function resetBaselineSamples(): Record<'left' | 'right', BaselineSamples> {
+  return {
+    left: { torsoDev: [], hipAngle: [], hipY: [] },
+    right: { torsoDev: [], hipAngle: [], hipY: [] },
+  };
+}
+
+function resetLegExtensionAfterTrackingInterruption(
+  currentState: LegExtensionState,
+): LegExtensionState {
+  return {
+    ...currentState,
+    fsm: initFSM(),
+    repWindow: null,
+    ratioTracker: new SmoothedAngleTracker({ medianWindow: 3, emaAlpha: 0.5 }),
+    hipTracker: new SmoothedAngleTracker(),
+    torsoTracker: new SmoothedAngleTracker(),
+    warmupGate: createLegExtensionWarmupGate(),
+    warmedUp: false,
+    smoothedRatio: null,
+    fastRatio: null,
+    currentKneeAngle: null,
+    currentHipRiseRatio: null,
+    smoothedHip: null,
+    smoothedTorso: null,
+    restMinRatio: Infinity,
+    hasSeenBentRest: false,
+    preWindowLockoutStreakCount: 0,
+    preWindowLockoutStreakStart: null,
+    baselineSamples: resetBaselineSamples(),
+  };
+}
+
 function initializeLegExtensionState(): LegExtensionState {
   return {
     fsm: initFSM(),
@@ -587,15 +632,7 @@ function initializeLegExtensionState(): LegExtensionState {
     ratioTracker: new SmoothedAngleTracker({ medianWindow: 3, emaAlpha: 0.5 }),
     hipTracker: new SmoothedAngleTracker(),
     torsoTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_hip', 'left_knee', 'left_ankle',
-        'right_hip', 'right_knee', 'right_ankle',
-        'left_shoulder', 'right_shoulder',
-      ],
-      requiredFrames: 10,
-      visibilityThreshold: 0.2,
-    }),
+    warmupGate: createLegExtensionWarmupGate(),
     warmedUp: false,
     smoothedRatio: null,
     fastRatio: null,
@@ -610,10 +647,7 @@ function initializeLegExtensionState(): LegExtensionState {
     hasSeenBentRest: false,
     preWindowLockoutStreakCount: 0,
     preWindowLockoutStreakStart: null,
-    baselineSamples: {
-      left: { torsoDev: [], hipAngle: [], hipY: [] },
-      right: { torsoDev: [], hipAngle: [], hipY: [] },
-    },
+    baselineSamples: resetBaselineSamples(),
   };
 }
 
@@ -1686,6 +1720,10 @@ function updateLegExtensionState(
     : Date.now();
   const t = timestampMs / 1000;
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
+
+  if (frameContext?.trackingInterrupted) {
+    return resetLegExtensionAfterTrackingInterruption(currentState);
+  }
 
   // Warmup gate
   if (!currentState.warmedUp) {

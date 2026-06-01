@@ -288,6 +288,113 @@ function buildRecording(
   };
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
+  const {
+    side = 'left',
+    orientation = 'facing-right',
+    posture = 'upright',
+    sideSwitchFrame,
+    distortedWorld = false,
+    shoulderScore,
+    sideOffset = 0.015,
+    keypointMutator,
+  } = options;
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const progress of segment.path) {
+      const framePosture = typeof posture === 'function' ? posture(frameIndex) : posture;
+      let frame: LandmarkRecording['frames'][number];
+      if (sideSwitchFrame !== undefined && frameIndex >= sideSwitchFrame) {
+        frame = side === 'left'
+          ? makeFrameWithScores(timestamp, progress, orientation, framePosture, 0.7, 0.99, sideOffset)
+          : makeFrameWithScores(timestamp, progress, orientation, framePosture, 0.99, 0.7, sideOffset);
+      } else {
+        frame = makeFrame(timestamp, progress, side, orientation, framePosture, 0.3, sideOffset);
+      }
+
+      if (shoulderScore !== undefined) {
+        frame.keypoints = frame.keypoints.map(keypoint =>
+          keypoint.name.includes('_shoulder') ? { ...keypoint, score: shoulderScore } : keypoint,
+        );
+      }
+
+      if (keypointMutator) {
+        frame.keypoints = frame.keypoints.map(keypoint => keypointMutator(keypoint, frameIndex, progress));
+      }
+
+      if (distortedWorld) {
+        const worldFrame = makeFrame(timestamp, 0, side, orientation, 'upright', 0.3, sideOffset);
+        frames.push({
+          timestamp: frame.timestamp,
+          keypoints: worldFrame.keypoints,
+          worldKeypoints: worldFrame.keypoints,
+          imageKeypoints: frame.keypoints,
+        });
+      } else {
+        frames.push(frame);
+      }
+
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Leg Extensions',
+    metadata: {
+      recordedAt: '2026-04-30T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep leg extension with recovery', [
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...interpolate(0, 0.5, 16),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 describe('Leg Extension synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -504,6 +611,55 @@ describe('Leg Extension synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     const activeFrames = result.frameTraces.filter(trace => trace.phase !== 'REST');
     expect(activeFrames.every(trace => trace.debugInfo.side === 'left')).toBe(true);
+  });
+
+  it('keeps clean four-rep leg extensions unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      buildMultiRepRecording('synthetic clean four leg extensions', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps leg extension counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      buildMultiRepRecording(`synthetic four leg extensions with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not add a false leg extension rep across a long silent gap between reps', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      buildMultiRepRecording('synthetic four leg extensions with walk-out gap', 4, { 1: 6000 }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active leg extension rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      legExtensionsDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real leg extension after a long gap once stable frames rebuild', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      buildSegmentedRecording('synthetic long gap then clean leg extension', [
+        { path: Array(20).fill(0), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('flags hip lift without punishing seated hips', () => {

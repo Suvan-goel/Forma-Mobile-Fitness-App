@@ -597,6 +597,44 @@ function initRepWindow(
   };
 }
 
+function createLyingLegCurlWarmupGate(): WarmupGate {
+  return new WarmupGate({
+    requiredJoints: [
+      'left_hip', 'left_knee', 'left_ankle',
+      'right_hip', 'right_knee', 'right_ankle',
+    ],
+    requiredFrames: 10,
+    visibilityThreshold: 0.2,
+  });
+}
+
+function resetLyingLegCurlAfterTrackingInterruption(
+  currentState: LyingLegCurlState,
+): LyingLegCurlState {
+  return {
+    ...currentState,
+    fsm: initFSM(),
+    repWindow: null,
+    pendingCompletedRep: null,
+    ratioTracker: new SmoothedAngleTracker(),
+    hipTracker: new SmoothedAngleTracker(),
+    warmupGate: createLyingLegCurlWarmupGate(),
+    warmedUp: false,
+    smoothedRatio: null,
+    fastRatio: null,
+    currentKneeAngle: null,
+    currentHipRiseRatio: null,
+    smoothedHip: null,
+    restMaxRatio: -Infinity,
+    restMaxKneeAngle: -Infinity,
+    restRatioSamples: [],
+    restKneeAngleSamples: [],
+    restHipAngleSamples: [],
+    restHipYSamples: [],
+    restThighVectorSamples: [],
+  };
+}
+
 function initializeLyingLegCurlState(): LyingLegCurlState {
   return {
     fsm: initFSM(),
@@ -606,14 +644,7 @@ function initializeLyingLegCurlState(): LyingLegCurlState {
     lastRepResult: null,
     ratioTracker: new SmoothedAngleTracker(),
     hipTracker: new SmoothedAngleTracker(),
-    warmupGate: new WarmupGate({
-      requiredJoints: [
-        'left_hip', 'left_knee', 'left_ankle',
-        'right_hip', 'right_knee', 'right_ankle',
-      ],
-      requiredFrames: 10,
-      visibilityThreshold: 0.2,
-    }),
+    warmupGate: createLyingLegCurlWarmupGate(),
     warmedUp: false,
     smoothedRatio: null,
     fastRatio: null,
@@ -1665,6 +1696,10 @@ function updateLyingLegCurlState(
     : Date.now();
   const t = timestampMs / 1000;
   const signalKeypoints = signalSourceKeypoints(frameContext, keypoints);
+
+  if (frameContext?.trackingInterrupted) {
+    return resetLyingLegCurlAfterTrackingInterruption(currentState);
+  }
 
   // Warmup gate
   if (!currentState.warmedUp) {

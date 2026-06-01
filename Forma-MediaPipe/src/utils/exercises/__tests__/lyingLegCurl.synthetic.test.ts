@@ -247,6 +247,88 @@ function buildRecording(
   };
 }
 
+function buildSegmentedRecording(
+  description: string,
+  segments: Array<{ path: number[]; gapAfterMs?: number }>,
+  options: Parameters<typeof buildRecording>[2] = {},
+): LandmarkRecording {
+  const {
+    side = 'left',
+    orientation = 'facing-right',
+    posture = 'flat',
+    sideSwitchFrame,
+    hiddenSideScore = 0.3,
+    sideOffset = 0.015,
+  } = options;
+  const frames: LandmarkRecording['frames'] = [];
+  let timestamp = 0;
+  let frameIndex = 0;
+
+  for (const segment of segments) {
+    for (const progress of segment.path) {
+      const framePosture = typeof posture === 'function' ? posture(frameIndex) : posture;
+      if (sideSwitchFrame !== undefined && frameIndex >= sideSwitchFrame) {
+        frames.push(side === 'left'
+          ? makeFrameWithScores(timestamp, progress, orientation, framePosture, 0.7, 0.99, sideOffset)
+          : makeFrameWithScores(timestamp, progress, orientation, framePosture, 0.99, 0.7, sideOffset));
+      } else {
+        frames.push(makeFrame(timestamp, progress, side, orientation, framePosture, hiddenSideScore, sideOffset));
+      }
+
+      timestamp += FRAME_MS;
+      frameIndex++;
+    }
+
+    if (segment.gapAfterMs !== undefined) {
+      timestamp += Math.max(0, segment.gapAfterMs - FRAME_MS);
+    }
+  }
+
+  return {
+    exerciseName: 'Lying Leg Curl',
+    metadata: {
+      recordedAt: '2026-04-30T00:00:00.000Z',
+      duration: timestamp / 1000,
+      description,
+      expectedReps: 0,
+      expectedScoreRange: [0, 100],
+    },
+    frames,
+  };
+}
+
+function buildMultiRepRecording(
+  description: string,
+  repCount: number,
+  gapsAfterRep: Record<number, number> = {},
+): LandmarkRecording {
+  return buildSegmentedRecording(
+    description,
+    Array.from({ length: repCount }, (_, repIndex) => ({
+      path: fullRepPath(),
+      gapAfterMs: gapsAfterRep[repIndex],
+    })),
+  );
+}
+
+function buildInterruptedMidRepRecording(): LandmarkRecording {
+  return buildSegmentedRecording('synthetic interrupted mid-rep lying leg curl with recovery', [
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...interpolate(0, 0.68, 18),
+      ],
+      gapAfterMs: 6000,
+    },
+    {
+      path: [
+        ...Array(16).fill(0),
+        ...fullRepPath(),
+      ],
+    },
+  ]);
+}
+
 function mapRecordingKeypoints(
   recording: LandmarkRecording,
   mapper: (point: Keypoint, frameIndex: number) => Keypoint,
@@ -303,6 +385,55 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
     expect(result.feedbackMessages).toContain('Curl higher — bring your heels closer to your glutes.');
+  });
+
+  it('keeps clean four-rep lying leg curls unchanged with normal frame intervals', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      buildMultiRepRecording('synthetic clean four lying leg curls', 4),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it.each([200, 700])('keeps lying leg curl counting unchanged for a %sms frame gap', (gapMs) => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      buildMultiRepRecording(`synthetic four lying leg curls with ${gapMs}ms gap`, 4, { 1: gapMs }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not add a false lying leg curl rep across a long silent gap between reps', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      buildMultiRepRecording('synthetic four lying leg curls with walk-out gap', 4, { 1: 6000 }),
+    );
+
+    expect(result.finalRepCount).toBe(4);
+  });
+
+  it('does not complete a stale active lying leg curl rep after a long silent gap', () => {
+    const result = replayRecordingVerbose(
+      lyingLegCurlDefinition,
+      buildInterruptedMidRepRecording(),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
+
+  it('counts a real lying leg curl after a long gap once stable frames rebuild', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      buildSegmentedRecording('synthetic long gap then clean lying leg curl', [
+        { path: Array(20).fill(0), gapAfterMs: 6000 },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
   });
 
   it('keeps sustained curl ROM feedback despite a one-frame full-curl spike', () => {
