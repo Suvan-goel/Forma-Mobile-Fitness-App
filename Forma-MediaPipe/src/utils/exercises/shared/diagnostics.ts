@@ -120,6 +120,7 @@ export function buildRepDiagnostics(options: {
   view?: RepDiagnostics['view'];
   selectedSide?: RepDiagnostics['selectedSide'];
   viewQuality?: RepDiagnostics['viewQuality'];
+  reliability?: RepDiagnostics['reliability'];
   metrics: RepMetricDiagnostic[];
   cues: RepCueDiagnostic[];
 }): RepDiagnostics {
@@ -130,6 +131,7 @@ export function buildRepDiagnostics(options: {
     selectedSide: options.selectedSide,
     scorable: options.scorable ?? true,
     viewQuality: options.viewQuality,
+    reliability: options.reliability,
     metrics: Object.fromEntries(options.metrics.map((metric) => [metric.key, metric])),
     cues: Object.fromEntries(options.cues.map((cue) => [cue.issueId, cue])),
   };

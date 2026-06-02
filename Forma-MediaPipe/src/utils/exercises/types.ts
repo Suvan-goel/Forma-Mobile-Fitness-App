@@ -12,6 +12,11 @@ import type {
   PoseQualityStatus,
   PoseQualityWarning,
 } from './shared/poseQuality';
+import type { PoseState } from '../pose/PoseState';
+import type {
+  CountabilityCandidate,
+  ScoreabilityCandidate,
+} from './shared/reliabilityInterpretation';
 
 // ============================================================================
 // ExerciseState — the standard external state every exercise exposes
@@ -49,6 +54,7 @@ export interface ExerciseFrameContext {
   silentGapMs?: number;
   trackingInterrupted?: boolean;
   reacquisitionFrameIndex?: number;
+  poseState?: PoseState;
 }
 
 // ============================================================================
@@ -169,6 +175,18 @@ export interface RepViewQualityDiagnostic {
   sampleCount: number;
 }
 
+export interface RepReliabilityDiagnostic {
+  countabilityCandidate: CountabilityCandidate;
+  scoreabilityCandidate: ScoreabilityCandidate;
+  usableChains: string[];
+  weakChains: string[];
+  safeCueFamilies: string[];
+  unsafeCueFamilies: string[];
+  reasons: string[];
+  suppressedCueFamilies?: string[];
+  suppressedIssueIds?: string[];
+}
+
 export interface RepDiagnostics {
   exerciseName: string;
   repIndex: number;
@@ -176,6 +194,7 @@ export interface RepDiagnostics {
   selectedSide?: 'left' | 'right' | 'both' | 'unknown';
   scorable: boolean;
   viewQuality?: RepViewQualityDiagnostic;
+  reliability?: RepReliabilityDiagnostic;
   metrics: Record<string, RepMetricDiagnostic>;
   cues: Record<string, RepCueDiagnostic>;
 }

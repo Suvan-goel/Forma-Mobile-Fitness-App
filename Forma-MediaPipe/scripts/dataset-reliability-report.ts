@@ -12,6 +12,13 @@ import {
   loadDatasetCasesWithSummary,
 } from './dataset-common';
 
+const DEFAULT_RELIABILITY_REPORT_DIR = path.join(
+  'datasets',
+  'form-heuristics',
+  'reports',
+  'reliability',
+);
+
 function usage(): string {
   return [
     'Usage:',
@@ -21,7 +28,7 @@ function usage(): string {
     '  npm run dataset:reliability-report -- datasets/form-heuristics --labelled-cases',
     '',
     'Optional:',
-    '  --json-out path/to/report.json',
+    `  --json-out path/to/report.json  Override default JSON output under ${DEFAULT_RELIABILITY_REPORT_DIR}`,
     '  --include-drafts        Include draft labels with --labelled-cases',
   ].join('\n');
 }
@@ -103,9 +110,46 @@ function readLabel(filePath: string): ExerciseLabelFile {
   return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as ExerciseLabelFile;
 }
 
+function timestampForFilename(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function safeFilenamePart(value: string): string {
+  return value
+    .replace(/\.json$/i, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'reliability-report';
+}
+
+function defaultJsonOutPath(args: {
+  resolvedTarget: string;
+  labelPath?: string;
+  labelledCases: boolean;
+}): string {
+  if (args.labelledCases) {
+    return path.join(DEFAULT_RELIABILITY_REPORT_DIR, `labelled-cases-${timestampForFilename()}.json`);
+  }
+
+  const targetStat = fs.existsSync(args.resolvedTarget) ? fs.statSync(args.resolvedTarget) : null;
+  const baseName = targetStat?.isFile()
+    ? safeFilenamePart(path.basename(args.resolvedTarget))
+    : `${safeFilenamePart(path.basename(args.resolvedTarget))}-${timestampForFilename()}`;
+  const suffix = args.labelPath ? '-labelled' : '';
+  return path.join(DEFAULT_RELIABILITY_REPORT_DIR, `${baseName}${suffix}.json`);
+}
+
+function writeJsonReport(filePath: string, payload: unknown): void {
+  const resolvedOut = path.resolve(process.cwd(), filePath);
+  fs.mkdirSync(path.dirname(resolvedOut), { recursive: true });
+  fs.writeFileSync(resolvedOut, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
+  console.log(`JSON report: ${path.relative(process.cwd(), resolvedOut)}`);
+}
+
 function main(): void {
   const { targetPath, jsonOut, labelPath, labelledCases, includeDrafts } = parseArgs(process.argv.slice(2));
   const resolvedTarget = path.resolve(process.cwd(), targetPath);
+  const resolvedJsonOut = jsonOut ?? defaultJsonOutPath({ resolvedTarget, labelPath, labelledCases });
   if (labelledCases) {
     const { cases, summary } = loadDatasetCasesWithSummary({
       datasetRoot: resolvedTarget,
@@ -125,19 +169,10 @@ function main(): void {
     });
 
     console.log(formatLoadSummary(summary));
-    if (jsonOut) {
-      const resolvedOut = path.resolve(process.cwd(), jsonOut);
-      fs.mkdirSync(path.dirname(resolvedOut), { recursive: true });
-      fs.writeFileSync(
-        resolvedOut,
-        `${JSON.stringify({ generatedAt: new Date().toISOString(), skipped: 0, reports }, null, 2)}\n`,
-        'utf-8',
-      );
-      console.log(`JSON report: ${path.relative(process.cwd(), resolvedOut)}`);
-    }
     if (reports.length === 0) {
       throw new Error(`No labelled LandmarkRecording cases found under ${resolvedTarget}`);
     }
+    writeJsonReport(resolvedJsonOut, { generatedAt: new Date().toISOString(), skipped: 0, reports });
     return;
   }
 
@@ -169,20 +204,10 @@ function main(): void {
     if (files.length > 1) console.log('');
   }
 
-  if (jsonOut) {
-    const resolvedOut = path.resolve(process.cwd(), jsonOut);
-    fs.mkdirSync(path.dirname(resolvedOut), { recursive: true });
-    fs.writeFileSync(
-      resolvedOut,
-      `${JSON.stringify({ generatedAt: new Date().toISOString(), skipped, reports }, null, 2)}\n`,
-      'utf-8',
-    );
-    console.log(`JSON report: ${path.relative(process.cwd(), resolvedOut)}`);
-  }
-
   if (reports.length === 0) {
     throw new Error(`No LandmarkRecording JSON files found at ${resolvedTarget}`);
   }
+  writeJsonReport(resolvedJsonOut, { generatedAt: new Date().toISOString(), skipped, reports });
   if (skipped > 0) {
     console.log(`Skipped ${skipped} JSON file(s) that did not look like LandmarkRecording files.`);
   }

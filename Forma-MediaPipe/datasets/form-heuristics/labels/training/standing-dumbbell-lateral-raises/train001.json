@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Standing Dumbbell Lateral Raises",
+  "sourceVideo": "videos/training/standing-dumbbell-lateral-raises/train001.mov",
+  "landmarkFile": "landmarks/training/standing-dumbbell-lateral-raises/train001.json",
+  "split": "train",
+  "reviewStatus": "draft",
+  "expectedReps": 4,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 1200,
+      "endMs": 2450,
+      "issueIds": [
+        "standing-dumbbell-lateral-raises.wrong_plane"
+      ],
+      "view": "side",
+      "scorable": false,
+      "notes": "Mistake example from side view. On-video coaching text flags raising directly to the side and locked elbows; only the visible plane cue is represented by the current issue taxonomy."
+    },
+    {
+      "index": 2,
+      "startMs": 2800,
+      "endMs": 4300,
+      "issueIds": [
+        "standing-dumbbell-lateral-raises.wrong_plane"
+      ],
+      "view": "side",
+      "scorable": false,
+      "notes": "Second mistake example from side view with the same on-video wrong-plane cue."
+    },
+    {
+      "index": 3,
+      "startMs": 4850,
+      "endMs": 6350,
+      "issueIds": [],
+      "view": "side",
+      "scorable": false,
+      "notes": "Proper-form example from side view. Counted as movement, but unscorable because reviewed scorable lateral-raise reps require a front view."
+    },
+    {
+      "index": 4,
+      "startMs": 6650,
+      "endMs": 8100,
+      "issueIds": [],
+      "view": "side",
+      "scorable": false,
+      "notes": "Second proper-form example from side view. Counted as movement, but unscorable because reviewed scorable lateral-raise reps require a front view."
+    }
+  ],
+  "notes": "Drafted from visual review of the training video contact sheets. The clip is a side-view instructional example with two visible mistake reps followed by two proper-form reps; all reps are marked scorable=false per the standing dumbbell lateral raise label guidance.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-01T22:18:31Z",
+    "generator": "codex-manual-draft",
+    "source": "visual-review"
+  }
+}

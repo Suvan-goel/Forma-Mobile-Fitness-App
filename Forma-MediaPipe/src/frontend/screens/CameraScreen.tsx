@@ -504,7 +504,6 @@ export const CameraScreen: React.FC = () => {
     if (!poseParserDiagnosticsActiveRef.current) {
       poseParserDiagnosticsRef.current.reset();
       poseStateDiagnosticsRef.current.reset();
-      previousPoseStateRef.current = null;
     }
   }, [debugMode]);
 
@@ -648,30 +647,31 @@ export const CameraScreen: React.FC = () => {
       poseParserDiagnosticsRef.current.observe(converted);
     }
     if (converted.keypoints.length === 0) {
+      const poseState = buildPoseState(converted, {
+        previousPoseState: previousPoseStateRef.current,
+      });
       if (poseParserDiagnosticsActiveRef.current) {
-        const poseState = buildPoseState(converted, {
-          previousPoseState: previousPoseStateRef.current,
-        });
         poseStateDiagnosticsRef.current.observe(poseState);
-        previousPoseStateRef.current = poseState;
       }
+      previousPoseStateRef.current = poseState;
       return;
     }
     const frameGap = poseFrameGapTrackerRef.current.observe(converted.timestampMs ?? now);
+    const poseState = buildPoseState(converted, {
+      ...frameGap,
+      previousPoseState: previousPoseStateRef.current,
+    });
     if (poseParserDiagnosticsActiveRef.current) {
-      const poseState = buildPoseState(converted, {
-        ...frameGap,
-        previousPoseState: previousPoseStateRef.current,
-      });
       poseStateDiagnosticsRef.current.observe(poseState);
-      previousPoseStateRef.current = poseState;
     }
+    previousPoseStateRef.current = poseState;
     const { keypoints, worldKeypoints, imageKeypoints, primarySource } = converted;
     const frameContext: ExerciseFrameContext = {
       worldKeypoints,
       imageKeypoints,
       primarySource,
       timestampMs: converted.timestampMs,
+      poseState,
       ...frameGap,
     };
 
@@ -1042,11 +1042,9 @@ export const CameraScreen: React.FC = () => {
       if (__DEV__ && poseStateDiagnosticsSummary && poseStateDiagnosticsSummary.totalFrames > 0 && !poseStateDiagnosticsLogged) {
         console.log(formatPoseStateReliabilitySummary(poseStateDiagnosticsSummary));
       }
-      if (poseParserDiagnosticsActiveRef.current) {
-        poseParserDiagnosticsRef.current.reset();
-        poseStateDiagnosticsRef.current.reset();
-        previousPoseStateRef.current = null;
-      }
+      poseParserDiagnosticsRef.current.reset();
+      poseStateDiagnosticsRef.current.reset();
+      previousPoseStateRef.current = null;
 
       // Weighted average: bad reps weigh up to 3× more than perfect reps
       let avgFormScore = 0;
@@ -1175,11 +1173,9 @@ export const CameraScreen: React.FC = () => {
       playReservedSetStartCue();
 
       // Start landmark recording when debug mode is on (works in Release builds too)
-      if (poseParserDiagnosticsActiveRef.current) {
-        poseParserDiagnosticsRef.current.reset();
-        poseStateDiagnosticsRef.current.reset();
-        previousPoseStateRef.current = null;
-      }
+      poseParserDiagnosticsRef.current.reset();
+      poseStateDiagnosticsRef.current.reset();
+      previousPoseStateRef.current = null;
       if (debugModeRef.current) {
         landmarkRecordingStartRef.current = Date.now();
         nativeLandmarkRecordingStartRef.current = null;

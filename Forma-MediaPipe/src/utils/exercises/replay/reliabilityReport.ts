@@ -20,6 +20,19 @@ import type {
   ExerciseLabelFile,
   RepLabel,
 } from '../dataset/types';
+import {
+  FOCUS_JOINTS,
+  REPORT_CHAINS,
+  interpretRepReliability,
+  interpretationProfileForExercise,
+  pairedPrimaryChainHasOneUsableAndOneWeak,
+  reliabilityProfileForExercise,
+  type CountabilityCandidate,
+  type ExerciseReliabilityInterpretationProfile,
+  type ExerciseReliabilityProfile,
+  type RepReliabilityInterpretation as LabelledRepReliabilityInterpretation,
+  type ScoreabilityCandidate,
+} from '../shared/reliabilityInterpretation';
 import type {
   LandmarkRecording,
   LandmarkRecordingFrame,
@@ -28,6 +41,15 @@ import type {
   LandmarkRecordingSchemaVersion,
   LandmarkRecordingScoreSource,
 } from './types';
+
+export type {
+  CountabilityCandidate,
+  CueFamilyReliabilityRule,
+  ExerciseReliabilityInterpretationProfile,
+  ExerciseReliabilityProfile,
+  RepReliabilityInterpretation as LabelledRepReliabilityInterpretation,
+  ScoreabilityCandidate,
+} from '../shared/reliabilityInterpretation';
 
 export type RecordingReliabilityMetadataMode = 'v2RichMetadata' | 'legacyApproximate';
 
@@ -96,18 +118,40 @@ export interface LabelledRepReliabilitySummary {
   poseStateSummary: PoseStateReliabilitySummary;
   jointSummaries: Record<string, RecordingReliabilityJointSummary>;
   focusJointSummaries: Record<string, RecordingReliabilityJointSummary>;
+  relevantFocusJointSummaries: Record<string, RecordingReliabilityJointSummary>;
   chainStatusCounts: Record<string, Record<PoseChainStatus, number>>;
+  relevantChainStatusCounts: Record<string, Record<PoseChainStatus, number>>;
   gapSummary: RecordingReliabilityGapSummary;
+  relevantReliabilityFlags: {
+    hasRelevantLowConfidence: boolean;
+    hasRelevantChainPartialOrUnreliable: boolean;
+    hasTrackingInterruption: boolean;
+  };
+  interpretation: LabelledRepReliabilityInterpretation;
+}
+
+export interface LabelledRepReliabilityInterpretationAggregate {
+  countabilityCandidateCounts: Record<CountabilityCandidate, number>;
+  scoreabilityCandidateCounts: Record<ScoreabilityCandidate, number>;
+  unsafeCueFamilyCounts: Record<string, number>;
+  reasonCounts: Record<string, number>;
+  oneSideUsableOtherWeakReps: number;
+  torsoReliableButPrimaryChainWeakReps: number;
 }
 
 export interface LabelledRepReliabilityAggregateSummary {
   repCount: number;
   repsWithNoFrames: number;
   repsWithTrackingInterruption: number;
-  repsWithMajorFocusJointLowConfidence: number;
+  globalRepsWithMajorFocusJointLowConfidence: number;
+  globalRepsWithChainPartialOrUnreliable: number;
+  repsWithRelevantFocusJointLowConfidence: number;
   repsWithRelevantChainPartialOrUnreliable: number;
   topUnreliableJoints: Record<string, number>;
+  relevantTopUnreliableJoints: Record<string, number>;
   averageChainStatusRates: Record<string, Record<PoseChainStatus, number>>;
+  relevantAverageChainStatusRates: Record<string, Record<PoseChainStatus, number>>;
+  interpretation: LabelledRepReliabilityInterpretationAggregate;
 }
 
 export interface LabelledRepReliabilityReport {
@@ -115,21 +159,12 @@ export interface LabelledRepReliabilityReport {
   sourceVideo: string;
   expectedReps: number;
   repCount: number;
+  relevanceProfile: ExerciseReliabilityProfile;
+  interpretationProfile: ExerciseReliabilityInterpretationProfile;
   aggregate: LabelledRepReliabilityAggregateSummary;
   reps: LabelledRepReliabilitySummary[];
 }
 
-const FOCUS_JOINTS = [
-  'left_wrist',
-  'right_wrist',
-  'left_elbow',
-  'right_elbow',
-  'left_knee',
-  'right_knee',
-  'left_ankle',
-  'right_ankle',
-] as const;
-const REPORT_CHAINS = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg', 'torso', 'pushupBodyLine'] as const;
 const MAJOR_LOW_CONFIDENCE_COVERAGE = 0.5;
 
 function finiteNumber(value: unknown): number | null {
@@ -437,6 +472,27 @@ function summarizeSamples(samples: PoseStateReliabilitySample[]): {
   };
 }
 
+function pickJointSummaries(
+  summaries: Record<string, RecordingReliabilityJointSummary>,
+  jointNames: readonly string[],
+): Record<string, RecordingReliabilityJointSummary> {
+  return Object.fromEntries(
+    jointNames.map((jointName) => [jointName, summaries[jointName] ?? emptyJointSummary()]),
+  );
+}
+
+function pickChainStatusCounts(
+  chainStatusCounts: Record<string, Record<PoseChainStatus, number>>,
+  chainNames: readonly string[],
+): Record<string, Record<PoseChainStatus, number>> {
+  return Object.fromEntries(
+    chainNames.map((chainName) => [
+      chainName,
+      chainStatusCounts[chainName] ?? { reliable: 0, partial: 0, unreliable: 0 },
+    ]),
+  );
+}
+
 function buildPoseStateSamples(recording: LandmarkRecording, metadataMode: RecordingReliabilityMetadataMode): PoseStateReliabilitySample[] {
   const gapTracker = createPoseFrameGapTracker();
   const samples: PoseStateReliabilitySample[] = [];
@@ -486,33 +542,95 @@ function addCounts(target: Record<string, number>, source: Record<string, number
   }
 }
 
-function hasMajorFocusJointLowConfidence(rep: LabelledRepReliabilitySummary): boolean {
-  if (rep.frameCount === 0) return false;
-  return Object.values(rep.focusJointSummaries).some((summary) => {
+function hasMajorLowConfidenceInSummaries(
+  frameCount: number,
+  summaries: Record<string, RecordingReliabilityJointSummary>,
+): boolean {
+  if (frameCount === 0) return false;
+  return Object.values(summaries).some((summary) => {
     const lowConfidenceFrames =
       summary.lowVisibilityReasonFrames +
       summary.lowPresenceReasonFrames +
       summary.visibilityUnknownFrames +
       summary.presenceUnknownFrames;
-    return lowConfidenceFrames / rep.frameCount >= MAJOR_LOW_CONFIDENCE_COVERAGE;
+    return lowConfidenceFrames / frameCount >= MAJOR_LOW_CONFIDENCE_COVERAGE;
   });
 }
 
-function hasRelevantChainPartialOrUnreliable(rep: LabelledRepReliabilitySummary): boolean {
-  if (rep.frameCount === 0) return false;
-  return REPORT_CHAINS.some((chainName) => {
-    const counts = rep.chainStatusCounts[chainName] ?? { reliable: 0, partial: 0, unreliable: 0 };
-    return (counts.partial + counts.unreliable) / rep.frameCount >= MAJOR_LOW_CONFIDENCE_COVERAGE;
+function hasChainPartialOrUnreliable(
+  frameCount: number,
+  chainStatusCounts: Record<string, Record<PoseChainStatus, number>>,
+  chainNames: readonly string[],
+): boolean {
+  if (frameCount === 0) return false;
+  return chainNames.some((chainName) => {
+    const counts = chainStatusCounts[chainName] ?? { reliable: 0, partial: 0, unreliable: 0 };
+    return (counts.partial + counts.unreliable) / frameCount >= MAJOR_LOW_CONFIDENCE_COVERAGE;
   });
+}
+
+function emptyCountabilityCandidateCounts(): Record<CountabilityCandidate, number> {
+  return { countable: 0, maybe: 0, notCountable: 0 };
+}
+
+function emptyScoreabilityCandidateCounts(): Record<ScoreabilityCandidate, number> {
+  return { fullyScoreable: 0, partiallyScoreable: 0, notScoreable: 0 };
+}
+
+function summarizeInterpretations(
+  reps: LabelledRepReliabilitySummary[],
+  profile: ExerciseReliabilityInterpretationProfile,
+): LabelledRepReliabilityInterpretationAggregate {
+  const countabilityCandidateCounts = emptyCountabilityCandidateCounts();
+  const scoreabilityCandidateCounts = emptyScoreabilityCandidateCounts();
+  const unsafeCueFamilyCounts: Record<string, number> = {};
+  const reasonCounts: Record<string, number> = {};
+  let oneSideUsableOtherWeakReps = 0;
+  let torsoReliableButPrimaryChainWeakReps = 0;
+
+  for (const rep of reps) {
+    const interpretation = rep.interpretation;
+    countabilityCandidateCounts[interpretation.countabilityCandidate]++;
+    scoreabilityCandidateCounts[interpretation.scoreabilityCandidate]++;
+    for (const cueFamily of interpretation.unsafeCueFamilies) {
+      unsafeCueFamilyCounts[cueFamily] = (unsafeCueFamilyCounts[cueFamily] ?? 0) + 1;
+    }
+    for (const reason of interpretation.reasons) {
+      reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+    }
+    if (pairedPrimaryChainHasOneUsableAndOneWeak(
+      profile,
+      interpretation.usableChains,
+      interpretation.weakChains,
+    )) {
+      oneSideUsableOtherWeakReps++;
+    }
+    if (
+      interpretation.usableChains.includes('torso') &&
+      profile.primaryChains.some((chainName) => interpretation.weakChains.includes(chainName))
+    ) {
+      torsoReliableButPrimaryChainWeakReps++;
+    }
+  }
+
+  return {
+    countabilityCandidateCounts,
+    scoreabilityCandidateCounts,
+    unsafeCueFamilyCounts,
+    reasonCounts,
+    oneSideUsableOtherWeakReps,
+    torsoReliableButPrimaryChainWeakReps,
+  };
 }
 
 function chainRateAverage(
   reps: LabelledRepReliabilitySummary[],
+  chainNames: readonly string[] = REPORT_CHAINS,
 ): Record<string, Record<PoseChainStatus, number>> {
   const repsWithFrames = reps.filter((rep) => rep.frameCount > 0);
   const result: Record<string, Record<PoseChainStatus, number>> = {};
 
-  for (const chainName of REPORT_CHAINS) {
+  for (const chainName of chainNames) {
     const totals: Record<PoseChainStatus, number> = { reliable: 0, partial: 0, unreliable: 0 };
     for (const rep of repsWithFrames) {
       const counts = rep.chainStatusCounts[chainName] ?? { reliable: 0, partial: 0, unreliable: 0 };
@@ -535,20 +653,48 @@ function summarizeLabelledReps(
   label: Pick<ExerciseLabelFile, 'exerciseName' | 'sourceVideo' | 'expectedReps' | 'reps'>,
   samples: PoseStateReliabilitySample[],
 ): LabelledRepReliabilityReport {
+  const relevanceProfile = reliabilityProfileForExercise(label.exerciseName);
+  const interpretationProfile = interpretationProfileForExercise(label.exerciseName);
   const reps = label.reps.map((rep): LabelledRepReliabilitySummary => {
     const repSamples = samplesInRepWindow(samples, rep);
     const summary = summarizeSamples(repSamples);
+    const relevantFocusJointSummaries = pickJointSummaries(summary.jointSummaries, relevanceProfile.focusJoints);
+    const relevantChainStatusCounts = pickChainStatusCounts(summary.chainStatusCounts, relevanceProfile.relevantChains);
+    const hasRelevantLowConfidence = hasMajorLowConfidenceInSummaries(repSamples.length, relevantFocusJointSummaries);
+    const hasRelevantChainPartialOrUnreliable = hasChainPartialOrUnreliable(
+      repSamples.length,
+      relevantChainStatusCounts,
+      relevanceProfile.relevantChains,
+    );
+    const interpretation = interpretRepReliability({
+      frameCount: repSamples.length,
+      chainStatusCounts: summary.chainStatusCounts,
+      trackingInterruptedFrames: summary.gapSummary.trackingInterruptedFrames,
+      profile: interpretationProfile,
+    });
     return {
       label: labelInfo(rep),
       frameCount: repSamples.length,
       ...summary,
+      relevantFocusJointSummaries,
+      relevantChainStatusCounts,
+      relevantReliabilityFlags: {
+        hasRelevantLowConfidence,
+        hasRelevantChainPartialOrUnreliable,
+        hasTrackingInterruption: summary.gapSummary.trackingInterruptedFrames > 0,
+      },
+      interpretation,
     };
   });
 
   const topUnreliableJoints: Record<string, number> = {};
+  const relevantTopUnreliableJoints: Record<string, number> = {};
   for (const rep of reps) {
     addCounts(topUnreliableJoints, Object.fromEntries(
       Object.entries(rep.jointSummaries).map(([name, summary]) => [name, summary.unreliable]),
+    ));
+    addCounts(relevantTopUnreliableJoints, Object.fromEntries(
+      Object.entries(rep.relevantFocusJointSummaries).map(([name, summary]) => [name, summary.unreliable]),
     ));
   }
 
@@ -557,14 +703,29 @@ function summarizeLabelledReps(
     sourceVideo: label.sourceVideo,
     expectedReps: label.expectedReps,
     repCount: label.reps.length,
+    relevanceProfile,
+    interpretationProfile,
     aggregate: {
       repCount: reps.length,
       repsWithNoFrames: reps.filter((rep) => rep.frameCount === 0).length,
       repsWithTrackingInterruption: reps.filter((rep) => rep.gapSummary.trackingInterruptedFrames > 0).length,
-      repsWithMajorFocusJointLowConfidence: reps.filter(hasMajorFocusJointLowConfidence).length,
-      repsWithRelevantChainPartialOrUnreliable: reps.filter(hasRelevantChainPartialOrUnreliable).length,
+      globalRepsWithMajorFocusJointLowConfidence: reps.filter((rep) => (
+        hasMajorLowConfidenceInSummaries(rep.frameCount, rep.focusJointSummaries)
+      )).length,
+      globalRepsWithChainPartialOrUnreliable: reps.filter((rep) => (
+        hasChainPartialOrUnreliable(rep.frameCount, rep.chainStatusCounts, REPORT_CHAINS)
+      )).length,
+      repsWithRelevantFocusJointLowConfidence: reps.filter((rep) => (
+        rep.relevantReliabilityFlags.hasRelevantLowConfidence
+      )).length,
+      repsWithRelevantChainPartialOrUnreliable: reps.filter((rep) => (
+        rep.relevantReliabilityFlags.hasRelevantChainPartialOrUnreliable
+      )).length,
       topUnreliableJoints,
+      relevantTopUnreliableJoints,
       averageChainStatusRates: chainRateAverage(reps),
+      relevantAverageChainStatusRates: chainRateAverage(reps, relevanceProfile.relevantChains),
+      interpretation: summarizeInterpretations(reps, interpretationProfile),
     },
     reps,
   };
@@ -652,8 +813,11 @@ function formatOptionalLabelField(value: unknown): string {
   return String(value);
 }
 
-function formatAverageChainRates(rates: Record<string, Record<PoseChainStatus, number>>): string {
-  return REPORT_CHAINS
+function formatAverageChainRates(
+  rates: Record<string, Record<PoseChainStatus, number>>,
+  chainNames: readonly string[] = REPORT_CHAINS,
+): string {
+  return chainNames
     .map((chainName) => {
       const chainRates = rates[chainName] ?? { reliable: 0, partial: 0, unreliable: 0 };
       return `${chainName}=reliable:${chainRates.reliable.toFixed(2)}/partial:${chainRates.partial.toFixed(2)}/unreliable:${chainRates.unreliable.toFixed(2)}`;
@@ -661,24 +825,59 @@ function formatAverageChainRates(rates: Record<string, Record<PoseChainStatus, n
     .join(' ');
 }
 
+function topCountMap(counts: Record<string, number>, limit = 5): string {
+  const entries = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+  return entries.length > 0 ? entries.map(([name, count]) => `${name}:${count}`).join(',') : 'none';
+}
+
+function formatCountabilityCandidateCounts(counts: Record<CountabilityCandidate, number>): string {
+  return `countable=${counts.countable}/maybe=${counts.maybe}/notCountable=${counts.notCountable}`;
+}
+
+function formatScoreabilityCandidateCounts(counts: Record<ScoreabilityCandidate, number>): string {
+  return `fullyScoreable=${counts.fullyScoreable}/partiallyScoreable=${counts.partiallyScoreable}/notScoreable=${counts.notScoreable}`;
+}
+
+function formatStringList(values: string[]): string {
+  return values.length > 0 ? values.join(',') : 'none';
+}
+
 function formatLabelledRepReliability(report: LabelledRepReliabilityReport): string[] {
+  const interpretation = report.aggregate.interpretation;
   const lines = [
-    `[LabelledRepReliability] reps=${report.repCount} expectedReps=${report.expectedReps} noFrameWindows=${report.aggregate.repsWithNoFrames} repsWithTrackingInterrupted=${report.aggregate.repsWithTrackingInterruption} repsWithMajorFocusLowConfidence=${report.aggregate.repsWithMajorFocusJointLowConfidence} repsWithPartialOrUnreliableChains=${report.aggregate.repsWithRelevantChainPartialOrUnreliable}`,
-    `[LabelledRepReliability] aggregateTopUnreliable=${topJointCounts(Object.fromEntries(
+    `[LabelledRepReliability] relevanceProfile chains=${report.relevanceProfile.relevantChains.join(',')} focusJoints=${report.relevanceProfile.focusJoints.join(',')}`,
+    `[LabelledRepReliability] interpretationProfile primaryChains=${report.interpretationProfile.primaryChains.join(',')} supportChains=${report.interpretationProfile.supportChains.join(',') || 'none'} minUsablePrimaryChainsForCount=${report.interpretationProfile.minUsablePrimaryChainsForCount} fullScoreChains=${report.interpretationProfile.fullScoreChains.join(',') || 'none'} cueFamilies=${report.interpretationProfile.cueFamilies.map((rule) => rule.family).join(',')}`,
+    `[LabelledRepReliability] reps=${report.repCount} expectedReps=${report.expectedReps} noFrameWindows=${report.aggregate.repsWithNoFrames} repsWithTrackingInterrupted=${report.aggregate.repsWithTrackingInterruption} globalFocusLowConfidence=${report.aggregate.globalRepsWithMajorFocusJointLowConfidence} relevantFocusLowConfidence=${report.aggregate.repsWithRelevantFocusJointLowConfidence} globalChainPartialOrUnreliable=${report.aggregate.globalRepsWithChainPartialOrUnreliable} relevantChainPartialOrUnreliable=${report.aggregate.repsWithRelevantChainPartialOrUnreliable}`,
+    `[LabelledRepReliability] aggregateGlobalTopUnreliable=${topJointCounts(Object.fromEntries(
       Object.entries(report.aggregate.topUnreliableJoints).map(([name, unreliable]) => [name, { ...emptyJointSummary(), unreliable }]),
-    ), 'unreliable')} averageChains ${formatAverageChainRates(report.aggregate.averageChainStatusRates)}`,
+    ), 'unreliable')} aggregateRelevantTopUnreliable=${topJointCounts(Object.fromEntries(
+      Object.entries(report.aggregate.relevantTopUnreliableJoints).map(([name, unreliable]) => [name, { ...emptyJointSummary(), unreliable }]),
+    ), 'unreliable')} averageChains ${formatAverageChainRates(report.aggregate.averageChainStatusRates)} relevantAverageChains ${formatAverageChainRates(report.aggregate.relevantAverageChainStatusRates, report.relevanceProfile.relevantChains)}`,
+    `[LabelledRepReliability] interpretation ${formatCountabilityCandidateCounts(interpretation.countabilityCandidateCounts)} ${formatScoreabilityCandidateCounts(interpretation.scoreabilityCandidateCounts)} topUnsafeCueFamilies=${topCountMap(interpretation.unsafeCueFamilyCounts)} topReasons=${topCountMap(interpretation.reasonCounts)} oneSideUsableOtherWeak=${interpretation.oneSideUsableOtherWeakReps} torsoReliableButPrimaryWeak=${interpretation.torsoReliableButPrimaryChainWeakReps}`,
   ];
 
   for (const rep of report.reps) {
     const status = rep.poseStateSummary.statusCounts;
     lines.push(
-      `[LabelledRepReliability] rep=${rep.label.index} window=${rep.label.startMs}-${rep.label.endMs}ms frames=${rep.frameCount} tracked=${status.tracked} partial=${status.partial} lost=${status.lost} view=${formatOptionalLabelField(rep.label.view)} scorable=${formatOptionalLabelField(rep.label.scorable)} issues=${formatIssueIds(rep.label.issueIds)} expectedScoreRange=${formatOptionalLabelField(rep.label.expectedScoreRange)} issueSeverities=${formatOptionalLabelField(rep.label.issueSeverities)} trackingInterrupted=${rep.gapSummary.trackingInterruptedFrames} reacquisitionFrames=${rep.gapSummary.reacquisitionFrames} topUnreliable=${topJointCounts(rep.jointSummaries, 'unreliable', 3)}`,
+      `[LabelledRepReliability] rep=${rep.label.index} window=${rep.label.startMs}-${rep.label.endMs}ms frames=${rep.frameCount} tracked=${status.tracked} partial=${status.partial} lost=${status.lost} view=${formatOptionalLabelField(rep.label.view)} scorable=${formatOptionalLabelField(rep.label.scorable)} issues=${formatIssueIds(rep.label.issueIds)} expectedScoreRange=${formatOptionalLabelField(rep.label.expectedScoreRange)} issueSeverities=${formatOptionalLabelField(rep.label.issueSeverities)} trackingInterrupted=${rep.gapSummary.trackingInterruptedFrames} reacquisitionFrames=${rep.gapSummary.reacquisitionFrames} hasRelevantLowConfidence=${rep.relevantReliabilityFlags.hasRelevantLowConfidence} hasRelevantChainPartialOrUnreliable=${rep.relevantReliabilityFlags.hasRelevantChainPartialOrUnreliable} topGlobalUnreliable=${topJointCounts(rep.jointSummaries, 'unreliable', 3)} topRelevantUnreliable=${topJointCounts(rep.relevantFocusJointSummaries, 'unreliable', 3)}`,
     );
     lines.push(
-      `[LabelledRepReliability] rep=${rep.label.index} chains arms ${formatChainCounts(rep.chainStatusCounts, ['leftArm', 'rightArm'])} legs ${formatChainCounts(rep.chainStatusCounts, ['leftLeg', 'rightLeg'])} torso ${formatChainCounts(rep.chainStatusCounts, ['torso', 'pushupBodyLine'])}`,
+      `[LabelledRepReliability] rep=${rep.label.index} globalChains arms ${formatChainCounts(rep.chainStatusCounts, ['leftArm', 'rightArm'])} legs ${formatChainCounts(rep.chainStatusCounts, ['leftLeg', 'rightLeg'])} torso ${formatChainCounts(rep.chainStatusCounts, ['torso', 'pushupBodyLine'])}`,
     );
     lines.push(
-      `[LabelledRepReliability] rep=${rep.label.index} focus wrists ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_wrist', 'right_wrist'])} elbows ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_elbow', 'right_elbow'])} knees ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_knee', 'right_knee'])} ankles ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_ankle', 'right_ankle'])}`,
+      `[LabelledRepReliability] rep=${rep.label.index} relevantChains ${formatChainCounts(rep.relevantChainStatusCounts, report.relevanceProfile.relevantChains)}`,
+    );
+    lines.push(
+      `[LabelledRepReliability] rep=${rep.label.index} globalFocus wrists ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_wrist', 'right_wrist'])} elbows ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_elbow', 'right_elbow'])} knees ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_knee', 'right_knee'])} ankles ${formatFocusJointsFromSummaries(rep.jointSummaries, ['left_ankle', 'right_ankle'])}`,
+    );
+    lines.push(
+      `[LabelledRepReliability] rep=${rep.label.index} relevantFocus ${formatFocusJointsFromSummaries(rep.relevantFocusJointSummaries, report.relevanceProfile.focusJoints)}`,
+    );
+    lines.push(
+      `[LabelledRepReliability] rep=${rep.label.index} interpretation countability=${rep.interpretation.countabilityCandidate} scoreability=${rep.interpretation.scoreabilityCandidate} usableChains=${formatStringList(rep.interpretation.usableChains)} weakChains=${formatStringList(rep.interpretation.weakChains)} safeCueFamilies=${formatStringList(rep.interpretation.safeCueFamilies)} unsafeCueFamilies=${formatStringList(rep.interpretation.unsafeCueFamilies)} reasons=${formatStringList(rep.interpretation.reasons)}`,
     );
   }
 

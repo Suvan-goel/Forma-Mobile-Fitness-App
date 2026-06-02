@@ -17,6 +17,8 @@ import {
   summarizeSetTrackingQuality,
 } from '../shared/poseQuality';
 import type { PoseQualityWarning } from '../shared/poseQuality';
+import type { PoseState } from '../../pose/PoseState';
+import { poseStateFromLandmarkRecordingFrame } from './reliabilityReport';
 import type {
   FrameTrace,
   FsmTransition,
@@ -105,6 +107,7 @@ function resolveDefinition(definition: ExerciseDefinition, options?: ReplayOptio
 function frameContextForReplay(
   frame: LandmarkRecording['frames'][number],
   frameGap?: PoseFrameGapMetadata,
+  poseState?: PoseState,
 ): ExerciseFrameContext {
   const hasExplicitImage = Array.isArray(frame.imageKeypoints) && frame.imageKeypoints.length > 0;
   const hasExplicitWorld = Array.isArray(frame.worldKeypoints) && frame.worldKeypoints.length > 0;
@@ -116,6 +119,7 @@ function frameContextForReplay(
     primarySource,
     timestampMs: frame.timestamp,
     ...frameGap,
+    poseState,
   };
 }
 
@@ -147,6 +151,7 @@ export function replayRecording(
   let previousQualityWindowActive = false;
   const originalDateNow = Date.now;
   const frameGapTracker = createPoseFrameGapTracker();
+  let previousPoseState: PoseState | null = null;
   // Keep replay deterministic and compatible with existing synthetic fixtures:
   // frame timestamps are elapsed milliseconds from the start of the recording.
   const baseTimeMs = 0;
@@ -155,7 +160,14 @@ export function replayRecording(
     for (const frame of recording.frames) {
       if (shouldSkipFrameForCurrentReplay(frame)) continue;
       Date.now = () => timestampToDateNow(baseTimeMs, frame.timestamp);
-      const frameContext = frameContextForReplay(frame, frameGapTracker.observe(frame.timestamp));
+      const frameGap = frameGapTracker.observe(frame.timestamp);
+      const poseState = poseStateFromLandmarkRecordingFrame(frame, {
+        schemaVersion: recording.schemaVersion,
+        previousPoseState,
+        ...frameGap,
+      });
+      previousPoseState = poseState;
+      const frameContext = frameContextForReplay(frame, frameGap, poseState);
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
         frameBoundsKeypoints: frameContext.imageKeypoints,
       });
@@ -279,13 +291,21 @@ export function replayRecordingVerbose(
   let previousQualityWindowActive = false;
   const baseTimeMs = 0;
   const frameGapTracker = createPoseFrameGapTracker();
+  let previousPoseState: PoseState | null = null;
 
   try {
     for (let i = 0; i < recording.frames.length; i++) {
       const frame = recording.frames[i];
       if (shouldSkipFrameForCurrentReplay(frame)) continue;
       Date.now = () => timestampToDateNow(baseTimeMs, frame.timestamp);
-      const frameContext = frameContextForReplay(frame, frameGapTracker.observe(frame.timestamp));
+      const frameGap = frameGapTracker.observe(frame.timestamp);
+      const poseState = poseStateFromLandmarkRecordingFrame(frame, {
+        schemaVersion: recording.schemaVersion,
+        previousPoseState,
+        ...frameGap,
+      });
+      previousPoseState = poseState;
+      const frameContext = frameContextForReplay(frame, frameGap, poseState);
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
         frameBoundsKeypoints: frameContext.imageKeypoints,
       });

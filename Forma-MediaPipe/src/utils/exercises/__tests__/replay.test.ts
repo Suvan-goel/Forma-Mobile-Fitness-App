@@ -187,6 +187,93 @@ describe('Replay quality windows', () => {
     expect(seenTrackingInterrupted).toEqual([false, false]);
   });
 
+  it('passes rich v2 PoseState into replay exercise updates', () => {
+    const seen: Array<{
+      hasPoseState: boolean;
+      primarySource: string | undefined;
+      leftShoulderVisibility: number | null | undefined;
+      leftShoulderPresence: number | null | undefined;
+    }> = [];
+    const definition: ExerciseDefinition = {
+      ...replayTestDefinition(999),
+      name: 'Replay V2 PoseState Test',
+      update: (_keypoints, state, frameContext) => {
+        const poseState = frameContext?.poseState;
+        seen.push({
+          hasPoseState: Boolean(poseState),
+          primarySource: poseState?.primarySource,
+          leftShoulderVisibility: poseState?.joints.left_shoulder?.visibility,
+          leftShoulderPresence: poseState?.joints.left_shoulder?.presence,
+        });
+        return state;
+      },
+    };
+    const parsed = parsePoseFrame({
+      timestampMs: 1234,
+      landmarks: rawLandmarks({
+        11: { visibility: 0.91, presence: 0.72 },
+      }),
+    });
+    expect(parsed).not.toBeNull();
+    const recording: LandmarkRecording = {
+      schemaVersion: 2,
+      exerciseName: 'Replay V2 PoseState Test',
+      metadata: {},
+      frames: [
+        createLandmarkRecordingFrame({
+          parsedFrame: parsed!,
+          timestamp: 0,
+        }),
+      ],
+    };
+
+    replayRecording(definition, recording);
+
+    expect(seen).toEqual([{
+      hasPoseState: true,
+      primarySource: 'image',
+      leftShoulderVisibility: 0.91,
+      leftShoulderPresence: 0.72,
+    }]);
+  });
+
+  it('passes approximate v1 PoseState into replay exercise updates', () => {
+    const seen: Array<{
+      hasPoseState: boolean;
+      leftShoulderVisibility: number | null | undefined;
+      leftShoulderPresence: number | null | undefined;
+      leftShoulderReliability: string | undefined;
+    }> = [];
+    const definition: ExerciseDefinition = {
+      ...replayTestDefinition(999),
+      name: 'Replay V1 PoseState Test',
+      update: (_keypoints, state, frameContext) => {
+        const joint = frameContext?.poseState?.joints.left_shoulder;
+        seen.push({
+          hasPoseState: Boolean(frameContext?.poseState),
+          leftShoulderVisibility: joint?.visibility,
+          leftShoulderPresence: joint?.presence,
+          leftShoulderReliability: joint?.reliability,
+        });
+        return state;
+      },
+    };
+    const recording: LandmarkRecording = {
+      exerciseName: 'Replay V1 PoseState Test',
+      metadata: {},
+      frames: [frame(0, 0.42)],
+    };
+
+    replayRecording(definition, recording);
+
+    expect(seen).toEqual([{
+      hasPoseState: true,
+      leftShoulderVisibility: 0.42,
+      leftShoulderPresence: null,
+      leftShoulderReliability: 'lowVisibility',
+    }]);
+  });
+
   it('skips explicit v2 noPose and trackingLost frames during current replay', () => {
     const seen: Array<{ timestampMs: number | undefined; trackingInterrupted: boolean }> = [];
     const definition: ExerciseDefinition = {

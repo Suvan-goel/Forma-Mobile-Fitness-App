@@ -26,6 +26,7 @@ import {
   mergeHeuristicConfig,
   runWithConfigBindings,
 } from '../heuristicConfig';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
 import {
   buildRepDiagnostics,
@@ -33,6 +34,10 @@ import {
   diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/barbellCurl.json';
 import type {
   ExerciseDefinition,
@@ -43,6 +48,7 @@ import type {
   RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -187,6 +193,35 @@ const BARBELL_CURL_CONFIG_BINDINGS = [
   { path: 'penaltyConfigs', target: PENALTY_CONFIGS as unknown as Record<string, unknown> },
   { path: 'viewQualityThresholds', target: VIEW_QUALITY_THRESHOLDS as unknown as Record<string, unknown> },
 ];
+
+const BARBELL_CURL_ISSUE_CUE_FAMILIES: Record<string, string> = {
+  'barbell-curl.incomplete_flex': 'visibleArmRom',
+  'barbell-curl.incomplete_extend': 'visibleArmRom',
+  'barbell-curl.incomplete_rom': 'bilateralArmRom',
+  'barbell-curl.shoulder_fail': 'visibleArmRom',
+  'barbell-curl.shoulder_warn': 'visibleArmRom',
+  'barbell-curl.torso_fail': 'torsoControl',
+  'barbell-curl.torso_warn': 'torsoControl',
+  'barbell-curl.elbow_flare': 'bilateralArmRom',
+  'barbell-curl.tempo_up': 'tempo',
+  'barbell-curl.tempo_down': 'tempo',
+  'barbell-curl.asymmetry': 'bilateralSymmetry',
+};
+
+const BARBELL_CURL_MESSAGE_CUE_FAMILIES: Record<string, string> = {
+  'Flex more at the top of the curl.': 'visibleArmRom',
+  'Extend fully at the bottom.': 'visibleArmRom',
+  'Incomplete rep — curl all the way up and fully extend.': 'bilateralArmRom',
+  'Too much shoulder involvement — reduce the weight.': 'visibleArmRom',
+  'Upper arms moving — keep elbows pinned to your sides.': 'visibleArmRom',
+  'Excessive body swing — this is cheating the rep.': 'torsoControl',
+  "Don't swing your torso — stay upright and controlled.": 'torsoControl',
+  "Keep your elbows in — don't flare them out to the sides.": 'bilateralArmRom',
+  "Tuck your elbows in — they're drifting outward.": 'bilateralArmRom',
+  'Slow down — control the curl.': 'tempo',
+  "Control the lowering — don't drop the weight.": 'tempo',
+  'Arms are uneven — curl both sides together.': 'bilateralSymmetry',
+};
 
 const BARBELL_CURL_QUALITY_PROFILE: NonNullable<ExerciseDefinition['qualityProfile']> = {
   exerciseName: 'Barbell Curl',
@@ -544,6 +579,10 @@ function finiteDelta(min: number, max: number): number | null {
   return Number.isFinite(delta) ? delta : null;
 }
 
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
 interface ShoulderDeltaSummary {
   left: number | null;
   right: number | null;
@@ -585,6 +624,7 @@ function computeRepScore(
   _rightArm: ArmFSM,
   viewAngle: ViewAngle = { angleDeg: 0, smoothedAngleDeg: 0, zone: 'frontal', primarySide: 'both' },
   viewQuality?: RepViewQualityDiagnostic,
+  allowedCueFamilies?: ReadonlySet<string>,
 ): number {
   const { minAngles, maxAngles } = repWindow;
   const isFrontal = viewAngle.zone === 'frontal';
@@ -595,11 +635,14 @@ function computeRepScore(
   const deltaTorso = isFinite(maxAngles.torso - minAngles.torso)
     ? maxAngles.torso - minAngles.torso
     : 0;
-  const torsoP = penaltyTorso(deltaTorso);
+  const torsoP = cueFamilyAllowed(allowedCueFamilies, 'torsoControl') ? penaltyTorso(deltaTorso) : 0;
 
   // Shoulder penalty: frontal uses bilateral max; side/oblique uses selected primary side.
   const shoulderSummary = getShoulderDeltaSummary(repWindow, viewAngle);
-  const shoulderP = shoulderSummary.scoring !== null ? penaltyShoulder(shoulderSummary.scoring) : 0;
+  const shoulderP =
+    cueFamilyAllowed(allowedCueFamilies, 'visibleArmRom') && shoulderSummary.scoring !== null
+      ? penaltyShoulder(shoulderSummary.scoring)
+      : 0;
 
   // ROM penalty — ratio-based (camera-invariant, no foreshortening compensation)
   const leftRatioOk = isFinite(repWindow.ratios.minLeftRatio) && isFinite(repWindow.ratios.maxLeftRatio);
@@ -617,18 +660,20 @@ function computeRepScore(
   }
   const romRatio = getRepWindowRomRatio(repWindow, viewAngle);
   const returnMaxRatio = getReturnMaxCurlRatio(repWindow, viewAngle);
-  const romP = penaltyROM(
-    isFinite(minRatio) ? minRatio : 0.45,
-    returnMaxRatio,
-    romRatio,
-  );
+  const romP = cueFamilyAllowed(allowedCueFamilies, 'visibleArmRom')
+    ? penaltyROM(
+        isFinite(minRatio) ? minRatio : 0.45,
+        returnMaxRatio,
+        romRatio,
+      )
+    : 0;
 
   const { tUp, tDown } = getRepTempoDurations(repWindow, leftArm, _rightArm, viewAngle);
-  const tempoP = penaltyTempo(tUp, tDown);
+  const tempoP = cueFamilyAllowed(allowedCueFamilies, 'tempo') ? penaltyTempo(tUp, tDown) : 0;
 
   // Asymmetry penalty — ratio-based (camera-invariant)
   let asymmetryP = 0;
-  if (frontFormEligible && leftRatioOk && rightRatioOk) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'bilateralSymmetry') && frontFormEligible && leftRatioOk && rightRatioOk) {
     const romLRatio = repWindow.ratios.maxLeftRatio - repWindow.ratios.minLeftRatio;
     const romRRatio = repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio;
     const deltaMinRatio = Math.abs(repWindow.ratios.minLeftRatio - repWindow.ratios.minRightRatio);
@@ -638,7 +683,7 @@ function computeRepScore(
 
   // Elbow flare penalty (frontal only)
   const flareSummary = getElbowFlareSummary(repWindow, frontFormEligible);
-  const elbowFlareP = flareSummary.sustainedWarn || flareSummary.sustainedFail
+  const elbowFlareP = cueFamilyAllowed(allowedCueFamilies, 'bilateralArmRom') && (flareSummary.sustainedWarn || flareSummary.sustainedFail)
     ? penaltyElbowFlare(flareSummary.maxFlareDeg)
     : 0;
 
@@ -746,6 +791,7 @@ interface RepWindow {
   /** Current-frame ratio sample validity for diagnostics and view quality. */
   ratioSamples: Record<CurlSide, RepRatioSampleCounts>;
   viewSamples: RepViewSamples;
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
   metadata: RepMetadata;
 }
 
@@ -911,6 +957,7 @@ function initRepWindow(tStart: number): RepWindow {
       primaryLeft: 0,
       primaryRight: 0,
     },
+    reliability: createPoseStateReliabilityAggregator(),
     metadata: {
       landmarkSource: 'image',
       ratioDistanceMode: 'image_2d',
@@ -1493,6 +1540,7 @@ function evaluateForm(
   rightArm: ArmFSM,
   viewAngle: ViewAngle,
   viewQuality: RepViewQualityDiagnostic,
+  allowedCueFamilies?: ReadonlySet<string>,
 ): { score: number; messages: string[] } {
   const { minAngles, maxAngles, ratios } = repWindow;
   const messages: string[] = [];
@@ -1607,9 +1655,106 @@ function evaluateForm(
   );
 
   // Score: continuous penalty curves
-  const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle, viewQuality);
+  const score = computeRepScore(repWindow, leftArm, rightArm, viewAngle, viewQuality, allowedCueFamilies);
 
   return { score, messages };
+}
+
+function reliabilityInterpretationForRepWindow(repWindow: RepWindow): {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+} | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+  return {
+    summary,
+    interpretation: interpretPoseStateReliabilitySummary('Barbell Curl', summary),
+  };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+  if (interpretation.scoreabilityCandidate === 'notScoreable') return [];
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const family = BARBELL_CURL_MESSAGE_CUE_FAMILIES[message];
+    return !family || !unsafeFamilies.has(family);
+  });
+}
+
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const family = BARBELL_CURL_ISSUE_CUE_FAMILIES[issueId];
+      if (family && unsafeFamilies.has(family)) {
+        suppressedIssueIds.push(issueId);
+        suppressedCueFamilies.add(family);
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${family}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogBarbellCurlReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logBarbellCurlRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogBarbellCurlReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[BarbellCurlReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
 }
 
 function viewDiagnostic(viewAngle: ViewAngle): 'front' | 'side' | 'oblique' {
@@ -1707,7 +1852,7 @@ function buildBarbellCurlDiagnostics(
   repIndex: number,
   scorable: boolean,
   viewQuality: RepViewQualityDiagnostic,
-): FrameworkRepResult['diagnostics'] {
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const { ratios, minAngles, maxAngles } = repWindow;
   const isFrontal = viewAngle.zone === 'frontal';
   const frontFormEligible = isFrontal && viewQuality.frontishConfirmed === true;
@@ -2107,6 +2252,9 @@ function updateBarbellCurlState(
     window.metadata.torsoAnchorSources[rawResult.torsoAnchorSource]++;
     window.tEnd = t;
     window.frameCount++;
+    if (frameContext?.poseState) {
+      window.reliability.observe(frameContext.poseState);
+    }
     window.viewSamples.total++;
     if (viewAngle.zone === 'frontal') window.viewSamples.front++;
     else if (viewAngle.zone === 'oblique') window.viewSamples.oblique++;
@@ -2310,6 +2458,11 @@ function completeRep(
   const viewQuality = buildBarbellCurlViewQuality(repWindow, viewAngle);
   const scorable = !viewQuality.viewUnknown;
   const qualityWarnings = getBarbellCurlQualityWarnings(viewQuality, viewAngle);
+  const reliability = reliabilityInterpretationForRepWindow(repWindow);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const reliabilityAllowsScoring = reliabilityInterpretation?.scoreabilityCandidate !== 'notScoreable';
+  const finalScorable = scorable && reliabilityAllowsScoring;
 
   newState.repCount++;
 
@@ -2329,7 +2482,23 @@ function completeRep(
     newState.rightArm,
     viewAngle,
     viewQuality,
+    allowedCueFamilies,
   );
+  const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
+  const diagnostics = applyReliabilityCueGating(
+    buildBarbellCurlDiagnostics(
+      repWindow,
+      newState.leftArm,
+      newState.rightArm,
+      viewAngle,
+      newState.repCount,
+      finalScorable,
+      viewQuality,
+    ),
+    reliabilityInterpretation,
+    finalScorable,
+  );
+  const finalScore = finalScorable ? score : 0;
 
   newState.lastRepResult = {
     repIndex: newState.repCount,
@@ -2337,25 +2506,19 @@ function completeRep(
     romRRatio,
     tUp,
     tDown,
-    score,
-    messages,
-    scorable,
+    score: finalScore,
+    messages: finalMessages,
+    scorable: finalScorable,
     qualityWarnings,
-    diagnostics: buildBarbellCurlDiagnostics(
-      repWindow,
-      newState.leftArm,
-      newState.rightArm,
-      viewAngle,
-      newState.repCount,
-      scorable,
-      viewQuality,
-    ),
+    diagnostics,
   };
 
-  if (!scorable) {
+  logBarbellCurlRepReliability(newState.repCount, reliabilityInterpretation, diagnostics);
+
+  if (!finalScorable) {
     newState.feedback = 'Form view unclear.';
-  } else if (messages.length > 0) {
-    newState.feedback = messages.join('\n');
+  } else if (finalMessages.length > 0) {
+    newState.feedback = finalMessages.join('\n');
   } else {
     newState.feedback = viewAngle.zone === 'frontal' ? 'Great rep!' : 'Good rep.';
   }

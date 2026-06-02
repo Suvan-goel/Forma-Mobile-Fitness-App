@@ -16,7 +16,13 @@ export {
   summarizeLandmarkRecordingReliability,
 } from './reliabilityReport';
 export type {
+  CountabilityCandidate,
+  CueFamilyReliabilityRule,
+  ExerciseReliabilityProfile,
+  ExerciseReliabilityInterpretationProfile,
   LabelledRepReliabilityAggregateSummary,
+  LabelledRepReliabilityInterpretation,
+  LabelledRepReliabilityInterpretationAggregate,
   LabelledRepReliabilityLabelInfo,
   LabelledRepReliabilityReport,
   LabelledRepReliabilitySummary,
@@ -26,6 +32,7 @@ export type {
   RecordingReliabilityGapSummary,
   RecordingReliabilityJointSummary,
   RecordingReliabilityMetadataMode,
+  ScoreabilityCandidate,
 } from './reliabilityReport';
 export type {
   FrameTrace,

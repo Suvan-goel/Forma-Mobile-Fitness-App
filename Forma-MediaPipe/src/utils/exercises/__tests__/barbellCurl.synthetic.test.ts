@@ -2,6 +2,11 @@ import { barbellCurlDefinition } from '../definitions/barbellCurl';
 import { replayRecording, replayRecordingVerbose } from './replayRunner';
 import type { LandmarkRecording } from './types';
 import type { Keypoint } from '../../poseAnalysis';
+import type {
+  PoseChainStatus,
+  PoseChainSummary,
+  PoseState,
+} from '../../pose/PoseState';
 
 type CurlView = 'front' | 'side-left' | 'side-right' | 'oblique-left' | 'oblique-right';
 type FrameValue<T> = T | ((index: number) => T);
@@ -516,6 +521,131 @@ function recordingWithExplicitSources(
   };
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
+const TEST_CHAIN_JOINTS: Record<string, string[]> = {
+  leftArm: ['left_shoulder', 'left_elbow', 'left_wrist'],
+  rightArm: ['right_shoulder', 'right_elbow', 'right_wrist'],
+  torso: ['left_shoulder', 'right_shoulder', 'left_hip', 'right_hip'],
+  leftLeg: ['left_hip', 'left_knee', 'left_ankle'],
+  rightLeg: ['right_hip', 'right_knee', 'right_ankle'],
+  pushupBodyLine: ['left_shoulder', 'left_hip', 'left_ankle', 'right_shoulder', 'right_hip', 'right_ankle'],
+};
+
+function testChainSummary(name: string, status: PoseChainStatus): PoseChainSummary {
+  const joints = TEST_CHAIN_JOINTS[name] ?? [];
+  return {
+    name,
+    joints,
+    reliableJoints: status === 'reliable' ? joints : [],
+    lowConfidenceJoints: status === 'partial' ? [joints[joints.length - 1] ?? `${name}_joint`] : [],
+    missingJoints: status === 'unreliable' ? [joints[joints.length - 1] ?? `${name}_joint`] : [],
+    malformedJoints: [],
+    staleJoints: [],
+    outlierCandidateJoints: [],
+    status,
+  };
+}
+
+function testPoseState(
+  timestampMs: number,
+  chainStatuses: Partial<Record<string, PoseChainStatus>> = {},
+): PoseState {
+  const chains = Object.fromEntries(
+    Object.keys(TEST_CHAIN_JOINTS).map((chainName) => [
+      chainName,
+      testChainSummary(chainName, chainStatuses[chainName] ?? 'reliable'),
+    ]),
+  );
+  const allStatuses = Object.values(chains).map((chain) => chain.status);
+  return {
+    timestampMs,
+    status: allStatuses.every((status) => status === 'reliable') ? 'tracked' : 'partial',
+    primarySource: 'image',
+    keypoints: [],
+    joints: {},
+    chains,
+    diagnostics: {
+      reliabilityCounts: {
+        reliable: 0,
+        lowVisibility: 0,
+        lowPresence: 0,
+        missing: 0,
+        malformed: 0,
+        stale: 0,
+        outlierCandidate: 0,
+      },
+      reasonCounts: {},
+      malformedJoints: [],
+      missingJoints: [],
+      lowConfidenceJoints: [],
+      staleJoints: [],
+      outlierCandidateJoints: [],
+      trackingInterrupted: false,
+    },
+  };
+}
+
+function replayRecordingWithPoseState(
+  recording: LandmarkRecording,
+  chainStatusesForFrame: (frame: LandmarkRecording['frames'][number], index: number) => Partial<Record<string, PoseChainStatus>>,
+) {
+  let state = barbellCurlDefinition.createState();
+  for (const [index, frame] of recording.frames.entries()) {
+    state = barbellCurlDefinition.update(frame.keypoints, state, {
+      imageKeypoints: frame.keypoints,
+      primarySource: 'image',
+      timestampMs: frame.timestamp,
+      poseState: testPoseState(frame.timestamp, chainStatusesForFrame(frame, index)),
+    });
+  }
+  return state;
+}
+
 describe('Barbell Curl synthetic replay coverage', () => {
   it('counts a clean front-facing full rep', () => {
     const result = replayRecording(
@@ -539,12 +669,53 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.reps[0]?.diagnostics?.metrics.primaryShoulderDelta).toBeDefined();
     expect(result.reps[0]?.diagnostics?.metrics.returnMaxCurlRatio.value).toBeGreaterThanOrEqual(0.85);
     expect(result.reps[0]?.diagnostics?.viewQuality?.frontishConfirmed).toBe(true);
+    expect(result.reps[0]?.diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.incomplete_extend']).toMatchObject({
       metricKeys: ['returnMaxCurlRatio'],
       triggered: false,
     });
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry'].eligible).toBe(true);
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.elbow_flare'].eligible).toBe(true);
+  });
+
+  it('keeps a clean full-reliability runtime PoseState rep unchanged', () => {
+    const recording = buildRecording('synthetic clean front curl', fullRepPath(), 'front');
+    const baseline = replayRecording(barbellCurlDefinition, recording);
+    const state = replayRecordingWithPoseState(recording, () => ({}));
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.score).toBe(baseline.repScores[0]);
+    expect(state.lastRepResult?.messages).toEqual([]);
+    expect(state.lastRepResult?.scorable).toBe(true);
+    expect(state.lastRepResult?.diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps clean v2 metadata replay fully scoreable', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      recordingWithV2PoseMetadata(buildRecording('synthetic clean v2 front curl', fullRepPath(), 'front')),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0]?.scorable).toBe(true);
+    expect(result.reps[0]?.diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
   });
 
   it('uses frame timestamps instead of JS callback time for live rep timing', () => {
@@ -667,6 +838,29 @@ describe('Barbell Curl synthetic replay coverage', () => {
     );
   });
 
+  it('preserves torso feedback when one arm chain is weak but torso is reliable', () => {
+    const recording = recordingWithTorsoSwing(
+      buildRecording('synthetic weak-left-arm torso swing curl', fullRepPath(), 'front'),
+    );
+    const state = replayRecordingWithPoseState(recording, () => ({ leftArm: 'partial' }));
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.scorable).toBe(true);
+    expect(state.lastRepResult?.messages).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/swing|torso|upright/),
+      ]),
+    );
+    expect(state.lastRepResult?.diagnostics?.cues['barbell-curl.torso_warn'].eligible).toBe(true);
+    expect(state.lastRepResult?.diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['rightArm', 'torso']),
+      weakChains: expect.arrayContaining(['leftArm']),
+      safeCueFamilies: expect.arrayContaining(['torsoControl']),
+    });
+  });
+
   it('keeps a clean front rep stable under small deterministic pose noise', () => {
     const result = replayRecording(
       barbellCurlDefinition,
@@ -745,11 +939,11 @@ describe('Barbell Curl synthetic replay coverage', () => {
       expect(result.reps[0]?.scorable).toBe(true);
       expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry']).toMatchObject({
         eligible: false,
-        skippedReason: 'not_front_view',
+        skippedReason: 'reliability_unsafe_bilateralSymmetry',
       });
       expect(result.reps[0]?.diagnostics?.cues['barbell-curl.elbow_flare']).toMatchObject({
         eligible: false,
-        skippedReason: 'not_front_view',
+        skippedReason: 'reliability_unsafe_bilateralArmRom',
       });
     },
   );
@@ -765,11 +959,11 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.reps[0]?.diagnostics?.view).toBe('oblique');
     expect(cues?.['barbell-curl.asymmetry']).toMatchObject({
       eligible: false,
-      skippedReason: 'not_front_view',
+      skippedReason: 'reliability_unsafe_bilateralSymmetry',
     });
     expect(cues?.['barbell-curl.elbow_flare']).toMatchObject({
       eligible: false,
-      skippedReason: 'not_front_view',
+      skippedReason: 'reliability_unsafe_bilateralArmRom',
     });
   });
 
@@ -852,6 +1046,61 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry'].triggered).toBe(true);
   });
 
+  it('keeps counting with one weak arm but suppresses unsafe bilateral cue families', () => {
+    const delayFrames = 20;
+    const basePath = [
+      ...Array(16).fill(EXTENDED_WRIST_Y),
+      ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 16),
+      ...Array(28).fill(TOP_WRIST_Y),
+      ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 24),
+      ...Array(8).fill(EXTENDED_WRIST_Y),
+    ];
+    const leftPath = [...basePath, ...Array(delayFrames).fill(EXTENDED_WRIST_Y)];
+    const rightPath = [...Array(delayFrames).fill(EXTENDED_WRIST_Y), ...basePath];
+    const recording = recordingWithV2PoseMetadata(
+      buildDualRecording('synthetic desynced front curl with weak left reliability', leftPath, rightPath, 'front'),
+      { lowVisibilityJoints: new Set(['left_elbow', 'left_wrist']) },
+    );
+    const result = replayRecording(barbellCurlDefinition, recording);
+    const asymmetryCue = result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry'];
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages).not.toContain('Arms are uneven — curl both sides together.');
+    expect(asymmetryCue).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_bilateralSymmetry',
+    });
+    expect(result.reps[0]?.scorable).toBe(true);
+    expect(result.reps[0]?.diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['rightArm', 'torso']),
+      weakChains: expect.arrayContaining(['leftArm']),
+      safeCueFamilies: expect.arrayContaining(['repCount', 'tempo', 'torsoControl', 'visibleArmRom']),
+      unsafeCueFamilies: expect.arrayContaining(['bilateralArmRom', 'bilateralSymmetry', 'wristSpecific']),
+      suppressedIssueIds: expect.arrayContaining(['barbell-curl.asymmetry']),
+    });
+  });
+
+  it('counts but marks a rep unscorable when both arm chains and torso are weak', () => {
+    const recording = buildRecording('synthetic clean front curl with weak runtime reliability', fullRepPath(), 'front');
+    const state = replayRecordingWithPoseState(recording, () => ({
+      leftArm: 'partial',
+      rightArm: 'partial',
+      torso: 'partial',
+    }));
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.scorable).toBe(false);
+    expect(state.lastRepResult?.score).toBe(0);
+    expect(state.lastRepResult?.diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'notCountable',
+      scoreabilityCandidate: 'notScoreable',
+      weakChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
+    });
+  });
+
   it('marks bilateral-only cues ineligible from side/oblique views', () => {
     const result = replayRecording(
       barbellCurlDefinition,
@@ -862,11 +1111,11 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(cues?.['barbell-curl.asymmetry']).toMatchObject({
       eligible: false,
-      skippedReason: 'not_front_view',
+      skippedReason: 'reliability_unsafe_bilateralSymmetry',
     });
     expect(cues?.['barbell-curl.elbow_flare']).toMatchObject({
       eligible: false,
-      skippedReason: 'not_front_view',
+      skippedReason: 'reliability_unsafe_bilateralArmRom',
     });
   });
 
@@ -983,12 +1232,12 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.torso_warn']).toMatchObject({
       eligible: false,
       triggered: false,
-      skippedReason: 'torso_unavailable',
+      skippedReason: 'reliability_unsafe_torsoControl',
     });
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.torso_fail']).toMatchObject({
       eligible: false,
       triggered: false,
-      skippedReason: 'torso_unavailable',
+      skippedReason: 'reliability_unsafe_torsoControl',
     });
   });
 
