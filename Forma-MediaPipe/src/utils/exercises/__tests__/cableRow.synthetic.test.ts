@@ -310,6 +310,56 @@ function buildInvalidWorldImageRecording(
   };
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name)
+      ? 0.2
+      : point.name.endsWith('_shoulder') || point.name.endsWith('_hip')
+        ? 0.99
+        : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 function buildYawArtifactRecording(description: string, path: number[]): LandmarkRecording {
   const recording = buildRecording(description, path);
   return {
@@ -441,6 +491,88 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
     expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('keeps clean v2 PoseState cable rows fully scoreable with one visible arm and torso', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean v2 cable row with one visible arm', fullRepPath()),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'torso']),
+      weakChains: expect.arrayContaining(['rightArm']),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps visible-arm and torso cues available when the hidden arm chain is weak', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic high v2 cable row with hidden arm weak', fullRepPath(), { armPath: 'highRow' }),
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toContain('Keep your elbows lower — row toward your ribs.');
+    expect(diagnostics.reliability).toMatchObject({
+      scoreabilityCandidate: 'fullyScoreable',
+      safeCueFamilies: expect.arrayContaining(['handlePath', 'torsoControl', 'visibleArmPath']),
+      unsafeCueFamilies: [],
+    });
+    expect(diagnostics.cues['cable-row.high_row'].triggered).toBe(true);
+  });
+
+  it('counts but suppresses unsafe arm-path cues when both arm chains are unreliable in v2 replay', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic occluded v2 high cable row', fullRepPath(), { armPath: 'highRow' }),
+        {
+          lowVisibilityJoints: new Set([
+            'left_elbow',
+            'left_wrist',
+            'right_elbow',
+            'right_wrist',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).not.toContain('Keep your elbows lower — row toward your ribs.');
+    expect(diagnostics.reliability).toMatchObject({
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['torso']),
+      weakChains: expect.arrayContaining(['leftArm', 'rightArm']),
+      unsafeCueFamilies: expect.arrayContaining(['handlePath', 'visibleArmPath', 'wristSpecific']),
+      suppressedIssueIds: expect.arrayContaining([
+        'cable-row.high_row',
+        'cable-row.row_depth',
+        'cable-row.row_extension',
+        'cable-row.shoulder_retraction',
+      ]),
+    });
+    expect(diagnostics.cues['cable-row.high_row']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_handlePath',
+    });
   });
 
   it('counts a meaningful partial row and records ROM feedback', () => {
