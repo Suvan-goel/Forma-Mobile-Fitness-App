@@ -403,6 +403,52 @@ function withWorldContext(
   };
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 function collectLiveWarnings(recording: LandmarkRecording): string[] {
   let state = lateralRaiseDefinition.createState();
   const warnings = new Set<string>();
@@ -495,6 +541,26 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.reps[0].scorable).toBe(true);
     expect(result.reps[0].qualityWarnings).not.toContain('front_view_uncertain');
     expect(result.reps[0].diagnostics?.view).toBe('front');
+  });
+
+  it('keeps clean v2 PoseState lateral raises fully scoreable', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      recordingWithV2PoseMetadata(
+        withWorldContext(buildRecording('synthetic clean v2 lateral raise', fullRepPath())),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
   });
 
   it('keeps mostly-front captures with brief oblique yaw scorable and diagnosed as front', () => {
@@ -639,6 +705,113 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.feedbackMessages).toContain('Raise out to your sides — avoid turning it into a front raise.');
     expect(metrics?.weakestPeakLateralReachRatio.value).toBeLessThan(0.45);
     expect(metrics?.leftPeakLateralReachRatio.value).toBeGreaterThan(metrics?.rightPeakLateralReachRatio.value ?? 0);
+  });
+
+  it('counts one weak-arm v2 rep but suppresses unsafe wrist/path and bilateral cues', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      recordingWithV2PoseMetadata(
+        withWorldContext(
+          buildRecording('synthetic weak-right-arm occluded lateral raise', fullRepPath(), {
+            rightArmPlane: 'front',
+            rightScale: 0.78,
+          }),
+        ),
+        { lowVisibilityJoints: new Set(['right_elbow', 'right_wrist']) },
+      ),
+    );
+
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).not.toContain('Raise out to your sides — avoid turning it into a front raise.');
+    expect(result.feedbackMessages).not.toContain('Even it out — raise both arms to the same height.');
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.wrong_plane']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_shoulderElbowWristPath',
+    });
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.asymmetry']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_bilateralRaiseSymmetry',
+    });
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'torso']),
+      weakChains: expect.arrayContaining(['rightArm']),
+      safeCueFamilies: expect.arrayContaining(['repCount', 'visibleArmRaise', 'torsoControl']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'shoulderElbowWristPath',
+        'wristEndpoint',
+        'bilateralRaiseSymmetry',
+      ]),
+      suppressedIssueIds: expect.arrayContaining([
+        'standing-dumbbell-lateral-raises.wrong_plane',
+        'standing-dumbbell-lateral-raises.asymmetry',
+      ]),
+    });
+  });
+
+  it('preserves torso feedback when one arm is weak but torso is reliable', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      recordingWithV2PoseMetadata(
+        withWorldContext(
+          buildRecording('synthetic weak-right-arm leaned lateral raise', fullRepPath(), {
+            posture: index => (index < 18 ? 'upright' : 'leaned'),
+          }),
+        ),
+        { lowVisibilityJoints: new Set(['right_elbow', 'right_wrist']) },
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toContain('Stay upright — avoid swaying or leaning.');
+    expect(result.reps[0].diagnostics?.cues['standing-dumbbell-lateral-raises.torso_warn']).toMatchObject({
+      eligible: true,
+      triggered: true,
+    });
+    expect(result.reps[0].diagnostics?.reliability?.safeCueFamilies).toEqual(
+      expect.arrayContaining(['torsoControl']),
+    );
+  });
+
+  it('counts but marks both-weak-arm v2 reps unscorable', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      recordingWithV2PoseMetadata(
+        withWorldContext(buildRecording('synthetic both-arm occluded lateral raise', fullRepPath())),
+        {
+          lowVisibilityJoints: new Set([
+            'left_elbow',
+            'left_wrist',
+            'right_elbow',
+            'right_wrist',
+          ]),
+        },
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['torso']),
+      weakChains: expect.arrayContaining(['leftArm', 'rightArm']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'visibleArmRaise',
+        'shoulderElbowWristPath',
+        'wristEndpoint',
+        'bilateralRaiseSymmetry',
+      ]),
+    });
   });
 
   it('counts with estimated endpoints when wrists are missing but makes wrist-dependent cues ineligible', () => {

@@ -48,7 +48,13 @@ import {
   diagnosticCue,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/lateralRaise.json';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -207,6 +213,30 @@ LATERAL_RAISE_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'standing-dumbbell-lateral-raises.tempo_up', metricKey: 'tRaise', thresholdPath: 'formThresholds.TEMPO_RAISE_MIN', direction: 'below' },
 ];
 
+const LATERAL_RAISE_ISSUE_CUE_FAMILIES: Record<string, string> = {
+  'standing-dumbbell-lateral-raises.rom_height': 'visibleArmRaise',
+  'standing-dumbbell-lateral-raises.over_raise': 'visibleArmRaise',
+  'standing-dumbbell-lateral-raises.elbow_bend': 'shoulderElbowWristPath',
+  'standing-dumbbell-lateral-raises.torso_warn': 'torsoControl',
+  'standing-dumbbell-lateral-raises.asymmetry': 'bilateralRaiseSymmetry',
+  'standing-dumbbell-lateral-raises.tempo_up': 'visibleArmRaise',
+  'standing-dumbbell-lateral-raises.tempo_down': 'visibleArmRaise',
+  'standing-dumbbell-lateral-raises.shoulder_shrug': 'torsoControl',
+  'standing-dumbbell-lateral-raises.wrong_plane': 'shoulderElbowWristPath',
+};
+
+const LATERAL_RAISE_MESSAGE_CUE_FAMILIES: Record<string, string> = {
+  'Raise higher — aim for shoulder level.': 'visibleArmRaise',
+  'Stop around shoulder height — avoid lifting too high.': 'visibleArmRaise',
+  'Keep your arms straighter — avoid excessive elbow bend.': 'shoulderElbowWristPath',
+  'Stay upright — avoid swaying or leaning.': 'torsoControl',
+  'Even it out — raise both arms to the same height.': 'bilateralRaiseSymmetry',
+  'Lift with control — avoid swinging the weights up.': 'visibleArmRaise',
+  'Control the descent — lower the weights slowly.': 'visibleArmRaise',
+  'Relax your traps — don\'t shrug the weight up.': 'torsoControl',
+  'Raise out to your sides — avoid turning it into a front raise.': 'shoulderElbowWristPath',
+};
+
 const LATERAL_RAISE_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
   { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
@@ -341,6 +371,8 @@ interface RepWindow {
   headShrugWarnSampleCount: number;
   /** Frame count */
   frameCount: number;
+  /** Runtime PoseState reliability observed during this active rep. */
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
 }
 
 interface LateralRaiseState {
@@ -556,6 +588,7 @@ function initRepWindow(
     shrugWarnSampleCount: 0,
     headShrugWarnSampleCount: 0,
     frameCount: 0,
+    reliability: createPoseStateReliabilityAggregator(),
   };
 }
 
@@ -1060,45 +1093,112 @@ function torsoWarningTriggered(repWindow: RepWindow): boolean {
   );
 }
 
-function computeRepWindowScore(repWindow: RepWindow): number {
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function reliabilityInterpretationForRepWindow(repWindow: RepWindow): {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+} | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+  return {
+    summary,
+    interpretation: interpretPoseStateReliabilitySummary('Standing Dumbbell Lateral Raises', summary),
+  };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function hasUsableArmChain(interpretation: RepReliabilityInterpretation | null): boolean {
+  if (!interpretation) return true;
+  return interpretation.usableChains.includes('leftArm') || interpretation.usableChains.includes('rightArm');
+}
+
+function reliabilityAllowsScoring(interpretation: RepReliabilityInterpretation | null): boolean {
+  return (
+    !interpretation ||
+    (
+      interpretation.scoreabilityCandidate !== 'notScoreable' &&
+      hasUsableArmChain(interpretation)
+    )
+  );
+}
+
+function repScorableWithReliability(
+  repWindow: RepWindow,
+  interpretation: RepReliabilityInterpretation | null,
+): boolean {
+  if (!interpretation) return isLateralRaiseRepScorable(repWindow);
+  return hasScorableFrontView(repWindow) && reliabilityAllowsScoring(interpretation);
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+  if (!reliabilityAllowsScoring(interpretation)) return [];
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const family = LATERAL_RAISE_MESSAGE_CUE_FAMILIES[message];
+    return !family || !unsafeFamilies.has(family);
+  });
+}
+
+function computeRepWindowScore(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): number {
   const penaltyPoints: number[] = [];
   const addPenalty = (value: number, config: PenaltyConfig) => {
     penaltyPoints.push(computePenaltyPoints(value, config));
   };
 
   // 1. ROM shortfall — ideal is ratio 1.0 (shoulder level). FSM ensures ≥0.85.
-  const romShortfall = Math.max(0, IDEAL.MAX_HEIGHT_RATIO - repWindow.maxHeightRatio);
-  addPenalty(romShortfall, PENALTY_CONFIGS.ROM);
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise')) {
+    const romShortfall = Math.max(0, IDEAL.MAX_HEIGHT_RATIO - repWindow.maxHeightRatio);
+    addPenalty(romShortfall, PENALTY_CONFIGS.ROM);
+  }
 
   // 2. Arm straightness — ideal is 0.97 (slight bend OK). Lower = more bend = worse.
-  if (hasEnoughSamples(repWindow.straightnessSampleCount)) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'shoulderElbowWristPath') &&
+    hasEnoughSamples(repWindow.straightnessSampleCount)
+  ) {
     const straightnessDeficit = Math.max(0, IDEAL.MIN_STRAIGHTNESS - repWindow.minStraightnessRatio);
     addPenalty(straightnessDeficit, PENALTY_CONFIGS.ARM_STRAIGHT);
   }
 
   // 3. Torso lean — lower is better (deadzone handles small amounts)
   const torsoPenaltyPoints: number[] = [];
-  if (hasEnoughSamples(repWindow.torsoSampleCount)) {
-    torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxTorsoLean, PENALTY_CONFIGS.TORSO_LEAN));
-  }
-  if (hasEnoughSamples(repWindow.sagittalSwaySampleCount)) {
-    torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxSagittalTorsoSway, PENALTY_CONFIGS.SAGITTAL_SWAY));
-  }
-  if (hasEnoughSamples(repWindow.hipSwaySampleCount)) {
-    torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxHipSwayRatio, PENALTY_CONFIGS.HIP_SWAY));
-  }
-  if (torsoPenaltyPoints.length > 0) {
-    penaltyPoints.push(Math.max(...torsoPenaltyPoints));
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl')) {
+    if (hasEnoughSamples(repWindow.torsoSampleCount)) {
+      torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxTorsoLean, PENALTY_CONFIGS.TORSO_LEAN));
+    }
+    if (hasEnoughSamples(repWindow.sagittalSwaySampleCount)) {
+      torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxSagittalTorsoSway, PENALTY_CONFIGS.SAGITTAL_SWAY));
+    }
+    if (hasEnoughSamples(repWindow.hipSwaySampleCount)) {
+      torsoPenaltyPoints.push(computePenaltyPoints(repWindow.maxHipSwayRatio, PENALTY_CONFIGS.HIP_SWAY));
+    }
+    if (torsoPenaltyPoints.length > 0) {
+      penaltyPoints.push(Math.max(...torsoPenaltyPoints));
+    }
   }
 
   // 4. Tempo — lightly penalize swingy raises and uncontrolled descents.
-  if (repWindow.tTop !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise') && repWindow.tTop !== null) {
     const tRaise = repWindow.tTop - repWindow.tStart;
     if (tRaise > 0 && tRaise < IDEAL.CONCENTRIC_TIME) {
       addPenalty(IDEAL.CONCENTRIC_TIME - tRaise, PENALTY_CONFIGS.TEMPO_RAISE);
     }
   }
-  if (repWindow.tLoweringStart !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise') && repWindow.tLoweringStart !== null) {
     const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < IDEAL.ECCENTRIC_TIME) {
       const deficit = IDEAL.ECCENTRIC_TIME - tLower;
@@ -1107,19 +1207,29 @@ function computeRepWindowScore(repWindow: RepWindow): number {
   }
 
   // 5. Asymmetry — sustained top-phase difference between arms.
-  if (hasEnoughSamples(repWindow.topFrameCount)) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'bilateralRaiseSymmetry') &&
+    hasEnoughSamples(repWindow.topFrameCount)
+  ) {
     addPenalty(repWindow.topHeightAsymmetry, PENALTY_CONFIGS.ASYMMETRY);
   }
 
   // 6. Shoulder shrug — torso-height or optional head-relative support.
-  addPenalty(effectiveShrugPct(repWindow), PENALTY_CONFIGS.SHRUG);
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl')) {
+    addPenalty(effectiveShrugPct(repWindow), PENALTY_CONFIGS.SHRUG);
+  }
 
   // 7. Over-raising — above shoulder level shifts tension and often invites shrugging.
-  const overRaise = Math.max(0, repWindow.maxHeightRatio - IDEAL.MAX_HEIGHT_RATIO);
-  addPenalty(overRaise, PENALTY_CONFIGS.OVER_RAISE);
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise')) {
+    const overRaise = Math.max(0, repWindow.maxHeightRatio - IDEAL.MAX_HEIGHT_RATIO);
+    addPenalty(overRaise, PENALTY_CONFIGS.OVER_RAISE);
+  }
 
   // 8. Wrong plane — height without enough outward reach is a front/scaption raise.
-  if (hasEnoughSamples(repWindow.lateralReachSampleCount)) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'shoulderElbowWristPath') &&
+    hasEnoughSamples(repWindow.lateralReachSampleCount)
+  ) {
     const lateralReachShortfall = Math.max(0, FORM_THRESHOLDS.LATERAL_REACH_MIN - weakestPeakLateralReachRatio(repWindow));
     addPenalty(lateralReachShortfall, PENALTY_CONFIGS.LATERAL_PATH);
   }
@@ -1131,21 +1241,31 @@ function computeRepWindowScore(repWindow: RepWindow): number {
 // FORM FEEDBACK (discrete messages for visual display)
 // ============================================================================
 
-function generateFormMessages(repWindow: RepWindow): string[] {
+function generateFormMessages(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): string[] {
   const messages: string[] = [];
 
   // 1. ROM — raise height (ratio-based)
-  if (repWindow.maxHeightRatio < FORM_THRESHOLDS.ROM_MIN) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise') &&
+    repWindow.maxHeightRatio < FORM_THRESHOLDS.ROM_MIN
+  ) {
     messages.push('Raise higher \u2014 aim for shoulder level.');
   }
 
   // 2. Over-raise (ratio-based)
-  if (repWindow.maxHeightRatio > FORM_THRESHOLDS.OVER_RAISE_WARN) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise') &&
+    repWindow.maxHeightRatio > FORM_THRESHOLDS.OVER_RAISE_WARN
+  ) {
     messages.push('Stop around shoulder height \u2014 avoid lifting too high.');
   }
 
   // 3. Arm straightness (ratio-based)
   if (
+    cueFamilyAllowed(allowedCueFamilies, 'shoulderElbowWristPath') &&
     hasEnoughSamples(repWindow.straightnessSampleCount) &&
     repWindow.minStraightnessRatio < FORM_THRESHOLDS.ELBOW_STRAIGHTNESS_WARN
   ) {
@@ -1153,12 +1273,16 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   }
 
   // 4. Torso lean/sway
-  if (torsoWarningTriggered(repWindow)) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'torsoControl') &&
+    torsoWarningTriggered(repWindow)
+  ) {
     messages.push('Stay upright \u2014 avoid swaying or leaning.');
   }
 
   // 5. Asymmetry (sustained near top, not single-frame spikes)
   if (
+    cueFamilyAllowed(allowedCueFamilies, 'bilateralRaiseSymmetry') &&
     hasEnoughSamples(repWindow.topFrameCount) &&
     repWindow.topHeightAsymmetry > FORM_THRESHOLDS.ASYMMETRY_WARN
   ) {
@@ -1166,7 +1290,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   }
 
   // 6. Raise tempo
-  if (repWindow.tTop !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise') && repWindow.tTop !== null) {
     const tRaise = repWindow.tTop - repWindow.tStart;
     if (tRaise > 0 && tRaise < FORM_THRESHOLDS.TEMPO_RAISE_MIN) {
       messages.push('Lift with control \u2014 avoid swinging the weights up.');
@@ -1174,7 +1298,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   }
 
   // 7. Eccentric tempo
-  if (repWindow.tLoweringStart !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmRaise') && repWindow.tLoweringStart !== null) {
     const tLower = repWindow.tEnd - repWindow.tLoweringStart;
     if (tLower > 0 && tLower < FORM_THRESHOLDS.TEMPO_LOWER_MIN) {
       messages.push('Control the descent \u2014 lower the weights slowly.');
@@ -1182,12 +1306,16 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   }
 
   // 8. Shoulder shrug
-  if (effectiveShrugPct(repWindow) > FORM_THRESHOLDS.SHRUG_WARN) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'torsoControl') &&
+    effectiveShrugPct(repWindow) > FORM_THRESHOLDS.SHRUG_WARN
+  ) {
     messages.push('Relax your traps \u2014 don\'t shrug the weight up.');
   }
 
   // 9. Wrong plane
   if (
+    cueFamilyAllowed(allowedCueFamilies, 'shoulderElbowWristPath') &&
     hasEnoughSamples(repWindow.lateralReachSampleCount) &&
     weakestPeakLateralReachRatio(repWindow) < FORM_THRESHOLDS.LATERAL_REACH_MIN
   ) {
@@ -1197,21 +1325,106 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   return messages;
 }
 
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const family = LATERAL_RAISE_ISSUE_CUE_FAMILIES[issueId];
+      if (family && unsafeFamilies.has(family)) {
+        suppressedIssueIds.push(issueId);
+        suppressedCueFamilies.add(family);
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${family}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogLateralRaiseReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logLateralRaiseRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogLateralRaiseReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[LateralRaiseReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
 function buildLateralRaiseRepResult(repWindow: RepWindow, repIndex: number): RepResult {
+  const reliability = reliabilityInterpretationForRepWindow(repWindow);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const finalScorable = repScorableWithReliability(repWindow, reliabilityInterpretation);
+  const messages = generateFormMessages(repWindow, allowedCueFamilies);
+  const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
+  const diagnostics = applyReliabilityCueGating(
+    buildLateralRaiseDiagnostics(repWindow, repIndex, finalScorable),
+    reliabilityInterpretation,
+    finalScorable,
+  );
+  const score = reliabilityAllowsScoring(reliabilityInterpretation)
+    ? computeRepWindowScore(repWindow, allowedCueFamilies)
+    : 0;
+  logLateralRaiseRepReliability(repIndex, reliabilityInterpretation, diagnostics);
+
   return {
     repIndex,
-    score: computeRepWindowScore(repWindow),
-    messages: generateFormMessages(repWindow),
-    scorable: isLateralRaiseRepScorable(repWindow),
+    score,
+    messages: finalMessages,
+    scorable: finalScorable,
     qualityWarnings: lateralRaiseQualityWarnings(repWindow),
-    diagnostics: buildLateralRaiseDiagnostics(repWindow, repIndex),
+    diagnostics,
   };
 }
 
 function buildLateralRaiseDiagnostics(
   repWindow: RepWindow,
   repIndex: number,
-): FrameworkRepResult['diagnostics'] {
+  scorable = isLateralRaiseRepScorable(repWindow),
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const hasLowering = repWindow.tLoweringStart !== null;
   const tLower = repWindow.tLoweringStart !== null ? repWindow.tEnd - repWindow.tLoweringStart : null;
   const tRaise = repWindow.tTop !== null ? repWindow.tTop - repWindow.tStart : null;
@@ -1241,7 +1454,7 @@ function buildLateralRaiseDiagnostics(
     repIndex,
     view: diagnosticView(repWindow),
     selectedSide: 'both',
-    scorable: isLateralRaiseRepScorable(repWindow),
+    scorable,
     metrics: [
       diagnosticMetric('peakHeightRatio', repWindow.maxHeightRatio, { unit: 'ratio' }),
       diagnosticMetric('leftPeakHeightRatio', repWindow.maxLeftHeightRatio, { unit: 'ratio' }),
@@ -1664,6 +1877,9 @@ function updateLateralRaiseState(
 
   // -- Accumulate every frame that participates in a full or returned partial rep. --
   if (state.repWindow && (prevPhase !== 'REST' || state.phase !== 'REST')) {
+    if (frameContext?.poseState) {
+      state.repWindow.reliability.observe(frameContext.poseState);
+    }
     accumulateRepWindowFrame(state.repWindow, {
       t,
       phase: state.phase,
@@ -1702,7 +1918,9 @@ function updateLateralRaiseState(
     state.lastRepResult = buildLateralRaiseRepResult(state.repWindow, state.repCount);
     const messages = state.lastRepResult.messages;
 
-    if (messages.length > 0) {
+    if (state.lastRepResult.scorable === false) {
+      state.feedback = 'Form view unclear.';
+    } else if (messages.length > 0) {
       state.feedback = messages.join('\n');
     } else {
       state.feedback = 'Great rep!';
@@ -1728,7 +1946,9 @@ function updateLateralRaiseState(
         state.repCount++;
         state.lastRepResult = buildLateralRaiseRepResult(w, state.repCount);
         const messages = state.lastRepResult.messages;
-        state.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
+        state.feedback = state.lastRepResult.scorable === false
+          ? 'Form view unclear.'
+          : messages.length > 0 ? messages.join('\n') : 'Good rep.';
         state.lastFeedbackTime = t;
       } else if (w.maxHeightRatio > 0) {
         state.feedback = LOW_ROM_FEEDBACK;
