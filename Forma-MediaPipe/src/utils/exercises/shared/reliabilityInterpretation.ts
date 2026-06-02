@@ -184,11 +184,12 @@ const EXERCISE_INTERPRETATION_PROFILES: Record<string, ExerciseReliabilityInterp
     cueFamilies: [
       { family: 'repCount', anyOfChains: ['leftArm', 'rightArm'], requiredChains: ['torso'] },
       { family: 'tempo', anyOfChains: ['leftArm', 'rightArm'] },
-      { family: 'visibleArmPath', anyOfChains: ['leftArm', 'rightArm'] },
-      { family: 'elbowExtension', anyOfChains: ['leftArm', 'rightArm'] },
-      { family: 'bilateralSymmetry', requiredChains: ['leftArm', 'rightArm'] },
-      { family: 'wristHandlePath', requiredChains: ['leftArm', 'rightArm'] },
       { family: 'torsoControl', requiredChains: ['torso'] },
+      { family: 'visibleArmPath', anyOfChains: ['leftArm', 'rightArm'] },
+      { family: 'handlePath', anyOfChains: ['leftArm', 'rightArm'] },
+      { family: 'elbowPath', anyOfChains: ['leftArm', 'rightArm'] },
+      { family: 'wristSpecific', anyOfChains: ['leftArm', 'rightArm'] },
+      { family: 'bilateralSymmetry', requiredChains: ['leftArm', 'rightArm'] },
     ],
   },
   cablerow: {

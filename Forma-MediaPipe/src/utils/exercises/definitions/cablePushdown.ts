@@ -39,7 +39,13 @@ import {
   diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/cablePushdown.json';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 import type {
   ExerciseDefinition,
@@ -293,6 +299,48 @@ CABLE_PUSHDOWN_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'cable-pushdowns.tempo_up', metricKey: 'returnVelocitySpikeRatio', thresholdPath: 'formThresholds.TEMPO_RETURN_SPIKE_WARN', direction: 'above' },
 ];
 
+const CABLE_PUSHDOWN_ISSUE_CUE_FAMILIES: Record<string, string[]> = {
+  'cable-pushdowns.lockout_short': ['handlePath', 'wristSpecific', 'visibleArmPath'],
+  'cable-pushdowns.rom_short': ['handlePath', 'wristSpecific', 'visibleArmPath'],
+  'cable-pushdowns.elbow_drift': ['elbowPath'],
+  'cable-pushdowns.elbow_forward': ['elbowPath'],
+  'cable-pushdowns.torso_warn': ['torsoControl'],
+  'cable-pushdowns.torso_rocking': ['torsoControl'],
+  'cable-pushdowns.tempo_down': ['tempo'],
+  'cable-pushdowns.tempo_up': ['tempo'],
+};
+
+const CABLE_PUSHDOWN_MESSAGE_CUE_FAMILIES: Record<string, string[]> = {
+  'Extend fully \u2014 lock out at the bottom of each rep.': ['handlePath', 'wristSpecific', 'visibleArmPath'],
+  'Start with a deeper bend \u2014 bring your forearms closer to your biceps.': ['handlePath', 'wristSpecific', 'visibleArmPath'],
+  'Keep your elbows pinned to your sides \u2014 avoid letting them drift.': ['elbowPath'],
+  'Start with your elbows tucked by your sides.': ['elbowPath'],
+  'Stay upright \u2014 avoid leaning into the pushdown.': ['torsoControl'],
+  'Keep your torso steady through the pushdown.': ['torsoControl'],
+  'Slow down the push \u2014 control the extension.': ['tempo'],
+  "Control the return \u2014 don't let the weight snap back.": ['tempo'],
+};
+
+const CABLE_PUSHDOWN_SELECTED_ARM_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'visibleArmPath',
+  'handlePath',
+  'elbowPath',
+  'wristSpecific',
+] as const;
+
+const CABLE_PUSHDOWN_RELIABILITY_JOINTS = [
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+  'left_hip',
+  'right_hip',
+] as const;
+
 const CABLE_PUSHDOWN_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
   { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
@@ -355,6 +403,8 @@ interface RepWindow {
   sideViewConfidenceSum: number;
   sideViewConfidenceMin: number;
   sideViewConfidenceSamples: number;
+  /** Runtime PoseState reliability observed during this active rep. */
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
   /** Velocity support for rushed push / snap-back return checks */
   lastVelocityRatio: number | null;
   lastVelocityTimestamp: number | null;
@@ -760,6 +810,197 @@ function returnVelocitySpikeRatio(repWindow: RepWindow): number | null {
   return velocitySpikeRatio(repWindow.returnVelocityValues);
 }
 
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function selectedArmChain(visibleSide: 'left' | 'right'): 'leftArm' | 'rightArm' {
+  return visibleSide === 'left' ? 'leftArm' : 'rightArm';
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function reliabilityInterpretationForRepWindow(
+  repWindow: RepWindow,
+  visibleSide: 'left' | 'right',
+): {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+} | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+
+  const baseInterpretation = interpretPoseStateReliabilitySummary('Cable Pushdowns', summary);
+  const selectedChain = selectedArmChain(visibleSide);
+  if (baseInterpretation.usableChains.includes(selectedChain)) {
+    return { summary, interpretation: baseInterpretation };
+  }
+
+  const selectedArmUnsafeFamilies = new Set<string>(CABLE_PUSHDOWN_SELECTED_ARM_CUE_FAMILIES);
+  const safeCueFamilies = baseInterpretation.safeCueFamilies.filter(
+    family => !selectedArmUnsafeFamilies.has(family),
+  );
+  const unsafeCueFamilies = uniqueStrings([
+    ...baseInterpretation.unsafeCueFamilies,
+    ...CABLE_PUSHDOWN_SELECTED_ARM_CUE_FAMILIES,
+  ]);
+
+  return {
+    summary,
+    interpretation: {
+      ...baseInterpretation,
+      countabilityCandidate:
+        baseInterpretation.countabilityCandidate === 'countable'
+          ? 'maybe'
+          : baseInterpretation.countabilityCandidate,
+      scoreabilityCandidate:
+        baseInterpretation.scoreabilityCandidate === 'fullyScoreable'
+          ? 'partiallyScoreable'
+          : baseInterpretation.scoreabilityCandidate,
+      safeCueFamilies,
+      unsafeCueFamilies,
+      reasons: uniqueStrings([
+        ...baseInterpretation.reasons,
+        `${selectedChain}_selected_chain_weak`,
+        'selected_arm_cue_families_unsafe',
+      ]),
+    },
+  };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function reliabilityAllowsScoring(
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: 'left' | 'right',
+): boolean {
+  if (!interpretation) return true;
+  return (
+    interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    interpretation.usableChains.includes(selectedArmChain(visibleSide)) &&
+    interpretation.usableChains.includes('torso')
+  );
+}
+
+function repScorableWithReliability(
+  repWindow: RepWindow,
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: 'left' | 'right',
+): boolean {
+  return isCablePushdownRepScorable(repWindow) && reliabilityAllowsScoring(interpretation, visibleSide);
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const families = CABLE_PUSHDOWN_MESSAGE_CUE_FAMILIES[message] ?? [];
+    return families.every(family => !unsafeFamilies.has(family));
+  });
+}
+
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const families = CABLE_PUSHDOWN_ISSUE_CUE_FAMILIES[issueId] ?? [];
+      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
+      if (unsafeFamily) {
+        suppressedIssueIds.push(issueId);
+        for (const family of families) {
+          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
+        }
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${unsafeFamily}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogCablePushdownReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logCablePushdownRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogCablePushdownReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[CablePushdownReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
+function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
+  return CABLE_PUSHDOWN_RELIABILITY_JOINTS.some((jointName) => {
+    const joint = poseState.joints[jointName];
+    return (
+      joint &&
+      (
+        joint.presence !== null ||
+        joint.reasons.includes('presence_unknown') ||
+        joint.reasons.includes('visibility_unknown')
+      )
+    );
+  });
+}
+
+function observeCablePushdownPoseState(
+  repWindow: RepWindow,
+  frameContext: ExerciseFrameContext | undefined,
+): void {
+  const poseState = frameContext?.poseState;
+  if (!poseState || !poseStateHasRichReliabilityMetadata(poseState)) return;
+  repWindow.reliability.observe(poseState);
+}
+
 function initialSourceCounts(): Record<LandmarkSourceName, number> {
   return { world: 0, image: 0, fallback: 0 };
 }
@@ -810,6 +1051,7 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
     sideViewConfidenceSum: 0,
     sideViewConfidenceMin: Infinity,
     sideViewConfidenceSamples: 0,
+    reliability: createPoseStateReliabilityAggregator(),
     lastVelocityRatio: null,
     lastVelocityTimestamp: null,
     pushVelocityValues: [],
@@ -994,19 +1236,26 @@ function updateFSM(
 // SCORING (continuous penalty curves)
 // ============================================================================
 
-function computeCablePushdownScore(repWindow: RepWindow): number {
+function computeCablePushdownScore(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
   // 1. ROM -- extension: ideal max ratio is 0.98+. Shortfall = max(0, 0.98 - maxRatio)
-  const extensionShortfall = Math.max(0, 0.98 - repWindow.maxRatio);
-  penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  if (cueFamilyAllowed(allowedCueFamilies, 'handlePath')) {
+    const extensionShortfall = Math.max(0, 0.98 - repWindow.maxRatio);
+    penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  }
 
   // 2. ROM -- flexion: ideal min ratio is 0.55 or below. Excess = max(0, minRatio - 0.55)
-  const flexionExcess = Math.max(0, repWindow.minRatio - 0.55);
-  penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmPath')) {
+    const flexionExcess = Math.max(0, repWindow.minRatio - 0.55);
+    penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
+  }
 
   // 3. Elbow drift (shoulder angle delta)
-  if (repWindow.shoulderAngleSampleCount > 0) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'elbowPath') && repWindow.shoulderAngleSampleCount > 0) {
     penalties.push({ value: repWindow.maxShoulderDelta, config: PENALTY_CONFIGS.ELBOW_DRIFT });
     penalties.push({
       value: repWindow.elbowForwardAngleAtStart ?? 0,
@@ -1015,19 +1264,23 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
   }
 
   // 4. Torso mechanics
-  if (repWindow.torsoDevSampleCount > 0) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && repWindow.torsoDevSampleCount > 0) {
     penalties.push({ value: repWindow.maxTorsoAbsoluteDev, config: PENALTY_CONFIGS.TORSO_LEAN });
     penalties.push({ value: repWindow.maxTorsoRockDelta, config: PENALTY_CONFIGS.TORSO_ROCK });
   }
 
   const holdMs = lockoutHoldMs(repWindow);
-  if (holdMs !== null && repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'handlePath') &&
+    holdMs !== null &&
+    repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL
+  ) {
     const holdDeficit = Math.max(0, FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS - holdMs);
     penalties.push({ value: holdDeficit, config: PENALTY_CONFIGS.LOCKOUT_HOLD });
   }
 
   // 5. Tempo
-  if (repWindow.tExtended !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && repWindow.tExtended !== null) {
     const tPush = repWindow.tExtended - repWindow.tStart;  // concentric (push down)
     const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended); // eccentric (return)
 
@@ -1042,11 +1295,11 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
     }
   }
   const pushSpikeRatio = pushVelocitySpikeRatio(repWindow);
-  if (pushSpikeRatio !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && pushSpikeRatio !== null) {
     penalties.push({ value: pushSpikeRatio, config: PENALTY_CONFIGS.PUSH_SPIKE });
   }
   const returnSpikeRatio = returnVelocitySpikeRatio(repWindow);
-  if (returnSpikeRatio !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && returnSpikeRatio !== null) {
     penalties.push({ value: returnSpikeRatio, config: PENALTY_CONFIGS.RETURN_SPIKE });
   }
 
@@ -1057,45 +1310,54 @@ function computeCablePushdownScore(repWindow: RepWindow): number {
 // FORM MESSAGES (discrete thresholds)
 // ============================================================================
 
-function generateFormMessages(repWindow: RepWindow): string[] {
+function generateFormMessages(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): string[] {
   const messages: string[] = [];
 
   // 1. Extension ROM -- didn't lock out fully (max ratio too low)
   const holdMs = lockoutHoldMs(repWindow);
   if (
-    repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL ||
-    (holdMs !== null &&
-      repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL &&
-      holdMs < FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS)
+    cueFamilyAllowed(allowedCueFamilies, 'handlePath') &&
+    (
+      repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL ||
+      (holdMs !== null &&
+        repWindow.maxRatio >= FORM_THRESHOLDS.EXTENSION_FAIL &&
+        holdMs < FORM_THRESHOLDS.LOCKOUT_HOLD_MIN_MS)
+    )
   ) {
     messages.push('Extend fully \u2014 lock out at the bottom of each rep.');
   }
 
   // 2. Flexion ROM -- didn't bend enough at the top (min ratio too high)
-  if (repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'visibleArmPath') && repWindow.minRatio > FORM_THRESHOLDS.FLEXION_FAIL) {
     messages.push('Start with a deeper bend \u2014 bring your forearms closer to your biceps.');
   }
 
   // 3. Elbow drift (shoulder movement)
-  if (repWindow.maxShoulderDelta > FORM_THRESHOLDS.ELBOW_DRIFT_WARN) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'elbowPath') && repWindow.maxShoulderDelta > FORM_THRESHOLDS.ELBOW_DRIFT_WARN) {
     messages.push('Keep your elbows pinned to your sides \u2014 avoid letting them drift.');
   }
-  if ((repWindow.elbowForwardAngleAtStart ?? 0) > FORM_THRESHOLDS.ELBOW_FORWARD_WARN) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'elbowPath') &&
+    (repWindow.elbowForwardAngleAtStart ?? 0) > FORM_THRESHOLDS.ELBOW_FORWARD_WARN
+  ) {
     messages.push('Start with your elbows tucked by your sides.');
   }
 
   // 4. Torso lean
-  if (repWindow.maxTorsoAbsoluteDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && repWindow.maxTorsoAbsoluteDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
     messages.push('Stay upright \u2014 avoid leaning into the pushdown.');
   }
-  if (repWindow.maxTorsoRockDelta > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && repWindow.maxTorsoRockDelta > FORM_THRESHOLDS.TORSO_ROCK_WARN) {
     messages.push('Keep your torso steady through the pushdown.');
   }
 
   // 5. Tempo
   const pushSpikeRatio = pushVelocitySpikeRatio(repWindow);
   const returnSpikeRatio = returnVelocitySpikeRatio(repWindow);
-  if (repWindow.tExtended !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && repWindow.tExtended !== null) {
     const tPush = repWindow.tExtended - repWindow.tStart;
     const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tExtended);
 
@@ -1120,7 +1382,8 @@ function buildCablePushdownDiagnostics(
   repWindow: RepWindow,
   repIndex: number,
   visibleSide: 'left' | 'right',
-): FrameworkRepResult['diagnostics'] {
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const hasTempo = repWindow.tExtended !== null;
   const tPush = repWindow.tExtended !== null ? repWindow.tExtended - repWindow.tStart : null;
   const tReturn = repWindow.tExtended !== null
@@ -1150,7 +1413,7 @@ function buildCablePushdownDiagnostics(
     repIndex,
     view: diagnosticsViewFor(viewQuality),
     selectedSide: visibleSide,
-    scorable: viewQuality.sideConfirmed,
+    scorable,
     viewQuality,
     metrics: [
       diagnosticMetric('extensionRatio', repWindow.maxRatio, { unit: 'ratio' }),
@@ -1327,16 +1590,27 @@ function buildCablePushdownRepResult(
   repIndex: number,
   visibleSide: 'left' | 'right',
 ): RepResult {
-  const scorable = isCablePushdownRepScorable(repWindow);
-  const score = scorable ? computeCablePushdownScore(repWindow) : 0;
-  const messages = scorable ? generateFormMessages(repWindow) : [];
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const sideViewScorable = isCablePushdownRepScorable(repWindow);
+  const scorable = repScorableWithReliability(repWindow, reliabilityInterpretation, visibleSide);
+  const score = scorable ? computeCablePushdownScore(repWindow, allowedCueFamilies) : 0;
+  const messages = sideViewScorable ? generateFormMessages(repWindow, allowedCueFamilies) : [];
+  const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
+  const diagnostics = applyReliabilityCueGating(
+    buildCablePushdownDiagnostics(repWindow, repIndex, visibleSide, scorable),
+    reliabilityInterpretation,
+    scorable,
+  );
+  logCablePushdownRepReliability(repIndex, reliabilityInterpretation, diagnostics);
   return {
     repIndex,
     score,
-    messages,
+    messages: finalMessages,
     scorable,
     qualityWarnings: cablePushdownQualityWarnings(repWindow),
-    diagnostics: buildCablePushdownDiagnostics(repWindow, repIndex, visibleSide),
+    diagnostics,
   };
 }
 
@@ -1590,6 +1864,7 @@ function updateCablePushdownState(
 
   if (returnedPartial && newState.repWindow) {
     const window = newState.repWindow;
+    observeCablePushdownPoseState(window, frameContext);
     recordRepWindowFrame(window, {
       t,
       rawRatio,
@@ -1646,6 +1921,7 @@ function updateCablePushdownState(
   }
 
   if (newState.repWindow && inRep) {
+    observeCablePushdownPoseState(newState.repWindow, frameContext);
     recordRepWindowFrame(newState.repWindow, {
       t,
       rawRatio,
@@ -1664,6 +1940,7 @@ function updateCablePushdownState(
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    observeCablePushdownPoseState(newState.repWindow, frameContext);
     recordRepWindowFrame(newState.repWindow, {
       t,
       rawRatio,

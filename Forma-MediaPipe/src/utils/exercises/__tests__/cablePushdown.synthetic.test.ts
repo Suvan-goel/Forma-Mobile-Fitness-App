@@ -325,6 +325,52 @@ function buildMildlyNoisyCleanRecording(): LandmarkRecording {
   };
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 function buildSegmentedRecording(
   description: string,
   segments: Array<{ path: number[]; gapAfterMs?: number }>,
@@ -532,6 +578,158 @@ describe('Cable Pushdown synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('keeps clean v2 PoseState cable pushdowns fully scoreable', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean full-reliability v2 cable pushdown', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
+      weakChains: [],
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'torsoControl',
+        'visibleArmPath',
+        'handlePath',
+        'elbowPath',
+        'wristSpecific',
+        'bilateralSymmetry',
+      ]),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps one weak hidden arm countable when the selected side and torso are reliable', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-side reliable v2 cable pushdown', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set(['right_elbow', 'right_wrist']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.selectedSide).toBe('left');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'torso']),
+      weakChains: expect.arrayContaining(['rightArm']),
+      safeCueFamilies: expect.arrayContaining(['handlePath', 'wristSpecific', 'elbowPath', 'torsoControl']),
+      unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('suppresses weak selected-arm path cues while leaving torso feedback safe in v2 replay', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-arm weak v2 cable pushdown', shallowTopFullRepPath(), {
+          hiddenSideScore: 0.99,
+          posture: index => (index < 16 ? 'upright' : 'leaned'),
+          elbowPosition: index => (index >= 20 && index < 50 ? 'drifted' : 'pinned'),
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_elbow', 'left_wrist']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).toContain('Stay upright — avoid leaning into the pushdown.');
+    expect(result.reps[0].messages).not.toContain('Start with a deeper bend — bring your forearms closer to your biceps.');
+    expect(result.reps[0].messages).not.toContain('Keep your elbows pinned to your sides — avoid letting them drift.');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'maybe',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['rightArm', 'torso']),
+      weakChains: expect.arrayContaining(['leftArm']),
+      safeCueFamilies: expect.arrayContaining(['torsoControl']),
+      unsafeCueFamilies: expect.arrayContaining(['handlePath', 'wristSpecific', 'elbowPath']),
+      suppressedIssueIds: expect.arrayContaining([
+        'cable-pushdowns.rom_short',
+        'cable-pushdowns.elbow_drift',
+      ]),
+    });
+    expect(diagnostics.cues['cable-pushdowns.rom_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_handlePath',
+    });
+    expect(diagnostics.cues['cable-pushdowns.elbow_drift']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_elbowPath',
+    });
+    expect(diagnostics.cues['cable-pushdowns.torso_warn'].triggered).toBe(true);
+  });
+
+  it('counts but marks both weak arm chains unscorable or partial in v2 replay', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic both-arm weak v2 cable pushdown', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set([
+            'left_elbow',
+            'left_wrist',
+            'right_elbow',
+            'right_wrist',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(['partiallyScoreable', 'notScoreable']).toContain(
+      diagnostics.reliability?.scoreabilityCandidate,
+    );
+    expect(diagnostics.reliability).toMatchObject({
+      usableChains: expect.arrayContaining(['torso']),
+      weakChains: expect.arrayContaining(['leftArm', 'rightArm']),
+      unsafeCueFamilies: expect.arrayContaining(['handlePath', 'wristSpecific', 'elbowPath']),
+    });
+  });
+
+  it('keeps tracking-interruption protection with v2 PoseState metadata', () => {
+    const result = replayRecordingVerbose(
+      cablePushdownDefinition,
+      recordingWithV2PoseMetadata(buildInterruptedMidRepRecording()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
   });
 
   it('uses image-space motion when world landmarks are static', () => {
