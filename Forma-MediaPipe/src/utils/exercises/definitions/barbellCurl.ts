@@ -2696,19 +2696,24 @@ export function createBarbellCurlDefinition(
         }
       : null;
     const completedNewRep = newInternal.repCount > state.repCount;
-    const liveQualityWarnings = newInternal.repWindow
-      ? getBarbellCurlQualityWarnings(
-          buildBarbellCurlViewQuality(newInternal.repWindow, newInternal.viewAngle),
-          newInternal.viewAngle,
-        )
-      : completedNewRep
-        ? (lastRepResult?.qualityWarnings ?? [])
-        : [];
-    const liveAnalysisStatus = newInternal.repWindow
-      ? barbellCurlRepWindowAnalysisStatus(newInternal.repWindow, newInternal.viewAngle)
-      : completedNewRep && lastRepResult?.qualityWarnings?.length === 0
-        ? fullFeedbackCameraStatus('exercise')
-        : null;
+    const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
+    const liveQualityWarnings = updateLiveCameraAnalysis
+      ? newInternal.repWindow
+        ? getBarbellCurlQualityWarnings(
+            buildBarbellCurlViewQuality(newInternal.repWindow, newInternal.viewAngle),
+            newInternal.viewAngle,
+          )
+        : completedNewRep
+          ? (lastRepResult?.qualityWarnings ?? [])
+          : []
+      : (state.liveQualityWarnings ?? []);
+    const liveAnalysisStatus = updateLiveCameraAnalysis
+      ? newInternal.repWindow
+        ? barbellCurlRepWindowAnalysisStatus(newInternal.repWindow, newInternal.viewAngle)
+        : completedNewRep && lastRepResult?.qualityWarnings?.length === 0
+          ? fullFeedbackCameraStatus('exercise')
+          : null
+      : (state.liveAnalysisStatus ?? null);
 
     return {
       repCount: newInternal.repCount,

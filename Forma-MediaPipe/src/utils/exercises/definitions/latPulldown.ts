@@ -2261,21 +2261,26 @@ export function createLatPulldownDefinition(
       }
       : null;
     const completedNewRep = internal.repCount > state.repCount;
-    const liveQualityWarnings = internal.repWindow
-      ? latPulldownQualityWarnings(internal.repWindow)
-      : completedNewRep
-        ? (lastRepResult?.qualityWarnings ?? [])
-        : [];
-    const liveAnalysisStatus = internal.repWindow
-      ? latPulldownRepWindowAnalysisStatus(internal.repWindow, internal.activeSide)
-      : completedNewRep
-        ? cameraStatusFromViewCueGating({
-            viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
-            reliability: lastRepResult?.diagnostics?.reliability,
-            viewRequired: 'side',
-            source: 'exercise',
-          })
-        : latPulldownSetupAnalysisStatus(internal);
+    const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
+    const liveQualityWarnings = updateLiveCameraAnalysis
+      ? internal.repWindow
+        ? latPulldownQualityWarnings(internal.repWindow)
+        : completedNewRep
+          ? (lastRepResult?.qualityWarnings ?? [])
+          : []
+      : (state.liveQualityWarnings ?? []);
+    const liveAnalysisStatus = updateLiveCameraAnalysis
+      ? internal.repWindow
+        ? latPulldownRepWindowAnalysisStatus(internal.repWindow, internal.activeSide)
+        : completedNewRep
+          ? cameraStatusFromViewCueGating({
+              viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
+              reliability: lastRepResult?.diagnostics?.reliability,
+              viewRequired: 'side',
+              source: 'exercise',
+            })
+          : latPulldownSetupAnalysisStatus(internal)
+      : (state.liveAnalysisStatus ?? null);
 
     return {
       repCount: internal.repCount,

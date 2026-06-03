@@ -2375,25 +2375,30 @@ export function createLateralRaiseDefinition(
 	          scorable: internal.lastRepResult.scorable,
 	          qualityWarnings: internal.lastRepResult.qualityWarnings,
 	          diagnostics: internal.lastRepResult.diagnostics,
-	        }
+        }
       : null;
     const completedNewRep = internal.repCount > state.repCount;
-    const liveQualityWarnings = internal.repWindow
-      ? lateralRaiseQualityWarnings(internal.repWindow)
-      : completedNewRep
-        ? (lastRepResult?.qualityWarnings ?? [])
-        : [];
-    const liveAnalysisStatus = internal.repWindow
-      ? lateralRaiseRepWindowAnalysisStatus(internal.repWindow)
-      : completedNewRep
-        ? cameraStatusFromViewCueGating({
-            viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
-            reliability: lastRepResult?.diagnostics?.reliability,
-            viewRequired: 'front',
-            viewCurrent: lastRepResult?.diagnostics?.view,
-            source: 'exercise',
-          })
-        : lateralRaiseSetupAnalysisStatus(internal);
+    const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
+    const liveQualityWarnings = updateLiveCameraAnalysis
+      ? internal.repWindow
+        ? lateralRaiseQualityWarnings(internal.repWindow)
+        : completedNewRep
+          ? (lastRepResult?.qualityWarnings ?? [])
+          : []
+      : (state.liveQualityWarnings ?? []);
+    const liveAnalysisStatus = updateLiveCameraAnalysis
+      ? internal.repWindow
+        ? lateralRaiseRepWindowAnalysisStatus(internal.repWindow)
+        : completedNewRep
+          ? cameraStatusFromViewCueGating({
+              viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
+              reliability: lastRepResult?.diagnostics?.reliability,
+              viewRequired: 'front',
+              viewCurrent: lastRepResult?.diagnostics?.view,
+              source: 'exercise',
+            })
+          : lateralRaiseSetupAnalysisStatus(internal)
+      : (state.liveAnalysisStatus ?? null);
 
     return {
       repCount: internal.repCount,

@@ -58,6 +58,12 @@ export interface ExerciseFrameContext {
   trackingInterrupted?: boolean;
   reacquisitionFrameIndex?: number;
   poseState?: PoseState;
+  /**
+   * Status/readiness UI work is display-only. Live callers can set this false
+   * on ordinary analyzer frames so rep-counting FSMs keep their old hot-path
+   * cadence while the camera pill refreshes at a lower rate.
+   */
+  cameraAnalysisStatusRequested?: boolean;
 }
 
 // ============================================================================

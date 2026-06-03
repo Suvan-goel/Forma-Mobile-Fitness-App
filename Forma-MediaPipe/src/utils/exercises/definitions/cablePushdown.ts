@@ -2360,21 +2360,26 @@ export function createCablePushdownDefinition(
         }
         : null;
       const completedNewRep = newInternal.repCount > state.repCount;
-      const liveQualityWarnings = newInternal.repWindow
-        ? cablePushdownQualityWarnings(newInternal.repWindow)
-        : completedNewRep
-          ? (lastRepResult?.qualityWarnings ?? [])
-          : cablePushdownSetupQualityWarnings(newInternal);
-      const liveAnalysisStatus = newInternal.repWindow
-        ? cablePushdownRepWindowAnalysisStatus(newInternal.repWindow, newInternal.visibleSide)
-        : completedNewRep
-          ? cameraStatusFromViewCueGating({
-              viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
-              reliability: lastRepResult?.diagnostics?.reliability,
-              viewRequired: 'side',
-              source: 'exercise',
-            })
-          : cablePushdownSetupAnalysisStatus(newInternal);
+      const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
+      const liveQualityWarnings = updateLiveCameraAnalysis
+        ? newInternal.repWindow
+          ? cablePushdownQualityWarnings(newInternal.repWindow)
+          : completedNewRep
+            ? (lastRepResult?.qualityWarnings ?? [])
+            : cablePushdownSetupQualityWarnings(newInternal)
+        : (state.liveQualityWarnings ?? []);
+      const liveAnalysisStatus = updateLiveCameraAnalysis
+        ? newInternal.repWindow
+          ? cablePushdownRepWindowAnalysisStatus(newInternal.repWindow, newInternal.visibleSide)
+          : completedNewRep
+            ? cameraStatusFromViewCueGating({
+                viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
+                reliability: lastRepResult?.diagnostics?.reliability,
+                viewRequired: 'side',
+                source: 'exercise',
+              })
+            : cablePushdownSetupAnalysisStatus(newInternal)
+        : (state.liveAnalysisStatus ?? null);
 
       return {
         repCount: newInternal.repCount,

@@ -2018,21 +2018,26 @@ export function createCableRowDefinition(
       }
       : null;
     const completedNewRep = newInternal.repCount > state.repCount;
-    const liveQualityWarnings = newInternal.repWindow
-      ? cableRowQualityWarnings(newInternal.repWindow)
-      : completedNewRep
-        ? (lastRepResult?.qualityWarnings ?? [])
-        : cableRowSetupQualityWarnings(newInternal);
-    const liveAnalysisStatus = newInternal.repWindow
-      ? cableRowRepWindowAnalysisStatus(newInternal.repWindow, newInternal.visibleSide)
-      : completedNewRep
-        ? cameraStatusFromViewCueGating({
-            viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
-            reliability: lastRepResult?.diagnostics?.reliability,
-            viewRequired: 'side',
-            source: 'exercise',
-          })
-        : cableRowSetupAnalysisStatus(newInternal);
+    const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
+    const liveQualityWarnings = updateLiveCameraAnalysis
+      ? newInternal.repWindow
+        ? cableRowQualityWarnings(newInternal.repWindow)
+        : completedNewRep
+          ? (lastRepResult?.qualityWarnings ?? [])
+          : cableRowSetupQualityWarnings(newInternal)
+      : (state.liveQualityWarnings ?? []);
+    const liveAnalysisStatus = updateLiveCameraAnalysis
+      ? newInternal.repWindow
+        ? cableRowRepWindowAnalysisStatus(newInternal.repWindow, newInternal.visibleSide)
+        : completedNewRep
+          ? cameraStatusFromViewCueGating({
+              viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
+              reliability: lastRepResult?.diagnostics?.reliability,
+              viewRequired: 'side',
+              source: 'exercise',
+            })
+          : cableRowSetupAnalysisStatus(newInternal)
+      : (state.liveAnalysisStatus ?? null);
 
     return {
       repCount: newInternal.repCount,

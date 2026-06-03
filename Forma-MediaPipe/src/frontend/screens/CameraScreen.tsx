@@ -115,6 +115,8 @@ const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
 const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
 const TOP_PILL_WARNING_STABLE_FRAMES = 3;
 const TOP_PILL_WARNING_HOLD_MS = 1000;
+const CAMERA_ANALYSIS_STATUS_UPDATE_INTERVAL_MS = 250;
+const CAMERA_PERF_LOG_ANALYZED_INTERVAL = 300;
 const VALID_SUBJECT_INVALID_FRAME_THRESHOLD = 12;
 const POSE_PARSER_DIAGNOSTICS_DEV_FLAG = process.env.EXPO_PUBLIC_POSE_PARSER_DIAGNOSTICS === '1';
 const LANDMARK_RECORDING_DUMP_JSON_DEV_FLAG = process.env.EXPO_PUBLIC_LANDMARK_RECORDING_DUMP_JSON === '1';
@@ -237,6 +239,120 @@ function summarizeValidSubjectForStatusLog(subject: ValidHumanSubjectTrackingRes
     chainStatuses: subject.chainStatuses,
     boundingBox: subject.boundingBox,
   };
+}
+
+type CameraPerfAccumulator = {
+  frames: number;
+  analyzed: number;
+  skippedThrottle: number;
+  noPose: number;
+  exerciseUpdates: number;
+  statusUpdates: number;
+  parseMs: number;
+  poseStateMs: number;
+  validSubjectMs: number;
+  qualityMs: number;
+  exerciseMs: number;
+  statusMs: number;
+  totalMs: number;
+  frameIntervalMs: number;
+  frameIntervalSamples: number;
+  maxTotalMs: number;
+  totalSamples: number[];
+  lastAnalyzedAt?: number;
+  lastLoggedAnalyzed: number;
+};
+
+function createCameraPerfAccumulator(): CameraPerfAccumulator {
+  return {
+    frames: 0,
+    analyzed: 0,
+    skippedThrottle: 0,
+    noPose: 0,
+    exerciseUpdates: 0,
+    statusUpdates: 0,
+    parseMs: 0,
+    poseStateMs: 0,
+    validSubjectMs: 0,
+    qualityMs: 0,
+    exerciseMs: 0,
+    statusMs: 0,
+    totalMs: 0,
+    frameIntervalMs: 0,
+    frameIntervalSamples: 0,
+    maxTotalMs: 0,
+    totalSamples: [],
+    lastLoggedAnalyzed: 0,
+  };
+}
+
+function cameraPerfNow(): number {
+  return Date.now();
+}
+
+function formatPerfMs(value: number): string {
+  return value.toFixed(1);
+}
+
+function percentile(values: number[], pct: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * pct) - 1));
+  return sorted[index];
+}
+
+function recordCameraPerfFrame(
+  perf: CameraPerfAccumulator,
+  sample: {
+    timestampMs: number;
+    noPose?: boolean;
+    exerciseUpdate?: boolean;
+    statusUpdate?: boolean;
+    parseMs?: number;
+    poseStateMs?: number;
+    validSubjectMs?: number;
+    qualityMs?: number;
+    exerciseMs?: number;
+    statusMs?: number;
+    totalMs: number;
+  },
+): void {
+  perf.analyzed++;
+  if (sample.noPose) perf.noPose++;
+  if (sample.exerciseUpdate) perf.exerciseUpdates++;
+  if (sample.statusUpdate) perf.statusUpdates++;
+  perf.parseMs += sample.parseMs ?? 0;
+  perf.poseStateMs += sample.poseStateMs ?? 0;
+  perf.validSubjectMs += sample.validSubjectMs ?? 0;
+  perf.qualityMs += sample.qualityMs ?? 0;
+  perf.exerciseMs += sample.exerciseMs ?? 0;
+  perf.statusMs += sample.statusMs ?? 0;
+  perf.totalMs += sample.totalMs;
+  perf.maxTotalMs = Math.max(perf.maxTotalMs, sample.totalMs);
+  if (perf.lastAnalyzedAt !== undefined) {
+    perf.frameIntervalMs += Math.max(0, sample.timestampMs - perf.lastAnalyzedAt);
+    perf.frameIntervalSamples++;
+  }
+  perf.lastAnalyzedAt = sample.timestampMs;
+  perf.totalSamples.push(sample.totalMs);
+  if (perf.totalSamples.length > 600) perf.totalSamples.shift();
+}
+
+function logCameraPerfSummary(
+  perf: CameraPerfAccumulator,
+  reason: string,
+  force = false,
+): void {
+  if (!__DEV__ || perf.analyzed === 0) return;
+  if (!force && perf.analyzed - perf.lastLoggedAnalyzed < CAMERA_PERF_LOG_ANALYZED_INTERVAL) return;
+  perf.lastLoggedAnalyzed = perf.analyzed;
+  const analyzed = Math.max(1, perf.analyzed);
+  const avgFrameInterval = perf.frameIntervalSamples > 0
+    ? perf.frameIntervalMs / perf.frameIntervalSamples
+    : 0;
+  console.log(
+    `[CameraPerf] reason=${reason} frames=${perf.frames} analyzed=${perf.analyzed} skippedThrottle=${perf.skippedThrottle} noPose=${perf.noPose} exerciseUpdates=${perf.exerciseUpdates} statusUpdates=${perf.statusUpdates} avgTotalMs=${formatPerfMs(perf.totalMs / analyzed)} p95TotalMs=${formatPerfMs(percentile(perf.totalSamples, 0.95))} maxTotalMs=${formatPerfMs(perf.maxTotalMs)} avgParseMs=${formatPerfMs(perf.parseMs / analyzed)} avgPoseStateMs=${formatPerfMs(perf.poseStateMs / analyzed)} avgValidSubjectMs=${formatPerfMs(perf.validSubjectMs / analyzed)} avgQualityMs=${formatPerfMs(perf.qualityMs / analyzed)} avgExerciseMs=${formatPerfMs(perf.exerciseMs / analyzed)} avgStatusMs=${formatPerfMs(perf.statusMs / analyzed)} avgFrameIntervalMs=${formatPerfMs(avgFrameInterval)}`,
+  );
 }
 
 function resolveWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
@@ -555,6 +671,7 @@ export const CameraScreen: React.FC = () => {
   const currentExerciseRef = useRef(currentExercise);
   const lastDetectionTimeRef = useRef(0);
   const lastUIUpdateTimeRef = useRef(0);
+  const lastCameraAnalysisStatusUpdateTimeRef = useRef(0);
   const lastTTSFeedbackTimestampRef = useRef<number | null>(null);
   const setStartSpeechRef = useRef<SetStartSpeechReservation | null>(null);
   const pendingUIStateRef = useRef<PendingUIState | null>(null);
@@ -583,6 +700,8 @@ export const CameraScreen: React.FC = () => {
   });
   const topPillAnalysisStatusSmoothingRef = useRef<{ key: string; count: number }>({ key: 'none', count: 0 });
   const lastCameraAnalysisStatusLogKeyRef = useRef('none');
+  const cameraAnalysisStatusRef = useRef<CameraAnalysisStatus | null>(null);
+  const cameraPerfRef = useRef(createCameraPerfAccumulator());
 
   // Sync refs with state
   useEffect(() => {
@@ -644,6 +763,9 @@ export const CameraScreen: React.FC = () => {
     topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
     topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
     lastCameraAnalysisStatusLogKeyRef.current = 'none';
+    lastCameraAnalysisStatusUpdateTimeRef.current = 0;
+    cameraAnalysisStatusRef.current = null;
+    cameraPerfRef.current = createCameraPerfAccumulator();
     lastTTSFeedbackTimestampRef.current = null;
     poseQualityTrackerRef.current.reset();
     repQualityAccumulatorRef.current.reset();
@@ -790,42 +912,73 @@ export const CameraScreen: React.FC = () => {
     if (isPausedRef.current && !debugModeRef.current) return;
 
     const now = Date.now();
+    const perf = cameraPerfRef.current;
+    const perfEnabled = __DEV__;
+    if (perfEnabled) perf.frames++;
+    const handleStartMs = perfEnabled ? cameraPerfNow() : 0;
 
     // Throttle analysis (not every frame - reduces JS thread load)
     if (now - lastDetectionTimeRef.current < ANALYSIS_THROTTLE_MS) {
+      if (perfEnabled) {
+        perf.skippedThrottle++;
+        logCameraPerfSummary(perf, 'interval');
+      }
       return;
     }
     lastDetectionTimeRef.current = now;
 
+    let markMs = perfEnabled ? cameraPerfNow() : 0;
     const converted = convertLandmarksToKeypoints(data);
+    const parseMs = perfEnabled ? cameraPerfNow() - markMs : 0;
     if (!converted) return;
     if (poseParserDiagnosticsActiveRef.current) {
       poseParserDiagnosticsRef.current.observe(converted);
     }
     if (converted.keypoints.length === 0) {
+      markMs = perfEnabled ? cameraPerfNow() : 0;
       const poseState = buildPoseState(converted, {
         previousPoseState: previousPoseStateRef.current,
       });
+      const poseStateMs = perfEnabled ? cameraPerfNow() - markMs : 0;
       if (poseParserDiagnosticsActiveRef.current) {
         poseStateDiagnosticsRef.current.observe(poseState);
       }
       previousPoseStateRef.current = poseState;
+      if (perfEnabled) {
+        recordCameraPerfFrame(perf, {
+          timestampMs: converted.timestampMs ?? now,
+          noPose: true,
+          parseMs,
+          poseStateMs,
+          totalMs: cameraPerfNow() - handleStartMs,
+        });
+        logCameraPerfSummary(perf, 'interval');
+      }
       return;
     }
     const frameGap = poseFrameGapTrackerRef.current.observe(converted.timestampMs ?? now);
+    markMs = perfEnabled ? cameraPerfNow() : 0;
     const poseState = buildPoseState(converted, {
       ...frameGap,
       previousPoseState: previousPoseStateRef.current,
     });
+    const poseStateMs = perfEnabled ? cameraPerfNow() - markMs : 0;
     if (poseParserDiagnosticsActiveRef.current) {
       poseStateDiagnosticsRef.current.observe(poseState);
     }
     previousPoseStateRef.current = poseState;
     const { keypoints, worldKeypoints, imageKeypoints, primarySource } = converted;
+    const shouldUpdateCameraAnalysisStatus =
+      now - lastCameraAnalysisStatusUpdateTimeRef.current >= CAMERA_ANALYSIS_STATUS_UPDATE_INTERVAL_MS;
+    if (shouldUpdateCameraAnalysisStatus) {
+      lastCameraAnalysisStatusUpdateTimeRef.current = now;
+    }
+    markMs = perfEnabled ? cameraPerfNow() : 0;
     const validSubject = validHumanSubjectTrackerRef.current.update(evaluateValidHumanSubject({
       poseState,
       imageKeypoints,
     }));
+    const validSubjectMs = perfEnabled ? cameraPerfNow() - markMs : 0;
     const validSubjectStatus = cameraStatusFromValidSubject(validSubject);
     const frameContext: ExerciseFrameContext = {
       worldKeypoints,
@@ -833,6 +986,7 @@ export const CameraScreen: React.FC = () => {
       primarySource,
       timestampMs: converted.timestampMs,
       poseState,
+      cameraAnalysisStatusRequested: shouldUpdateCameraAnalysisStatus,
       ...frameGap,
     };
 
@@ -857,85 +1011,99 @@ export const CameraScreen: React.FC = () => {
     const exerciseDef = exerciseNameFromRoute ? ExerciseRegistry.get(exerciseNameFromRoute) : undefined;
     if (exerciseDef && exerciseStateRef.current) {
       const qualityProfile = resolveExerciseQualityProfile(exerciseDef);
+      markMs = perfEnabled ? cameraPerfNow() : 0;
       const quality = poseQualityTrackerRef.current.update(keypoints, qualityProfile, {
         frameBoundsKeypoints: imageKeypoints,
       });
+      const qualityMs = perfEnabled ? cameraPerfNow() - markMs : 0;
+      markMs = perfEnabled ? cameraPerfNow() : 0;
       const newState = exerciseDef.update(keypoints, exerciseStateRef.current, frameContext);
+      const exerciseMs = perfEnabled ? cameraPerfNow() - markMs : 0;
       newState.quality = quality;
       exerciseStateRef.current = newState;
 
       const repScore = newState.lastRepResult?.score ?? 0;
       const completedNewTrackedRep = newState.repCount > completedRepCountRef.current;
       const repQuality = repQualityAccumulatorRef.current.recordFrame(quality, newState);
-      const currentLiveWarnings = mergeTrackingWarnings(newState.liveQualityWarnings ?? []);
-      const liveWarningSet = new Set(currentLiveWarnings);
-      const smoothing = topPillWarningSmoothingRef.current;
-      const stableLiveWarnings = currentLiveWarnings.filter((warning) => {
-        const count = (smoothing[warning] ?? 0) + 1;
-        smoothing[warning] = Math.min(count, TOP_PILL_WARNING_STABLE_FRAMES);
-        return count >= TOP_PILL_WARNING_STABLE_FRAMES;
-      });
-      for (const warning of Object.keys(smoothing) as PoseQualityWarning[]) {
-        if (!liveWarningSet.has(warning)) {
-          delete smoothing[warning];
+      let displayedQuality = quality;
+      const shouldResolveCameraAnalysisStatus = shouldUpdateCameraAnalysisStatus || completedNewTrackedRep;
+      let selectedCameraAnalysisStatus = cameraAnalysisStatusRef.current;
+      let statusMs = 0;
+      if (shouldResolveCameraAnalysisStatus) {
+        markMs = perfEnabled ? cameraPerfNow() : 0;
+        const currentLiveWarnings = mergeTrackingWarnings(newState.liveQualityWarnings ?? []);
+        const liveWarningSet = new Set(currentLiveWarnings);
+        const smoothing = topPillWarningSmoothingRef.current;
+        const stableLiveWarnings = currentLiveWarnings.filter((warning) => {
+          const count = (smoothing[warning] ?? 0) + 1;
+          smoothing[warning] = Math.min(count, TOP_PILL_WARNING_STABLE_FRAMES);
+          return count >= TOP_PILL_WARNING_STABLE_FRAMES;
+        });
+        for (const warning of Object.keys(smoothing) as PoseQualityWarning[]) {
+          if (!liveWarningSet.has(warning)) {
+            delete smoothing[warning];
+          }
         }
-      }
-      const liveWarnings = mergeTrackingWarnings(
-        stableLiveWarnings,
-        completedNewTrackedRep ? (newState.lastRepResult?.qualityWarnings ?? []) : [],
-      );
-      let stableTopPillWarnings = liveWarnings;
-      if (liveWarnings.length > 0) {
-        topPillWarningHoldRef.current = { warnings: liveWarnings, updatedAt: now };
-      } else if (
-        topPillWarningHoldRef.current.warnings.length > 0 &&
-        now - topPillWarningHoldRef.current.updatedAt <= TOP_PILL_WARNING_HOLD_MS
-      ) {
-        stableTopPillWarnings = topPillWarningHoldRef.current.warnings;
-      } else {
-        topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
-      }
-      const rawExerciseStatus = newState.liveAnalysisStatus ?? null;
-      let stableExerciseStatus: CameraAnalysisStatus | null = null;
-      const rawExerciseStatusKey = cameraAnalysisStatusKey(rawExerciseStatus);
-      const statusSmoothing = topPillAnalysisStatusSmoothingRef.current;
-      if (rawExerciseStatus) {
-        if (statusSmoothing.key === rawExerciseStatusKey) {
-          statusSmoothing.count = Math.min(statusSmoothing.count + 1, TOP_PILL_WARNING_STABLE_FRAMES);
+        const liveWarnings = mergeTrackingWarnings(
+          stableLiveWarnings,
+          completedNewTrackedRep ? (newState.lastRepResult?.qualityWarnings ?? []) : [],
+        );
+        let stableTopPillWarnings = liveWarnings;
+        if (liveWarnings.length > 0) {
+          topPillWarningHoldRef.current = { warnings: liveWarnings, updatedAt: now };
+        } else if (
+          topPillWarningHoldRef.current.warnings.length > 0 &&
+          now - topPillWarningHoldRef.current.updatedAt <= TOP_PILL_WARNING_HOLD_MS
+        ) {
+          stableTopPillWarnings = topPillWarningHoldRef.current.warnings;
         } else {
-          statusSmoothing.key = rawExerciseStatusKey;
-          statusSmoothing.count = 1;
+          topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
         }
-        if (statusSmoothing.count >= TOP_PILL_WARNING_STABLE_FRAMES) {
-          stableExerciseStatus = rawExerciseStatus;
+        const rawExerciseStatus = newState.liveAnalysisStatus ?? null;
+        let stableExerciseStatus: CameraAnalysisStatus | null = null;
+        const rawExerciseStatusKey = cameraAnalysisStatusKey(rawExerciseStatus);
+        const statusSmoothing = topPillAnalysisStatusSmoothingRef.current;
+        if (rawExerciseStatus) {
+          if (statusSmoothing.key === rawExerciseStatusKey) {
+            statusSmoothing.count = Math.min(statusSmoothing.count + 1, TOP_PILL_WARNING_STABLE_FRAMES);
+          } else {
+            statusSmoothing.key = rawExerciseStatusKey;
+            statusSmoothing.count = 1;
+          }
+          if (statusSmoothing.count >= TOP_PILL_WARNING_STABLE_FRAMES) {
+            stableExerciseStatus = rawExerciseStatus;
+          }
+        } else {
+          statusSmoothing.key = 'none';
+          statusSmoothing.count = 0;
         }
-      } else {
-        statusSmoothing.key = 'none';
-        statusSmoothing.count = 0;
+        if (stableExerciseStatus) {
+          topPillAnalysisStatusHoldRef.current = { status: stableExerciseStatus, updatedAt: now };
+        } else if (
+          topPillAnalysisStatusHoldRef.current.status &&
+          now - topPillAnalysisStatusHoldRef.current.updatedAt <= TOP_PILL_WARNING_HOLD_MS
+        ) {
+          stableExerciseStatus = topPillAnalysisStatusHoldRef.current.status;
+        } else {
+          topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
+        }
+        displayedQuality = buildDisplayedPoseQuality(quality, stableTopPillWarnings);
+        const cameraStatusResolution = resolveCameraAnalysisStatus({
+          poseQuality: quality,
+          exerciseWarnings: stableTopPillWarnings,
+          exerciseStatus: stableExerciseStatus,
+          poseStateStatus: validSubjectStatus,
+        });
+        selectedCameraAnalysisStatus = cameraStatusResolution.selected;
+        cameraAnalysisStatusRef.current = selectedCameraAnalysisStatus;
+        logCameraAnalysisStatusResolution(cameraStatusResolution, {
+          poseQuality: quality,
+          exerciseStatus: stableExerciseStatus,
+          poseState,
+          validSubject,
+        });
+        statusMs = perfEnabled ? cameraPerfNow() - markMs : 0;
       }
-      if (stableExerciseStatus) {
-        topPillAnalysisStatusHoldRef.current = { status: stableExerciseStatus, updatedAt: now };
-      } else if (
-        topPillAnalysisStatusHoldRef.current.status &&
-        now - topPillAnalysisStatusHoldRef.current.updatedAt <= TOP_PILL_WARNING_HOLD_MS
-      ) {
-        stableExerciseStatus = topPillAnalysisStatusHoldRef.current.status;
-      } else {
-        topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
-      }
-      const displayedQuality = buildDisplayedPoseQuality(quality, stableTopPillWarnings);
-      const cameraStatusResolution = resolveCameraAnalysisStatus({
-        poseQuality: quality,
-        exerciseWarnings: stableTopPillWarnings,
-        exerciseStatus: stableExerciseStatus,
-        poseStateStatus: validSubjectStatus,
-      });
-      logCameraAnalysisStatusResolution(cameraStatusResolution, {
-        poseQuality: quality,
-        exerciseStatus: stableExerciseStatus,
-        poseState,
-        validSubject,
-      });
 
       // Accumulate UI updates — don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
@@ -943,7 +1111,9 @@ export const CameraScreen: React.FC = () => {
       pending.feedback = newState.feedback;
       pending.exerciseDebug = newState.debugInfo;
       pending.quality = displayedQuality;
-      pending.analysisStatus = cameraStatusResolution.selected;
+      if (shouldResolveCameraAnalysisStatus) {
+        pending.analysisStatus = selectedCameraAnalysisStatus;
+      }
 
       const feedbackTimestamp = newState.feedbackTimestamp;
 
@@ -1051,6 +1221,21 @@ export const CameraScreen: React.FC = () => {
         lastUIUpdateTimeRef.current = now;
         flushPendingUI();
       }
+      if (perfEnabled) {
+        recordCameraPerfFrame(perf, {
+          timestampMs: converted.timestampMs ?? now,
+          exerciseUpdate: true,
+          statusUpdate: shouldResolveCameraAnalysisStatus,
+          parseMs,
+          poseStateMs,
+          validSubjectMs,
+          qualityMs,
+          exerciseMs,
+          statusMs,
+          totalMs: cameraPerfNow() - handleStartMs,
+        });
+        logCameraPerfSummary(perf, 'interval');
+      }
     } else if (!exerciseDef) {
       // Generic exercise detection - also throttled
       const detection = detectExercise(keypoints);
@@ -1148,6 +1333,9 @@ export const CameraScreen: React.FC = () => {
       const repFeedback = accumulatedRepFeedbackRef.current;
       const repQualities = accumulatedRepQualitiesRef.current;
       const trackingQualitySummary = summarizeSetTrackingQuality(repQualities);
+      if (__DEV__) {
+        logCameraPerfSummary(cameraPerfRef.current, 'set-stop', true);
+      }
 
       setIsRecording(false);
       setExerciseDebug(null);
@@ -1370,11 +1558,14 @@ export const CameraScreen: React.FC = () => {
       validHumanSubjectTrackerRef.current.reset();
       setTrackingQuality(null);
       setCameraAnalysisStatus(null);
+      cameraAnalysisStatusRef.current = null;
       topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
       topPillWarningSmoothingRef.current = {};
       topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
       topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
       lastCameraAnalysisStatusLogKeyRef.current = 'none';
+      lastCameraAnalysisStatusUpdateTimeRef.current = 0;
+      cameraPerfRef.current = createCameraPerfAccumulator();
       poseFrameGapTrackerRef.current.reset();
       ttsResetCoach();
       playReservedSetStartCue();
