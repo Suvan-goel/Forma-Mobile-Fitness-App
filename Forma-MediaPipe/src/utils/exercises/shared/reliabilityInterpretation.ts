@@ -117,7 +117,20 @@ const EXERCISE_RELIABILITY_PROFILES: Record<string, ExerciseReliabilityProfile> 
   machineabcrunches: {
     exerciseName: 'Machine Ab Crunches',
     relevantChains: ['torso'],
-    focusJoints: ['left_shoulder', 'right_shoulder', 'left_hip', 'right_hip', 'left_knee', 'right_knee'],
+    focusJoints: [
+      'left_shoulder',
+      'right_shoulder',
+      'left_hip',
+      'right_hip',
+      'left_knee',
+      'right_knee',
+      'left_ear',
+      'right_ear',
+      'left_elbow',
+      'right_elbow',
+      'left_wrist',
+      'right_wrist',
+    ],
   },
   pushup: {
     exerciseName: 'Push-Up',
@@ -285,8 +298,14 @@ const EXERCISE_INTERPRETATION_PROFILES: Record<string, ExerciseReliabilityInterp
     fullScoreChains: ['torso'],
     cueFamilies: [
       { family: 'repCount', requiredChains: ['torso'] },
-      { family: 'torsoFlexion', requiredChains: ['torso'] },
-      { family: 'hipAngle', requiredChains: ['torso'] },
+      { family: 'tempo', requiredChains: ['torso'] },
+      { family: 'torsoCrunchPath', requiredChains: ['torso'] },
+      { family: 'hipAngleRange', requiredChains: ['torso'] },
+      { family: 'kneeSupport', requiredChains: ['torso'] },
+      { family: 'shoulderHipAlignment', requiredChains: ['torso'] },
+      { family: 'setupPosture', requiredChains: ['torso'] },
+      { family: 'auxiliaryArmCue', anyOfChains: ['leftArm', 'rightArm'] },
+      { family: 'neckPosition', requiredChains: ['torso'] },
     ],
   },
   pushup: {

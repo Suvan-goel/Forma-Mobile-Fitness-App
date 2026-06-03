@@ -323,6 +323,52 @@ function hideSide(recording: LandmarkRecording, side: 'left' | 'right'): Landmar
   };
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 describe('Machine Ab Crunch synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -340,6 +386,164 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
       expect(result.reps[0].diagnostics?.metrics.sideViewMinConfidence.value).not.toBeNull();
     },
   );
+
+  it('keeps clean v2 PoseState machine ab crunches fully scoreable', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean full-reliability v2 machine ab crunch', fullRepPath()),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['torso', 'leftArm', 'rightArm']),
+      weakChains: [],
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'torsoCrunchPath',
+        'hipAngleRange',
+        'kneeSupport',
+        'shoulderHipAlignment',
+        'setupPosture',
+        'auxiliaryArmCue',
+        'neckPosition',
+      ]),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps weak non-critical arm and wrist joints countable and scoreable', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic weak arms v2 machine ab crunch', fullRepPath()),
+        {
+          lowVisibilityJoints: new Set([
+            'left_elbow',
+            'left_wrist',
+            'right_elbow',
+            'right_wrist',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['torso']),
+      weakChains: expect.arrayContaining(['leftArm', 'rightArm']),
+      safeCueFamilies: expect.arrayContaining(['repCount', 'tempo', 'torsoCrunchPath', 'hipAngleRange']),
+      unsafeCueFamilies: expect.arrayContaining(['auxiliaryArmCue']),
+      suppressedIssueIds: expect.arrayContaining(['machine-ab-crunches.arm_pull']),
+    });
+  });
+
+  it('suppresses weak selected hip-angle cue families while preserving count in v2 replay', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic weak selected knee v2 machine ab crunch', incompleteReturnPath(), {
+          hipShift: index => index >= 24 && index <= 70,
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_knee']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).not.toContain('Extend fully — return to the upright position.');
+    expect(result.reps[0].messages).not.toContain('Keep your hips planted — flex from your waist.');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'maybe',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['torso', 'leftArm', 'rightArm']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'torsoCrunchPath',
+        'hipAngleRange',
+        'kneeSupport',
+        'shoulderHipAlignment',
+        'setupPosture',
+      ]),
+      suppressedIssueIds: expect.arrayContaining([
+        'machine-ab-crunches.lockout_short',
+        'machine-ab-crunches.hips_moving',
+      ]),
+    });
+    expect(diagnostics.cues['machine-ab-crunches.lockout_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_torsoCrunchPath',
+    });
+    expect(diagnostics.cues['machine-ab-crunches.hips_moving']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_setupPosture',
+    });
+  });
+
+  it('counts but marks a weak selected torso signal partially or not scoreable', () => {
+    const result = replayRecording(
+      machineAbCrunchDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic weak selected torso v2 machine ab crunch', fullRepPath()),
+        {
+          lowVisibilityJoints: new Set([
+            'left_shoulder',
+            'left_hip',
+            'left_knee',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(['partiallyScoreable', 'notScoreable']).toContain(
+      diagnostics.reliability?.scoreabilityCandidate,
+    );
+    expect(diagnostics.reliability).toMatchObject({
+      weakChains: expect.arrayContaining(['torso']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'torsoCrunchPath',
+        'hipAngleRange',
+        'kneeSupport',
+        'shoulderHipAlignment',
+        'setupPosture',
+      ]),
+    });
+  });
+
+  it('keeps tracking-interruption protection with v2 PoseState metadata', () => {
+    const result = replayRecordingVerbose(
+      machineAbCrunchDefinition,
+      recordingWithV2PoseMetadata(buildInterruptedMidRepRecording()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
 
   it('counts one-side-visible movement but marks side-view form unscorable', () => {
     const result = replayRecording(

@@ -35,6 +35,11 @@ import {
   diagnosticCue,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/machineAbCrunch.json';
 
 import type {
@@ -45,6 +50,7 @@ import type {
   RepDiagnostics,
   RepResult as FrameworkRepResult,
 } from '../types';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -140,6 +146,52 @@ const FEEDBACK = {
   ARM_PULL: 'Use your abs, not your arms — keep the handles light.',
   HIPS_MOVING: 'Keep your hips planted — flex from your waist.',
 } as const;
+
+const MACHINE_AB_CRUNCH_RELIABILITY_JOINTS = [
+  'left_shoulder',
+  'right_shoulder',
+  'left_hip',
+  'right_hip',
+  'left_knee',
+  'right_knee',
+  'left_ear',
+  'right_ear',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+];
+
+const MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES = [
+  'torsoCrunchPath',
+  'hipAngleRange',
+  'kneeSupport',
+  'shoulderHipAlignment',
+];
+
+const MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES: Record<string, string[]> = {
+  'machine-ab-crunches.depth_short': MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES,
+  'machine-ab-crunches.lockout_short': MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES,
+  'machine-ab-crunches.neck_forward': ['setupPosture', 'shoulderHipAlignment', 'neckPosition'],
+  'machine-ab-crunches.side_view_uncertain': [],
+  'machine-ab-crunches.tempo_down': ['tempo'],
+  'machine-ab-crunches.tempo_up': ['tempo'],
+  'machine-ab-crunches.tempo_jerk': ['tempo'],
+  'machine-ab-crunches.arm_pull': ['auxiliaryArmCue'],
+  'machine-ab-crunches.hips_moving': ['setupPosture', 'kneeSupport', 'shoulderHipAlignment'],
+};
+
+const MACHINE_AB_CRUNCH_MESSAGE_CUE_FAMILIES: Record<string, string[]> = {
+  [FEEDBACK.DEPTH_SHORT]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.depth_short'],
+  [FEEDBACK.LOCKOUT_SHORT]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.lockout_short'],
+  [FEEDBACK.NECK_FORWARD]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.neck_forward'],
+  [FEEDBACK.TEMPO_DOWN]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.tempo_down'],
+  [FEEDBACK.TEMPO_UP]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.tempo_up'],
+  [FEEDBACK.SIDE_VIEW]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.side_view_uncertain'],
+  [FEEDBACK.TEMPO_JERK]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.tempo_jerk'],
+  [FEEDBACK.ARM_PULL]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.arm_pull'],
+  [FEEDBACK.HIPS_MOVING]: MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES['machine-ab-crunches.hips_moving'],
+};
 
 const DEFAULT_MACHINE_AB_CRUNCH_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -264,6 +316,7 @@ interface RepWindow {
   maxHipShiftRatio: number;
   hipShiftSamples: number;
   hipShiftRatioSamples: number[];
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
 }
 
 interface RepResult {
@@ -439,6 +492,7 @@ function initRepWindow(tStart: number, selectedSide: AbCrunchSide, startExtensio
     maxHipShiftRatio: 0,
     hipShiftSamples: 0,
     hipShiftRatioSamples: [],
+    reliability: createPoseStateReliabilityAggregator(),
   };
 }
 
@@ -794,34 +848,289 @@ function diagnosticsViewFor(viewQuality: NonNullable<RepDiagnostics['viewQuality
   return 'unknown';
 }
 
-function computeAbCrunchScore(repWindow: RepWindow): number {
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function cueFamiliesAllowed(
+  allowedCueFamilies: ReadonlySet<string> | undefined,
+  families: string[],
+): boolean {
+  return families.every(family => cueFamilyAllowed(allowedCueFamilies, family));
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function removeCueFamilies(source: string[], families: Iterable<string>): string[] {
+  const familySet = new Set(families);
+  return source.filter(family => !familySet.has(family));
+}
+
+function jointUnreliableRate(summary: PoseStateReliabilitySummary, jointName: string): number {
+  return (summary.unreliableJointCounts[jointName] ?? 0) / Math.max(1, summary.totalFrames);
+}
+
+function sideJointReliable(summary: PoseStateReliabilitySummary, side: AbCrunchSide, jointName: string): boolean {
+  return summary.totalFrames > 0 && jointUnreliableRate(summary, `${side}_${jointName}`) < 0.25;
+}
+
+function selectedHipAngleReliable(summary: PoseStateReliabilitySummary, side: AbCrunchSide): boolean {
+  return (
+    sideJointReliable(summary, side, 'shoulder') &&
+    sideJointReliable(summary, side, 'hip') &&
+    sideJointReliable(summary, side, 'knee')
+  );
+}
+
+function selectedAuxiliaryArmReliable(summary: PoseStateReliabilitySummary, side: AbCrunchSide): boolean {
+  return (
+    sideJointReliable(summary, side, 'elbow') &&
+    sideJointReliable(summary, side, 'wrist')
+  );
+}
+
+function selectedNeckReliable(summary: PoseStateReliabilitySummary, side: AbCrunchSide): boolean {
+  return sideJointReliable(summary, side, 'ear');
+}
+
+interface AbCrunchReliabilityResult {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+  selectedHipAngleReliable: boolean;
+}
+
+function reliabilityInterpretationForRepWindow(repWindow: RepWindow): AbCrunchReliabilityResult | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+
+  const baseInterpretation = interpretPoseStateReliabilitySummary('Machine Ab Crunches', summary);
+  const hipAngleReliable = selectedHipAngleReliable(summary, repWindow.selectedSide);
+  const auxArmReliable = selectedAuxiliaryArmReliable(summary, repWindow.selectedSide);
+  const neckReliable = selectedNeckReliable(summary, repWindow.selectedSide);
+
+  let countabilityCandidate = baseInterpretation.countabilityCandidate;
+  let scoreabilityCandidate = baseInterpretation.scoreabilityCandidate;
+  let safeCueFamilies = [...baseInterpretation.safeCueFamilies];
+  let unsafeCueFamilies = [...baseInterpretation.unsafeCueFamilies];
+  const reasons = [...baseInterpretation.reasons];
+
+  if (hipAngleReliable) {
+    safeCueFamilies = uniqueStrings([...safeCueFamilies, ...MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES]);
+    unsafeCueFamilies = removeCueFamilies(unsafeCueFamilies, MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES);
+  } else {
+    const unsafeFamilies = [
+      'repCount',
+      'tempo',
+      ...MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES,
+      'setupPosture',
+    ];
+    safeCueFamilies = removeCueFamilies(safeCueFamilies, unsafeFamilies);
+    unsafeCueFamilies = uniqueStrings([...unsafeCueFamilies, ...unsafeFamilies]);
+    countabilityCandidate = countabilityCandidate === 'countable' ? 'maybe' : countabilityCandidate;
+    scoreabilityCandidate = scoreabilityCandidate === 'fullyScoreable'
+      ? 'partiallyScoreable'
+      : scoreabilityCandidate;
+    reasons.push(`${repWindow.selectedSide}_hip_angle_signal_weak`, 'hip_angle_cue_families_unsafe');
+  }
+
+  if (auxArmReliable) {
+    safeCueFamilies = uniqueStrings([...safeCueFamilies, 'auxiliaryArmCue']);
+    unsafeCueFamilies = removeCueFamilies(unsafeCueFamilies, ['auxiliaryArmCue']);
+  } else {
+    safeCueFamilies = removeCueFamilies(safeCueFamilies, ['auxiliaryArmCue']);
+    unsafeCueFamilies = uniqueStrings([...unsafeCueFamilies, 'auxiliaryArmCue']);
+    scoreabilityCandidate = scoreabilityCandidate === 'fullyScoreable'
+      ? 'partiallyScoreable'
+      : scoreabilityCandidate;
+    reasons.push(`${repWindow.selectedSide}_auxiliary_arm_weak`);
+  }
+
+  if (neckReliable) {
+    safeCueFamilies = uniqueStrings([...safeCueFamilies, 'neckPosition']);
+    unsafeCueFamilies = removeCueFamilies(unsafeCueFamilies, ['neckPosition']);
+  } else {
+    safeCueFamilies = removeCueFamilies(safeCueFamilies, ['neckPosition']);
+    unsafeCueFamilies = uniqueStrings([...unsafeCueFamilies, 'neckPosition']);
+    scoreabilityCandidate = scoreabilityCandidate === 'fullyScoreable'
+      ? 'partiallyScoreable'
+      : scoreabilityCandidate;
+    reasons.push(`${repWindow.selectedSide}_ear_weak`);
+  }
+
+  return {
+    summary,
+    selectedHipAngleReliable: hipAngleReliable,
+    interpretation: {
+      ...baseInterpretation,
+      countabilityCandidate,
+      scoreabilityCandidate,
+      safeCueFamilies: uniqueStrings(safeCueFamilies),
+      unsafeCueFamilies: uniqueStrings(unsafeCueFamilies),
+      reasons: uniqueStrings(reasons),
+    },
+  };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function reliabilityAllowsScoring(reliability: AbCrunchReliabilityResult | null): boolean {
+  if (!reliability) return true;
+  return (
+    reliability.interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    reliability.interpretation.usableChains.includes('torso') &&
+    reliability.selectedHipAngleReliable
+  );
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const families = MACHINE_AB_CRUNCH_MESSAGE_CUE_FAMILIES[message] ?? [];
+    return families.every(family => !unsafeFamilies.has(family));
+  });
+}
+
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const families = MACHINE_AB_CRUNCH_ISSUE_CUE_FAMILIES[issueId] ?? [];
+      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
+      if (unsafeFamily) {
+        suppressedIssueIds.push(issueId);
+        for (const family of families) {
+          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
+        }
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${unsafeFamily}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogMachineAbCrunchReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logMachineAbCrunchRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogMachineAbCrunchReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[MachineAbCrunchReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
+function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
+  return MACHINE_AB_CRUNCH_RELIABILITY_JOINTS.some((jointName) => {
+    const joint = poseState.joints[jointName];
+    return (
+      joint &&
+      (
+        joint.presence !== null ||
+        joint.reasons.includes('presence_unknown') ||
+        joint.reasons.includes('visibility_unknown')
+      )
+    );
+  });
+}
+
+function observeMachineAbCrunchPoseState(
+  repWindow: RepWindow,
+  frameContext: ExerciseFrameContext | undefined,
+): void {
+  const poseState = frameContext?.poseState;
+  if (!poseState || !poseStateHasRichReliabilityMetadata(poseState)) return;
+  repWindow.reliability.observe(poseState);
+}
+
+function computeAbCrunchScore(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
-  const crunchShortfall = Math.max(0, repWindow.crunchDepthAngle - SCORE_TARGETS.CRUNCH_IDEAL);
-  penalties.push({ value: crunchShortfall, config: PENALTY_CONFIGS.CRUNCH_ROM });
+  if (cueFamiliesAllowed(allowedCueFamilies, MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES)) {
+    const crunchShortfall = Math.max(0, repWindow.crunchDepthAngle - SCORE_TARGETS.CRUNCH_IDEAL);
+    penalties.push({ value: crunchShortfall, config: PENALTY_CONFIGS.CRUNCH_ROM });
+  }
 
-  const extensionShortfall = Math.max(0, SCORE_TARGETS.EXTENSION_IDEAL - returnExtensionAngle(repWindow));
-  penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  if (cueFamiliesAllowed(allowedCueFamilies, MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES)) {
+    const extensionShortfall = Math.max(0, SCORE_TARGETS.EXTENSION_IDEAL - returnExtensionAngle(repWindow));
+    penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  }
 
   const neckForward = neckForwardCueValue(repWindow);
-  if (neckForward !== null) {
+  if (
+    neckForward !== null &&
+    cueFamiliesAllowed(allowedCueFamilies, ['setupPosture', 'shoulderHipAlignment', 'neckPosition'])
+  ) {
     penalties.push({ value: neckForward, config: PENALTY_CONFIGS.NECK_FORWARD });
   }
 
   const spikeRatio = velocitySpikeRatio(repWindow);
-  if (spikeRatio !== null) {
+  if (spikeRatio !== null && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     penalties.push({ value: spikeRatio, config: PENALTY_CONFIGS.TEMPO_JERK });
   }
   const armPull = armPullCueValue(repWindow);
-  if (armPull !== null) {
+  if (armPull !== null && cueFamilyAllowed(allowedCueFamilies, 'auxiliaryArmCue')) {
     penalties.push({ value: armPull, config: PENALTY_CONFIGS.ARM_PULL });
   }
   const hipShift = hipShiftCueValue(repWindow);
-  if (hipShift !== null) {
+  if (hipShift !== null && cueFamiliesAllowed(allowedCueFamilies, ['setupPosture', 'kneeSupport', 'shoulderHipAlignment'])) {
     penalties.push({ value: hipShift, config: PENALTY_CONFIGS.HIP_SHIFT });
   }
 
-  if (repWindow.tBottom !== null) {
+  if (repWindow.tBottom !== null && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     const tCrunch = repWindow.tBottom - repWindow.tStart;
     const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tBottom);
 
@@ -842,20 +1151,33 @@ function generateUnscorableMessages(repWindow: RepWindow): string[] {
   return !sideViewIsScorable(repWindow) ? [FEEDBACK.SIDE_VIEW] : [];
 }
 
-function generateFormMessages(repWindow: RepWindow): string[] {
+function generateFormMessages(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): string[] {
   const messages: string[] = [];
-  if (repWindow.crunchDepthAngle > FORM_THRESHOLDS.CRUNCH_ROM_FAIL) {
+  if (
+    repWindow.crunchDepthAngle > FORM_THRESHOLDS.CRUNCH_ROM_FAIL &&
+    cueFamiliesAllowed(allowedCueFamilies, MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES)
+  ) {
     messages.push(FEEDBACK.DEPTH_SHORT);
   }
-  if (returnExtensionAngle(repWindow) < FORM_THRESHOLDS.EXTENSION_ROM_FAIL) {
+  if (
+    returnExtensionAngle(repWindow) < FORM_THRESHOLDS.EXTENSION_ROM_FAIL &&
+    cueFamiliesAllowed(allowedCueFamilies, MACHINE_AB_CRUNCH_HIP_ANGLE_CUE_FAMILIES)
+  ) {
     messages.push(FEEDBACK.LOCKOUT_SHORT);
   }
   const neckForward = neckForwardCueValue(repWindow);
-  if (neckForward !== null && neckForward > FORM_THRESHOLDS.NECK_FORWARD_WARN) {
+  if (
+    neckForward !== null &&
+    neckForward > FORM_THRESHOLDS.NECK_FORWARD_WARN &&
+    cueFamiliesAllowed(allowedCueFamilies, ['setupPosture', 'shoulderHipAlignment', 'neckPosition'])
+  ) {
     messages.push(FEEDBACK.NECK_FORWARD);
   }
 
-  if (repWindow.tBottom !== null) {
+  if (repWindow.tBottom !== null && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     const tCrunch = repWindow.tBottom - repWindow.tStart;
     const tReturn = repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tBottom);
 
@@ -867,15 +1189,19 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     }
   }
 
-  if (tempoJerkTriggered(repWindow)) {
+  if (tempoJerkTriggered(repWindow) && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     messages.push(FEEDBACK.TEMPO_JERK);
   }
   const armPull = armPullCueValue(repWindow);
-  if (armPull !== null && armPull > FORM_THRESHOLDS.ARM_PULL_WARN) {
+  if (armPull !== null && armPull > FORM_THRESHOLDS.ARM_PULL_WARN && cueFamilyAllowed(allowedCueFamilies, 'auxiliaryArmCue')) {
     messages.push(FEEDBACK.ARM_PULL);
   }
   const hipShift = hipShiftCueValue(repWindow);
-  if (hipShift !== null && hipShift > FORM_THRESHOLDS.HIP_SHIFT_WARN) {
+  if (
+    hipShift !== null &&
+    hipShift > FORM_THRESHOLDS.HIP_SHIFT_WARN &&
+    cueFamiliesAllowed(allowedCueFamilies, ['setupPosture', 'kneeSupport', 'shoulderHipAlignment'])
+  ) {
     messages.push(FEEDBACK.HIPS_MOVING);
   }
 
@@ -885,7 +1211,8 @@ function generateFormMessages(repWindow: RepWindow): string[] {
 function buildAbCrunchDiagnostics(
   repWindow: RepWindow,
   repIndex: number,
-): FrameworkRepResult['diagnostics'] {
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const hasTempo = repWindow.tBottom !== null;
   const tCrunch = repWindow.tBottom !== null ? repWindow.tBottom - repWindow.tStart : null;
   const tReturn = repWindow.tBottom !== null ? repWindow.tEnd - (repWindow.tReturnStart ?? repWindow.tBottom) : null;
@@ -915,7 +1242,7 @@ function buildAbCrunchDiagnostics(
     repIndex,
     view: diagnosticsViewFor(viewQuality),
     selectedSide: repWindow.selectedSide,
-    scorable: isAbCrunchRepScorable(repWindow),
+    scorable,
     viewQuality,
     metrics: [
       diagnosticMetric('startExtensionAngle', repWindow.startExtensionAngle, { unit: 'degrees' }),
@@ -1150,17 +1477,29 @@ function buildAbCrunchDiagnostics(
 }
 
 function buildAbCrunchRepResult(repWindow: RepWindow, repIndex: number): RepResult {
-  const scorable = isAbCrunchRepScorable(repWindow);
-  const score = scorable ? computeAbCrunchScore(repWindow) : 0;
-  const messages = scorable ? generateFormMessages(repWindow) : generateUnscorableMessages(repWindow);
+  const reliability = reliabilityInterpretationForRepWindow(repWindow);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const qualityScorable = isAbCrunchRepScorable(repWindow);
+  const scorable = qualityScorable && reliabilityAllowsScoring(reliability);
+  const score = scorable ? computeAbCrunchScore(repWindow, allowedCueFamilies) : 0;
+  const messages = qualityScorable
+    ? suppressUnsafeReliabilityMessages(generateFormMessages(repWindow, allowedCueFamilies), reliabilityInterpretation)
+    : generateUnscorableMessages(repWindow);
   const qualityWarnings = abCrunchQualityWarnings(repWindow);
+  const diagnostics = applyReliabilityCueGating(
+    buildAbCrunchDiagnostics(repWindow, repIndex, scorable),
+    reliabilityInterpretation,
+    scorable,
+  );
+  logMachineAbCrunchRepReliability(repIndex, reliabilityInterpretation, diagnostics);
   return {
     repIndex,
     score,
     messages,
     scorable,
     qualityWarnings,
-    diagnostics: buildAbCrunchDiagnostics(repWindow, repIndex),
+    diagnostics,
   };
 }
 
@@ -1387,6 +1726,7 @@ function updateAbCrunchState(
   const rawHipSample = computeHipAngleSample(analysisKeypoints, preferredSide, allowSideFallback);
   if (rawHipSample === null) {
     if (state.repWindow) {
+      observeMachineAbCrunchPoseState(state.repWindow, frameContext);
       markRepWindowLowConfidence(state.repWindow, 0, sideViewConfidence);
     }
     return state;
@@ -1394,6 +1734,7 @@ function updateAbCrunchState(
 
   if (rawHipSample.confidence < THRESHOLDS.PRIMARY_CONFIDENCE_MIN) {
     if (state.repWindow) {
+      observeMachineAbCrunchPoseState(state.repWindow, frameContext);
       markRepWindowLowConfidence(state.repWindow, rawHipSample.confidence, sideViewConfidence);
     }
     if (state.feedback && t - state.lastFeedbackTime > 2.0) state.feedback = null;
@@ -1452,6 +1793,7 @@ function updateAbCrunchState(
   const inRep = state.phase !== 'REST';
   const trackingPartialInRest = state.phase === 'REST' && prevPhase === 'REST';
   if (state.repWindow && (inRep || trackingPartialInRest)) {
+    observeMachineAbCrunchPoseState(state.repWindow, frameContext);
     updateRepWindowMetrics(
       state.repWindow,
       analysisKeypoints,
