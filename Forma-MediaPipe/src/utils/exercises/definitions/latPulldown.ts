@@ -1572,6 +1572,9 @@ function buildLatPulldownRepResult(
   const reliabilityInterpretation = reliability?.interpretation ?? null;
   const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
   const scorable = repScorableWithReliability(repWindow, reliabilityInterpretation, activeSide);
+  // ScoreabilityCandidate controls reliability safety; final scorable also
+  // includes the exercise view gate. Keep the historical score calculation for
+  // diagnostics even if the view gate later marks the rep unscorable.
   const score = reliabilityAllowsScoring(reliabilityInterpretation, activeSide)
     ? computeLatPulldownScore(repWindow, allowedCueFamilies)
     : 0;

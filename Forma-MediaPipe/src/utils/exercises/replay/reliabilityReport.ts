@@ -298,6 +298,10 @@ export function parsedPoseFrameFromRecordingFrame(
   const metadataMode = options.metadataMode
     ?? (options.schemaVersion === 2 && frame.poseMetadata ? 'v2RichMetadata' : 'legacyApproximate');
   if (metadataMode !== 'v2RichMetadata' || !frame.poseMetadata) {
+    // Prefer v2 poseMetadata for reliability gating. Legacy/v1 recordings only
+    // carry Keypoint.score, so their PoseState is approximate; older exercises
+    // still accept it for replay compatibility, while newer exercises may guard
+    // on rich metadata before trusting reliability-sensitive cue gates.
     return parsedPoseFrameFromLegacyRecordingFrame(frame);
   }
 

@@ -1080,6 +1080,7 @@ describe('Barbell Curl synthetic replay coverage', () => {
       safeCueFamilies: expect.arrayContaining(['repCount', 'tempo', 'torsoControl', 'visibleArmRom']),
       unsafeCueFamilies: expect.arrayContaining(['bilateralArmRom', 'bilateralSymmetry', 'wristSpecific']),
       suppressedIssueIds: expect.arrayContaining(['barbell-curl.asymmetry']),
+      suppressedCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
     });
   });
 

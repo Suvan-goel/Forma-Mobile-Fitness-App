@@ -1405,6 +1405,9 @@ function buildLateralRaiseRepResult(repWindow: RepWindow, repIndex: number): Rep
     reliabilityInterpretation,
     finalScorable,
   );
+  // ScoreabilityCandidate controls reliability safety; finalScorable also
+  // includes the exercise view gate. Keep the historical score calculation for
+  // diagnostics even if the view gate later marks the rep unscorable.
   const score = reliabilityAllowsScoring(reliabilityInterpretation)
     ? computeRepWindowScore(repWindow, allowedCueFamilies)
     : 0;

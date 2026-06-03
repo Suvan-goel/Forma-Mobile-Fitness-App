@@ -1403,6 +1403,9 @@ function buildCableRowRepResult(
     reliabilityInterpretation,
     scorable,
   );
+  // ScoreabilityCandidate controls reliability safety; final scorable also
+  // includes the exercise side-view gate. Keep the historical score calculation
+  // for diagnostics even if the view gate later marks the rep unscorable.
   const score = reliabilityAllowsScoring(reliabilityInterpretation)
     ? computeCableRowScore(repWindow, allowedCueFamilies)
     : 0;

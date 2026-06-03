@@ -1753,6 +1753,7 @@ function logBarbellCurlRepReliability(
     `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
     `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
     `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
     `reasons=${interpretation.reasons.join(',') || 'none'}`,
   ].join(' '));
 }
