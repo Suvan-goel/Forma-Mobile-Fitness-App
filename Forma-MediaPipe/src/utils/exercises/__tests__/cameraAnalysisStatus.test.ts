@@ -87,6 +87,47 @@ describe('CameraAnalysisStatus resolver', () => {
     expect(result.selected?.details?.feedbackMode).toBe('limited');
   });
 
+  it('does not let soft generic key-joint warnings override useful exercise feedback', () => {
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high', ['keep_key_joints_in_frame']),
+      exerciseStatus: fullFeedbackCameraStatus('exercise'),
+    });
+
+    expect(result.selected?.message).toBe('Full feedback available');
+    expect(result.selected?.source).toBe('exercise');
+  });
+
+  it('does not let soft missing-joint warnings override limited exercise feedback', () => {
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('medium', ['missing_required_joints']),
+      exerciseStatus: limitedFeedbackCameraStatus({
+        reason: 'partial_view_scoring',
+      }),
+    });
+
+    expect(result.selected?.message).toBe('Limited feedback - adjust angle for full analysis');
+    expect(result.selected?.details?.feedbackMode).toBe('limited');
+  });
+
+  it('lets invalid subject tracking override limited or full feedback', () => {
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high'),
+      exerciseStatus: limitedFeedbackCameraStatus(),
+      poseStateStatus: {
+        level: 'error',
+        category: 'tracking',
+        message: 'Tracking was lost.',
+        priority: 1000,
+        source: 'poseState',
+        reason: 'invalid_subject_collapsed_torso',
+        details: { feedbackMode: 'unavailable' },
+      },
+    });
+
+    expect(result.selected?.message).toBe('Tracking was lost.');
+    expect(result.selected?.source).toBe('poseState');
+  });
+
   it('shows tracking good only when no higher-priority issue exists', () => {
     const result = resolveCameraAnalysisStatus({
       poseQuality: qualitySnapshot('high'),

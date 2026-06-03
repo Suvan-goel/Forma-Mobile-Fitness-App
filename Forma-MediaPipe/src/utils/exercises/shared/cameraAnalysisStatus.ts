@@ -108,8 +108,25 @@ const VIEW_WARNINGS = new Set<PoseQualityWarning>([
   'view_uncertain',
 ]);
 
+const SOFT_GENERIC_POSE_WARNINGS = new Set<PoseQualityWarning>([
+  'keep_key_joints_in_frame',
+  'missing_required_joints',
+]);
+
 function uniqueStrings(values: Array<string | undefined>): string[] {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+}
+
+function exerciseStatusAllowsUsefulFeedback(status?: CameraAnalysisStatus | null): boolean {
+  const mode = status?.details?.feedbackMode;
+  return mode === 'full' || mode === 'limited';
+}
+
+function shouldSuppressPoseQualityWarning(
+  warning: PoseQualityWarning,
+  exerciseStatus?: CameraAnalysisStatus | null,
+): boolean {
+  return SOFT_GENERIC_POSE_WARNINGS.has(warning) && exerciseStatusAllowsUsefulFeedback(exerciseStatus);
 }
 
 function messageForWarning(warning: PoseQualityWarning): string {
@@ -382,6 +399,7 @@ export function resolveCameraAnalysisStatus(
 
   if (input.poseQuality) {
     for (const warning of input.poseQuality.warnings) {
+      if (shouldSuppressPoseQualityWarning(warning, input.exerciseStatus)) continue;
       candidates.push(cameraStatusFromPoseQualityWarning(warning, 'poseQuality'));
     }
     candidates.push(cameraStatusFromPoseQuality(input.poseQuality));

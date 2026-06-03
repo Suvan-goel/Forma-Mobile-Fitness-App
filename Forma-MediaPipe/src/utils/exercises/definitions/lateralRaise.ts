@@ -55,6 +55,9 @@ import {
 } from '../shared/reliabilityInterpretation';
 import {
   cameraStatusFromViewCueGating,
+  countOnlyCameraStatus,
+  fullFeedbackCameraStatus,
+  limitedFeedbackCameraStatus,
   type CameraAnalysisStatus,
 } from '../shared/cameraAnalysisStatus';
 import tunedConfig from './tuned/lateralRaise.json';
@@ -887,6 +890,35 @@ function lateralRaiseRepWindowAnalysisStatus(repWindow: RepWindow): CameraAnalys
     viewRequired: 'front',
     viewCurrent: diagnosticView(repWindow),
     source: 'exercise',
+  });
+}
+
+function lateralRaiseSetupAnalysisStatus(state: LateralRaiseState): CameraAnalysisStatus | null {
+  if (!state.warmedUp || state.viewAngleSmoothedDeg === null) return null;
+  const view = classifyFrontViewAngle(state.viewAngleSmoothedDeg);
+  if (view === 'front') {
+    return fullFeedbackCameraStatus('exercise', 'setup_front_view_ready');
+  }
+  if (view === 'oblique') {
+    return limitedFeedbackCameraStatus({
+      source: 'exercise',
+      reason: 'setup_oblique_view',
+      details: {
+        feedbackMode: 'limited',
+        viewRequired: 'front',
+        viewCurrent: 'oblique',
+      },
+    });
+  }
+  return countOnlyCameraStatus({
+    source: 'exercise',
+    reason: 'setup_side_view_for_front_exercise',
+    message: 'Face the camera for full symmetry feedback',
+    details: {
+      feedbackMode: 'countOnly',
+      viewRequired: 'front',
+      viewCurrent: 'side',
+    },
   });
 }
 
@@ -2361,7 +2393,7 @@ export function createLateralRaiseDefinition(
             viewCurrent: lastRepResult?.diagnostics?.view,
             source: 'exercise',
           })
-        : null;
+        : lateralRaiseSetupAnalysisStatus(internal);
 
     return {
       repCount: internal.repCount,

@@ -45,6 +45,9 @@ import {
 } from '../shared/cableViewGating';
 import {
   cameraStatusFromViewCueGating,
+  countOnlyCameraStatus,
+  fullFeedbackCameraStatus,
+  limitedFeedbackCameraStatus,
   type CameraAnalysisStatus,
 } from '../shared/cameraAnalysisStatus';
 import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
@@ -402,6 +405,9 @@ interface LatPulldownState {
   /** Visual feedback */
   feedback: string | null;
   lastFeedbackTime: number;
+  /** Status-only setup view samples; does not affect counting/scoring. */
+  setupSideViewConfidences: number[];
+  setupSelectedSideConfidences: number[];
 }
 
 interface LatPulldownDebugInfo {
@@ -477,6 +483,8 @@ function resetLatPulldownAfterTrackingInterruption(state: LatPulldownState): Lat
     smoothedTorsoLean: 0,
     smoothedUpperArmDrive: null,
     smoothedTorsoDev: null,
+    setupSideViewConfidences: [],
+    setupSelectedSideConfidences: [],
   };
 }
 
@@ -508,6 +516,8 @@ function initializeState(): LatPulldownState {
     smoothedTorsoDev: null,
     feedback: null,
     lastFeedbackTime: 0,
+    setupSideViewConfidences: [],
+    setupSelectedSideConfidences: [],
   };
 }
 
@@ -902,6 +912,77 @@ function isLatPulldownRepScorable(repWindow: RepWindow): boolean {
 
 function latPulldownQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
   return isLatPulldownRepScorable(repWindow) ? [] : ['side_view_uncertain'];
+}
+
+function pushRollingSample(samples: number[], value: number, maxLength = SIDE_VIEW_MIN_SAMPLES): void {
+  samples.push(value);
+  if (samples.length > maxLength) samples.shift();
+}
+
+function selectedSideSetupConfidence(keypoints: Keypoint[], side: 'left' | 'right'): number {
+  return minKeypointConfidence(keypoints, [
+    `${side}_shoulder`,
+    `${side}_elbow`,
+    `${side}_wrist`,
+    `${side}_hip`,
+  ]);
+}
+
+function updateLatPulldownSetupReadiness(
+  state: LatPulldownState,
+  signalKeypoints: Keypoint[],
+  side: 'left' | 'right',
+  sideViewConfidence: number | null,
+): void {
+  if (state.phase !== 'REST' || state.repWindow) {
+    state.setupSideViewConfidences = [];
+    state.setupSelectedSideConfidences = [];
+    return;
+  }
+  if (sideViewConfidence !== null) {
+    pushRollingSample(state.setupSideViewConfidences, sideViewConfidence);
+  }
+  pushRollingSample(state.setupSelectedSideConfidences, selectedSideSetupConfidence(signalKeypoints, side));
+}
+
+function latPulldownSetupAnalysisStatus(state: LatPulldownState): CameraAnalysisStatus | null {
+  const hasSideSamples = state.setupSideViewConfidences.length >= SIDE_VIEW_MIN_SAMPLES;
+  const hasSelectedSideSamples = state.setupSelectedSideConfidences.length >= SIDE_VIEW_MIN_SAMPLES;
+  if (!hasSideSamples && !hasSelectedSideSamples) return null;
+
+  const averageSide = hasSideSamples
+    ? state.setupSideViewConfidences.reduce((sum, value) => sum + value, 0) / state.setupSideViewConfidences.length
+    : null;
+  const minSide = hasSideSamples ? Math.min(...state.setupSideViewConfidences) : null;
+  const selectedSideReady = hasSelectedSideSamples &&
+    state.setupSelectedSideConfidences.every((confidence) => confidence >= FORM_CONFIDENCE_MIN);
+  const sideReady = averageSide !== null &&
+    minSide !== null &&
+    averageSide >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    minSide >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN;
+
+  if (sideReady) {
+    return fullFeedbackCameraStatus('exercise', 'setup_side_view_ready');
+  }
+  if (selectedSideReady) {
+    return limitedFeedbackCameraStatus({
+      source: 'exercise',
+      reason: 'setup_partial_view_ready',
+      details: {
+        feedbackMode: 'limited',
+        viewRequired: 'side',
+      },
+    });
+  }
+  return countOnlyCameraStatus({
+    source: 'exercise',
+    reason: 'setup_side_view_uncertain',
+    message: 'Turn side-on for full form analysis',
+    details: {
+      feedbackMode: 'countOnly',
+      viewRequired: 'side',
+    },
+  });
 }
 
 function latPulldownRepWindowAnalysisStatus(
@@ -1726,6 +1807,7 @@ function updateLatPulldownState(
   const rawUpperArmDrive = upperArmSample?.value ?? null;
   const rawTorsoDev = torsoSample?.value ?? null;
   const sideViewConfidence = calculateSideViewConfidence(signalKeypoints);
+  updateLatPulldownSetupReadiness(state, signalKeypoints, side, sideViewConfidence);
 
   let rawTorsoLean: number | null = null;
   if (isVisible(shoulder, VISIBILITY_THRESHOLD) && isVisible(hip, VISIBILITY_THRESHOLD)) {
@@ -2193,7 +2275,7 @@ export function createLatPulldownDefinition(
             viewRequired: 'side',
             source: 'exercise',
           })
-        : null;
+        : latPulldownSetupAnalysisStatus(internal);
 
     return {
       repCount: internal.repCount,

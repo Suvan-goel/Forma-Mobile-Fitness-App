@@ -27,6 +27,11 @@ import {
   formatPoseStateReliabilitySummary,
 } from '../../utils/pose/buildPoseState';
 import type { PoseState } from '../../utils/pose/PoseState';
+import {
+  ValidHumanSubjectTracker,
+  evaluateValidHumanSubject,
+  type ValidHumanSubjectTrackingResult,
+} from '../../utils/pose/validHumanSubject';
 import '../../utils/exercises/definitions/register';
 import {
   ExerciseRegistry,
@@ -110,6 +115,7 @@ const SET_RECORDING_KEEP_AWAKE_TAG = 'forma-set-recording';
 const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
 const TOP_PILL_WARNING_STABLE_FRAMES = 3;
 const TOP_PILL_WARNING_HOLD_MS = 1000;
+const VALID_SUBJECT_INVALID_FRAME_THRESHOLD = 12;
 const POSE_PARSER_DIAGNOSTICS_DEV_FLAG = process.env.EXPO_PUBLIC_POSE_PARSER_DIAGNOSTICS === '1';
 const LANDMARK_RECORDING_DUMP_JSON_DEV_FLAG = process.env.EXPO_PUBLIC_LANDMARK_RECORDING_DUMP_JSON === '1';
 
@@ -172,6 +178,51 @@ function formatCameraAnalysisStatusForLog(status: CameraAnalysisStatus) {
     source: status.source,
     reason: status.reason,
     feedbackMode: status.details?.feedbackMode,
+  };
+}
+
+function cameraStatusFromValidSubject(
+  subject: ValidHumanSubjectTrackingResult,
+): CameraAnalysisStatus | null {
+  if (!subject.sustainedInvalid) return null;
+  return {
+    level: 'error',
+    category: 'tracking',
+    message: 'Tracking was lost.',
+    priority: 1000,
+    source: 'poseState',
+    reason: `invalid_subject_${subject.reason ?? 'unknown'}`,
+    details: {
+      feedbackMode: 'unavailable',
+      usableChains: subject.usableChains,
+      weakChains: subject.weakChains,
+    },
+  };
+}
+
+function summarizePoseStateForStatusLog(poseState: PoseState | null | undefined) {
+  if (!poseState) return null;
+  return {
+    status: poseState.status,
+    chains: Object.fromEntries(
+      Object.entries(poseState.chains).map(([name, chain]) => [name, chain.status]),
+    ),
+    reliabilityCounts: poseState.diagnostics.reliabilityCounts,
+    topReasons: poseState.diagnostics.reasonCounts,
+  };
+}
+
+function summarizeValidSubjectForStatusLog(subject: ValidHumanSubjectTrackingResult | null | undefined) {
+  if (!subject) return null;
+  return {
+    valid: subject.valid,
+    reason: subject.reason,
+    invalidFrameCount: subject.invalidFrameCount,
+    sustainedInvalid: subject.sustainedInvalid,
+    presentMajorJoints: subject.presentMajorJoints,
+    usableChains: subject.usableChains,
+    weakChains: subject.weakChains,
+    boundingBox: subject.boundingBox,
   };
 }
 
@@ -505,6 +556,9 @@ export const CameraScreen: React.FC = () => {
   const completedRepCountRef = useRef(0);
   const poseQualityTrackerRef = useRef(new PoseQualityTracker());
   const repQualityAccumulatorRef = useRef(new RepQualityWindowAccumulator());
+  const validHumanSubjectTrackerRef = useRef(new ValidHumanSubjectTracker({
+    invalidFrameThreshold: VALID_SUBJECT_INVALID_FRAME_THRESHOLD,
+  }));
   const topPillWarningHoldRef = useRef<{ warnings: PoseQualityWarning[]; updatedAt: number }>({
     warnings: [],
     updatedAt: 0,
@@ -580,6 +634,7 @@ export const CameraScreen: React.FC = () => {
     lastTTSFeedbackTimestampRef.current = null;
     poseQualityTrackerRef.current.reset();
     repQualityAccumulatorRef.current.reset();
+    validHumanSubjectTrackerRef.current.reset();
     poseFrameGapTrackerRef.current.reset();
     poseParserDiagnosticsRef.current.reset();
     poseStateDiagnosticsRef.current.reset();
@@ -681,7 +736,15 @@ export const CameraScreen: React.FC = () => {
     });
   }, []);
 
-  const logCameraAnalysisStatusResolution = useCallback((resolution: CameraAnalysisStatusResolution) => {
+  const logCameraAnalysisStatusResolution = useCallback((
+    resolution: CameraAnalysisStatusResolution,
+    diagnostics?: {
+      poseQuality?: PoseQualitySnapshot;
+      exerciseStatus?: CameraAnalysisStatus | null;
+      poseState?: PoseState;
+      validSubject?: ValidHumanSubjectTrackingResult;
+    },
+  ) => {
     if (!__DEV__ || !resolution.selected) return;
     const logKey = cameraAnalysisStatusKey(resolution.selected);
     if (logKey === lastCameraAnalysisStatusLogKeyRef.current) return;
@@ -693,6 +756,18 @@ export const CameraScreen: React.FC = () => {
         .sort((a, b) => b.priority - a.priority)
         .slice(0, 5)
         .map(formatCameraAnalysisStatusForLog),
+      poseQuality: diagnostics?.poseQuality
+        ? {
+            status: diagnostics.poseQuality.status,
+            warnings: diagnostics.poseQuality.warnings,
+            confidence: diagnostics.poseQuality.confidence,
+          }
+        : undefined,
+      exerciseLiveAnalysisStatus: diagnostics?.exerciseStatus
+        ? formatCameraAnalysisStatusForLog(diagnostics.exerciseStatus)
+        : null,
+      poseState: summarizePoseStateForStatusLog(diagnostics?.poseState),
+      validSubject: summarizeValidSubjectForStatusLog(diagnostics?.validSubject),
     });
   }, []);
 
@@ -734,6 +809,11 @@ export const CameraScreen: React.FC = () => {
     }
     previousPoseStateRef.current = poseState;
     const { keypoints, worldKeypoints, imageKeypoints, primarySource } = converted;
+    const validSubject = validHumanSubjectTrackerRef.current.update(evaluateValidHumanSubject({
+      poseState,
+      imageKeypoints,
+    }));
+    const validSubjectStatus = cameraStatusFromValidSubject(validSubject);
     const frameContext: ExerciseFrameContext = {
       worldKeypoints,
       imageKeypoints,
@@ -835,8 +915,14 @@ export const CameraScreen: React.FC = () => {
         poseQuality: quality,
         exerciseWarnings: stableTopPillWarnings,
         exerciseStatus: stableExerciseStatus,
+        poseStateStatus: validSubjectStatus,
       });
-      logCameraAnalysisStatusResolution(cameraStatusResolution);
+      logCameraAnalysisStatusResolution(cameraStatusResolution, {
+        poseQuality: quality,
+        exerciseStatus: stableExerciseStatus,
+        poseState,
+        validSubject,
+      });
 
       // Accumulate UI updates — don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
@@ -1268,6 +1354,7 @@ export const CameraScreen: React.FC = () => {
       completedRepCountRef.current = 0;
       poseQualityTrackerRef.current.reset();
       repQualityAccumulatorRef.current.reset();
+      validHumanSubjectTrackerRef.current.reset();
       setTrackingQuality(null);
       setCameraAnalysisStatus(null);
       topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
