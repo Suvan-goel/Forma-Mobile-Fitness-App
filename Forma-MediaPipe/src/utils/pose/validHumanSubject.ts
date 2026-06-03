@@ -7,7 +7,20 @@ export type ValidHumanSubjectInvalidReason =
   | 'torso_unusable'
   | 'no_limb_chain'
   | 'subject_too_small'
-  | 'collapsed_torso';
+  | 'collapsed_torso'
+  | 'subject_center_jump'
+  | 'subject_scale_jump'
+  | 'active_subject_jump'
+  | 'reacquisition_pending';
+
+export interface SubjectObservation {
+  centerX: number;
+  centerY: number;
+  area: number;
+  width: number;
+  height: number;
+  maxDimension: number;
+}
 
 export interface ValidHumanSubjectResult {
   valid: boolean;
@@ -15,22 +28,31 @@ export interface ValidHumanSubjectResult {
   presentMajorJoints: number;
   usableChains: string[];
   weakChains: string[];
-  boundingBox?: {
-    width: number;
-    height: number;
-    maxDimension: number;
-  };
+  boundingBox?: SubjectObservation;
 }
 
 export interface ValidHumanSubjectTrackingResult extends ValidHumanSubjectResult {
   invalidFrameCount: number;
   validFrameCount: number;
+  reacquisitionFrameCount: number;
   sustainedInvalid: boolean;
+  rejectedAsLikelyFalseSubject: boolean;
+  subjectCenter?: { x: number; y: number };
+  previousSubjectCenter?: { x: number; y: number };
+  centerJump?: number;
+  bboxArea?: number;
+  previousBboxArea?: number;
+  bboxAreaRatio?: number;
 }
 
 export interface ValidHumanSubjectTrackerOptions {
   invalidFrameThreshold?: number;
   validFrameThreshold?: number;
+  reacquisitionFrameThreshold?: number;
+  centerJumpThreshold?: number;
+  hardCenterJumpThreshold?: number;
+  scaleRatioMin?: number;
+  scaleRatioMax?: number;
 }
 
 const MAJOR_JOINTS = [
@@ -51,9 +73,14 @@ const MAJOR_JOINTS = [
 const LIMB_CHAINS = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
 const DEFAULT_INVALID_FRAME_THRESHOLD = 12;
 const DEFAULT_VALID_FRAME_THRESHOLD = 2;
+const DEFAULT_REACQUISITION_FRAME_THRESHOLD = 6;
 const MIN_PRESENT_MAJOR_JOINTS = 5;
 const MIN_SUBJECT_BOX_MAX_DIMENSION = 0.06;
 const MIN_TORSO_SPAN = 0.04;
+const DEFAULT_CENTER_JUMP_THRESHOLD = 0.32;
+const DEFAULT_HARD_CENTER_JUMP_THRESHOLD = 0.48;
+const DEFAULT_SCALE_RATIO_MIN = 0.38;
+const DEFAULT_SCALE_RATIO_MAX = 2.8;
 
 function isJointPresent(poseState: PoseState, jointName: string): boolean {
   const joint = poseState.joints[jointName];
@@ -98,10 +125,28 @@ function visibleMajorBox(imageKeypoints: Keypoint[] | undefined): ValidHumanSubj
   const width = maxX - minX;
   const height = maxY - minY;
   return {
+    centerX: minX + width / 2,
+    centerY: minY + height / 2,
+    area: Math.max(0, width) * Math.max(0, height),
     width,
     height,
     maxDimension: Math.max(width, height),
   };
+}
+
+function observationFromResult(result: ValidHumanSubjectResult): SubjectObservation | null {
+  return result.valid && result.boundingBox ? result.boundingBox : null;
+}
+
+function centerDistance(a: SubjectObservation, b: SubjectObservation): number {
+  const dx = a.centerX - b.centerX;
+  const dy = a.centerY - b.centerY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function areaRatio(current: SubjectObservation, previous: SubjectObservation): number {
+  if (previous.area <= 1e-6 || current.area <= 1e-6) return Infinity;
+  return current.area / previous.area;
 }
 
 function torsoSpan(poseState: PoseState): number {
@@ -186,35 +231,223 @@ export function evaluateValidHumanSubject(args: {
 export class ValidHumanSubjectTracker {
   private invalidFrameCount = 0;
   private validFrameCount = 0;
+  private reacquisitionFrameCount = 0;
+  private sustainedInvalid = false;
+  private activeSubject: SubjectObservation | null = null;
+  private reacquisitionCandidate: SubjectObservation | null = null;
   private readonly invalidFrameThreshold: number;
   private readonly validFrameThreshold: number;
+  private readonly reacquisitionFrameThreshold: number;
+  private readonly centerJumpThreshold: number;
+  private readonly hardCenterJumpThreshold: number;
+  private readonly scaleRatioMin: number;
+  private readonly scaleRatioMax: number;
 
   constructor(options: ValidHumanSubjectTrackerOptions = {}) {
     this.invalidFrameThreshold = options.invalidFrameThreshold ?? DEFAULT_INVALID_FRAME_THRESHOLD;
     this.validFrameThreshold = options.validFrameThreshold ?? DEFAULT_VALID_FRAME_THRESHOLD;
+    this.reacquisitionFrameThreshold = options.reacquisitionFrameThreshold ?? DEFAULT_REACQUISITION_FRAME_THRESHOLD;
+    this.centerJumpThreshold = options.centerJumpThreshold ?? DEFAULT_CENTER_JUMP_THRESHOLD;
+    this.hardCenterJumpThreshold = options.hardCenterJumpThreshold ?? DEFAULT_HARD_CENTER_JUMP_THRESHOLD;
+    this.scaleRatioMin = options.scaleRatioMin ?? DEFAULT_SCALE_RATIO_MIN;
+    this.scaleRatioMax = options.scaleRatioMax ?? DEFAULT_SCALE_RATIO_MAX;
   }
 
   reset(): void {
     this.invalidFrameCount = 0;
     this.validFrameCount = 0;
+    this.reacquisitionFrameCount = 0;
+    this.sustainedInvalid = false;
+    this.activeSubject = null;
+    this.reacquisitionCandidate = null;
   }
 
-  update(result: ValidHumanSubjectResult): ValidHumanSubjectTrackingResult {
-    if (result.valid) {
-      this.validFrameCount++;
-      if (this.validFrameCount >= this.validFrameThreshold) {
-        this.invalidFrameCount = 0;
-      }
-    } else {
-      this.validFrameCount = 0;
-      this.invalidFrameCount++;
+  private continuityIssue(current: SubjectObservation, previous: SubjectObservation): {
+    reason?: ValidHumanSubjectInvalidReason;
+    centerJump: number;
+    bboxAreaRatio: number;
+  } {
+    const jump = centerDistance(current, previous);
+    const ratio = areaRatio(current, previous);
+    const scaleJump = ratio < this.scaleRatioMin || ratio > this.scaleRatioMax;
+    const hardCenterJump = jump > this.hardCenterJumpThreshold;
+    const combinedJump = jump > this.centerJumpThreshold && scaleJump;
+    let reason: ValidHumanSubjectInvalidReason | undefined;
+    if (hardCenterJump && scaleJump) reason = 'active_subject_jump';
+    else if (hardCenterJump) reason = 'subject_center_jump';
+    else if (combinedJump) reason = 'active_subject_jump';
+    else if (scaleJump && jump > this.centerJumpThreshold * 0.55) reason = 'subject_scale_jump';
+    return {
+      reason,
+      centerJump: jump,
+      bboxAreaRatio: ratio,
+    };
+  }
+
+  private accept(result: ValidHumanSubjectResult, observation: SubjectObservation): ValidHumanSubjectTrackingResult {
+    const previousSubject = this.activeSubject;
+    this.validFrameCount++;
+    this.reacquisitionFrameCount = 0;
+    this.reacquisitionCandidate = null;
+    if (this.validFrameCount >= this.validFrameThreshold) {
+      this.invalidFrameCount = 0;
+      this.sustainedInvalid = false;
     }
+    const tracking = this.withTrackingFields(result, {
+      valid: true,
+      rejectedAsLikelyFalseSubject: false,
+      previousSubject,
+    });
+    this.activeSubject = observation;
+    return tracking;
+  }
+
+  private reject(result: ValidHumanSubjectResult, args: {
+    reason: ValidHumanSubjectInvalidReason;
+    rejectedAsLikelyFalseSubject?: boolean;
+    centerJump?: number;
+    bboxAreaRatio?: number;
+  }): ValidHumanSubjectTrackingResult {
+    this.validFrameCount = 0;
+    this.reacquisitionFrameCount = 0;
+    this.reacquisitionCandidate = null;
+    this.invalidFrameCount++;
+    if (this.invalidFrameCount >= this.invalidFrameThreshold) {
+      this.sustainedInvalid = true;
+    }
+    return this.withTrackingFields(
+      { ...result, valid: false, reason: args.reason },
+      {
+        valid: false,
+        rejectedAsLikelyFalseSubject: args.rejectedAsLikelyFalseSubject ?? false,
+        centerJump: args.centerJump,
+        bboxAreaRatio: args.bboxAreaRatio,
+      },
+    );
+  }
+
+  private reacquire(result: ValidHumanSubjectResult, observation: SubjectObservation): ValidHumanSubjectTrackingResult {
+    const previous = this.activeSubject;
+    if (previous) {
+      const issue = this.continuityIssue(observation, previous);
+      if (issue.reason) {
+        return this.reject(result, {
+          reason: issue.reason,
+          rejectedAsLikelyFalseSubject: true,
+          centerJump: issue.centerJump,
+          bboxAreaRatio: issue.bboxAreaRatio,
+        });
+      }
+    }
+
+    if (!this.reacquisitionCandidate) {
+      this.reacquisitionCandidate = observation;
+      this.reacquisitionFrameCount = 1;
+    } else {
+      const issue = this.continuityIssue(observation, this.reacquisitionCandidate);
+      if (issue.reason) {
+        this.reacquisitionCandidate = observation;
+        this.reacquisitionFrameCount = 1;
+      } else {
+        this.reacquisitionFrameCount++;
+        this.reacquisitionCandidate = observation;
+      }
+    }
+
+    if (this.reacquisitionFrameCount >= this.reacquisitionFrameThreshold) {
+      this.validFrameCount = this.validFrameThreshold;
+      this.invalidFrameCount = 0;
+      this.sustainedInvalid = false;
+      this.reacquisitionCandidate = null;
+      const tracking = this.withTrackingFields(result, {
+        valid: true,
+        rejectedAsLikelyFalseSubject: false,
+        previousSubject: this.activeSubject,
+      });
+      this.activeSubject = observation;
+      return tracking;
+    }
+
+    return this.withTrackingFields(
+      { ...result, valid: false, reason: 'reacquisition_pending' },
+      {
+        valid: false,
+        rejectedAsLikelyFalseSubject: false,
+      },
+    );
+  }
+
+  private withTrackingFields(
+    result: ValidHumanSubjectResult,
+    args: {
+      valid: boolean;
+      rejectedAsLikelyFalseSubject: boolean;
+      centerJump?: number;
+      bboxAreaRatio?: number;
+      previousSubject?: SubjectObservation | null;
+    },
+  ): ValidHumanSubjectTrackingResult {
+    const observation = observationFromResult(result);
+    const previous = args.previousSubject === undefined ? this.activeSubject : args.previousSubject;
+    const centerJump = args.centerJump ?? (observation && previous ? centerDistance(observation, previous) : undefined);
+    const bboxAreaRatio = args.bboxAreaRatio ?? (observation && previous ? areaRatio(observation, previous) : undefined);
 
     return {
       ...result,
+      valid: args.valid,
       invalidFrameCount: this.invalidFrameCount,
       validFrameCount: this.validFrameCount,
-      sustainedInvalid: !result.valid && this.invalidFrameCount >= this.invalidFrameThreshold,
+      reacquisitionFrameCount: this.reacquisitionFrameCount,
+      sustainedInvalid: this.sustainedInvalid,
+      rejectedAsLikelyFalseSubject: args.rejectedAsLikelyFalseSubject,
+      subjectCenter: observation
+        ? { x: observation.centerX, y: observation.centerY }
+        : undefined,
+      previousSubjectCenter: previous
+        ? { x: previous.centerX, y: previous.centerY }
+        : undefined,
+      centerJump,
+      bboxArea: observation?.area,
+      previousBboxArea: previous?.area,
+      bboxAreaRatio,
     };
+  }
+
+  update(result: ValidHumanSubjectResult): ValidHumanSubjectTrackingResult {
+    const observation = observationFromResult(result);
+    if (!result.valid || !observation) {
+      return this.reject(result, {
+        reason: result.reason ?? 'pose_lost',
+      });
+    }
+
+    if (!this.activeSubject) {
+      this.validFrameCount = Math.max(this.validFrameCount + 1, this.validFrameThreshold);
+      this.invalidFrameCount = 0;
+      this.sustainedInvalid = false;
+      const tracking = this.withTrackingFields(result, {
+        valid: true,
+        rejectedAsLikelyFalseSubject: false,
+        previousSubject: null,
+      });
+      this.activeSubject = observation;
+      return tracking;
+    }
+
+    if (this.sustainedInvalid) {
+      return this.reacquire(result, observation);
+    }
+
+    const issue = this.continuityIssue(observation, this.activeSubject);
+    if (issue.reason) {
+      return this.reject(result, {
+        reason: issue.reason,
+        rejectedAsLikelyFalseSubject: true,
+        centerJump: issue.centerJump,
+        bboxAreaRatio: issue.bboxAreaRatio,
+      });
+    }
+
+    return this.accept(result, observation);
   }
 }

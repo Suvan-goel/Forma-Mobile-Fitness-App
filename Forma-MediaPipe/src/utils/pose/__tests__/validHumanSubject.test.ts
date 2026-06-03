@@ -44,6 +44,30 @@ function keypoints(overrides: Partial<Record<string, Partial<Keypoint>>> = {}): 
   }));
 }
 
+function transformedKeypoints(args: {
+  offsetX?: number;
+  offsetY?: number;
+  scale?: number;
+} = {}): Keypoint[] {
+  const { offsetX = 0, offsetY = 0, scale = 1 } = args;
+  return keypoints(Object.fromEntries(
+    MAJOR_JOINTS.map((name) => {
+      const base = BASE_POINTS[name];
+      return [name, {
+        x: 0.5 + (base.x - 0.5) * scale + offsetX,
+        y: 0.55 + (base.y - 0.55) * scale + offsetY,
+      }];
+    }),
+  ));
+}
+
+function validSubject(frameKeypoints: Keypoint[]) {
+  return evaluateValidHumanSubject({
+    poseState: poseState(frameKeypoints),
+    imageKeypoints: frameKeypoints,
+  });
+}
+
 function poseState(frameKeypoints: Keypoint[]) {
   return buildPoseState({
     status: frameKeypoints.length > 0 ? 'ok' : 'trackingLost',
@@ -58,15 +82,22 @@ function poseState(frameKeypoints: Keypoint[]) {
 }
 
 describe('valid human subject status helper', () => {
+  it('keeps a normal valid user valid across frames', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 3 });
+    const first = tracker.update(validSubject(keypoints()));
+    const second = tracker.update(validSubject(transformedKeypoints({ offsetX: 0.02 })));
+
+    expect(first.valid).toBe(true);
+    expect(second.valid).toBe(true);
+    expect(second.sustainedInvalid).toBe(false);
+  });
+
   it('treats a normal one-limb occlusion as a valid subject', () => {
     const frameKeypoints = keypoints({
       left_elbow: { score: 0 },
       left_wrist: { score: 0 },
     });
-    const result = evaluateValidHumanSubject({
-      poseState: poseState(frameKeypoints),
-      imageKeypoints: frameKeypoints,
-    });
+    const result = validSubject(frameKeypoints);
 
     expect(result.valid).toBe(true);
     expect(result.usableChains).toEqual(expect.arrayContaining(['torso', 'rightArm']));
@@ -76,10 +107,7 @@ describe('valid human subject status helper', () => {
     const frameKeypoints = keypoints(Object.fromEntries(
       MAJOR_JOINTS.map((name) => [name, { x: 0.5, y: 0.5, z: 0 }]),
     ));
-    const result = evaluateValidHumanSubject({
-      poseState: poseState(frameKeypoints),
-      imageKeypoints: frameKeypoints,
-    });
+    const result = validSubject(frameKeypoints);
 
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('subject_too_small');
@@ -101,6 +129,96 @@ describe('valid human subject status helper', () => {
     expect(tracker.update(invalid).sustainedInvalid).toBe(true);
   });
 
+  it('marks tracking lost when the user leaves and no valid pose remains', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 3 });
+    tracker.update(validSubject(keypoints()));
+    const invalid = validSubject([]);
+
+    expect(tracker.update(invalid).sustainedInvalid).toBe(false);
+    expect(tracker.update(invalid).sustainedInvalid).toBe(false);
+    const lost = tracker.update(invalid);
+    expect(lost.sustainedInvalid).toBe(true);
+    expect(lost.reason).toBe('pose_lost');
+  });
+
+  it('marks tracking lost when a false tiny object pose appears after the user leaves', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 3 });
+    tracker.update(validSubject(keypoints()));
+    const falseObject = validSubject(keypoints(Object.fromEntries(
+      MAJOR_JOINTS.map((name) => [name, { x: 0.84, y: 0.18, z: 0 }]),
+    )));
+
+    tracker.update(falseObject);
+    tracker.update(falseObject);
+    const lost = tracker.update(falseObject);
+    expect(lost.sustainedInvalid).toBe(true);
+    expect(lost.reason).toBe('subject_too_small');
+  });
+
+  it('rejects a sudden center and scale jump to a different false subject', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 2 });
+    tracker.update(validSubject(keypoints()));
+    const falseSubject = validSubject(transformedKeypoints({
+      offsetX: 0.55,
+      offsetY: -0.08,
+      scale: 0.45,
+    }));
+
+    const first = tracker.update(falseSubject);
+    const second = tracker.update(falseSubject);
+    expect(first.valid).toBe(false);
+    expect(first.rejectedAsLikelyFalseSubject).toBe(true);
+    expect(first.reason).toBe('active_subject_jump');
+    expect(second.sustainedInvalid).toBe(true);
+  });
+
+  it('reacquires the user after enough stable plausible frames', () => {
+    const tracker = new ValidHumanSubjectTracker({
+      invalidFrameThreshold: 2,
+      reacquisitionFrameThreshold: 3,
+    });
+    tracker.update(validSubject(keypoints()));
+    const invalid = validSubject([]);
+    tracker.update(invalid);
+    expect(tracker.update(invalid).sustainedInvalid).toBe(true);
+
+    const returning = validSubject(transformedKeypoints({ offsetX: 0.02 }));
+    expect(tracker.update(returning).valid).toBe(false);
+    expect(tracker.update(returning).valid).toBe(false);
+    const reacquired = tracker.update(returning);
+    expect(reacquired.valid).toBe(true);
+    expect(reacquired.sustainedInvalid).toBe(false);
+  });
+
+  it('does not reject fast but plausible movement', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 3 });
+    tracker.update(validSubject(keypoints()));
+
+    let latest = tracker.update(validSubject(transformedKeypoints({ offsetX: 0.08 })));
+    latest = tracker.update(validSubject(transformedKeypoints({ offsetX: 0.16 })));
+    latest = tracker.update(validSubject(transformedKeypoints({ offsetX: 0.24 })));
+
+    expect(latest.valid).toBe(true);
+    expect(latest.sustainedInvalid).toBe(false);
+    expect(latest.rejectedAsLikelyFalseSubject).toBe(false);
+  });
+
+  it('does not flicker lost on short temporary bad frames', () => {
+    const tracker = new ValidHumanSubjectTracker({
+      invalidFrameThreshold: 3,
+      validFrameThreshold: 2,
+    });
+    tracker.update(validSubject(keypoints()));
+    const invalid = validSubject([]);
+
+    expect(tracker.update(invalid).sustainedInvalid).toBe(false);
+    expect(tracker.update(invalid).sustainedInvalid).toBe(false);
+    expect(tracker.update(validSubject(keypoints())).sustainedInvalid).toBe(false);
+    const recovered = tracker.update(validSubject(keypoints()));
+    expect(recovered.invalidFrameCount).toBe(0);
+    expect(recovered.sustainedInvalid).toBe(false);
+  });
+
   it('clears invalid history after stable valid frames', () => {
     const tracker = new ValidHumanSubjectTracker({
       invalidFrameThreshold: 3,
@@ -115,6 +233,7 @@ describe('valid human subject status helper', () => {
       imageKeypoints: keypoints(),
     });
 
+    tracker.update(valid);
     tracker.update(invalid);
     tracker.update(invalid);
     expect(tracker.update(valid).invalidFrameCount).toBe(2);
