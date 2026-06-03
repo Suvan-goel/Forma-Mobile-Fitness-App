@@ -225,16 +225,34 @@ const LATERAL_RAISE_ISSUE_CUE_FAMILIES: Record<string, string> = {
   'standing-dumbbell-lateral-raises.wrong_plane': 'shoulderElbowWristPath',
 };
 
-const LATERAL_RAISE_MESSAGE_CUE_FAMILIES: Record<string, string> = {
-  'Raise higher — aim for shoulder level.': 'visibleArmRaise',
-  'Stop around shoulder height — avoid lifting too high.': 'visibleArmRaise',
-  'Keep your arms straighter — avoid excessive elbow bend.': 'shoulderElbowWristPath',
-  'Stay upright — avoid swaying or leaning.': 'torsoControl',
-  'Even it out — raise both arms to the same height.': 'bilateralRaiseSymmetry',
-  'Lift with control — avoid swinging the weights up.': 'visibleArmRaise',
-  'Control the descent — lower the weights slowly.': 'visibleArmRaise',
-  'Relax your traps — don\'t shrug the weight up.': 'torsoControl',
-  'Raise out to your sides — avoid turning it into a front raise.': 'shoulderElbowWristPath',
+const LATERAL_RAISE_ALL_CUE_FAMILIES = [
+  'repCount',
+  'visibleArmRaise',
+  'torsoControl',
+  'shoulderElbowWristPath',
+  'wristEndpoint',
+  'bilateralRaiseSymmetry',
+] as const;
+
+type LateralRaiseCueFamily = typeof LATERAL_RAISE_ALL_CUE_FAMILIES[number];
+type LateralRaiseCueViewRequirement =
+  | 'anyView'
+  | 'selectedSideOk'
+  | 'frontRequired'
+  | 'bilateralGeometryRequired';
+
+const LATERAL_RAISE_MEANINGFUL_VIEW_CUE_FAMILIES: readonly LateralRaiseCueFamily[] = [
+  'visibleArmRaise',
+  'torsoControl',
+];
+
+const LATERAL_RAISE_CUE_VIEW_REQUIREMENTS: Record<LateralRaiseCueFamily, LateralRaiseCueViewRequirement> = {
+  repCount: 'selectedSideOk',
+  visibleArmRaise: 'selectedSideOk',
+  torsoControl: 'anyView',
+  shoulderElbowWristPath: 'frontRequired',
+  wristEndpoint: 'selectedSideOk',
+  bilateralRaiseSymmetry: 'bilateralGeometryRequired',
 };
 
 const LATERAL_RAISE_CONFIG_BINDINGS = [
@@ -429,6 +447,19 @@ interface RepResult {
   scorable?: boolean;
   qualityWarnings?: FrameworkRepResult['qualityWarnings'];
   diagnostics?: FrameworkRepResult['diagnostics'];
+}
+
+interface LateralRaiseViewCueDecision {
+  finalSafeCueFamilies: string[];
+  finalUnsafeCueFamilies: string[];
+  viewBlockedCueFamilies: string[];
+  poseStateBlockedCueFamilies: string[];
+  finalAllowedCueFamilies: ReadonlySet<string>;
+  frontViewGatePassed: boolean;
+  partialViewScoringAllowed: boolean;
+  scorable: boolean;
+  finalScorableReason?: string;
+  finalUnscorableReason?: string;
 }
 
 /** Debug info for on-screen overlay */
@@ -1097,6 +1128,14 @@ function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, f
   return !allowedCueFamilies || allowedCueFamilies.has(family);
 }
 
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function sortedUnique(values: Iterable<string>): string[] {
+  return uniqueStrings(values).sort((a, b) => a.localeCompare(b));
+}
+
 function reliabilityInterpretationForRepWindow(repWindow: RepWindow): {
   summary: PoseStateReliabilitySummary;
   interpretation: RepReliabilityInterpretation;
@@ -1109,13 +1148,18 @@ function reliabilityInterpretationForRepWindow(repWindow: RepWindow): {
   };
 }
 
-function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
-  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
-}
-
 function hasUsableArmChain(interpretation: RepReliabilityInterpretation | null): boolean {
   if (!interpretation) return true;
   return interpretation.usableChains.includes('leftArm') || interpretation.usableChains.includes('rightArm');
+}
+
+function hasUsableArmAndTorso(interpretation: RepReliabilityInterpretation | null): boolean {
+  if (!interpretation) return false;
+  return (
+    interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    hasUsableArmChain(interpretation) &&
+    interpretation.usableChains.includes('torso')
+  );
 }
 
 function reliabilityAllowsScoring(interpretation: RepReliabilityInterpretation | null): boolean {
@@ -1128,26 +1172,111 @@ function reliabilityAllowsScoring(interpretation: RepReliabilityInterpretation |
   );
 }
 
-function repScorableWithReliability(
-  repWindow: RepWindow,
-  interpretation: RepReliabilityInterpretation | null,
+function lateralRaiseCueFamilyAllowedByView(
+  requirement: LateralRaiseCueViewRequirement,
+  frontViewGatePassed: boolean,
+  viewEvidenceAvailable: boolean,
+  partialViewCandidate: boolean,
 ): boolean {
-  if (!interpretation) return isLateralRaiseRepScorable(repWindow);
-  return hasScorableFrontView(repWindow) && reliabilityAllowsScoring(interpretation);
+  if (frontViewGatePassed) return true;
+  if (!viewEvidenceAvailable) return true;
+  switch (requirement) {
+    case 'anyView':
+      return true;
+    case 'selectedSideOk':
+      return partialViewCandidate;
+    case 'frontRequired':
+    case 'bilateralGeometryRequired':
+      return false;
+    default:
+      return false;
+  }
 }
 
-function suppressUnsafeReliabilityMessages(
-  messages: string[],
+function resolveLateralRaiseViewCueDecision(
+  repWindow: RepWindow,
   interpretation: RepReliabilityInterpretation | null,
-): string[] {
-  if (!interpretation) return messages;
-  if (!reliabilityAllowsScoring(interpretation)) return [];
+): LateralRaiseViewCueDecision {
+  const frontViewGatePassed = hasScorableFrontView(repWindow);
+  const view = diagnosticView(repWindow);
+  const viewEvidenceAvailable = view !== 'unknown';
+  const partialViewCandidate = view === 'oblique';
+  const legacyQualityScorable = isLateralRaiseRepScorable(repWindow);
+  const armAndTorsoUsable = hasUsableArmAndTorso(interpretation);
+  const reliabilitySafeFamilies = new Set(
+    interpretation
+      ? interpretation.safeCueFamilies
+      : (frontViewGatePassed || !viewEvidenceAvailable) ? LATERAL_RAISE_ALL_CUE_FAMILIES : [],
+  );
+  const poseStateBlockedCueFamilies = sortedUnique(interpretation?.unsafeCueFamilies ?? []);
+  const poseStateBlockedSet = new Set(poseStateBlockedCueFamilies);
+  const viewBlockedCueFamilies: string[] = [];
+  const finalSafeCueFamilies: string[] = [];
+  const finalUnsafeCueFamilies: string[] = [];
 
-  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
-  return messages.filter((message) => {
-    const family = LATERAL_RAISE_MESSAGE_CUE_FAMILIES[message];
-    return !family || !unsafeFamilies.has(family);
-  });
+  for (const family of LATERAL_RAISE_ALL_CUE_FAMILIES) {
+    const requirement = LATERAL_RAISE_CUE_VIEW_REQUIREMENTS[family];
+    const viewAllows = lateralRaiseCueFamilyAllowedByView(
+      requirement,
+      frontViewGatePassed,
+      viewEvidenceAvailable,
+      partialViewCandidate,
+    );
+    const poseStateAllows = reliabilitySafeFamilies.has(family) && !poseStateBlockedSet.has(family);
+
+    if (!viewAllows) viewBlockedCueFamilies.push(family);
+    if (viewAllows && poseStateAllows) finalSafeCueFamilies.push(family);
+    else finalUnsafeCueFamilies.push(family);
+  }
+
+  const finalSafeSet = new Set(finalSafeCueFamilies);
+  const hasMeaningfulSafeCue = LATERAL_RAISE_MEANINGFUL_VIEW_CUE_FAMILIES.some((family) => (
+    finalSafeSet.has(family)
+  ));
+  const reliabilityScorable = interpretation
+    ? reliabilityAllowsScoring(interpretation)
+    : legacyQualityScorable;
+  const partialViewScoringAllowed = Boolean(
+    interpretation &&
+    !frontViewGatePassed &&
+    partialViewCandidate &&
+    armAndTorsoUsable &&
+    hasMeaningfulSafeCue
+  );
+  const scorable = interpretation
+    ? reliabilityScorable && (frontViewGatePassed || partialViewScoringAllowed)
+    : legacyQualityScorable;
+
+  let finalScorableReason: string | undefined;
+  let finalUnscorableReason: string | undefined;
+  if (scorable) {
+    finalScorableReason = frontViewGatePassed ? 'front_view_confirmed' : 'partial_view_scoring';
+  } else if (!interpretation && !frontViewGatePassed) {
+    finalUnscorableReason = 'front_view_uncertain';
+  } else if (!reliabilityScorable) {
+    finalUnscorableReason = interpretation
+      ? 'pose_reliability_not_scoreable'
+      : 'missing_required_joints';
+  } else if (!frontViewGatePassed && !armAndTorsoUsable) {
+    finalUnscorableReason = 'front_view_failed_visible_arm_or_torso_unreliable';
+  } else if (!hasMeaningfulSafeCue) {
+    finalUnscorableReason = 'no_meaningful_safe_cue_families';
+  } else {
+    finalUnscorableReason = 'front_view_uncertain';
+  }
+
+  return {
+    finalSafeCueFamilies: sortedUnique(finalSafeCueFamilies),
+    finalUnsafeCueFamilies: sortedUnique(finalUnsafeCueFamilies),
+    viewBlockedCueFamilies: sortedUnique(viewBlockedCueFamilies),
+    poseStateBlockedCueFamilies,
+    finalAllowedCueFamilies: new Set(finalSafeCueFamilies),
+    frontViewGatePassed,
+    partialViewScoringAllowed,
+    scorable,
+    finalScorableReason,
+    finalUnscorableReason,
+  };
 }
 
 function computeRepWindowScore(
@@ -1325,42 +1454,64 @@ function generateFormMessages(
   return messages;
 }
 
-function applyReliabilityCueGating(
+function lateralRaiseViewCueGatingDiagnostic(
+  decision: LateralRaiseViewCueDecision,
+): NonNullable<FrameworkRepResult['diagnostics']>['viewCueGating'] {
+  return {
+    viewBlockedCueFamilies: decision.viewBlockedCueFamilies,
+    poseStateBlockedCueFamilies: decision.poseStateBlockedCueFamilies,
+    finalSafeCueFamilies: decision.finalSafeCueFamilies,
+    finalUnsafeCueFamilies: decision.finalUnsafeCueFamilies,
+    finalScorableReason: decision.finalScorableReason,
+    finalUnscorableReason: decision.finalUnscorableReason,
+    sideViewGatePassed: decision.frontViewGatePassed,
+    frontViewGatePassed: decision.frontViewGatePassed,
+    partialViewScoringAllowed: decision.partialViewScoringAllowed,
+  };
+}
+
+function applyLateralRaiseCueGating(
   diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
   interpretation: RepReliabilityInterpretation | null,
-  scorable: boolean,
+  decision: LateralRaiseViewCueDecision,
 ): NonNullable<FrameworkRepResult['diagnostics']> {
-  if (!interpretation) return { ...diagnostics, scorable };
-
-  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const viewBlockedFamilies = new Set(decision.viewBlockedCueFamilies);
+  const poseStateBlockedFamilies = new Set(decision.poseStateBlockedCueFamilies);
   const suppressedIssueIds: string[] = [];
   const suppressedCueFamilies = new Set<string>();
   const cues = Object.fromEntries(
     Object.entries(diagnostics.cues).map(([issueId, cue]) => {
       const family = LATERAL_RAISE_ISSUE_CUE_FAMILIES[issueId];
-      if (family && unsafeFamilies.has(family)) {
-        suppressedIssueIds.push(issueId);
-        suppressedCueFamilies.add(family);
-        return [issueId, {
-          ...cue,
-          eligible: false,
-          triggered: false,
-          skippedReason: `reliability_unsafe_${family}`,
-        }];
-      }
-      return [issueId, cue];
+      if (!family) return [issueId, cue];
+      const viewBlocked = viewBlockedFamilies.has(family);
+      const poseStateBlocked = poseStateBlockedFamilies.has(family);
+      if (!viewBlocked && !poseStateBlocked) return [issueId, cue];
+
+      suppressedIssueIds.push(issueId);
+      suppressedCueFamilies.add(family);
+      return [issueId, {
+        ...cue,
+        eligible: false,
+        triggered: false,
+        skippedReason: viewBlocked
+          ? `view_unsafe_${family}`
+          : `reliability_unsafe_${family}`,
+      }];
     }),
   );
 
   return {
     ...diagnostics,
-    scorable,
+    scorable: decision.scorable,
     cues,
-    reliability: {
-      ...interpretation,
-      suppressedCueFamilies: Array.from(suppressedCueFamilies),
-      suppressedIssueIds,
-    },
+    viewCueGating: lateralRaiseViewCueGatingDiagnostic(decision),
+    reliability: interpretation
+      ? {
+          ...interpretation,
+          suppressedCueFamilies: sortedUnique(suppressedCueFamilies),
+          suppressedIssueIds: sortedUnique(suppressedIssueIds),
+        }
+      : diagnostics.reliability,
   };
 }
 
@@ -1389,6 +1540,8 @@ function logLateralRaiseRepReliability(
     `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
     `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
     `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `frontViewGate=${diagnostics?.viewCueGating?.frontViewGatePassed === true ? 'passed' : 'failed'}`,
+    `partialViewScoring=${diagnostics?.viewCueGating?.partialViewScoringAllowed === true ? 'allowed' : 'blocked'}`,
     `reasons=${interpretation.reasons.join(',') || 'none'}`,
   ].join(' '));
 }
@@ -1396,19 +1549,16 @@ function logLateralRaiseRepReliability(
 function buildLateralRaiseRepResult(repWindow: RepWindow, repIndex: number): RepResult {
   const reliability = reliabilityInterpretationForRepWindow(repWindow);
   const reliabilityInterpretation = reliability?.interpretation ?? null;
-  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
-  const finalScorable = repScorableWithReliability(repWindow, reliabilityInterpretation);
+  const cueDecision = resolveLateralRaiseViewCueDecision(repWindow, reliabilityInterpretation);
+  const allowedCueFamilies = cueDecision.finalAllowedCueFamilies;
   const messages = generateFormMessages(repWindow, allowedCueFamilies);
-  const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
-  const diagnostics = applyReliabilityCueGating(
-    buildLateralRaiseDiagnostics(repWindow, repIndex, finalScorable),
+  const diagnostics = applyLateralRaiseCueGating(
+    buildLateralRaiseDiagnostics(repWindow, repIndex, cueDecision.scorable),
     reliabilityInterpretation,
-    finalScorable,
+    cueDecision,
   );
-  // ScoreabilityCandidate controls reliability safety; finalScorable also
-  // includes the exercise view gate. Keep the historical score calculation for
-  // diagnostics even if the view gate later marks the rep unscorable.
-  const score = reliabilityAllowsScoring(reliabilityInterpretation)
+  // Score only from cue families that survive both PoseState and view gating.
+  const score = cueDecision.finalAllowedCueFamilies.size > 0 && reliabilityAllowsScoring(reliabilityInterpretation)
     ? computeRepWindowScore(repWindow, allowedCueFamilies)
     : 0;
   logLateralRaiseRepReliability(repIndex, reliabilityInterpretation, diagnostics);
@@ -1416,8 +1566,8 @@ function buildLateralRaiseRepResult(repWindow: RepWindow, repIndex: number): Rep
   return {
     repIndex,
     score,
-    messages: finalMessages,
-    scorable: finalScorable,
+    messages,
+    scorable: cueDecision.scorable,
     qualityWarnings: lateralRaiseQualityWarnings(repWindow),
     diagnostics,
   };

@@ -514,7 +514,7 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.feedbackMessages).toEqual([]);
   });
 
-  it('counts but marks sustained oblique world-landmark captures unscorable', () => {
+  it('counts sustained oblique world-landmark captures with limited view-gated feedback', () => {
     const recording = withWorldContext(
       buildRecording('synthetic oblique lateral raise', fullRepPath()),
       () => 0,
@@ -523,11 +523,20 @@ describe('Lateral Raise synthetic replay coverage', () => {
     const result = replayRecording(lateralRaiseDefinition, recording, { confidenceGating: true });
 
     expect(result.finalRepCount).toBe(1);
-    expect(result.reps[0].scorable).toBe(false);
+    expect(result.reps[0].scorable).toBe(true);
     expect(result.reps[0].qualityWarnings).toContain('front_view_uncertain');
-    expect(result.reps[0].diagnostics?.scorable).toBe(false);
+    expect(result.reps[0].diagnostics?.scorable).toBe(true);
     expect(result.reps[0].diagnostics?.view).toBe('oblique');
-    expect(result.feedbackMessages[0]).toContain('Face the camera so I can judge your form.');
+    expect(result.reps[0].diagnostics?.viewCueGating).toMatchObject({
+      frontViewGatePassed: false,
+      partialViewScoringAllowed: true,
+      finalScorableReason: 'partial_view_scoring',
+      viewBlockedCueFamilies: expect.arrayContaining([
+        'bilateralRaiseSymmetry',
+        'shoulderElbowWristPath',
+      ]),
+    });
+    expect(result.feedbackMessages.join('\n')).not.toContain('Face the camera so I can judge your form.');
     expect(collectLiveWarnings(recording)).toContain('front_view_uncertain');
   });
 
@@ -561,6 +570,164 @@ describe('Lateral Raise synthetic replay coverage', () => {
       unsafeCueFamilies: [],
       suppressedIssueIds: [],
     });
+    expect(result.reps[0].diagnostics?.viewCueGating).toMatchObject({
+      frontViewGatePassed: true,
+      partialViewScoringAllowed: false,
+      finalScorableReason: 'front_view_confirmed',
+      finalSafeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'visibleArmRaise',
+        'torsoControl',
+        'shoulderElbowWristPath',
+        'wristEndpoint',
+        'bilateralRaiseSymmetry',
+      ]),
+      viewBlockedCueFamilies: [],
+      poseStateBlockedCueFamilies: [],
+    });
+  });
+
+  it('keeps reliable mild-oblique v2 reps partially scoreable with front-only cues view-blocked', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      recordingWithV2PoseMetadata(
+        withWorldContext(
+          buildRecording('synthetic reliable oblique v2 lateral raise', fullRepPath(), {
+            rightScale: 0.78,
+            rightArmPlane: 'front',
+          }),
+          () => 0,
+          () => 35,
+        ),
+      ),
+      { confidenceGating: true },
+    );
+
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].qualityWarnings).toContain('front_view_uncertain');
+    expect(diagnostics.view).toBe('oblique');
+    expect(diagnostics.viewCueGating).toMatchObject({
+      frontViewGatePassed: false,
+      partialViewScoringAllowed: true,
+      finalScorableReason: 'partial_view_scoring',
+      finalSafeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'visibleArmRaise',
+        'torsoControl',
+      ]),
+      viewBlockedCueFamilies: expect.arrayContaining([
+        'bilateralRaiseSymmetry',
+        'shoulderElbowWristPath',
+      ]),
+      poseStateBlockedCueFamilies: [],
+    });
+    expect(diagnostics.viewCueGating?.finalUnsafeCueFamilies).toEqual(
+      expect.arrayContaining(['bilateralRaiseSymmetry', 'shoulderElbowWristPath']),
+    );
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.asymmetry']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'view_unsafe_bilateralRaiseSymmetry',
+    });
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.wrong_plane']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'view_unsafe_shoulderElbowWristPath',
+    });
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.rom_height'].eligible).toBe(true);
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.torso_warn'].eligible).toBe(true);
+    expect(result.feedbackMessages).not.toContain('Raise out to your sides — avoid turning it into a front raise.');
+    expect(result.feedbackMessages).not.toContain('Even it out — raise both arms to the same height.');
+    expect(result.feedbackMessages.join('\n')).not.toContain('Face the camera so I can judge your form.');
+  });
+
+  it('keeps oblique v2 reps unscored when no arm chain is reliable', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      recordingWithV2PoseMetadata(
+        withWorldContext(
+          buildRecording('synthetic oblique both-arm weak v2 lateral raise', fullRepPath()),
+          () => 0,
+          () => 35,
+        ),
+        {
+          lowVisibilityJoints: new Set([
+            'left_elbow',
+            'left_wrist',
+            'right_elbow',
+            'right_wrist',
+          ]),
+        },
+      ),
+      { confidenceGating: true },
+    );
+
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(diagnostics.viewCueGating).toMatchObject({
+      frontViewGatePassed: false,
+      partialViewScoringAllowed: false,
+      finalUnscorableReason: 'pose_reliability_not_scoreable',
+      poseStateBlockedCueFamilies: expect.arrayContaining([
+        'repCount',
+        'visibleArmRaise',
+        'shoulderElbowWristPath',
+        'wristEndpoint',
+      ]),
+    });
+    expect(diagnostics.viewCueGating?.finalUnsafeCueFamilies).toEqual(
+      expect.arrayContaining(['visibleArmRaise', 'wristEndpoint', 'shoulderElbowWristPath']),
+    );
+    expect(diagnostics.cues['standing-dumbbell-lateral-raises.rom_height']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_visibleArmRaise',
+    });
+  });
+
+  it('keeps oblique v2 reps unscored when no meaningful cue family remains safe', () => {
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      recordingWithV2PoseMetadata(
+        withWorldContext(
+          buildRecording('synthetic oblique all-chains weak v2 lateral raise', fullRepPath()),
+          () => 0,
+          () => 35,
+        ),
+        {
+          lowVisibilityJoints: new Set([
+            'left_shoulder',
+            'right_shoulder',
+            'left_elbow',
+            'right_elbow',
+            'left_wrist',
+            'right_wrist',
+            'left_hip',
+            'right_hip',
+          ]),
+        },
+      ),
+      { confidenceGating: true },
+    );
+
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(diagnostics.viewCueGating).toMatchObject({
+      frontViewGatePassed: false,
+      partialViewScoringAllowed: false,
+      finalSafeCueFamilies: [],
+    });
+    expect(diagnostics.viewCueGating?.finalUnsafeCueFamilies).toEqual(
+      expect.arrayContaining(['visibleArmRaise', 'torsoControl', 'wristEndpoint']),
+    );
   });
 
   it('keeps mostly-front captures with brief oblique yaw scorable and diagnosed as front', () => {

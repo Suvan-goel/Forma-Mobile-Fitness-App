@@ -195,6 +195,7 @@ export interface RepViewCueGatingDiagnostic {
   finalScorableReason?: string;
   finalUnscorableReason?: string;
   sideViewGatePassed: boolean;
+  frontViewGatePassed?: boolean;
   partialViewScoringAllowed: boolean;
 }
 
