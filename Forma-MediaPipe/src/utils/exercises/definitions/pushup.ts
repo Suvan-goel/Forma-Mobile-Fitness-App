@@ -30,7 +30,13 @@ import {
   diagnosticCue,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/pushup.json';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -136,6 +142,52 @@ const VISIBILITY_THRESHOLD = 0.2;
 const FORM_CONFIDENCE_MIN = 0.3;
 const SETUP_FEEDBACK = 'Set the camera side-on with your full body in frame.';
 const SHOULDER_STACK_FEEDBACK = 'Stack your shoulders over your hands.';
+const PUSHUP_RELIABILITY_JOINTS = [
+  'nose',
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+  'left_hip',
+  'right_hip',
+  'left_ankle',
+  'right_ankle',
+];
+const PUSHUP_SELECTED_ARM_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'armDepth',
+  'elbowPath',
+  'wristHandPlacement',
+];
+const PUSHUP_ISSUE_CUE_FAMILIES: Record<string, string[]> = {
+  'push-up.depth_short': ['armDepth', 'elbowPath', 'wristHandPlacement'],
+  'push-up.lockout_short': ['armDepth', 'elbowPath', 'wristHandPlacement'],
+  'push-up.incomplete_rom': ['armDepth', 'elbowPath', 'wristHandPlacement'],
+  'push-up.hip_sag': ['bodyLine', 'hipSag', 'footAnklePosition'],
+  'push-up.hip_pike': ['bodyLine', 'hipSag', 'footAnklePosition'],
+  'push-up.head_position': ['headNeckPosition'],
+  'push-up.shoulder_stack': ['wristHandPlacement'],
+  'push-up.camera_setup': ['torsoControl'],
+  'push-up.tempo_up': ['tempo'],
+  'push-up.tempo_down': ['tempo'],
+};
+const PUSHUP_MESSAGE_CUE_FAMILIES: Record<string, string[]> = {
+  'Go deeper \u2014 aim for elbows at 90 degrees.': ['armDepth', 'elbowPath', 'wristHandPlacement'],
+  'Lock out your arms fully at the top.': ['armDepth', 'elbowPath', 'wristHandPlacement'],
+  'Incomplete rep \u2014 full range of motion from lockout to 90 degrees.': ['armDepth', 'elbowPath', 'wristHandPlacement'],
+  'Hips are sagging \u2014 engage your core to maintain a straight line.': ['bodyLine', 'hipSag', 'footAnklePosition'],
+  'Keep your hips up \u2014 your body line is dropping.': ['bodyLine', 'hipSag', 'footAnklePosition'],
+  'Hips are piking up \u2014 lower them to maintain a straight plank.': ['bodyLine', 'hipSag', 'footAnklePosition'],
+  'Hips are riding high \u2014 aim for a straight body line.': ['bodyLine', 'hipSag', 'footAnklePosition'],
+  'Keep your head neutral \u2014 align your neck with your spine.': ['headNeckPosition'],
+  [SHOULDER_STACK_FEEDBACK]: ['wristHandPlacement'],
+  [SETUP_FEEDBACK]: ['torsoControl'],
+  'Slow down the push \u2014 control the movement.': ['tempo'],
+  "Control the descent \u2014 don't drop into the pushup.": ['tempo'],
+};
 
 const DEFAULT_PUSHUP_HEURISTIC_CONFIG = {
   thresholds: THRESHOLDS,
@@ -229,6 +281,7 @@ interface PushupRepWindow {
   headJudgeableFrames: number;
   setupWarningFrames: number;
   setupWarningCounts: Partial<Record<PushupSetupWarning, number>>;
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
   /** Timestamps */
   tStart: number;
   tBottom: number | null;
@@ -364,6 +417,7 @@ function initRepWindow(tStart: number): PushupRepWindow {
     headJudgeableFrames: 0,
     setupWarningFrames: 0,
     setupWarningCounts: {},
+    reliability: createPoseStateReliabilityAggregator(),
     tStart,
     tBottom: null,
     tEnd: tStart,
@@ -1060,6 +1114,341 @@ function pushupDiagnosticView(repWindow: PushupRepWindow): NonNullable<Framework
   return setupWarningRate(repWindow) > 0.4 ? 'unknown' : 'side';
 }
 
+function pushupQualityScorable(repWindow: PushupRepWindow): boolean {
+  const bodyCoverage = repWindow.frameCount === 0 ? 0 : repWindow.bodyJudgeableFrames / repWindow.frameCount;
+  // Head tracking gates only the optional head-position cue. A rep with clear
+  // arms/body/setup remains scorable even when the nose landmark is unreliable.
+  return bodyCoverage >= 0.6 && setupWarningRate(repWindow) <= 0.4;
+}
+
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function selectedArmChain(visibleSide: 'left' | 'right'): 'leftArm' | 'rightArm' {
+  return visibleSide === 'left' ? 'leftArm' : 'rightArm';
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function jointReliableForMostOfRep(
+  summary: PoseStateReliabilitySummary,
+  jointName: string,
+): boolean {
+  if (summary.totalFrames === 0) return false;
+  const unreliableFrames = summary.unreliableJointCounts[jointName] ?? 0;
+  return unreliableFrames / summary.totalFrames < 0.25;
+}
+
+function selectedSideJointsReliable(
+  summary: PoseStateReliabilitySummary,
+  visibleSide: 'left' | 'right',
+  jointNames: string[],
+): boolean {
+  return jointNames.every((jointName) => (
+    jointReliableForMostOfRep(summary, `${visibleSide}_${jointName}`)
+  ));
+}
+
+function addUsableReliabilityChain(
+  interpretation: RepReliabilityInterpretation,
+  chainName: string,
+): RepReliabilityInterpretation {
+  if (interpretation.usableChains.includes(chainName)) return interpretation;
+  return {
+    ...interpretation,
+    usableChains: [...interpretation.usableChains, chainName],
+    weakChains: interpretation.weakChains.filter(chain => chain !== chainName),
+  };
+}
+
+function markCueFamiliesSafe(
+  interpretation: RepReliabilityInterpretation,
+  families: string[],
+): RepReliabilityInterpretation {
+  const familySet = new Set(families);
+  return {
+    ...interpretation,
+    safeCueFamilies: uniqueStrings([
+      ...interpretation.safeCueFamilies,
+      ...families,
+    ]),
+    unsafeCueFamilies: interpretation.unsafeCueFamilies.filter(family => !familySet.has(family)),
+  };
+}
+
+function updatePushupReliabilityCandidates(
+  interpretation: RepReliabilityInterpretation,
+  summary: PoseStateReliabilitySummary,
+  visibleSide: 'left' | 'right',
+): RepReliabilityInterpretation {
+  const selectedArmUsable = interpretation.usableChains.includes(selectedArmChain(visibleSide));
+  const torsoUsable = interpretation.usableChains.includes('torso');
+  const bodyLineUsable = interpretation.usableChains.includes('pushupBodyLine');
+  const bothArmsUsable =
+    interpretation.usableChains.includes('leftArm') &&
+    interpretation.usableChains.includes('rightArm');
+  const countabilityCandidate =
+    summary.trackingInterruptedFrames === 0 && selectedArmUsable && torsoUsable
+      ? 'countable'
+      : interpretation.countabilityCandidate;
+  const fullScoreable =
+    countabilityCandidate === 'countable' &&
+    bothArmsUsable &&
+    torsoUsable &&
+    bodyLineUsable &&
+    interpretation.unsafeCueFamilies.length === 0;
+  const scoreabilityCandidate = fullScoreable
+    ? 'fullyScoreable'
+    : countabilityCandidate === 'notCountable'
+      ? 'notScoreable'
+      : selectedArmUsable && torsoUsable
+        ? 'partiallyScoreable'
+        : interpretation.scoreabilityCandidate;
+
+  return {
+    ...interpretation,
+    countabilityCandidate,
+    scoreabilityCandidate,
+  };
+}
+
+function applySelectedSideSupportOverrides(
+  interpretation: RepReliabilityInterpretation,
+  summary: PoseStateReliabilitySummary,
+  visibleSide: 'left' | 'right',
+): RepReliabilityInterpretation {
+  let next = interpretation;
+  const selectedTorsoReliable = selectedSideJointsReliable(summary, visibleSide, ['shoulder', 'hip']);
+  const selectedBodyLineReliable = selectedSideJointsReliable(summary, visibleSide, ['shoulder', 'hip', 'ankle']);
+
+  if (selectedTorsoReliable && !next.usableChains.includes('torso')) {
+    next = addUsableReliabilityChain(next, 'torso');
+    next = markCueFamiliesSafe(next, ['repCount', 'torsoControl', 'headNeckPosition']);
+    next = {
+      ...next,
+      reasons: uniqueStrings([
+        ...next.reasons,
+        'selected_side_torso_support_usable',
+      ]),
+    };
+  }
+
+  if (selectedBodyLineReliable && !next.usableChains.includes('pushupBodyLine')) {
+    next = addUsableReliabilityChain(next, 'pushupBodyLine');
+    next = markCueFamiliesSafe(next, ['bodyLine', 'hipSag', 'kneeSupport', 'footAnklePosition']);
+    next = {
+      ...next,
+      reasons: uniqueStrings([
+        ...next.reasons,
+        'selected_side_body_line_usable',
+      ]),
+    };
+  }
+
+  return updatePushupReliabilityCandidates(next, summary, visibleSide);
+}
+
+function reliabilityInterpretationForRepWindow(
+  repWindow: PushupRepWindow,
+  visibleSide: 'left' | 'right',
+): {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+} | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+
+  const baseInterpretation = interpretPoseStateReliabilitySummary('Push-Up', summary);
+  const selectedChain = selectedArmChain(visibleSide);
+  let interpretation = applySelectedSideSupportOverrides(baseInterpretation, summary, visibleSide);
+
+  if (!interpretation.usableChains.includes(selectedChain)) {
+    const selectedArmUnsafeFamilies = new Set<string>(PUSHUP_SELECTED_ARM_CUE_FAMILIES);
+    const safeCueFamilies = interpretation.safeCueFamilies.filter(
+      family => !selectedArmUnsafeFamilies.has(family),
+    );
+    const unsafeCueFamilies = uniqueStrings([
+      ...interpretation.unsafeCueFamilies,
+      ...PUSHUP_SELECTED_ARM_CUE_FAMILIES,
+    ]);
+
+    interpretation = {
+      ...interpretation,
+      countabilityCandidate:
+        interpretation.countabilityCandidate === 'countable'
+          ? 'maybe'
+          : interpretation.countabilityCandidate,
+      scoreabilityCandidate:
+        interpretation.scoreabilityCandidate === 'fullyScoreable'
+          ? 'partiallyScoreable'
+          : interpretation.scoreabilityCandidate,
+      safeCueFamilies,
+      unsafeCueFamilies,
+      reasons: uniqueStrings([
+        ...interpretation.reasons,
+        `${selectedChain}_selected_chain_weak`,
+        'selected_arm_cue_families_unsafe',
+      ]),
+    };
+  }
+
+  if (!jointReliableForMostOfRep(summary, 'nose') && interpretation.safeCueFamilies.includes('headNeckPosition')) {
+    interpretation = {
+      ...interpretation,
+      safeCueFamilies: interpretation.safeCueFamilies.filter(family => family !== 'headNeckPosition'),
+      unsafeCueFamilies: uniqueStrings([
+        ...interpretation.unsafeCueFamilies,
+        'headNeckPosition',
+      ]),
+      scoreabilityCandidate:
+        interpretation.scoreabilityCandidate === 'fullyScoreable'
+          ? 'partiallyScoreable'
+          : interpretation.scoreabilityCandidate,
+      reasons: uniqueStrings([
+        ...interpretation.reasons,
+        'nose_weak',
+        'head_neck_cue_family_unsafe',
+      ]),
+    };
+  }
+
+  return { summary, interpretation };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function reliabilityAllowsScoring(
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: 'left' | 'right',
+): boolean {
+  if (!interpretation) return true;
+  return (
+    interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    interpretation.usableChains.includes(selectedArmChain(visibleSide)) &&
+    interpretation.usableChains.includes('torso')
+  );
+}
+
+function repScorableWithReliability(
+  repWindow: PushupRepWindow,
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: 'left' | 'right',
+): boolean {
+  return pushupQualityScorable(repWindow) && reliabilityAllowsScoring(interpretation, visibleSide);
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const families = PUSHUP_MESSAGE_CUE_FAMILIES[message] ?? [];
+    return families.every(family => !unsafeFamilies.has(family));
+  });
+}
+
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const families = PUSHUP_ISSUE_CUE_FAMILIES[issueId] ?? [];
+      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
+      if (unsafeFamily) {
+        suppressedIssueIds.push(issueId);
+        for (const family of families) {
+          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
+        }
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${unsafeFamily}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogPushupReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logPushupRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogPushupReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[PushUpReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
+function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
+  return PUSHUP_RELIABILITY_JOINTS.some((jointName) => {
+    const joint = poseState.joints[jointName];
+    return (
+      joint &&
+      (
+        joint.presence !== null ||
+        joint.reasons.includes('presence_unknown') ||
+        joint.reasons.includes('visibility_unknown')
+      )
+    );
+  });
+}
+
+function observePushupPoseState(
+  repWindow: PushupRepWindow,
+  frameContext: ExerciseFrameContext | undefined,
+): void {
+  const poseState = frameContext?.poseState;
+  if (!poseState || !poseStateHasRichReliabilityMetadata(poseState)) return;
+  repWindow.reliability.observe(poseState);
+}
+
 // ============================================================================
 // FORM EVALUATION
 // ============================================================================
@@ -1072,48 +1461,67 @@ function pushupDiagnosticView(repWindow: PushupRepWindow): NonNullable<Framework
  *
  * Each category: min(cap, scale * max(0, x - deadzone)^2)
  */
-function computePushupRepScore(repWindow: PushupRepWindow): number {
+function computePushupRepScore(
+  repWindow: PushupRepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): number {
   let penalty = 0;
 
   // 1. Depth shortfall — lower minRatio is better (closer to 0.60)
-  const depthExcess = Math.max(0, repWindow.minElbowRatio - SCORE_CURVES.DEPTH.deadzone);
-  penalty += Math.min(SCORE_CURVES.DEPTH.cap, SCORE_CURVES.DEPTH.scale * depthExcess * depthExcess);
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'armDepth') &&
+    cueFamilyAllowed(allowedCueFamilies, 'elbowPath') &&
+    cueFamilyAllowed(allowedCueFamilies, 'wristHandPlacement')
+  ) {
+    const depthExcess = Math.max(0, repWindow.minElbowRatio - SCORE_CURVES.DEPTH.deadzone);
+    penalty += Math.min(SCORE_CURVES.DEPTH.cap, SCORE_CURVES.DEPTH.scale * depthExcess * depthExcess);
 
-  // 2. Lockout shortfall — higher maxRatio is better (closer to 0.97+)
-  const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxElbowRatio);
-  penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
+    // 2. Lockout shortfall — higher maxRatio is better (closer to 0.97+)
+    const lockoutShortfall = Math.max(0, SCORE_CURVES.LOCKOUT.ideal - repWindow.maxElbowRatio);
+    penalty += Math.min(SCORE_CURVES.LOCKOUT.cap, SCORE_CURVES.LOCKOUT.scale * lockoutShortfall * lockoutShortfall);
+  }
 
   // 3. Hip alignment -- body should be ~180 (straight line). Body angle
   //    penalizes any bend; signed hip deviation preserves sag/pike direction
   //    for feedback and adds a camera-normalized scoring check.
-  const hasBodyAngles = Number.isFinite(repWindow.minBodyAngle) && Number.isFinite(repWindow.maxBodyAngle);
-  const hasHipDeviation = Number.isFinite(repWindow.minHipDev) && Number.isFinite(repWindow.maxHipDev);
-  const bodyLineDev = hasBodyAngles
-    ? Math.max(0, SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone - repWindow.minBodyAngle)
-    : 0;
-  const signedHipDev = hasHipDeviation ? Math.max(Math.abs(repWindow.minHipDev), Math.abs(repWindow.maxHipDev)) : 0;
-  const hipDevExcess = Math.max(0, signedHipDev - SCORE_CURVES.HIP_DEV.deadzone);
-  const hipAnglePenalty = SCORE_CURVES.HIP.scale * bodyLineDev * bodyLineDev;
-  const hipDevPenalty = SCORE_CURVES.HIP_DEV.scale * hipDevExcess * hipDevExcess;
-  penalty += Math.min(SCORE_CURVES.HIP.cap, Math.max(hipAnglePenalty, hipDevPenalty));
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'bodyLine') &&
+    cueFamilyAllowed(allowedCueFamilies, 'hipSag') &&
+    cueFamilyAllowed(allowedCueFamilies, 'footAnklePosition')
+  ) {
+    const hasBodyAngles = Number.isFinite(repWindow.minBodyAngle) && Number.isFinite(repWindow.maxBodyAngle);
+    const hasHipDeviation = Number.isFinite(repWindow.minHipDev) && Number.isFinite(repWindow.maxHipDev);
+    const bodyLineDev = hasBodyAngles
+      ? Math.max(0, SCORE_CURVES.HIP.neutral - SCORE_CURVES.HIP.deadzone - repWindow.minBodyAngle)
+      : 0;
+    const signedHipDev = hasHipDeviation ? Math.max(Math.abs(repWindow.minHipDev), Math.abs(repWindow.maxHipDev)) : 0;
+    const hipDevExcess = Math.max(0, signedHipDev - SCORE_CURVES.HIP_DEV.deadzone);
+    const hipAnglePenalty = SCORE_CURVES.HIP.scale * bodyLineDev * bodyLineDev;
+    const hipDevPenalty = SCORE_CURVES.HIP_DEV.scale * hipDevExcess * hipDevExcess;
+    penalty += Math.min(SCORE_CURVES.HIP.cap, Math.max(hipAnglePenalty, hipDevPenalty));
+  }
 
   // 4. Head/neck alignment -- obvious head drop/crane out of plank line
-  const headShortfall = Number.isFinite(repWindow.minHeadSpine)
-    ? Math.max(0, SCORE_CURVES.HEAD.min - repWindow.minHeadSpine)
-    : 0;
-  penalty += Math.min(SCORE_CURVES.HEAD.cap, SCORE_CURVES.HEAD.scale * headShortfall * headShortfall);
+  if (cueFamilyAllowed(allowedCueFamilies, 'headNeckPosition')) {
+    const headShortfall = Number.isFinite(repWindow.minHeadSpine)
+      ? Math.max(0, SCORE_CURVES.HEAD.min - repWindow.minHeadSpine)
+      : 0;
+    penalty += Math.min(SCORE_CURVES.HEAD.cap, SCORE_CURVES.HEAD.scale * headShortfall * headShortfall);
+  }
 
   // 5. Shoulder/wrist stack -- small, capped setup/form penalty aligned with the low-priority cue.
-  const shoulderStackExcess = Number.isFinite(repWindow.maxShoulderWristOffset)
-    ? Math.max(0, repWindow.maxShoulderWristOffset - FORM_THRESHOLDS.SHOULDER_WRIST_WARN)
-    : 0;
-  penalty += Math.min(
-    SCORE_CURVES.SHOULDER_STACK.cap,
-    SCORE_CURVES.SHOULDER_STACK.scale * shoulderStackExcess * shoulderStackExcess,
-  );
+  if (cueFamilyAllowed(allowedCueFamilies, 'wristHandPlacement')) {
+    const shoulderStackExcess = Number.isFinite(repWindow.maxShoulderWristOffset)
+      ? Math.max(0, repWindow.maxShoulderWristOffset - FORM_THRESHOLDS.SHOULDER_WRIST_WARN)
+      : 0;
+    penalty += Math.min(
+      SCORE_CURVES.SHOULDER_STACK.cap,
+      SCORE_CURVES.SHOULDER_STACK.scale * shoulderStackExcess * shoulderStackExcess,
+    );
+  }
 
   // 6. Tempo -- too fast in either direction
-  if (repWindow.tBottom !== null) {
+  if (repWindow.tBottom !== null && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
 
@@ -1139,22 +1547,29 @@ function computePushupRepScore(repWindow: PushupRepWindow): number {
  * These are independent of the continuous score -- a rep can score 92 and
  * still surface an actionable message.
  */
-function generateFormMessages(repWindow: PushupRepWindow): string[] {
+function generateFormMessages(
+  repWindow: PushupRepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): string[] {
   const messages: string[] = [];
 
   // 1. Depth (ratio-based)
-  if (repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL) {
+  const armCueAllowed =
+    cueFamilyAllowed(allowedCueFamilies, 'armDepth') &&
+    cueFamilyAllowed(allowedCueFamilies, 'elbowPath') &&
+    cueFamilyAllowed(allowedCueFamilies, 'wristHandPlacement');
+  if (armCueAllowed && repWindow.minElbowRatio > FORM_THRESHOLDS.DEPTH_FAIL) {
     messages.push('Go deeper \u2014 aim for elbows at 90 degrees.');
   }
 
   // 2. Lockout (ratio-based)
-  if (repWindow.maxElbowRatio < FORM_THRESHOLDS.LOCKOUT_FAIL) {
+  if (armCueAllowed && repWindow.maxElbowRatio < FORM_THRESHOLDS.LOCKOUT_FAIL) {
     messages.push('Lock out your arms fully at the top.');
   }
 
   // 3. ROM (ratio-based)
   const romRatio = repWindow.maxElbowRatio - repWindow.minElbowRatio;
-  if (romRatio < FORM_THRESHOLDS.ROM_MIN && messages.length === 0) {
+  if (armCueAllowed && romRatio < FORM_THRESHOLDS.ROM_MIN && messages.length === 0) {
     messages.push('Incomplete rep \u2014 full range of motion from lockout to 90 degrees.');
   }
 
@@ -1164,36 +1579,51 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
 
   const hasHipDeviation = Number.isFinite(minDev) && Number.isFinite(maxDev);
 
-  if (hasHipDeviation && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
-    messages.push('Hips are sagging \u2014 engage your core to maintain a straight line.');
-  } else if (hasHipDeviation && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN) {
-    messages.push('Keep your hips up \u2014 your body line is dropping.');
-  }
+  const bodyLineCueAllowed =
+    cueFamilyAllowed(allowedCueFamilies, 'bodyLine') &&
+    cueFamilyAllowed(allowedCueFamilies, 'hipSag') &&
+    cueFamilyAllowed(allowedCueFamilies, 'footAnklePosition');
+  if (bodyLineCueAllowed) {
+    if (hasHipDeviation && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_FAIL) {
+      messages.push('Hips are sagging \u2014 engage your core to maintain a straight line.');
+    } else if (hasHipDeviation && maxDev > FORM_THRESHOLDS.HIP_DEV_SAG_WARN) {
+      messages.push('Keep your hips up \u2014 your body line is dropping.');
+    }
 
-  if (hasHipDeviation && minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL) {
-    messages.push('Hips are piking up \u2014 lower them to maintain a straight plank.');
-  } else if (hasHipDeviation && -minDev > FORM_THRESHOLDS.HIP_DEV_PIKE_WARN) {
-    messages.push('Hips are riding high \u2014 aim for a straight body line.');
+    if (hasHipDeviation && minDev < -FORM_THRESHOLDS.HIP_DEV_PIKE_FAIL) {
+      messages.push('Hips are piking up \u2014 lower them to maintain a straight plank.');
+    } else if (hasHipDeviation && -minDev > FORM_THRESHOLDS.HIP_DEV_PIKE_WARN) {
+      messages.push('Hips are riding high \u2014 aim for a straight body line.');
+    }
   }
 
   // 5. Head/neck alignment
-  if (Number.isFinite(repWindow.minHeadSpine) && repWindow.minHeadSpine < FORM_THRESHOLDS.HEAD_SPINE_WARN) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'headNeckPosition') &&
+    Number.isFinite(repWindow.minHeadSpine) &&
+    repWindow.minHeadSpine < FORM_THRESHOLDS.HEAD_SPINE_WARN
+  ) {
     messages.push('Keep your head neutral \u2014 align your neck with your spine.');
   }
 
   if (
+    cueFamilyAllowed(allowedCueFamilies, 'wristHandPlacement') &&
     Number.isFinite(repWindow.maxShoulderWristOffset) &&
     repWindow.maxShoulderWristOffset > FORM_THRESHOLDS.SHOULDER_WRIST_WARN
   ) {
     messages.push(SHOULDER_STACK_FEEDBACK);
   }
 
-  if (repWindow.frameCount > 0 && repWindow.setupWarningFrames / repWindow.frameCount > 0.4) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'torsoControl') &&
+    repWindow.frameCount > 0 &&
+    repWindow.setupWarningFrames / repWindow.frameCount > 0.4
+  ) {
     messages.push(SETUP_FEEDBACK);
   }
 
   // 6. Tempo
-  if (repWindow.tBottom !== null) {
+  if (repWindow.tBottom !== null && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     const tEccentric = repWindow.tBottom - repWindow.tStart;
     const tConcentric = repWindow.tEnd - repWindow.tBottom;
 
@@ -1216,13 +1646,11 @@ function generateFormMessages(repWindow: PushupRepWindow): string[] {
  */
 function evaluateForm(
   repWindow: PushupRepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
 ): { score: number; messages: string[]; scorable: boolean; qualityWarnings: FrameworkRepResult['qualityWarnings'] } {
-  const score = computePushupRepScore(repWindow);
-  const messages = generateFormMessages(repWindow);
-  const bodyCoverage = repWindow.frameCount === 0 ? 0 : repWindow.bodyJudgeableFrames / repWindow.frameCount;
-  // Head tracking gates only the optional head-position cue. A rep with clear
-  // arms/body/setup remains scorable even when the nose landmark is unreliable.
-  const scorable = bodyCoverage >= 0.6 && setupWarningRate(repWindow) <= 0.4;
+  const score = computePushupRepScore(repWindow, allowedCueFamilies);
+  const messages = generateFormMessages(repWindow, allowedCueFamilies);
+  const scorable = pushupQualityScorable(repWindow);
   return { score, messages, scorable, qualityWarnings: pushupQualityWarnings(repWindow) };
 }
 
@@ -1231,7 +1659,7 @@ function buildPushupDiagnostics(
   repIndex: number,
   visibleSide: 'left' | 'right',
   scorable: boolean,
-): FrameworkRepResult['diagnostics'] {
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const romRatio = repWindow.maxElbowRatio - repWindow.minElbowRatio;
   const tDown = repWindow.tBottom !== null ? repWindow.tBottom - repWindow.tStart : null;
   const tUp = repWindow.tBottom !== null ? repWindow.tEnd - repWindow.tBottom : null;
@@ -1380,6 +1808,46 @@ function buildPushupDiagnostics(
   });
 }
 
+function buildPushupRepResult(
+  repWindow: PushupRepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+  romRatio: number,
+  tDown: number,
+  tUp: number,
+): RepResult {
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const reliabilityScorable = reliabilityAllowsScoring(reliabilityInterpretation, visibleSide);
+  const scorable = repScorableWithReliability(repWindow, reliabilityInterpretation, visibleSide);
+  const { score: qualityScore, messages, qualityWarnings } = evaluateForm(repWindow, allowedCueFamilies);
+  const score = scorable ? qualityScore : 0;
+  const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
+  const diagnostics = applyReliabilityCueGating(
+    buildPushupDiagnostics(repWindow, repIndex, visibleSide, scorable),
+    reliabilityInterpretation,
+    scorable,
+  );
+
+  logPushupRepReliability(repIndex, reliabilityInterpretation, diagnostics);
+
+  return {
+    repIndex,
+    romRatio,
+    tDown,
+    tUp,
+    score,
+    messages: finalMessages,
+    scorable,
+    qualityWarnings: reliabilityScorable ? qualityWarnings : uniqueStrings([
+      ...(qualityWarnings ?? []),
+      'missing_required_joints',
+    ]) as FrameworkRepResult['qualityWarnings'],
+    diagnostics,
+  };
+}
+
 // ============================================================================
 // UPDATE LOGIC
 // ============================================================================
@@ -1519,6 +1987,7 @@ function updatePushupState(
   // Handle returned partials: count meaningful ROM, ignore tiny setup pulses.
   if (fsmResult.partialRep) {
     if (newState.repWindow) {
+      observePushupPoseState(newState.repWindow, frameContext);
       recordRepWindowFrame(newState.repWindow, fast, smoothed, t, newState.fsm.phase);
 
       const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
@@ -1532,18 +2001,15 @@ function updatePushupState(
         })
       ) {
         newState.repCount++;
-        const { score, messages, scorable, qualityWarnings } = evaluateForm(newState.repWindow);
-        newState.lastRepResult = {
-          repIndex: newState.repCount,
+        newState.lastRepResult = buildPushupRepResult(
+          newState.repWindow,
+          newState.repCount,
+          visibleSide,
           romRatio,
-          tDown: duration,
-          tUp: 0,
-          score,
-          messages,
-          scorable,
-          qualityWarnings,
-          diagnostics: buildPushupDiagnostics(newState.repWindow, newState.repCount, visibleSide, scorable),
-        };
+          duration,
+          0,
+        );
+        const { messages } = newState.lastRepResult;
         newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
       } else {
         newState.feedback = LOW_ROM_FEEDBACK;
@@ -1569,11 +2035,13 @@ function updatePushupState(
   }
 
   if (newState.repWindow && inRep) {
+    observePushupPoseState(newState.repWindow, frameContext);
     recordRepWindowFrame(newState.repWindow, fast, smoothed, t, newState.fsm.phase);
   }
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    observePushupPoseState(newState.repWindow, frameContext);
     recordRepWindowFrame(newState.repWindow, fast, smoothed, t, newState.fsm.phase);
 
     const romRatio = newState.repWindow.maxElbowRatio - newState.repWindow.minElbowRatio;
@@ -1602,19 +2070,15 @@ function updatePushupState(
     const tDown = newState.repWindow.tBottom ? newState.repWindow.tBottom - newState.repWindow.tStart : 0;
     const tUp = newState.repWindow.tBottom ? newState.repWindow.tEnd - newState.repWindow.tBottom : 0;
 
-    const { score, messages, scorable, qualityWarnings } = evaluateForm(newState.repWindow);
-
-    newState.lastRepResult = {
-      repIndex: newState.repCount,
+    newState.lastRepResult = buildPushupRepResult(
+      newState.repWindow,
+      newState.repCount,
+      visibleSide,
       romRatio,
       tDown,
       tUp,
-      score,
-      messages,
-      scorable,
-      qualityWarnings,
-      diagnostics: buildPushupDiagnostics(newState.repWindow, newState.repCount, visibleSide, scorable),
-    };
+    );
+    const { messages } = newState.lastRepResult;
 
     if (messages.length > 0) {
       newState.feedback = messages.join('\n');

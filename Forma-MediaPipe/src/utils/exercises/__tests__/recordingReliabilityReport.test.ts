@@ -534,8 +534,20 @@ describe('recording reliability report', () => {
     expect(rep.relevantChainStatusCounts.pushupBodyLine.partial).toBe(1);
     expect(rep.interpretation.countabilityCandidate).toBe('countable');
     expect(rep.interpretation.scoreabilityCandidate).toBe('partiallyScoreable');
-    expect(rep.interpretation.safeCueFamilies).toEqual(expect.arrayContaining(['repCount', 'armDepth', 'torsoMotion']));
-    expect(rep.interpretation.unsafeCueFamilies).toEqual(expect.arrayContaining(['bodyLine', 'footAnklePosition']));
+    expect(rep.interpretation.safeCueFamilies).toEqual(expect.arrayContaining([
+      'repCount',
+      'tempo',
+      'armDepth',
+      'elbowPath',
+      'wristHandPlacement',
+      'torsoControl',
+    ]));
+    expect(rep.interpretation.unsafeCueFamilies).toEqual(expect.arrayContaining([
+      'bodyLine',
+      'hipSag',
+      'kneeSupport',
+      'footAnklePosition',
+    ]));
   });
 
   it('treats squat leg reliability as relevant', () => {

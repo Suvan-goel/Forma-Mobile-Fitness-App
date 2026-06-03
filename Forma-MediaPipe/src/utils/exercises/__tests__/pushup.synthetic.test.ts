@@ -383,12 +383,21 @@ function buildRecordingWithPostureDuringRep(
   elbowPath: number[],
   posture: PushupPosture,
   orientation: PushupOrientation,
+  options: { hiddenSideScore?: number } = {},
 ): LandmarkRecording {
   return {
     ...buildRecording(description, elbowPath, { orientation }),
     frames: elbowPath.map((elbowOffsetX, index) => {
       const activePosture = index < 22 ? 'neutral' : posture;
-      return makeFrame(index * FRAME_MS, elbowOffsetX, 'left', orientation, activePosture, 'neutral');
+      return makeFrame(
+        index * FRAME_MS,
+        elbowOffsetX,
+        'left',
+        orientation,
+        activePosture,
+        'neutral',
+        options.hiddenSideScore,
+      );
     }),
   };
 }
@@ -417,6 +426,52 @@ function withExplicitImageAndWorld(recording: LandmarkRecording): LandmarkRecord
         keypoints: worldKeypoints.map(point => ({ ...point })),
         imageKeypoints,
         worldKeypoints,
+      };
+    }),
+  };
+}
+
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
       };
     }),
   };
@@ -492,6 +547,231 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.cues['push-up.depth_short'].triggered).toBe(false);
     expect(result.reps[0].diagnostics?.cues['push-up.lockout_short'].triggered).toBe(false);
     expect(result.reps[0].diagnostics?.cues['push-up.camera_setup'].triggered).toBe(false);
+  });
+
+  it('keeps clean v2 PoseState push-ups fully scoreable', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean full-reliability v2 pushup', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso', 'pushupBodyLine']),
+      weakChains: [],
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'armDepth',
+        'elbowPath',
+        'wristHandPlacement',
+        'torsoControl',
+        'bodyLine',
+        'hipSag',
+        'footAnklePosition',
+        'headNeckPosition',
+      ]),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps one weak non-selected arm countable when the selected side and torso are reliable', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-side reliable v2 pushup', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set(['right_elbow', 'right_wrist']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.selectedSide).toBe('left');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'torso', 'pushupBodyLine']),
+      weakChains: expect.arrayContaining(['rightArm']),
+      safeCueFamilies: expect.arrayContaining(['armDepth', 'elbowPath', 'wristHandPlacement', 'bodyLine']),
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps selected-side v2 push-ups scoreable when only the hidden side is weak', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-side v2 pushup with weak hidden side', fullRepPath()),
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.selectedSide).toBe('left');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'torso', 'pushupBodyLine']),
+      weakChains: expect.arrayContaining(['rightArm']),
+      safeCueFamilies: expect.arrayContaining(['armDepth', 'bodyLine', 'hipSag', 'footAnklePosition']),
+      suppressedIssueIds: [],
+    });
+    expect(diagnostics.reliability?.weakChains ?? []).not.toContain('torso');
+    expect(diagnostics.reliability?.weakChains ?? []).not.toContain('pushupBodyLine');
+  });
+
+  it('suppresses weak ankle body-line cues without blocking a v2 replay count', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecordingWithPostureDuringRep(
+          'synthetic weak ankles sag v2 pushup',
+          fullRepPath(),
+          'sag',
+          'facing-right',
+          { hiddenSideScore: 0.99 },
+        ),
+        {
+          lowVisibilityJoints: new Set(['left_ankle', 'right_ankle']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages.join('\n')).not.toContain('Hips are sagging');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
+      weakChains: expect.arrayContaining(['pushupBodyLine']),
+      unsafeCueFamilies: expect.arrayContaining(['bodyLine', 'hipSag', 'footAnklePosition']),
+      suppressedIssueIds: expect.arrayContaining(['push-up.hip_sag']),
+    });
+    expect(diagnostics.cues['push-up.hip_sag']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_bodyLine',
+    });
+  });
+
+  it('suppresses weak selected-arm depth and wrist cues in v2 replay', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic weak selected-arm near-depth v2 pushup', nearDepthFullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_elbow', 'left_wrist']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.feedbackMessages).not.toContain('Go deeper \u2014 aim for elbows at 90 degrees.');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'maybe',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['rightArm', 'torso', 'pushupBodyLine']),
+      weakChains: expect.arrayContaining(['leftArm']),
+      unsafeCueFamilies: expect.arrayContaining(['armDepth', 'elbowPath', 'wristHandPlacement']),
+      suppressedIssueIds: expect.arrayContaining(['push-up.depth_short']),
+    });
+    expect(diagnostics.cues['push-up.depth_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_armDepth',
+    });
+  });
+
+  it('keeps body-line feedback safe when v2 body-line joints are reliable', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecordingWithPostureDuringRep(
+          'synthetic reliable sag v2 pushup',
+          fullRepPath(),
+          'sag',
+          'facing-right',
+          { hiddenSideScore: 0.99 },
+        ),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.feedbackMessages.join('\n')).toContain('Hips are sagging');
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      scoreabilityCandidate: 'fullyScoreable',
+      safeCueFamilies: expect.arrayContaining(['bodyLine', 'hipSag', 'footAnklePosition']),
+      unsafeCueFamilies: [],
+    });
+    expect(result.reps[0].diagnostics?.cues['push-up.hip_sag'].triggered).toBe(true);
+  });
+
+  it('counts but marks both weak arm chains unscorable or partial in v2 replay', () => {
+    const result = replayRecording(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic both-arm weak v2 pushup', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set([
+            'left_elbow',
+            'left_wrist',
+            'right_elbow',
+            'right_wrist',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(['partiallyScoreable', 'notScoreable']).toContain(
+      diagnostics.reliability?.scoreabilityCandidate,
+    );
+    expect(diagnostics.reliability).toMatchObject({
+      usableChains: expect.arrayContaining(['torso', 'pushupBodyLine']),
+      weakChains: expect.arrayContaining(['leftArm', 'rightArm']),
+      unsafeCueFamilies: expect.arrayContaining(['armDepth', 'elbowPath', 'wristHandPlacement']),
+    });
+  });
+
+  it('keeps tracking-interruption protection with v2 PoseState metadata', () => {
+    const result = replayRecordingVerbose(
+      pushupDefinition,
+      recordingWithV2PoseMetadata(buildInterruptedMidRepRecording()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
   });
 
   it('does not count a small pulse that never reaches bottom', () => {
