@@ -301,6 +301,56 @@ function buildWorldStaticImageRecording(
   };
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name)
+      ? 0.2
+      : point.name.endsWith('_shoulder') || point.name.endsWith('_hip')
+        ? 0.99
+        : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 function mapRecordingKeypointSources(
   recording: LandmarkRecording,
   transform: (keypoints: Keypoint[], frameIndex: number) => Keypoint[],
@@ -490,6 +540,181 @@ describe('Lat Pulldown synthetic replay coverage', () => {
       expect(result.feedbackMessages).toEqual([]);
     },
   );
+
+  it('keeps clean v2 PoseState lat pulldowns fully scoreable', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean full-reliability v2 lat pulldown', fullRepPath(), {
+          hiddenSideScore: 0.99,
+          sideGap: 0.04,
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
+      weakChains: [],
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'torsoControl',
+        'visibleArmPath',
+        'handlePath',
+        'elbowPath',
+        'wristSpecific',
+        'bilateralSymmetry',
+        'rangeOfMotion',
+      ]),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps one weak hidden arm countable when the selected side and torso are reliable', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-side reliable v2 lat pulldown', fullRepPath(), {
+          side: 'right',
+          hiddenSideScore: 0.8,
+          sideGap: 0.04,
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_elbow', 'left_wrist']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.selectedSide).toBe('right');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['rightArm', 'torso']),
+      weakChains: expect.arrayContaining(['leftArm']),
+      safeCueFamilies: expect.arrayContaining([
+        'handlePath',
+        'wristSpecific',
+        'elbowPath',
+        'rangeOfMotion',
+        'torsoControl',
+      ]),
+      unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('suppresses weak selected-arm path cues while leaving torso feedback safe in v2 replay', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-arm weak v2 lat pulldown', halfRepPath(), {
+          side: 'right',
+          hiddenSideScore: 0.8,
+          sideGap: 0.04,
+          posture: 'leaned',
+          armPath: 'arm-dominant',
+        }),
+        {
+          lowVisibilityJoints: new Set(['right_elbow', 'right_wrist']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).toContain('Stay upright — avoid leaning back excessively.');
+    expect(result.reps[0].messages).not.toContain('Pull deeper — bring the bar to your upper chest.');
+    expect(result.reps[0].messages).not.toContain('Drive your elbows down — pull with your lats, not just your arms.');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'maybe',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftArm', 'torso']),
+      weakChains: expect.arrayContaining(['rightArm']),
+      safeCueFamilies: expect.arrayContaining(['torsoControl']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'handlePath',
+        'wristSpecific',
+        'elbowPath',
+        'rangeOfMotion',
+      ]),
+      suppressedIssueIds: expect.arrayContaining([
+        'cable-lat-pulldowns.rom_short',
+        'cable-lat-pulldowns.elbow_drive',
+      ]),
+    });
+    expect(diagnostics.cues['cable-lat-pulldowns.rom_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_rangeOfMotion',
+    });
+    expect(diagnostics.cues['cable-lat-pulldowns.elbow_drive']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_elbowPath',
+    });
+    expect(diagnostics.cues['cable-lat-pulldowns.torso_warn'].triggered).toBe(true);
+  });
+
+  it('counts but marks both weak arm chains unscorable or partial in v2 replay', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic both-arm weak v2 lat pulldown', fullRepPath(), {
+          hiddenSideScore: 0.99,
+          sideGap: 0.04,
+        }),
+        {
+          lowVisibilityJoints: new Set([
+            'left_elbow',
+            'left_wrist',
+            'right_elbow',
+            'right_wrist',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(['partiallyScoreable', 'notScoreable']).toContain(
+      diagnostics.reliability?.scoreabilityCandidate,
+    );
+    expect(diagnostics.reliability).toMatchObject({
+      usableChains: expect.arrayContaining(['torso']),
+      weakChains: expect.arrayContaining(['leftArm', 'rightArm']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'handlePath',
+        'wristSpecific',
+        'elbowPath',
+        'rangeOfMotion',
+      ]),
+    });
+  });
+
+  it('keeps tracking-interruption protection with v2 PoseState metadata', () => {
+    const result = replayRecordingVerbose(
+      latPulldownDefinition,
+      recordingWithV2PoseMetadata(buildInterruptedMidRepRecording()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
 
   it('does not count a tiny pulldown pulse', () => {
     const result = replayRecordingVerbose(

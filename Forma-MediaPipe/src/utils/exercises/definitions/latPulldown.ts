@@ -38,7 +38,13 @@ import {
   diagnosticCue,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/latPulldown.json';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 import type {
   ExerciseDefinition,
@@ -184,6 +190,49 @@ LAT_PULLDOWN_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'cable-lat-pulldowns.tempo_up', metricKey: 'tReturn', thresholdPath: 'formThresholds.TEMPO_RETURN_MIN', direction: 'below' },
 ];
 
+const LAT_PULLDOWN_ISSUE_CUE_FAMILIES: Record<string, string[]> = {
+  'cable-lat-pulldowns.rom_short': ['rangeOfMotion', 'handlePath', 'wristSpecific', 'visibleArmPath'],
+  'cable-lat-pulldowns.lockout_short': ['rangeOfMotion', 'handlePath', 'wristSpecific', 'visibleArmPath'],
+  'cable-lat-pulldowns.elbow_drive': ['elbowPath', 'visibleArmPath'],
+  'cable-lat-pulldowns.torso_warn': ['torsoControl'],
+  'cable-lat-pulldowns.torso_rocking': ['torsoControl'],
+  'cable-lat-pulldowns.shoulder_shrug': ['torsoControl'],
+  'cable-lat-pulldowns.tempo_down': ['tempo'],
+  'cable-lat-pulldowns.tempo_up': ['tempo'],
+};
+
+const LAT_PULLDOWN_MESSAGE_CUE_FAMILIES: Record<string, string[]> = {
+  'Pull deeper \u2014 bring the bar to your upper chest.': ['rangeOfMotion', 'handlePath', 'wristSpecific', 'visibleArmPath'],
+  'Extend fully \u2014 reach all the way up at the top.': ['rangeOfMotion', 'handlePath', 'wristSpecific', 'visibleArmPath'],
+  'Drive your elbows down \u2014 pull with your lats, not just your arms.': ['elbowPath', 'visibleArmPath'],
+  'Stay upright \u2014 avoid leaning back excessively.': ['torsoControl'],
+  'Keep your torso steady through the pulldown.': ['torsoControl'],
+  'Keep your shoulders down as you pull.': ['torsoControl'],
+  'Slow down the pull \u2014 control the descent.': ['tempo'],
+  'Control the return \u2014 resist the weight on the way up.': ['tempo'],
+};
+
+const LAT_PULLDOWN_SELECTED_ARM_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'visibleArmPath',
+  'handlePath',
+  'elbowPath',
+  'wristSpecific',
+  'rangeOfMotion',
+] as const;
+
+const LAT_PULLDOWN_RELIABILITY_JOINTS = [
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+  'left_hip',
+  'right_hip',
+] as const;
+
 const LAT_PULLDOWN_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
   { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
@@ -251,6 +300,8 @@ interface RepWindow {
   leftMaxRatio: number;
   rightMinRatio: number;
   rightMaxRatio: number;
+  /** Runtime PoseState reliability observed during this active rep. */
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
   /** Frame count */
   frameCount: number;
 }
@@ -447,6 +498,7 @@ function initRepWindow(tStart: number): RepWindow {
     leftMaxRatio: -Infinity,
     rightMinRatio: Infinity,
     rightMaxRatio: -Infinity,
+    reliability: createPoseStateReliabilityAggregator(),
     frameCount: 0,
   };
 }
@@ -901,6 +953,197 @@ function torsoWarnTriggered(repWindow: RepWindow): boolean {
   );
 }
 
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function selectedArmChain(activeSide: 'left' | 'right'): 'leftArm' | 'rightArm' {
+  return activeSide === 'left' ? 'leftArm' : 'rightArm';
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function reliabilityInterpretationForRepWindow(
+  repWindow: RepWindow,
+  activeSide: 'left' | 'right',
+): {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+} | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+
+  const baseInterpretation = interpretPoseStateReliabilitySummary('Cable Lat Pulldowns', summary);
+  const selectedChain = selectedArmChain(activeSide);
+  if (baseInterpretation.usableChains.includes(selectedChain)) {
+    return { summary, interpretation: baseInterpretation };
+  }
+
+  const selectedArmUnsafeFamilies = new Set<string>(LAT_PULLDOWN_SELECTED_ARM_CUE_FAMILIES);
+  const safeCueFamilies = baseInterpretation.safeCueFamilies.filter(
+    family => !selectedArmUnsafeFamilies.has(family),
+  );
+  const unsafeCueFamilies = uniqueStrings([
+    ...baseInterpretation.unsafeCueFamilies,
+    ...LAT_PULLDOWN_SELECTED_ARM_CUE_FAMILIES,
+  ]);
+
+  return {
+    summary,
+    interpretation: {
+      ...baseInterpretation,
+      countabilityCandidate:
+        baseInterpretation.countabilityCandidate === 'countable'
+          ? 'maybe'
+          : baseInterpretation.countabilityCandidate,
+      scoreabilityCandidate:
+        baseInterpretation.scoreabilityCandidate === 'fullyScoreable'
+          ? 'partiallyScoreable'
+          : baseInterpretation.scoreabilityCandidate,
+      safeCueFamilies,
+      unsafeCueFamilies,
+      reasons: uniqueStrings([
+        ...baseInterpretation.reasons,
+        `${selectedChain}_selected_chain_weak`,
+        'selected_arm_cue_families_unsafe',
+      ]),
+    },
+  };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function reliabilityAllowsScoring(
+  interpretation: RepReliabilityInterpretation | null,
+  activeSide: 'left' | 'right',
+): boolean {
+  if (!interpretation) return true;
+  return (
+    interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    interpretation.usableChains.includes(selectedArmChain(activeSide)) &&
+    interpretation.usableChains.includes('torso')
+  );
+}
+
+function repScorableWithReliability(
+  repWindow: RepWindow,
+  interpretation: RepReliabilityInterpretation | null,
+  activeSide: 'left' | 'right',
+): boolean {
+  return isLatPulldownRepScorable(repWindow) && reliabilityAllowsScoring(interpretation, activeSide);
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const families = LAT_PULLDOWN_MESSAGE_CUE_FAMILIES[message] ?? [];
+    return families.every(family => !unsafeFamilies.has(family));
+  });
+}
+
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const families = LAT_PULLDOWN_ISSUE_CUE_FAMILIES[issueId] ?? [];
+      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
+      if (unsafeFamily) {
+        suppressedIssueIds.push(issueId);
+        for (const family of families) {
+          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
+        }
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${unsafeFamily}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogLatPulldownReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logLatPulldownRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogLatPulldownReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[LatPulldownReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
+function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
+  return LAT_PULLDOWN_RELIABILITY_JOINTS.some((jointName) => {
+    const joint = poseState.joints[jointName];
+    return (
+      joint &&
+      (
+        joint.presence !== null ||
+        joint.reasons.includes('presence_unknown') ||
+        joint.reasons.includes('visibility_unknown')
+      )
+    );
+  });
+}
+
+function observeLatPulldownPoseState(
+  repWindow: RepWindow,
+  frameContext: ExerciseFrameContext | undefined,
+): void {
+  const poseState = frameContext?.poseState;
+  if (!poseState || !poseStateHasRichReliabilityMetadata(poseState)) return;
+  repWindow.reliability.observe(poseState);
+}
+
 // ============================================================================
 // FSM LOGIC
 // ============================================================================
@@ -968,37 +1211,44 @@ function updateFSM(
 // SCORING (continuous penalty curves)
 // ============================================================================
 
-function computeLatPulldownScore(repWindow: RepWindow): number {
+function computeLatPulldownScore(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
 
   // 1. ROM pull: target follows the tunable feedback threshold.
-  const pullShortfall = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.PULL_ROM_FAIL);
-  penalties.push({ value: pullShortfall, config: PENALTY_CONFIGS.PULL_ROM });
+  if (cueFamilyAllowed(allowedCueFamilies, 'rangeOfMotion')) {
+    const pullShortfall = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.PULL_ROM_FAIL);
+    penalties.push({ value: pullShortfall, config: PENALTY_CONFIGS.PULL_ROM });
+  }
 
   // 2. ROM extension: target follows the tunable feedback threshold.
-  const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_ROM_FAIL - repWindow.maxRatio);
-  penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  if (cueFamilyAllowed(allowedCueFamilies, 'rangeOfMotion')) {
+    const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_ROM_FAIL - repWindow.maxRatio);
+    penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  }
 
   // 3. Upper-arm drive: elbows should travel down instead of only bending the arms.
-  if (hasUpperArmDriveDiagnostics(repWindow)) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'elbowPath') && hasUpperArmDriveDiagnostics(repWindow)) {
     const upperArmDriveShortfall = Math.max(0, FORM_THRESHOLDS.ELBOW_DRIVE_FAIL - repWindow.maxUpperArmDriveDelta);
     penalties.push({ value: upperArmDriveShortfall, config: PENALTY_CONFIGS.ELBOW_DRIVE });
   }
 
   // 4. Torso and shoulder mechanics.
-  if (hasTorsoDeviationDiagnostics(repWindow)) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && hasTorsoDeviationDiagnostics(repWindow)) {
     penalties.push({ value: repWindow.maxTorsoLeanBackDelta, config: PENALTY_CONFIGS.TORSO_LEAN });
     penalties.push({ value: torsoRockDelta(repWindow), config: PENALTY_CONFIGS.TORSO_ROCK });
   }
-  if (hasTorsoLeanDiagnostics(repWindow)) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && hasTorsoLeanDiagnostics(repWindow)) {
     penalties.push({ value: repWindow.maxTorsoAbsoluteBackLean, config: PENALTY_CONFIGS.TORSO_ABSOLUTE });
   }
-  if (hasShoulderShrugDiagnostics(repWindow)) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && hasShoulderShrugDiagnostics(repWindow)) {
     penalties.push({ value: repWindow.maxShoulderShrugRatio, config: PENALTY_CONFIGS.SHOULDER_SHRUG });
   }
 
   // 5. Tempo
-  if (repWindow.tBottom !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && repWindow.tBottom !== null) {
     const tPull = repWindow.tBottom - repWindow.tStart;
     const tReturn = repWindow.tEnd - repWindow.tBottom;
 
@@ -1019,29 +1269,34 @@ function computeLatPulldownScore(repWindow: RepWindow): number {
 // FORM MESSAGES (discrete thresholds)
 // ============================================================================
 
-function generateFormMessages(repWindow: RepWindow): string[] {
+function generateFormMessages(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): string[] {
   const messages: string[] = [];
 
-  if (repWindow.minRatio > FORM_THRESHOLDS.PULL_ROM_FAIL) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'rangeOfMotion') && repWindow.minRatio > FORM_THRESHOLDS.PULL_ROM_FAIL) {
     messages.push('Pull deeper \u2014 bring the bar to your upper chest.');
   }
 
-  if (repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_ROM_FAIL) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'rangeOfMotion') && repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_ROM_FAIL) {
     messages.push('Extend fully \u2014 reach all the way up at the top.');
   }
 
   if (
+    cueFamilyAllowed(allowedCueFamilies, 'elbowPath') &&
     hasUpperArmDriveDiagnostics(repWindow) &&
     repWindow.maxUpperArmDriveDelta < FORM_THRESHOLDS.ELBOW_DRIVE_FAIL
   ) {
     messages.push('Drive your elbows down \u2014 pull with your lats, not just your arms.');
   }
 
-  if (torsoWarnTriggered(repWindow)) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && torsoWarnTriggered(repWindow)) {
     messages.push('Stay upright \u2014 avoid leaning back excessively.');
   }
 
   if (
+    cueFamilyAllowed(allowedCueFamilies, 'torsoControl') &&
     hasTorsoDeviationDiagnostics(repWindow) &&
     torsoRockDelta(repWindow) > FORM_THRESHOLDS.TORSO_ROCK_WARN
   ) {
@@ -1049,13 +1304,14 @@ function generateFormMessages(repWindow: RepWindow): string[] {
   }
 
   if (
+    cueFamilyAllowed(allowedCueFamilies, 'torsoControl') &&
     hasShoulderShrugDiagnostics(repWindow) &&
     repWindow.maxShoulderShrugRatio > FORM_THRESHOLDS.SHOULDER_SHRUG_WARN
   ) {
     messages.push('Keep your shoulders down as you pull.');
   }
 
-  if (repWindow.tBottom !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && repWindow.tBottom !== null) {
     const tPull = repWindow.tBottom - repWindow.tStart;
     const tReturn = repWindow.tEnd - repWindow.tBottom;
 
@@ -1074,7 +1330,8 @@ function buildLatPulldownDiagnostics(
   repWindow: RepWindow,
   repIndex: number,
   activeSide: 'left' | 'right',
-): FrameworkRepResult['diagnostics'] {
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const hasTempo = repWindow.tBottom !== null;
   const tPull = repWindow.tBottom !== null ? repWindow.tBottom - repWindow.tStart : null;
   const tReturn = repWindow.tBottom !== null ? repWindow.tEnd - repWindow.tBottom : null;
@@ -1094,7 +1351,7 @@ function buildLatPulldownDiagnostics(
     repIndex,
     view: diagnosticsViewFor(viewQuality),
     selectedSide: activeSide,
-    scorable: isLatPulldownRepScorable(repWindow),
+    scorable,
     viewQuality,
     metrics: [
       diagnosticMetric('pullDepthRatio', repWindow.minRatio, { unit: 'ratio' }),
@@ -1311,17 +1568,32 @@ function buildLatPulldownRepResult(
   repIndex: number,
   activeSide: 'left' | 'right',
 ): RepResult {
-  const score = computeLatPulldownScore(repWindow);
-  const messages = generateFormMessages(repWindow);
-  const scorable = isLatPulldownRepScorable(repWindow);
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, activeSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const scorable = repScorableWithReliability(repWindow, reliabilityInterpretation, activeSide);
+  const score = reliabilityAllowsScoring(reliabilityInterpretation, activeSide)
+    ? computeLatPulldownScore(repWindow, allowedCueFamilies)
+    : 0;
+  const messages = suppressUnsafeReliabilityMessages(
+    generateFormMessages(repWindow, allowedCueFamilies),
+    reliabilityInterpretation,
+  );
   const qualityWarnings = latPulldownQualityWarnings(repWindow);
+  const diagnostics = applyReliabilityCueGating(
+    buildLatPulldownDiagnostics(repWindow, repIndex, activeSide, scorable),
+    reliabilityInterpretation,
+    scorable,
+  );
+  logLatPulldownRepReliability(repIndex, reliabilityInterpretation, diagnostics);
+
   return {
     repIndex,
     score,
     messages,
     scorable,
     qualityWarnings,
-    diagnostics: buildLatPulldownDiagnostics(repWindow, repIndex, activeSide),
+    diagnostics,
   };
 }
 
@@ -1470,6 +1742,7 @@ function updateLatPulldownState(
   const inRep = state.phase !== 'REST';
   if (state.repWindow && inRep) {
     const w = state.repWindow;
+    observeLatPulldownPoseState(w, frameContext);
     w.tEnd = t;
     w.frameCount++;
     w.minRatio = Math.min(w.minRatio, fastRatio);
@@ -1533,6 +1806,7 @@ function updateLatPulldownState(
 
   // -- Handle rep completion --
   if (fsmResult.repCompleted && state.repWindow) {
+    observeLatPulldownPoseState(state.repWindow, frameContext);
     state.repWindow.maxRatio = Math.max(state.repWindow.maxRatio, rawRatio, fastRatio);
     if (sideViewConfidence !== null) {
       state.repWindow.sideViewConfidenceSum += sideViewConfidence;
@@ -1566,6 +1840,7 @@ function updateLatPulldownState(
     let countedPartial = false;
     if (state.repWindow) {
       const w = state.repWindow;
+      observeLatPulldownPoseState(w, frameContext);
       w.tEnd = t;
       w.minRatio = Math.min(w.minRatio, fastRatio);
       w.maxRatio = Math.max(w.maxRatio, rawRatio, fastRatio);
