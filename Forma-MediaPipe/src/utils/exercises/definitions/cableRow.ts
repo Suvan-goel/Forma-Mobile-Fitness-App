@@ -1449,7 +1449,7 @@ function buildCableRowRepResult(
     cueDecision,
   );
   const scoreReliabilityAllowed = reliabilityAllowsScoring(reliabilityInterpretation, visibleSide);
-  const score = scoreReliabilityAllowed
+  const score = scorable && scoreReliabilityAllowed
     ? computeCableRowScore(repWindow, cueDecision.finalAllowedCueFamilies)
     : 0;
   logCableRowRepReliability(repIndex, reliabilityInterpretation, diagnostics);

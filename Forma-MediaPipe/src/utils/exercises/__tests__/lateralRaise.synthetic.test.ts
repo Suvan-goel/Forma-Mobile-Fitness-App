@@ -478,7 +478,7 @@ describe('Lateral Raise synthetic replay coverage', () => {
     orientation => {
       const result = replayRecording(
         lateralRaiseDefinition,
-        buildRecording(`synthetic clean lateral raise ${orientation}`, fullRepPath(), { orientation }),
+        withWorldContext(buildRecording(`synthetic clean lateral raise ${orientation}`, fullRepPath(), { orientation })),
       );
 
       expect(result.finalRepCount).toBe(1);
@@ -490,10 +490,12 @@ describe('Lateral Raise synthetic replay coverage', () => {
   it('counts two clean reps in one recording with clean feedback and two rep traces', () => {
     const result = replayRecordingVerbose(
       lateralRaiseDefinition,
-      buildRecording('synthetic two clean lateral raise reps', [
-        ...fullRepPath(),
-        ...fullRepPath(),
-      ]),
+      withWorldContext(
+        buildRecording('synthetic two clean lateral raise reps', [
+          ...fullRepPath(),
+          ...fullRepPath(),
+        ]),
+      ),
     );
 
     expect(result.finalRepCount).toBe(2);
@@ -562,6 +564,9 @@ describe('Lateral Raise synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThan(0);
+    expect(result.reps[0].score).toBeGreaterThan(0);
+    expect(result.reps[0].score).toBe(result.repScores[0]);
     expect(result.feedbackMessages).toEqual([]);
     expect(result.reps[0].diagnostics?.reliability).toMatchObject({
       countabilityCandidate: 'countable',
@@ -670,6 +675,7 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
     expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(diagnostics.viewCueGating).toMatchObject({
       frontViewGatePassed: false,
       partialViewScoringAllowed: false,
@@ -720,6 +726,8 @@ describe('Lateral Raise synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(diagnostics.viewCueGating).toMatchObject({
       frontViewGatePassed: false,
       partialViewScoringAllowed: false,
@@ -754,6 +762,8 @@ describe('Lateral Raise synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.reps[0].qualityWarnings).toContain('front_view_uncertain');
     expect(result.reps[0].diagnostics?.scorable).toBe(false);
     expect(result.reps[0].diagnostics?.view).toBe('unknown');
@@ -772,8 +782,14 @@ describe('Lateral Raise synthetic replay coverage', () => {
   });
 
   it('counts a meaningful partial lateral raise and records ROM feedback', () => {
-    const clean = replayRecording(lateralRaiseDefinition, buildRecording('synthetic clean lateral raise', fullRepPath()));
-    const result = replayRecording(lateralRaiseDefinition, buildRecording('synthetic half lateral raise', halfRepPath()));
+    const clean = replayRecording(
+      lateralRaiseDefinition,
+      withWorldContext(buildRecording('synthetic clean lateral raise', fullRepPath())),
+    );
+    const result = replayRecording(
+      lateralRaiseDefinition,
+      withWorldContext(buildRecording('synthetic half lateral raise', halfRepPath())),
+    );
 
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeLessThan(clean.repScores[0]);
@@ -844,10 +860,13 @@ describe('Lateral Raise synthetic replay coverage', () => {
   });
 
   it('counts a front raise but flags the wrong movement plane', () => {
-    const clean = replayRecording(lateralRaiseDefinition, buildRecording('synthetic clean lateral raise', fullRepPath()));
+    const clean = replayRecording(
+      lateralRaiseDefinition,
+      withWorldContext(buildRecording('synthetic clean lateral raise', fullRepPath())),
+    );
     const result = replayRecording(
       lateralRaiseDefinition,
-      buildRecording('synthetic front raise mistaken for lateral raise', fullRepPath(), { armPlane: 'front' }),
+      withWorldContext(buildRecording('synthetic front raise mistaken for lateral raise', fullRepPath(), { armPlane: 'front' })),
     );
 
     expect(result.finalRepCount).toBe(1);
@@ -966,6 +985,7 @@ describe('Lateral Raise synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
     expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.feedbackMessages).toEqual([]);
     expect(result.reps[0].diagnostics?.reliability).toMatchObject({
       scoreabilityCandidate: 'partiallyScoreable',
@@ -997,6 +1017,8 @@ describe('Lateral Raise synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.reps[0].qualityWarnings).toContain('arms_hidden');
     expect(result.reps[0].qualityWarnings).not.toContain('front_view_uncertain');
     expect(diagnostics.scorable).toBe(false);
@@ -1256,11 +1278,11 @@ describe('Lateral Raise synthetic replay coverage', () => {
   it('flags over-raising above shoulder height without punishing shoulder-level reps', () => {
     const clean = replayRecording(
       lateralRaiseDefinition,
-      buildRecording('synthetic shoulder-level lateral raise', fullRepPath()),
+      withWorldContext(buildRecording('synthetic shoulder-level lateral raise', fullRepPath())),
     );
     const overRaised = replayRecording(
       lateralRaiseDefinition,
-      buildRecording('synthetic over-raised lateral raise', overRaisePath()),
+      withWorldContext(buildRecording('synthetic over-raised lateral raise', overRaisePath())),
     );
 
     expect(clean.feedbackMessages).not.toContain('Stop around shoulder height — avoid lifting too high.');

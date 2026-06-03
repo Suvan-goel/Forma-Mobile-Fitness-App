@@ -504,6 +504,8 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(true);
     expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.reps[0].score).toBeGreaterThanOrEqual(85);
+    expect(result.reps[0].score).toBe(result.repScores[0]);
     expect(result.feedbackMessages).toEqual([]);
     expect(result.reps[0].diagnostics?.reliability).toMatchObject({
       countabilityCandidate: 'countable',
@@ -581,6 +583,7 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
     expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.reps[0].messages).not.toContain('Keep your elbows lower — row toward your ribs.');
     expect(diagnostics.reliability).toMatchObject({
       scoreabilityCandidate: 'partiallyScoreable',
@@ -875,6 +878,8 @@ describe('Cable Row synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(diagnostics.scorable).toBe(false);
     expect(diagnostics.view).toBe('unknown');
     expect(diagnostics.metrics.sideViewConfidence.sampleCount).toBeGreaterThanOrEqual(5);

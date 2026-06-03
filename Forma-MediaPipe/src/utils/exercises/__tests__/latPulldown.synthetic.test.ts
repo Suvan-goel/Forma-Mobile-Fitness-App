@@ -555,6 +555,8 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(true);
     expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.reps[0].score).toBeGreaterThanOrEqual(85);
+    expect(result.reps[0].score).toBe(result.repScores[0]);
     expect(result.feedbackMessages).toEqual([]);
     expect(result.reps[0].diagnostics?.reliability).toMatchObject({
       countabilityCandidate: 'countable',
@@ -664,6 +666,7 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
     expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.reps[0].messages).toContain('Stay upright — avoid leaning back excessively.');
     expect(result.reps[0].messages).not.toContain('Pull deeper — bring the bar to your upper chest.');
     expect(result.reps[0].messages).not.toContain('Drive your elbows down — pull with your lats, not just your arms.');
@@ -721,6 +724,7 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
     expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(['partiallyScoreable', 'notScoreable']).toContain(
       diagnostics.reliability?.scoreabilityCandidate,
     );
@@ -929,6 +933,8 @@ describe('Lat Pulldown synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
@@ -960,6 +966,8 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     const metrics = result.reps[0].diagnostics?.metrics;
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
     expect(metrics?.bilateralSampleCount.value).toBe(0);
@@ -1177,7 +1185,9 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     const metrics = result.reps[0].diagnostics?.metrics;
     const cues = result.reps[0].diagnostics?.cues;
     expect(result.finalRepCount).toBe(1);
-    expect(result.repScores[0]).toBe(100);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].score).toBe(0);
     expect(result.feedbackMessages).not.toContain('Stay upright — avoid leaning back excessively.');
     expect(result.feedbackMessages).not.toContain('Keep your torso steady through the pulldown.');
     expect(metrics?.torsoLeanBackDelta.eligible).toBe(false);

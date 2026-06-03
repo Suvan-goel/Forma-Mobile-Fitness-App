@@ -1558,7 +1558,9 @@ function buildLateralRaiseRepResult(repWindow: RepWindow, repIndex: number): Rep
     cueDecision,
   );
   // Score only from cue families that survive both PoseState and view gating.
-  const score = cueDecision.finalAllowedCueFamilies.size > 0 && reliabilityAllowsScoring(reliabilityInterpretation)
+  const score = cueDecision.scorable &&
+    cueDecision.finalAllowedCueFamilies.size > 0 &&
+    reliabilityAllowsScoring(reliabilityInterpretation)
     ? computeRepWindowScore(repWindow, allowedCueFamilies)
     : 0;
   logLateralRaiseRepReliability(repIndex, reliabilityInterpretation, diagnostics);

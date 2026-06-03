@@ -1601,7 +1601,7 @@ function buildLatPulldownRepResult(
   });
   const scorable = cueDecision.scorable;
   const scoreReliabilityAllowed = reliabilityAllowsScoring(reliabilityInterpretation, activeSide);
-  const score = scoreReliabilityAllowed
+  const score = scorable && scoreReliabilityAllowed
     ? computeLatPulldownScore(repWindow, cueDecision.finalAllowedCueFamilies)
     : 0;
   const canShowCueFeedback = sideViewScorable || cueDecision.partialViewScoringAllowed;
