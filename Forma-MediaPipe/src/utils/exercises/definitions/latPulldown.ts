@@ -38,6 +38,11 @@ import {
   diagnosticCue,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import {
+  applyCableCueGatingToDiagnostics,
+  resolveCableViewCueDecision,
+  type CableCueViewRequirement,
+} from '../shared/cableViewGating';
 import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
 import {
   interpretPoseStateReliabilitySummary,
@@ -221,6 +226,40 @@ const LAT_PULLDOWN_SELECTED_ARM_CUE_FAMILIES = [
   'wristSpecific',
   'rangeOfMotion',
 ] as const;
+
+const LAT_PULLDOWN_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'torsoControl',
+  'visibleArmPath',
+  'handlePath',
+  'elbowPath',
+  'wristSpecific',
+  'bilateralSymmetry',
+  'rangeOfMotion',
+] as const;
+
+const LAT_PULLDOWN_MEANINGFUL_CUE_FAMILIES = [
+  'tempo',
+  'torsoControl',
+  'visibleArmPath',
+  'handlePath',
+  'elbowPath',
+  'wristSpecific',
+  'rangeOfMotion',
+] as const;
+
+const LAT_PULLDOWN_CUE_VIEW_REQUIREMENTS: Record<string, CableCueViewRequirement> = {
+  repCount: 'selectedSideOk',
+  tempo: 'selectedSideOk',
+  torsoControl: 'selectedSideOk',
+  visibleArmPath: 'selectedSideOk',
+  handlePath: 'sidePreferred',
+  elbowPath: 'sidePreferred',
+  wristSpecific: 'selectedSideOk',
+  bilateralSymmetry: 'bilateralGeometryRequired',
+  rangeOfMotion: 'sidePreferred',
+};
 
 const LAT_PULLDOWN_RELIABILITY_JOINTS = [
   'left_shoulder',
@@ -1050,46 +1089,27 @@ function suppressUnsafeReliabilityMessages(
   });
 }
 
-function applyReliabilityCueGating(
+function applyLatPulldownCueGating(
   diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
   interpretation: RepReliabilityInterpretation | null,
-  scorable: boolean,
+  decision: ReturnType<typeof resolveCableViewCueDecision>,
 ): NonNullable<FrameworkRepResult['diagnostics']> {
-  if (!interpretation) return { ...diagnostics, scorable };
-
-  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
-  const suppressedIssueIds: string[] = [];
-  const suppressedCueFamilies = new Set<string>();
-  const cues = Object.fromEntries(
-    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
-      const families = LAT_PULLDOWN_ISSUE_CUE_FAMILIES[issueId] ?? [];
-      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
-      if (unsafeFamily) {
-        suppressedIssueIds.push(issueId);
-        for (const family of families) {
-          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
-        }
-        return [issueId, {
-          ...cue,
-          eligible: false,
-          triggered: false,
-          skippedReason: `reliability_unsafe_${unsafeFamily}`,
-        }];
+  const withReliability = interpretation
+    ? {
+        ...diagnostics,
+        reliability: {
+          ...interpretation,
+          suppressedCueFamilies: [],
+          suppressedIssueIds: [],
+        },
       }
-      return [issueId, cue];
-    }),
-  );
+    : diagnostics;
 
-  return {
-    ...diagnostics,
-    scorable,
-    cues,
-    reliability: {
-      ...interpretation,
-      suppressedCueFamilies: Array.from(suppressedCueFamilies),
-      suppressedIssueIds,
-    },
-  };
+  return applyCableCueGatingToDiagnostics({
+    diagnostics: withReliability,
+    decision,
+    issueCueFamilies: LAT_PULLDOWN_ISSUE_CUE_FAMILIES,
+  });
 }
 
 function shouldLogLatPulldownReliability(): boolean {
@@ -1570,23 +1590,32 @@ function buildLatPulldownRepResult(
 ): RepResult {
   const reliability = reliabilityInterpretationForRepWindow(repWindow, activeSide);
   const reliabilityInterpretation = reliability?.interpretation ?? null;
-  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
-  const scorable = repScorableWithReliability(repWindow, reliabilityInterpretation, activeSide);
-  // ScoreabilityCandidate controls reliability safety; final scorable also
-  // includes the exercise view gate. Keep the historical score calculation for
-  // diagnostics even if the view gate later marks the rep unscorable.
-  const score = reliabilityAllowsScoring(reliabilityInterpretation, activeSide)
-    ? computeLatPulldownScore(repWindow, allowedCueFamilies)
+  const sideViewScorable = isLatPulldownRepScorable(repWindow);
+  const cueDecision = resolveCableViewCueDecision({
+    allCueFamilies: LAT_PULLDOWN_CUE_FAMILIES,
+    meaningfulCueFamilies: LAT_PULLDOWN_MEANINGFUL_CUE_FAMILIES,
+    cueViewRequirements: LAT_PULLDOWN_CUE_VIEW_REQUIREMENTS,
+    sideViewGatePassed: sideViewScorable,
+    interpretation: reliabilityInterpretation,
+    selectedSide: activeSide,
+  });
+  const scorable = cueDecision.scorable;
+  const scoreReliabilityAllowed = reliabilityAllowsScoring(reliabilityInterpretation, activeSide);
+  const score = scoreReliabilityAllowed
+    ? computeLatPulldownScore(repWindow, cueDecision.finalAllowedCueFamilies)
     : 0;
+  const canShowCueFeedback = sideViewScorable || cueDecision.partialViewScoringAllowed;
   const messages = suppressUnsafeReliabilityMessages(
-    generateFormMessages(repWindow, allowedCueFamilies),
+    canShowCueFeedback
+      ? generateFormMessages(repWindow, cueDecision.finalAllowedCueFamilies)
+      : [],
     reliabilityInterpretation,
   );
   const qualityWarnings = latPulldownQualityWarnings(repWindow);
-  const diagnostics = applyReliabilityCueGating(
+  const diagnostics = applyLatPulldownCueGating(
     buildLatPulldownDiagnostics(repWindow, repIndex, activeSide, scorable),
     reliabilityInterpretation,
-    scorable,
+    cueDecision,
   );
   logLatPulldownRepReliability(repIndex, reliabilityInterpretation, diagnostics);
 

@@ -535,6 +535,32 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(diagnostics.cues['cable-row.high_row'].triggered).toBe(true);
   });
 
+  it('allows partial cue-level scoring for front-ish rows when selected arm and torso are reliable in v2 replay', () => {
+    const result = replayRecording(
+      cableRowDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic front-ish selected-side reliable v2 cable row', fullRepPath(), {
+          sideGap: 0.42,
+        }),
+      ),
+      { confidenceGating: true },
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(diagnostics.scorable).toBe(true);
+    expect(diagnostics.view).toBe('unknown');
+    expect(diagnostics.viewCueGating).toMatchObject({
+      sideViewGatePassed: false,
+      partialViewScoringAllowed: true,
+      finalScorableReason: 'partial_view_scoring',
+      finalSafeCueFamilies: expect.arrayContaining(['visibleArmPath', 'torsoControl', 'tempo']),
+    });
+    expect(diagnostics.metrics.sideViewMinConfidence.value ?? 1).toBeLessThan(0.25);
+  });
+
   it('counts but suppresses unsafe arm-path cues when both arm chains are unreliable in v2 replay', () => {
     const result = replayRecording(
       cableRowDefinition,
@@ -573,6 +599,7 @@ describe('Cable Row synthetic replay coverage', () => {
       triggered: false,
       skippedReason: 'reliability_unsafe_handlePath',
     });
+    expect(diagnostics.viewCueGating?.finalUnscorableReason).toBe('pose_reliability_not_scoreable');
   });
 
   it('counts a meaningful partial row and records ROM feedback', () => {
@@ -853,6 +880,11 @@ describe('Cable Row synthetic replay coverage', () => {
     expect(diagnostics.metrics.sideViewConfidence.sampleCount).toBeGreaterThanOrEqual(5);
     expect(diagnostics.metrics.sideViewMinConfidence.sampleCount).toBeGreaterThanOrEqual(5);
     expect(diagnostics.metrics.sideViewMinConfidence.value ?? 1).toBeLessThan(0.25);
+    expect(diagnostics.viewCueGating).toMatchObject({
+      sideViewGatePassed: false,
+      partialViewScoringAllowed: false,
+      finalUnscorableReason: 'side_view_uncertain',
+    });
     expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });

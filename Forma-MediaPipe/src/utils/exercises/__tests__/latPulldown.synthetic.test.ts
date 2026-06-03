@@ -614,6 +614,35 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     });
   });
 
+  it('allows partial cue-level scoring for front-ish pulldowns when selected arm and torso are reliable in v2 replay', () => {
+    const result = replayRecording(
+      latPulldownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic front-ish selected-side reliable v2 lat pulldown', fullRepPath(), {
+          side: 'right',
+          hiddenSideScore: 0.99,
+          sideGap: 0.36,
+        }),
+      ),
+      { confidenceGating: true },
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(diagnostics.view).toBe('front');
+    expect(diagnostics.viewQuality?.status).toBe('frontish_confirmed');
+    expect(diagnostics.viewCueGating).toMatchObject({
+      sideViewGatePassed: false,
+      partialViewScoringAllowed: true,
+      finalScorableReason: 'partial_view_scoring',
+      viewBlockedCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+      finalSafeCueFamilies: expect.arrayContaining(['rangeOfMotion', 'visibleArmPath', 'elbowPath', 'torsoControl', 'tempo']),
+      finalUnsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+    });
+  });
+
   it('suppresses weak selected-arm path cues while leaving torso feedback safe in v2 replay', () => {
     const result = replayRecording(
       latPulldownDefinition,
@@ -666,6 +695,7 @@ describe('Lat Pulldown synthetic replay coverage', () => {
       skippedReason: 'reliability_unsafe_elbowPath',
     });
     expect(diagnostics.cues['cable-lat-pulldowns.torso_warn'].triggered).toBe(true);
+    expect(diagnostics.viewCueGating?.finalUnscorableReason).toBe('pose_reliability_not_scoreable');
   });
 
   it('counts but marks both weak arm chains unscorable or partial in v2 replay', () => {
@@ -903,6 +933,11 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
     expect(result.reps[0].diagnostics?.metrics.frontishViewConfirmed.value).toBe(1);
+    expect(result.reps[0].diagnostics?.viewCueGating).toMatchObject({
+      sideViewGatePassed: false,
+      partialViewScoringAllowed: false,
+      finalUnscorableReason: 'side_view_uncertain',
+    });
     expect(result.reps[0].issueIds).toEqual([]);
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });
@@ -929,6 +964,11 @@ describe('Lat Pulldown synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
     expect(metrics?.bilateralSampleCount.value).toBe(0);
     expect(metrics?.frontishViewConfirmed.value).toBe(1);
+    expect(result.reps[0].diagnostics?.viewCueGating).toMatchObject({
+      sideViewGatePassed: false,
+      partialViewScoringAllowed: false,
+      finalUnscorableReason: 'side_view_uncertain',
+    });
     expect(result.reps[0].issueIds).toEqual([]);
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
   });

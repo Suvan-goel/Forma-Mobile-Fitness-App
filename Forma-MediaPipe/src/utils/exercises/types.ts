@@ -187,6 +187,17 @@ export interface RepReliabilityDiagnostic {
   suppressedIssueIds?: string[];
 }
 
+export interface RepViewCueGatingDiagnostic {
+  viewBlockedCueFamilies: string[];
+  poseStateBlockedCueFamilies: string[];
+  finalSafeCueFamilies: string[];
+  finalUnsafeCueFamilies: string[];
+  finalScorableReason?: string;
+  finalUnscorableReason?: string;
+  sideViewGatePassed: boolean;
+  partialViewScoringAllowed: boolean;
+}
+
 export interface RepDiagnostics {
   exerciseName: string;
   repIndex: number;
@@ -195,6 +206,7 @@ export interface RepDiagnostics {
   scorable: boolean;
   viewQuality?: RepViewQualityDiagnostic;
   reliability?: RepReliabilityDiagnostic;
+  viewCueGating?: RepViewCueGatingDiagnostic;
   metrics: Record<string, RepMetricDiagnostic>;
   cues: Record<string, RepCueDiagnostic>;
 }

@@ -39,6 +39,11 @@ import {
   diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import {
+  applyCableCueGatingToDiagnostics,
+  resolveCableViewCueDecision,
+  type CableCueViewRequirement,
+} from '../shared/cableViewGating';
 import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
 import {
   interpretPoseStateReliabilitySummary,
@@ -329,6 +334,37 @@ const CABLE_PUSHDOWN_SELECTED_ARM_CUE_FAMILIES = [
   'elbowPath',
   'wristSpecific',
 ] as const;
+
+const CABLE_PUSHDOWN_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'torsoControl',
+  'visibleArmPath',
+  'handlePath',
+  'elbowPath',
+  'wristSpecific',
+  'bilateralSymmetry',
+] as const;
+
+const CABLE_PUSHDOWN_MEANINGFUL_CUE_FAMILIES = [
+  'tempo',
+  'torsoControl',
+  'visibleArmPath',
+  'handlePath',
+  'elbowPath',
+  'wristSpecific',
+] as const;
+
+const CABLE_PUSHDOWN_CUE_VIEW_REQUIREMENTS: Record<string, CableCueViewRequirement> = {
+  repCount: 'selectedSideOk',
+  tempo: 'selectedSideOk',
+  torsoControl: 'selectedSideOk',
+  visibleArmPath: 'selectedSideOk',
+  handlePath: 'sidePreferred',
+  elbowPath: 'sidePreferred',
+  wristSpecific: 'selectedSideOk',
+  bilateralSymmetry: 'bilateralGeometryRequired',
+};
 
 const CABLE_PUSHDOWN_RELIABILITY_JOINTS = [
   'left_shoulder',
@@ -907,46 +943,27 @@ function suppressUnsafeReliabilityMessages(
   });
 }
 
-function applyReliabilityCueGating(
+function applyCablePushdownCueGating(
   diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
   interpretation: RepReliabilityInterpretation | null,
-  scorable: boolean,
+  decision: ReturnType<typeof resolveCableViewCueDecision>,
 ): NonNullable<FrameworkRepResult['diagnostics']> {
-  if (!interpretation) return { ...diagnostics, scorable };
-
-  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
-  const suppressedIssueIds: string[] = [];
-  const suppressedCueFamilies = new Set<string>();
-  const cues = Object.fromEntries(
-    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
-      const families = CABLE_PUSHDOWN_ISSUE_CUE_FAMILIES[issueId] ?? [];
-      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
-      if (unsafeFamily) {
-        suppressedIssueIds.push(issueId);
-        for (const family of families) {
-          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
-        }
-        return [issueId, {
-          ...cue,
-          eligible: false,
-          triggered: false,
-          skippedReason: `reliability_unsafe_${unsafeFamily}`,
-        }];
+  const withReliability = interpretation
+    ? {
+        ...diagnostics,
+        reliability: {
+          ...interpretation,
+          suppressedCueFamilies: [],
+          suppressedIssueIds: [],
+        },
       }
-      return [issueId, cue];
-    }),
-  );
+    : diagnostics;
 
-  return {
-    ...diagnostics,
-    scorable,
-    cues,
-    reliability: {
-      ...interpretation,
-      suppressedCueFamilies: Array.from(suppressedCueFamilies),
-      suppressedIssueIds,
-    },
-  };
+  return applyCableCueGatingToDiagnostics({
+    diagnostics: withReliability,
+    decision,
+    issueCueFamilies: CABLE_PUSHDOWN_ISSUE_CUE_FAMILIES,
+  });
 }
 
 function shouldLogCablePushdownReliability(): boolean {
@@ -987,7 +1004,11 @@ function cablePushdownScoringReason(args: {
   reliabilityAllowed: boolean;
   scorable: boolean;
   qualityWarnings: FrameworkRepResult['qualityWarnings'];
+  diagnostics?: FrameworkRepResult['diagnostics'];
 }): string {
+  const viewCueGating = args.diagnostics?.viewCueGating;
+  if (viewCueGating?.finalScorableReason) return viewCueGating.finalScorableReason;
+  if (viewCueGating?.finalUnscorableReason) return viewCueGating.finalUnscorableReason;
   if (!args.sideViewPassed) {
     return args.qualityWarnings?.includes('side_view_uncertain')
       ? 'side_view_uncertain'
@@ -1015,6 +1036,7 @@ function logCablePushdownScoringDecision(args: {
   const minSide = args.repWindow.sideViewConfidenceSamples > 0
     ? args.repWindow.sideViewConfidenceMin
     : null;
+  const viewCueGating = args.diagnostics.viewCueGating;
   console.log([
     `[CablePushdownScoring] rep=${args.repIndex}`,
     `scorable=${args.scorable}`,
@@ -1023,6 +1045,7 @@ function logCablePushdownScoringDecision(args: {
       reliabilityAllowed,
       scorable: args.scorable,
       qualityWarnings: args.qualityWarnings,
+      diagnostics: args.diagnostics,
     })}`,
     `reliability=${args.interpretation?.scoreabilityCandidate ?? 'n/a'}`,
     `qualityWarnings=${args.qualityWarnings?.join(',') || 'none'}`,
@@ -1036,6 +1059,9 @@ function logCablePushdownScoringDecision(args: {
     `sideSamples=${args.repWindow.sideViewConfidenceSamples}`,
     `thresholds=avg>=${FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN.toFixed(2)},min>=${FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN.toFixed(2)},samples>=${FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES}`,
     `exerciseScorableGate=${sideViewPassed ? 'passed' : 'failed'}`,
+    `partialViewScoring=${viewCueGating?.partialViewScoringAllowed === true ? 'allowed' : 'blocked'}`,
+    `viewBlocked=${viewCueGating?.viewBlockedCueFamilies.join(',') || 'none'}`,
+    `finalSafe=${viewCueGating?.finalSafeCueFamilies.join(',') || 'none'}`,
     `reliabilityAllowsScoring=${reliabilityAllowed}`,
     `setupWarning=${args.qualityWarnings?.includes('side_view_uncertain') === true}`,
     'globalAdjustedQuality=not_available_check_CameraScreen',
@@ -1656,17 +1682,27 @@ function buildCablePushdownRepResult(
 ): RepResult {
   const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide);
   const reliabilityInterpretation = reliability?.interpretation ?? null;
-  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
   const sideViewScorable = isCablePushdownRepScorable(repWindow);
-  const scorable = repScorableWithReliability(repWindow, reliabilityInterpretation, visibleSide);
-  const score = scorable ? computeCablePushdownScore(repWindow, allowedCueFamilies) : 0;
-  const messages = sideViewScorable ? generateFormMessages(repWindow, allowedCueFamilies) : [];
+  const cueDecision = resolveCableViewCueDecision({
+    allCueFamilies: CABLE_PUSHDOWN_CUE_FAMILIES,
+    meaningfulCueFamilies: CABLE_PUSHDOWN_MEANINGFUL_CUE_FAMILIES,
+    cueViewRequirements: CABLE_PUSHDOWN_CUE_VIEW_REQUIREMENTS,
+    sideViewGatePassed: sideViewScorable,
+    interpretation: reliabilityInterpretation,
+    selectedSide: visibleSide,
+  });
+  const scorable = cueDecision.scorable;
+  const score = scorable ? computeCablePushdownScore(repWindow, cueDecision.finalAllowedCueFamilies) : 0;
+  const canShowCueFeedback = sideViewScorable || cueDecision.partialViewScoringAllowed;
+  const messages = canShowCueFeedback
+    ? generateFormMessages(repWindow, cueDecision.finalAllowedCueFamilies)
+    : [];
   const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
   const qualityWarnings = cablePushdownQualityWarnings(repWindow);
-  const diagnostics = applyReliabilityCueGating(
+  const diagnostics = applyCablePushdownCueGating(
     buildCablePushdownDiagnostics(repWindow, repIndex, visibleSide, scorable),
     reliabilityInterpretation,
-    scorable,
+    cueDecision,
   );
   logCablePushdownRepReliability(repIndex, reliabilityInterpretation, diagnostics);
   logCablePushdownScoringDecision({

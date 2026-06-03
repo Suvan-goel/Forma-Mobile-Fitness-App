@@ -533,6 +533,11 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
+    expect(result.reps[0].diagnostics?.viewCueGating).toMatchObject({
+      sideViewGatePassed: false,
+      partialViewScoringAllowed: false,
+      finalUnscorableReason: 'side_view_uncertain',
+    });
     expect(result.reps[0].issueIds).toEqual([]);
   });
 
@@ -552,6 +557,34 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.metrics.sideViewConfidence.value).toBeGreaterThanOrEqual(0.45);
   });
 
+  it('allows partial cue-level scoring for front-ish pushdowns when selected arm and torso are reliable in v2 replay', () => {
+    const result = replayRecording(
+      cablePushdownDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic front-ish selected-side reliable v2 cable pushdown', fullRepPath(), {
+          hiddenSideScore: 0.99,
+          sideGap: 0.42,
+        }),
+      ),
+      { confidenceGating: true },
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
+    expect(diagnostics.view).toBe('front');
+    expect(diagnostics.viewQuality?.status).toBe('frontish_confirmed');
+    expect(diagnostics.viewCueGating).toMatchObject({
+      sideViewGatePassed: false,
+      partialViewScoringAllowed: true,
+      finalScorableReason: 'partial_view_scoring',
+      viewBlockedCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+      finalSafeCueFamilies: expect.arrayContaining(['visibleArmPath', 'handlePath', 'elbowPath', 'torsoControl', 'tempo']),
+      finalUnsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+    });
+  });
+
   it('does not leak form feedback or praise for poor side-view reps without replay gating', () => {
     const result = replayRecordingVerbose(
       cablePushdownDefinition,
@@ -564,6 +597,7 @@ describe('Cable Pushdown synthetic replay coverage', () => {
     expect(result.reps[0].scorable).toBe(false);
     expect(result.reps[0].score).toBe(0);
     expect(result.reps[0].messages).toEqual([]);
+    expect(result.reps[0].diagnostics?.viewCueGating?.partialViewScoringAllowed).toBe(false);
     expect(result.feedbackMessages).toEqual([]);
     expect(result.frameTraces.some(trace => trace.feedback === 'Turn side-on so I can judge your pushdown.')).toBe(true);
     expect(result.frameTraces.every(trace => trace.feedback !== 'Great rep!')).toBe(true);
@@ -688,6 +722,7 @@ describe('Cable Pushdown synthetic replay coverage', () => {
       skippedReason: 'reliability_unsafe_elbowPath',
     });
     expect(diagnostics.cues['cable-pushdowns.torso_warn'].triggered).toBe(true);
+    expect(diagnostics.viewCueGating?.finalUnscorableReason).toBe('pose_reliability_not_scoreable');
   });
 
   it('counts but marks both weak arm chains unscorable or partial in v2 replay', () => {
