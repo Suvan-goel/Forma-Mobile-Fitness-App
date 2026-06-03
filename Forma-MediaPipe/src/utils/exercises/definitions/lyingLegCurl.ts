@@ -43,6 +43,11 @@ import {
   diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/lyingLegCurl.json';
 
 import type {
@@ -54,6 +59,7 @@ import type {
   RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 // ============================================================================
 // MODULE-PRIVATE HELPERS
@@ -447,6 +453,7 @@ interface RepWindow {
   tEnd: number;
   /** Frame count */
   frameCount: number;
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
 }
 
 interface RepResult {
@@ -594,6 +601,7 @@ function initRepWindow(
     tLowerStart: null,
     tEnd: tStart,
     frameCount: 0,
+    reliability: createPoseStateReliabilityAggregator(),
   };
 }
 
@@ -974,6 +982,69 @@ const FEEDBACK = {
   TRACKING_SETUP: 'Keep your hips, knees, and lower legs visible so I can judge your curl.',
 } as const;
 
+const LYING_LEG_CURL_RELIABILITY_JOINTS = [
+  'left_hip',
+  'right_hip',
+  'left_knee',
+  'right_knee',
+  'left_ankle',
+  'right_ankle',
+  'left_heel',
+  'right_heel',
+  'left_foot_index',
+  'right_foot_index',
+  'left_shoulder',
+  'right_shoulder',
+];
+
+const LYING_LEG_CURL_SELECTED_LEG_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'visibleLegPath',
+  'kneeFlexion',
+  'rangeOfMotion',
+  'lockoutOrExtension',
+  'distalEndpoint',
+  'heelFootFallback',
+];
+
+const LYING_LEG_CURL_ISSUE_CUE_FAMILIES: Record<string, string[]> = {
+  'lying-leg-curl.rom_curl_short': [
+    'distalEndpoint',
+    'heelFootFallback',
+    'rangeOfMotion',
+    'kneeFlexion',
+    'visibleLegPath',
+  ],
+  'lying-leg-curl.rom_extend_short': [
+    'distalEndpoint',
+    'heelFootFallback',
+    'rangeOfMotion',
+    'lockoutOrExtension',
+    'visibleLegPath',
+  ],
+  'lying-leg-curl.hip_lift': ['torsoSetup'],
+  'lying-leg-curl.thigh_movement': ['visibleLegPath', 'torsoSetup'],
+  'lying-leg-curl.top_hold_short': ['lockoutOrExtension', 'distalEndpoint', 'heelFootFallback'],
+  'lying-leg-curl.tempo_up': ['tempo'],
+  'lying-leg-curl.tempo_down': ['tempo'],
+  'lying-leg-curl.tempo_jerk': ['tempo'],
+  'lying-leg-curl.side_view_uncertain': [],
+};
+
+const LYING_LEG_CURL_MESSAGE_CUE_FAMILIES: Record<string, string[]> = {
+  [FEEDBACK.CURL_SHORT]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.rom_curl_short'],
+  [FEEDBACK.EXTEND_SHORT]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.rom_extend_short'],
+  [FEEDBACK.HIP_LIFT]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.hip_lift'],
+  [FEEDBACK.THIGH_MOVEMENT]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.thigh_movement'],
+  [FEEDBACK.TOP_HOLD]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.top_hold_short'],
+  [FEEDBACK.TEMPO_CURL]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.tempo_up'],
+  [FEEDBACK.TEMPO_LOWER]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.tempo_down'],
+  [FEEDBACK.TEMPO_JERK]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.tempo_jerk'],
+  [FEEDBACK.SIDE_VIEW]: LYING_LEG_CURL_ISSUE_CUE_FAMILIES['lying-leg-curl.side_view_uncertain'],
+  [FEEDBACK.TRACKING_SETUP]: [],
+};
+
 function hasKneeAngleSamples(repWindow: RepWindow): boolean {
   const sampleRate = repWindow.frameCount > 0
     ? repWindow.kneeAngleSampleCount / repWindow.frameCount
@@ -1037,6 +1108,286 @@ function mostUsedDistalEndpoint(repWindow: RepWindow): DistalEndpointName | null
     }
   }
   return bestEndpoint;
+}
+
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function cueFamiliesAllowed(
+  allowedCueFamilies: ReadonlySet<string> | undefined,
+  families: string[],
+): boolean {
+  return families.every(family => cueFamilyAllowed(allowedCueFamilies, family));
+}
+
+function distalEndpointCueFamilies(repWindow: RepWindow): string[] {
+  const endpoint = mostUsedDistalEndpoint(repWindow);
+  return endpoint && endpoint !== 'ankle'
+    ? ['distalEndpoint', 'heelFootFallback']
+    : ['distalEndpoint'];
+}
+
+function selectedLegChain(visibleSide: 'left' | 'right'): 'leftLeg' | 'rightLeg' {
+  return visibleSide === 'left' ? 'leftLeg' : 'rightLeg';
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function jointUnreliableRate(summary: PoseStateReliabilitySummary, jointName: string): number {
+  return (summary.unreliableJointCounts[jointName] ?? 0) / Math.max(1, summary.totalFrames);
+}
+
+function selectedLegCoreReliable(summary: PoseStateReliabilitySummary, visibleSide: 'left' | 'right'): boolean {
+  return (
+    summary.totalFrames > 0 &&
+    jointUnreliableRate(summary, `${visibleSide}_hip`) < 0.25 &&
+    jointUnreliableRate(summary, `${visibleSide}_knee`) < 0.25
+  );
+}
+
+function selectedDistalEndpointReliable(
+  summary: PoseStateReliabilitySummary,
+  visibleSide: 'left' | 'right',
+  endpoint: DistalEndpointName | null,
+): boolean {
+  if (!endpoint || summary.totalFrames === 0) return false;
+  return jointUnreliableRate(summary, distalEndpointKey(visibleSide, endpoint)) < 0.25;
+}
+
+function selectedFallbackCueFamilies(endpoint: DistalEndpointName | null): string[] {
+  return endpoint && endpoint !== 'ankle' ? ['heelFootFallback'] : [];
+}
+
+function removeCueFamilies(source: string[], families: Iterable<string>): string[] {
+  const familySet = new Set(families);
+  return source.filter(family => !familySet.has(family));
+}
+
+interface LyingLegCurlReliabilityResult {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+  selectedEndpoint: DistalEndpointName | null;
+  selectedCoreReliable: boolean;
+  selectedDistalReliable: boolean;
+}
+
+function reliabilityInterpretationForRepWindow(
+  repWindow: RepWindow,
+  visibleSide: 'left' | 'right',
+): LyingLegCurlReliabilityResult | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+
+  const baseInterpretation = interpretPoseStateReliabilitySummary('Lying Leg Curl', summary);
+  const selectedChain = selectedLegChain(visibleSide);
+  const selectedEndpoint = mostUsedDistalEndpoint(repWindow);
+  const coreReliable = selectedLegCoreReliable(summary, visibleSide);
+  const distalReliable = selectedDistalEndpointReliable(summary, visibleSide, selectedEndpoint);
+  const selectedLegReliableForObservedCurl = coreReliable && distalReliable;
+
+  let countabilityCandidate = baseInterpretation.countabilityCandidate;
+  let scoreabilityCandidate = baseInterpretation.scoreabilityCandidate;
+  let safeCueFamilies = [...baseInterpretation.safeCueFamilies];
+  let unsafeCueFamilies = [...baseInterpretation.unsafeCueFamilies];
+  const reasons = [...baseInterpretation.reasons];
+
+  if (!baseInterpretation.usableChains.includes(selectedChain)) {
+    if (selectedLegReliableForObservedCurl) {
+      safeCueFamilies = uniqueStrings([
+        ...safeCueFamilies,
+        ...LYING_LEG_CURL_SELECTED_LEG_CUE_FAMILIES,
+      ]);
+      unsafeCueFamilies = removeCueFamilies(unsafeCueFamilies, LYING_LEG_CURL_SELECTED_LEG_CUE_FAMILIES);
+      if (baseInterpretation.usableChains.includes('torso') && summary.trackingInterruptedFrames === 0) {
+        countabilityCandidate = 'countable';
+      }
+      if (scoreabilityCandidate === 'notScoreable') {
+        scoreabilityCandidate = 'partiallyScoreable';
+      }
+      reasons.push(`${selectedChain}_weak_but_distal_fallback_reliable`);
+    } else {
+      const selectedUnsafeFamilies = new Set<string>(LYING_LEG_CURL_SELECTED_LEG_CUE_FAMILIES);
+      safeCueFamilies = safeCueFamilies.filter(family => !selectedUnsafeFamilies.has(family));
+      unsafeCueFamilies = uniqueStrings([
+        ...unsafeCueFamilies,
+        ...LYING_LEG_CURL_SELECTED_LEG_CUE_FAMILIES,
+      ]);
+      countabilityCandidate = countabilityCandidate === 'countable' ? 'maybe' : countabilityCandidate;
+      scoreabilityCandidate = scoreabilityCandidate === 'fullyScoreable'
+        ? 'partiallyScoreable'
+        : scoreabilityCandidate;
+      reasons.push(`${selectedChain}_selected_chain_weak`, 'selected_leg_cue_families_unsafe');
+    }
+  }
+
+  if (!distalReliable) {
+    const unsafeDistalFamilies = [
+      'visibleLegPath',
+      'kneeFlexion',
+      'rangeOfMotion',
+      'lockoutOrExtension',
+      'distalEndpoint',
+      ...selectedFallbackCueFamilies(selectedEndpoint),
+    ];
+    safeCueFamilies = removeCueFamilies(safeCueFamilies, unsafeDistalFamilies);
+    unsafeCueFamilies = uniqueStrings([...unsafeCueFamilies, ...unsafeDistalFamilies]);
+    scoreabilityCandidate = scoreabilityCandidate === 'fullyScoreable'
+      ? 'partiallyScoreable'
+      : scoreabilityCandidate;
+    reasons.push(
+      selectedEndpoint
+        ? `${distalEndpointKey(visibleSide, selectedEndpoint)}_distal_endpoint_weak`
+        : 'selected_distal_endpoint_unavailable',
+    );
+  }
+
+  return {
+    summary,
+    selectedEndpoint,
+    selectedCoreReliable: coreReliable,
+    selectedDistalReliable: distalReliable,
+    interpretation: {
+      ...baseInterpretation,
+      countabilityCandidate,
+      scoreabilityCandidate,
+      safeCueFamilies: uniqueStrings(safeCueFamilies),
+      unsafeCueFamilies: uniqueStrings(unsafeCueFamilies),
+      reasons: uniqueStrings(reasons),
+    },
+  };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function reliabilityAllowsScoring(
+  reliability: LyingLegCurlReliabilityResult | null,
+): boolean {
+  if (!reliability) return true;
+  return (
+    reliability.interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    reliability.interpretation.usableChains.includes('torso') &&
+    reliability.selectedCoreReliable &&
+    reliability.selectedDistalReliable
+  );
+}
+
+function repScorableWithReliability(
+  repWindow: RepWindow,
+  reliability: LyingLegCurlReliabilityResult | null,
+): boolean {
+  return isLyingLegCurlRepScorable(repWindow) && reliabilityAllowsScoring(reliability);
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const families = LYING_LEG_CURL_MESSAGE_CUE_FAMILIES[message] ?? [];
+    return families.every(family => !unsafeFamilies.has(family));
+  });
+}
+
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const families = LYING_LEG_CURL_ISSUE_CUE_FAMILIES[issueId] ?? [];
+      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
+      if (unsafeFamily) {
+        suppressedIssueIds.push(issueId);
+        for (const family of families) {
+          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
+        }
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${unsafeFamily}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogLyingLegCurlReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logLyingLegCurlRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogLyingLegCurlReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[LyingLegCurlReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
+function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
+  return LYING_LEG_CURL_RELIABILITY_JOINTS.some((jointName) => {
+    const joint = poseState.joints[jointName];
+    return (
+      joint &&
+      (
+        joint.presence !== null ||
+        joint.reasons.includes('presence_unknown') ||
+        joint.reasons.includes('visibility_unknown')
+      )
+    );
+  });
+}
+
+function observeLyingLegCurlPoseState(
+  repWindow: RepWindow,
+  frameContext: ExerciseFrameContext | undefined,
+): void {
+  const poseState = frameContext?.poseState;
+  if (!poseState || !poseStateHasRichReliabilityMetadata(poseState)) return;
+  repWindow.reliability.observe(poseState);
 }
 
 function curlDepthShort(repWindow: RepWindow): boolean {
@@ -1135,40 +1486,56 @@ function buildLyingLegCurlViewQuality(repWindow: RepWindow): RepViewQualityDiagn
   };
 }
 
-function computeLyingLegCurlScore(repWindow: RepWindow): number {
+function computeLyingLegCurlScore(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): number {
   const penalties: Array<{ value: number; config: PenaltyConfig }> = [];
+  const distalCueFamilies = distalEndpointCueFamilies(repWindow);
 
   // 1. ROM -- flexion: ideal minRatio is configurable. Excess = max(0, minRatio - ideal)
-  const flexionExcess = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.FLEXION_IDEAL_RATIO);
-  penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
+  if (cueFamiliesAllowed(allowedCueFamilies, ['visibleLegPath', 'kneeFlexion', 'rangeOfMotion', ...distalCueFamilies])) {
+    const flexionExcess = Math.max(0, repWindow.minRatio - FORM_THRESHOLDS.FLEXION_IDEAL_RATIO);
+    penalties.push({ value: flexionExcess, config: PENALTY_CONFIGS.FLEXION_ROM });
+  }
 
   // 2. ROM -- extension: use return-phase extension so starting posture cannot hide a short return.
-  const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_IDEAL_RATIO - returnExtensionRatio(repWindow));
-  penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  if (cueFamiliesAllowed(allowedCueFamilies, ['visibleLegPath', 'rangeOfMotion', 'lockoutOrExtension', ...distalCueFamilies])) {
+    const extensionShortfall = Math.max(0, FORM_THRESHOLDS.EXTENSION_IDEAL_RATIO - returnExtensionRatio(repWindow));
+    penalties.push({ value: extensionShortfall, config: PENALTY_CONFIGS.EXTENSION_ROM });
+  }
 
-  if (hasKneeAngleSamples(repWindow)) {
+  if (hasKneeAngleSamples(repWindow) && cueFamiliesAllowed(allowedCueFamilies, ['kneeFlexion', ...distalCueFamilies])) {
     const kneeFlexionExcess = Math.max(0, repWindow.minKneeAngle - FORM_THRESHOLDS.KNEE_FLEXION_IDEAL);
     penalties.push({ value: kneeFlexionExcess, config: PENALTY_CONFIGS.KNEE_FLEXION_ROM });
   }
 
-  if (hasReturnKneeAngleSamples(repWindow)) {
+  if (hasReturnKneeAngleSamples(repWindow) && cueFamiliesAllowed(allowedCueFamilies, ['lockoutOrExtension', ...distalCueFamilies])) {
     const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.returnMaxKneeAngle);
     penalties.push({ value: kneeExtensionShortfall, config: PENALTY_CONFIGS.KNEE_EXTENSION_ROM });
   }
 
   // 3. Hip lift (hip angle delta + normalized vertical hip rise)
-  penalties.push({ value: repWindow.maxHipDelta, config: PENALTY_CONFIGS.HIP_LIFT });
-  penalties.push({ value: repWindow.maxHipRiseRatio, config: PENALTY_CONFIGS.HIP_RISE });
-  penalties.push({ value: repWindow.maxThighDriftRatio, config: PENALTY_CONFIGS.THIGH_MOVEMENT });
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoSetup')) {
+    penalties.push({ value: repWindow.maxHipDelta, config: PENALTY_CONFIGS.HIP_LIFT });
+    penalties.push({ value: repWindow.maxHipRiseRatio, config: PENALTY_CONFIGS.HIP_RISE });
+  }
+  if (cueFamiliesAllowed(allowedCueFamilies, ['visibleLegPath', 'torsoSetup'])) {
+    penalties.push({ value: repWindow.maxThighDriftRatio, config: PENALTY_CONFIGS.THIGH_MOVEMENT });
+  }
 
   const hold = topHoldSeconds(repWindow);
-  if (hold !== null && hold < FORM_THRESHOLDS.TOP_HOLD_MIN) {
+  if (
+    hold !== null &&
+    hold < FORM_THRESHOLDS.TOP_HOLD_MIN &&
+    cueFamiliesAllowed(allowedCueFamilies, ['lockoutOrExtension', ...distalCueFamilies])
+  ) {
     const deficit = FORM_THRESHOLDS.TOP_HOLD_MIN - hold;
     penalties.push({ value: deficit, config: PENALTY_CONFIGS.TOP_HOLD });
   }
 
   // 4. Tempo and jerk/bounce
-  if (repWindow.tCurled !== null) {
+  if (repWindow.tCurled !== null && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     const tCurl = repWindow.tCurled - repWindow.tStart;    // concentric (curl up)
     const tLower = repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled); // eccentric (lower down)
 
@@ -1183,14 +1550,16 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
     }
   }
 
-  const spikeRatio = velocitySpikeRatio(repWindow);
-  const jerkExcess = Math.max(
-    spikeRatio !== null ? spikeRatio - FORM_THRESHOLDS.TEMPO_JERK_SPIKE_WARN : 0,
-    repWindow.maxCurlVelocity - FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN,
-    repWindow.maxLowerVelocity - FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN,
-    0,
-  );
-  penalties.push({ value: jerkExcess, config: PENALTY_CONFIGS.TEMPO_JERK });
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
+    const spikeRatio = velocitySpikeRatio(repWindow);
+    const jerkExcess = Math.max(
+      spikeRatio !== null ? spikeRatio - FORM_THRESHOLDS.TEMPO_JERK_SPIKE_WARN : 0,
+      repWindow.maxCurlVelocity - FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN,
+      repWindow.maxLowerVelocity - FORM_THRESHOLDS.TEMPO_JERK_VELOCITY_WARN,
+      0,
+    );
+    penalties.push({ value: jerkExcess, config: PENALTY_CONFIGS.TEMPO_JERK });
+  }
 
   return computeScore(penalties);
 }
@@ -1199,34 +1568,47 @@ function computeLyingLegCurlScore(repWindow: RepWindow): number {
 // FORM MESSAGES (discrete thresholds)
 // ============================================================================
 
-function generateFormMessages(repWindow: RepWindow): string[] {
+function generateFormMessages(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): string[] {
   const messages: string[] = [];
+  const distalCueFamilies = distalEndpointCueFamilies(repWindow);
 
   // 1. Flexion ROM -- didn't curl far enough (minRatio too high)
-  if (curlDepthShort(repWindow)) {
+  if (
+    curlDepthShort(repWindow) &&
+    cueFamiliesAllowed(allowedCueFamilies, ['visibleLegPath', 'kneeFlexion', 'rangeOfMotion', ...distalCueFamilies])
+  ) {
     messages.push(FEEDBACK.CURL_SHORT);
   }
 
   // 2. Extension ROM -- didn't straighten fully (maxRatio too low)
-  if (extensionShort(repWindow)) {
+  if (
+    extensionShort(repWindow) &&
+    cueFamiliesAllowed(allowedCueFamilies, ['visibleLegPath', 'rangeOfMotion', 'lockoutOrExtension', ...distalCueFamilies])
+  ) {
     messages.push(FEEDBACK.EXTEND_SHORT);
   }
 
   // 3. Hip lift
-  if (hipLiftTriggered(repWindow)) {
+  if (hipLiftTriggered(repWindow) && cueFamilyAllowed(allowedCueFamilies, 'torsoSetup')) {
     messages.push(FEEDBACK.HIP_LIFT);
   }
 
-  if (thighMovementTriggered(repWindow)) {
+  if (thighMovementTriggered(repWindow) && cueFamiliesAllowed(allowedCueFamilies, ['visibleLegPath', 'torsoSetup'])) {
     messages.push(FEEDBACK.THIGH_MOVEMENT);
   }
 
-  if (topHoldShort(repWindow)) {
+  if (
+    topHoldShort(repWindow) &&
+    cueFamiliesAllowed(allowedCueFamilies, ['lockoutOrExtension', ...distalCueFamilies])
+  ) {
     messages.push(FEEDBACK.TOP_HOLD);
   }
 
   // 4. Tempo
-  if (repWindow.tCurled !== null) {
+  if (repWindow.tCurled !== null && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     const tCurl = repWindow.tCurled - repWindow.tStart;
     const tLower = repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled);
 
@@ -1238,7 +1620,7 @@ function generateFormMessages(repWindow: RepWindow): string[] {
     }
   }
 
-  if (tempoJerkTriggered(repWindow)) {
+  if (tempoJerkTriggered(repWindow) && cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
     messages.push(FEEDBACK.TEMPO_JERK);
   }
 
@@ -1254,7 +1636,7 @@ function buildLyingLegCurlDiagnostics(
   repIndex: number,
   visibleSide: 'left' | 'right',
   scorable: boolean,
-): FrameworkRepResult['diagnostics'] {
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const hasTempo = repWindow.tCurled !== null;
   const tCurl = repWindow.tCurled !== null ? repWindow.tCurled - repWindow.tStart : null;
   const tLower = repWindow.tCurled !== null ? repWindow.tEnd - (repWindow.tLowerStart ?? repWindow.tCurled) : null;
@@ -1458,6 +1840,39 @@ function buildLyingLegCurlDiagnostics(
   });
 }
 
+function buildLyingLegCurlRepResult(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+): RepResult {
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const scorable = repScorableWithReliability(repWindow, reliability);
+  const score = reliabilityAllowsScoring(reliability)
+    ? computeLyingLegCurlScore(repWindow, allowedCueFamilies)
+    : 0;
+  const messages = suppressUnsafeReliabilityMessages(
+    generateFormMessages(repWindow, allowedCueFamilies),
+    reliabilityInterpretation,
+  );
+  const diagnostics = applyReliabilityCueGating(
+    buildLyingLegCurlDiagnostics(repWindow, repIndex, visibleSide, scorable),
+    reliabilityInterpretation,
+    scorable,
+  );
+  logLyingLegCurlRepReliability(repIndex, reliabilityInterpretation, diagnostics);
+
+  return {
+    repIndex,
+    score,
+    messages,
+    scorable,
+    qualityWarnings: lyingLegCurlQualityWarnings(repWindow),
+    diagnostics,
+  };
+}
+
 // ============================================================================
 // UPDATE LOGIC
 // ============================================================================
@@ -1659,23 +2074,17 @@ function completeRep(
   t: number,
 ): void {
   state.repCount++;
-  const score = computeLyingLegCurlScore(window);
-  const formMessages = generateFormMessages(window);
-  const scorable = isLyingLegCurlRepScorable(window);
-  const qualityWarnings = lyingLegCurlQualityWarnings(window);
-  const messages = !scorable && qualityWarnings?.includes('side_view_uncertain')
+  const repResult = buildLyingLegCurlRepResult(window, state.repCount, visibleSide);
+  const qualityWarnings = repResult.qualityWarnings;
+  const messages = repResult.scorable === false && qualityWarnings?.includes('side_view_uncertain')
     ? [FEEDBACK.SIDE_VIEW]
-    : !scorable && qualityWarnings?.includes('missing_required_joints')
+    : repResult.scorable === false && qualityWarnings?.includes('missing_required_joints')
       ? [FEEDBACK.TRACKING_SETUP]
-      : formMessages;
+      : repResult.messages;
 
   state.lastRepResult = {
-    repIndex: state.repCount,
-    score,
+    ...repResult,
     messages,
-    scorable,
-    qualityWarnings,
-    diagnostics: buildLyingLegCurlDiagnostics(window, state.repCount, visibleSide, scorable),
   };
 
   if (messages.length > 0) {
@@ -1748,6 +2157,7 @@ function updateLyingLegCurlState(
     };
     const dropoutWindow = newState.repWindow ?? newState.pendingCompletedRep?.window ?? null;
     if (dropoutWindow) {
+      observeLyingLegCurlPoseState(dropoutWindow, frameContext);
       markRepWindowLowConfidenceDropout(dropoutWindow, t, sideViewConfidence);
     }
     if (
@@ -1810,6 +2220,7 @@ function updateLyingLegCurlState(
     };
 
     if (!startingNextRep) {
+      observeLyingLegCurlPoseState(pending.window, frameContext);
       updateRepWindowReturnExtension(pending.window, pendingSample);
     }
 
@@ -1889,6 +2300,7 @@ function updateLyingLegCurlState(
       ? calculateHipRiseRatio(hip.y, newState.repWindow.hipYBaseline, legChainLength)
       : null;
     newState.currentHipRiseRatio = hipRiseRatio;
+    observeLyingLegCurlPoseState(newState.repWindow, frameContext);
     updateRepWindowMetrics(newState.repWindow, {
       ratio: smoothedRatio,
       fastRatio,

@@ -353,6 +353,52 @@ function setKeypointScores(
   ));
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 describe('Lying Leg Curl synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -367,6 +413,213 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
       expect(result.feedbackMessages).toEqual([]);
     },
   );
+
+  it('keeps clean v2 PoseState lying leg curls fully scoreable', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean full-reliability v2 lying leg curl', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'rightLeg', 'torso']),
+      weakChains: [],
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'visibleLegPath',
+        'kneeFlexion',
+        'rangeOfMotion',
+        'lockoutOrExtension',
+        'distalEndpoint',
+        'heelFootFallback',
+        'bilateralSymmetry',
+        'torsoSetup',
+      ]),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps one weak non-selected leg countable when the selected leg and torso are reliable', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-leg reliable v2 lying leg curl', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set([
+            'right_knee',
+            'right_ankle',
+            'right_heel',
+            'right_foot_index',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.selectedSide).toBe('left');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'torso']),
+      weakChains: expect.arrayContaining(['rightLeg']),
+      safeCueFamilies: expect.arrayContaining([
+        'visibleLegPath',
+        'kneeFlexion',
+        'rangeOfMotion',
+        'lockoutOrExtension',
+        'distalEndpoint',
+        'heelFootFallback',
+        'torsoSetup',
+      ]),
+      unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('suppresses weak selected distal cues while leaving torso setup feedback safe in v2 replay', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected distal weak v2 lying leg curl', halfRepPath(), {
+          hiddenSideScore: 0.99,
+          posture: index => (index < 16 ? 'flat' : 'hip-lift'),
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_ankle']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).toContain('Keep your hips down — avoid lifting off the pad.');
+    expect(result.reps[0].messages).not.toContain('Curl higher — bring your heels closer to your glutes.');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'maybe',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['rightLeg', 'torso']),
+      weakChains: expect.arrayContaining(['leftLeg']),
+      safeCueFamilies: expect.arrayContaining(['torsoSetup']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'distalEndpoint',
+        'rangeOfMotion',
+        'kneeFlexion',
+        'lockoutOrExtension',
+      ]),
+      suppressedIssueIds: expect.arrayContaining(['lying-leg-curl.rom_curl_short']),
+    });
+    expect(diagnostics.cues['lying-leg-curl.rom_curl_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_distalEndpoint',
+    });
+    expect(diagnostics.cues['lying-leg-curl.hip_lift'].triggered).toBe(true);
+  });
+
+  it('keeps distal fallback countable but does not make weak fallback-source feedback safe', () => {
+    const recording = setKeypointScores(
+      buildRecording('synthetic weak heel fallback v2 lying leg curl', halfRepPath(), {
+        hiddenSideScore: 0.99,
+      }),
+      ['left_ankle', 'right_ankle'],
+      0.05,
+    );
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      recordingWithV2PoseMetadata(recording, {
+        lowVisibilityJoints: new Set(['left_heel']),
+      }),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(diagnostics.metrics.distalEndpoint.label).toBe('heel');
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).not.toContain('Curl higher — bring your heels closer to your glutes.');
+    expect(diagnostics.reliability).toMatchObject({
+      weakChains: expect.arrayContaining(['leftLeg']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'distalEndpoint',
+        'heelFootFallback',
+        'rangeOfMotion',
+        'lockoutOrExtension',
+      ]),
+      suppressedIssueIds: expect.arrayContaining(['lying-leg-curl.rom_curl_short']),
+    });
+    expect(diagnostics.cues['lying-leg-curl.rom_curl_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_distalEndpoint',
+    });
+  });
+
+  it('counts but marks a selected-leg weak v2 rep partially or not scoreable', () => {
+    const result = replayRecording(
+      lyingLegCurlDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-leg weak v2 lying leg curl', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set([
+            'left_knee',
+            'left_ankle',
+            'left_heel',
+            'left_foot_index',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(['partiallyScoreable', 'notScoreable']).toContain(
+      diagnostics.reliability?.scoreabilityCandidate,
+    );
+    expect(diagnostics.reliability).toMatchObject({
+      usableChains: expect.arrayContaining(['rightLeg', 'torso']),
+      weakChains: expect.arrayContaining(['leftLeg']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'visibleLegPath',
+        'kneeFlexion',
+        'rangeOfMotion',
+        'lockoutOrExtension',
+        'distalEndpoint',
+        'heelFootFallback',
+      ]),
+    });
+  });
+
+  it('keeps tracking-interruption protection with v2 PoseState metadata', () => {
+    const result = replayRecordingVerbose(
+      lyingLegCurlDefinition,
+      recordingWithV2PoseMetadata(buildInterruptedMidRepRecording()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
 
   it('does not count a tiny lying-leg-curl pulse', () => {
     const result = replayRecordingVerbose(
