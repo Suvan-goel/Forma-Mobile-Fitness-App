@@ -43,6 +43,10 @@ import {
   resolveCableViewCueDecision,
   type CableCueViewRequirement,
 } from '../shared/cableViewGating';
+import {
+  cameraStatusFromViewCueGating,
+  type CameraAnalysisStatus,
+} from '../shared/cameraAnalysisStatus';
 import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
 import {
   interpretPoseStateReliabilitySummary,
@@ -898,6 +902,30 @@ function isLatPulldownRepScorable(repWindow: RepWindow): boolean {
 
 function latPulldownQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qualityWarnings'] {
   return isLatPulldownRepScorable(repWindow) ? [] : ['side_view_uncertain'];
+}
+
+function latPulldownRepWindowAnalysisStatus(
+  repWindow: RepWindow,
+  activeSide: 'left' | 'right',
+): CameraAnalysisStatus | null {
+  const viewQuality = buildLatPulldownViewQuality(repWindow);
+  if (viewQuality.sampleCount < SIDE_VIEW_MIN_SAMPLES) return null;
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, activeSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const cueDecision = resolveCableViewCueDecision({
+    allCueFamilies: LAT_PULLDOWN_CUE_FAMILIES,
+    meaningfulCueFamilies: LAT_PULLDOWN_MEANINGFUL_CUE_FAMILIES,
+    cueViewRequirements: LAT_PULLDOWN_CUE_VIEW_REQUIREMENTS,
+    sideViewGatePassed: isLatPulldownRepScorable(repWindow),
+    interpretation: reliabilityInterpretation,
+    selectedSide: activeSide,
+  });
+  return cameraStatusFromViewCueGating({
+    viewCueGating: cueDecision,
+    reliability: reliabilityInterpretation,
+    viewRequired: 'side',
+    source: 'exercise',
+  });
 }
 
 function diagnosticsViewFor(viewQuality: RepViewQualityDiagnostic): NonNullable<FrameworkRepResult['diagnostics']>['view'] {
@@ -2132,6 +2160,7 @@ export function createLatPulldownDefinition(
     debugInfo: {},
     repQualityWindowActive: false,
     liveQualityWarnings: [],
+    liveAnalysisStatus: null,
     _internal: withLatPulldownConfig(config, () => initializeState()),
   }),
 
@@ -2155,6 +2184,16 @@ export function createLatPulldownDefinition(
       : completedNewRep
         ? (lastRepResult?.qualityWarnings ?? [])
         : [];
+    const liveAnalysisStatus = internal.repWindow
+      ? latPulldownRepWindowAnalysisStatus(internal.repWindow, internal.activeSide)
+      : completedNewRep
+        ? cameraStatusFromViewCueGating({
+            viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
+            reliability: lastRepResult?.diagnostics?.reliability,
+            viewRequired: 'side',
+            source: 'exercise',
+          })
+        : null;
 
     return {
       repCount: internal.repCount,
@@ -2164,6 +2203,7 @@ export function createLatPulldownDefinition(
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
       repQualityWindowActive: internal.repWindow !== null,
       liveQualityWarnings,
+      liveAnalysisStatus,
       _internal: internal,
     };
   },

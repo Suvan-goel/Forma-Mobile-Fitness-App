@@ -33,6 +33,7 @@ import {
   PoseQualityTracker,
   RepQualityWindowAccumulator,
   buildDisplayedPoseQuality,
+  resolveCameraAnalysisStatus,
   getUnscoredRepFeedback,
   getPoseQualityMessage,
   resolveExerciseQualityProfile,
@@ -45,6 +46,8 @@ import type {
   PoseQualityWarning,
   RepTrackingQuality,
   SetTrackingQualitySummary,
+  CameraAnalysisStatus,
+  CameraAnalysisStatusResolution,
 } from '../../utils/exercises';
 import {
   createLandmarkRecordingFrame,
@@ -86,6 +89,7 @@ type PendingUIState = {
   feedback?: string | null;
   exerciseDebug?: Record<string, unknown> | null;
   quality?: PoseQualitySnapshot;
+  analysisStatus?: CameraAnalysisStatus | null;
   workoutUpdate?: PendingWorkoutUpdate;
 };
 
@@ -127,11 +131,48 @@ function getTrackingQualityTone(status: PoseQualitySnapshot['status'] | RepTrack
   return { color: '#F87171', backgroundColor: 'rgba(248, 113, 113, 0.15)', borderColor: 'rgba(248, 113, 113, 0.34)' };
 }
 
+function getCameraAnalysisStatusTone(level: CameraAnalysisStatus['level']) {
+  if (level === 'good') {
+    return { color: '#34E0A6', backgroundColor: 'rgba(52, 224, 166, 0.14)', borderColor: 'rgba(52, 224, 166, 0.34)' };
+  }
+  if (level === 'info') {
+    return { color: '#60A5FA', backgroundColor: 'rgba(96, 165, 250, 0.14)', borderColor: 'rgba(96, 165, 250, 0.32)' };
+  }
+  if (level === 'warning') {
+    return { color: '#FBBF24', backgroundColor: 'rgba(251, 191, 36, 0.14)', borderColor: 'rgba(251, 191, 36, 0.32)' };
+  }
+  return { color: '#F87171', backgroundColor: 'rgba(248, 113, 113, 0.15)', borderColor: 'rgba(248, 113, 113, 0.34)' };
+}
+
 function mergeTrackingWarnings(
   baseWarnings: PoseQualityWarning[],
   exerciseWarnings: PoseQualityWarning[] = [],
 ): PoseQualityWarning[] {
   return Array.from(new Set([...baseWarnings, ...exerciseWarnings]));
+}
+
+function cameraAnalysisStatusKey(status: CameraAnalysisStatus | null | undefined): string {
+  if (!status) return 'none';
+  return [
+    status.level,
+    status.category,
+    status.source,
+    status.reason ?? '',
+    status.message,
+    status.details?.feedbackMode ?? '',
+  ].join('|');
+}
+
+function formatCameraAnalysisStatusForLog(status: CameraAnalysisStatus) {
+  return {
+    message: status.message,
+    level: status.level,
+    category: status.category,
+    priority: status.priority,
+    source: status.source,
+    reason: status.reason,
+    feedbackMode: status.details?.feedbackMode,
+  };
 }
 
 function resolveWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
@@ -303,6 +344,7 @@ export const CameraScreen: React.FC = () => {
   const durationRef = useRef(0);
   const [feedbackFeed, setFeedbackFeed] = useState<FeedbackFeedItem[]>([]);
   const [trackingQuality, setTrackingQuality] = useState<PoseQualitySnapshot | null>(null);
+  const [cameraAnalysisStatus, setCameraAnalysisStatus] = useState<CameraAnalysisStatus | null>(null);
   const feedbackIdRef = useRef(0);
   const [exerciseDebug, setExerciseDebug] = useState<Record<string, unknown> | null>(null);
   const currentTrainer = useMemo(
@@ -468,6 +510,12 @@ export const CameraScreen: React.FC = () => {
     updatedAt: 0,
   });
   const topPillWarningSmoothingRef = useRef<Partial<Record<PoseQualityWarning, number>>>({});
+  const topPillAnalysisStatusHoldRef = useRef<{ status: CameraAnalysisStatus | null; updatedAt: number }>({
+    status: null,
+    updatedAt: 0,
+  });
+  const topPillAnalysisStatusSmoothingRef = useRef<{ key: string; count: number }>({ key: 'none', count: 0 });
+  const lastCameraAnalysisStatusLogKeyRef = useRef('none');
 
   // Sync refs with state
   useEffect(() => {
@@ -523,8 +571,12 @@ export const CameraScreen: React.FC = () => {
     angleBufferRef.current = {};
     setVarianceStats(null);
     setTrackingQuality(null);
+    setCameraAnalysisStatus(null);
     topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
     topPillWarningSmoothingRef.current = {};
+    topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
+    topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
+    lastCameraAnalysisStatusLogKeyRef.current = 'none';
     lastTTSFeedbackTimestampRef.current = null;
     poseQualityTrackerRef.current.reset();
     repQualityAccumulatorRef.current.reset();
@@ -563,6 +615,7 @@ export const CameraScreen: React.FC = () => {
       if (pending.formScore !== undefined) setCurrentFormScore(pending.formScore);
       if (pending.exerciseDebug !== undefined) setExerciseDebug(pending.exerciseDebug);
       if (pending.quality !== undefined) setTrackingQuality(pending.quality);
+      if (pending.analysisStatus !== undefined) setCameraAnalysisStatus(pending.analysisStatus);
       if (pending.workoutUpdate) {
         const repFeedback = pending.workoutUpdate.repFeedback?.trim() ?? '';
         if (repFeedback !== '') {
@@ -625,6 +678,21 @@ export const CameraScreen: React.FC = () => {
           }
         }
       }
+    });
+  }, []);
+
+  const logCameraAnalysisStatusResolution = useCallback((resolution: CameraAnalysisStatusResolution) => {
+    if (!__DEV__ || !resolution.selected) return;
+    const logKey = cameraAnalysisStatusKey(resolution.selected);
+    if (logKey === lastCameraAnalysisStatusLogKeyRef.current) return;
+    lastCameraAnalysisStatusLogKeyRef.current = logKey;
+    console.log('[CameraAnalysisStatus]', {
+      selected: formatCameraAnalysisStatusForLog(resolution.selected),
+      competing: resolution.candidates
+        .filter((status) => status !== resolution.selected)
+        .sort((a, b) => b.priority - a.priority)
+        .slice(0, 5)
+        .map(formatCameraAnalysisStatusForLog),
     });
   }, []);
 
@@ -734,7 +802,41 @@ export const CameraScreen: React.FC = () => {
       } else {
         topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
       }
+      const rawExerciseStatus = newState.liveAnalysisStatus ?? null;
+      let stableExerciseStatus: CameraAnalysisStatus | null = null;
+      const rawExerciseStatusKey = cameraAnalysisStatusKey(rawExerciseStatus);
+      const statusSmoothing = topPillAnalysisStatusSmoothingRef.current;
+      if (rawExerciseStatus) {
+        if (statusSmoothing.key === rawExerciseStatusKey) {
+          statusSmoothing.count = Math.min(statusSmoothing.count + 1, TOP_PILL_WARNING_STABLE_FRAMES);
+        } else {
+          statusSmoothing.key = rawExerciseStatusKey;
+          statusSmoothing.count = 1;
+        }
+        if (statusSmoothing.count >= TOP_PILL_WARNING_STABLE_FRAMES) {
+          stableExerciseStatus = rawExerciseStatus;
+        }
+      } else {
+        statusSmoothing.key = 'none';
+        statusSmoothing.count = 0;
+      }
+      if (stableExerciseStatus) {
+        topPillAnalysisStatusHoldRef.current = { status: stableExerciseStatus, updatedAt: now };
+      } else if (
+        topPillAnalysisStatusHoldRef.current.status &&
+        now - topPillAnalysisStatusHoldRef.current.updatedAt <= TOP_PILL_WARNING_HOLD_MS
+      ) {
+        stableExerciseStatus = topPillAnalysisStatusHoldRef.current.status;
+      } else {
+        topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
+      }
       const displayedQuality = buildDisplayedPoseQuality(quality, stableTopPillWarnings);
+      const cameraStatusResolution = resolveCameraAnalysisStatus({
+        poseQuality: quality,
+        exerciseWarnings: stableTopPillWarnings,
+        exerciseStatus: stableExerciseStatus,
+      });
+      logCameraAnalysisStatusResolution(cameraStatusResolution);
 
       // Accumulate UI updates — don't setState here (blocks main thread)
       const pending = pendingUIStateRef.current ?? {};
@@ -742,6 +844,7 @@ export const CameraScreen: React.FC = () => {
       pending.feedback = newState.feedback;
       pending.exerciseDebug = newState.debugInfo;
       pending.quality = displayedQuality;
+      pending.analysisStatus = cameraStatusResolution.selected;
 
       const feedbackTimestamp = newState.feedbackTimestamp;
 
@@ -903,7 +1006,7 @@ export const CameraScreen: React.FC = () => {
         setExercisePhase('idle');
       }
     }
-  }, [convertLandmarksToKeypoints, exerciseNameFromRoute, flushPendingUI]);
+  }, [convertLandmarksToKeypoints, exerciseNameFromRoute, flushPendingUI, logCameraAnalysisStatusResolution]);
 
   // Memoize button handlers to prevent recreating on every render
   const workoutDataRef = useRef(workoutData);
@@ -1166,8 +1269,12 @@ export const CameraScreen: React.FC = () => {
       poseQualityTrackerRef.current.reset();
       repQualityAccumulatorRef.current.reset();
       setTrackingQuality(null);
+      setCameraAnalysisStatus(null);
       topPillWarningHoldRef.current = { warnings: [], updatedAt: 0 };
       topPillWarningSmoothingRef.current = {};
+      topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
+      topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
+      lastCameraAnalysisStatusLogKeyRef.current = 'none';
       poseFrameGapTrackerRef.current.reset();
       ttsResetCoach();
       playReservedSetStartCue();
@@ -1325,15 +1432,19 @@ export const CameraScreen: React.FC = () => {
 
   const trackingQualityCue = useMemo(() => {
     if (!trackingQuality || (!isRecording && !debugMode)) return null;
-    const tone = getTrackingQualityTone(trackingQuality.status);
+    const activeStatus = cameraAnalysisStatus;
+    const tone = activeStatus
+      ? getCameraAnalysisStatusTone(activeStatus.level)
+      : getTrackingQualityTone(trackingQuality.status);
     const pct = Math.round(trackingQuality.confidence * 100);
+    const message = activeStatus?.message ?? getPoseQualityMessage(trackingQuality);
     return {
       text: debugMode
-        ? `${getPoseQualityMessage(trackingQuality)} · ${pct}%`
-        : getPoseQualityMessage(trackingQuality),
+        ? `${message} · ${pct}%`
+        : message,
       tone,
     };
-  }, [trackingQuality, isRecording, debugMode]);
+  }, [trackingQuality, cameraAnalysisStatus, isRecording, debugMode]);
 
   // Dynamic positioning for the setup guide ("?") button so it stays centered
   // between the discard "X" button and the exercise title text,

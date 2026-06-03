@@ -103,6 +103,17 @@ export {
   summarizeRepQuality,
   summarizeSetTrackingQuality,
 } from './shared/poseQuality';
+export {
+  CAMERA_ANALYSIS_STATUS_PRIORITY,
+  cameraStatusFromPoseQuality,
+  cameraStatusFromPoseQualityWarning,
+  cameraStatusFromViewCueGating,
+  countOnlyCameraStatus,
+  fullFeedbackCameraStatus,
+  limitedFeedbackCameraStatus,
+  resolveCameraAnalysisStatus,
+  selectCameraAnalysisStatus,
+} from './shared/cameraAnalysisStatus';
 export type {
   ExerciseQualityProfile,
   PoseQualitySnapshot,
@@ -113,3 +124,12 @@ export type {
   RepTrackingQuality,
   SetTrackingQualitySummary,
 } from './shared/poseQuality';
+export type {
+  CameraAnalysisFeedbackMode,
+  CameraAnalysisStatus,
+  CameraAnalysisStatusCategory,
+  CameraAnalysisStatusLevel,
+  CameraAnalysisStatusResolution,
+  CameraAnalysisStatusSource,
+  ResolveCameraAnalysisStatusInput,
+} from './shared/cameraAnalysisStatus';

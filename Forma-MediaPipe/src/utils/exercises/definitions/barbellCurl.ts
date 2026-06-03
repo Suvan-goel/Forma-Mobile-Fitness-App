@@ -38,6 +38,11 @@ import {
   interpretPoseStateReliabilitySummary,
   type RepReliabilityInterpretation,
 } from '../shared/reliabilityInterpretation';
+import {
+  countOnlyCameraStatus,
+  fullFeedbackCameraStatus,
+  type CameraAnalysisStatus,
+} from '../shared/cameraAnalysisStatus';
 import tunedConfig from './tuned/barbellCurl.json';
 import type {
   ExerciseDefinition,
@@ -1845,6 +1850,40 @@ function getBarbellCurlQualityWarnings(
   return viewAngle.zone === 'frontal' ? ['front_view_uncertain'] : ['side_view_uncertain'];
 }
 
+function barbellCurlRepWindowAnalysisStatus(
+  repWindow: RepWindow,
+  viewAngle: ViewAngle,
+): CameraAnalysisStatus | null {
+  const viewQuality = buildBarbellCurlViewQuality(repWindow, viewAngle);
+  if (viewQuality.sampleCount < VIEW_QUALITY_THRESHOLDS.MIN_SAMPLES) return null;
+  const warnings = getBarbellCurlQualityWarnings(viewQuality, viewAngle) ?? [];
+  if (warnings.includes('front_view_uncertain')) {
+    return countOnlyCameraStatus({
+      source: 'exercise',
+      reason: 'front_view_uncertain',
+      message: 'Face the camera for full symmetry feedback',
+      details: {
+        feedbackMode: 'countOnly',
+        viewRequired: 'front',
+        viewCurrent: 'unknown',
+      },
+    });
+  }
+  if (warnings.includes('side_view_uncertain')) {
+    return countOnlyCameraStatus({
+      source: 'exercise',
+      reason: 'side_view_uncertain',
+      message: 'Turn side-on for full form analysis',
+      details: {
+        feedbackMode: 'countOnly',
+        viewRequired: 'side',
+        viewCurrent: 'unknown',
+      },
+    });
+  }
+  return fullFeedbackCameraStatus('exercise');
+}
+
 function buildBarbellCurlDiagnostics(
   repWindow: RepWindow,
   leftArm: ArmFSM,
@@ -2634,6 +2673,7 @@ export function createBarbellCurlDefinition(
     debugInfo: {},
     repQualityWindowActive: false,
     liveQualityWarnings: [],
+    liveAnalysisStatus: null,
     _internal: withBarbellCurlConfig(config, () => initializeBarbellCurlState()),
   }),
 
@@ -2664,6 +2704,11 @@ export function createBarbellCurlDefinition(
       : completedNewRep
         ? (lastRepResult?.qualityWarnings ?? [])
         : [];
+    const liveAnalysisStatus = newInternal.repWindow
+      ? barbellCurlRepWindowAnalysisStatus(newInternal.repWindow, newInternal.viewAngle)
+      : completedNewRep && lastRepResult?.qualityWarnings?.length === 0
+        ? fullFeedbackCameraStatus('exercise')
+        : null;
 
     return {
       repCount: newInternal.repCount,
@@ -2673,6 +2718,7 @@ export function createBarbellCurlDefinition(
       debugInfo: getBarbellCurlDebugInfo(newInternal) as Record<string, unknown>,
       repQualityWindowActive: newInternal.repWindow !== null,
       liveQualityWarnings,
+      liveAnalysisStatus,
       _internal: newInternal,
     };
   },

@@ -53,6 +53,10 @@ import {
   interpretPoseStateReliabilitySummary,
   type RepReliabilityInterpretation,
 } from '../shared/reliabilityInterpretation';
+import {
+  cameraStatusFromViewCueGating,
+  type CameraAnalysisStatus,
+} from '../shared/cameraAnalysisStatus';
 import tunedConfig from './tuned/lateralRaise.json';
 import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
@@ -870,6 +874,20 @@ function lateralRaiseQualityWarnings(repWindow: RepWindow): FrameworkRepResult['
   if (!hasScorableFrontView(repWindow)) warnings.push('front_view_uncertain');
   if (!hasScorableWristCoverage(repWindow)) warnings.push('arms_hidden');
   return warnings;
+}
+
+function lateralRaiseRepWindowAnalysisStatus(repWindow: RepWindow): CameraAnalysisStatus | null {
+  if (!hasEnoughViewAngleSamples(repWindow)) return null;
+  const reliability = reliabilityInterpretationForRepWindow(repWindow);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const cueDecision = resolveLateralRaiseViewCueDecision(repWindow, reliabilityInterpretation);
+  return cameraStatusFromViewCueGating({
+    viewCueGating: cueDecision,
+    reliability: reliabilityInterpretation,
+    viewRequired: 'front',
+    viewCurrent: diagnosticView(repWindow),
+    source: 'exercise',
+  });
 }
 
 function weakestPeakLateralReachRatio(repWindow: RepWindow): number {
@@ -2308,6 +2326,7 @@ export function createLateralRaiseDefinition(
     debugInfo: {},
     repQualityWindowActive: false,
     liveQualityWarnings: [],
+    liveAnalysisStatus: null,
     _internal: withLateralRaiseConfig(config, () => initializeState()),
   }),
 
@@ -2332,6 +2351,17 @@ export function createLateralRaiseDefinition(
       : completedNewRep
         ? (lastRepResult?.qualityWarnings ?? [])
         : [];
+    const liveAnalysisStatus = internal.repWindow
+      ? lateralRaiseRepWindowAnalysisStatus(internal.repWindow)
+      : completedNewRep
+        ? cameraStatusFromViewCueGating({
+            viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
+            reliability: lastRepResult?.diagnostics?.reliability,
+            viewRequired: 'front',
+            viewCurrent: lastRepResult?.diagnostics?.view,
+            source: 'exercise',
+          })
+        : null;
 
     return {
       repCount: internal.repCount,
@@ -2341,6 +2371,7 @@ export function createLateralRaiseDefinition(
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
       repQualityWindowActive: internal.repWindow !== null,
       liveQualityWarnings,
+      liveAnalysisStatus,
       _internal: internal,
     };
   },

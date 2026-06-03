@@ -17,6 +17,7 @@ import type {
   CountabilityCandidate,
   ScoreabilityCandidate,
 } from './shared/reliabilityInterpretation';
+import type { CameraAnalysisStatus } from './shared/cameraAnalysisStatus';
 
 // ============================================================================
 // ExerciseState — the standard external state every exercise exposes
@@ -42,6 +43,8 @@ export interface ExerciseState {
   repQualityWindowActive?: boolean;
   /** Display-only live setup/view warnings for the camera tracking pill. */
   liveQualityWarnings?: PoseQualityWarning[];
+  /** Display-only live camera-analysis status. Does not affect counting or scoring. */
+  liveAnalysisStatus?: CameraAnalysisStatus | null;
   /** Opaque internal state — only the exercise's own update() reads/writes this */
   _internal: unknown;
 }

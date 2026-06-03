@@ -44,6 +44,11 @@ import {
   resolveCableViewCueDecision,
   type CableCueViewRequirement,
 } from '../shared/cableViewGating';
+import {
+  cameraStatusFromViewCueGating,
+  countOnlyCameraStatus,
+  type CameraAnalysisStatus,
+} from '../shared/cameraAnalysisStatus';
 import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
 import {
   interpretPoseStateReliabilitySummary,
@@ -814,6 +819,43 @@ function cablePushdownSetupQualityWarnings(state: CablePushdownState): Framework
   )
     ? ['side_view_uncertain']
     : [];
+}
+
+function cablePushdownRepWindowAnalysisStatus(
+  repWindow: RepWindow,
+  visibleSide: 'left' | 'right',
+): CameraAnalysisStatus | null {
+  if (repWindow.sideViewConfidenceSamples < FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES) return null;
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const cueDecision = resolveCableViewCueDecision({
+    allCueFamilies: CABLE_PUSHDOWN_CUE_FAMILIES,
+    meaningfulCueFamilies: CABLE_PUSHDOWN_MEANINGFUL_CUE_FAMILIES,
+    cueViewRequirements: CABLE_PUSHDOWN_CUE_VIEW_REQUIREMENTS,
+    sideViewGatePassed: isCablePushdownRepScorable(repWindow),
+    interpretation: reliabilityInterpretation,
+    selectedSide: visibleSide,
+  });
+  return cameraStatusFromViewCueGating({
+    viewCueGating: cueDecision,
+    reliability: reliabilityInterpretation,
+    viewRequired: 'side',
+    source: 'exercise',
+  });
+}
+
+function cablePushdownSetupAnalysisStatus(state: CablePushdownState): CameraAnalysisStatus | null {
+  const warnings = cablePushdownSetupQualityWarnings(state) ?? [];
+  if (!warnings.includes('side_view_uncertain')) return null;
+  return countOnlyCameraStatus({
+    source: 'exercise',
+    reason: 'setup_side_view_uncertain',
+    message: 'Turn side-on for full form analysis',
+    details: {
+      feedbackMode: 'countOnly',
+      viewRequired: 'side',
+    },
+  });
 }
 
 function lockoutHoldMs(repWindow: RepWindow): number | null {
@@ -2295,6 +2337,7 @@ export function createCablePushdownDefinition(
       debugInfo: {},
       repQualityWindowActive: false,
       liveQualityWarnings: [],
+      liveAnalysisStatus: null,
       _internal: withCablePushdownConfig(config, () => initializeCablePushdownState()),
     }),
 
@@ -2322,6 +2365,16 @@ export function createCablePushdownDefinition(
         : completedNewRep
           ? (lastRepResult?.qualityWarnings ?? [])
           : cablePushdownSetupQualityWarnings(newInternal);
+      const liveAnalysisStatus = newInternal.repWindow
+        ? cablePushdownRepWindowAnalysisStatus(newInternal.repWindow, newInternal.visibleSide)
+        : completedNewRep
+          ? cameraStatusFromViewCueGating({
+              viewCueGating: lastRepResult?.diagnostics?.viewCueGating,
+              reliability: lastRepResult?.diagnostics?.reliability,
+              viewRequired: 'side',
+              source: 'exercise',
+            })
+          : cablePushdownSetupAnalysisStatus(newInternal);
 
       return {
         repCount: newInternal.repCount,
@@ -2331,6 +2384,7 @@ export function createCablePushdownDefinition(
         debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
         repQualityWindowActive: newInternal.repWindow !== null,
         liveQualityWarnings,
+        liveAnalysisStatus,
         _internal: newInternal,
       };
     },
