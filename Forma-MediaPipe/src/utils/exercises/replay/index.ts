@@ -10,6 +10,10 @@ export {
 } from './recordingSchema';
 export { replayRecording, replayRecordingVerbose } from './replayRunner';
 export {
+  formatCameraStatusReplayReport,
+  replayCameraAnalysisStatus,
+} from './cameraStatusReplay';
+export {
   formatLandmarkRecordingReliabilityReport,
   parsedPoseFrameFromRecordingFrame,
   poseStateFromLandmarkRecordingFrame,
@@ -34,6 +38,17 @@ export type {
   RecordingReliabilityMetadataMode,
   ScoreabilityCandidate,
 } from './reliabilityReport';
+export type {
+  CameraStatusMessageSummary,
+  CameraStatusReplayFrameTrace,
+  CameraStatusReplayOptions,
+  CameraStatusReplayReport,
+  CameraStatusSilentGapReport,
+  CameraStatusTimelineEntry,
+  CameraStatusTimeByCategory,
+  CameraStatusTimeByFeedbackMode,
+  CameraStatusTransitionSummary,
+} from './cameraStatusReplay';
 export type {
   FrameTrace,
   FsmTransition,
