@@ -395,6 +395,52 @@ function buildInterruptedMidRepRecording(): LandmarkRecording {
   ]);
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 describe('Leg Extension synthetic replay coverage', () => {
   it.each<Orientation>(['facing-right', 'facing-left'])(
     'counts a clean full rep when %s',
@@ -415,6 +461,162 @@ describe('Leg Extension synthetic replay coverage', () => {
       expect(result.reps[0].diagnostics?.metrics.topHoldMs.value).toBeGreaterThanOrEqual(100);
     },
   );
+
+  it('keeps clean v2 PoseState leg extensions fully scoreable', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean full-reliability v2 leg extension', fullRepPath(), {
+          keypointMutator: keypoint => ({ ...keypoint, score: 0.99 }),
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'rightLeg', 'torso']),
+      weakChains: [],
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'visibleLegPath',
+        'kneeExtension',
+        'rangeOfMotion',
+        'lockout',
+        'distalEndpoint',
+        'bilateralSymmetry',
+        'torsoSetup',
+      ]),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps one weak non-selected leg countable when the selected leg and torso are reliable', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-leg reliable v2 leg extension', fullRepPath(), {
+          keypointMutator: keypoint => ({ ...keypoint, score: 0.99 }),
+        }),
+        {
+          lowVisibilityJoints: new Set(['right_knee', 'right_ankle']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.selectedSide).toBe('left');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'torso']),
+      weakChains: expect.arrayContaining(['rightLeg']),
+      safeCueFamilies: expect.arrayContaining([
+        'visibleLegPath',
+        'kneeExtension',
+        'rangeOfMotion',
+        'lockout',
+        'distalEndpoint',
+        'torsoSetup',
+      ]),
+      unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('suppresses weak selected-leg distal cues while leaving torso setup feedback safe in v2 replay', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected distal weak v2 leg extension', halfRepPath(), {
+          posture: index => (index < 16 ? 'upright' : 'leaned'),
+          keypointMutator: keypoint => ({ ...keypoint, score: 0.99 }),
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_ankle']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).toContain('Keep your back against the pad — avoid leaning forward.');
+    expect(result.reps[0].messages).not.toContain('Extend fully — straighten your legs completely at the top.');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'maybe',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['rightLeg', 'torso']),
+      weakChains: expect.arrayContaining(['leftLeg']),
+      safeCueFamilies: expect.arrayContaining(['torsoSetup']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'distalEndpoint',
+        'rangeOfMotion',
+        'lockout',
+        'kneeExtension',
+      ]),
+      suppressedIssueIds: expect.arrayContaining(['leg-extensions.lockout_short']),
+    });
+    expect(diagnostics.cues['leg-extensions.lockout_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_distalEndpoint',
+    });
+    expect(diagnostics.cues['leg-extensions.torso_warn'].triggered).toBe(true);
+  });
+
+  it('counts but marks a selected-leg weak v2 rep partially or not scoreable', () => {
+    const result = replayRecording(
+      legExtensionsDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-leg weak v2 leg extension', fullRepPath(), {
+          keypointMutator: keypoint => ({ ...keypoint, score: 0.99 }),
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_knee', 'left_ankle']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(['partiallyScoreable', 'notScoreable']).toContain(
+      diagnostics.reliability?.scoreabilityCandidate,
+    );
+    expect(diagnostics.reliability).toMatchObject({
+      usableChains: expect.arrayContaining(['rightLeg', 'torso']),
+      weakChains: expect.arrayContaining(['leftLeg']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'visibleLegPath',
+        'kneeExtension',
+        'rangeOfMotion',
+        'lockout',
+        'distalEndpoint',
+      ]),
+    });
+  });
+
+  it('keeps tracking-interruption protection with v2 PoseState metadata', () => {
+    const result = replayRecordingVerbose(
+      legExtensionsDefinition,
+      recordingWithV2PoseMetadata(buildInterruptedMidRepRecording()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
+  });
 
   it('counts front-ish leg extensions but marks them unscorable for side-view uncertainty', () => {
     const result = replayRecording(

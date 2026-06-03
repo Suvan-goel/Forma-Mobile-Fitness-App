@@ -41,7 +41,13 @@ import {
   diagnosticLabelMetric,
   diagnosticMetric,
 } from '../shared/diagnostics';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
 import tunedConfig from './tuned/legExtensions.json';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 import type {
   ExerciseDefinition,
@@ -340,6 +346,51 @@ LEG_EXTENSIONS_TUNABLE_SPEC.diagnosticTuning = [
   { issueId: 'leg-extensions.top_hold_short', metricKey: 'topHoldSeconds', thresholdPath: 'formThresholds.TOP_HOLD_MIN', direction: 'below' },
 ];
 
+const LEG_EXTENSION_ISSUE_CUE_FAMILIES: Record<string, string[]> = {
+  'leg-extensions.lockout_short': ['distalEndpoint', 'rangeOfMotion', 'lockout', 'kneeExtension', 'visibleLegPath'],
+  'leg-extensions.rom_short_leg_ext': ['distalEndpoint', 'rangeOfMotion', 'kneeExtension', 'visibleLegPath'],
+  'leg-extensions.torso_warn': ['torsoSetup'],
+  'leg-extensions.hip_lift': ['torsoSetup'],
+  'leg-extensions.top_hold_short': ['distalEndpoint', 'lockout', 'rangeOfMotion'],
+  'leg-extensions.tempo_up': ['tempo'],
+  'leg-extensions.tempo_down': ['tempo'],
+};
+
+const LEG_EXTENSION_MESSAGE_CUE_FAMILIES: Record<string, string[]> = {
+  'Extend fully \u2014 straighten your legs completely at the top.': ['distalEndpoint', 'rangeOfMotion', 'lockout', 'kneeExtension', 'visibleLegPath'],
+  'Lower the weight more \u2014 start from a deeper bend.': ['distalEndpoint', 'rangeOfMotion', 'kneeExtension', 'visibleLegPath'],
+  'Keep your back against the pad \u2014 avoid leaning forward.': ['torsoSetup'],
+  "Keep your hips on the seat \u2014 don't lift off the pad.": ['torsoSetup'],
+  'Pause briefly at full extension.': ['distalEndpoint', 'lockout', 'rangeOfMotion'],
+  'Slow down the extension \u2014 control the lift.': ['tempo'],
+  "Control the return \u2014 don't let the weight drop.": ['tempo'],
+};
+
+const LEG_EXTENSION_SELECTED_LEG_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'visibleLegPath',
+  'kneeExtension',
+  'rangeOfMotion',
+  'lockout',
+  'distalEndpoint',
+] as const;
+
+const LEG_EXTENSION_RELIABILITY_JOINTS = [
+  'left_shoulder',
+  'right_shoulder',
+  'left_hip',
+  'right_hip',
+  'left_knee',
+  'right_knee',
+  'left_ankle',
+  'right_ankle',
+  'left_heel',
+  'right_heel',
+  'left_foot_index',
+  'right_foot_index',
+] as const;
+
 const LEG_EXTENSIONS_CONFIG_BINDINGS = [
   { path: 'thresholds', target: THRESHOLDS as unknown as Record<string, unknown> },
   { path: 'formThresholds', target: FORM_THRESHOLDS as unknown as Record<string, unknown> },
@@ -442,6 +493,8 @@ interface RepWindow {
   sideViewConfidenceMin: number;
   selectedSideSamples: number;
   tEnd: number;
+  /** Runtime PoseState reliability observed during this active rep. */
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
   /** Frame count */
   frameCount: number;
   frameSamples: RepFrameSample[];
@@ -573,6 +626,7 @@ function initRepWindow(tStart: number, initialRatio?: number): RepWindow {
     sideViewConfidenceMin: Infinity,
     selectedSideSamples: 0,
     tEnd: tStart,
+    reliability: createPoseStateReliabilityAggregator(),
     frameCount: 0,
     frameSamples: [],
   };
@@ -1055,6 +1109,204 @@ function legExtensionQualityWarnings(repWindow: RepWindow): FrameworkRepResult['
   return sideViewIsScorable(repWindow) ? [] : ['side_view_uncertain'];
 }
 
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function cueFamiliesAllowed(
+  allowedCueFamilies: ReadonlySet<string> | undefined,
+  families: string[],
+): boolean {
+  return families.every(family => cueFamilyAllowed(allowedCueFamilies, family));
+}
+
+function selectedLegChain(visibleSide: 'left' | 'right'): 'leftLeg' | 'rightLeg' {
+  return visibleSide === 'left' ? 'leftLeg' : 'rightLeg';
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function reliabilityInterpretationForRepWindow(
+  repWindow: RepWindow,
+  visibleSide: 'left' | 'right',
+): {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+} | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+
+  const baseInterpretation = interpretPoseStateReliabilitySummary('Leg Extensions', summary);
+  const selectedChain = selectedLegChain(visibleSide);
+  if (baseInterpretation.usableChains.includes(selectedChain)) {
+    return { summary, interpretation: baseInterpretation };
+  }
+
+  const selectedLegUnsafeFamilies = new Set<string>(LEG_EXTENSION_SELECTED_LEG_CUE_FAMILIES);
+  const safeCueFamilies = baseInterpretation.safeCueFamilies.filter(
+    family => !selectedLegUnsafeFamilies.has(family),
+  );
+  const unsafeCueFamilies = uniqueStrings([
+    ...baseInterpretation.unsafeCueFamilies,
+    ...LEG_EXTENSION_SELECTED_LEG_CUE_FAMILIES,
+  ]);
+
+  return {
+    summary,
+    interpretation: {
+      ...baseInterpretation,
+      countabilityCandidate:
+        baseInterpretation.countabilityCandidate === 'countable'
+          ? 'maybe'
+          : baseInterpretation.countabilityCandidate,
+      scoreabilityCandidate:
+        baseInterpretation.scoreabilityCandidate === 'fullyScoreable'
+          ? 'partiallyScoreable'
+          : baseInterpretation.scoreabilityCandidate,
+      safeCueFamilies,
+      unsafeCueFamilies,
+      reasons: uniqueStrings([
+        ...baseInterpretation.reasons,
+        `${selectedChain}_selected_chain_weak`,
+        'selected_leg_cue_families_unsafe',
+      ]),
+    },
+  };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function reliabilityAllowsScoring(
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: 'left' | 'right',
+): boolean {
+  if (!interpretation) return true;
+  return (
+    interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    interpretation.usableChains.includes(selectedLegChain(visibleSide)) &&
+    interpretation.usableChains.includes('torso')
+  );
+}
+
+function repScorableWithReliability(
+  repWindow: RepWindow,
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: 'left' | 'right',
+): boolean {
+  return sideViewIsScorable(repWindow) && reliabilityAllowsScoring(interpretation, visibleSide);
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const families = LEG_EXTENSION_MESSAGE_CUE_FAMILIES[message] ?? [];
+    return families.every(family => !unsafeFamilies.has(family));
+  });
+}
+
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const families = LEG_EXTENSION_ISSUE_CUE_FAMILIES[issueId] ?? [];
+      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
+      if (unsafeFamily) {
+        suppressedIssueIds.push(issueId);
+        for (const family of families) {
+          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
+        }
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${unsafeFamily}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogLegExtensionReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logLegExtensionRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogLegExtensionReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[LegExtensionReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
+function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
+  return LEG_EXTENSION_RELIABILITY_JOINTS.some((jointName) => {
+    const joint = poseState.joints[jointName];
+    return (
+      joint &&
+      (
+        joint.presence !== null ||
+        joint.reasons.includes('presence_unknown') ||
+        joint.reasons.includes('visibility_unknown')
+      )
+    );
+  });
+}
+
+function observeLegExtensionPoseState(
+  repWindow: RepWindow,
+  frameContext: ExerciseFrameContext | undefined,
+): void {
+  const poseState = frameContext?.poseState;
+  if (!poseState || !poseStateHasRichReliabilityMetadata(poseState)) return;
+  repWindow.reliability.observe(poseState);
+}
+
 function isLockoutShort(repWindow: RepWindow): boolean {
   const ratioShort = repWindow.maxRatio < FORM_THRESHOLDS.EXTENSION_FAIL;
   const kneeShortOrUnavailable =
@@ -1124,60 +1376,74 @@ function isMeaningfulLegExtensionPartialRep(repWindow: RepWindow, duration: numb
   });
 }
 
-function computeLegExtensionScore(repWindow: RepWindow): number {
+function computeLegExtensionScore(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): number {
   const penaltyPoints: number[] = [];
   const pushPenalty = (value: number, config: PenaltyConfig) => {
     penaltyPoints.push(computePenaltyPoints(value, config));
   };
 
   // 1. ROM -- extension: ideal maxRatio is 0.97+. Shortfall = max(0, 0.97 - maxRatio)
-  const extensionShortfall = Math.max(0, 0.97 - repWindow.maxRatio);
-  let extensionPenalty = computePenaltyPoints(extensionShortfall, PENALTY_CONFIGS.EXTENSION_ROM);
-  if (hasKneeExtensionMetric(repWindow)) {
-    const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.maxKneeAngle);
-    extensionPenalty = Math.max(
-      extensionPenalty,
-      computePenaltyPoints(kneeExtensionShortfall, PENALTY_CONFIGS.KNEE_EXTENSION_ROM),
-    );
+  if (cueFamiliesAllowed(allowedCueFamilies, ['rangeOfMotion', 'lockout', 'kneeExtension', 'distalEndpoint'])) {
+    const extensionShortfall = Math.max(0, 0.97 - repWindow.maxRatio);
+    let extensionPenalty = computePenaltyPoints(extensionShortfall, PENALTY_CONFIGS.EXTENSION_ROM);
+    if (hasKneeExtensionMetric(repWindow)) {
+      const kneeExtensionShortfall = Math.max(0, FORM_THRESHOLDS.KNEE_EXTENSION_IDEAL - repWindow.maxKneeAngle);
+      extensionPenalty = Math.max(
+        extensionPenalty,
+        computePenaltyPoints(kneeExtensionShortfall, PENALTY_CONFIGS.KNEE_EXTENSION_ROM),
+      );
+    }
+    penaltyPoints.push(extensionPenalty);
   }
-  penaltyPoints.push(extensionPenalty);
 
   // 2. ROM -- flexion: ideal minRatio is 0.58 or below. Excess = max(0, minRatio - 0.58)
-  const flexionExcess = Math.max(0, repWindow.minRatio - 0.58);
-  let flexionPenalty = computePenaltyPoints(flexionExcess, PENALTY_CONFIGS.FLEXION_ROM);
-  if (hasKneeFlexionMetric(repWindow)) {
-    const kneeFlexionExcess = Math.max(0, repWindow.minKneeAngle - KNEE_FLEXION_IDEAL);
-    flexionPenalty = Math.max(
-      flexionPenalty,
-      computePenaltyPoints(kneeFlexionExcess, PENALTY_CONFIGS.KNEE_FLEXION_ROM),
-    );
+  if (cueFamiliesAllowed(allowedCueFamilies, ['rangeOfMotion', 'kneeExtension', 'distalEndpoint'])) {
+    const flexionExcess = Math.max(0, repWindow.minRatio - 0.58);
+    let flexionPenalty = computePenaltyPoints(flexionExcess, PENALTY_CONFIGS.FLEXION_ROM);
+    if (hasKneeFlexionMetric(repWindow)) {
+      const kneeFlexionExcess = Math.max(0, repWindow.minKneeAngle - KNEE_FLEXION_IDEAL);
+      flexionPenalty = Math.max(
+        flexionPenalty,
+        computePenaltyPoints(kneeFlexionExcess, PENALTY_CONFIGS.KNEE_FLEXION_ROM),
+      );
+    }
+    penaltyPoints.push(flexionPenalty);
   }
-  penaltyPoints.push(flexionPenalty);
 
   // 3. Torso lean
-  if (hasTorsoMetric(repWindow)) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoSetup') && hasTorsoMetric(repWindow)) {
     pushPenalty(repWindow.maxTorsoDev, PENALTY_CONFIGS.TORSO_LEAN);
   }
 
   // 4. Hip lift (hip angle delta from baseline)
-  let hipLiftPenalty = computePenaltyPoints(repWindow.maxHipDelta, PENALTY_CONFIGS.HIP_LIFT);
-  if (hasHipRiseMetric(repWindow)) {
-    hipLiftPenalty = Math.max(
-      hipLiftPenalty,
-      computePenaltyPoints(repWindow.maxHipRiseRatio, PENALTY_CONFIGS.HIP_RISE),
-    );
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoSetup')) {
+    let hipLiftPenalty = computePenaltyPoints(repWindow.maxHipDelta, PENALTY_CONFIGS.HIP_LIFT);
+    if (hasHipRiseMetric(repWindow)) {
+      hipLiftPenalty = Math.max(
+        hipLiftPenalty,
+        computePenaltyPoints(repWindow.maxHipRiseRatio, PENALTY_CONFIGS.HIP_RISE),
+      );
+    }
+    penaltyPoints.push(hipLiftPenalty);
   }
-  penaltyPoints.push(hipLiftPenalty);
 
   const hold = topHoldSeconds(repWindow);
-  if (hold !== null && !isLockoutShort(repWindow) && hold < FORM_THRESHOLDS.TOP_HOLD_MIN) {
+  if (
+    cueFamiliesAllowed(allowedCueFamilies, ['lockout', 'distalEndpoint']) &&
+    hold !== null &&
+    !isLockoutShort(repWindow) &&
+    hold < FORM_THRESHOLDS.TOP_HOLD_MIN
+  ) {
     const deficit = FORM_THRESHOLDS.TOP_HOLD_MIN - hold;
     pushPenalty(deficit, PENALTY_CONFIGS.TOP_HOLD);
   }
 
   // 5. Tempo
   const { tExtend, tReturn } = lockoutTempo(repWindow);
-  if (tExtend !== null && tReturn !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && tExtend !== null && tReturn !== null) {
 
     // Penalize if too fast using the same thresholds that drive feedback.
     if (tExtend > 0 && tExtend < FORM_THRESHOLDS.TEMPO_EXTEND_MIN) {
@@ -1197,36 +1463,49 @@ function computeLegExtensionScore(repWindow: RepWindow): number {
 // FORM MESSAGES (discrete thresholds)
 // ============================================================================
 
-function generateFormMessages(repWindow: RepWindow): string[] {
+function generateFormMessages(
+  repWindow: RepWindow,
+  allowedCueFamilies?: ReadonlySet<string>,
+): string[] {
   const messages: string[] = [];
 
   // 1. Extension ROM -- didn't reach full extension
-  if (isLockoutShort(repWindow)) {
+  if (
+    cueFamiliesAllowed(allowedCueFamilies, ['rangeOfMotion', 'lockout', 'kneeExtension', 'distalEndpoint']) &&
+    isLockoutShort(repWindow)
+  ) {
     messages.push('Extend fully \u2014 straighten your legs completely at the top.');
   }
 
   // 2. Flexion ROM -- didn't bend enough at the bottom
-  if (isFlexionShort(repWindow)) {
+  if (
+    cueFamiliesAllowed(allowedCueFamilies, ['rangeOfMotion', 'kneeExtension', 'distalEndpoint']) &&
+    isFlexionShort(repWindow)
+  ) {
     messages.push('Lower the weight more \u2014 start from a deeper bend.');
   }
 
   // 3. Torso lean
-  if (hasTorsoMetric(repWindow) && repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_LEAN_WARN) {
+  if (
+    cueFamilyAllowed(allowedCueFamilies, 'torsoSetup') &&
+    hasTorsoMetric(repWindow) &&
+    repWindow.maxTorsoDev > FORM_THRESHOLDS.TORSO_LEAN_WARN
+  ) {
     messages.push('Keep your back against the pad \u2014 avoid leaning forward.');
   }
 
   // 4. Hip lift
-  if (isHipLift(repWindow)) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'torsoSetup') && isHipLift(repWindow)) {
     messages.push('Keep your hips on the seat \u2014 don\'t lift off the pad.');
   }
 
-  if (isTopHoldShort(repWindow)) {
+  if (cueFamiliesAllowed(allowedCueFamilies, ['lockout', 'distalEndpoint']) && isTopHoldShort(repWindow)) {
     messages.push('Pause briefly at full extension.');
   }
 
   // 5. Tempo (measured to true lockout, not the early FSM EXTENDED phase)
   const { tExtend, tReturn } = lockoutTempo(repWindow);
-  if (tExtend !== null && tReturn !== null) {
+  if (cueFamilyAllowed(allowedCueFamilies, 'tempo') && tExtend !== null && tReturn !== null) {
 
     if (tExtend > 0 && tExtend < FORM_THRESHOLDS.TEMPO_EXTEND_MIN) {
       messages.push('Slow down the extension \u2014 control the lift.');
@@ -1244,7 +1523,7 @@ function buildLegExtensionDiagnostics(
   repIndex: number,
   visibleSide: 'left' | 'right',
   scorable: boolean,
-): FrameworkRepResult['diagnostics'] {
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const hasTempo = repWindow.tLockout !== null;
   const { tExtend, tReturn } = lockoutTempo(repWindow);
   const hasKnee = hasKneeExtensionMetric(repWindow) && hasKneeFlexionMetric(repWindow);
@@ -1463,6 +1742,40 @@ function buildLegExtensionDiagnostics(
       }),
     ],
   });
+}
+
+function buildLegExtensionRepResult(
+  repWindow: RepWindow,
+  repIndex: number,
+  visibleSide: 'left' | 'right',
+): RepResult {
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const scorable = repScorableWithReliability(repWindow, reliabilityInterpretation, visibleSide);
+  const score = reliabilityAllowsScoring(reliabilityInterpretation, visibleSide)
+    ? computeLegExtensionScore(repWindow, allowedCueFamilies)
+    : 0;
+  const messages = suppressUnsafeReliabilityMessages(
+    generateFormMessages(repWindow, allowedCueFamilies),
+    reliabilityInterpretation,
+  );
+  const qualityWarnings = legExtensionQualityWarnings(repWindow);
+  const diagnostics = applyReliabilityCueGating(
+    buildLegExtensionDiagnostics(repWindow, repIndex, visibleSide, scorable),
+    reliabilityInterpretation,
+    scorable,
+  );
+  logLegExtensionRepReliability(repIndex, reliabilityInterpretation, diagnostics);
+
+  return {
+    repIndex,
+    score,
+    messages,
+    scorable,
+    qualityWarnings,
+    diagnostics,
+  };
 }
 
 // ============================================================================
@@ -1822,6 +2135,7 @@ function updateLegExtensionState(
 
   if (returnedPartial && newState.repWindow) {
     const window = newState.repWindow;
+    observeLegExtensionPoseState(window, frameContext);
     recordFrameInWindow({
       window,
       signalKeypoints,
@@ -1841,18 +2155,9 @@ function updateLegExtensionState(
 
     if (isMeaningfulLegExtensionPartialRep(window, duration)) {
       newState.repCount++;
-      const score = computeLegExtensionScore(window);
-      const messages = generateFormMessages(window);
-      const scorable = sideViewIsScorable(window);
-      const qualityWarnings = legExtensionQualityWarnings(window);
-      newState.lastRepResult = {
-        repIndex: newState.repCount,
-        score,
-        messages,
-        scorable,
-        qualityWarnings,
-        diagnostics: buildLegExtensionDiagnostics(window, newState.repCount, visibleSide, scorable),
-      };
+      const repResult = buildLegExtensionRepResult(window, newState.repCount, visibleSide);
+      const messages = repResult.messages;
+      newState.lastRepResult = repResult;
       newState.feedback = messages.length > 0 ? messages.join('\n') : 'Good rep.';
       newState.lastFeedbackTime = t;
     } else if (actualRom > 0) {
@@ -1887,6 +2192,7 @@ function updateLegExtensionState(
 
   if (newState.repWindow && inRep) {
     const window = newState.repWindow;
+    observeLegExtensionPoseState(window, frameContext);
     recordFrameInWindow({
       window,
       signalKeypoints,
@@ -1910,6 +2216,7 @@ function updateLegExtensionState(
 
   // Rep completed
   if (fsmResult.repCompleted && newState.repWindow) {
+    observeLegExtensionPoseState(newState.repWindow, frameContext);
     recordFrameInWindow({
       window: newState.repWindow,
       signalKeypoints,
@@ -1927,19 +2234,9 @@ function updateLegExtensionState(
 
     newState.repCount++;
 
-    const score = computeLegExtensionScore(newState.repWindow);
-    const messages = generateFormMessages(newState.repWindow);
-    const scorable = sideViewIsScorable(newState.repWindow);
-    const qualityWarnings = legExtensionQualityWarnings(newState.repWindow);
-
-    newState.lastRepResult = {
-      repIndex: newState.repCount,
-      score,
-      messages,
-      scorable,
-      qualityWarnings,
-      diagnostics: buildLegExtensionDiagnostics(newState.repWindow, newState.repCount, visibleSide, scorable),
-    };
+    const repResult = buildLegExtensionRepResult(newState.repWindow, newState.repCount, visibleSide);
+    const messages = repResult.messages;
+    newState.lastRepResult = repResult;
 
     if (messages.length > 0) {
       newState.feedback = messages.join('\n');
