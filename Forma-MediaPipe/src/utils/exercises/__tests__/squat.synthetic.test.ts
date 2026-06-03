@@ -528,6 +528,52 @@ function buildFrontRecording(
   };
 }
 
+function recordingWithV2PoseMetadata(
+  recording: LandmarkRecording,
+  options: {
+    lowVisibilityJoints?: Set<string>;
+    lowPresenceJoints?: Set<string>;
+  } = {},
+): LandmarkRecording {
+  const lowVisibilityJoints = options.lowVisibilityJoints ?? new Set<string>();
+  const lowPresenceJoints = options.lowPresenceJoints ?? new Set<string>();
+
+  const metadataFor = (
+    keypoints: Keypoint[] | undefined,
+    source: 'image' | 'world',
+  ) => keypoints?.map((point) => ({
+    name: point.name,
+    source,
+    visibility: lowVisibilityJoints.has(point.name) ? 0.2 : point.score,
+    presence: lowPresenceJoints.has(point.name) ? 0.2 : 1.0,
+    visibilityState: 'present' as const,
+    presenceState: 'present' as const,
+    scoreSource: 'visibility' as const,
+    malformedFields: [],
+  }));
+
+  return {
+    ...recording,
+    schemaVersion: 2,
+    frames: recording.frames.map((frame) => {
+      const imageKeypoints = frame.imageKeypoints ?? frame.keypoints;
+      const worldKeypoints = frame.worldKeypoints;
+      return {
+        ...frame,
+        timestampMs: frame.timestamp,
+        status: 'poseDetected' as const,
+        primarySource: frame.primarySource ?? (worldKeypoints?.length ? 'world' : 'image'),
+        imageKeypoints,
+        ...(worldKeypoints ? { worldKeypoints } : {}),
+        poseMetadata: {
+          imageLandmarks: metadataFor(imageKeypoints, 'image'),
+          ...(worldKeypoints ? { worldLandmarks: metadataFor(worldKeypoints, 'world') } : {}),
+        },
+      };
+    }),
+  };
+}
+
 function collectLiveWarnings(recording: LandmarkRecording): string[] {
   let state = squatDefinition.createState();
   const warnings = new Set<string>();
@@ -596,6 +642,251 @@ describe('Barbell Squat synthetic replay coverage', () => {
         partialRep: expect.objectContaining({ value: 0 }),
       }),
     );
+  });
+
+  it('keeps clean v2 PoseState squats fully scoreable', () => {
+    const result = replayRecording(
+      squatDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic clean full-reliability v2 squat', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'fullyScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'rightLeg', 'torso']),
+      weakChains: [],
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'tempo',
+        'visibleLegPath',
+        'depth',
+        'kneeTracking',
+        'hipKneePath',
+        'ankleFootPosition',
+        'heelLift',
+        'torsoLean',
+        'barPathOrUpperBody',
+        'bilateralSymmetry',
+        'setupStance',
+      ]),
+      unsafeCueFamilies: [],
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('keeps selected-side v2 squats scoreable when only the hidden side is weak', () => {
+    const result = replayRecording(
+      squatDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-side reliable v2 squat', fullRepPath()),
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+    expect(result.feedbackMessages).toEqual([]);
+    expect(diagnostics.selectedSide).toBe('left');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'torso']),
+      weakChains: expect.arrayContaining(['rightLeg']),
+      safeCueFamilies: expect.arrayContaining([
+        'repCount',
+        'depth',
+        'hipKneePath',
+        'heelLift',
+        'torsoLean',
+      ]),
+      unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry', 'setupStance']),
+      suppressedIssueIds: [],
+    });
+  });
+
+  it('suppresses weak selected-foot cues without blocking v2 squat counting', () => {
+    const result = replayRecording(
+      squatDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-foot weak v2 squat', fullRepPath(), {
+          hiddenSideScore: 0.99,
+          heelLift: true,
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_heel', 'left_foot_index']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(true);
+    expect(result.reps[0].messages).not.toContain('Keep your heels planted — drive through your mid-foot.');
+    expect(result.reps[0].issueIds).not.toContain('barbell-squat.heel_lift');
+    expect(diagnostics.reliability).toMatchObject({
+      countabilityCandidate: 'countable',
+      scoreabilityCandidate: 'partiallyScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'rightLeg', 'torso']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'ankleFootPosition',
+        'heelLift',
+        'setupStance',
+      ]),
+      suppressedIssueIds: expect.arrayContaining(['barbell-squat.heel_lift']),
+    });
+    expect(diagnostics.cues['barbell-squat.heel_lift']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_ankleFootPosition',
+    });
+  });
+
+  it('suppresses weak selected-knee path cues in v2 replay', () => {
+    const result = replayRecording(
+      squatDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic selected-knee weak v2 shallow squat', fullRepPath(), {
+          hiddenSideScore: 0.99,
+          poseProfile: 'true-depth-shallow',
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_knee']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).not.toContain('Squat deeper — aim to get your thighs parallel.');
+    expect(diagnostics.reliability).toMatchObject({
+      scoreabilityCandidate: 'notScoreable',
+      usableChains: expect.arrayContaining(['rightLeg', 'torso']),
+      weakChains: expect.arrayContaining(['leftLeg']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'visibleLegPath',
+        'depth',
+        'kneeTracking',
+        'hipKneePath',
+      ]),
+      suppressedIssueIds: expect.arrayContaining(['barbell-squat.depth_short']),
+    });
+    expect(diagnostics.cues['barbell-squat.depth_short']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_depth',
+    });
+  });
+
+  it('keeps torso feedback safe when v2 torso landmarks are reliable', () => {
+    const result = replayRecording(
+      squatDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic torso-safe v2 leaned squat', fullRepPath(), {
+          hiddenSideScore: 0.99,
+          posture: index => (index < 45 ? 'upright' : 'leaned'),
+        }),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].messages).toContain('Too much forward lean — keep your chest up.');
+    expect(result.reps[0].diagnostics?.reliability).toMatchObject({
+      scoreabilityCandidate: 'fullyScoreable',
+      safeCueFamilies: expect.arrayContaining(['torsoLean', 'barPathOrUpperBody']),
+      unsafeCueFamilies: [],
+    });
+    expect(result.reps[0].diagnostics?.cues['barbell-squat.torso_fail'].triggered).toBe(true);
+  });
+
+  it('suppresses torso and upper-body cues when v2 torso landmarks are weak', () => {
+    const result = replayRecording(
+      squatDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic torso-weak v2 leaned squat', fullRepPath(), {
+          hiddenSideScore: 0.99,
+          posture: index => (index < 45 ? 'upright' : 'leaned'),
+        }),
+        {
+          lowVisibilityJoints: new Set(['left_shoulder', 'right_shoulder']),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(result.reps[0].messages).not.toContain('Too much forward lean — keep your chest up.');
+    expect(diagnostics.reliability).toMatchObject({
+      scoreabilityCandidate: 'notScoreable',
+      usableChains: expect.arrayContaining(['leftLeg', 'rightLeg']),
+      weakChains: expect.arrayContaining(['torso']),
+      unsafeCueFamilies: expect.arrayContaining(['torsoLean', 'barPathOrUpperBody']),
+      suppressedIssueIds: expect.arrayContaining(['barbell-squat.torso_fail']),
+    });
+    expect(diagnostics.cues['barbell-squat.torso_fail']).toMatchObject({
+      eligible: false,
+      triggered: false,
+      skippedReason: 'reliability_unsafe_torsoLean',
+    });
+  });
+
+  it('counts but marks both weak leg chains unscorable or partial in v2 replay', () => {
+    const result = replayRecording(
+      squatDefinition,
+      recordingWithV2PoseMetadata(
+        buildRecording('synthetic both-leg weak v2 squat', fullRepPath(), {
+          hiddenSideScore: 0.99,
+        }),
+        {
+          lowVisibilityJoints: new Set([
+            'left_knee',
+            'left_ankle',
+            'right_knee',
+            'right_ankle',
+          ]),
+        },
+      ),
+    );
+    const diagnostics = result.reps[0].diagnostics!;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0].scorable).toBe(false);
+    expect(result.repScores[0]).toBe(0);
+    expect(['partiallyScoreable', 'notScoreable']).toContain(
+      diagnostics.reliability?.scoreabilityCandidate,
+    );
+    expect(diagnostics.reliability).toMatchObject({
+      usableChains: expect.arrayContaining(['torso']),
+      weakChains: expect.arrayContaining(['leftLeg', 'rightLeg']),
+      unsafeCueFamilies: expect.arrayContaining([
+        'visibleLegPath',
+        'depth',
+        'kneeTracking',
+        'hipKneePath',
+      ]),
+    });
+  });
+
+  it('keeps tracking-interruption protection with v2 PoseState metadata', () => {
+    const result = replayRecordingVerbose(
+      squatDefinition,
+      recordingWithV2PoseMetadata(buildInterruptedMidRepRecording()),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.repTraces).toHaveLength(1);
   });
 
   it('counts a clean front-view squat but marks it unscorable for side-view form scoring', () => {

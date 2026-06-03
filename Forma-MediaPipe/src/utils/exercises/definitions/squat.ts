@@ -44,6 +44,12 @@ import {
   diagnosticMetric,
 } from '../shared/diagnostics';
 import { LOW_ROM_FEEDBACK, isMeaningfulPartialRep } from '../shared/partialReps';
+import { createPoseStateReliabilityAggregator } from '../../pose/buildPoseState';
+import {
+  interpretPoseStateReliabilitySummary,
+  type RepReliabilityInterpretation,
+} from '../shared/reliabilityInterpretation';
+import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 import tunedConfig from './tuned/squat.json';
 
 // ============================================================================
@@ -352,6 +358,7 @@ interface SquatRepWindow {
   pendingCompletionFrames: number | null;
   /** True when a meaningful partial rep was counted from a reset before bottom */
   partialRep: boolean;
+  reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
 }
 
 interface SquatAngles {
@@ -620,6 +627,7 @@ function initRepWindow(
     frameCount: 0,
     pendingCompletionFrames: null,
     partialRep: false,
+    reliability: createPoseStateReliabilityAggregator(),
   };
 }
 
@@ -1541,6 +1549,62 @@ const SQUAT_FEEDBACK = {
   TEMPO_DOWN: 'Slow the descent \u2014 control the weight down.',
 } as const;
 
+const SQUAT_RELIABILITY_JOINTS = [
+  'left_shoulder',
+  'right_shoulder',
+  'left_hip',
+  'right_hip',
+  'left_knee',
+  'right_knee',
+  'left_ankle',
+  'right_ankle',
+  'left_heel',
+  'right_heel',
+  'left_foot_index',
+  'right_foot_index',
+] as const;
+
+const SQUAT_SELECTED_LEG_CUE_FAMILIES = [
+  'repCount',
+  'tempo',
+  'visibleLegPath',
+  'depth',
+  'kneeTracking',
+  'hipKneePath',
+  'ankleFootPosition',
+  'heelLift',
+  'setupStance',
+] as const;
+
+const SQUAT_DISTAL_FOOT_CUE_FAMILIES = [
+  'ankleFootPosition',
+  'heelLift',
+  'setupStance',
+] as const;
+
+const SQUAT_ISSUE_CUE_FAMILIES: Record<string, string[]> = {
+  'barbell-squat.depth_short': ['depth', 'hipKneePath', 'visibleLegPath'],
+  'barbell-squat.lockout_short': ['visibleLegPath', 'hipKneePath'],
+  'barbell-squat.incomplete_rom': ['depth', 'hipKneePath', 'visibleLegPath'],
+  'barbell-squat.heel_lift': ['ankleFootPosition', 'heelLift'],
+  'barbell-squat.torso_fail': ['torsoLean', 'barPathOrUpperBody'],
+  'barbell-squat.torso_warn': ['torsoLean', 'barPathOrUpperBody'],
+  'barbell-squat.tempo_up': ['tempo'],
+  'barbell-squat.tempo_down': ['tempo'],
+};
+
+const SQUAT_MESSAGE_CUE_FAMILIES: Record<string, string[]> = {
+  [SQUAT_FEEDBACK.DEPTH_FAIL]: ['depth', 'hipKneePath', 'visibleLegPath'],
+  [SQUAT_FEEDBACK.DEPTH_WARN]: ['depth', 'hipKneePath', 'visibleLegPath'],
+  [SQUAT_FEEDBACK.LOCKOUT]: ['visibleLegPath', 'hipKneePath'],
+  [SQUAT_FEEDBACK.ROM]: ['depth', 'hipKneePath', 'visibleLegPath'],
+  [SQUAT_FEEDBACK.HEEL_LIFT]: ['ankleFootPosition', 'heelLift'],
+  [SQUAT_FEEDBACK.TORSO_FAIL]: ['torsoLean', 'barPathOrUpperBody'],
+  [SQUAT_FEEDBACK.TORSO_WARN]: ['torsoLean', 'barPathOrUpperBody'],
+  [SQUAT_FEEDBACK.TEMPO_UP]: ['tempo'],
+  [SQUAT_FEEDBACK.TEMPO_DOWN]: ['tempo'],
+};
+
 type SquatSeverity = 'none' | 'warn' | 'fail';
 type DepthSource = 'thighDepthAngle' | 'depthRatio';
 
@@ -1730,6 +1794,210 @@ function squatQualityWarnings(analysis: Pick<SquatMetricSnapshot, 'scorable' | '
   return analysis.sideConfirmed
     ? ['missing_required_joints']
     : ['view_uncertain'];
+}
+
+function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
+  return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function selectedLegChain(visibleSide: SquatSide): 'leftLeg' | 'rightLeg' {
+  return visibleSide === 'left' ? 'leftLeg' : 'rightLeg';
+}
+
+function uniqueStrings(values: Iterable<string>): string[] {
+  return Array.from(new Set(values));
+}
+
+function jointReliableForMostOfRep(summary: PoseStateReliabilitySummary, jointName: string): boolean {
+  if (summary.totalFrames === 0) return false;
+  const unreliableCount = summary.unreliableJointCounts[jointName] ?? 0;
+  return unreliableCount / summary.totalFrames < 0.25;
+}
+
+function jointsReliableForMostOfRep(summary: PoseStateReliabilitySummary, jointNames: string[]): boolean {
+  return jointNames.every(jointName => jointReliableForMostOfRep(summary, jointName));
+}
+
+function markChainUsable(interpretation: RepReliabilityInterpretation, chainName: string): void {
+  interpretation.usableChains = uniqueStrings([...interpretation.usableChains, chainName]);
+  interpretation.weakChains = interpretation.weakChains.filter(chain => chain !== chainName);
+}
+
+function markCueFamiliesSafe(interpretation: RepReliabilityInterpretation, families: readonly string[]): void {
+  interpretation.safeCueFamilies = uniqueStrings([...interpretation.safeCueFamilies, ...families]);
+  interpretation.unsafeCueFamilies = interpretation.unsafeCueFamilies.filter(
+    family => !families.includes(family),
+  );
+}
+
+function markCueFamiliesUnsafe(
+  interpretation: RepReliabilityInterpretation,
+  families: readonly string[],
+  reason: string,
+): void {
+  const familySet = new Set(families);
+  interpretation.safeCueFamilies = interpretation.safeCueFamilies.filter(
+    family => !familySet.has(family),
+  );
+  interpretation.unsafeCueFamilies = uniqueStrings([
+    ...interpretation.unsafeCueFamilies,
+    ...families,
+  ]);
+  interpretation.reasons = uniqueStrings([...interpretation.reasons, reason]);
+}
+
+function reliabilityInterpretationForRepWindow(
+  repWindow: SquatRepWindow,
+  visibleSide: SquatSide,
+): {
+  summary: PoseStateReliabilitySummary;
+  interpretation: RepReliabilityInterpretation;
+} | null {
+  const summary = repWindow.reliability.snapshot();
+  if (summary.totalFrames === 0) return null;
+
+  const baseInterpretation = interpretPoseStateReliabilitySummary('Barbell Squat', summary);
+  const interpretation: RepReliabilityInterpretation = {
+    ...baseInterpretation,
+    usableChains: [...baseInterpretation.usableChains],
+    weakChains: [...baseInterpretation.weakChains],
+    safeCueFamilies: [...baseInterpretation.safeCueFamilies],
+    unsafeCueFamilies: [...baseInterpretation.unsafeCueFamilies],
+    reasons: [...baseInterpretation.reasons],
+  };
+  const selectedChain = selectedLegChain(visibleSide);
+  const selectedLegReliable =
+    baseInterpretation.usableChains.includes(selectedChain) ||
+    jointsReliableForMostOfRep(summary, [
+      `${visibleSide}_hip`,
+      `${visibleSide}_knee`,
+      `${visibleSide}_ankle`,
+    ]);
+  const selectedTorsoReliable =
+    baseInterpretation.usableChains.includes('torso') ||
+    jointsReliableForMostOfRep(summary, [
+      `${visibleSide}_shoulder`,
+      `${visibleSide}_hip`,
+    ]);
+  const selectedDistalFootReliable = jointsReliableForMostOfRep(summary, [
+    `${visibleSide}_ankle`,
+    `${visibleSide}_heel`,
+    `${visibleSide}_foot_index`,
+  ]);
+
+  if (selectedLegReliable) {
+    markChainUsable(interpretation, selectedChain);
+    markCueFamiliesSafe(interpretation, ['tempo', 'visibleLegPath', 'kneeTracking']);
+  } else {
+    markCueFamiliesUnsafe(
+      interpretation,
+      SQUAT_SELECTED_LEG_CUE_FAMILIES,
+      `${selectedChain}_selected_chain_weak`,
+    );
+  }
+
+  if (selectedTorsoReliable) {
+    markChainUsable(interpretation, 'torso');
+    markCueFamiliesSafe(interpretation, ['torsoLean', 'barPathOrUpperBody']);
+  } else {
+    markCueFamiliesUnsafe(
+      interpretation,
+      ['repCount', 'depth', 'hipKneePath', 'torsoLean', 'barPathOrUpperBody', 'setupStance'],
+      'selected_side_torso_weak',
+    );
+  }
+
+  if (selectedLegReliable && selectedTorsoReliable) {
+    markCueFamiliesSafe(interpretation, [
+      'repCount',
+      'tempo',
+      'visibleLegPath',
+      'depth',
+      'kneeTracking',
+      'hipKneePath',
+      'torsoLean',
+      'barPathOrUpperBody',
+    ]);
+    interpretation.countabilityCandidate =
+      summary.trackingInterruptedFrames > 0 ? 'maybe' : 'countable';
+  } else if (selectedLegReliable || selectedTorsoReliable) {
+    interpretation.countabilityCandidate = 'maybe';
+  } else {
+    interpretation.countabilityCandidate = 'notCountable';
+  }
+
+  if (!selectedDistalFootReliable) {
+    markCueFamiliesUnsafe(
+      interpretation,
+      SQUAT_DISTAL_FOOT_CUE_FAMILIES,
+      'selected_distal_foot_weak',
+    );
+  } else if (selectedLegReliable) {
+    markCueFamiliesSafe(interpretation, ['ankleFootPosition', 'heelLift']);
+  }
+
+  if (!selectedLegReliable || !selectedTorsoReliable) {
+    interpretation.scoreabilityCandidate = 'notScoreable';
+  } else if (interpretation.unsafeCueFamilies.length === 0) {
+    interpretation.scoreabilityCandidate = 'fullyScoreable';
+  } else {
+    interpretation.scoreabilityCandidate = 'partiallyScoreable';
+  }
+
+  if (interpretation.unsafeCueFamilies.length > 0) {
+    interpretation.reasons = uniqueStrings([...interpretation.reasons, 'some_cue_families_unsafe']);
+  }
+
+  return { summary, interpretation };
+}
+
+function safeCueFamilySet(interpretation: RepReliabilityInterpretation | null): ReadonlySet<string> | undefined {
+  return interpretation ? new Set(interpretation.safeCueFamilies) : undefined;
+}
+
+function reliabilityAllowsScoring(
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: SquatSide,
+): boolean {
+  if (!interpretation) return true;
+  return (
+    interpretation.scoreabilityCandidate !== 'notScoreable' &&
+    interpretation.usableChains.includes(selectedLegChain(visibleSide)) &&
+    interpretation.usableChains.includes('torso')
+  );
+}
+
+function repScorableWithReliability(
+  analysis: SquatMetricSnapshot,
+  interpretation: RepReliabilityInterpretation | null,
+  visibleSide: SquatSide,
+): boolean {
+  return analysis.scorable && reliabilityAllowsScoring(interpretation, visibleSide);
+}
+
+function qualityWarningsWithReliability(
+  analysis: SquatMetricSnapshot,
+  scorable: boolean,
+  interpretation: RepReliabilityInterpretation | null,
+): FrameworkRepResult['qualityWarnings'] {
+  const warnings = [...(analysis.qualityWarnings ?? [])];
+  if (interpretation && analysis.scorable && !scorable) {
+    warnings.push('missing_required_joints');
+  }
+  return uniqueStrings(warnings) as FrameworkRepResult['qualityWarnings'];
+}
+
+function suppressUnsafeReliabilityMessages(
+  messages: string[],
+  interpretation: RepReliabilityInterpretation | null,
+): string[] {
+  if (!interpretation) return messages;
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  return messages.filter((message) => {
+    const families = SQUAT_MESSAGE_CUE_FAMILIES[message] ?? [];
+    return families.every(family => !unsafeFamilies.has(family));
+  });
 }
 
 function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
@@ -2067,6 +2335,51 @@ function analyzeSquatRep(repWindow: SquatRepWindow): SquatMetricSnapshot {
   };
 }
 
+function applySquatCueSafety(
+  analysis: SquatMetricSnapshot,
+  allowedCueFamilies: ReadonlySet<string> | undefined,
+): SquatMetricSnapshot {
+  if (!allowedCueFamilies) return analysis;
+
+  const safeAnalysis: SquatMetricSnapshot = { ...analysis };
+  const legPathAllowed =
+    cueFamilyAllowed(allowedCueFamilies, 'visibleLegPath') &&
+    cueFamilyAllowed(allowedCueFamilies, 'hipKneePath');
+  const depthAllowed =
+    legPathAllowed &&
+    cueFamilyAllowed(allowedCueFamilies, 'depth');
+  const heelAllowed =
+    cueFamilyAllowed(allowedCueFamilies, 'ankleFootPosition') &&
+    cueFamilyAllowed(allowedCueFamilies, 'heelLift');
+
+  if (!depthAllowed) {
+    safeAnalysis.depthSeverity = 'none';
+    safeAnalysis.incompleteRom = false;
+  }
+  if (!legPathAllowed) {
+    safeAnalysis.lockoutShort = false;
+  }
+  if (!heelAllowed) {
+    safeAnalysis.heelLiftTriggered = false;
+  }
+  if (!cueFamilyAllowed(allowedCueFamilies, 'kneeTracking')) {
+    safeAnalysis.kneeValgusTriggered = false;
+    safeAnalysis.kneeValgusSeverity = 'none';
+  }
+  if (
+    !cueFamilyAllowed(allowedCueFamilies, 'torsoLean') ||
+    !cueFamilyAllowed(allowedCueFamilies, 'barPathOrUpperBody')
+  ) {
+    safeAnalysis.torsoSeverity = 'none';
+  }
+  if (!cueFamilyAllowed(allowedCueFamilies, 'tempo')) {
+    safeAnalysis.tempoUpShort = false;
+    safeAnalysis.tempoDownShort = false;
+  }
+
+  return safeAnalysis;
+}
+
 function computeSquatRepScore(analysis: SquatMetricSnapshot): number {
   if (!analysis.scorable) return 0;
 
@@ -2180,11 +2493,18 @@ function generateFormMessages(analysis: SquatMetricSnapshot): string[] {
 
 function evaluateForm(
   repWindow: SquatRepWindow,
-): { score: number; messages: string[]; analysis: SquatMetricSnapshot } {
+  allowedCueFamilies?: ReadonlySet<string>,
+): {
+  score: number;
+  messages: string[];
+  analysis: SquatMetricSnapshot;
+  scoringAnalysis: SquatMetricSnapshot;
+} {
   const analysis = analyzeSquatRep(repWindow);
-  const score = computeSquatRepScore(analysis);
-  const messages = generateFormMessages(analysis);
-  return { score, messages, analysis };
+  const scoringAnalysis = applySquatCueSafety(analysis, allowedCueFamilies);
+  const score = computeSquatRepScore(scoringAnalysis);
+  const messages = generateFormMessages(scoringAnalysis);
+  return { score, messages, analysis, scoringAnalysis };
 }
 
 function buildSquatDiagnostics(
@@ -2192,7 +2512,7 @@ function buildSquatDiagnostics(
   repIndex: number,
   visibleSide: 'left' | 'right',
   analysis: SquatMetricSnapshot = analyzeSquatRep(repWindow),
-): FrameworkRepResult['diagnostics'] {
+): NonNullable<FrameworkRepResult['diagnostics']> {
   const hasTempo = analysis.scorable && analysis.tDown !== null && analysis.tUp !== null;
   const depthThresholdPath = analysis.depthSource === 'thighDepthAngle'
     ? 'formThresholds.THIGH_DEPTH_WARN'
@@ -2687,6 +3007,139 @@ function buildSquatDiagnostics(
   });
 }
 
+function applyReliabilityCueGating(
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>,
+  interpretation: RepReliabilityInterpretation | null,
+  scorable: boolean,
+): NonNullable<FrameworkRepResult['diagnostics']> {
+  if (!interpretation) return { ...diagnostics, scorable };
+
+  const unsafeFamilies = new Set(interpretation.unsafeCueFamilies);
+  const suppressedIssueIds: string[] = [];
+  const suppressedCueFamilies = new Set<string>();
+  const cues = Object.fromEntries(
+    Object.entries(diagnostics.cues).map(([issueId, cue]) => {
+      const families = SQUAT_ISSUE_CUE_FAMILIES[issueId] ?? [];
+      const unsafeFamily = families.find(family => unsafeFamilies.has(family));
+      if (unsafeFamily) {
+        suppressedIssueIds.push(issueId);
+        for (const family of families) {
+          if (unsafeFamilies.has(family)) suppressedCueFamilies.add(family);
+        }
+        return [issueId, {
+          ...cue,
+          eligible: false,
+          triggered: false,
+          skippedReason: `reliability_unsafe_${unsafeFamily}`,
+        }];
+      }
+      return [issueId, cue];
+    }),
+  );
+
+  return {
+    ...diagnostics,
+    scorable,
+    cues,
+    reliability: {
+      ...interpretation,
+      suppressedCueFamilies: Array.from(suppressedCueFamilies),
+      suppressedIssueIds,
+    },
+  };
+}
+
+function shouldLogSquatReliability(): boolean {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    !(typeof process !== 'undefined' && process.env.JEST_WORKER_ID)
+  );
+}
+
+function logSquatRepReliability(
+  repIndex: number,
+  interpretation: RepReliabilityInterpretation | null,
+  diagnostics: FrameworkRepResult['diagnostics'],
+): void {
+  if (!interpretation || !shouldLogSquatReliability()) return;
+  const reliability = diagnostics?.reliability;
+  console.log([
+    `[SquatReliability] rep=${repIndex}`,
+    `countability=${interpretation.countabilityCandidate}`,
+    `scoreability=${interpretation.scoreabilityCandidate}`,
+    `usableChains=${interpretation.usableChains.join(',') || 'none'}`,
+    `weakChains=${interpretation.weakChains.join(',') || 'none'}`,
+    `safeCueFamilies=${interpretation.safeCueFamilies.join(',') || 'none'}`,
+    `unsafeCueFamilies=${interpretation.unsafeCueFamilies.join(',') || 'none'}`,
+    `suppressedIssues=${reliability?.suppressedIssueIds?.join(',') || 'none'}`,
+    `suppressedFamilies=${reliability?.suppressedCueFamilies?.join(',') || 'none'}`,
+    `reasons=${interpretation.reasons.join(',') || 'none'}`,
+  ].join(' '));
+}
+
+function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
+  return SQUAT_RELIABILITY_JOINTS.some((jointName) => {
+    const joint = poseState.joints[jointName];
+    return (
+      joint &&
+      (
+        joint.presence !== null ||
+        joint.reasons.includes('presence_unknown') ||
+        joint.reasons.includes('visibility_unknown')
+      )
+    );
+  });
+}
+
+function observeSquatPoseState(
+  repWindow: SquatRepWindow,
+  frameContext: ExerciseFrameContext | undefined,
+): void {
+  const poseState = frameContext?.poseState;
+  if (!poseState || !poseStateHasRichReliabilityMetadata(poseState)) return;
+  repWindow.reliability.observe(poseState);
+}
+
+function buildSquatRepResult(args: {
+  repWindow: SquatRepWindow;
+  repIndex: number;
+  visibleSide: SquatSide;
+  romRatio: number;
+  tDownFallback?: number;
+  tUpFallback?: number;
+}): RepResult {
+  const reliability = reliabilityInterpretationForRepWindow(args.repWindow, args.visibleSide);
+  const reliabilityInterpretation = reliability?.interpretation ?? null;
+  const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
+  const { score: qualityScore, messages, analysis } = evaluateForm(args.repWindow, allowedCueFamilies);
+  const scorable = repScorableWithReliability(analysis, reliabilityInterpretation, args.visibleSide);
+  const score = scorable ? qualityScore : 0;
+  const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
+  const qualityWarnings = qualityWarningsWithReliability(analysis, scorable, reliabilityInterpretation);
+  const diagnostics = applyReliabilityCueGating(
+    buildSquatDiagnostics(args.repWindow, args.repIndex, args.visibleSide, analysis),
+    reliabilityInterpretation,
+    scorable,
+  );
+  const tDown = analysis.tDown ?? args.tDownFallback ?? 0;
+  const tUp = analysis.tUp ?? args.tUpFallback ?? 0;
+
+  logSquatRepReliability(args.repIndex, reliabilityInterpretation, diagnostics);
+
+  return {
+    repIndex: args.repIndex,
+    romRatio: args.romRatio,
+    tDown,
+    tUp,
+    score,
+    messages: finalMessages,
+    scorable,
+    qualityWarnings,
+    diagnostics,
+  };
+}
+
 function captureStandingBaselines(
   state: SquatState,
   imageKeypoints: Keypoint[],
@@ -2926,23 +3379,18 @@ function finalizeRepWindow(
   state.repCount++;
   state.repWindow.tConfirmedEnd = state.repWindow.tEnd;
 
-  const { score, messages, analysis } = evaluateForm(state.repWindow);
-  const tDown = analysis.tDown ?? 0;
-  const tUp = analysis.tUp ?? 0;
-
-  state.lastRepResult = {
+  state.lastRepResult = buildSquatRepResult({
+    repWindow: state.repWindow,
     repIndex: state.repCount,
+    visibleSide,
     romRatio,
-    tDown,
-    tUp,
-    score,
-    messages,
-    scorable: analysis.scorable,
-    qualityWarnings: analysis.qualityWarnings,
-    diagnostics: buildSquatDiagnostics(state.repWindow, state.repCount, visibleSide, analysis),
-  };
+  });
 
-  state.feedback = messages.length > 0 ? messages.join('\n') : analysis.scorable ? 'Great rep!' : null;
+  state.feedback = state.lastRepResult.messages.length > 0
+    ? state.lastRepResult.messages.join('\n')
+    : state.lastRepResult.scorable
+      ? 'Great rep!'
+      : null;
   state.lastFeedbackTime = state.repWindow.tEnd;
   state.repWindow = null;
   state.fsm = resetFSMToStanding();
@@ -3011,6 +3459,7 @@ function updateSquatState(
     if (newState.repWindow) {
       newState.repWindow.tEnd = t;
       newState.repWindow.frameCount++;
+      observeSquatPoseState(newState.repWindow, frameContext);
       updateRepWindowMetrics(newState.repWindow, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
     }
 
@@ -3033,19 +3482,19 @@ function updateSquatState(
       newState.repWindow.tMovementEnd = newState.repWindow.tEnd;
       newState.repWindow.tConfirmedEnd = newState.repWindow.tEnd;
       const tDown = newState.repWindow.tEnd - newState.repWindow.tStart;
-      const { score, messages, analysis } = evaluateForm(newState.repWindow);
-      newState.lastRepResult = {
+      newState.lastRepResult = buildSquatRepResult({
+        repWindow: newState.repWindow,
         repIndex: newState.repCount,
+        visibleSide,
         romRatio: finalPartialROM,
-        tDown,
-        tUp: 0,
-        score,
-        messages,
-        scorable: analysis.scorable,
-        qualityWarnings: analysis.qualityWarnings,
-        diagnostics: buildSquatDiagnostics(newState.repWindow, newState.repCount, visibleSide, analysis),
-      };
-      newState.feedback = messages.length > 0 ? messages.join('\n') : analysis.scorable ? 'Good rep.' : null;
+        tDownFallback: tDown,
+        tUpFallback: 0,
+      });
+      newState.feedback = newState.lastRepResult.messages.length > 0
+        ? newState.lastRepResult.messages.join('\n')
+        : newState.lastRepResult.scorable
+          ? 'Good rep.'
+          : null;
       newState.lastFeedbackTime = t;
     } else if (finalPartialROM > 0) {
       newState.feedback = LOW_ROM_FEEDBACK;
@@ -3061,6 +3510,7 @@ function updateSquatState(
     newState.repWindow.tEnd = t;
     newState.repWindow.frameCount++;
     newState.repWindow.pendingCompletionFrames++;
+    observeSquatPoseState(newState.repWindow, frameContext);
     updateRepWindowMetrics(newState.repWindow, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
 
     if (pendingLockoutReady(newState.repWindow)) {
@@ -3091,6 +3541,7 @@ function updateSquatState(
     const window = newState.repWindow;
     window.tEnd = t;
     window.frameCount++;
+    observeSquatPoseState(window, frameContext);
     updateRepWindowMetrics(window, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
 
     // Set tBottom as soon as depth is reached so tempo reflects the full descent
@@ -3109,6 +3560,7 @@ function updateSquatState(
     newState.repWindow.tEnd = t;
     newState.repWindow.tMovementEnd ??= t;
     newState.repWindow.frameCount++;
+    observeSquatPoseState(newState.repWindow, frameContext);
     updateRepWindowMetrics(newState.repWindow, imageKeypoints, metricKeypoints, visibleSide, rawAngles, fast, smoothed);
     newState.repWindow.pendingCompletionFrames = 0;
     if (pendingLockoutReady(newState.repWindow)) {

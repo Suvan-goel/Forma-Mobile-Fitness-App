@@ -578,10 +578,18 @@ describe('recording reliability report', () => {
     expect(rep.interpretation.scoreabilityCandidate).toBe('partiallyScoreable');
     expect(rep.interpretation.usableChains).toEqual(expect.arrayContaining(['leftLeg', 'torso']));
     expect(rep.interpretation.weakChains).toContain('rightLeg');
-    expect(rep.interpretation.safeCueFamilies).toEqual(expect.arrayContaining(['repCount', 'depth', 'torsoControl']));
+    expect(rep.interpretation.safeCueFamilies).toEqual(expect.arrayContaining([
+      'repCount',
+      'depth',
+      'hipKneePath',
+      'ankleFootPosition',
+      'heelLift',
+      'torsoLean',
+      'barPathOrUpperBody',
+    ]));
     expect(rep.interpretation.unsafeCueFamilies).toEqual(expect.arrayContaining([
-      'lowerBodyTracking',
-      'footAnklePosition',
+      'bilateralSymmetry',
+      'setupStance',
     ]));
   });
 
