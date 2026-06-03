@@ -1,5 +1,5 @@
 import type { Keypoint } from '../poseAnalysis';
-import type { PoseChainSummary, PoseState } from './PoseState';
+import type { PoseChainStatus, PoseChainSummary, PoseState } from './PoseState';
 
 export type ValidHumanSubjectInvalidReason =
   | 'pose_lost'
@@ -28,6 +28,8 @@ export interface ValidHumanSubjectResult {
   presentMajorJoints: number;
   usableChains: string[];
   weakChains: string[];
+  chainStatuses: Record<string, PoseChainStatus>;
+  strongHumanEvidence: boolean;
   boundingBox?: SubjectObservation;
 }
 
@@ -43,6 +45,8 @@ export interface ValidHumanSubjectTrackingResult extends ValidHumanSubjectResult
   bboxArea?: number;
   previousBboxArea?: number;
   bboxAreaRatio?: number;
+  continuityOverride: boolean;
+  suspiciousSignals: string[];
 }
 
 export interface ValidHumanSubjectTrackerOptions {
@@ -77,10 +81,10 @@ const DEFAULT_REACQUISITION_FRAME_THRESHOLD = 6;
 const MIN_PRESENT_MAJOR_JOINTS = 5;
 const MIN_SUBJECT_BOX_MAX_DIMENSION = 0.06;
 const MIN_TORSO_SPAN = 0.04;
-const DEFAULT_CENTER_JUMP_THRESHOLD = 0.32;
-const DEFAULT_HARD_CENTER_JUMP_THRESHOLD = 0.48;
-const DEFAULT_SCALE_RATIO_MIN = 0.38;
-const DEFAULT_SCALE_RATIO_MAX = 2.8;
+const DEFAULT_CENTER_JUMP_THRESHOLD = 0.42;
+const DEFAULT_HARD_CENTER_JUMP_THRESHOLD = 0.52;
+const DEFAULT_SCALE_RATIO_MIN = 0.25;
+const DEFAULT_SCALE_RATIO_MAX = 4.0;
 
 function isJointPresent(poseState: PoseState, jointName: string): boolean {
   const joint = poseState.joints[jointName];
@@ -98,6 +102,10 @@ function reliableJointCount(poseState: PoseState, joints: string[]): number {
 function chainUsable(chain: PoseChainSummary | undefined): boolean {
   if (!chain) return false;
   return chain.status === 'reliable' || chain.status === 'partial';
+}
+
+function chainReliable(chain: PoseChainSummary | undefined): boolean {
+  return chain?.status === 'reliable';
 }
 
 function visibleMajorBox(imageKeypoints: Keypoint[] | undefined): ValidHumanSubjectResult['boundingBox'] {
@@ -179,10 +187,15 @@ export function evaluateValidHumanSubject(args: {
       presentMajorJoints: 0,
       usableChains: [],
       weakChains: [],
+      chainStatuses: {},
+      strongHumanEvidence: false,
     };
   }
 
   const presentMajorJoints = MAJOR_JOINTS.filter((jointName) => isJointPresent(poseState, jointName)).length;
+  const chainStatuses = Object.fromEntries(
+    Object.entries(poseState.chains).map(([chainName, chain]) => [chainName, chain.status]),
+  );
   const usableChains = Object.values(poseState.chains)
     .filter(chainUsable)
     .map((chain) => chain.name);
@@ -201,11 +214,17 @@ export function evaluateValidHumanSubject(args: {
       isJointPresent(poseState, 'right_hip')
     );
   const hasLimbChain = LIMB_CHAINS.some((chainName) => chainUsable(poseState.chains[chainName]));
+  const strongHumanEvidence =
+    presentMajorJoints >= 6 &&
+    chainReliable(poseState.chains.torso) &&
+    LIMB_CHAINS.some((chainName) => chainReliable(poseState.chains[chainName]));
 
   const base = {
     presentMajorJoints,
     usableChains,
     weakChains,
+    chainStatuses,
+    strongHumanEvidence,
     boundingBox,
   };
 
@@ -266,12 +285,17 @@ export class ValidHumanSubjectTracker {
     reason?: ValidHumanSubjectInvalidReason;
     centerJump: number;
     bboxAreaRatio: number;
+    suspiciousSignals: string[];
   } {
     const jump = centerDistance(current, previous);
     const ratio = areaRatio(current, previous);
     const scaleJump = ratio < this.scaleRatioMin || ratio > this.scaleRatioMax;
     const hardCenterJump = jump > this.hardCenterJumpThreshold;
     const combinedJump = jump > this.centerJumpThreshold && scaleJump;
+    const suspiciousSignals: string[] = [];
+    if (jump > this.centerJumpThreshold) suspiciousSignals.push('center_jump');
+    if (hardCenterJump) suspiciousSignals.push('hard_center_jump');
+    if (scaleJump) suspiciousSignals.push('scale_jump');
     let reason: ValidHumanSubjectInvalidReason | undefined;
     if (hardCenterJump && scaleJump) reason = 'active_subject_jump';
     else if (hardCenterJump) reason = 'subject_center_jump';
@@ -281,7 +305,26 @@ export class ValidHumanSubjectTracker {
       reason,
       centerJump: jump,
       bboxAreaRatio: ratio,
+      suspiciousSignals,
     };
+  }
+
+  private shouldRejectContinuity(
+    result: ValidHumanSubjectResult,
+    issue: ReturnType<ValidHumanSubjectTracker['continuityIssue']>,
+  ): boolean {
+    if (!issue.reason) return false;
+    if (!result.strongHumanEvidence) return true;
+
+    const hardCenterJump = issue.suspiciousSignals.includes('hard_center_jump');
+    const scaleJump = issue.suspiciousSignals.includes('scale_jump');
+    const severeShrink = issue.bboxAreaRatio < this.scaleRatioMin * 0.85;
+    const severeGrowth = issue.bboxAreaRatio > this.scaleRatioMax * 1.15;
+
+    // A solid torso plus a reliable major limb is strong evidence that this is
+    // still the user. Only reject continuity when the switch is severe enough
+    // to look like a different subject/object, not normal exercise motion.
+    return hardCenterJump && scaleJump && (severeShrink || severeGrowth);
   }
 
   private accept(result: ValidHumanSubjectResult, observation: SubjectObservation): ValidHumanSubjectTrackingResult {
@@ -307,6 +350,7 @@ export class ValidHumanSubjectTracker {
     rejectedAsLikelyFalseSubject?: boolean;
     centerJump?: number;
     bboxAreaRatio?: number;
+    suspiciousSignals?: string[];
   }): ValidHumanSubjectTrackingResult {
     this.validFrameCount = 0;
     this.reacquisitionFrameCount = 0;
@@ -322,6 +366,7 @@ export class ValidHumanSubjectTracker {
         rejectedAsLikelyFalseSubject: args.rejectedAsLikelyFalseSubject ?? false,
         centerJump: args.centerJump,
         bboxAreaRatio: args.bboxAreaRatio,
+        suspiciousSignals: args.suspiciousSignals,
       },
     );
   }
@@ -330,12 +375,13 @@ export class ValidHumanSubjectTracker {
     const previous = this.activeSubject;
     if (previous) {
       const issue = this.continuityIssue(observation, previous);
-      if (issue.reason) {
+      if (this.shouldRejectContinuity(result, issue)) {
         return this.reject(result, {
-          reason: issue.reason,
+          reason: issue.reason ?? 'active_subject_jump',
           rejectedAsLikelyFalseSubject: true,
           centerJump: issue.centerJump,
           bboxAreaRatio: issue.bboxAreaRatio,
+          suspiciousSignals: issue.suspiciousSignals,
         });
       }
     }
@@ -345,7 +391,7 @@ export class ValidHumanSubjectTracker {
       this.reacquisitionFrameCount = 1;
     } else {
       const issue = this.continuityIssue(observation, this.reacquisitionCandidate);
-      if (issue.reason) {
+      if (this.shouldRejectContinuity(result, issue)) {
         this.reacquisitionCandidate = observation;
         this.reacquisitionFrameCount = 1;
       } else {
@@ -385,6 +431,8 @@ export class ValidHumanSubjectTracker {
       centerJump?: number;
       bboxAreaRatio?: number;
       previousSubject?: SubjectObservation | null;
+      continuityOverride?: boolean;
+      suspiciousSignals?: string[];
     },
   ): ValidHumanSubjectTrackingResult {
     const observation = observationFromResult(result);
@@ -410,6 +458,8 @@ export class ValidHumanSubjectTracker {
       bboxArea: observation?.area,
       previousBboxArea: previous?.area,
       bboxAreaRatio,
+      continuityOverride: args.continuityOverride ?? false,
+      suspiciousSignals: args.suspiciousSignals ?? [],
     };
   }
 
@@ -439,15 +489,26 @@ export class ValidHumanSubjectTracker {
     }
 
     const issue = this.continuityIssue(observation, this.activeSubject);
-    if (issue.reason) {
+    if (this.shouldRejectContinuity(result, issue)) {
       return this.reject(result, {
-        reason: issue.reason,
+        reason: issue.reason ?? 'active_subject_jump',
         rejectedAsLikelyFalseSubject: true,
         centerJump: issue.centerJump,
         bboxAreaRatio: issue.bboxAreaRatio,
+        suspiciousSignals: issue.suspiciousSignals,
       });
     }
 
-    return this.accept(result, observation);
+    const accepted = this.accept(result, observation);
+    if (issue.reason) {
+      return {
+        ...accepted,
+        continuityOverride: true,
+        suspiciousSignals: issue.suspiciousSignals,
+        centerJump: issue.centerJump,
+        bboxAreaRatio: issue.bboxAreaRatio,
+      };
+    }
+    return accepted;
   }
 }

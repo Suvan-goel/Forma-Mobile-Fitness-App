@@ -103,6 +103,51 @@ describe('valid human subject status helper', () => {
     expect(result.usableChains).toEqual(expect.arrayContaining(['torso', 'rightArm']));
   });
 
+  it('keeps a real user valid when moving closer or farther', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 3 });
+    tracker.update(validSubject(keypoints()));
+
+    const closer = tracker.update(validSubject(transformedKeypoints({ scale: 1.8 })));
+    const farther = tracker.update(validSubject(transformedKeypoints({ scale: 0.55 })));
+
+    expect(closer.valid).toBe(true);
+    expect(farther.valid).toBe(true);
+    expect(farther.sustainedInvalid).toBe(false);
+  });
+
+  it('keeps exercise-like arm posture changes valid', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 3 });
+    tracker.update(validSubject(keypoints()));
+    const armsRaised = keypoints({
+      left_elbow: { x: 0.36, y: 0.2 },
+      right_elbow: { x: 0.64, y: 0.2 },
+      left_wrist: { x: 0.34, y: 0.12 },
+      right_wrist: { x: 0.66, y: 0.12 },
+    });
+
+    const result = tracker.update(validSubject(armsRaised));
+
+    expect(result.valid).toBe(true);
+    expect(result.sustainedInvalid).toBe(false);
+    expect(result.rejectedAsLikelyFalseSubject).toBe(false);
+  });
+
+  it('lets strong torso and major-limb evidence override a moderate continuity jump', () => {
+    const tracker = new ValidHumanSubjectTracker({ invalidFrameThreshold: 2 });
+    tracker.update(validSubject(keypoints()));
+    const movedSubject = validSubject(transformedKeypoints({
+      offsetX: 0.44,
+      scale: 0.45,
+    }));
+
+    const result = tracker.update(movedSubject);
+
+    expect(result.valid).toBe(true);
+    expect(result.strongHumanEvidence).toBe(true);
+    expect(result.continuityOverride).toBe(true);
+    expect(result.sustainedInvalid).toBe(false);
+  });
+
   it('rejects collapsed object-like poses', () => {
     const frameKeypoints = keypoints(Object.fromEntries(
       MAJOR_JOINTS.map((name) => [name, { x: 0.5, y: 0.5, z: 0 }]),

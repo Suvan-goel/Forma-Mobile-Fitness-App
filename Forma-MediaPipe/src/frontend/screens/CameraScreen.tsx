@@ -222,6 +222,9 @@ function summarizeValidSubjectForStatusLog(subject: ValidHumanSubjectTrackingRes
     reacquisitionFrameCount: subject.reacquisitionFrameCount,
     sustainedInvalid: subject.sustainedInvalid,
     rejectedAsLikelyFalseSubject: subject.rejectedAsLikelyFalseSubject,
+    continuityOverride: subject.continuityOverride,
+    suspiciousSignals: subject.suspiciousSignals,
+    strongHumanEvidence: subject.strongHumanEvidence,
     presentMajorJoints: subject.presentMajorJoints,
     subjectCenter: subject.subjectCenter,
     previousSubjectCenter: subject.previousSubjectCenter,
@@ -231,6 +234,7 @@ function summarizeValidSubjectForStatusLog(subject: ValidHumanSubjectTrackingRes
     bboxAreaRatio: subject.bboxAreaRatio,
     usableChains: subject.usableChains,
     weakChains: subject.weakChains,
+    chainStatuses: subject.chainStatuses,
     boundingBox: subject.boundingBox,
   };
 }
