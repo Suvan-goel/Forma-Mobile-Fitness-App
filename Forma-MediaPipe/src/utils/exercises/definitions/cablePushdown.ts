@@ -978,6 +978,70 @@ function logCablePushdownRepReliability(
   ].join(' '));
 }
 
+function formatCablePushdownScoringRatio(value: number | null): string {
+  return value === null ? 'n/a' : value.toFixed(2);
+}
+
+function cablePushdownScoringReason(args: {
+  sideViewPassed: boolean;
+  reliabilityAllowed: boolean;
+  scorable: boolean;
+  qualityWarnings: FrameworkRepResult['qualityWarnings'];
+}): string {
+  if (!args.sideViewPassed) {
+    return args.qualityWarnings?.includes('side_view_uncertain')
+      ? 'side_view_uncertain'
+      : 'bad_view';
+  }
+  if (!args.reliabilityAllowed) return 'pose_reliability_not_scoreable';
+  return args.scorable ? 'scoreable' : 'unknown_unscored';
+}
+
+function logCablePushdownScoringDecision(args: {
+  repIndex: number;
+  repWindow: RepWindow;
+  visibleSide: 'left' | 'right';
+  scorable: boolean;
+  qualityWarnings: FrameworkRepResult['qualityWarnings'];
+  interpretation: RepReliabilityInterpretation | null;
+  diagnostics: NonNullable<FrameworkRepResult['diagnostics']>;
+}): void {
+  if (!shouldLogCablePushdownReliability()) return;
+
+  const sideViewPassed = isCablePushdownRepScorable(args.repWindow);
+  const reliabilityAllowed = reliabilityAllowsScoring(args.interpretation, args.visibleSide);
+  const viewQuality = args.diagnostics.viewQuality ?? buildCablePushdownViewQuality(args.repWindow);
+  const averageSide = averageSideViewConfidence(args.repWindow);
+  const minSide = args.repWindow.sideViewConfidenceSamples > 0
+    ? args.repWindow.sideViewConfidenceMin
+    : null;
+  console.log([
+    `[CablePushdownScoring] rep=${args.repIndex}`,
+    `scorable=${args.scorable}`,
+    `reason=${cablePushdownScoringReason({
+      sideViewPassed,
+      reliabilityAllowed,
+      scorable: args.scorable,
+      qualityWarnings: args.qualityWarnings,
+    })}`,
+    `reliability=${args.interpretation?.scoreabilityCandidate ?? 'n/a'}`,
+    `qualityWarnings=${args.qualityWarnings?.join(',') || 'none'}`,
+    `view=${args.diagnostics.view ?? 'unknown'}`,
+    `viewStatus=${viewQuality.status}`,
+    `sideConfirmed=${viewQuality.sideConfirmed}`,
+    `frontishConfirmed=${viewQuality.frontishConfirmed === true}`,
+    `viewUnknown=${viewQuality.viewUnknown}`,
+    `avgSide=${formatCablePushdownScoringRatio(averageSide)}`,
+    `minSide=${formatCablePushdownScoringRatio(minSide)}`,
+    `sideSamples=${args.repWindow.sideViewConfidenceSamples}`,
+    `thresholds=avg>=${FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN.toFixed(2)},min>=${FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN.toFixed(2)},samples>=${FORM_THRESHOLDS.SIDE_VIEW_MIN_SAMPLES}`,
+    `exerciseScorableGate=${sideViewPassed ? 'passed' : 'failed'}`,
+    `reliabilityAllowsScoring=${reliabilityAllowed}`,
+    `setupWarning=${args.qualityWarnings?.includes('side_view_uncertain') === true}`,
+    'globalAdjustedQuality=not_available_check_CameraScreen',
+  ].join(' '));
+}
+
 function poseStateHasRichReliabilityMetadata(poseState: NonNullable<ExerciseFrameContext['poseState']>): boolean {
   return CABLE_PUSHDOWN_RELIABILITY_JOINTS.some((jointName) => {
     const joint = poseState.joints[jointName];
@@ -1598,18 +1662,28 @@ function buildCablePushdownRepResult(
   const score = scorable ? computeCablePushdownScore(repWindow, allowedCueFamilies) : 0;
   const messages = sideViewScorable ? generateFormMessages(repWindow, allowedCueFamilies) : [];
   const finalMessages = suppressUnsafeReliabilityMessages(messages, reliabilityInterpretation);
+  const qualityWarnings = cablePushdownQualityWarnings(repWindow);
   const diagnostics = applyReliabilityCueGating(
     buildCablePushdownDiagnostics(repWindow, repIndex, visibleSide, scorable),
     reliabilityInterpretation,
     scorable,
   );
   logCablePushdownRepReliability(repIndex, reliabilityInterpretation, diagnostics);
+  logCablePushdownScoringDecision({
+    repIndex,
+    repWindow,
+    visibleSide,
+    scorable,
+    qualityWarnings,
+    interpretation: reliabilityInterpretation,
+    diagnostics,
+  });
   return {
     repIndex,
     score,
     messages: finalMessages,
     scorable,
-    qualityWarnings: cablePushdownQualityWarnings(repWindow),
+    qualityWarnings,
     diagnostics,
   };
 }
