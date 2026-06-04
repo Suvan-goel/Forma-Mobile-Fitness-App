@@ -20,6 +20,7 @@ export type CameraAnalysisStatusSource =
   | 'exercise'
   | 'poseState'
   | 'viewCueGating'
+  | 'completedRep'
   | 'global';
 
 export type CameraAnalysisFeedbackMode = 'full' | 'limited' | 'countOnly' | 'unavailable';
@@ -69,8 +70,28 @@ type ViewCueGatingLike = {
 };
 
 type ReliabilityLike = {
+  scoreabilityCandidate?: string;
   usableChains?: string[];
   weakChains?: string[];
+  safeCueFamilies?: string[];
+  unsafeCueFamilies?: string[];
+};
+
+type CompletedRepReadinessLike = {
+  scorable?: boolean;
+  diagnostics?: {
+    scorable?: boolean;
+    view?: string;
+    reliability?: ReliabilityLike | null;
+    viewCueGating?: ViewCueGatingLike | null;
+  } | null;
+};
+
+export interface RecentCompletedRepCameraStatusState {
+  status: CameraAnalysisStatus | null;
+  updatedAt: number;
+  expiresAt: number;
+  fullReadinessFrameCount: number;
 };
 
 export const CAMERA_ANALYSIS_STATUS_PRIORITY = {
@@ -86,6 +107,9 @@ export const CAMERA_ANALYSIS_STATUS_PRIORITY = {
   TRACKING_OKAY: 120,
   TRACKING_GOOD: 100,
 } as const;
+
+export const RECENT_COMPLETED_REP_CAMERA_STATUS_HOLD_MS = 1800;
+export const RECENT_COMPLETED_REP_FULL_READINESS_CLEAR_FRAMES = 3;
 
 const FRAMING_WARNINGS = new Set<PoseQualityWarning>([
   'move_camera_back',
@@ -115,6 +139,26 @@ const SOFT_GENERIC_POSE_WARNINGS = new Set<PoseQualityWarning>([
 
 function uniqueStrings(values: Array<string | undefined>): string[] {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+}
+
+function isFullFeedbackStatus(status?: CameraAnalysisStatus | null): boolean {
+  return status?.details?.feedbackMode === 'full';
+}
+
+function shouldUseKeyJointMessage(
+  reliability?: ReliabilityLike | null,
+  reason?: string,
+): boolean {
+  if (reliability?.scoreabilityCandidate === 'notScoreable') return true;
+  if ((reliability?.weakChains?.length ?? 0) > 0) return true;
+  if (!reason) return false;
+  return (
+    reason.includes('reliability') ||
+    reason.includes('unreliable') ||
+    reason.includes('pose_state') ||
+    reason.includes('tracking_quality') ||
+    reason.includes('not_scoreable')
+  );
 }
 
 function exerciseStatusAllowsUsefulFeedback(status?: CameraAnalysisStatus | null): boolean {
@@ -375,6 +419,167 @@ export function cameraStatusFromViewCueGating(args: {
   return {
     ...fullFeedbackCameraStatus(source, viewCueGating.finalScorableReason ?? 'full_feedback_available'),
     details,
+  };
+}
+
+export function cameraStatusFromCompletedRepReadiness(args: {
+  repResult?: CompletedRepReadinessLike | null;
+  trackingQualityScorable?: boolean;
+  source?: CameraAnalysisStatusSource;
+}): CameraAnalysisStatus | null {
+  const { repResult, source = 'completedRep' } = args;
+  if (!repResult) return null;
+
+  const diagnostics = repResult.diagnostics ?? null;
+  const reliability = diagnostics?.reliability ?? null;
+  const viewCueGating = diagnostics?.viewCueGating ?? null;
+  const blockedCueFamilies = uniqueStrings([
+    ...(viewCueGating?.viewBlockedCueFamilies ?? []),
+    ...(viewCueGating?.poseStateBlockedCueFamilies ?? []),
+    ...(reliability?.unsafeCueFamilies ?? []),
+  ]);
+  const details = {
+    feedbackMode: 'full' as CameraAnalysisFeedbackMode,
+    safeCueFamilies: viewCueGating?.finalSafeCueFamilies ?? reliability?.safeCueFamilies ?? [],
+    blockedCueFamilies,
+    weakChains: reliability?.weakChains ?? [],
+    usableChains: reliability?.usableChains ?? [],
+    viewCurrent: diagnostics?.view,
+  };
+  const finalUnscorableReason = viewCueGating?.finalUnscorableReason;
+  const repMarkedUnscorable = repResult.scorable === false || diagnostics?.scorable === false;
+  const trackingMarkedUnscorable = args.trackingQualityScorable === false;
+  const reliabilityNotScoreable = reliability?.scoreabilityCandidate === 'notScoreable';
+
+  if (finalUnscorableReason || repMarkedUnscorable || trackingMarkedUnscorable || reliabilityNotScoreable) {
+    const reason = finalUnscorableReason
+      ?? (reliabilityNotScoreable
+        ? 'pose_reliability_not_scoreable'
+        : trackingMarkedUnscorable
+          ? 'completed_rep_tracking_quality_unscorable'
+          : 'completed_rep_unscorable');
+    return countOnlyCameraStatus({
+      source,
+      reason,
+      message: shouldUseKeyJointMessage(reliability, reason)
+        ? 'Count only - keep key joints visible'
+        : 'Count only - improve camera angle for form feedback',
+      details: {
+        ...details,
+        feedbackMode: 'countOnly',
+      },
+    });
+  }
+
+  if (
+    reliability?.scoreabilityCandidate === 'partiallyScoreable' ||
+    viewCueGating?.partialViewScoringAllowed === true
+  ) {
+    const reason = reliability?.scoreabilityCandidate === 'partiallyScoreable'
+      ? 'completed_rep_partial_reliability'
+      : viewCueGating?.finalScorableReason ?? 'completed_rep_partial_view_scoring';
+    return limitedFeedbackCameraStatus({
+      source,
+      reason,
+      message: shouldUseKeyJointMessage(reliability, reason)
+        ? 'Limited feedback - keep key joints visible'
+        : 'Limited feedback - adjust angle for full analysis',
+      details: {
+        ...details,
+        feedbackMode: 'limited',
+      },
+    });
+  }
+
+  if (blockedCueFamilies.length > 0) {
+    return limitedFeedbackCameraStatus({
+      source,
+      reason: 'completed_rep_some_cues_unavailable',
+      message: (viewCueGating?.poseStateBlockedCueFamilies?.length ?? 0) > 0
+        ? 'Limited feedback - keep key joints visible'
+        : 'Limited feedback - some cues unavailable',
+      priority: CAMERA_ANALYSIS_STATUS_PRIORITY.SOME_CUES_UNAVAILABLE,
+      details: {
+        ...details,
+        feedbackMode: 'limited',
+      },
+    });
+  }
+
+  if (
+    reliability?.scoreabilityCandidate === 'fullyScoreable' ||
+    viewCueGating?.finalScorableReason
+  ) {
+    return {
+      ...fullFeedbackCameraStatus(source, viewCueGating?.finalScorableReason ?? 'completed_rep_full_feedback'),
+      details,
+    };
+  }
+
+  return null;
+}
+
+export function createRecentCompletedRepCameraStatusState(): RecentCompletedRepCameraStatusState {
+  return {
+    status: null,
+    updatedAt: 0,
+    expiresAt: 0,
+    fullReadinessFrameCount: 0,
+  };
+}
+
+export function recentCompletedRepCameraStatus(
+  state: RecentCompletedRepCameraStatusState,
+  nowMs: number,
+): CameraAnalysisStatus | null {
+  if (!state.status) return null;
+  if (nowMs > state.expiresAt) return null;
+  return state.status;
+}
+
+export function updateRecentCompletedRepCameraStatusState(
+  state: RecentCompletedRepCameraStatusState,
+  args: {
+    nowMs: number;
+    completedRepStatus?: CameraAnalysisStatus | null;
+    currentReadinessStatus?: CameraAnalysisStatus | null;
+    holdMs?: number;
+    fullReadinessClearFrames?: number;
+  },
+): RecentCompletedRepCameraStatusState {
+  const holdMs = args.holdMs ?? RECENT_COMPLETED_REP_CAMERA_STATUS_HOLD_MS;
+  const fullReadinessClearFrames = args.fullReadinessClearFrames
+    ?? RECENT_COMPLETED_REP_FULL_READINESS_CLEAR_FRAMES;
+  const completedRepMode = args.completedRepStatus?.details?.feedbackMode;
+
+  if (completedRepMode === 'limited' || completedRepMode === 'countOnly' || completedRepMode === 'unavailable') {
+    return {
+      status: args.completedRepStatus ?? null,
+      updatedAt: args.nowMs,
+      expiresAt: args.nowMs + holdMs,
+      fullReadinessFrameCount: 0,
+    };
+  }
+
+  if (completedRepMode === 'full') {
+    return createRecentCompletedRepCameraStatusState();
+  }
+
+  if (!state.status || args.nowMs > state.expiresAt) {
+    return createRecentCompletedRepCameraStatusState();
+  }
+
+  const fullReadinessFrameCount = isFullFeedbackStatus(args.currentReadinessStatus)
+    ? state.fullReadinessFrameCount + 1
+    : 0;
+
+  if (fullReadinessFrameCount >= fullReadinessClearFrames) {
+    return createRecentCompletedRepCameraStatusState();
+  }
+
+  return {
+    ...state,
+    fullReadinessFrameCount,
   };
 }
 

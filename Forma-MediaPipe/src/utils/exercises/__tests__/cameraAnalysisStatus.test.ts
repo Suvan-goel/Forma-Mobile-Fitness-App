@@ -1,10 +1,14 @@
 import {
+  cameraStatusFromCompletedRepReadiness,
   countOnlyCameraStatus,
+  createRecentCompletedRepCameraStatusState,
   fullFeedbackCameraStatus,
   limitedFeedbackCameraStatus,
+  recentCompletedRepCameraStatus,
   resolveCameraAnalysisStatus,
   selectCameraAnalysisStatus,
   cameraStatusFromViewCueGating,
+  updateRecentCompletedRepCameraStatusState,
   type CameraAnalysisStatus,
 } from '../shared/cameraAnalysisStatus';
 import type { PoseQualitySnapshot, PoseQualityWarning } from '../shared/poseQuality';
@@ -202,5 +206,149 @@ describe('CameraAnalysisStatus resolver', () => {
 
     expect(result.selected?.message).toBe('Count only - improve camera angle for form feedback');
     expect(result.selected?.details?.feedbackMode).toBe('countOnly');
+  });
+
+  it('summarizes completed partially scoreable reps as recent limited feedback', () => {
+    const status = cameraStatusFromCompletedRepReadiness({
+      repResult: {
+        scorable: true,
+        diagnostics: {
+          scorable: true,
+          reliability: {
+            scoreabilityCandidate: 'partiallyScoreable',
+            usableChains: ['leftArm'],
+            weakChains: ['rightArm'],
+            safeCueFamilies: ['rangeOfMotion'],
+            unsafeCueFamilies: ['bilateralGeometry'],
+          },
+        },
+      },
+    });
+
+    expect(status?.source).toBe('completedRep');
+    expect(status?.message).toBe('Limited feedback - keep key joints visible');
+    expect(status?.details?.feedbackMode).toBe('limited');
+    expect(status?.details?.weakChains).toContain('rightArm');
+    expect(status?.details?.blockedCueFamilies).toContain('bilateralGeometry');
+  });
+
+  it('summarizes completed not-scoreable reps as recent count-only feedback', () => {
+    const status = cameraStatusFromCompletedRepReadiness({
+      repResult: {
+        scorable: false,
+        diagnostics: {
+          scorable: false,
+          reliability: {
+            scoreabilityCandidate: 'notScoreable',
+            usableChains: [],
+            weakChains: ['leftArm', 'rightArm'],
+            safeCueFamilies: [],
+            unsafeCueFamilies: ['rangeOfMotion'],
+          },
+        },
+      },
+    });
+
+    expect(status?.message).toBe('Count only - keep key joints visible');
+    expect(status?.details?.feedbackMode).toBe('countOnly');
+    expect(status?.reason).toBe('pose_reliability_not_scoreable');
+  });
+
+  it('summarizes completed tracking-quality unscored reps as recent count-only feedback', () => {
+    const status = cameraStatusFromCompletedRepReadiness({
+      repResult: { scorable: true },
+      trackingQualityScorable: false,
+    });
+
+    expect(status?.message).toBe('Count only - keep key joints visible');
+    expect(status?.details?.feedbackMode).toBe('countOnly');
+    expect(status?.reason).toBe('completed_rep_tracking_quality_unscorable');
+  });
+
+  it('lets recent completed-rep limited feedback beat generic full readiness', () => {
+    const recentStatus = cameraStatusFromCompletedRepReadiness({
+      repResult: {
+        scorable: true,
+        diagnostics: {
+          scorable: true,
+          reliability: {
+            scoreabilityCandidate: 'partiallyScoreable',
+            usableChains: ['leftArm'],
+            weakChains: ['rightArm'],
+            safeCueFamilies: ['rangeOfMotion'],
+            unsafeCueFamilies: [],
+          },
+        },
+      },
+    });
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high'),
+      exerciseStatus: fullFeedbackCameraStatus('exercise'),
+      additionalStatuses: [recentStatus],
+    });
+
+    expect(result.selected?.source).toBe('completedRep');
+    expect(result.selected?.details?.feedbackMode).toBe('limited');
+  });
+
+  it('keeps tracking lost and critical framing above recent completed-rep feedback', () => {
+    const recentStatus = countOnlyCameraStatus({ source: 'completedRep' });
+    const lost = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('lost', ['tracking_lost']),
+      additionalStatuses: [recentStatus],
+    });
+    const framedOut = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high', ['move_camera_back']),
+      additionalStatuses: [recentStatus],
+    });
+
+    expect(lost.selected?.source).toBe('poseQuality');
+    expect(lost.selected?.reason).toBe('tracking_lost');
+    expect(framedOut.selected?.source).toBe('poseQuality');
+    expect(framedOut.selected?.category).toBe('framing');
+  });
+
+  it('holds recent completed-rep feedback briefly, then expires it', () => {
+    const recentStatus = limitedFeedbackCameraStatus({ source: 'completedRep' });
+    const state = updateRecentCompletedRepCameraStatusState(
+      createRecentCompletedRepCameraStatusState(),
+      {
+        nowMs: 1000,
+        completedRepStatus: recentStatus,
+        holdMs: 1000,
+      },
+    );
+
+    expect(recentCompletedRepCameraStatus(state, 1500)).toBe(recentStatus);
+    expect(recentCompletedRepCameraStatus(state, 2001)).toBeNull();
+  });
+
+  it('clears a recent completed-rep hold after sustained full readiness', () => {
+    const recentStatus = limitedFeedbackCameraStatus({ source: 'completedRep' });
+    let state = updateRecentCompletedRepCameraStatusState(
+      createRecentCompletedRepCameraStatusState(),
+      {
+        nowMs: 1000,
+        completedRepStatus: recentStatus,
+        holdMs: 5000,
+      },
+    );
+
+    for (const nowMs of [1100, 1200]) {
+      state = updateRecentCompletedRepCameraStatusState(state, {
+        nowMs,
+        currentReadinessStatus: fullFeedbackCameraStatus('exercise'),
+        fullReadinessClearFrames: 3,
+      });
+      expect(recentCompletedRepCameraStatus(state, nowMs)).toBe(recentStatus);
+    }
+
+    state = updateRecentCompletedRepCameraStatusState(state, {
+      nowMs: 1300,
+      currentReadinessStatus: fullFeedbackCameraStatus('exercise'),
+      fullReadinessClearFrames: 3,
+    });
+
+    expect(recentCompletedRepCameraStatus(state, 1300)).toBeNull();
   });
 });

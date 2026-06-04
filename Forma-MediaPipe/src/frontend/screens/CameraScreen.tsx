@@ -38,11 +38,15 @@ import {
   PoseQualityTracker,
   RepQualityWindowAccumulator,
   buildDisplayedPoseQuality,
+  cameraStatusFromCompletedRepReadiness,
+  createRecentCompletedRepCameraStatusState,
   resolveCameraAnalysisStatus,
   getUnscoredRepFeedback,
   getPoseQualityMessage,
+  recentCompletedRepCameraStatus,
   resolveExerciseQualityProfile,
   summarizeSetTrackingQuality,
+  updateRecentCompletedRepCameraStatusState,
 } from '../../utils/exercises';
 import type {
   ExerciseState,
@@ -53,6 +57,7 @@ import type {
   SetTrackingQualitySummary,
   CameraAnalysisStatus,
   CameraAnalysisStatusResolution,
+  RecentCompletedRepCameraStatusState,
 } from '../../utils/exercises';
 import {
   createLandmarkRecordingFrame,
@@ -180,6 +185,16 @@ function formatCameraAnalysisStatusForLog(status: CameraAnalysisStatus) {
     source: status.source,
     reason: status.reason,
     feedbackMode: status.details?.feedbackMode,
+    details: status.details
+      ? {
+          safeCueFamilies: status.details.safeCueFamilies,
+          blockedCueFamilies: status.details.blockedCueFamilies,
+          weakChains: status.details.weakChains,
+          usableChains: status.details.usableChains,
+          viewRequired: status.details.viewRequired,
+          viewCurrent: status.details.viewCurrent,
+        }
+      : undefined,
   };
 }
 
@@ -238,6 +253,23 @@ function summarizeValidSubjectForStatusLog(subject: ValidHumanSubjectTrackingRes
     weakChains: subject.weakChains,
     chainStatuses: subject.chainStatuses,
     boundingBox: subject.boundingBox,
+  };
+}
+
+function summarizeRecentCompletedRepStatusForLog(
+  state: RecentCompletedRepCameraStatusState,
+  selected: CameraAnalysisStatus | null,
+  nowMs: number,
+) {
+  const status = recentCompletedRepCameraStatus(state, nowMs);
+  if (!status) return null;
+  return {
+    status: formatCameraAnalysisStatusForLog(status),
+    ageMs: Math.max(0, nowMs - state.updatedAt),
+    expiresInMs: Math.max(0, state.expiresAt - nowMs),
+    fullReadinessFrameCount: state.fullReadinessFrameCount,
+    selected: selected === status,
+    selectedOverLiveReadiness: selected === status && status.details?.feedbackMode !== 'full',
   };
 }
 
@@ -701,6 +733,7 @@ export const CameraScreen: React.FC = () => {
   const topPillAnalysisStatusSmoothingRef = useRef<{ key: string; count: number }>({ key: 'none', count: 0 });
   const lastCameraAnalysisStatusLogKeyRef = useRef('none');
   const cameraAnalysisStatusRef = useRef<CameraAnalysisStatus | null>(null);
+  const recentCompletedRepCameraStatusRef = useRef(createRecentCompletedRepCameraStatusState());
   const cameraPerfRef = useRef(createCameraPerfAccumulator());
 
   // Sync refs with state
@@ -765,6 +798,7 @@ export const CameraScreen: React.FC = () => {
     lastCameraAnalysisStatusLogKeyRef.current = 'none';
     lastCameraAnalysisStatusUpdateTimeRef.current = 0;
     cameraAnalysisStatusRef.current = null;
+    recentCompletedRepCameraStatusRef.current = createRecentCompletedRepCameraStatusState();
     cameraPerfRef.current = createCameraPerfAccumulator();
     lastTTSFeedbackTimestampRef.current = null;
     poseQualityTrackerRef.current.reset();
@@ -876,6 +910,8 @@ export const CameraScreen: React.FC = () => {
     diagnostics?: {
       poseQuality?: PoseQualitySnapshot;
       exerciseStatus?: CameraAnalysisStatus | null;
+      recentCompletedRepStatus?: RecentCompletedRepCameraStatusState;
+      nowMs?: number;
       poseState?: PoseState;
       validSubject?: ValidHumanSubjectTrackingResult;
     },
@@ -900,6 +936,13 @@ export const CameraScreen: React.FC = () => {
         : undefined,
       exerciseLiveAnalysisStatus: diagnostics?.exerciseStatus
         ? formatCameraAnalysisStatusForLog(diagnostics.exerciseStatus)
+        : null,
+      recentCompletedRepStatus: diagnostics?.recentCompletedRepStatus
+        ? summarizeRecentCompletedRepStatusForLog(
+            diagnostics.recentCompletedRepStatus,
+            resolution.selected,
+            diagnostics.nowMs ?? Date.now(),
+          )
         : null,
       poseState: summarizePoseStateForStatusLog(diagnostics?.poseState),
       validSubject: summarizeValidSubjectForStatusLog(diagnostics?.validSubject),
@@ -1087,18 +1130,39 @@ export const CameraScreen: React.FC = () => {
         } else {
           topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
         }
+        const completedRepReadinessStatus = completedNewTrackedRep
+          ? cameraStatusFromCompletedRepReadiness({
+              repResult: newState.lastRepResult,
+              trackingQualityScorable: repQuality?.scorable ?? quality.canScoreRep,
+            })
+          : null;
+        recentCompletedRepCameraStatusRef.current = updateRecentCompletedRepCameraStatusState(
+          recentCompletedRepCameraStatusRef.current,
+          {
+            nowMs: now,
+            completedRepStatus: completedRepReadinessStatus,
+            currentReadinessStatus: stableExerciseStatus,
+          },
+        );
+        const recentCompletedRepStatus = recentCompletedRepCameraStatus(
+          recentCompletedRepCameraStatusRef.current,
+          now,
+        );
         displayedQuality = buildDisplayedPoseQuality(quality, stableTopPillWarnings);
         const cameraStatusResolution = resolveCameraAnalysisStatus({
           poseQuality: quality,
           exerciseWarnings: stableTopPillWarnings,
           exerciseStatus: stableExerciseStatus,
           poseStateStatus: validSubjectStatus,
+          additionalStatuses: [recentCompletedRepStatus],
         });
         selectedCameraAnalysisStatus = cameraStatusResolution.selected;
         cameraAnalysisStatusRef.current = selectedCameraAnalysisStatus;
         logCameraAnalysisStatusResolution(cameraStatusResolution, {
           poseQuality: quality,
           exerciseStatus: stableExerciseStatus,
+          recentCompletedRepStatus: recentCompletedRepCameraStatusRef.current,
+          nowMs: now,
           poseState,
           validSubject,
         });
@@ -1565,6 +1629,7 @@ export const CameraScreen: React.FC = () => {
       topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
       lastCameraAnalysisStatusLogKeyRef.current = 'none';
       lastCameraAnalysisStatusUpdateTimeRef.current = 0;
+      recentCompletedRepCameraStatusRef.current = createRecentCompletedRepCameraStatusState();
       cameraPerfRef.current = createCameraPerfAccumulator();
       poseFrameGapTrackerRef.current.reset();
       ttsResetCoach();

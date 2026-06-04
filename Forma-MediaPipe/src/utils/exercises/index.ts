@@ -107,12 +107,16 @@ export {
   CAMERA_ANALYSIS_STATUS_PRIORITY,
   cameraStatusFromPoseQuality,
   cameraStatusFromPoseQualityWarning,
+  cameraStatusFromCompletedRepReadiness,
   cameraStatusFromViewCueGating,
   countOnlyCameraStatus,
+  createRecentCompletedRepCameraStatusState,
   fullFeedbackCameraStatus,
   limitedFeedbackCameraStatus,
+  recentCompletedRepCameraStatus,
   resolveCameraAnalysisStatus,
   selectCameraAnalysisStatus,
+  updateRecentCompletedRepCameraStatusState,
 } from './shared/cameraAnalysisStatus';
 export type {
   ExerciseQualityProfile,
@@ -131,5 +135,6 @@ export type {
   CameraAnalysisStatusLevel,
   CameraAnalysisStatusResolution,
   CameraAnalysisStatusSource,
+  RecentCompletedRepCameraStatusState,
   ResolveCameraAnalysisStatusInput,
 } from './shared/cameraAnalysisStatus';
