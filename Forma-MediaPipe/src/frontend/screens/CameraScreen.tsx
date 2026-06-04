@@ -121,6 +121,10 @@ type SetStartSpeechReservation = {
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const EXERCISE_HEADER_TITLE_MAX_WIDTH = Math.max(
+  132,
+  SCREEN_WIDTH - SPACING.screenHorizontal * 2 - 176,
+);
 // Use 'screen' height to include the Android navigation bar area (avoids black bar at bottom)
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
@@ -2128,7 +2132,14 @@ export const CameraScreen: React.FC = () => {
           </View>
 
           <View style={styles.exerciseTopCardWrap} onLayout={handleTitleLayout}>
-            <Text style={styles.detectionExercise} numberOfLines={1}>
+            <Text
+              style={[
+                styles.detectionExercise,
+                { maxWidth: EXERCISE_HEADER_TITLE_MAX_WIDTH },
+              ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {displayValues.exerciseDisplayName}
             </Text>
           </View>
