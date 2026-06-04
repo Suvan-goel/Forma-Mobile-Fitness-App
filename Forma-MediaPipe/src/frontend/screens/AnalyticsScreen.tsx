@@ -11,7 +11,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Settings as SettingsIcon,
@@ -19,7 +19,6 @@ import {
   Trophy,
   Activity,
   TrendingUp,
-  ChevronRight,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -481,7 +480,6 @@ export const AnalyticsScreen: React.FC = () => {
                               </Text>
                               <Text style={styles.pbSub}>{row.best ? 'Best set' : 'No PB'}</Text>
                             </View>
-                            <ChevronRight size={16} color={COLORS.textTertiary} strokeWidth={1.7} />
                           </View>
                         ))
                       )}
@@ -545,15 +543,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(24, 26, 28, 0.78)',
     padding: 3,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.24,
-        shadowRadius: 14,
-      },
-      android: { elevation: 5 },
-    }),
   },
   topTab: {
     flex: 1,

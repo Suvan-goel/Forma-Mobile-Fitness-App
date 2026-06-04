@@ -3,7 +3,7 @@
  */
 
 import React, { memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
@@ -74,15 +74,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(24, 26, 28, 0.78)',
     padding: 3,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.24,
-        shadowRadius: 14,
-      },
-      android: { elevation: 5 },
-    }),
   },
   tab: {
     flex: 1,
