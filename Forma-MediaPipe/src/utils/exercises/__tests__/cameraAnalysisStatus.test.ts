@@ -1,13 +1,18 @@
 import {
+  cameraLiveFeedbackReadinessStatus,
   cameraStatusFromCompletedRepReadiness,
+  cameraStatusFromPoseStateReadiness,
   countOnlyCameraStatus,
+  createCameraLiveFeedbackReadinessState,
   createRecentCompletedRepCameraStatusState,
   fullFeedbackCameraStatus,
   limitedFeedbackCameraStatus,
   recentCompletedRepCameraStatus,
   resolveCameraAnalysisStatus,
   selectCameraAnalysisStatus,
+  shouldIncludeRecentCompletedRepCameraStatus,
   cameraStatusFromViewCueGating,
+  updateCameraLiveFeedbackReadinessState,
   updateRecentCompletedRepCameraStatusState,
   type CameraAnalysisStatus,
 } from '../shared/cameraAnalysisStatus';
@@ -34,6 +39,29 @@ function qualitySnapshot(
     sampleCount: 12,
     lowConfidenceFrameCount: status === 'low' || status === 'lost' ? 12 : 0,
   };
+}
+
+function poseStateReadiness(chains: Record<string, string>) {
+  return {
+    status: 'tracked',
+    chains: Object.fromEntries(
+      Object.entries(chains).map(([name, status]) => [name, { status }]),
+    ),
+  };
+}
+
+function appendLiveReadinessSamples(
+  statuses: CameraAnalysisStatus[],
+  timestamps: number[],
+) {
+  let state = createCameraLiveFeedbackReadinessState();
+  for (let i = 0; i < statuses.length; i++) {
+    state = updateCameraLiveFeedbackReadinessState(state, {
+      nowMs: timestamps[i],
+      sampleStatus: statuses[i],
+    });
+  }
+  return state;
 }
 
 describe('CameraAnalysisStatus resolver', () => {
@@ -350,5 +378,186 @@ describe('CameraAnalysisStatus resolver', () => {
     });
 
     expect(recentCompletedRepCameraStatus(state, 1300)).toBeNull();
+  });
+
+  it('keeps sustained live limited readiness after recent completed-rep hold expires', () => {
+    const recentState = updateRecentCompletedRepCameraStatusState(
+      createRecentCompletedRepCameraStatusState(),
+      {
+        nowMs: 1000,
+        completedRepStatus: limitedFeedbackCameraStatus({ source: 'completedRep' }),
+        holdMs: 1000,
+      },
+    );
+    const liveState = appendLiveReadinessSamples(
+      [
+        limitedFeedbackCameraStatus({ source: 'poseState', reason: 'pose_partial' }),
+        limitedFeedbackCameraStatus({ source: 'poseState', reason: 'pose_partial' }),
+        limitedFeedbackCameraStatus({ source: 'poseState', reason: 'pose_partial' }),
+      ],
+      [1750, 2000, 2250],
+    );
+
+    expect(recentCompletedRepCameraStatus(recentState, 2251)).toBeNull();
+    expect(cameraLiveFeedbackReadinessStatus(liveState, 2251)?.details?.feedbackMode).toBe('limited');
+  });
+
+  it('uses sustained live full readiness instead of stale recent limited readiness', () => {
+    const recentStatus = limitedFeedbackCameraStatus({ source: 'completedRep' });
+    const liveState = appendLiveReadinessSamples(
+      [
+        fullFeedbackCameraStatus('poseState'),
+        fullFeedbackCameraStatus('poseState'),
+        fullFeedbackCameraStatus('poseState'),
+      ],
+      [1000, 1250, 1500],
+    );
+    const liveStatus = cameraLiveFeedbackReadinessStatus(liveState, 1500);
+
+    expect(liveStatus?.details?.feedbackMode).toBe('full');
+    expect(shouldIncludeRecentCompletedRepCameraStatus({
+      recentStatus,
+      liveFeedbackReadinessStatus: liveStatus,
+    })).toBe(false);
+  });
+
+  it('does not let one full sample immediately override sustained limited readiness', () => {
+    const liveState = appendLiveReadinessSamples(
+      [
+        limitedFeedbackCameraStatus({ source: 'poseState' }),
+        limitedFeedbackCameraStatus({ source: 'poseState' }),
+        limitedFeedbackCameraStatus({ source: 'poseState' }),
+        fullFeedbackCameraStatus('poseState'),
+      ],
+      [1000, 1200, 1400, 1600],
+    );
+
+    expect(cameraLiveFeedbackReadinessStatus(liveState, 1600)?.details?.feedbackMode).toBe('limited');
+  });
+
+  it('does not let one limited sample immediately override sustained full readiness', () => {
+    const liveState = appendLiveReadinessSamples(
+      [
+        fullFeedbackCameraStatus('poseState'),
+        fullFeedbackCameraStatus('poseState'),
+        fullFeedbackCameraStatus('poseState'),
+        limitedFeedbackCameraStatus({ source: 'poseState' }),
+      ],
+      [1000, 1200, 1400, 1600],
+    );
+
+    expect(cameraLiveFeedbackReadinessStatus(liveState, 1600)?.details?.feedbackMode).toBe('full');
+  });
+
+  it('lets tracking lost override live readiness and recent completed-rep readiness', () => {
+    const liveState = appendLiveReadinessSamples(
+      [
+        limitedFeedbackCameraStatus({ source: 'poseState' }),
+        limitedFeedbackCameraStatus({ source: 'poseState' }),
+        limitedFeedbackCameraStatus({ source: 'poseState' }),
+      ],
+      [1000, 1250, 1500],
+    );
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('lost', ['tracking_lost']),
+      additionalStatuses: [
+        cameraLiveFeedbackReadinessStatus(liveState, 1500),
+        limitedFeedbackCameraStatus({ source: 'completedRep' }),
+      ],
+    });
+
+    expect(result.selected?.reason).toBe('tracking_lost');
+    expect(result.selected?.source).toBe('poseQuality');
+  });
+
+  it('lets critical framing override live readiness', () => {
+    const liveState = appendLiveReadinessSamples(
+      [
+        fullFeedbackCameraStatus('poseState'),
+        fullFeedbackCameraStatus('poseState'),
+        fullFeedbackCameraStatus('poseState'),
+      ],
+      [1000, 1250, 1500],
+    );
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high', ['move_camera_back']),
+      additionalStatuses: [cameraLiveFeedbackReadinessStatus(liveState, 1500)],
+    });
+
+    expect(result.selected?.category).toBe('framing');
+    expect(result.selected?.source).toBe('poseQuality');
+  });
+
+  it('keeps existing tracking-good fallback when live readiness is unavailable', () => {
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high'),
+      additionalStatuses: [
+        cameraLiveFeedbackReadinessStatus(createCameraLiveFeedbackReadinessState(), 1000),
+      ],
+    });
+
+    expect(result.selected?.reason).toBe('tracking_good');
+    expect(result.selected?.source).toBe('poseQuality');
+  });
+
+  it('uses recent completed-rep readiness only as fallback or matching reinforcement', () => {
+    const recentStatus = limitedFeedbackCameraStatus({ source: 'completedRep' });
+    const liveLimited = limitedFeedbackCameraStatus({ source: 'liveReadiness' });
+    const liveFull = fullFeedbackCameraStatus('liveReadiness');
+
+    expect(shouldIncludeRecentCompletedRepCameraStatus({
+      recentStatus,
+      liveFeedbackReadinessStatus: null,
+    })).toBe(true);
+    expect(shouldIncludeRecentCompletedRepCameraStatus({
+      recentStatus,
+      liveFeedbackReadinessStatus: liveLimited,
+    })).toBe(true);
+    expect(shouldIncludeRecentCompletedRepCameraStatus({
+      recentStatus,
+      liveFeedbackReadinessStatus: liveFull,
+    })).toBe(false);
+  });
+
+  it('maps Barbell Curl current PoseState readiness to full feedback when both arms and torso are reliable', () => {
+    const status = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Barbell Curl',
+      poseState: poseStateReadiness({
+        torso: 'reliable',
+        leftArm: 'reliable',
+        rightArm: 'reliable',
+      }),
+    });
+
+    expect(status?.details?.feedbackMode).toBe('full');
+    expect(status?.reason).toBe('barbell_curl_pose_state_full_readiness');
+  });
+
+  it('maps Barbell Curl current PoseState readiness to limited feedback with one reliable arm and torso', () => {
+    const status = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Barbell Curl',
+      poseState: poseStateReadiness({
+        torso: 'reliable',
+        leftArm: 'reliable',
+        rightArm: 'unreliable',
+      }),
+    });
+
+    expect(status?.details?.feedbackMode).toBe('limited');
+    expect(status?.details?.weakChains).toContain('rightArm');
+  });
+
+  it('maps Barbell Curl current PoseState readiness to count-only without a reliable primary arm chain', () => {
+    const status = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Barbell Curl',
+      poseState: poseStateReadiness({
+        torso: 'reliable',
+        leftArm: 'unreliable',
+        rightArm: 'partial',
+      }),
+    });
+
+    expect(status?.details?.feedbackMode).toBe('countOnly');
+    expect(status?.reason).toBe('barbell_curl_pose_state_count_only_readiness');
   });
 });

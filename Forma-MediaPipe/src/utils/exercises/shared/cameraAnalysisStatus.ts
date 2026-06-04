@@ -20,6 +20,7 @@ export type CameraAnalysisStatusSource =
   | 'exercise'
   | 'poseState'
   | 'viewCueGating'
+  | 'liveReadiness'
   | 'completedRep'
   | 'global';
 
@@ -87,6 +88,30 @@ type CompletedRepReadinessLike = {
   } | null;
 };
 
+type PoseStateReadinessLike = {
+  status?: string;
+  chains?: Record<string, { status?: string } | undefined>;
+};
+
+export interface CameraLiveFeedbackReadinessSample {
+  status: CameraAnalysisStatus;
+  timestampMs: number;
+}
+
+export interface CameraLiveFeedbackReadinessState {
+  samples: CameraLiveFeedbackReadinessSample[];
+}
+
+export interface CameraLiveFeedbackReadinessSnapshot {
+  status: CameraAnalysisStatus | null;
+  sampleCount: number;
+  windowAgeMs: number;
+  feedbackModeCounts: Partial<Record<CameraAnalysisFeedbackMode, number>>;
+  dominantFeedbackMode?: CameraAnalysisFeedbackMode;
+  hasEnoughSamples: boolean;
+  reason?: string;
+}
+
 export interface RecentCompletedRepCameraStatusState {
   status: CameraAnalysisStatus | null;
   updatedAt: number;
@@ -110,6 +135,10 @@ export const CAMERA_ANALYSIS_STATUS_PRIORITY = {
 
 export const RECENT_COMPLETED_REP_CAMERA_STATUS_HOLD_MS = 1800;
 export const RECENT_COMPLETED_REP_FULL_READINESS_CLEAR_FRAMES = 3;
+export const LIVE_FEEDBACK_READINESS_WINDOW_MS = 1000;
+export const LIVE_FEEDBACK_READINESS_MIN_SAMPLES = 3;
+export const LIVE_FEEDBACK_READINESS_DOMINANCE_RATIO = 0.6;
+export const LIVE_FEEDBACK_READINESS_MAX_SAMPLES = 8;
 
 const FRAMING_WARNINGS = new Set<PoseQualityWarning>([
   'move_camera_back',
@@ -159,6 +188,112 @@ function shouldUseKeyJointMessage(
     reason.includes('tracking_quality') ||
     reason.includes('not_scoreable')
   );
+}
+
+function feedbackModeOf(status?: CameraAnalysisStatus | null): CameraAnalysisFeedbackMode | null {
+  return status?.details?.feedbackMode ?? null;
+}
+
+function isUsableChainStatus(status?: string): boolean {
+  return status === 'reliable' || status === 'partial';
+}
+
+function modeSeverity(mode: CameraAnalysisFeedbackMode): number {
+  switch (mode) {
+    case 'unavailable':
+      return 4;
+    case 'countOnly':
+      return 3;
+    case 'limited':
+      return 2;
+    case 'full':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function dominantFeedbackMode(
+  samples: CameraLiveFeedbackReadinessSample[],
+): { mode: CameraAnalysisFeedbackMode; count: number } | null {
+  const counts: Partial<Record<CameraAnalysisFeedbackMode, number>> = {};
+  for (const sample of samples) {
+    const mode = feedbackModeOf(sample.status);
+    if (!mode) continue;
+    counts[mode] = (counts[mode] ?? 0) + 1;
+  }
+
+  let dominant: { mode: CameraAnalysisFeedbackMode; count: number } | null = null;
+  for (const [mode, count] of Object.entries(counts) as Array<[CameraAnalysisFeedbackMode, number]>) {
+    if (
+      !dominant ||
+      count > dominant.count ||
+      (count === dominant.count && modeSeverity(mode) > modeSeverity(dominant.mode))
+    ) {
+      dominant = { mode, count };
+    }
+  }
+  return dominant;
+}
+
+function aggregateDetailsForMode(
+  samples: CameraLiveFeedbackReadinessSample[],
+  mode: CameraAnalysisFeedbackMode,
+): CameraAnalysisStatus['details'] {
+  const matching = samples.filter((sample) => feedbackModeOf(sample.status) === mode);
+  const latest = matching[matching.length - 1]?.status;
+  return {
+    feedbackMode: mode,
+    safeCueFamilies: uniqueStrings(matching.flatMap(sample => sample.status.details?.safeCueFamilies ?? [])),
+    blockedCueFamilies: uniqueStrings(matching.flatMap(sample => sample.status.details?.blockedCueFamilies ?? [])),
+    weakChains: uniqueStrings(matching.flatMap(sample => sample.status.details?.weakChains ?? [])),
+    usableChains: uniqueStrings(matching.flatMap(sample => sample.status.details?.usableChains ?? [])),
+    viewRequired: latest?.details?.viewRequired,
+    viewCurrent: latest?.details?.viewCurrent,
+  };
+}
+
+function statusFromDominantLiveMode(
+  samples: CameraLiveFeedbackReadinessSample[],
+  mode: CameraAnalysisFeedbackMode,
+): CameraAnalysisStatus | null {
+  const matching = samples.filter((sample) => feedbackModeOf(sample.status) === mode);
+  const latest = matching[matching.length - 1]?.status;
+  if (!latest) return null;
+  const details = aggregateDetailsForMode(samples, mode);
+  const reason = latest.reason ?? `live_readiness_${mode}`;
+
+  if (mode === 'full') {
+    return {
+      ...fullFeedbackCameraStatus('liveReadiness', reason),
+      details,
+    };
+  }
+
+  if (mode === 'limited') {
+    return limitedFeedbackCameraStatus({
+      source: 'liveReadiness',
+      reason,
+      message: latest.message,
+      details,
+    });
+  }
+
+  if (mode === 'countOnly') {
+    return countOnlyCameraStatus({
+      source: 'liveReadiness',
+      reason,
+      message: latest.message,
+      details,
+    });
+  }
+
+  return {
+    ...latest,
+    source: 'liveReadiness',
+    reason,
+    details,
+  };
 }
 
 function exerciseStatusAllowsUsefulFeedback(status?: CameraAnalysisStatus | null): boolean {
@@ -420,6 +555,166 @@ export function cameraStatusFromViewCueGating(args: {
     ...fullFeedbackCameraStatus(source, viewCueGating.finalScorableReason ?? 'full_feedback_available'),
     details,
   };
+}
+
+export function cameraStatusFromPoseStateReadiness(args: {
+  exerciseName?: string | null;
+  poseState?: PoseStateReadinessLike | null;
+  source?: CameraAnalysisStatusSource;
+}): CameraAnalysisStatus | null {
+  const { exerciseName, poseState, source = 'poseState' } = args;
+  if (!exerciseName || !poseState?.chains) return null;
+  if (exerciseName.trim().toLowerCase() !== 'barbell curl') return null;
+
+  const torsoStatus = poseState.chains.torso?.status;
+  const leftArmStatus = poseState.chains.leftArm?.status;
+  const rightArmStatus = poseState.chains.rightArm?.status;
+  const reliableArms = uniqueStrings([
+    leftArmStatus === 'reliable' ? 'leftArm' : undefined,
+    rightArmStatus === 'reliable' ? 'rightArm' : undefined,
+  ]);
+  const weakChains = uniqueStrings([
+    torsoStatus !== 'reliable' ? 'torso' : undefined,
+    leftArmStatus !== 'reliable' ? 'leftArm' : undefined,
+    rightArmStatus !== 'reliable' ? 'rightArm' : undefined,
+  ]);
+  const torsoUsable = isUsableChainStatus(torsoStatus);
+  const details = {
+    feedbackMode: 'full' as CameraAnalysisFeedbackMode,
+    usableChains: uniqueStrings([
+      torsoUsable ? 'torso' : undefined,
+      ...reliableArms,
+    ]),
+    weakChains,
+  };
+
+  if (torsoStatus === 'reliable' && reliableArms.length === 2) {
+    return {
+      ...fullFeedbackCameraStatus(source, 'barbell_curl_pose_state_full_readiness'),
+      details,
+    };
+  }
+
+  if (torsoUsable && reliableArms.length >= 1) {
+    return limitedFeedbackCameraStatus({
+      source,
+      reason: 'barbell_curl_pose_state_partial_arm_readiness',
+      message: 'Limited feedback - keep key joints visible',
+      details: {
+        ...details,
+        feedbackMode: 'limited',
+      },
+    });
+  }
+
+  return countOnlyCameraStatus({
+    source,
+    reason: 'barbell_curl_pose_state_count_only_readiness',
+    message: 'Count only - keep key joints visible',
+    details: {
+      ...details,
+      feedbackMode: 'countOnly',
+    },
+  });
+}
+
+export function createCameraLiveFeedbackReadinessState(): CameraLiveFeedbackReadinessState {
+  return {
+    samples: [],
+  };
+}
+
+export function updateCameraLiveFeedbackReadinessState(
+  state: CameraLiveFeedbackReadinessState,
+  args: {
+    nowMs: number;
+    sampleStatus?: CameraAnalysisStatus | null;
+    windowMs?: number;
+    maxSamples?: number;
+  },
+): CameraLiveFeedbackReadinessState {
+  const windowMs = args.windowMs ?? LIVE_FEEDBACK_READINESS_WINDOW_MS;
+  const maxSamples = args.maxSamples ?? LIVE_FEEDBACK_READINESS_MAX_SAMPLES;
+  const cutoffMs = args.nowMs - windowMs;
+  const samples = state.samples.filter(sample => sample.timestampMs >= cutoffMs);
+
+  if (args.sampleStatus) {
+    samples.push({
+      status: args.sampleStatus,
+      timestampMs: args.nowMs,
+    });
+  }
+
+  return {
+    samples: samples.slice(-maxSamples),
+  };
+}
+
+export function summarizeCameraLiveFeedbackReadinessState(
+  state: CameraLiveFeedbackReadinessState,
+  nowMs: number,
+  args: {
+    windowMs?: number;
+    minSamples?: number;
+    dominanceRatio?: number;
+  } = {},
+): CameraLiveFeedbackReadinessSnapshot {
+  const windowMs = args.windowMs ?? LIVE_FEEDBACK_READINESS_WINDOW_MS;
+  const minSamples = args.minSamples ?? LIVE_FEEDBACK_READINESS_MIN_SAMPLES;
+  const dominanceRatio = args.dominanceRatio ?? LIVE_FEEDBACK_READINESS_DOMINANCE_RATIO;
+  const cutoffMs = nowMs - windowMs;
+  const samples = state.samples.filter(sample => sample.timestampMs >= cutoffMs);
+  const sampleCount = samples.length;
+  const feedbackModeCounts: Partial<Record<CameraAnalysisFeedbackMode, number>> = {};
+  for (const sample of samples) {
+    const mode = feedbackModeOf(sample.status);
+    if (mode) feedbackModeCounts[mode] = (feedbackModeCounts[mode] ?? 0) + 1;
+  }
+  const dominant = dominantFeedbackMode(samples);
+  const hasEnoughSamples = Boolean(
+    dominant &&
+    sampleCount >= minSamples &&
+    dominant.count / sampleCount >= dominanceRatio,
+  );
+  const status = hasEnoughSamples && dominant
+    ? statusFromDominantLiveMode(samples, dominant.mode)
+    : null;
+  const oldestTimestamp = samples[0]?.timestampMs ?? nowMs;
+
+  return {
+    status,
+    sampleCount,
+    windowAgeMs: Math.max(0, nowMs - oldestTimestamp),
+    feedbackModeCounts,
+    dominantFeedbackMode: dominant?.mode,
+    hasEnoughSamples,
+    reason: status?.reason,
+  };
+}
+
+export function cameraLiveFeedbackReadinessStatus(
+  state: CameraLiveFeedbackReadinessState,
+  nowMs: number,
+  args: {
+    windowMs?: number;
+    minSamples?: number;
+    dominanceRatio?: number;
+  } = {},
+): CameraAnalysisStatus | null {
+  return summarizeCameraLiveFeedbackReadinessState(state, nowMs, args).status;
+}
+
+export function shouldIncludeRecentCompletedRepCameraStatus(args: {
+  recentStatus?: CameraAnalysisStatus | null;
+  liveFeedbackReadinessStatus?: CameraAnalysisStatus | null;
+}): boolean {
+  const recentMode = feedbackModeOf(args.recentStatus);
+  if (!args.recentStatus || !recentMode) return false;
+
+  const liveMode = feedbackModeOf(args.liveFeedbackReadinessStatus);
+  if (!args.liveFeedbackReadinessStatus || !liveMode) return true;
+
+  return liveMode === recentMode;
 }
 
 export function cameraStatusFromCompletedRepReadiness(args: {

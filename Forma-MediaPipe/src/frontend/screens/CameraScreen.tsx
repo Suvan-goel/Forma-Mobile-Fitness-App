@@ -38,14 +38,21 @@ import {
   PoseQualityTracker,
   RepQualityWindowAccumulator,
   buildDisplayedPoseQuality,
+  cameraLiveFeedbackReadinessStatus,
   cameraStatusFromCompletedRepReadiness,
+  cameraStatusFromPoseStateReadiness,
+  createCameraLiveFeedbackReadinessState,
   createRecentCompletedRepCameraStatusState,
   resolveCameraAnalysisStatus,
   getUnscoredRepFeedback,
   getPoseQualityMessage,
   recentCompletedRepCameraStatus,
   resolveExerciseQualityProfile,
+  selectCameraAnalysisStatus,
+  shouldIncludeRecentCompletedRepCameraStatus,
+  summarizeCameraLiveFeedbackReadinessState,
   summarizeSetTrackingQuality,
+  updateCameraLiveFeedbackReadinessState,
   updateRecentCompletedRepCameraStatusState,
 } from '../../utils/exercises';
 import type {
@@ -55,6 +62,7 @@ import type {
   PoseQualityWarning,
   RepTrackingQuality,
   SetTrackingQualitySummary,
+  CameraLiveFeedbackReadinessState,
   CameraAnalysisStatus,
   CameraAnalysisStatusResolution,
   RecentCompletedRepCameraStatusState,
@@ -270,6 +278,25 @@ function summarizeRecentCompletedRepStatusForLog(
     fullReadinessFrameCount: state.fullReadinessFrameCount,
     selected: selected === status,
     selectedOverLiveReadiness: selected === status && status.details?.feedbackMode !== 'full',
+  };
+}
+
+function summarizeLiveFeedbackReadinessForLog(
+  state: CameraLiveFeedbackReadinessState,
+  selected: CameraAnalysisStatus | null,
+  nowMs: number,
+) {
+  const snapshot = summarizeCameraLiveFeedbackReadinessState(state, nowMs);
+  const statusKey = cameraAnalysisStatusKey(snapshot.status);
+  return {
+    status: snapshot.status ? formatCameraAnalysisStatusForLog(snapshot.status) : null,
+    selected: snapshot.status ? cameraAnalysisStatusKey(selected) === statusKey : false,
+    sampleCount: snapshot.sampleCount,
+    windowAgeMs: snapshot.windowAgeMs,
+    feedbackModeCounts: snapshot.feedbackModeCounts,
+    dominantFeedbackMode: snapshot.dominantFeedbackMode,
+    hasEnoughSamples: snapshot.hasEnoughSamples,
+    reason: snapshot.reason,
   };
 }
 
@@ -733,6 +760,7 @@ export const CameraScreen: React.FC = () => {
   const topPillAnalysisStatusSmoothingRef = useRef<{ key: string; count: number }>({ key: 'none', count: 0 });
   const lastCameraAnalysisStatusLogKeyRef = useRef('none');
   const cameraAnalysisStatusRef = useRef<CameraAnalysisStatus | null>(null);
+  const liveFeedbackReadinessRef = useRef(createCameraLiveFeedbackReadinessState());
   const recentCompletedRepCameraStatusRef = useRef(createRecentCompletedRepCameraStatusState());
   const cameraPerfRef = useRef(createCameraPerfAccumulator());
 
@@ -798,6 +826,7 @@ export const CameraScreen: React.FC = () => {
     lastCameraAnalysisStatusLogKeyRef.current = 'none';
     lastCameraAnalysisStatusUpdateTimeRef.current = 0;
     cameraAnalysisStatusRef.current = null;
+    liveFeedbackReadinessRef.current = createCameraLiveFeedbackReadinessState();
     recentCompletedRepCameraStatusRef.current = createRecentCompletedRepCameraStatusState();
     cameraPerfRef.current = createCameraPerfAccumulator();
     lastTTSFeedbackTimestampRef.current = null;
@@ -910,6 +939,7 @@ export const CameraScreen: React.FC = () => {
     diagnostics?: {
       poseQuality?: PoseQualitySnapshot;
       exerciseStatus?: CameraAnalysisStatus | null;
+      liveFeedbackReadiness?: CameraLiveFeedbackReadinessState;
       recentCompletedRepStatus?: RecentCompletedRepCameraStatusState;
       nowMs?: number;
       poseState?: PoseState;
@@ -920,6 +950,20 @@ export const CameraScreen: React.FC = () => {
     const logKey = cameraAnalysisStatusKey(resolution.selected);
     if (logKey === lastCameraAnalysisStatusLogKeyRef.current) return;
     lastCameraAnalysisStatusLogKeyRef.current = logKey;
+    const liveFeedbackReadinessLog = diagnostics?.liveFeedbackReadiness
+      ? summarizeLiveFeedbackReadinessForLog(
+          diagnostics.liveFeedbackReadiness,
+          resolution.selected,
+          diagnostics.nowMs ?? Date.now(),
+        )
+      : null;
+    const recentCompletedRepStatusLog = diagnostics?.recentCompletedRepStatus
+      ? summarizeRecentCompletedRepStatusForLog(
+          diagnostics.recentCompletedRepStatus,
+          resolution.selected,
+          diagnostics.nowMs ?? Date.now(),
+        )
+      : null;
     console.log('[CameraAnalysisStatus]', {
       selected: formatCameraAnalysisStatusForLog(resolution.selected),
       competing: resolution.candidates
@@ -937,15 +981,15 @@ export const CameraScreen: React.FC = () => {
       exerciseLiveAnalysisStatus: diagnostics?.exerciseStatus
         ? formatCameraAnalysisStatusForLog(diagnostics.exerciseStatus)
         : null,
-      recentCompletedRepStatus: diagnostics?.recentCompletedRepStatus
-        ? summarizeRecentCompletedRepStatusForLog(
-            diagnostics.recentCompletedRepStatus,
-            resolution.selected,
-            diagnostics.nowMs ?? Date.now(),
-          )
-        : null,
+      liveFeedbackReadiness: liveFeedbackReadinessLog,
+      recentCompletedRepStatus: recentCompletedRepStatusLog,
       poseState: summarizePoseStateForStatusLog(diagnostics?.poseState),
       validSubject: summarizeValidSubjectForStatusLog(diagnostics?.validSubject),
+      trackingGoodFallback: resolution.selected?.reason === 'tracking_good' &&
+        !liveFeedbackReadinessLog?.status &&
+        !diagnostics?.exerciseStatus
+        ? true
+        : undefined,
     });
   }, []);
 
@@ -1130,6 +1174,25 @@ export const CameraScreen: React.FC = () => {
         } else {
           topPillAnalysisStatusHoldRef.current = { status: null, updatedAt: 0 };
         }
+        const poseStateReadinessStatus = cameraStatusFromPoseStateReadiness({
+          exerciseName: exerciseNameFromRoute,
+          poseState,
+        });
+        const currentLiveReadinessSample = selectCameraAnalysisStatus([
+          completedNewTrackedRep ? null : rawExerciseStatus,
+          poseStateReadinessStatus,
+        ]);
+        liveFeedbackReadinessRef.current = updateCameraLiveFeedbackReadinessState(
+          liveFeedbackReadinessRef.current,
+          {
+            nowMs: now,
+            sampleStatus: currentLiveReadinessSample,
+          },
+        );
+        const liveFeedbackReadinessStatus = cameraLiveFeedbackReadinessStatus(
+          liveFeedbackReadinessRef.current,
+          now,
+        );
         const completedRepReadinessStatus = completedNewTrackedRep
           ? cameraStatusFromCompletedRepReadiness({
               repResult: newState.lastRepResult,
@@ -1141,26 +1204,34 @@ export const CameraScreen: React.FC = () => {
           {
             nowMs: now,
             completedRepStatus: completedRepReadinessStatus,
-            currentReadinessStatus: stableExerciseStatus,
+            currentReadinessStatus: liveFeedbackReadinessStatus,
           },
         );
         const recentCompletedRepStatus = recentCompletedRepCameraStatus(
           recentCompletedRepCameraStatusRef.current,
           now,
         );
+        const recentCompletedRepResolverStatus = shouldIncludeRecentCompletedRepCameraStatus({
+          recentStatus: recentCompletedRepStatus,
+          liveFeedbackReadinessStatus,
+        })
+          ? recentCompletedRepStatus
+          : null;
+        const exerciseStatusForResolver = liveFeedbackReadinessStatus ? null : stableExerciseStatus;
         displayedQuality = buildDisplayedPoseQuality(quality, stableTopPillWarnings);
         const cameraStatusResolution = resolveCameraAnalysisStatus({
           poseQuality: quality,
           exerciseWarnings: stableTopPillWarnings,
-          exerciseStatus: stableExerciseStatus,
+          exerciseStatus: exerciseStatusForResolver,
           poseStateStatus: validSubjectStatus,
-          additionalStatuses: [recentCompletedRepStatus],
+          additionalStatuses: [liveFeedbackReadinessStatus, recentCompletedRepResolverStatus],
         });
         selectedCameraAnalysisStatus = cameraStatusResolution.selected;
         cameraAnalysisStatusRef.current = selectedCameraAnalysisStatus;
         logCameraAnalysisStatusResolution(cameraStatusResolution, {
           poseQuality: quality,
           exerciseStatus: stableExerciseStatus,
+          liveFeedbackReadiness: liveFeedbackReadinessRef.current,
           recentCompletedRepStatus: recentCompletedRepCameraStatusRef.current,
           nowMs: now,
           poseState,
@@ -1629,6 +1700,7 @@ export const CameraScreen: React.FC = () => {
       topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
       lastCameraAnalysisStatusLogKeyRef.current = 'none';
       lastCameraAnalysisStatusUpdateTimeRef.current = 0;
+      liveFeedbackReadinessRef.current = createCameraLiveFeedbackReadinessState();
       recentCompletedRepCameraStatusRef.current = createRecentCompletedRepCameraStatusState();
       cameraPerfRef.current = createCameraPerfAccumulator();
       poseFrameGapTrackerRef.current.reset();

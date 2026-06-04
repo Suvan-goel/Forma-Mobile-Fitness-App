@@ -105,17 +105,23 @@ export {
 } from './shared/poseQuality';
 export {
   CAMERA_ANALYSIS_STATUS_PRIORITY,
+  cameraLiveFeedbackReadinessStatus,
   cameraStatusFromPoseQuality,
   cameraStatusFromPoseQualityWarning,
   cameraStatusFromCompletedRepReadiness,
+  cameraStatusFromPoseStateReadiness,
   cameraStatusFromViewCueGating,
   countOnlyCameraStatus,
+  createCameraLiveFeedbackReadinessState,
   createRecentCompletedRepCameraStatusState,
   fullFeedbackCameraStatus,
   limitedFeedbackCameraStatus,
   recentCompletedRepCameraStatus,
   resolveCameraAnalysisStatus,
   selectCameraAnalysisStatus,
+  shouldIncludeRecentCompletedRepCameraStatus,
+  summarizeCameraLiveFeedbackReadinessState,
+  updateCameraLiveFeedbackReadinessState,
   updateRecentCompletedRepCameraStatusState,
 } from './shared/cameraAnalysisStatus';
 export type {
@@ -130,6 +136,8 @@ export type {
 } from './shared/poseQuality';
 export type {
   CameraAnalysisFeedbackMode,
+  CameraLiveFeedbackReadinessState,
+  CameraLiveFeedbackReadinessSnapshot,
   CameraAnalysisStatus,
   CameraAnalysisStatusCategory,
   CameraAnalysisStatusLevel,
