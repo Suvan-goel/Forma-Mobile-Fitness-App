@@ -41,14 +41,16 @@ import {
   cameraLiveFeedbackReadinessStatus,
   cameraStatusFromCompletedRepReadiness,
   cameraStatusFromPoseStateReadiness,
+  cameraStatusFromSilentPoseGap,
   createCameraLiveFeedbackReadinessState,
   createRecentCompletedRepCameraStatusState,
+  LIVE_CAMERA_STATUS_SILENT_POSE_GAP_THRESHOLD_MS,
   resolveCameraAnalysisStatus,
   getUnscoredRepFeedback,
   getPoseQualityMessage,
   recentCompletedRepCameraStatus,
   resolveExerciseQualityProfile,
-  selectCameraAnalysisStatus,
+  selectLiveFeedbackReadinessSample,
   shouldIncludeRecentCompletedRepCameraStatus,
   summarizeCameraLiveFeedbackReadinessState,
   summarizeSetTrackingQuality,
@@ -129,6 +131,8 @@ const TRACKING_TTS_LOW_FRAME_THRESHOLD = 18;
 const TOP_PILL_WARNING_STABLE_FRAMES = 3;
 const TOP_PILL_WARNING_HOLD_MS = 1000;
 const CAMERA_ANALYSIS_STATUS_UPDATE_INTERVAL_MS = 250;
+const CAMERA_STATUS_HEARTBEAT_INTERVAL_MS = 200;
+const CAMERA_STATUS_SILENT_POSE_GAP_MS = LIVE_CAMERA_STATUS_SILENT_POSE_GAP_THRESHOLD_MS;
 const CAMERA_PERF_LOG_ANALYZED_INTERVAL = 300;
 const VALID_SUBJECT_INVALID_FRAME_THRESHOLD = 12;
 const POSE_PARSER_DIAGNOSTICS_DEV_FLAG = process.env.EXPO_PUBLIC_POSE_PARSER_DIAGNOSTICS === '1';
@@ -177,8 +181,6 @@ function cameraAnalysisStatusKey(status: CameraAnalysisStatus | null | undefined
   return [
     status.level,
     status.category,
-    status.source,
-    status.reason ?? '',
     status.message,
     status.details?.feedbackMode ?? '',
   ].join('|');
@@ -307,6 +309,8 @@ type CameraPerfAccumulator = {
   noPose: number;
   exerciseUpdates: number;
   statusUpdates: number;
+  statusHeartbeatTicks: number;
+  silentGapStatusUpdates: number;
   parseMs: number;
   poseStateMs: number;
   validSubjectMs: number;
@@ -330,6 +334,8 @@ function createCameraPerfAccumulator(): CameraPerfAccumulator {
     noPose: 0,
     exerciseUpdates: 0,
     statusUpdates: 0,
+    statusHeartbeatTicks: 0,
+    silentGapStatusUpdates: 0,
     parseMs: 0,
     poseStateMs: 0,
     validSubjectMs: 0,
@@ -410,7 +416,7 @@ function logCameraPerfSummary(
     ? perf.frameIntervalMs / perf.frameIntervalSamples
     : 0;
   console.log(
-    `[CameraPerf] reason=${reason} frames=${perf.frames} analyzed=${perf.analyzed} skippedThrottle=${perf.skippedThrottle} noPose=${perf.noPose} exerciseUpdates=${perf.exerciseUpdates} statusUpdates=${perf.statusUpdates} avgTotalMs=${formatPerfMs(perf.totalMs / analyzed)} p95TotalMs=${formatPerfMs(percentile(perf.totalSamples, 0.95))} maxTotalMs=${formatPerfMs(perf.maxTotalMs)} avgParseMs=${formatPerfMs(perf.parseMs / analyzed)} avgPoseStateMs=${formatPerfMs(perf.poseStateMs / analyzed)} avgValidSubjectMs=${formatPerfMs(perf.validSubjectMs / analyzed)} avgQualityMs=${formatPerfMs(perf.qualityMs / analyzed)} avgExerciseMs=${formatPerfMs(perf.exerciseMs / analyzed)} avgStatusMs=${formatPerfMs(perf.statusMs / analyzed)} avgFrameIntervalMs=${formatPerfMs(avgFrameInterval)}`,
+    `[CameraPerf] reason=${reason} frames=${perf.frames} analyzed=${perf.analyzed} skippedThrottle=${perf.skippedThrottle} noPose=${perf.noPose} exerciseUpdates=${perf.exerciseUpdates} statusUpdates=${perf.statusUpdates} statusHeartbeatTicks=${perf.statusHeartbeatTicks} silentGapStatusUpdates=${perf.silentGapStatusUpdates} avgTotalMs=${formatPerfMs(perf.totalMs / analyzed)} p95TotalMs=${formatPerfMs(percentile(perf.totalSamples, 0.95))} maxTotalMs=${formatPerfMs(perf.maxTotalMs)} avgParseMs=${formatPerfMs(perf.parseMs / analyzed)} avgPoseStateMs=${formatPerfMs(perf.poseStateMs / analyzed)} avgValidSubjectMs=${formatPerfMs(perf.validSubjectMs / analyzed)} avgQualityMs=${formatPerfMs(perf.qualityMs / analyzed)} avgExerciseMs=${formatPerfMs(perf.exerciseMs / analyzed)} avgStatusMs=${formatPerfMs(perf.statusMs / analyzed)} avgFrameIntervalMs=${formatPerfMs(avgFrameInterval)}`,
   );
 }
 
@@ -729,6 +735,8 @@ export const CameraScreen: React.FC = () => {
   const repCountRef = useRef(repCount);
   const currentExerciseRef = useRef(currentExercise);
   const lastDetectionTimeRef = useRef(0);
+  const lastPoseEventTimestampRef = useRef(0);
+  const lastValidPoseTimestampRef = useRef(0);
   const lastUIUpdateTimeRef = useRef(0);
   const lastCameraAnalysisStatusUpdateTimeRef = useRef(0);
   const lastTTSFeedbackTimestampRef = useRef<number | null>(null);
@@ -760,6 +768,7 @@ export const CameraScreen: React.FC = () => {
   const topPillAnalysisStatusSmoothingRef = useRef<{ key: string; count: number }>({ key: 'none', count: 0 });
   const lastCameraAnalysisStatusLogKeyRef = useRef('none');
   const cameraAnalysisStatusRef = useRef<CameraAnalysisStatus | null>(null);
+  const heartbeatSyntheticTrackingLostActiveRef = useRef(false);
   const liveFeedbackReadinessRef = useRef(createCameraLiveFeedbackReadinessState());
   const recentCompletedRepCameraStatusRef = useRef(createRecentCompletedRepCameraStatusState());
   const cameraPerfRef = useRef(createCameraPerfAccumulator());
@@ -795,6 +804,19 @@ export const CameraScreen: React.FC = () => {
     debugModeRef.current = debugMode;
   }, [debugMode]);
   useEffect(() => {
+    if (!isRecording && !debugMode) {
+      heartbeatSyntheticTrackingLostActiveRef.current = false;
+      return;
+    }
+    const now = Date.now();
+    if (lastPoseEventTimestampRef.current <= 0) {
+      lastPoseEventTimestampRef.current = now;
+    }
+    if (lastValidPoseTimestampRef.current <= 0) {
+      lastValidPoseTimestampRef.current = now;
+    }
+  }, [debugMode, isRecording]);
+  useEffect(() => {
     poseParserDiagnosticsActiveRef.current = shouldObservePoseParserDiagnostics(debugMode);
     if (!poseParserDiagnosticsActiveRef.current) {
       poseParserDiagnosticsRef.current.reset();
@@ -825,6 +847,9 @@ export const CameraScreen: React.FC = () => {
     topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
     lastCameraAnalysisStatusLogKeyRef.current = 'none';
     lastCameraAnalysisStatusUpdateTimeRef.current = 0;
+    lastPoseEventTimestampRef.current = 0;
+    lastValidPoseTimestampRef.current = 0;
+    heartbeatSyntheticTrackingLostActiveRef.current = false;
     cameraAnalysisStatusRef.current = null;
     liveFeedbackReadinessRef.current = createCameraLiveFeedbackReadinessState();
     recentCompletedRepCameraStatusRef.current = createRecentCompletedRepCameraStatusState();
@@ -944,6 +969,13 @@ export const CameraScreen: React.FC = () => {
       nowMs?: number;
       poseState?: PoseState;
       validSubject?: ValidHumanSubjectTrackingResult;
+      heartbeat?: {
+        lastPoseAgeMs: number;
+        lastPoseEventAgeMs?: number;
+        thresholdMs: number;
+        reason?: string;
+        synthetic: boolean;
+      };
     },
   ) => {
     if (!__DEV__ || !resolution.selected) return;
@@ -985,6 +1017,7 @@ export const CameraScreen: React.FC = () => {
       recentCompletedRepStatus: recentCompletedRepStatusLog,
       poseState: summarizePoseStateForStatusLog(diagnostics?.poseState),
       validSubject: summarizeValidSubjectForStatusLog(diagnostics?.validSubject),
+      heartbeat: diagnostics?.heartbeat,
       trackingGoodFallback: resolution.selected?.reason === 'tracking_good' &&
         !liveFeedbackReadinessLog?.status &&
         !diagnostics?.exerciseStatus
@@ -993,12 +1026,88 @@ export const CameraScreen: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      const active = isRecordingRef.current || debugModeRef.current;
+      if (!active || (isPausedRef.current && !debugModeRef.current)) return;
+
+      const now = Date.now();
+      const perf = cameraPerfRef.current;
+      if (__DEV__) {
+        perf.statusHeartbeatTicks++;
+      }
+
+      const lastValidPoseAt = lastValidPoseTimestampRef.current;
+      if (lastValidPoseAt <= 0) return;
+
+      const lastPoseAgeMs = now - lastValidPoseAt;
+      const silentGapStatus = cameraStatusFromSilentPoseGap({
+        lastPoseAgeMs,
+        thresholdMs: CAMERA_STATUS_SILENT_POSE_GAP_MS,
+      });
+      if (!silentGapStatus) {
+        heartbeatSyntheticTrackingLostActiveRef.current = false;
+        return;
+      }
+
+      const currentStatus = cameraAnalysisStatusRef.current;
+      const alreadyShowingTrackingLost =
+        cameraAnalysisStatusKey(currentStatus) === cameraAnalysisStatusKey(silentGapStatus);
+      const firstSilentGapUpdate = !heartbeatSyntheticTrackingLostActiveRef.current;
+      if (!firstSilentGapUpdate && alreadyShowingTrackingLost) return;
+
+      heartbeatSyntheticTrackingLostActiveRef.current = true;
+      if (__DEV__) {
+        perf.silentGapStatusUpdates++;
+      }
+
+      const lastPoseEventAgeMs = lastPoseEventTimestampRef.current > 0
+        ? now - lastPoseEventTimestampRef.current
+        : undefined;
+      const cameraStatusResolution = resolveCameraAnalysisStatus({
+        poseStateStatus: silentGapStatus,
+        additionalStatuses: [currentStatus],
+      });
+      cameraAnalysisStatusRef.current = cameraStatusResolution.selected;
+      const pending = pendingUIStateRef.current ?? {};
+      pending.analysisStatus = cameraStatusResolution.selected;
+      pendingUIStateRef.current = pending;
+      setCameraAnalysisStatus(cameraStatusResolution.selected);
+
+      if (__DEV__) {
+        console.log('[CameraStatusHeartbeat]', {
+          lastPoseAgeMs: Math.round(lastPoseAgeMs),
+          lastPoseEventAgeMs: lastPoseEventAgeMs === undefined ? undefined : Math.round(lastPoseEventAgeMs),
+          selected: cameraStatusResolution.selected?.message,
+          reason: silentGapStatus.reason,
+          thresholdMs: CAMERA_STATUS_SILENT_POSE_GAP_MS,
+        });
+      }
+      logCameraAnalysisStatusResolution(cameraStatusResolution, {
+        nowMs: now,
+        heartbeat: {
+          lastPoseAgeMs: Math.round(lastPoseAgeMs),
+          lastPoseEventAgeMs: lastPoseEventAgeMs === undefined ? undefined : Math.round(lastPoseEventAgeMs),
+          thresholdMs: CAMERA_STATUS_SILENT_POSE_GAP_MS,
+          reason: silentGapStatus.reason,
+          synthetic: true,
+        },
+      });
+      if (__DEV__) {
+        logCameraPerfSummary(perf, 'status-heartbeat');
+      }
+    }, CAMERA_STATUS_HEARTBEAT_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [logCameraAnalysisStatusResolution]);
+
   // Handle landmark data from MediaPipe - throttle analysis, batch UI updates. Run when recording or when debug mode (to show angles).
   const handleLandmark = useCallback((data: any) => {
     if (!isRecordingRef.current && !debugModeRef.current) return;
     if (isPausedRef.current && !debugModeRef.current) return;
 
     const now = Date.now();
+    lastPoseEventTimestampRef.current = now;
     const perf = cameraPerfRef.current;
     const perfEnabled = __DEV__;
     if (perfEnabled) perf.frames++;
@@ -1043,6 +1152,8 @@ export const CameraScreen: React.FC = () => {
       }
       return;
     }
+    lastValidPoseTimestampRef.current = now;
+    heartbeatSyntheticTrackingLostActiveRef.current = false;
     const frameGap = poseFrameGapTrackerRef.current.observe(converted.timestampMs ?? now);
     markMs = perfEnabled ? cameraPerfNow() : 0;
     const poseState = buildPoseState(converted, {
@@ -1178,10 +1289,10 @@ export const CameraScreen: React.FC = () => {
           exerciseName: exerciseNameFromRoute,
           poseState,
         });
-        const currentLiveReadinessSample = selectCameraAnalysisStatus([
-          completedNewTrackedRep ? null : rawExerciseStatus,
+        const currentLiveReadinessSample = selectLiveFeedbackReadinessSample({
+          exerciseStatus: completedNewTrackedRep ? null : rawExerciseStatus,
           poseStateReadinessStatus,
-        ]);
+        });
         liveFeedbackReadinessRef.current = updateCameraLiveFeedbackReadinessState(
           liveFeedbackReadinessRef.current,
           {
@@ -1700,6 +1811,10 @@ export const CameraScreen: React.FC = () => {
       topPillAnalysisStatusSmoothingRef.current = { key: 'none', count: 0 };
       lastCameraAnalysisStatusLogKeyRef.current = 'none';
       lastCameraAnalysisStatusUpdateTimeRef.current = 0;
+      const recordingStartMs = Date.now();
+      lastPoseEventTimestampRef.current = recordingStartMs;
+      lastValidPoseTimestampRef.current = recordingStartMs;
+      heartbeatSyntheticTrackingLostActiveRef.current = false;
       liveFeedbackReadinessRef.current = createCameraLiveFeedbackReadinessState();
       recentCompletedRepCameraStatusRef.current = createRecentCompletedRepCameraStatusState();
       cameraPerfRef.current = createCameraPerfAccumulator();

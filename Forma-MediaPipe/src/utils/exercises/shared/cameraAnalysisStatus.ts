@@ -139,6 +139,7 @@ export const LIVE_FEEDBACK_READINESS_WINDOW_MS = 1000;
 export const LIVE_FEEDBACK_READINESS_MIN_SAMPLES = 3;
 export const LIVE_FEEDBACK_READINESS_DOMINANCE_RATIO = 0.6;
 export const LIVE_FEEDBACK_READINESS_MAX_SAMPLES = 8;
+export const LIVE_CAMERA_STATUS_SILENT_POSE_GAP_THRESHOLD_MS = 1000;
 
 const FRAMING_WARNINGS = new Set<PoseQualityWarning>([
   'move_camera_back',
@@ -170,6 +171,19 @@ function uniqueStrings(values: Array<string | undefined>): string[] {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
 }
 
+function isViewGuidanceStatus(status?: CameraAnalysisStatus | null): boolean {
+  if (!status) return false;
+  const reason = status.reason ?? '';
+  return (
+    status.category === 'view' ||
+    reason.includes('view') ||
+    reason.includes('angle') ||
+    reason === 'setup_oblique_view' ||
+    status.message.startsWith('Turn side-on') ||
+    status.message.startsWith('Face the camera')
+  );
+}
+
 function isFullFeedbackStatus(status?: CameraAnalysisStatus | null): boolean {
   return status?.details?.feedbackMode === 'full';
 }
@@ -192,6 +206,29 @@ function shouldUseKeyJointMessage(
 
 function feedbackModeOf(status?: CameraAnalysisStatus | null): CameraAnalysisFeedbackMode | null {
   return status?.details?.feedbackMode ?? null;
+}
+
+export function canonicalizeCameraAnalysisStatus(
+  status?: CameraAnalysisStatus | null,
+): CameraAnalysisStatus | null {
+  if (!status) return null;
+  if (!isViewGuidanceStatus(status)) return status;
+  const feedbackMode = feedbackModeOf(status);
+  if (feedbackMode === 'limited') {
+    if (status.message === 'Limited feedback - adjust angle for full analysis') return status;
+    return {
+      ...status,
+      message: 'Limited feedback - adjust angle for full analysis',
+    };
+  }
+  if (feedbackMode === 'countOnly') {
+    if (status.message === 'Count only - improve camera angle for form feedback') return status;
+    return {
+      ...status,
+      message: 'Count only - improve camera angle for form feedback',
+    };
+  }
+  return status;
 }
 
 function isUsableChainStatus(status?: string): boolean {
@@ -274,7 +311,7 @@ function statusFromDominantLiveMode(
     return limitedFeedbackCameraStatus({
       source: 'liveReadiness',
       reason,
-      message: latest.message,
+      message: canonicalizeCameraAnalysisStatus(latest)?.message,
       details,
     });
   }
@@ -288,8 +325,9 @@ function statusFromDominantLiveMode(
     });
   }
 
+  const canonicalLatest = canonicalizeCameraAnalysisStatus(latest) ?? latest;
   return {
-    ...latest,
+    ...canonicalLatest,
     source: 'liveReadiness',
     reason,
     details,
@@ -303,9 +341,13 @@ function exerciseStatusAllowsUsefulFeedback(status?: CameraAnalysisStatus | null
 
 function shouldSuppressPoseQualityWarning(
   warning: PoseQualityWarning,
-  exerciseStatus?: CameraAnalysisStatus | null,
+  usefulFeedbackStatus?: CameraAnalysisStatus | null,
+  hasCriticalFramingWarning = false,
 ): boolean {
-  return SOFT_GENERIC_POSE_WARNINGS.has(warning) && exerciseStatusAllowsUsefulFeedback(exerciseStatus);
+  if (warning === 'tracking_lost') return false;
+  if (hasCriticalFramingWarning && VIEW_WARNINGS.has(warning)) return true;
+  if (VIEW_WARNINGS.has(warning) && exerciseStatusAllowsUsefulFeedback(usefulFeedbackStatus)) return true;
+  return SOFT_GENERIC_POSE_WARNINGS.has(warning) && exerciseStatusAllowsUsefulFeedback(usefulFeedbackStatus);
 }
 
 function messageForWarning(warning: PoseQualityWarning): string {
@@ -426,6 +468,25 @@ export function cameraStatusFromPoseQuality(snapshot: PoseQualitySnapshot): Came
     source: 'poseQuality',
     reason: 'tracking_good',
     details: { feedbackMode: 'full' },
+  };
+}
+
+export function cameraStatusFromSilentPoseGap(args: {
+  lastPoseAgeMs: number;
+  thresholdMs?: number;
+  source?: CameraAnalysisStatusSource;
+}): CameraAnalysisStatus | null {
+  const thresholdMs = args.thresholdMs ?? LIVE_CAMERA_STATUS_SILENT_POSE_GAP_THRESHOLD_MS;
+  if (!Number.isFinite(args.lastPoseAgeMs) || args.lastPoseAgeMs <= thresholdMs) return null;
+
+  return {
+    level: 'error',
+    category: 'tracking',
+    message: 'Tracking was lost.',
+    priority: CAMERA_ANALYSIS_STATUS_PRIORITY.TRACKING_LOST,
+    source: args.source ?? 'global',
+    reason: 'silent_pose_gap',
+    details: { feedbackMode: 'unavailable' },
   };
 }
 
@@ -717,6 +778,27 @@ export function shouldIncludeRecentCompletedRepCameraStatus(args: {
   return liveMode === recentMode;
 }
 
+export function selectLiveFeedbackReadinessSample(args: {
+  exerciseStatus?: CameraAnalysisStatus | null;
+  poseStateReadinessStatus?: CameraAnalysisStatus | null;
+}): CameraAnalysisStatus | null {
+  const exerciseStatus = canonicalizeCameraAnalysisStatus(args.exerciseStatus);
+  const poseStateReadinessStatus = canonicalizeCameraAnalysisStatus(args.poseStateReadinessStatus);
+  const exerciseMode = feedbackModeOf(exerciseStatus);
+  const poseStateMode = feedbackModeOf(poseStateReadinessStatus);
+
+  if (
+    isViewGuidanceStatus(exerciseStatus) &&
+    exerciseMode === 'countOnly' &&
+    poseStateReadinessStatus &&
+    (poseStateMode === 'full' || poseStateMode === 'limited')
+  ) {
+    return poseStateReadinessStatus;
+  }
+
+  return selectCameraAnalysisStatus([exerciseStatus, poseStateReadinessStatus]);
+}
+
 export function cameraStatusFromCompletedRepReadiness(args: {
   repResult?: CompletedRepReadinessLike | null;
   trackingQualityScorable?: boolean;
@@ -881,7 +963,9 @@ export function updateRecentCompletedRepCameraStatusState(
 export function selectCameraAnalysisStatus(
   statuses: Array<CameraAnalysisStatus | null | undefined>,
 ): CameraAnalysisStatus | null {
-  const candidates = statuses.filter((status): status is CameraAnalysisStatus => Boolean(status));
+  const candidates = statuses
+    .map(canonicalizeCameraAnalysisStatus)
+    .filter((status): status is CameraAnalysisStatus => Boolean(status));
   if (candidates.length === 0) return null;
   return candidates
     .map((status, index) => ({ status, index }))
@@ -896,16 +980,30 @@ export function resolveCameraAnalysisStatus(
   input: ResolveCameraAnalysisStatusInput,
 ): CameraAnalysisStatusResolution {
   const candidates: CameraAnalysisStatus[] = [];
+  const readinessStatuses = [
+    input.exerciseStatus,
+    input.viewCueGatingStatus,
+    ...(input.additionalStatuses ?? []),
+  ].map(canonicalizeCameraAnalysisStatus);
+  const usefulFeedbackStatus = selectCameraAnalysisStatus(
+    readinessStatuses.filter(exerciseStatusAllowsUsefulFeedback),
+  );
+  const allWarnings = [
+    ...(input.poseQuality?.warnings ?? []),
+    ...(input.exerciseWarnings ?? []),
+  ];
+  const hasCriticalFramingWarning = allWarnings.some((warning) => FRAMING_WARNINGS.has(warning));
 
   if (input.poseQuality) {
     for (const warning of input.poseQuality.warnings) {
-      if (shouldSuppressPoseQualityWarning(warning, input.exerciseStatus)) continue;
+      if (shouldSuppressPoseQualityWarning(warning, usefulFeedbackStatus, hasCriticalFramingWarning)) continue;
       candidates.push(cameraStatusFromPoseQualityWarning(warning, 'poseQuality'));
     }
     candidates.push(cameraStatusFromPoseQuality(input.poseQuality));
   }
 
   for (const warning of input.exerciseWarnings ?? []) {
+    if (shouldSuppressPoseQualityWarning(warning, usefulFeedbackStatus, hasCriticalFramingWarning)) continue;
     candidates.push(cameraStatusFromPoseQualityWarning(warning, 'exercise'));
   }
 

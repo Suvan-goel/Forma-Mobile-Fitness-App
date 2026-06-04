@@ -60,6 +60,18 @@ export interface PoseQualitySnapshot {
   evaluationDurationMs?: number;
 }
 
+export interface PoseFramingDiagnostics {
+  bodyBoxWidth: number | null;
+  bodyBoxHeight: number | null;
+  bodyBoxMaxDimension: number | null;
+  bodyBoxArea: number | null;
+  normalizedCoordinates: boolean;
+  visibleFramingKeypointCount: number;
+  moveCloserThreshold: number;
+  moveBackWidthThreshold: number;
+  moveBackHeightThreshold: number;
+}
+
 export interface RepTrackingQuality {
   status: PoseQualityStatus;
   confidence: number;
@@ -106,6 +118,8 @@ const DEFAULT_WINDOW_SIZE = 15;
 const JITTER_WARNING_THRESHOLD = 0.16;
 const LOW_REP_FRAME_RATE_LIMIT = 0.4;
 const DEFAULT_TOO_SMALL_BOX_THRESHOLD = 0.18;
+const MOVE_CAMERA_BACK_WIDTH_THRESHOLD = 0.86;
+const MOVE_CAMERA_BACK_HEIGHT_THRESHOLD = 0.92;
 
 const SIDE_CHAIN_LEFT = ['left_shoulder', 'left_elbow', 'left_wrist', 'left_hip'];
 const SIDE_CHAIN_RIGHT = ['right_shoulder', 'right_elbow', 'right_wrist', 'right_hip'];
@@ -396,7 +410,7 @@ function frameBoundsWarnings(
   if (minX < 0.03 || maxX > 0.97 || minY < 0.03 || maxY > 0.97) {
     warnings.add(framingScope === 'key_joints' ? 'keep_key_joints_in_frame' : 'keep_full_body_in_frame');
   }
-  if (maxX - minX > 0.86 || maxY - minY > 0.92) {
+  if (maxX - minX > MOVE_CAMERA_BACK_WIDTH_THRESHOLD || maxY - minY > MOVE_CAMERA_BACK_HEIGHT_THRESHOLD) {
     warnings.add('move_camera_back');
   }
   const boxSize = Math.max(maxX - minX, maxY - minY);
@@ -405,6 +419,68 @@ function frameBoundsWarnings(
     warnings.add('move_camera_closer');
   }
   return Array.from(warnings);
+}
+
+export function getPoseFramingDiagnostics(
+  keypoints: Keypoint[],
+  profile: ExerciseQualityProfile,
+): PoseFramingDiagnostics {
+  const tooSmallBoxThreshold = profile.tooSmallBoxThreshold ?? DEFAULT_TOO_SMALL_BOX_THRESHOLD;
+  const base = {
+    moveCloserThreshold: tooSmallBoxThreshold,
+    moveBackWidthThreshold: MOVE_CAMERA_BACK_WIDTH_THRESHOLD,
+    moveBackHeightThreshold: MOVE_CAMERA_BACK_HEIGHT_THRESHOLD,
+  };
+  const normalizedCoordinates = looksLikeNormalizedImageCoordinates(keypoints);
+  if (!normalizedCoordinates) {
+    return {
+      bodyBoxWidth: null,
+      bodyBoxHeight: null,
+      bodyBoxMaxDimension: null,
+      bodyBoxArea: null,
+      normalizedCoordinates,
+      visibleFramingKeypointCount: 0,
+      ...base,
+    };
+  }
+
+  const map = getKeypointMap(keypoints);
+  const group = selectBestRequiredGroup(map, getRequiredGroups(profile));
+  const visible = keypointsForFraming(keypoints, profile, group);
+  if (visible.length === 0) {
+    return {
+      bodyBoxWidth: null,
+      bodyBoxHeight: null,
+      bodyBoxMaxDimension: null,
+      bodyBoxArea: null,
+      normalizedCoordinates,
+      visibleFramingKeypointCount: 0,
+      ...base,
+    };
+  }
+
+  let minX = 1;
+  let minY = 1;
+  let maxX = 0;
+  let maxY = 0;
+  for (const keypoint of visible) {
+    minX = Math.min(minX, keypoint.x);
+    minY = Math.min(minY, keypoint.y);
+    maxX = Math.max(maxX, keypoint.x);
+    maxY = Math.max(maxY, keypoint.y);
+  }
+
+  const bodyBoxWidth = maxX - minX;
+  const bodyBoxHeight = maxY - minY;
+  return {
+    bodyBoxWidth,
+    bodyBoxHeight,
+    bodyBoxMaxDimension: Math.max(bodyBoxWidth, bodyBoxHeight),
+    bodyBoxArea: bodyBoxWidth * bodyBoxHeight,
+    normalizedCoordinates,
+    visibleFramingKeypointCount: visible.length,
+    ...base,
+  };
 }
 
 function mostCommonWarnings(frames: FrameQuality[], minimumRatio: number): PoseQualityWarning[] {

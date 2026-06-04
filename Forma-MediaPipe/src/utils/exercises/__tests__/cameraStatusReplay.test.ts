@@ -39,10 +39,20 @@ function fullBodyKeypoints(offsetX = 0): Keypoint[] {
   ];
 }
 
+function scaledBodyKeypoints(scale = 1): Keypoint[] {
+  return fullBodyKeypoints().map((point) => ({
+    ...point,
+    x: 0.5 + (point.x - 0.5) * scale,
+    y: 0.5 + (point.y - 0.5) * scale,
+  }));
+}
+
 function makeRecording(timestamps: number[], args: {
   schemaVersion?: LandmarkRecording['schemaVersion'];
   exerciseName?: string;
+  keypoints?: Keypoint[];
 } = {}): LandmarkRecording {
+  const keypoints = args.keypoints ?? fullBodyKeypoints();
   return {
     ...(args.schemaVersion ? { schemaVersion: args.schemaVersion } : {}),
     exerciseName: args.exerciseName ?? 'Camera Status Replay Test',
@@ -53,8 +63,8 @@ function makeRecording(timestamps: number[], args: {
       timestamp,
       timestampMs: timestamp,
       status: 'poseDetected',
-      keypoints: fullBodyKeypoints(),
-      imageKeypoints: fullBodyKeypoints(),
+      keypoints,
+      imageKeypoints: keypoints,
       primarySource: 'image',
     })),
   };
@@ -74,6 +84,7 @@ function makeState(): ExerciseState {
 function makeDefinition(args: {
   status?: CameraAnalysisStatus | StatusFactory;
   warnings?: PoseQualityWarning[] | WarningFactory;
+  onUpdate?: () => void;
 } = {}): ExerciseDefinition {
   const statusArg = args.status;
   const warningsArg = args.warnings;
@@ -98,6 +109,7 @@ function makeDefinition(args: {
     },
     createState: makeState,
     update: (_keypoints, currentState) => {
+      args.onUpdate?.();
       const internal = currentState._internal as { frameIndex: number };
       const frameIndex = internal.frameIndex;
       return {
@@ -162,6 +174,18 @@ describe('camera status replay', () => {
     expect(report.recoveryLatenciesMs[0]).toBeGreaterThanOrEqual(0);
   });
 
+  it('does not run exercise updates for synthetic no-pose samples', () => {
+    let updateCount = 0;
+    const timestamps = [0, 33, 66, 2500, 2533, 2566];
+    const report = replayCameraAnalysisStatus(
+      makeDefinition({ onUpdate: () => { updateCount++; } }),
+      makeRecording(timestamps, { schemaVersion: 2 }),
+    );
+
+    expect(report.syntheticNoPoseFrameCount).toBeGreaterThan(0);
+    expect(updateCount).toBe(timestamps.length);
+  });
+
   it('does not flicker to tracking lost for a short temporary gap', () => {
     const report = replayCameraAnalysisStatus(
       makeDefinition(),
@@ -210,5 +234,23 @@ describe('camera status replay', () => {
     expect(report.schemaVersion).toBe('legacy');
     expect(report.processedFrameCount).toBe(5);
     expect(report.timeline.some((entry) => entry.status?.message === 'Full feedback available')).toBe(true);
+  });
+
+  it('reports body-size metrics for too-far diagnostics', () => {
+    const report = replayCameraAnalysisStatus(
+      makeDefinition(),
+      makeRecording([0, 33, 66, 99, 132], {
+        schemaVersion: 2,
+        keypoints: scaledBodyKeypoints(0.2),
+      }),
+      { includeFrames: true },
+    );
+
+    expect(report.bodySize.bodyBoxMaxDimension.min).not.toBeNull();
+    expect(report.bodySize.bodyBoxArea.mean).not.toBeNull();
+    expect(report.bodySize.moveCloserThreshold).toBeGreaterThan(0);
+    expect(report.bodySize.moveBackWidthThreshold).toBeGreaterThan(0);
+    expect(report.bodySize.moveBackHeightThreshold).toBeGreaterThan(0);
+    expect(report.frames?.[0].framing.bodyBoxMaxDimension).not.toBeNull();
   });
 });

@@ -72,8 +72,13 @@ const CAPTURE_SECTION_GAP = 22;
 const TEMPLATE_CARD_GAP = 9;
 const CAPTURE_CARD_HEIGHT = 188;
 const CAPTURE_CARD_HEIGHT_TALL = 200;
+const TOOLS_CARD_HEIGHT = 174;
+const TOOLS_CARD_HEIGHT_TALL = 186;
 const CAPTURE_CARD_HORIZONTAL_PADDING = 15;
 const CAPTURE_CARD_VERTICAL_PADDING = 18;
+const TEMPLATE_CARD_EXTRA_HEIGHT = 76;
+const TEMPLATE_THUMB_HEIGHT = 108;
+const TEMPLATE_THUMB_HEIGHT_COMPACT = 92;
 const BODY_VISUAL_WIDTH = 112;
 const BODY_VISUAL_HEIGHT = 146;
 const ACTIVE_SECONDARY_ACTIONS_WIDTH = 152;
@@ -247,6 +252,10 @@ export const RecordLandingScreen: React.FC = () => {
     CAPTURE_CARD_HEIGHT_TALL,
     Math.max(CAPTURE_CARD_HEIGHT, Math.round(windowHeight * 0.22)),
   );
+  const toolsCardHeight = Math.min(
+    TOOLS_CARD_HEIGHT_TALL,
+    Math.max(TOOLS_CARD_HEIGHT, Math.round(windowHeight * 0.205)),
+  );
   const bodyVisualHeight = captureCardHeight - CAPTURE_CARD_VERTICAL_PADDING * 2;
   const bodyVisualWidth = Math.round(
     BODY_VISUAL_WIDTH * (bodyVisualHeight / BODY_VISUAL_HEIGHT),
@@ -255,8 +264,9 @@ export const RecordLandingScreen: React.FC = () => {
     (windowWidth - CAPTURE_HORIZONTAL_PADDING * 2 - TEMPLATE_CARD_GAP * 2) / 3;
   const templateThumbHeight = Math.min(
     templateCardWidth + 6,
-    compactHeight ? 92 : 122,
+    compactHeight ? TEMPLATE_THUMB_HEIGHT_COMPACT : TEMPLATE_THUMB_HEIGHT,
   );
+  const templateCardHeight = templateThumbHeight + TEMPLATE_CARD_EXTRA_HEIGHT;
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -666,7 +676,7 @@ export const RecordLandingScreen: React.FC = () => {
                 colors={[...TOOLS_CARD_GRADIENT]}
                 start={CARD_GRADIENT_START}
                 end={CARD_GRADIENT_END}
-                style={[styles.toolsCard, { height: captureCardHeight }]}
+                style={[styles.toolsCard, { height: toolsCardHeight }]}
               >
                 <ToolRow
                   icon={
@@ -723,7 +733,7 @@ export const RecordLandingScreen: React.FC = () => {
             <View
               style={[
                 styles.templatesRow,
-                { height: captureCardHeight },
+                { height: templateCardHeight },
               ]}
             >
               {recentTemplates.slice(0, 3).map((tmpl) => (
@@ -1156,9 +1166,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 54,
+    minHeight: 50,
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 5,
   },
   toolRowDivider: {
     borderBottomWidth: 1,

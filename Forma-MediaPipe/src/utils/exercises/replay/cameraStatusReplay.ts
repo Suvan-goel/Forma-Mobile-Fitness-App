@@ -7,15 +7,27 @@ import {
 } from '../../pose/validHumanSubject';
 import {
   CAMERA_ANALYSIS_STATUS_PRIORITY,
+  cameraLiveFeedbackReadinessStatus,
+  cameraStatusFromCompletedRepReadiness,
+  cameraStatusFromPoseStateReadiness,
+  createCameraLiveFeedbackReadinessState,
+  createRecentCompletedRepCameraStatusState,
+  recentCompletedRepCameraStatus,
   resolveCameraAnalysisStatus,
+  selectLiveFeedbackReadinessSample,
+  shouldIncludeRecentCompletedRepCameraStatus,
+  updateCameraLiveFeedbackReadinessState,
+  updateRecentCompletedRepCameraStatusState,
   type CameraAnalysisFeedbackMode,
   type CameraAnalysisStatus,
   type CameraAnalysisStatusCategory,
 } from '../shared/cameraAnalysisStatus';
 import {
   buildDisplayedPoseQuality,
+  getPoseFramingDiagnostics,
   PoseQualityTracker,
   resolveExerciseQualityProfile,
+  type PoseFramingDiagnostics,
   type PoseQualitySnapshot,
   type PoseQualityWarning,
 } from '../shared/poseQuality';
@@ -105,6 +117,20 @@ export interface CameraStatusTransitionSummary {
   count: number;
 }
 
+export interface CameraStatusMetricStats {
+  min: number | null;
+  mean: number | null;
+  max: number | null;
+}
+
+export interface CameraStatusBodySizeSummary {
+  bodyBoxMaxDimension: CameraStatusMetricStats;
+  bodyBoxArea: CameraStatusMetricStats;
+  moveCloserThreshold: number;
+  moveBackWidthThreshold: number;
+  moveBackHeightThreshold: number;
+}
+
 export interface CameraStatusSilentGapReport {
   index: number;
   startMs: number;
@@ -140,6 +166,9 @@ export interface CameraStatusReplayFrameTrace {
   stableExerciseWarnings: PoseQualityWarning[];
   rawExerciseStatus: CameraAnalysisStatus | null;
   stableExerciseStatus: CameraAnalysisStatus | null;
+  liveFeedbackReadinessStatus: CameraAnalysisStatus | null;
+  recentCompletedRepStatus: CameraAnalysisStatus | null;
+  framing: PoseFramingDiagnostics;
   validSubject: Pick<
     ValidHumanSubjectTrackingResult,
     | 'valid'
@@ -172,6 +201,7 @@ export interface CameraStatusReplayReport {
   silentGaps: CameraStatusSilentGapReport[];
   trackingLostLatenciesMs: number[];
   recoveryLatenciesMs: number[];
+  bodySize: CameraStatusBodySizeSummary;
   timeline: CameraStatusTimelineEntry[];
   frames?: CameraStatusReplayFrameTrace[];
   thresholds: {
@@ -221,8 +251,6 @@ function statusKey(status: CameraAnalysisStatus | null | undefined): string {
   return [
     status.level,
     status.category,
-    status.source,
-    status.reason ?? '',
     status.message,
     status.details?.feedbackMode ?? '',
   ].join('|');
@@ -542,6 +570,30 @@ function summarizeTransitions(timeline: CameraStatusTimelineEntry[], maxItems: n
     .slice(0, maxItems);
 }
 
+function summarizeMetric(values: Array<number | null | undefined>): CameraStatusMetricStats {
+  const finiteValues = values.filter((value): value is number => Number.isFinite(value));
+  if (finiteValues.length === 0) {
+    return { min: null, mean: null, max: null };
+  }
+  const sum = finiteValues.reduce((total, value) => total + value, 0);
+  return {
+    min: Math.min(...finiteValues),
+    mean: sum / finiteValues.length,
+    max: Math.max(...finiteValues),
+  };
+}
+
+function summarizeBodySize(frames: CameraStatusReplayFrameTrace[]): CameraStatusBodySizeSummary {
+  const firstFraming = frames.find((frame) => frame.framing)?.framing;
+  return {
+    bodyBoxMaxDimension: summarizeMetric(frames.map((frame) => frame.framing.bodyBoxMaxDimension)),
+    bodyBoxArea: summarizeMetric(frames.map((frame) => frame.framing.bodyBoxArea)),
+    moveCloserThreshold: firstFraming?.moveCloserThreshold ?? 0,
+    moveBackWidthThreshold: firstFraming?.moveBackWidthThreshold ?? 0,
+    moveBackHeightThreshold: firstFraming?.moveBackHeightThreshold ?? 0,
+  };
+}
+
 function countFlickers(timeline: CameraStatusTimelineEntry[], flickerWindowMs: number): number {
   let flickers = 0;
   for (let index = 2; index < timeline.length; index += 1) {
@@ -569,6 +621,9 @@ function makeFrameTrace(args: {
   stableTopPillWarnings: PoseQualityWarning[];
   rawExerciseStatus: CameraAnalysisStatus | null;
   stableExerciseStatus: CameraAnalysisStatus | null;
+  liveFeedbackReadinessStatus: CameraAnalysisStatus | null;
+  recentCompletedRepStatus: CameraAnalysisStatus | null;
+  framing: PoseFramingDiagnostics;
   validSubject: ValidHumanSubjectTrackingResult;
 }): CameraStatusReplayFrameTrace {
   const inputStatus: LandmarkRecordingFrameStatus | 'poseDetected' = args.sample.frame.status ?? (
@@ -593,6 +648,9 @@ function makeFrameTrace(args: {
     stableExerciseWarnings: args.stableTopPillWarnings,
     rawExerciseStatus: args.rawExerciseStatus,
     stableExerciseStatus: args.stableExerciseStatus,
+    liveFeedbackReadinessStatus: args.liveFeedbackReadinessStatus,
+    recentCompletedRepStatus: args.recentCompletedRepStatus,
+    framing: args.framing,
     validSubject: {
       valid: args.validSubject.valid,
       reason: args.validSubject.reason,
@@ -637,6 +695,8 @@ export function replayCameraAnalysisStatus(
   let warningHold: { warnings: PoseQualityWarning[]; updatedAt: number } = { warnings: [], updatedAt: 0 };
   let statusSmoothing: { key: string; count: number } = { key: 'none', count: 0 };
   let statusHold: { status: CameraAnalysisStatus | null; updatedAt: number } = { status: null, updatedAt: 0 };
+  let liveFeedbackReadiness = createCameraLiveFeedbackReadinessState();
+  let recentCompletedRepStatusState = createRecentCompletedRepCameraStatusState();
   let previousPoseState: PoseState | null = null;
   let completedRepCount = state.repCount;
   const frames: CameraStatusReplayFrameTrace[] = [];
@@ -669,14 +729,19 @@ export function replayCameraAnalysisStatus(
       const quality = qualityTracker.update(sample.frame.keypoints, qualityProfile, {
         frameBoundsKeypoints: imageKeypoints,
       });
+      const framing = getPoseFramingDiagnostics(
+        imageKeypoints.length > 0 ? imageKeypoints : sample.frame.keypoints,
+        qualityProfile,
+      );
 
       const processExerciseFrame = !isNoPoseSample(sample.frame);
+      let completedNewTrackedRep = false;
       let rawExerciseWarnings: PoseQualityWarning[] = [];
       let rawExerciseStatus: CameraAnalysisStatus | null = null;
       if (processExerciseFrame) {
         state = activeDefinition.update(sample.frame.keypoints, state, frameContext);
         state.quality = quality;
-        const completedNewTrackedRep = state.repCount > completedRepCount;
+        completedNewTrackedRep = state.repCount > completedRepCount;
         rawExerciseWarnings = mergeTrackingWarnings(state.liveQualityWarnings ?? []);
         rawExerciseStatus = state.liveAnalysisStatus ?? null;
         if (completedNewTrackedRep) {
@@ -738,12 +803,52 @@ export function replayCameraAnalysisStatus(
         statusHold = { status: null, updatedAt: 0 };
       }
 
+      const poseStateReadinessStatus = cameraStatusFromPoseStateReadiness({
+        exerciseName: activeDefinition.name,
+        poseState,
+      });
+      const currentLiveReadinessSample = selectLiveFeedbackReadinessSample({
+        exerciseStatus: completedNewTrackedRep ? null : rawExerciseStatus,
+        poseStateReadinessStatus,
+      });
+      liveFeedbackReadiness = updateCameraLiveFeedbackReadinessState(liveFeedbackReadiness, {
+        nowMs: sample.timestampMs,
+        sampleStatus: currentLiveReadinessSample,
+      });
+      const liveFeedbackReadinessStatus = cameraLiveFeedbackReadinessStatus(
+        liveFeedbackReadiness,
+        sample.timestampMs,
+      );
+      const completedRepReadinessStatus = completedNewTrackedRep
+        ? cameraStatusFromCompletedRepReadiness({ repResult: state.lastRepResult })
+        : null;
+      recentCompletedRepStatusState = updateRecentCompletedRepCameraStatusState(
+        recentCompletedRepStatusState,
+        {
+          nowMs: sample.timestampMs,
+          completedRepStatus: completedRepReadinessStatus,
+          currentReadinessStatus: liveFeedbackReadinessStatus,
+        },
+      );
+      const recentCompletedRepStatus = recentCompletedRepCameraStatus(
+        recentCompletedRepStatusState,
+        sample.timestampMs,
+      );
+      const recentCompletedRepResolverStatus = shouldIncludeRecentCompletedRepCameraStatus({
+        recentStatus: recentCompletedRepStatus,
+        liveFeedbackReadinessStatus,
+      })
+        ? recentCompletedRepStatus
+        : null;
+      const exerciseStatusForResolver = liveFeedbackReadinessStatus ? null : stableExerciseStatus;
+
       const displayedQuality = buildDisplayedPoseQuality(quality, stableTopPillWarnings);
       const resolution = resolveCameraAnalysisStatus({
         poseQuality: quality,
         exerciseWarnings: stableTopPillWarnings,
-        exerciseStatus: stableExerciseStatus,
+        exerciseStatus: exerciseStatusForResolver,
         poseStateStatus: validSubjectStatus,
+        additionalStatuses: [liveFeedbackReadinessStatus, recentCompletedRepResolverStatus],
       });
 
       frames.push(makeFrameTrace({
@@ -756,6 +861,9 @@ export function replayCameraAnalysisStatus(
         stableTopPillWarnings,
         rawExerciseStatus,
         stableExerciseStatus,
+        liveFeedbackReadinessStatus,
+        recentCompletedRepStatus,
+        framing,
         validSubject,
       }));
     }
@@ -769,6 +877,7 @@ export function replayCameraAnalysisStatus(
   const observedDurationMs = Math.max(0, lastTimestamp - firstTimestamp);
   const totalDurationMs = Math.max(observedDurationMs, finiteNumber(recording.metadata.duration) ?? 0);
   const timeline = buildTimeline(frames, totalDurationMs);
+  const bodySize = summarizeBodySize(frames);
   const silentGaps = summarizeSilentGaps(gaps, timeline);
   const longestStaleStatusDurationMs = silentGaps.reduce(
     (max, gap) => Math.max(max, gap.staleStatusDurationMs),
@@ -800,6 +909,7 @@ export function replayCameraAnalysisStatus(
     recoveryLatenciesMs: silentGaps
       .map((gap) => gap.recoveryLatencyMs)
       .filter((value): value is number => value !== undefined),
+    bodySize,
     timeline,
     ...(options.includeFrames ? { frames } : {}),
     thresholds: {
@@ -824,6 +934,11 @@ function formatTimeMap(values: Record<string, number>): string {
     .filter(([, durationMs]) => durationMs > 0)
     .map(([key, durationMs]) => `${key}=${formatMs(durationMs)}`)
     .join(', ') || 'none';
+}
+
+function formatMetricStats(stats: CameraStatusMetricStats): string {
+  const format = (value: number | null) => value === null ? 'n/a' : value.toFixed(3);
+  return `min=${format(stats.min)}, mean=${format(stats.mean)}, max=${format(stats.max)}`;
 }
 
 export function formatCameraStatusReplayReport(
@@ -861,6 +976,8 @@ export function formatCameraStatusReplayReport(
     `Status changes: ${report.statusChanges}; flicker count: ${report.flickerCount}; longest stale gap status: ${formatMs(report.longestStaleStatusDurationMs)}`,
     `Time by category: ${formatTimeMap(report.timeByCategory)}`,
     `Time by feedback mode: ${formatTimeMap(report.timeByFeedbackMode)}`,
+    `Body box max dimension: ${formatMetricStats(report.bodySize.bodyBoxMaxDimension)}; moveCloserThreshold=${report.bodySize.moveCloserThreshold}`,
+    `Body box area: ${formatMetricStats(report.bodySize.bodyBoxArea)}; moveBackWidthThreshold=${report.bodySize.moveBackWidthThreshold}; moveBackHeightThreshold=${report.bodySize.moveBackHeightThreshold}`,
     ...gapLines,
     ...topMessageLines,
   ].join('\n');

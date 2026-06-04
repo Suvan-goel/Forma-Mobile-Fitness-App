@@ -1,0 +1,2482 @@
+{
+  "generatedAt": "2026-06-04T16:57:09.291Z",
+  "skipped": 0,
+  "reports": [
+    {
+      "filePath": "/Users/suvangoel/Forma-Mobile-Fitness-App/Forma-MediaPipe/datasets/form-heuristics/status-tests/01_clean_curl.json",
+      "report": {
+        "exerciseName": "Barbell Curl",
+        "schemaVersion": 2,
+        "frameCount": 146,
+        "processedFrameCount": 146,
+        "poseDetectedFrameCount": 146,
+        "noPoseFrameCount": 0,
+        "syntheticNoPoseFrameCount": 0,
+        "totalDurationMs": 15031,
+        "statusChanges": 15,
+        "flickerCount": 0,
+        "longestStaleStatusDurationMs": 0,
+        "timeByCategory": {
+          "tracking": 6122,
+          "framing": 0,
+          "exerciseSetup": 0,
+          "view": 6145,
+          "feedbackAvailability": 2764,
+          "occlusion": 0,
+          "countOnly": 0,
+          "none": 0
+        },
+        "timeByFeedbackMode": {
+          "full": 8886,
+          "limited": 0,
+          "countOnly": 6145,
+          "unavailable": 0,
+          "unspecified": 0
+        },
+        "topMessages": [
+          {
+            "message": "Tracking good",
+            "count": 6,
+            "durationMs": 6122,
+            "category": "tracking",
+            "level": "good",
+            "source": "poseQuality",
+            "reason": "tracking_good",
+            "feedbackMode": "full"
+          },
+          {
+            "message": "Face the camera so I can judge your form.",
+            "count": 5,
+            "durationMs": 6145,
+            "category": "view",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "front_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Full feedback available",
+            "count": 5,
+            "durationMs": 2764,
+            "category": "feedbackAvailability",
+            "level": "good",
+            "source": "exercise",
+            "reason": "full_feedback_available",
+            "feedbackMode": "full"
+          }
+        ],
+        "topTransitions": [
+          {
+            "from": "Face the camera so I can judge your form.",
+            "to": "Full feedback available",
+            "count": 5
+          },
+          {
+            "from": "Full feedback available",
+            "to": "Tracking good",
+            "count": 5
+          },
+          {
+            "from": "Tracking good",
+            "to": "Face the camera so I can judge your form.",
+            "count": 5
+          }
+        ],
+        "silentGaps": [],
+        "trackingLostLatenciesMs": [],
+        "recoveryLatenciesMs": [],
+        "timeline": [
+          {
+            "index": 0,
+            "startMs": 299162163,
+            "endMs": 299164341,
+            "durationMs": 2178,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "startMs": 299164341,
+            "endMs": 299165351,
+            "durationMs": 1010,
+            "key": "warning|view|exercise|front_view_uncertain|Face the camera so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Face the camera so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "front_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "front"
+              }
+            }
+          },
+          {
+            "index": 2,
+            "startMs": 299165351,
+            "endMs": 299166050,
+            "durationMs": 699,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 3,
+            "startMs": 299166050,
+            "endMs": 299166209,
+            "durationMs": 159,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 4,
+            "startMs": 299166209,
+            "endMs": 299167649,
+            "durationMs": 1440,
+            "key": "warning|view|exercise|front_view_uncertain|Face the camera so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Face the camera so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "front_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "front"
+              }
+            }
+          },
+          {
+            "index": 5,
+            "startMs": 299167649,
+            "endMs": 299168012,
+            "durationMs": 363,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 6,
+            "startMs": 299168012,
+            "endMs": 299168652,
+            "durationMs": 640,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 7,
+            "startMs": 299168652,
+            "endMs": 299169887,
+            "durationMs": 1235,
+            "key": "warning|view|exercise|front_view_uncertain|Face the camera so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Face the camera so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "front_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "front"
+              }
+            }
+          },
+          {
+            "index": 8,
+            "startMs": 299169887,
+            "endMs": 299170159,
+            "durationMs": 272,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 9,
+            "startMs": 299170159,
+            "endMs": 299170686,
+            "durationMs": 527,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 10,
+            "startMs": 299170686,
+            "endMs": 299171694,
+            "durationMs": 1008,
+            "key": "warning|view|exercise|front_view_uncertain|Face the camera so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Face the camera so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "front_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "front"
+              }
+            }
+          },
+          {
+            "index": 11,
+            "startMs": 299171694,
+            "endMs": 299172700,
+            "durationMs": 1006,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 12,
+            "startMs": 299172700,
+            "endMs": 299173129,
+            "durationMs": 429,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 13,
+            "startMs": 299173129,
+            "endMs": 299174581,
+            "durationMs": 1452,
+            "key": "warning|view|exercise|front_view_uncertain|Face the camera so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Face the camera so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "front_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "front"
+              }
+            }
+          },
+          {
+            "index": 14,
+            "startMs": 299174581,
+            "endMs": 299175005,
+            "durationMs": 424,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 15,
+            "startMs": 299175005,
+            "endMs": 299177194,
+            "durationMs": 2189,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          }
+        ],
+        "thresholds": {
+          "topPillWarningStableFrames": 3,
+          "topPillWarningHoldMs": 1000,
+          "validSubjectInvalidFrameThreshold": 12,
+          "poseFrameGapInterruptionThresholdMs": 1000,
+          "syntheticGapThresholdMs": 1000,
+          "syntheticGapFrameIntervalMs": 33,
+          "maxSyntheticFramesPerGap": 900
+        }
+      }
+    },
+    {
+      "filePath": "/Users/suvangoel/Forma-Mobile-Fitness-App/Forma-MediaPipe/datasets/form-heuristics/status-tests/02_occluded_curl.json",
+      "report": {
+        "exerciseName": "Barbell Curl",
+        "schemaVersion": 2,
+        "frameCount": 158,
+        "processedFrameCount": 158,
+        "poseDetectedFrameCount": 158,
+        "noPoseFrameCount": 0,
+        "syntheticNoPoseFrameCount": 0,
+        "totalDurationMs": 15648,
+        "statusChanges": 14,
+        "flickerCount": 0,
+        "longestStaleStatusDurationMs": 0,
+        "timeByCategory": {
+          "tracking": 5229,
+          "framing": 0,
+          "exerciseSetup": 0,
+          "view": 5355,
+          "feedbackAvailability": 5064,
+          "occlusion": 0,
+          "countOnly": 0,
+          "none": 0
+        },
+        "timeByFeedbackMode": {
+          "full": 10293,
+          "limited": 0,
+          "countOnly": 5355,
+          "unavailable": 0,
+          "unspecified": 0
+        },
+        "topMessages": [
+          {
+            "message": "Turn side-on so I can judge your form.",
+            "count": 5,
+            "durationMs": 5355,
+            "category": "view",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "side_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Tracking good",
+            "count": 5,
+            "durationMs": 5229,
+            "category": "tracking",
+            "level": "good",
+            "source": "poseQuality",
+            "reason": "tracking_good",
+            "feedbackMode": "full"
+          },
+          {
+            "message": "Full feedback available",
+            "count": 5,
+            "durationMs": 5064,
+            "category": "feedbackAvailability",
+            "level": "good",
+            "source": "exercise",
+            "reason": "full_feedback_available",
+            "feedbackMode": "full"
+          }
+        ],
+        "topTransitions": [
+          {
+            "from": "Turn side-on so I can judge your form.",
+            "to": "Full feedback available",
+            "count": 5
+          },
+          {
+            "from": "Full feedback available",
+            "to": "Tracking good",
+            "count": 4
+          },
+          {
+            "from": "Tracking good",
+            "to": "Turn side-on so I can judge your form.",
+            "count": 4
+          },
+          {
+            "from": "Full feedback available",
+            "to": "Turn side-on so I can judge your form.",
+            "count": 1
+          }
+        ],
+        "silentGaps": [],
+        "trackingLostLatenciesMs": [],
+        "recoveryLatenciesMs": [],
+        "timeline": [
+          {
+            "index": 0,
+            "startMs": 299419246,
+            "endMs": 299422535,
+            "durationMs": 3289,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "startMs": 299422535,
+            "endMs": 299423771,
+            "durationMs": 1236,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 2,
+            "startMs": 299423771,
+            "endMs": 299424507,
+            "durationMs": 736,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 3,
+            "startMs": 299424507,
+            "endMs": 299425567,
+            "durationMs": 1060,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 4,
+            "startMs": 299425567,
+            "endMs": 299426723,
+            "durationMs": 1156,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 5,
+            "startMs": 299426723,
+            "endMs": 299426873,
+            "durationMs": 150,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 6,
+            "startMs": 299426873,
+            "endMs": 299427915,
+            "durationMs": 1042,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 7,
+            "startMs": 299427915,
+            "endMs": 299428954,
+            "durationMs": 1039,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 8,
+            "startMs": 299428954,
+            "endMs": 299429017,
+            "durationMs": 63,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 9,
+            "startMs": 299429017,
+            "endMs": 299430019,
+            "durationMs": 1002,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 10,
+            "startMs": 299430019,
+            "endMs": 299431011,
+            "durationMs": 992,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 11,
+            "startMs": 299431011,
+            "endMs": 299431106,
+            "durationMs": 95,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 12,
+            "startMs": 299431106,
+            "endMs": 299432121,
+            "durationMs": 1015,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 13,
+            "startMs": 299432121,
+            "endMs": 299433262,
+            "durationMs": 1141,
+            "key": "good|feedbackAvailability|exercise|full_feedback_available|Full feedback available|full",
+            "status": {
+              "level": "good",
+              "category": "feedbackAvailability",
+              "message": "Full feedback available",
+              "priority": 140,
+              "source": "exercise",
+              "reason": "full_feedback_available",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 14,
+            "startMs": 299433262,
+            "endMs": 299434894,
+            "durationMs": 1632,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          }
+        ],
+        "thresholds": {
+          "topPillWarningStableFrames": 3,
+          "topPillWarningHoldMs": 1000,
+          "validSubjectInvalidFrameThreshold": 12,
+          "poseFrameGapInterruptionThresholdMs": 1000,
+          "syntheticGapThresholdMs": 1000,
+          "syntheticGapFrameIntervalMs": 33,
+          "maxSyntheticFramesPerGap": 900
+        }
+      }
+    },
+    {
+      "filePath": "/Users/suvangoel/Forma-Mobile-Fitness-App/Forma-MediaPipe/datasets/form-heuristics/status-tests/03_walk_out.json",
+      "report": {
+        "exerciseName": "Barbell Curl",
+        "schemaVersion": 2,
+        "frameCount": 190,
+        "processedFrameCount": 400,
+        "poseDetectedFrameCount": 190,
+        "noPoseFrameCount": 0,
+        "syntheticNoPoseFrameCount": 210,
+        "totalDurationMs": 20385,
+        "statusChanges": 8,
+        "flickerCount": 0,
+        "longestStaleStatusDurationMs": 132,
+        "timeByCategory": {
+          "tracking": 18334,
+          "framing": 0,
+          "exerciseSetup": 0,
+          "view": 389,
+          "feedbackAvailability": 0,
+          "occlusion": 33,
+          "countOnly": 1629,
+          "none": 0
+        },
+        "timeByFeedbackMode": {
+          "full": 10844,
+          "limited": 0,
+          "countOnly": 2051,
+          "unavailable": 7490,
+          "unspecified": 0
+        },
+        "topMessages": [
+          {
+            "message": "Tracking good",
+            "count": 2,
+            "durationMs": 10844,
+            "category": "tracking",
+            "level": "good",
+            "source": "poseQuality",
+            "reason": "tracking_good",
+            "feedbackMode": "full"
+          },
+          {
+            "message": "Turn side-on for full form analysis",
+            "count": 2,
+            "durationMs": 895,
+            "category": "countOnly",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "side_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Turn side-on so I can judge your form.",
+            "count": 2,
+            "durationMs": 389,
+            "category": "view",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "side_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Tracking was lost.",
+            "count": 1,
+            "durationMs": 7490,
+            "category": "tracking",
+            "level": "error",
+            "source": "poseQuality",
+            "reason": "tracking_lost",
+            "feedbackMode": "unavailable"
+          },
+          {
+            "message": "Face the camera for full symmetry feedback",
+            "count": 1,
+            "durationMs": 734,
+            "category": "countOnly",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "front_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Ensure your key joints are clearly visible.",
+            "count": 1,
+            "durationMs": 33,
+            "category": "occlusion",
+            "level": "warning",
+            "source": "poseQuality",
+            "reason": "missing_required_joints",
+            "feedbackMode": "countOnly"
+          }
+        ],
+        "topTransitions": [
+          {
+            "from": "Ensure your key joints are clearly visible.",
+            "to": "Tracking was lost.",
+            "count": 1
+          },
+          {
+            "from": "Face the camera for full symmetry feedback",
+            "to": "Turn side-on for full form analysis",
+            "count": 1
+          },
+          {
+            "from": "Tracking good",
+            "to": "Turn side-on so I can judge your form.",
+            "count": 1
+          },
+          {
+            "from": "Tracking was lost.",
+            "to": "Turn side-on for full form analysis",
+            "count": 1
+          },
+          {
+            "from": "Turn side-on for full form analysis",
+            "to": "Ensure your key joints are clearly visible.",
+            "count": 1
+          },
+          {
+            "from": "Turn side-on for full form analysis",
+            "to": "Turn side-on so I can judge your form.",
+            "count": 1
+          },
+          {
+            "from": "Turn side-on so I can judge your form.",
+            "to": "Face the camera for full symmetry feedback",
+            "count": 1
+          },
+          {
+            "from": "Turn side-on so I can judge your form.",
+            "to": "Tracking good",
+            "count": 1
+          }
+        ],
+        "silentGaps": [
+          {
+            "index": 0,
+            "startMs": 301735201,
+            "endMs": 301742146,
+            "durationMs": 6945,
+            "synthesizedFrameCount": 210,
+            "statusBeforeGap": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side",
+                "viewCurrent": "unknown"
+              }
+            },
+            "firstStatusChangeMs": 301735333,
+            "staleStatusDurationMs": 132,
+            "trackingLostAppeared": true,
+            "trackingLostAtMs": 301735366,
+            "trackingLostLatencyMs": 165,
+            "recoveryAtMs": 301742856,
+            "recoveryLatencyMs": 710,
+            "statusAfterRecovery": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side",
+                "viewCurrent": "unknown"
+              }
+            }
+          }
+        ],
+        "trackingLostLatenciesMs": [
+          165
+        ],
+        "recoveryLatenciesMs": [
+          710
+        ],
+        "timeline": [
+          {
+            "index": 0,
+            "startMs": 301727676,
+            "endMs": 301734023,
+            "durationMs": 6347,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "startMs": 301734023,
+            "endMs": 301734296,
+            "durationMs": 273,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 2,
+            "startMs": 301734296,
+            "endMs": 301735030,
+            "durationMs": 734,
+            "key": "warning|countOnly|exercise|front_view_uncertain|Face the camera for full symmetry feedback|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Face the camera for full symmetry feedback",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "front_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "front",
+                "viewCurrent": "unknown"
+              }
+            }
+          },
+          {
+            "index": 3,
+            "startMs": 301735030,
+            "endMs": 301735333,
+            "durationMs": 303,
+            "key": "warning|countOnly|exercise|side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side",
+                "viewCurrent": "unknown"
+              }
+            }
+          },
+          {
+            "index": 4,
+            "startMs": 301735333,
+            "endMs": 301735366,
+            "durationMs": 33,
+            "key": "warning|occlusion|poseQuality|missing_required_joints|Ensure your key joints are clearly visible.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "occlusion",
+              "message": "Ensure your key joints are clearly visible.",
+              "priority": 880,
+              "source": "poseQuality",
+              "reason": "missing_required_joints",
+              "details": {
+                "feedbackMode": "countOnly"
+              }
+            }
+          },
+          {
+            "index": 5,
+            "startMs": 301735366,
+            "endMs": 301742856,
+            "durationMs": 7490,
+            "key": "error|tracking|poseQuality|tracking_lost|Tracking was lost.|unavailable",
+            "status": {
+              "level": "error",
+              "category": "tracking",
+              "message": "Tracking was lost.",
+              "priority": 1000,
+              "source": "poseQuality",
+              "reason": "tracking_lost",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 6,
+            "startMs": 301742856,
+            "endMs": 301743448,
+            "durationMs": 592,
+            "key": "warning|countOnly|exercise|side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side",
+                "viewCurrent": "unknown"
+              }
+            }
+          },
+          {
+            "index": 7,
+            "startMs": 301743448,
+            "endMs": 301743564,
+            "durationMs": 116,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 8,
+            "startMs": 301743564,
+            "endMs": 301748061,
+            "durationMs": 4497,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          }
+        ],
+        "thresholds": {
+          "topPillWarningStableFrames": 3,
+          "topPillWarningHoldMs": 1000,
+          "validSubjectInvalidFrameThreshold": 12,
+          "poseFrameGapInterruptionThresholdMs": 1000,
+          "syntheticGapThresholdMs": 1000,
+          "syntheticGapFrameIntervalMs": 33,
+          "maxSyntheticFramesPerGap": 900
+        }
+      }
+    },
+    {
+      "filePath": "/Users/suvangoel/Forma-Mobile-Fitness-App/Forma-MediaPipe/datasets/form-heuristics/status-tests/good_to_bad_angle.json",
+      "report": {
+        "exerciseName": "Cable Pushdowns",
+        "schemaVersion": 2,
+        "frameCount": 391,
+        "processedFrameCount": 391,
+        "poseDetectedFrameCount": 391,
+        "noPoseFrameCount": 0,
+        "syntheticNoPoseFrameCount": 0,
+        "totalDurationMs": 32594,
+        "statusChanges": 32,
+        "flickerCount": 1,
+        "longestStaleStatusDurationMs": 0,
+        "timeByCategory": {
+          "tracking": 5053,
+          "framing": 3982,
+          "exerciseSetup": 0,
+          "view": 3409,
+          "feedbackAvailability": 9830,
+          "occlusion": 0,
+          "countOnly": 10320,
+          "none": 0
+        },
+        "timeByFeedbackMode": {
+          "full": 5053,
+          "limited": 9830,
+          "countOnly": 13729,
+          "unavailable": 3982,
+          "unspecified": 0
+        },
+        "topMessages": [
+          {
+            "message": "Keep your key joints inside the frame.",
+            "count": 9,
+            "durationMs": 3982,
+            "category": "framing",
+            "level": "warning",
+            "source": "poseQuality",
+            "reason": "keep_key_joints_in_frame",
+            "feedbackMode": "unavailable"
+          },
+          {
+            "message": "Turn side-on for full form analysis",
+            "count": 7,
+            "durationMs": 10320,
+            "category": "countOnly",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "setup_side_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Limited feedback - adjust angle for full analysis",
+            "count": 5,
+            "durationMs": 7167,
+            "category": "feedbackAvailability",
+            "level": "info",
+            "source": "exercise",
+            "reason": "partial_view_scoring",
+            "feedbackMode": "limited"
+          },
+          {
+            "message": "Tracking good",
+            "count": 5,
+            "durationMs": 5053,
+            "category": "tracking",
+            "level": "good",
+            "source": "poseQuality",
+            "reason": "tracking_good",
+            "feedbackMode": "full"
+          },
+          {
+            "message": "Turn side-on so I can judge your form.",
+            "count": 4,
+            "durationMs": 3409,
+            "category": "view",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "side_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Limited feedback - keep key joints visible",
+            "count": 3,
+            "durationMs": 2663,
+            "category": "feedbackAvailability",
+            "level": "info",
+            "source": "exercise",
+            "reason": "cue_families_unavailable",
+            "feedbackMode": "limited"
+          }
+        ],
+        "topTransitions": [
+          {
+            "from": "Keep your key joints inside the frame.",
+            "to": "Turn side-on for full form analysis",
+            "count": 5
+          },
+          {
+            "from": "Limited feedback - adjust angle for full analysis",
+            "to": "Keep your key joints inside the frame.",
+            "count": 5
+          },
+          {
+            "from": "Turn side-on for full form analysis",
+            "to": "Limited feedback - adjust angle for full analysis",
+            "count": 5
+          },
+          {
+            "from": "Keep your key joints inside the frame.",
+            "to": "Turn side-on so I can judge your form.",
+            "count": 3
+          },
+          {
+            "from": "Turn side-on so I can judge your form.",
+            "to": "Limited feedback - keep key joints visible",
+            "count": 3
+          },
+          {
+            "from": "Tracking good",
+            "to": "Keep your key joints inside the frame.",
+            "count": 2
+          },
+          {
+            "from": "Tracking good",
+            "to": "Turn side-on for full form analysis",
+            "count": 2
+          },
+          {
+            "from": "Turn side-on for full form analysis",
+            "to": "Tracking good",
+            "count": 2
+          },
+          {
+            "from": "Keep your key joints inside the frame.",
+            "to": "Tracking good",
+            "count": 1
+          },
+          {
+            "from": "Limited feedback - keep key joints visible",
+            "to": "Keep your key joints inside the frame.",
+            "count": 1
+          }
+        ],
+        "silentGaps": [],
+        "trackingLostLatenciesMs": [],
+        "recoveryLatenciesMs": [],
+        "timeline": [
+          {
+            "index": 0,
+            "startMs": 301918725,
+            "endMs": 301920161,
+            "durationMs": 1436,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "startMs": 301920161,
+            "endMs": 301922019,
+            "durationMs": 1858,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 2,
+            "startMs": 301922019,
+            "endMs": 301924173,
+            "durationMs": 2154,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 3,
+            "startMs": 301924173,
+            "endMs": 301925122,
+            "durationMs": 949,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 4,
+            "startMs": 301925122,
+            "endMs": 301925696,
+            "durationMs": 574,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 5,
+            "startMs": 301925696,
+            "endMs": 301925811,
+            "durationMs": 115,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 6,
+            "startMs": 301925811,
+            "endMs": 301925954,
+            "durationMs": 143,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 7,
+            "startMs": 301925954,
+            "endMs": 301926762,
+            "durationMs": 808,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 8,
+            "startMs": 301926762,
+            "endMs": 301928439,
+            "durationMs": 1677,
+            "key": "info|feedbackAvailability|exercise|cue_families_unavailable|Limited feedback - keep key joints visible|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - keep key joints visible",
+              "priority": 480,
+              "source": "exercise",
+              "reason": "cue_families_unavailable",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [
+                  "rightArm"
+                ],
+                "usableChains": [
+                  "leftArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 9,
+            "startMs": 301928439,
+            "endMs": 301928995,
+            "durationMs": 556,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 10,
+            "startMs": 301928995,
+            "endMs": 301932691,
+            "durationMs": 3696,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 11,
+            "startMs": 301932691,
+            "endMs": 301933887,
+            "durationMs": 1196,
+            "key": "info|feedbackAvailability|exercise|partial_view_scoring|Limited feedback - adjust angle for full analysis|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - adjust angle for full analysis",
+              "priority": 780,
+              "source": "exercise",
+              "reason": "partial_view_scoring",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [],
+                "usableChains": [
+                  "leftArm",
+                  "rightArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 12,
+            "startMs": 301933887,
+            "endMs": 301934075,
+            "durationMs": 188,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 13,
+            "startMs": 301934075,
+            "endMs": 301934616,
+            "durationMs": 541,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 14,
+            "startMs": 301934616,
+            "endMs": 301935915,
+            "durationMs": 1299,
+            "key": "info|feedbackAvailability|exercise|partial_view_scoring|Limited feedback - adjust angle for full analysis|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - adjust angle for full analysis",
+              "priority": 780,
+              "source": "exercise",
+              "reason": "partial_view_scoring",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [],
+                "usableChains": [
+                  "leftArm",
+                  "rightArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 15,
+            "startMs": 301935915,
+            "endMs": 301936041,
+            "durationMs": 126,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 16,
+            "startMs": 301936041,
+            "endMs": 301936642,
+            "durationMs": 601,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 17,
+            "startMs": 301936642,
+            "endMs": 301938048,
+            "durationMs": 1406,
+            "key": "info|feedbackAvailability|exercise|partial_view_scoring|Limited feedback - adjust angle for full analysis|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - adjust angle for full analysis",
+              "priority": 780,
+              "source": "exercise",
+              "reason": "partial_view_scoring",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [],
+                "usableChains": [
+                  "leftArm",
+                  "rightArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 18,
+            "startMs": 301938048,
+            "endMs": 301938626,
+            "durationMs": 578,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 19,
+            "startMs": 301938626,
+            "endMs": 301938795,
+            "durationMs": 169,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 20,
+            "startMs": 301938795,
+            "endMs": 301940455,
+            "durationMs": 1660,
+            "key": "info|feedbackAvailability|exercise|partial_view_scoring|Limited feedback - adjust angle for full analysis|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - adjust angle for full analysis",
+              "priority": 780,
+              "source": "exercise",
+              "reason": "partial_view_scoring",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [],
+                "usableChains": [
+                  "leftArm",
+                  "rightArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 21,
+            "startMs": 301940455,
+            "endMs": 301940669,
+            "durationMs": 214,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 22,
+            "startMs": 301940669,
+            "endMs": 301941620,
+            "durationMs": 951,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 23,
+            "startMs": 301941620,
+            "endMs": 301943226,
+            "durationMs": 1606,
+            "key": "info|feedbackAvailability|exercise|partial_view_scoring|Limited feedback - adjust angle for full analysis|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - adjust angle for full analysis",
+              "priority": 780,
+              "source": "exercise",
+              "reason": "partial_view_scoring",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [],
+                "usableChains": [
+                  "leftArm",
+                  "rightArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 24,
+            "startMs": 301943226,
+            "endMs": 301943434,
+            "durationMs": 208,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 25,
+            "startMs": 301943434,
+            "endMs": 301945938,
+            "durationMs": 2504,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 26,
+            "startMs": 301945938,
+            "endMs": 301946271,
+            "durationMs": 333,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 27,
+            "startMs": 301946271,
+            "endMs": 301946564,
+            "durationMs": 293,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 28,
+            "startMs": 301946564,
+            "endMs": 301948036,
+            "durationMs": 1472,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 29,
+            "startMs": 301948036,
+            "endMs": 301948388,
+            "durationMs": 352,
+            "key": "info|feedbackAvailability|exercise|cue_families_unavailable|Limited feedback - keep key joints visible|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - keep key joints visible",
+              "priority": 480,
+              "source": "exercise",
+              "reason": "cue_families_unavailable",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [
+                  "rightArm"
+                ],
+                "usableChains": [
+                  "leftArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 30,
+            "startMs": 301948388,
+            "endMs": 301949671,
+            "durationMs": 1283,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 31,
+            "startMs": 301949671,
+            "endMs": 301950685,
+            "durationMs": 1014,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 32,
+            "startMs": 301950685,
+            "endMs": 301951319,
+            "durationMs": 634,
+            "key": "info|feedbackAvailability|exercise|cue_families_unavailable|Limited feedback - keep key joints visible|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - keep key joints visible",
+              "priority": 480,
+              "source": "exercise",
+              "reason": "cue_families_unavailable",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [
+                  "rightArm"
+                ],
+                "usableChains": [
+                  "leftArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          }
+        ],
+        "thresholds": {
+          "topPillWarningStableFrames": 3,
+          "topPillWarningHoldMs": 1000,
+          "validSubjectInvalidFrameThreshold": 12,
+          "poseFrameGapInterruptionThresholdMs": 1000,
+          "syntheticGapThresholdMs": 1000,
+          "syntheticGapFrameIntervalMs": 33,
+          "maxSyntheticFramesPerGap": 900
+        }
+      }
+    },
+    {
+      "filePath": "/Users/suvangoel/Forma-Mobile-Fitness-App/Forma-MediaPipe/datasets/form-heuristics/status-tests/too_close.json",
+      "report": {
+        "exerciseName": "Cable Pushdowns",
+        "schemaVersion": 2,
+        "frameCount": 178,
+        "processedFrameCount": 178,
+        "poseDetectedFrameCount": 178,
+        "noPoseFrameCount": 0,
+        "syntheticNoPoseFrameCount": 0,
+        "totalDurationMs": 16303,
+        "statusChanges": 6,
+        "flickerCount": 1,
+        "longestStaleStatusDurationMs": 0,
+        "timeByCategory": {
+          "tracking": 1796,
+          "framing": 5433,
+          "exerciseSetup": 0,
+          "view": 1010,
+          "feedbackAvailability": 496,
+          "occlusion": 0,
+          "countOnly": 7568,
+          "none": 0
+        },
+        "timeByFeedbackMode": {
+          "full": 1744,
+          "limited": 548,
+          "countOnly": 8578,
+          "unavailable": 5433,
+          "unspecified": 0
+        },
+        "topMessages": [
+          {
+            "message": "Tracking good",
+            "count": 2,
+            "durationMs": 1744,
+            "category": "tracking",
+            "level": "good",
+            "source": "poseQuality",
+            "reason": "tracking_good",
+            "feedbackMode": "full"
+          },
+          {
+            "message": "Turn side-on for full form analysis",
+            "count": 1,
+            "durationMs": 7568,
+            "category": "countOnly",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "setup_side_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Keep your key joints inside the frame.",
+            "count": 1,
+            "durationMs": 5433,
+            "category": "framing",
+            "level": "warning",
+            "source": "poseQuality",
+            "reason": "keep_key_joints_in_frame",
+            "feedbackMode": "unavailable"
+          },
+          {
+            "message": "Turn side-on so I can judge your form.",
+            "count": 1,
+            "durationMs": 1010,
+            "category": "view",
+            "level": "warning",
+            "source": "exercise",
+            "reason": "side_view_uncertain",
+            "feedbackMode": "countOnly"
+          },
+          {
+            "message": "Limited feedback - keep key joints visible",
+            "count": 1,
+            "durationMs": 496,
+            "category": "feedbackAvailability",
+            "level": "info",
+            "source": "exercise",
+            "reason": "cue_families_unavailable",
+            "feedbackMode": "limited"
+          },
+          {
+            "message": "Tracking okay",
+            "count": 1,
+            "durationMs": 52,
+            "category": "tracking",
+            "level": "info",
+            "source": "poseQuality",
+            "reason": "tracking_okay",
+            "feedbackMode": "limited"
+          }
+        ],
+        "topTransitions": [
+          {
+            "from": "Keep your key joints inside the frame.",
+            "to": "Turn side-on so I can judge your form.",
+            "count": 1
+          },
+          {
+            "from": "Tracking good",
+            "to": "Tracking okay",
+            "count": 1
+          },
+          {
+            "from": "Tracking good",
+            "to": "Turn side-on for full form analysis",
+            "count": 1
+          },
+          {
+            "from": "Tracking okay",
+            "to": "Tracking good",
+            "count": 1
+          },
+          {
+            "from": "Turn side-on for full form analysis",
+            "to": "Keep your key joints inside the frame.",
+            "count": 1
+          },
+          {
+            "from": "Turn side-on so I can judge your form.",
+            "to": "Limited feedback - keep key joints visible",
+            "count": 1
+          }
+        ],
+        "silentGaps": [],
+        "trackingLostLatenciesMs": [],
+        "recoveryLatenciesMs": [],
+        "timeline": [
+          {
+            "index": 0,
+            "startMs": 302009509,
+            "endMs": 302009827,
+            "durationMs": 318,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "startMs": 302009827,
+            "endMs": 302009879,
+            "durationMs": 52,
+            "key": "info|tracking|poseQuality|tracking_okay|Tracking okay|limited",
+            "status": {
+              "level": "info",
+              "category": "tracking",
+              "message": "Tracking okay",
+              "priority": 120,
+              "source": "poseQuality",
+              "reason": "tracking_okay",
+              "details": {
+                "feedbackMode": "limited"
+              }
+            }
+          },
+          {
+            "index": 2,
+            "startMs": 302009879,
+            "endMs": 302011305,
+            "durationMs": 1426,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 3,
+            "startMs": 302011305,
+            "endMs": 302018873,
+            "durationMs": 7568,
+            "key": "warning|countOnly|exercise|setup_side_view_uncertain|Turn side-on for full form analysis|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "countOnly",
+              "message": "Turn side-on for full form analysis",
+              "priority": 790,
+              "source": "exercise",
+              "reason": "setup_side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 4,
+            "startMs": 302018873,
+            "endMs": 302024306,
+            "durationMs": 5433,
+            "key": "warning|framing|poseQuality|keep_key_joints_in_frame|Keep your key joints inside the frame.|unavailable",
+            "status": {
+              "level": "warning",
+              "category": "framing",
+              "message": "Keep your key joints inside the frame.",
+              "priority": 920,
+              "source": "poseQuality",
+              "reason": "keep_key_joints_in_frame",
+              "details": {
+                "feedbackMode": "unavailable"
+              }
+            }
+          },
+          {
+            "index": 5,
+            "startMs": 302024306,
+            "endMs": 302025316,
+            "durationMs": 1010,
+            "key": "warning|view|exercise|side_view_uncertain|Turn side-on so I can judge your form.|countOnly",
+            "status": {
+              "level": "warning",
+              "category": "view",
+              "message": "Turn side-on so I can judge your form.",
+              "priority": 760,
+              "source": "exercise",
+              "reason": "side_view_uncertain",
+              "details": {
+                "feedbackMode": "countOnly",
+                "viewRequired": "side"
+              }
+            }
+          },
+          {
+            "index": 6,
+            "startMs": 302025316,
+            "endMs": 302025812,
+            "durationMs": 496,
+            "key": "info|feedbackAvailability|exercise|cue_families_unavailable|Limited feedback - keep key joints visible|limited",
+            "status": {
+              "level": "info",
+              "category": "feedbackAvailability",
+              "message": "Limited feedback - keep key joints visible",
+              "priority": 480,
+              "source": "exercise",
+              "reason": "cue_families_unavailable",
+              "details": {
+                "feedbackMode": "limited",
+                "safeCueFamilies": [
+                  "elbowPath",
+                  "handlePath",
+                  "repCount",
+                  "tempo",
+                  "torsoControl",
+                  "visibleArmPath",
+                  "wristSpecific"
+                ],
+                "blockedCueFamilies": [
+                  "bilateralSymmetry"
+                ],
+                "weakChains": [
+                  "leftArm"
+                ],
+                "usableChains": [
+                  "rightArm",
+                  "torso"
+                ],
+                "viewRequired": "side"
+              }
+            }
+          }
+        ],
+        "thresholds": {
+          "topPillWarningStableFrames": 3,
+          "topPillWarningHoldMs": 1000,
+          "validSubjectInvalidFrameThreshold": 12,
+          "poseFrameGapInterruptionThresholdMs": 1000,
+          "syntheticGapThresholdMs": 1000,
+          "syntheticGapFrameIntervalMs": 33,
+          "maxSyntheticFramesPerGap": 900
+        }
+      }
+    },
+    {
+      "filePath": "/Users/suvangoel/Forma-Mobile-Fitness-App/Forma-MediaPipe/datasets/form-heuristics/status-tests/too_far.json",
+      "report": {
+        "exerciseName": "Barbell Curl",
+        "schemaVersion": 2,
+        "frameCount": 159,
+        "processedFrameCount": 159,
+        "poseDetectedFrameCount": 159,
+        "noPoseFrameCount": 0,
+        "syntheticNoPoseFrameCount": 0,
+        "totalDurationMs": 22675,
+        "statusChanges": 2,
+        "flickerCount": 1,
+        "longestStaleStatusDurationMs": 0,
+        "timeByCategory": {
+          "tracking": 22675,
+          "framing": 0,
+          "exerciseSetup": 0,
+          "view": 0,
+          "feedbackAvailability": 0,
+          "occlusion": 0,
+          "countOnly": 0,
+          "none": 0
+        },
+        "timeByFeedbackMode": {
+          "full": 22365,
+          "limited": 310,
+          "countOnly": 0,
+          "unavailable": 0,
+          "unspecified": 0
+        },
+        "topMessages": [
+          {
+            "message": "Tracking good",
+            "count": 2,
+            "durationMs": 22365,
+            "category": "tracking",
+            "level": "good",
+            "source": "poseQuality",
+            "reason": "tracking_good",
+            "feedbackMode": "full"
+          },
+          {
+            "message": "Hold steady.",
+            "count": 1,
+            "durationMs": 310,
+            "category": "tracking",
+            "level": "warning",
+            "source": "poseQuality",
+            "reason": "unstable_tracking",
+            "feedbackMode": "limited"
+          }
+        ],
+        "topTransitions": [
+          {
+            "from": "Hold steady.",
+            "to": "Tracking good",
+            "count": 1
+          },
+          {
+            "from": "Tracking good",
+            "to": "Hold steady.",
+            "count": 1
+          }
+        ],
+        "silentGaps": [],
+        "trackingLostLatenciesMs": [],
+        "recoveryLatenciesMs": [],
+        "timeline": [
+          {
+            "index": 0,
+            "startMs": 302185906,
+            "endMs": 302186081,
+            "durationMs": 175,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "startMs": 302186081,
+            "endMs": 302186391,
+            "durationMs": 310,
+            "key": "warning|tracking|poseQuality|unstable_tracking|Hold steady.|limited",
+            "status": {
+              "level": "warning",
+              "category": "tracking",
+              "message": "Hold steady.",
+              "priority": 790,
+              "source": "poseQuality",
+              "reason": "unstable_tracking",
+              "details": {
+                "feedbackMode": "limited"
+              }
+            }
+          },
+          {
+            "index": 2,
+            "startMs": 302186391,
+            "endMs": 302208581,
+            "durationMs": 22190,
+            "key": "good|tracking|poseQuality|tracking_good|Tracking good|full",
+            "status": {
+              "level": "good",
+              "category": "tracking",
+              "message": "Tracking good",
+              "priority": 100,
+              "source": "poseQuality",
+              "reason": "tracking_good",
+              "details": {
+                "feedbackMode": "full"
+              }
+            }
+          }
+        ],
+        "thresholds": {
+          "topPillWarningStableFrames": 3,
+          "topPillWarningHoldMs": 1000,
+          "validSubjectInvalidFrameThreshold": 12,
+          "poseFrameGapInterruptionThresholdMs": 1000,
+          "syntheticGapThresholdMs": 1000,
+          "syntheticGapFrameIntervalMs": 33,
+          "maxSyntheticFramesPerGap": 900
+        }
+      }
+    }
+  ]
+}

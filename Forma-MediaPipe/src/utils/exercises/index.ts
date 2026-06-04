@@ -98,6 +98,7 @@ export {
   buildDisplayedPoseQuality,
   getPoseQualityMessage,
   getPoseQualityStatusLabel,
+  getPoseFramingDiagnostics,
   getUnscoredRepFeedback,
   resolveExerciseQualityProfile,
   summarizeRepQuality,
@@ -106,6 +107,8 @@ export {
 export {
   CAMERA_ANALYSIS_STATUS_PRIORITY,
   cameraLiveFeedbackReadinessStatus,
+  canonicalizeCameraAnalysisStatus,
+  cameraStatusFromSilentPoseGap,
   cameraStatusFromPoseQuality,
   cameraStatusFromPoseQualityWarning,
   cameraStatusFromCompletedRepReadiness,
@@ -115,9 +118,11 @@ export {
   createCameraLiveFeedbackReadinessState,
   createRecentCompletedRepCameraStatusState,
   fullFeedbackCameraStatus,
+  LIVE_CAMERA_STATUS_SILENT_POSE_GAP_THRESHOLD_MS,
   limitedFeedbackCameraStatus,
   recentCompletedRepCameraStatus,
   resolveCameraAnalysisStatus,
+  selectLiveFeedbackReadinessSample,
   selectCameraAnalysisStatus,
   shouldIncludeRecentCompletedRepCameraStatus,
   summarizeCameraLiveFeedbackReadinessState,
@@ -126,6 +131,7 @@ export {
 } from './shared/cameraAnalysisStatus';
 export type {
   ExerciseQualityProfile,
+  PoseFramingDiagnostics,
   PoseQualitySnapshot,
   PoseQualityStatus,
   PoseQualityTrackerOptions,

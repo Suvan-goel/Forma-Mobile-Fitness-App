@@ -1,7 +1,9 @@
 import {
   cameraLiveFeedbackReadinessStatus,
+  canonicalizeCameraAnalysisStatus,
   cameraStatusFromCompletedRepReadiness,
   cameraStatusFromPoseStateReadiness,
+  cameraStatusFromSilentPoseGap,
   countOnlyCameraStatus,
   createCameraLiveFeedbackReadinessState,
   createRecentCompletedRepCameraStatusState,
@@ -10,6 +12,7 @@ import {
   recentCompletedRepCameraStatus,
   resolveCameraAnalysisStatus,
   selectCameraAnalysisStatus,
+  selectLiveFeedbackReadinessSample,
   shouldIncludeRecentCompletedRepCameraStatus,
   cameraStatusFromViewCueGating,
   updateCameraLiveFeedbackReadinessState,
@@ -76,6 +79,47 @@ describe('CameraAnalysisStatus resolver', () => {
     expect(result.selected?.level).toBe('error');
   });
 
+  it('creates tracking-lost status for a sustained silent pose gap', () => {
+    const status = cameraStatusFromSilentPoseGap({
+      lastPoseAgeMs: 1001,
+      thresholdMs: 1000,
+    });
+
+    expect(status?.message).toBe('Tracking was lost.');
+    expect(status?.reason).toBe('silent_pose_gap');
+    expect(status?.source).toBe('global');
+    expect(status?.details?.feedbackMode).toBe('unavailable');
+  });
+
+  it('does not create tracking-lost status for a short silent pose gap', () => {
+    expect(cameraStatusFromSilentPoseGap({
+      lastPoseAgeMs: 999,
+      thresholdMs: 1000,
+    })).toBeNull();
+    expect(cameraStatusFromSilentPoseGap({
+      lastPoseAgeMs: 0,
+      thresholdMs: 1000,
+    })).toBeNull();
+  });
+
+  it('lets silent pose gap tracking lost override live and recent readiness', () => {
+    const silentGapStatus = cameraStatusFromSilentPoseGap({
+      lastPoseAgeMs: 1500,
+      thresholdMs: 1000,
+    });
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high'),
+      poseStateStatus: silentGapStatus,
+      additionalStatuses: [
+        fullFeedbackCameraStatus('liveReadiness'),
+        limitedFeedbackCameraStatus({ source: 'completedRep' }),
+      ],
+    });
+
+    expect(result.selected?.message).toBe('Tracking was lost.');
+    expect(result.selected?.reason).toBe('silent_pose_gap');
+  });
+
   it('lets framing warnings override limited feedback', () => {
     const result = resolveCameraAnalysisStatus({
       poseQuality: qualitySnapshot('high', ['move_camera_back']),
@@ -92,7 +136,7 @@ describe('CameraAnalysisStatus resolver', () => {
       exerciseWarnings: ['side_view_uncertain'],
     });
 
-    expect(result.selected?.message).toBe('Turn side-on so I can judge your form.');
+    expect(result.selected?.message).toBe('Count only - improve camera angle for form feedback');
     expect(result.selected?.source).toBe('exercise');
   });
 
@@ -117,6 +161,75 @@ describe('CameraAnalysisStatus resolver', () => {
 
     expect(result.selected?.message).toBe('Limited feedback - adjust angle for full analysis');
     expect(result.selected?.details?.feedbackMode).toBe('limited');
+  });
+
+  it('suppresses hard view warnings when useful live readiness is available', () => {
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high'),
+      exerciseWarnings: ['front_view_uncertain'],
+      additionalStatuses: [fullFeedbackCameraStatus('liveReadiness')],
+    });
+
+    expect(result.selected?.message).toBe('Full feedback available');
+    expect(result.selected?.source).toBe('liveReadiness');
+    expect(result.candidates.some((status) => status.reason === 'front_view_uncertain')).toBe(false);
+  });
+
+  it('uses limited readiness instead of hard Barbell Curl view warnings when one arm and torso are usable', () => {
+    const status = selectLiveFeedbackReadinessSample({
+      exerciseStatus: countOnlyCameraStatus({
+        reason: 'front_view_uncertain',
+        message: 'Face the camera so I can judge your form.',
+        details: { feedbackMode: 'countOnly', viewRequired: 'front' },
+      }),
+      poseStateReadinessStatus: cameraStatusFromPoseStateReadiness({
+        exerciseName: 'Barbell Curl',
+        poseState: poseStateReadiness({
+          torso: 'reliable',
+          leftArm: 'reliable',
+          rightArm: 'unreliable',
+        }),
+      }),
+    });
+
+    expect(status?.message).toBe('Limited feedback - keep key joints visible');
+    expect(status?.details?.feedbackMode).toBe('limited');
+  });
+
+  it('canonicalizes equivalent limited angle/readiness messages', () => {
+    const messages = [
+      'Turn side-on for full form analysis',
+      'Turn side-on so I can judge your form.',
+      'Limited feedback - adjust angle for full analysis',
+    ];
+
+    for (const message of messages) {
+      expect(canonicalizeCameraAnalysisStatus(limitedFeedbackCameraStatus({
+        message,
+        reason: 'setup_side_view_uncertain',
+      }))?.message).toBe('Limited feedback - adjust angle for full analysis');
+    }
+  });
+
+  it('canonicalizes equivalent count-only angle messages without changing key-joint count-only text', () => {
+    expect(canonicalizeCameraAnalysisStatus(countOnlyCameraStatus({
+      message: 'Turn side-on for full form analysis',
+      reason: 'setup_side_view_uncertain',
+    }))?.message).toBe('Count only - improve camera angle for form feedback');
+    expect(canonicalizeCameraAnalysisStatus(countOnlyCameraStatus({
+      message: 'Count only - keep key joints visible',
+      reason: 'pose_reliability_not_scoreable',
+    }))?.message).toBe('Count only - keep key joints visible');
+  });
+
+  it('suppresses view-angle warnings while critical framing is active', () => {
+    const result = resolveCameraAnalysisStatus({
+      poseQuality: qualitySnapshot('high'),
+      exerciseWarnings: ['move_camera_back', 'side_view_uncertain'],
+    });
+
+    expect(result.selected?.message).toBe('Move the camera back.');
+    expect(result.candidates.some((status) => status.reason === 'side_view_uncertain')).toBe(false);
   });
 
   it('does not let soft generic key-joint warnings override useful exercise feedback', () => {
@@ -400,6 +513,29 @@ describe('CameraAnalysisStatus resolver', () => {
 
     expect(recentCompletedRepCameraStatus(recentState, 2251)).toBeNull();
     expect(cameraLiveFeedbackReadinessStatus(liveState, 2251)?.details?.feedbackMode).toBe('limited');
+  });
+
+  it('keeps occluded Barbell Curl readiness limited rather than alternating full/count-only', () => {
+    const statuses = [1000, 1250, 1500].map(() => selectLiveFeedbackReadinessSample({
+      exerciseStatus: countOnlyCameraStatus({
+        reason: 'front_view_uncertain',
+        message: 'Face the camera so I can judge your form.',
+        details: { feedbackMode: 'countOnly', viewRequired: 'front' },
+      }),
+      poseStateReadinessStatus: cameraStatusFromPoseStateReadiness({
+        exerciseName: 'Barbell Curl',
+        poseState: poseStateReadiness({
+          torso: 'reliable',
+          leftArm: 'reliable',
+          rightArm: 'unreliable',
+        }),
+      }),
+    })).filter((status): status is CameraAnalysisStatus => Boolean(status));
+    const liveState = appendLiveReadinessSamples(statuses, [1000, 1250, 1500]);
+    const status = cameraLiveFeedbackReadinessStatus(liveState, 1500);
+
+    expect(status?.message).toBe('Limited feedback - keep key joints visible');
+    expect(status?.details?.feedbackMode).toBe('limited');
   });
 
   it('uses sustained live full readiness instead of stale recent limited readiness', () => {
