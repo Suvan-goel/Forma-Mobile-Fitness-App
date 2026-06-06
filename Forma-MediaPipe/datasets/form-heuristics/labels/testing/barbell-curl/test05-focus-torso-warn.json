@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/testing/barbell-curl/test05-focus-torso-warn.mp4",
+  "landmarkFile": "landmarks/testing/barbell-curl/test05-focus-torso-warn.json",
+  "split": "test",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5900,
+      "endMs": 8400,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 9100,
+      "endMs": 11300,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 12100,
+      "endMs": 14700,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 15500,
+      "endMs": 17800,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 18600,
+      "endMs": 21400,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 22900,
+      "endMs": 24600,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Draft labels from timestamped video inspection. Issue IDs, view, scorable value, and rep count follow barbell-curl-reliable-v1-recordings."
+}

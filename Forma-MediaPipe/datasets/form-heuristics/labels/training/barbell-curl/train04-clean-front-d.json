@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train04-clean-front-d.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train04-clean-front-d.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-unknown",
+    "sessionId": "session-unknown",
+    "cameraSetupId": "camera-setup-unknown",
+    "environmentId": "environment-unknown",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "expectedReps": 5,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6650,
+      "endMs": 8950,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with stable shoulders and torso."
+    },
+    {
+      "index": 2,
+      "startMs": 11650,
+      "endMs": 13800,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with stable shoulders and torso."
+    },
+    {
+      "index": 3,
+      "startMs": 16500,
+      "endMs": 18950,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with stable shoulders and torso."
+    },
+    {
+      "index": 4,
+      "startMs": 21050,
+      "endMs": 23650,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with stable shoulders and torso."
+    },
+    {
+      "index": 5,
+      "startMs": 25950,
+      "endMs": 29200,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with stable shoulders and torso."
+    }
+  ],
+  "notes": "Draft labels for train04-clean-front-d. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were estimated from the actual video."
+}

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train18-focus-tempo-up.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train18-focus-tempo-up.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5500,
+      "endMs": 8500,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with normal tempo."
+    },
+    {
+      "index": 2,
+      "startMs": 8500,
+      "endMs": 12000,
+      "issueIds": ["barbell-curl.tempo_up"],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly rushed upward curl per recording plan."
+    },
+    {
+      "index": 3,
+      "startMs": 12000,
+      "endMs": 15800,
+      "issueIds": ["barbell-curl.tempo_up"],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly rushed upward curl per recording plan."
+    },
+    {
+      "index": 4,
+      "startMs": 15800,
+      "endMs": 19500,
+      "issueIds": ["barbell-curl.tempo_up"],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly rushed upward curl per recording plan."
+    },
+    {
+      "index": 5,
+      "startMs": 19500,
+      "endMs": 23000,
+      "issueIds": ["barbell-curl.tempo_up"],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly rushed upward curl per recording plan."
+    },
+    {
+      "index": 6,
+      "startMs": 23000,
+      "endMs": 26600,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with normal tempo."
+    }
+  ],
+  "notes": "Draft labels. Timings were inspected from the video; issueIds follow the barbell-curl-reliable-v1 recording plan."
+}

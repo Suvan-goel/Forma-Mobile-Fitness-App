@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/testing/barbell-curl/test08-hard-negative-front.mp4",
+  "landmarkFile": "landmarks/testing/barbell-curl/test08-hard-negative-front.json",
+  "split": "test",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-barbell-curl-1",
+    "sessionId": "test08-hard-negative-front",
+    "cameraSetupId": "test08-hard-negative-front-camera",
+    "environmentId": "environment-anonymous-gym",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5000,
+      "endMs": 9300,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "notes": "Clean hard-negative rep from plan; timing reviewed from video."
+    },
+    {
+      "index": 2,
+      "startMs": 9300,
+      "endMs": 14100,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "notes": "Clean hard-negative rep from plan; timing reviewed from video."
+    },
+    {
+      "index": 3,
+      "startMs": 14100,
+      "endMs": 19100,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "notes": "Clean hard-negative rep from plan; timing reviewed from video."
+    },
+    {
+      "index": 4,
+      "startMs": 19100,
+      "endMs": 24700,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "notes": "Clean hard-negative rep from plan; timing reviewed from video."
+    },
+    {
+      "index": 5,
+      "startMs": 24700,
+      "endMs": 30000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "notes": "Clean hard-negative rep from plan; timing reviewed from video."
+    },
+    {
+      "index": 6,
+      "startMs": 30000,
+      "endMs": 33000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "suggestedIssueIds": [],
+      "suggestedFeedbackMessages": [],
+      "notes": "Clean hard-negative rep from plan; timing reviewed from video."
+    }
+  ],
+  "notes": "Draft manual labels from barbell-curl-reliable-v1-recordings.md. Issue IDs/scorable/view follow the plan; timings were inspected from the source video.",
+  "labelingGuidance": [
+    "Front-view Barbell Curl reps are full-form labels: review bilateral ROM, symmetry/sync, elbow flare, shoulder involvement, torso swing, and tempo.",
+    "Side/oblique Barbell Curl reps are limited-signal fallback labels: label only visible-arm ROM/flex/extend, shoulder involvement, torso swing, and tempo when observable.",
+    "For side/oblique reps, do not treat missing asymmetry or elbow-flare cues as clean negatives; leave those issues unlabelled unless the rep is front-view and judgeable.",
+    "Mark view as front, side, oblique, or unknown; set scorable=false when arm path, torso, or rep timing cannot be judged.",
+    "Count meaningful partial curl attempts as reps when there is a visible flex and return, even if ROM is poor.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "availableIssues": [
+    {
+      "issueId": "barbell-curl.incomplete_flex",
+      "feedbackMessage": "Flex more at the top of the curl."
+    },
+    {
+      "issueId": "barbell-curl.incomplete_extend",
+      "feedbackMessage": "Extend fully at the bottom."
+    },
+    {
+      "issueId": "barbell-curl.incomplete_rom",
+      "feedbackMessage": "Incomplete rep — curl all the way up and fully extend."
+    },
+    {
+      "issueId": "barbell-curl.shoulder_fail",
+      "feedbackMessage": "Too much shoulder involvement — reduce the weight."
+    },
+    {
+      "issueId": "barbell-curl.shoulder_warn",
+      "feedbackMessage": "Upper arms moving — keep elbows pinned to your sides."
+    },
+    {
+      "issueId": "barbell-curl.torso_fail",
+      "feedbackMessage": "Excessive body swing — this is cheating the rep."
+    },
+    {
+      "issueId": "barbell-curl.torso_warn",
+      "feedbackMessage": "Don't swing your torso — stay upright and controlled."
+    },
+    {
+      "issueId": "barbell-curl.tempo_up",
+      "feedbackMessage": "Slow down — control the curl."
+    },
+    {
+      "issueId": "barbell-curl.tempo_down",
+      "feedbackMessage": "Control the lowering — don't drop the weight."
+    },
+    {
+      "issueId": "barbell-curl.asymmetry",
+      "feedbackMessage": "Arms are uneven — curl both sides together."
+    },
+    {
+      "issueId": "barbell-curl.elbow_flare",
+      "feedbackMessage": "Keep your elbows in — don't flare them out to the sides."
+    }
+  ],
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T23:18:00Z",
+    "generator": "manual-video-labeling",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

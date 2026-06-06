@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val04-focus-tempo-up.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val04-focus-tempo-up.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-unknown",
+    "sessionId": "session-unknown",
+    "cameraSetupId": "camera-setup-unknown",
+    "environmentId": "environment-unknown",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 7100,
+      "endMs": 9450,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 11200,
+      "endMs": 13200,
+      "issueIds": [
+        "barbell-curl.tempo_up"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly fast upward curl tempo."
+    },
+    {
+      "index": 3,
+      "startMs": 14200,
+      "endMs": 15850,
+      "issueIds": [
+        "barbell-curl.tempo_up"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly fast upward curl tempo."
+    },
+    {
+      "index": 4,
+      "startMs": 17200,
+      "endMs": 19000,
+      "issueIds": [
+        "barbell-curl.tempo_up"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly fast upward curl tempo."
+    },
+    {
+      "index": 5,
+      "startMs": 20150,
+      "endMs": 21850,
+      "issueIds": [
+        "barbell-curl.tempo_up"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly fast upward curl tempo."
+    },
+    {
+      "index": 6,
+      "startMs": 23000,
+      "endMs": 25150,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft labels for val04-focus-tempo-up. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were estimated from the actual video."
+}

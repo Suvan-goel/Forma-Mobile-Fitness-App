@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val07-multi-body.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val07-multi-body.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-barbell-curl-validation-1",
+    "sessionId": "val07-multi-body",
+    "cameraSetupId": "val07-multi-body-camera",
+    "environmentId": "environment-anonymous-gym",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "labelingGuidance": [
+    "Front-view Barbell Curl reps are full-form labels: review bilateral ROM, symmetry/sync, elbow flare, shoulder involvement, torso swing, and tempo.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "expectedReps": 10,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6250,
+      "endMs": 9000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 10750,
+      "endMs": 13250,
+      "issueIds": [
+        "barbell-curl.shoulder_warn"
+      ],
+      "issueSeverities": {
+        "barbell-curl.shoulder_warn": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild upper-arm drift."
+    },
+    {
+      "index": 3,
+      "startMs": 15000,
+      "endMs": 17500,
+      "issueIds": [
+        "barbell-curl.shoulder_warn"
+      ],
+      "issueSeverities": {
+        "barbell-curl.shoulder_warn": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear upper-arm drift that is still not a full shoulder heave."
+    },
+    {
+      "index": 4,
+      "startMs": 19000,
+      "endMs": 21500,
+      "issueIds": [
+        "barbell-curl.shoulder_fail"
+      ],
+      "issueSeverities": {
+        "barbell-curl.shoulder_fail": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild shoulder heave."
+    },
+    {
+      "index": 5,
+      "startMs": 22750,
+      "endMs": 25000,
+      "issueIds": [
+        "barbell-curl.shoulder_fail"
+      ],
+      "issueSeverities": {
+        "barbell-curl.shoulder_fail": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear shoulder heave."
+    },
+    {
+      "index": 6,
+      "startMs": 26500,
+      "endMs": 28750,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "issueSeverities": {
+        "barbell-curl.torso_warn": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild torso swing."
+    },
+    {
+      "index": 7,
+      "startMs": 29750,
+      "endMs": 32000,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "issueSeverities": {
+        "barbell-curl.torso_warn": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear but not extreme torso swing."
+    },
+    {
+      "index": 8,
+      "startMs": 34250,
+      "endMs": 36750,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "issueSeverities": {
+        "barbell-curl.torso_fail": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild but obvious body swing."
+    },
+    {
+      "index": 9,
+      "startMs": 37750,
+      "endMs": 40000,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "issueSeverities": {
+        "barbell-curl.torso_fail": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear strong body swing or lean-back cheat."
+    },
+    {
+      "index": 10,
+      "startMs": 41750,
+      "endMs": 44250,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft label for val07-multi-body. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were inspected from the actual video.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T22:17:23Z",
+    "generator": "codex-manual-video-inspection",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

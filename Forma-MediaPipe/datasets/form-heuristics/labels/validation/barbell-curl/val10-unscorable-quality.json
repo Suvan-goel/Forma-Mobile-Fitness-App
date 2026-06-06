@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val10-unscorable-quality.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val10-unscorable-quality.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-barbell-curl-validation-1",
+    "sessionId": "val10-unscorable-quality",
+    "cameraSetupId": "val10-unscorable-quality-camera",
+    "environmentId": "environment-anonymous-gym",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "unknown",
+    "cameraSide": "unknown",
+    "lightingCondition": "unknown",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "poor"
+  },
+  "labelingGuidance": [
+    "Mark view as front, side, oblique, or unknown; set scorable=false when arm path, torso, or rep timing cannot be judged.",
+    "Count meaningful partial curl attempts as reps when there is a visible flex and return, even if ROM is poor.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "expectedReps": 3,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 3000,
+      "endMs": 5750,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "unknown",
+      "scorable": false,
+      "notes": "Curl from poor-quality capture; close crop and occlusion make form unscorable."
+    },
+    {
+      "index": 2,
+      "startMs": 6000,
+      "endMs": 7500,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "unknown",
+      "scorable": false,
+      "notes": "Curl from poor-quality capture; close crop and occlusion make form unscorable."
+    },
+    {
+      "index": 3,
+      "startMs": 8250,
+      "endMs": 10000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "unknown",
+      "scorable": false,
+      "notes": "Curl from poor-quality capture; close crop and occlusion make form unscorable."
+    }
+  ],
+  "notes": "Draft label for val10-unscorable-quality. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were inspected from the actual video. All reps remain unscorable as planned.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T22:17:23Z",
+    "generator": "codex-manual-video-inspection",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

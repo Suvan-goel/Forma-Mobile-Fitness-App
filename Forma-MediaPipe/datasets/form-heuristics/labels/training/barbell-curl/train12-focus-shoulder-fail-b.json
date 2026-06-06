@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train12-focus-shoulder-fail-b.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train12-focus-shoulder-fail-b.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5300,
+      "endMs": 8300,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 10000,
+      "endMs": 12200,
+      "issueIds": [
+        "barbell-curl.shoulder_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 13200,
+      "endMs": 15300,
+      "issueIds": [
+        "barbell-curl.shoulder_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 16600,
+      "endMs": 18800,
+      "issueIds": [
+        "barbell-curl.shoulder_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 20200,
+      "endMs": 22400,
+      "issueIds": [
+        "barbell-curl.shoulder_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 24800,
+      "endMs": 26500,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Draft labels from the barbell-curl reliable-v1 recording plan. Rep timing was manually inspected from the video."
+}

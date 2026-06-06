@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val06-multi-rom-tempo.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val06-multi-rom-tempo.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-barbell-curl-validation-1",
+    "sessionId": "val06-multi-rom-tempo",
+    "cameraSetupId": "val06-multi-rom-tempo-camera",
+    "environmentId": "environment-anonymous-gym",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "labelingGuidance": [
+    "Front-view Barbell Curl reps are full-form labels: review bilateral ROM, symmetry/sync, elbow flare, shoulder involvement, torso swing, and tempo.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "expectedReps": 10,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5750,
+      "endMs": 8250,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 9250,
+      "endMs": 11000,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_flex": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly stop short at the top."
+    },
+    {
+      "index": 3,
+      "startMs": 12000,
+      "endMs": 14000,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_flex": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly stop short at the top."
+    },
+    {
+      "index": 4,
+      "startMs": 15625,
+      "endMs": 18625,
+      "issueIds": [
+        "barbell-curl.incomplete_extend"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_extend": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly avoid full extension at the bottom."
+    },
+    {
+      "index": 5,
+      "startMs": 19000,
+      "endMs": 21750,
+      "issueIds": [
+        "barbell-curl.incomplete_extend"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_extend": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly avoid full extension at the bottom."
+    },
+    {
+      "index": 6,
+      "startMs": 22250,
+      "endMs": 24000,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_rom": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild short half-curl."
+    },
+    {
+      "index": 7,
+      "startMs": 24500,
+      "endMs": 26000,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_rom": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear short half-curl."
+    },
+    {
+      "index": 8,
+      "startMs": 28250,
+      "endMs": 30250,
+      "issueIds": [
+        "barbell-curl.tempo_down"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly rush the lowering phase."
+    },
+    {
+      "index": 9,
+      "startMs": 32000,
+      "endMs": 34000,
+      "issueIds": [
+        "barbell-curl.tempo_down"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly drop the bar too fast."
+    },
+    {
+      "index": 10,
+      "startMs": 35250,
+      "endMs": 38250,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft label for val06-multi-rom-tempo. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were inspected from the actual video.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T22:17:23Z",
+    "generator": "codex-manual-video-inspection",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

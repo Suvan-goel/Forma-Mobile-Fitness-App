@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train14-focus-torso-fail-a.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train14-focus-torso-fail-a.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6800,
+      "endMs": 9300,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 12700,
+      "endMs": 15200,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 16200,
+      "endMs": 18900,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 20100,
+      "endMs": 22400,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 23500,
+      "endMs": 26200,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 28100,
+      "endMs": 30200,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Draft labels from the barbell-curl reliable-v1 recording plan. Rep timing was manually inspected from the video; torso-fail windows include the visible body-swing initiation."
+}

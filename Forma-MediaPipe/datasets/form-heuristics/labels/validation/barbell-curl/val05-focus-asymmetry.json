@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val05-focus-asymmetry.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val05-focus-asymmetry.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-unknown",
+    "sessionId": "session-unknown",
+    "cameraSetupId": "camera-setup-unknown",
+    "environmentId": "environment-unknown",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 8650,
+      "endMs": 10850,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 12200,
+      "endMs": 14350,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild arm asymmetry."
+    },
+    {
+      "index": 3,
+      "startMs": 15600,
+      "endMs": 17750,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild arm asymmetry."
+    },
+    {
+      "index": 4,
+      "startMs": 19350,
+      "endMs": 22200,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear arm asymmetry."
+    },
+    {
+      "index": 5,
+      "startMs": 23450,
+      "endMs": 26250,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear arm asymmetry."
+    },
+    {
+      "index": 6,
+      "startMs": 27350,
+      "endMs": 29150,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft labels for val05-focus-asymmetry. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were estimated from the actual video."
+}

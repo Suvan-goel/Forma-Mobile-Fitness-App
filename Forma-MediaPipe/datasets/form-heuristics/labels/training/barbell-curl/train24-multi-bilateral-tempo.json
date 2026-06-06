@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train24-multi-bilateral-tempo.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train24-multi-bilateral-tempo.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-id",
+    "sessionId": "session-anonymous-id",
+    "cameraSetupId": "camera-setup-anonymous-id",
+    "environmentId": "environment-anonymous-id",
+    "collectionMode": "unknown",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "unknown",
+    "lightingCondition": "unknown",
+    "reviewerId": "reviewer-anonymous-id",
+    "reviewerConfidence": "unknown",
+    "reviewerViewConfidence": "good"
+  },
+  "labelingGuidance": [
+    "Front-view Barbell Curl reps are full-form labels: review bilateral ROM, symmetry/sync, elbow flare, shoulder involvement, torso swing, and tempo.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "expectedReps": 10,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6200,
+      "endMs": 9800,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 9800,
+      "endMs": 13000,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild left/right arm mismatch."
+    },
+    {
+      "index": 3,
+      "startMs": 13000,
+      "endMs": 16900,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear left/right arm mismatch."
+    },
+    {
+      "index": 4,
+      "startMs": 16900,
+      "endMs": 20600,
+      "issueIds": [
+        "barbell-curl.elbow_flare"
+      ],
+      "issueSeverities": {
+        "barbell-curl.elbow_flare": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild elbow flare outward."
+    },
+    {
+      "index": 5,
+      "startMs": 20600,
+      "endMs": 24800,
+      "issueIds": [
+        "barbell-curl.elbow_flare"
+      ],
+      "issueSeverities": {
+        "barbell-curl.elbow_flare": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear elbow flare outward."
+    },
+    {
+      "index": 6,
+      "startMs": 24800,
+      "endMs": 29100,
+      "issueIds": [
+        "barbell-curl.tempo_up"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly rush the upward curl."
+    },
+    {
+      "index": 7,
+      "startMs": 29100,
+      "endMs": 32600,
+      "issueIds": [
+        "barbell-curl.tempo_up"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly curl upward too fast."
+    },
+    {
+      "index": 8,
+      "startMs": 32600,
+      "endMs": 35800,
+      "issueIds": [
+        "barbell-curl.tempo_down"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly rush the lowering phase."
+    },
+    {
+      "index": 9,
+      "startMs": 35800,
+      "endMs": 39600,
+      "issueIds": [
+        "barbell-curl.tempo_down"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly drop the bar too fast."
+    },
+    {
+      "index": 10,
+      "startMs": 39600,
+      "endMs": 43100,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft label from barbell-curl-reliable-v1-recordings with manually inspected video timings.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T22:09:24Z",
+    "generator": "codex-manual-video-inspection",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

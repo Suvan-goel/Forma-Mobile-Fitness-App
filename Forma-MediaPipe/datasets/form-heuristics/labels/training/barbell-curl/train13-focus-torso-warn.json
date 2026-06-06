@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train13-focus-torso-warn.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train13-focus-torso-warn.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 3800,
+      "endMs": 7300,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 8600,
+      "endMs": 10800,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 12000,
+      "endMs": 14200,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 15700,
+      "endMs": 17400,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 19500,
+      "endMs": 21400,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 23700,
+      "endMs": 25600,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Draft labels from the barbell-curl reliable-v1 recording plan. Rep timing was manually inspected from the video."
+}

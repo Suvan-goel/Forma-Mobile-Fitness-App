@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train21-focus-asymmetry-b.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train21-focus-asymmetry-b.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-id",
+    "sessionId": "session-anonymous-id",
+    "cameraSetupId": "camera-setup-anonymous-id",
+    "environmentId": "environment-anonymous-id",
+    "collectionMode": "unknown",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "unknown",
+    "lightingCondition": "unknown",
+    "reviewerId": "reviewer-anonymous-id",
+    "reviewerConfidence": "unknown",
+    "reviewerViewConfidence": "good"
+  },
+  "labelingGuidance": [
+    "Front-view Barbell Curl reps are full-form labels: review bilateral ROM, symmetry/sync, elbow flare, shoulder involvement, torso swing, and tempo.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5000,
+      "endMs": 6000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with both arms even."
+    },
+    {
+      "index": 2,
+      "startMs": 9000,
+      "endMs": 11250,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild left/right mismatch in timing, height, or ROM."
+    },
+    {
+      "index": 3,
+      "startMs": 12750,
+      "endMs": 15000,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild left/right mismatch in timing, height, or ROM."
+    },
+    {
+      "index": 4,
+      "startMs": 16750,
+      "endMs": 19000,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear left/right mismatch in timing, height, or ROM."
+    },
+    {
+      "index": 5,
+      "startMs": 20750,
+      "endMs": 23000,
+      "issueIds": [
+        "barbell-curl.asymmetry"
+      ],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear left/right mismatch in timing, height, or ROM."
+    },
+    {
+      "index": 6,
+      "startMs": 23750,
+      "endMs": 24750,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with both arms even."
+    }
+  ],
+  "notes": "Draft label from barbell-curl-reliable-v1-recordings with manually inspected video timings.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T22:09:24Z",
+    "generator": "codex-manual-video-inspection",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

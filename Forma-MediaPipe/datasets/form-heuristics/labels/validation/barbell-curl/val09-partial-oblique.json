@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val09-partial-oblique.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val09-partial-oblique.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-barbell-curl-validation-1",
+    "sessionId": "val09-partial-oblique",
+    "cameraSetupId": "val09-partial-oblique-camera",
+    "environmentId": "environment-anonymous-gym",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "oblique",
+    "cameraSide": "oblique",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "usable"
+  },
+  "labelingGuidance": [
+    "Side/oblique Barbell Curl reps are limited-signal fallback labels: label only visible-arm ROM/flex/extend, shoulder involvement, torso swing, and tempo when observable.",
+    "For side/oblique reps, do not treat missing asymmetry or elbow-flare cues as clean negatives; leave those issues unlabelled unless the rep is front-view and judgeable.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "expectedReps": 5,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 7250,
+      "endMs": 9750,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "oblique",
+      "scorable": true,
+      "notes": "Clean visible-arm curl."
+    },
+    {
+      "index": 2,
+      "startMs": 10250,
+      "endMs": 12250,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_rom": "moderate"
+      },
+      "view": "oblique",
+      "scorable": true,
+      "notes": "Visible arm performs a short half-curl."
+    },
+    {
+      "index": 3,
+      "startMs": 13250,
+      "endMs": 16500,
+      "issueIds": [
+        "barbell-curl.shoulder_fail"
+      ],
+      "issueSeverities": {
+        "barbell-curl.shoulder_fail": "moderate"
+      },
+      "view": "oblique",
+      "scorable": true,
+      "notes": "Visible shoulder heaves to help lift."
+    },
+    {
+      "index": 4,
+      "startMs": 19000,
+      "endMs": 22250,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "issueSeverities": {
+        "barbell-curl.torso_fail": "moderate"
+      },
+      "view": "oblique",
+      "scorable": true,
+      "notes": "Visible torso swing or lean-back cheat."
+    },
+    {
+      "index": 5,
+      "startMs": 23500,
+      "endMs": 25000,
+      "issueIds": [
+        "barbell-curl.tempo_up",
+        "barbell-curl.tempo_down"
+      ],
+      "issueSeverities": {
+        "barbell-curl.tempo_up": "moderate",
+        "barbell-curl.tempo_down": "moderate"
+      },
+      "view": "oblique",
+      "scorable": true,
+      "notes": "Visible arm curls up too fast and lowers too fast."
+    }
+  ],
+  "notes": "Draft label for val09-partial-oblique. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were inspected from the actual video. Asymmetry and elbow flare are intentionally unlabelled for this partial oblique view.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T22:17:23Z",
+    "generator": "codex-manual-video-inspection",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

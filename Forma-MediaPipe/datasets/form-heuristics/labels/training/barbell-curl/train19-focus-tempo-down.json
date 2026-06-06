@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train19-focus-tempo-down.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train19-focus-tempo-down.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5600,
+      "endMs": 9000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with normal tempo."
+    },
+    {
+      "index": 2,
+      "startMs": 9000,
+      "endMs": 11800,
+      "issueIds": ["barbell-curl.tempo_down"],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly rushed lowering phase per recording plan."
+    },
+    {
+      "index": 3,
+      "startMs": 11800,
+      "endMs": 14700,
+      "issueIds": ["barbell-curl.tempo_down"],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly rushed lowering phase per recording plan."
+    },
+    {
+      "index": 4,
+      "startMs": 14700,
+      "endMs": 18200,
+      "issueIds": ["barbell-curl.tempo_down"],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly rushed lowering phase per recording plan."
+    },
+    {
+      "index": 5,
+      "startMs": 18200,
+      "endMs": 21100,
+      "issueIds": ["barbell-curl.tempo_down"],
+      "issueSeverities": {
+        "barbell-curl.tempo_down": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly rushed lowering phase per recording plan."
+    },
+    {
+      "index": 6,
+      "startMs": 21100,
+      "endMs": 25000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with normal tempo."
+    }
+  ],
+  "notes": "Draft labels. Timings were inspected from the video; issueIds follow the barbell-curl-reliable-v1 recording plan."
+}

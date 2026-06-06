@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train16-focus-elbow-flare-a.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train16-focus-elbow-flare-a.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6000,
+      "endMs": 9200,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 9200,
+      "endMs": 12400,
+      "issueIds": ["barbell-curl.elbow_flare"],
+      "issueSeverities": {
+        "barbell-curl.elbow_flare": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild elbow flare per recording plan."
+    },
+    {
+      "index": 3,
+      "startMs": 12400,
+      "endMs": 15500,
+      "issueIds": ["barbell-curl.elbow_flare"],
+      "issueSeverities": {
+        "barbell-curl.elbow_flare": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild elbow flare per recording plan."
+    },
+    {
+      "index": 4,
+      "startMs": 15500,
+      "endMs": 18400,
+      "issueIds": ["barbell-curl.elbow_flare"],
+      "issueSeverities": {
+        "barbell-curl.elbow_flare": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear elbow flare per recording plan."
+    },
+    {
+      "index": 5,
+      "startMs": 18400,
+      "endMs": 21400,
+      "issueIds": ["barbell-curl.elbow_flare"],
+      "issueSeverities": {
+        "barbell-curl.elbow_flare": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear elbow flare per recording plan."
+    },
+    {
+      "index": 6,
+      "startMs": 21400,
+      "endMs": 24100,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft labels. Timings were inspected from the video; issueIds follow the barbell-curl-reliable-v1 recording plan."
+}

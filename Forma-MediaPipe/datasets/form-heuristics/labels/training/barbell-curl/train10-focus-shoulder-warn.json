@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train10-focus-shoulder-warn.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train10-focus-shoulder-warn.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 8500,
+      "endMs": 10500,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 12000,
+      "endMs": 13500,
+      "issueIds": [
+        "barbell-curl.shoulder_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 14750,
+      "endMs": 17000,
+      "issueIds": [
+        "barbell-curl.shoulder_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 18250,
+      "endMs": 20500,
+      "issueIds": [
+        "barbell-curl.shoulder_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 21500,
+      "endMs": 23750,
+      "issueIds": [
+        "barbell-curl.shoulder_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 25250,
+      "endMs": 27500,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Draft labels from timestamped video inspection. Issue IDs, view, scorable value, and rep count follow barbell-curl-reliable-v1-recordings."
+}

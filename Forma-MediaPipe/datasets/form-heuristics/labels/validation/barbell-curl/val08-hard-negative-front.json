@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val08-hard-negative-front.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val08-hard-negative-front.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-anonymous-barbell-curl-validation-1",
+    "sessionId": "val08-hard-negative-front",
+    "cameraSetupId": "val08-hard-negative-front-camera",
+    "environmentId": "environment-anonymous-gym",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "labelingGuidance": [
+    "Front-view Barbell Curl reps are full-form labels: review bilateral ROM, symmetry/sync, elbow flare, shoulder involvement, torso swing, and tempo.",
+    "Label only visible faults; do not treat unobservable cues as clean negatives."
+  ],
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6000,
+      "endMs": 8750,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean curl with slight natural torso movement, still acceptable."
+    },
+    {
+      "index": 2,
+      "startMs": 11250,
+      "endMs": 13500,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean curl with natural shoulder movement, not a fault."
+    },
+    {
+      "index": 3,
+      "startMs": 16000,
+      "endMs": 18250,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean curl with brisk but controlled tempo."
+    },
+    {
+      "index": 4,
+      "startMs": 21250,
+      "endMs": 23500,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean curl reaching near-full but acceptable top ROM."
+    },
+    {
+      "index": 5,
+      "startMs": 27750,
+      "endMs": 30000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean curl reaching near-full but acceptable bottom extension."
+    },
+    {
+      "index": 6,
+      "startMs": 33250,
+      "endMs": 36000,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean curl with normal form."
+    }
+  ],
+  "notes": "Draft label for val08-hard-negative-front. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were inspected from the actual video.",
+  "draftMetadata": {
+    "generatedAt": "2026-06-05T22:17:23Z",
+    "generator": "codex-manual-video-inspection",
+    "source": "barbell-curl-reliable-v1-recordings"
+  }
+}

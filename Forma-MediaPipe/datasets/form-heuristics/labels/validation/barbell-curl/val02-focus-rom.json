@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/validation/barbell-curl/val02-focus-rom.mp4",
+  "landmarkFile": "landmarks/validation/barbell-curl/val02-focus-rom.json",
+  "split": "validation",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-unknown",
+    "sessionId": "session-unknown",
+    "cameraSetupId": "camera-setup-unknown",
+    "environmentId": "environment-unknown",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6200,
+      "endMs": 8850,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 11350,
+      "endMs": 12950,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_rom": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild incomplete range of motion."
+    },
+    {
+      "index": 3,
+      "startMs": 14150,
+      "endMs": 15550,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_rom": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild incomplete range of motion."
+    },
+    {
+      "index": 4,
+      "startMs": 16650,
+      "endMs": 18100,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_rom": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly incomplete range of motion."
+    },
+    {
+      "index": 5,
+      "startMs": 19250,
+      "endMs": 20750,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_rom": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly incomplete range of motion."
+    },
+    {
+      "index": 6,
+      "startMs": 21750,
+      "endMs": 23900,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft labels for val02-focus-rom. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were estimated from the actual video."
+}

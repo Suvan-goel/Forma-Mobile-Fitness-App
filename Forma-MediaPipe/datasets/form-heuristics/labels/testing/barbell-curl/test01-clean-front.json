@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/testing/barbell-curl/test01-clean-front.mp4",
+  "landmarkFile": "landmarks/testing/barbell-curl/test01-clean-front.json",
+  "split": "test",
+  "reviewStatus": "reviewed",
+  "expectedReps": 5,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5500,
+      "endMs": 7400,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 8600,
+      "endMs": 10800,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 11700,
+      "endMs": 13700,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 14400,
+      "endMs": 16600,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 17500,
+      "endMs": 19900,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Draft labels from timestamped video inspection. Issue IDs, view, scorable value, and rep count follow barbell-curl-reliable-v1-recordings."
+}

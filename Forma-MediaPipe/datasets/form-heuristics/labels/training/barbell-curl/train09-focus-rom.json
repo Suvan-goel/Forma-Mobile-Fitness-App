@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train09-focus-rom.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train09-focus-rom.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 6250,
+      "endMs": 8750,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 11250,
+      "endMs": 13250,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 14750,
+      "endMs": 17000,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 18750,
+      "endMs": 20500,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 21250,
+      "endMs": 23250,
+      "issueIds": [
+        "barbell-curl.incomplete_rom"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 25250,
+      "endMs": 27750,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Draft labels from timestamped video inspection. Issue IDs, view, scorable value, and rep count follow barbell-curl-reliable-v1-recordings."
+}

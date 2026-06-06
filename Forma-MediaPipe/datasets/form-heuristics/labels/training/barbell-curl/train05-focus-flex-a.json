@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train05-focus-flex-a.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train05-focus-flex-a.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-unknown",
+    "sessionId": "session-unknown",
+    "cameraSetupId": "camera-setup-unknown",
+    "environmentId": "environment-unknown",
+    "collectionMode": "staged",
+    "deviceModel": "unknown",
+    "cameraView": "front",
+    "cameraSide": "frontish",
+    "lightingCondition": "bright",
+    "reviewerId": "codex",
+    "reviewerConfidence": "medium",
+    "reviewerViewConfidence": "good"
+  },
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 10800,
+      "endMs": 13350,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    },
+    {
+      "index": 2,
+      "startMs": 15250,
+      "endMs": 17150,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_flex": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly stops short at the top."
+    },
+    {
+      "index": 3,
+      "startMs": 18800,
+      "endMs": 21050,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_flex": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mildly stops short at the top."
+    },
+    {
+      "index": 4,
+      "startMs": 22250,
+      "endMs": 24050,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_flex": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly stops short at the top."
+    },
+    {
+      "index": 5,
+      "startMs": 25150,
+      "endMs": 26950,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "issueSeverities": {
+        "barbell-curl.incomplete_flex": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clearly stops short at the top."
+    },
+    {
+      "index": 6,
+      "startMs": 28000,
+      "endMs": 30850,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl."
+    }
+  ],
+  "notes": "Draft labels for train05-focus-flex-a. Issue IDs, view, scorable flag, and rep count follow barbell-curl-reliable-v1-recordings.md; startMs/endMs were estimated from the actual video."
+}

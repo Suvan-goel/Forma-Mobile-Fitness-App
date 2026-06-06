@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/training/barbell-curl/train20-focus-asymmetry-a.mp4",
+  "landmarkFile": "landmarks/training/barbell-curl/train20-focus-asymmetry-a.json",
+  "split": "train",
+  "reviewStatus": "reviewed",
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 8200,
+      "endMs": 11200,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with both arms even."
+    },
+    {
+      "index": 2,
+      "startMs": 11200,
+      "endMs": 15500,
+      "issueIds": ["barbell-curl.asymmetry"],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild left/right mismatch per recording plan."
+    },
+    {
+      "index": 3,
+      "startMs": 15500,
+      "endMs": 20000,
+      "issueIds": ["barbell-curl.asymmetry"],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "mild"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Mild left/right mismatch per recording plan."
+    },
+    {
+      "index": 4,
+      "startMs": 20000,
+      "endMs": 24100,
+      "issueIds": ["barbell-curl.asymmetry"],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear left/right mismatch per recording plan."
+    },
+    {
+      "index": 5,
+      "startMs": 24100,
+      "endMs": 28400,
+      "issueIds": ["barbell-curl.asymmetry"],
+      "issueSeverities": {
+        "barbell-curl.asymmetry": "moderate"
+      },
+      "view": "front",
+      "scorable": true,
+      "notes": "Clear left/right mismatch per recording plan."
+    },
+    {
+      "index": 6,
+      "startMs": 28400,
+      "endMs": 30700,
+      "issueIds": [],
+      "issueSeverities": {},
+      "view": "front",
+      "scorable": true,
+      "notes": "Clean full curl with both arms even."
+    }
+  ],
+  "notes": "Draft labels. Timings were inspected from the video; issueIds follow the barbell-curl-reliable-v1 recording plan."
+}
