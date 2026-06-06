@@ -138,6 +138,11 @@ const TEMPO_UP_MIN_SAFETY_FLOOR = 0.15;
 const ELBOW_FLARE_MIN_CONFIDENT_SAMPLES = 4;
 const ELBOW_FLARE_WARN_SAMPLE_RATIO = 0.25;
 const ELBOW_FLARE_FAIL_SAMPLE_RATIO = 0.2;
+const TORSO_DELTA_TRIM_FRACTION = 0.10;
+const FRONT_SHORT_PARTIAL_MIN_PRIMARY_ROM = 0.06;
+const FRONT_SHORT_PARTIAL_MIN_SECONDARY_ROM = 0.04;
+const FRONT_SHORT_PARTIAL_MIN_DURATION_SEC = 0.45;
+const FRONT_SHORT_PARTIAL_MAX_DURATION_SEC = 3.5;
 
 /** Warm-up: require N consecutive stable frames before enabling FSM */
 const WARMUP_REQUIRED = 12;          // ~0.6s at 20fps
@@ -575,6 +580,18 @@ function sideParticipated(repWindow: RepWindow, side: CurlSide): boolean {
   );
 }
 
+function frontShortPartialParticipated(repWindow: RepWindow): boolean {
+  const leftRom = sideRomRatio(repWindow, 'left');
+  const rightRom = sideRomRatio(repWindow, 'right');
+  const primaryRom = Math.max(leftRom, rightRom);
+  const secondaryRom = Math.min(leftRom, rightRom);
+
+  return (
+    primaryRom >= FRONT_SHORT_PARTIAL_MIN_PRIMARY_ROM &&
+    secondaryRom >= FRONT_SHORT_PARTIAL_MIN_SECONDARY_ROM
+  );
+}
+
 function primarySideForView(viewAngle: ViewAngle): CurlSide {
   return viewAngle.primarySide === 'right' ? 'right' : 'left';
 }
@@ -586,6 +603,137 @@ function finiteDelta(min: number, max: number): number | null {
 
 function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
   return !allowedCueFamilies || allowedCueFamilies.has(family);
+}
+
+function trimmedRange(values: number[]): number | null {
+  const finiteValues = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (finiteValues.length === 0) return null;
+  if (finiteValues.length < 20) return finiteValues[finiteValues.length - 1] - finiteValues[0];
+
+  const trimCount = Math.min(
+    Math.floor((finiteValues.length - 1) / 2),
+    Math.max(1, Math.floor(finiteValues.length * TORSO_DELTA_TRIM_FRACTION)),
+  );
+  return finiteValues[finiteValues.length - 1 - trimCount] - finiteValues[trimCount];
+}
+
+interface TorsoDeltaSummary {
+  raw: number | null;
+  robust: number | null;
+  sampleCount: number;
+  skippedReason: string | null;
+}
+
+function getTorsoDeltaSummary(repWindow: RepWindow): TorsoDeltaSummary {
+  const raw = finiteDelta(repWindow.minAngles.torso, repWindow.maxAngles.torso);
+  const robust = trimmedRange(repWindow.torsoSamples);
+  return {
+    raw,
+    robust,
+    sampleCount: repWindow.torsoSamples.length,
+    skippedReason: robust === null ? 'torso_unavailable' : null,
+  };
+}
+
+interface IncompleteRomSummary {
+  romRatio: number;
+  leftLow: boolean;
+  rightLow: boolean;
+  triggered: boolean;
+}
+
+function getIncompleteRomSummary(
+  repWindow: RepWindow,
+  viewAngle: ViewAngle,
+  flexTriggered: boolean,
+  extendTriggered: boolean,
+): IncompleteRomSummary {
+  const leftOk = sideRatioOk(repWindow, 'left');
+  const rightOk = sideRatioOk(repWindow, 'right');
+  const leftRom = leftOk ? sideRomRatio(repWindow, 'left') : 0;
+  const rightRom = rightOk ? sideRomRatio(repWindow, 'right') : 0;
+  const leftLow = leftOk && leftRom < THRESHOLDS.ROM_MIN;
+  const rightLow = rightOk && rightRom < THRESHOLDS.ROM_MIN;
+  const romBlockedByEndpointCue = flexTriggered || extendTriggered;
+
+  if (viewAngle.zone === 'frontal') {
+    const romRatio = leftOk && rightOk ? Math.min(leftRom, rightRom) : Math.max(leftRom, rightRom);
+    return {
+      romRatio,
+      leftLow,
+      rightLow,
+      triggered: !romBlockedByEndpointCue && (leftOk && rightOk ? leftLow && rightLow : romRatio < THRESHOLDS.ROM_MIN),
+    };
+  }
+
+  const primarySide = primarySideForView(viewAngle);
+  const romRatio = primarySide === 'left' ? leftRom : rightRom;
+  return {
+    romRatio,
+    leftLow,
+    rightLow,
+    triggered: !romBlockedByEndpointCue && romRatio < THRESHOLDS.ROM_MIN,
+  };
+}
+
+interface AsymmetrySummary {
+  eligible: boolean;
+  skippedReason: string;
+  minRatio: number | null;
+  romRatio: number | null;
+  ratio: number | null;
+  minTriggered: boolean;
+  romTriggered: boolean;
+  syncTriggered: boolean;
+  triggered: boolean;
+}
+
+function getAsymmetrySummary(
+  repWindow: RepWindow,
+  isFrontal: boolean,
+  frontFormEligible: boolean,
+  leftRatioOk: boolean,
+  rightRatioOk: boolean,
+  romLRatio: number,
+  romRRatio: number,
+  viewQuality?: Pick<RepViewQualityDiagnostic, 'frontishConfirmed'>,
+): AsymmetrySummary {
+  const minRatio = isFrontal && leftRatioOk && rightRatioOk
+    ? Math.abs(repWindow.ratios.minLeftRatio - repWindow.ratios.minRightRatio)
+    : null;
+  const romRatio = isFrontal && leftRatioOk && rightRatioOk
+    ? Math.abs(romLRatio - romRRatio)
+    : null;
+  const ratio =
+    minRatio !== null && romRatio !== null
+      ? Math.max(minRatio, romRatio)
+      : null;
+  const eligible =
+    frontFormEligible &&
+    leftRatioOk &&
+    rightRatioOk &&
+    sideParticipated(repWindow, 'left') &&
+    sideParticipated(repWindow, 'right');
+  const skippedReason = isFrontal && !viewQuality?.frontishConfirmed
+    ? 'front_view_unconfirmed'
+    : isFrontal
+      ? 'bilateral_participation_missing'
+      : 'not_front_view';
+  const minTriggered = minRatio !== null && minRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO;
+  const romTriggered = romRatio !== null && romRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO;
+  const syncTriggered = repWindow.metadata.syncDelta !== null && repWindow.metadata.syncDelta > THRESHOLDS.SYNC_WINDOW;
+
+  return {
+    eligible,
+    skippedReason,
+    minRatio,
+    romRatio,
+    ratio,
+    minTriggered,
+    romTriggered,
+    syncTriggered,
+    triggered: eligible && (syncTriggered || (minTriggered && romTriggered)),
+  };
 }
 
 interface ShoulderDeltaSummary {
@@ -631,16 +779,16 @@ function computeRepScore(
   viewQuality?: RepViewQualityDiagnostic,
   allowedCueFamilies?: ReadonlySet<string>,
 ): number {
-  const { minAngles, maxAngles } = repWindow;
   const isFrontal = viewAngle.zone === 'frontal';
   const frontFormEligible = isFrontal && (viewQuality?.frontishConfirmed ?? true);
   const primaryIsLeft = viewAngle.primarySide !== 'right';
 
   // Torso penalty (delta-based, already camera-invariant)
-  const deltaTorso = isFinite(maxAngles.torso - minAngles.torso)
-    ? maxAngles.torso - minAngles.torso
-    : 0;
-  const torsoP = cueFamilyAllowed(allowedCueFamilies, 'torsoControl') ? penaltyTorso(deltaTorso) : 0;
+  const torsoSummary = getTorsoDeltaSummary(repWindow);
+  const torsoP =
+    cueFamilyAllowed(allowedCueFamilies, 'torsoControl') && torsoSummary.robust !== null
+      ? penaltyTorso(torsoSummary.robust)
+      : 0;
 
   // Shoulder penalty: frontal uses bilateral max; side/oblique uses selected primary side.
   const shoulderSummary = getShoulderDeltaSummary(repWindow, viewAngle);
@@ -681,9 +829,23 @@ function computeRepScore(
   if (cueFamilyAllowed(allowedCueFamilies, 'bilateralSymmetry') && frontFormEligible && leftRatioOk && rightRatioOk) {
     const romLRatio = repWindow.ratios.maxLeftRatio - repWindow.ratios.minLeftRatio;
     const romRRatio = repWindow.ratios.maxRightRatio - repWindow.ratios.minRightRatio;
-    const deltaMinRatio = Math.abs(repWindow.ratios.minLeftRatio - repWindow.ratios.minRightRatio);
-    const deltaRomRatio = Math.abs(romLRatio - romRRatio);
-    asymmetryP = penaltyAsymmetry(deltaMinRatio, deltaRomRatio, repWindow.metadata.syncDelta);
+    const asymmetrySummary = getAsymmetrySummary(
+      repWindow,
+      isFrontal,
+      frontFormEligible,
+      leftRatioOk,
+      rightRatioOk,
+      romLRatio,
+      romRRatio,
+      viewQuality,
+    );
+    if (asymmetrySummary.triggered) {
+      asymmetryP = penaltyAsymmetry(
+        asymmetrySummary.minTriggered ? asymmetrySummary.minRatio ?? 0 : 0,
+        asymmetrySummary.romTriggered ? asymmetrySummary.romRatio ?? 0 : 0,
+        asymmetrySummary.syncTriggered ? repWindow.metadata.syncDelta : null,
+      );
+    }
   }
 
   // Elbow flare penalty (frontal only)
@@ -762,6 +924,7 @@ interface RepMetadata {
   landmarkSource: LandmarkSource;
   ratioDistanceMode: RatioDistanceMode;
   torsoAnchorSources: Record<TorsoAnchorSource, number>;
+  countingSide: CurlSide | null;
   completionView: ViewAngle | null;
   selectedSideAtCompletion: ViewAngle['primarySide'] | null;
   syncDelta: number | null;
@@ -793,6 +956,8 @@ interface RepWindow {
   tempo: Record<CurlSide, RepTempoSide>;
   /** Sustained elbow flare samples. Frontal view only. */
   elbowFlare: Record<CurlSide, RepElbowFlareCounts>;
+  /** Smoothed torso samples used to reject isolated max/min spikes in torso delta. */
+  torsoSamples: number[];
   /** Current-frame ratio sample validity for diagnostics and view quality. */
   ratioSamples: Record<CurlSide, RepRatioSampleCounts>;
   viewSamples: RepViewSamples;
@@ -908,7 +1073,7 @@ function initElbowFlareCounts(): RepElbowFlareCounts {
   };
 }
 
-function initRepWindow(tStart: number): RepWindow {
+function initRepWindow(tStart: number, countingSide: CurlSide | null = null): RepWindow {
   return {
     minAngles: {
       leftElbow: Infinity,
@@ -949,6 +1114,7 @@ function initRepWindow(tStart: number): RepWindow {
     frameCount: 0,
     tempo: { left: initRepTempoSide(), right: initRepTempoSide() },
     elbowFlare: { left: initElbowFlareCounts(), right: initElbowFlareCounts() },
+    torsoSamples: [],
     ratioSamples: {
       left: { validSamples: 0, dropoutSamples: 0 },
       right: { validSamples: 0, dropoutSamples: 0 },
@@ -970,6 +1136,7 @@ function initRepWindow(tStart: number): RepWindow {
         shoulder_center: 0,
         unavailable: 0,
       },
+      countingSide,
       completionView: null,
       selectedSideAtCompletion: null,
       syncDelta: null,
@@ -1547,7 +1714,7 @@ function evaluateForm(
   viewQuality: RepViewQualityDiagnostic,
   allowedCueFamilies?: ReadonlySet<string>,
 ): { score: number; messages: string[] } {
-  const { minAngles, maxAngles, ratios } = repWindow;
+  const { ratios } = repWindow;
   const messages: string[] = [];
   const isFrontal = viewAngle.zone === 'frontal';
   const frontFormEligible = isFrontal && viewQuality.frontishConfirmed === true;
@@ -1579,7 +1746,6 @@ function evaluateForm(
   // ROM metrics — ratio-based
   const romLRatio = leftRatioOk ? ratios.maxLeftRatio - ratios.minLeftRatio : 0;
   const romRRatio = rightRatioOk ? ratios.maxRightRatio - ratios.minRightRatio : 0;
-  const primaryRomRatio = primaryIsLeft ? romLRatio : romRRatio;
 
   // 1. Severe shoulder involvement / severe torso swing
   // 2. Shoulder warning / torso warning
@@ -1592,30 +1758,27 @@ function evaluateForm(
     }
   }
 
-  const deltaTorso = maxAngles.torso - minAngles.torso;
-  if (isFinite(deltaTorso)) {
-    if (deltaTorso > FORM_THRESHOLDS.TORSO_FAIL) {
+  const torsoSummary = getTorsoDeltaSummary(repWindow);
+  if (torsoSummary.robust !== null) {
+    if (torsoSummary.robust > FORM_THRESHOLDS.TORSO_FAIL) {
       severeMessages.push('Excessive body swing — this is cheating the rep.');
-    } else if (deltaTorso > FORM_THRESHOLDS.TORSO_WARN) {
+    } else if (torsoSummary.robust > FORM_THRESHOLDS.TORSO_WARN) {
       warningMessages.push("Don't swing your torso — stay upright and controlled.");
     }
   }
 
   // 3. ROM feedback
-  if (isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN) {
+  const flexTriggered = isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN;
+  const extendTriggered = returnMaxRatio !== null && returnMaxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN;
+  if (flexTriggered) {
     romMessages.push('Flex more at the top of the curl.');
   }
-  if (returnMaxRatio !== null && returnMaxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN) {
+  if (extendTriggered) {
     romMessages.push('Extend fully at the bottom.');
   }
-  if (isFrontal) {
-    if ((romLRatio < THRESHOLDS.ROM_MIN || romRRatio < THRESHOLDS.ROM_MIN) && romMessages.length === 0) {
-      romMessages.push('Incomplete rep — curl all the way up and fully extend.');
-    }
-  } else {
-    if (primaryRomRatio < THRESHOLDS.ROM_MIN && romMessages.length === 0) {
-      romMessages.push('Incomplete rep — curl all the way up and fully extend.');
-    }
+  const romSummary = getIncompleteRomSummary(repWindow, viewAngle, flexTriggered, extendTriggered);
+  if (romSummary.triggered && romMessages.length === 0) {
+    romMessages.push('Incomplete rep — curl all the way up and fully extend.');
   }
 
   // 4. Elbow flare (frontal only)
@@ -1638,17 +1801,18 @@ function evaluateForm(
     tempoAsymmetryMessages.push("Control the lowering — don't drop the weight.");
   }
 
-  if (frontFormEligible && leftRatioOk && rightRatioOk) {
-    const deltaMinRatio = Math.abs(ratios.minLeftRatio - ratios.minRightRatio);
-    const deltaRomRatio = Math.abs(romLRatio - romRRatio);
-    const syncDelta = repWindow.metadata.syncDelta;
-    if (
-      deltaMinRatio > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO ||
-      deltaRomRatio > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO ||
-      (syncDelta !== null && syncDelta > THRESHOLDS.SYNC_WINDOW)
-    ) {
-      tempoAsymmetryMessages.push('Arms are uneven — curl both sides together.');
-    }
+  const asymmetrySummary = getAsymmetrySummary(
+    repWindow,
+    isFrontal,
+    frontFormEligible,
+    leftRatioOk,
+    rightRatioOk,
+    romLRatio,
+    romRRatio,
+    viewQuality,
+  );
+  if (asymmetrySummary.triggered) {
+    tempoAsymmetryMessages.push('Arms are uneven — curl both sides together.');
   }
 
   messages.push(
@@ -1893,7 +2057,7 @@ function buildBarbellCurlDiagnostics(
   scorable: boolean,
   viewQuality: RepViewQualityDiagnostic,
 ): NonNullable<FrameworkRepResult['diagnostics']> {
-  const { ratios, minAngles, maxAngles } = repWindow;
+  const { ratios } = repWindow;
   const isFrontal = viewAngle.zone === 'frontal';
   const frontFormEligible = isFrontal && viewQuality.frontishConfirmed === true;
   const primaryIsLeft = viewAngle.primarySide !== 'right';
@@ -1932,43 +2096,34 @@ function buildBarbellCurlDiagnostics(
   const returnMaxRatio = getReturnMaxCurlRatio(repWindow, viewAngle);
   const flexTriggered = typeof minRatio === 'number' && isFinite(minRatio) && minRatio > FORM_THRESHOLDS.FLEX_RATIO_WARN;
   const extendTriggered = returnMaxRatio !== null && returnMaxRatio < FORM_THRESHOLDS.EXTEND_RATIO_WARN;
-  const incompleteRomTriggered = isFrontal
-    ? (romLRatio < THRESHOLDS.ROM_MIN || romRRatio < THRESHOLDS.ROM_MIN) && !flexTriggered && !extendTriggered
-    : romRatio < THRESHOLDS.ROM_MIN && !flexTriggered && !extendTriggered;
+  const romSummary = getIncompleteRomSummary(repWindow, viewAngle, flexTriggered, extendTriggered);
+  const incompleteRomTriggered = romSummary.triggered;
 
   const shoulderSummary = getShoulderDeltaSummary(repWindow, viewAngle);
   const shoulderDelta = shoulderSummary.scoring;
-  const torsoDelta = maxAngles.torso - minAngles.torso;
-  const torsoAvailable = Number.isFinite(torsoDelta);
+  const torsoSummary = getTorsoDeltaSummary(repWindow);
+  const torsoDelta = torsoSummary.robust;
+  const torsoRawDelta = torsoSummary.raw;
+  const torsoAvailable = torsoDelta !== null;
   const flareSummary = getElbowFlareSummary(repWindow, frontFormEligible);
   const flareSupport = maxElbowFlareSupport(repWindow);
   const { tUp, tDown } = getRepTempoDurations(repWindow, leftArm, rightArm, viewAngle);
-  const asymmetryMinRatio = isFrontal && leftRatioOk && rightRatioOk
-    ? Math.abs(ratios.minLeftRatio - ratios.minRightRatio)
-    : null;
-  const asymmetryRomRatio = isFrontal && leftRatioOk && rightRatioOk
-    ? Math.abs(romLRatio - romRRatio)
-    : null;
-  const asymmetryRatio =
-    asymmetryMinRatio !== null && asymmetryRomRatio !== null
-      ? Math.max(asymmetryMinRatio, asymmetryRomRatio)
-      : null;
-  const asymmetryEligible =
-    frontFormEligible &&
-    leftRatioOk &&
-    rightRatioOk &&
-    sideParticipated(repWindow, 'left') &&
-    sideParticipated(repWindow, 'right');
-  const frontOnlySkippedReason = isFrontal && !viewQuality.frontishConfirmed
-    ? 'front_view_unconfirmed'
-    : isFrontal
-      ? 'bilateral_participation_missing'
-      : 'not_front_view';
-  const asymmetryTriggered =
-    asymmetryEligible &&
-    ((asymmetryMinRatio ?? 0) > FORM_THRESHOLDS.SYMMETRY_MIN_RATIO ||
-      (asymmetryRomRatio ?? 0) > FORM_THRESHOLDS.SYMMETRY_ROM_RATIO ||
-      (repWindow.metadata.syncDelta !== null && repWindow.metadata.syncDelta > THRESHOLDS.SYNC_WINDOW));
+  const asymmetrySummary = getAsymmetrySummary(
+    repWindow,
+    isFrontal,
+    frontFormEligible,
+    leftRatioOk,
+    rightRatioOk,
+    romLRatio,
+    romRRatio,
+    viewQuality,
+  );
+  const asymmetryMinRatio = asymmetrySummary.minRatio;
+  const asymmetryRomRatio = asymmetrySummary.romRatio;
+  const asymmetryRatio = asymmetrySummary.ratio;
+  const asymmetryEligible = asymmetrySummary.eligible;
+  const frontOnlySkippedReason = asymmetrySummary.skippedReason;
+  const asymmetryTriggered = asymmetrySummary.triggered;
 
   return buildRepDiagnostics({
     exerciseName: 'Barbell Curl',
@@ -1987,6 +2142,17 @@ function buildBarbellCurlDiagnostics(
       diagnosticMetric('maxCurlRatio', maxRatio, { unit: 'ratio' }),
       diagnosticMetric('returnMaxCurlRatio', returnMaxRatio, { unit: 'ratio', eligible: returnMaxRatio !== null, skippedReason: 'return_extension_unavailable' }),
       diagnosticMetric('romRatio', romRatio, { unit: 'ratio' }),
+      diagnosticLabelMetric('romShortfallEvidence', isFrontal
+        ? romSummary.leftLow && romSummary.rightLow
+          ? 'bilateral'
+          : romSummary.leftLow
+            ? 'left_only'
+            : romSummary.rightLow
+              ? 'right_only'
+              : 'none'
+        : romSummary.leftLow || romSummary.rightLow
+          ? primarySide
+          : 'none'),
       diagnosticMetric('leftRomRatio', romLRatio, { unit: 'ratio', eligible: leftRatioOk, skippedReason: 'left_arm_unavailable' }),
       diagnosticMetric('rightRomRatio', romRRatio, { unit: 'ratio', eligible: rightRatioOk, skippedReason: 'right_arm_unavailable' }),
       diagnosticMetric('leftReturnMaxCurlRatio', leftReturnMaxRatio, { unit: 'ratio', eligible: leftReturnMaxRatio !== null, skippedReason: 'left_return_extension_unavailable' }),
@@ -2017,7 +2183,19 @@ function buildBarbellCurlDiagnostics(
         eligible: shoulderDelta !== null,
         skippedReason: shoulderSummary.skippedReason ?? 'shoulder_unavailable',
       }),
-      diagnosticMetric('torsoDelta', torsoDelta, { unit: 'degrees', eligible: torsoAvailable, skippedReason: 'torso_unavailable' }),
+      diagnosticMetric('torsoDelta', torsoDelta, {
+        unit: 'degrees',
+        eligible: torsoAvailable,
+        sampleCount: torsoSummary.sampleCount,
+        skippedReason: torsoSummary.skippedReason ?? 'torso_unavailable',
+      }),
+      diagnosticMetric('torsoDeltaRaw', torsoRawDelta, {
+        unit: 'degrees',
+        eligible: torsoRawDelta !== null,
+        sampleCount: torsoSummary.sampleCount,
+        skippedReason: 'torso_unavailable',
+      }),
+      diagnosticMetric('torsoSampleCount', torsoSummary.sampleCount, { unit: 'count', sampleCount: torsoSummary.sampleCount }),
       diagnosticMetric('elbowFlareMaxDeg', flareSummary.maxFlareDeg, {
         unit: 'degrees',
         eligible: frontFormEligible && flareSupport.sampleCount >= ELBOW_FLARE_MIN_CONFIDENT_SAMPLES,
@@ -2108,7 +2286,7 @@ function buildBarbellCurlDiagnostics(
         thresholdPath: 'formThresholds.TORSO_FAIL',
         thresholdValue: FORM_THRESHOLDS.TORSO_FAIL,
         eligible: torsoAvailable,
-        triggered: torsoAvailable && torsoDelta > FORM_THRESHOLDS.TORSO_FAIL,
+        triggered: torsoAvailable && torsoDelta! > FORM_THRESHOLDS.TORSO_FAIL,
         skippedReason: 'torso_unavailable',
       }),
       diagnosticCue({
@@ -2121,8 +2299,8 @@ function buildBarbellCurlDiagnostics(
         eligible: torsoAvailable,
         triggered:
           torsoAvailable &&
-          torsoDelta > FORM_THRESHOLDS.TORSO_WARN &&
-          torsoDelta <= FORM_THRESHOLDS.TORSO_FAIL,
+          torsoDelta! > FORM_THRESHOLDS.TORSO_WARN &&
+          torsoDelta! <= FORM_THRESHOLDS.TORSO_FAIL,
         skippedReason: 'torso_unavailable',
       }),
       diagnosticCue({
@@ -2276,7 +2454,10 @@ function updateBarbellCurlState(
   const rightInRep = rightValid && newState.rightArm.state !== 'REST';
   const inRep = leftInRep || rightInRep;
   if (inRep && !currentState.repWindow) {
-    newState.repWindow = initRepWindow(t);
+    const countingSide = viewAngle.zone === 'frontal'
+      ? null
+      : getPrimaryArm(viewAngle, leftValid, rightValid);
+    newState.repWindow = initRepWindow(t, countingSide);
   }
 
   // Include the transition frame (DOWN→REST): the angle that triggered completion
@@ -2313,6 +2494,9 @@ function updateBarbellCurlState(
       if (Number.isFinite(rawAngles[key])) {
         updateMinMax(window, key, smoothed[key]);
       }
+    }
+    if (Number.isFinite(rawAngles.torso) && Number.isFinite(smoothed.torso)) {
+      window.torsoSamples.push(smoothed.torso);
     }
 
     // Track reach ratios using current-frame-valid fast values to capture true depth/lockout.
@@ -2370,13 +2554,29 @@ function updateBarbellCurlState(
       const leftEndTime = newState.leftArm.tDownToRest;
       const rightEndTime = newState.rightArm.tDownToRest;
 
-      if (leftParticipated && rightParticipated && leftEndTime !== null && rightEndTime !== null) {
+      const partialFinished = leftPartialFinished || rightPartialFinished;
+      const bilateralParticipation = leftParticipated && rightParticipated;
+
+      if (bilateralParticipation && leftEndTime !== null && rightEndTime !== null) {
         newState.repWindow.metadata.syncDelta = Math.abs(leftEndTime - rightEndTime);
-        if (leftPartialFinished || rightPartialFinished) {
+        if (partialFinished) {
           completePartialRepIfMeaningful(newState, t, viewAngle);
         } else {
           completeRep(newState, t, viewAngle);
         }
+      } else if (
+        partialFinished &&
+        leftEndTime !== null &&
+        rightEndTime !== null &&
+        isCountableFrontShortPartial(
+          newState,
+          newState.repWindow,
+          viewAngle,
+          newState.repWindow.tEnd - newState.repWindow.tStart,
+        )
+      ) {
+        newState.repWindow.metadata.syncDelta = Math.abs(leftEndTime - rightEndTime);
+        completeRep(newState, t, viewAngle);
       } else {
         // Single-arm movement in a front-view barbell curl is not a clean bilateral rep.
         resetBarbellCurlRepTracking(newState);
@@ -2385,17 +2585,19 @@ function updateBarbellCurlState(
   } else {
     // OBLIQUE/SIDE MODE: count from the selected visible primary arm only.
     const primaryArm = getPrimaryArm(viewAngle, leftValid, rightValid);
-    const armState = primaryArm === 'left' ? newState.leftArm : newState.rightArm;
-    const prevArmState = primaryArm === 'left' ? prevLeftState : prevRightState;
-    const primaryParticipated = newState.repWindow ? sideParticipated(newState.repWindow, primaryArm) : false;
+    const lockedPrimaryArm = newState.repWindow?.metadata.countingSide ?? primaryArm;
+    const armState = lockedPrimaryArm === 'left' ? newState.leftArm : newState.rightArm;
+    const prevArmState = lockedPrimaryArm === 'left' ? prevLeftState : prevRightState;
+    const primaryParticipated = newState.repWindow ? sideParticipated(newState.repWindow, lockedPrimaryArm) : false;
+    const completionView = newState.repWindow ? lockCountingView(newState.repWindow, viewAngle) : viewAngle;
 
     const justFinished = prevArmState === 'DOWN' && armState.state === 'REST';
     const partialFinished = prevArmState === 'UP' && armState.partialReturnedToRest;
 
     if (justFinished && newState.repWindow && primaryParticipated) {
-      completeRep(newState, t, viewAngle);
+      completeRep(newState, t, completionView);
     } else if (partialFinished && newState.repWindow && primaryParticipated) {
-      completePartialRepIfMeaningful(newState, t, viewAngle);
+      completePartialRepIfMeaningful(newState, t, completionView);
     } else if ((justFinished || partialFinished) && newState.repWindow) {
       resetBarbellCurlRepTracking(newState);
     }
@@ -2434,6 +2636,28 @@ function getRepWindowRomRatio(repWindow: RepWindow, viewAngle: ViewAngle): numbe
   return viewAngle.primarySide === 'right' ? rightRom : leftRom;
 }
 
+function getRepWindowCountingRomRatio(repWindow: RepWindow, viewAngle: ViewAngle): number {
+  const leftRom = sideRomRatio(repWindow, 'left');
+  const rightRom = sideRomRatio(repWindow, 'right');
+
+  if (viewAngle.zone === 'frontal') {
+    return Math.max(leftRom, rightRom);
+  }
+
+  const side = repWindow.metadata.countingSide ?? primarySideForView(viewAngle);
+  return side === 'right' ? rightRom : leftRom;
+}
+
+function lockCountingView(repWindow: RepWindow, viewAngle: ViewAngle): ViewAngle {
+  if (viewAngle.zone === 'frontal' || !repWindow.metadata.countingSide) {
+    return viewAngle;
+  }
+  return {
+    ...viewAngle,
+    primarySide: repWindow.metadata.countingSide,
+  };
+}
+
 function resetBarbellCurlRepTracking(newState: BarbellCurlState): void {
   newState.repWindow = null;
   newState.leftArm = initArmFSM();
@@ -2466,7 +2690,7 @@ function completePartialRepIfMeaningful(
   const window = newState.repWindow;
   if (!window) return;
 
-  const actualRom = getRepWindowRomRatio(window, viewAngle);
+  const actualRom = getRepWindowCountingRomRatio(window, viewAngle);
   const duration = window.tEnd - window.tStart;
 
   if (isMeaningfulPartialRep({
@@ -2479,9 +2703,32 @@ function completePartialRepIfMeaningful(
     return;
   }
 
+  if (isCountableFrontShortPartial(newState, window, viewAngle, duration)) {
+    completeRep(newState, t, viewAngle);
+    return;
+  }
+
   newState.feedback = LOW_ROM_FEEDBACK;
   newState.lastFeedbackTime = t;
   resetBarbellCurlRepTracking(newState);
+}
+
+function isCountableFrontShortPartial(
+  state: BarbellCurlState,
+  repWindow: RepWindow,
+  viewAngle: ViewAngle,
+  durationSec: number,
+): boolean {
+  if (viewAngle.zone !== 'frontal') return false;
+  if (state.repCount === 0) return false;
+  if (
+    durationSec < FRONT_SHORT_PARTIAL_MIN_DURATION_SEC ||
+    durationSec > FRONT_SHORT_PARTIAL_MAX_DURATION_SEC
+  ) {
+    return false;
+  }
+
+  return frontShortPartialParticipated(repWindow);
 }
 
 /** Complete a rep: evaluate form, update state, reset FSMs. */

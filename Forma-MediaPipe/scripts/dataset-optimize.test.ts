@@ -13,12 +13,14 @@ import type {
   RepDiagnostics,
   TunableSpec,
 } from '../src/utils/exercises/types';
-import type { DatasetCase, ExerciseLabelFile } from '../src/utils/exercises/dataset';
+import type { CaseEvaluation, DatasetCase, ExerciseLabelFile } from '../src/utils/exercises/dataset';
 import { getConfigValue } from '../src/utils/exercises/heuristicConfig';
 import { replayRecording } from '../src/utils/exercises/replay';
 import {
   DEFAULT_MIN_SPLIT_CASES,
   buildOptimizerReplayCache,
+  buildCleanFpGateDiagnostics,
+  buildCleanSafetySummary,
   evaluateCasesCompact,
   evaluateCasesDetailed,
   minimumSplitGate,
@@ -344,12 +346,13 @@ describe('dataset optimiser scaling helpers', () => {
     const compact = evaluateCasesCompact(definition, cases);
     const detailed = evaluateCasesDetailed(definition, cases);
 
-    expect(compact).toEqual({
+    expect(compact).toMatchObject({
       totals: detailed?.totals,
       metrics: detailed?.metrics,
       qualityCoverage: detailed?.qualityCoverage,
       diagnosticSummary: detailed?.diagnosticSummary,
     });
+    expect(compact?.cleanSafety?.buckets.cleanFront.cleanReps).toBe(1);
   });
 
   it('cached compact evaluation matches uncached compact evaluation', () => {
@@ -405,6 +408,259 @@ describe('dataset optimiser scaling helpers', () => {
     expect(rawEvaluation.totals.falsePositives).toBe(1);
     expect(optimizerEvaluation?.totals.falsePositives).toBe(0);
     expect(optimizerEvaluation?.metrics.cleanRepFalsePositiveRate).toBe(0);
+  });
+
+  it('reports clean, hard-negative, per-issue, and unscorable clean-safety buckets', () => {
+    const definition = makeDiagnosticSyntheticExercise('Diagnostic Synthetic Clean Buckets', {
+      thresholds: { COMPLETE_AT: 0.5 },
+      formThresholds: { WARN_AT: 0.7 },
+    });
+    const hardNegative = diagnosticSyntheticCase(definition.name, 0.8, []);
+    hardNegative.label.sourceVideo = `videos/${definition.name}/hard-negative-clean-front.mp4`;
+    hardNegative.label.reps[0].view = 'front';
+    const unscorable = diagnosticSyntheticCase(definition.name, 0.85, []);
+    unscorable.label.sourceVideo = `videos/${definition.name}/unscorable-clean.mp4`;
+    unscorable.label.reps[0].scorable = false;
+
+    const evaluation = evaluateCasesCompact(definition, [hardNegative, unscorable]);
+
+    expect(evaluation?.cleanSafety?.buckets.cleanFront).toMatchObject({
+      cleanReps: 1,
+      falsePositiveReps: 1,
+      falseIssueCount: 1,
+    });
+    expect(evaluation?.cleanSafety?.buckets.hardNegativeClean).toMatchObject({
+      cleanReps: 1,
+      falsePositiveReps: 1,
+    });
+    expect(evaluation?.cleanSafety?.buckets.unscorable).toMatchObject({
+      cleanReps: 1,
+      falsePositiveReps: 1,
+    });
+    expect(
+      evaluation?.cleanSafety?.perIssueCleanFalsePositives[diagnosticSyntheticIssueId],
+    ).toMatchObject({
+      cleanFalsePositiveCount: 1,
+      hardNegativeCleanFalsePositiveCount: 1,
+      splitBreakdown: { train: 1, validation: 0, test: 0 },
+    });
+  });
+
+  it('derives asymmetry sub-cue, ROM, and torso clean-FP diagnostics from rep diagnostics', () => {
+    const sourceVideo = 'videos/barbell-curl/synthetic-clean-front.mp4';
+    const datasetCase: DatasetCase = {
+      label: {
+        schemaVersion: 1,
+        exerciseName: 'Barbell Curl',
+        sourceVideo,
+        split: 'train',
+        reviewStatus: 'reviewed',
+        expectedReps: 4,
+        reps: [
+          { index: 1, startMs: 0, endMs: 1000, issueIds: [], view: 'front' },
+          { index: 2, startMs: 1000, endMs: 2000, issueIds: ['barbell-curl.asymmetry'], view: 'front' },
+          { index: 3, startMs: 2000, endMs: 3000, issueIds: ['barbell-curl.asymmetry'], view: 'front' },
+          { index: 4, startMs: 3000, endMs: 4000, issueIds: [], view: 'front' },
+        ],
+      },
+      recording: { exerciseName: 'Barbell Curl', metadata: {}, frames: [] },
+    };
+    const diagnostics = (overrides: Partial<RepDiagnostics>): RepDiagnostics => ({
+      exerciseName: 'Barbell Curl',
+      repIndex: 1,
+      view: 'front',
+      selectedSide: 'both',
+      scorable: true,
+      metrics: {},
+      cues: {},
+      ...overrides,
+    });
+    const rep = (
+      index: number,
+      expectedIssueIds: string[],
+      predictedIssueIds: string[],
+      predictedDiagnostics: RepDiagnostics,
+    ) => ({
+      index,
+      matchStatus: 'matched',
+      expectedRepIndex: index,
+      predictedRepIndex: index,
+      expectedStartMs: (index - 1) * 1000,
+      expectedEndMs: index * 1000,
+      predictedStartMs: (index - 1) * 1000,
+      predictedEndMs: index * 1000,
+      overlapMs: 1000,
+      completionDeltaMs: 0,
+      expectedIssueIds,
+      predictedIssueIds,
+      predictedDiagnostics,
+      truePositives: [],
+      falsePositives: [],
+      falseNegatives: [],
+      expectedScorable: true,
+      expectedScorableExplicit: false,
+      predictedScorable: true,
+      expectedView: 'front',
+      predictedView: 'front',
+      expectedClean: expectedIssueIds.length === 0,
+      predictedClean: predictedIssueIds.length === 0,
+    });
+    const asymmetryCue = {
+      issueId: 'barbell-curl.asymmetry',
+      metricKeys: ['asymmetryMinRatio', 'asymmetryRomRatio', 'syncDelta'],
+      direction: 'above' as const,
+      eligible: true,
+      triggered: true,
+      thresholdValue: { minRatio: 0.15, romRatio: 0.17, syncDelta: 0.74 },
+    };
+    const cleanSafety = buildCleanSafetySummary([
+      {
+        exerciseName: 'Barbell Curl',
+        sourceVideo,
+        split: 'train',
+        expectedReps: 4,
+        predictedReps: 4,
+        repCountCorrect: true,
+        reps: [
+          rep(1, [], ['barbell-curl.asymmetry', 'barbell-curl.incomplete_rom'], diagnostics({
+            metrics: {
+              asymmetryMinRatio: { key: 'asymmetryMinRatio', value: 0.2, eligible: true },
+              asymmetryRomRatio: { key: 'asymmetryRomRatio', value: 0.05, eligible: true },
+              syncDelta: { key: 'syncDelta', value: 0.1, eligible: true },
+              romRatio: { key: 'romRatio', value: 0.31, eligible: true },
+              minCurlRatio: { key: 'minCurlRatio', value: 0.45, eligible: true },
+              returnMaxCurlRatio: { key: 'returnMaxCurlRatio', value: 0.92, eligible: true },
+            },
+            cues: {
+              'barbell-curl.asymmetry': asymmetryCue,
+              'barbell-curl.incomplete_rom': {
+                issueId: 'barbell-curl.incomplete_rom',
+                metricKeys: ['romRatio'],
+                direction: 'below',
+                eligible: true,
+                triggered: true,
+                thresholdValue: 0.38,
+              },
+              'barbell-curl.incomplete_flex': {
+                issueId: 'barbell-curl.incomplete_flex',
+                metricKeys: ['minCurlRatio'],
+                direction: 'above',
+                eligible: true,
+                triggered: false,
+              },
+              'barbell-curl.incomplete_extend': {
+                issueId: 'barbell-curl.incomplete_extend',
+                metricKeys: ['returnMaxCurlRatio'],
+                direction: 'below',
+                eligible: true,
+                triggered: false,
+              },
+            },
+          })),
+          rep(2, ['barbell-curl.asymmetry'], ['barbell-curl.asymmetry'], diagnostics({
+            metrics: {
+              asymmetryMinRatio: { key: 'asymmetryMinRatio', value: 0.02, eligible: true },
+              asymmetryRomRatio: { key: 'asymmetryRomRatio', value: 0.2, eligible: true },
+              syncDelta: { key: 'syncDelta', value: 0.1, eligible: true },
+            },
+            cues: { 'barbell-curl.asymmetry': asymmetryCue },
+          })),
+          rep(3, ['barbell-curl.asymmetry'], [], diagnostics({
+            metrics: {
+              asymmetryMinRatio: { key: 'asymmetryMinRatio', value: 0.02, eligible: true },
+              asymmetryRomRatio: { key: 'asymmetryRomRatio', value: 0.03, eligible: true },
+              syncDelta: { key: 'syncDelta', value: 0.1, eligible: true },
+            },
+            cues: {
+              'barbell-curl.asymmetry': {
+                ...asymmetryCue,
+                triggered: false,
+              },
+            },
+          })),
+          rep(4, [], ['barbell-curl.torso_fail'], diagnostics({
+            reliability: {
+              countabilityCandidate: 'countable',
+              scoreabilityCandidate: 'fullyScoreable',
+              usableChains: [],
+              weakChains: [],
+              safeCueFamilies: [],
+              unsafeCueFamilies: [],
+              reasons: ['outlierCandidate large_delta bone_length_jump'],
+            },
+            metrics: {
+              torsoDelta: { key: 'torsoDelta', value: 88, eligible: true },
+            },
+            cues: {
+              'barbell-curl.torso_fail': {
+                issueId: 'barbell-curl.torso_fail',
+                metricKeys: ['torsoDelta'],
+                direction: 'above',
+                eligible: true,
+                triggered: true,
+                thresholdValue: 28,
+              },
+            },
+          })),
+        ],
+        matchedReps: [],
+        missingExpectedReps: [],
+        extraPredictedReps: [],
+        totals: {} as CaseEvaluation['totals'],
+      } as CaseEvaluation,
+    ], [datasetCase]);
+
+    expect(cleanSafety.asymmetrySubCues.minRatio.cleanFalsePositiveCount).toBe(1);
+    expect(cleanSafety.asymmetrySubCues.romRatio.truePositiveCount).toBe(1);
+    expect(cleanSafety.asymmetrySubCues.none.falseNegativeCount).toBe(1);
+    expect(cleanSafety.romFalsePositiveDiagnostics.examples[0]).toMatchObject({
+      romRatio: 0.31,
+      romMinThreshold: 0.38,
+      incompleteRomEmitted: true,
+      incompleteRomSuppressedByPrecedence: false,
+    });
+    expect(cleanSafety.torsoFalsePositiveDiagnostics.examples[0]).toMatchObject({
+      torsoDelta: 88,
+      threshold: 28,
+      poseOutlierSignals: {
+        outlierCandidate: true,
+        largeDelta: true,
+        boneLengthJump: true,
+      },
+    });
+  });
+
+  it('reports clean-FP gates for train and validation without test-selection checks', () => {
+    const summary = (
+      repCountAccuracy: number,
+      cleanFpRate: number,
+      hardNegativeRate: number,
+    ) => ({
+      metrics: {
+        repCountAccuracy,
+        cleanRepFalsePositiveRate: cleanFpRate,
+      },
+      cleanSafety: {
+        buckets: {
+          hardNegativeClean: { falsePositiveRate: hardNegativeRate },
+        },
+      },
+    }) as unknown as ReturnType<typeof evaluateCasesCompact>;
+    const gate = buildCleanFpGateDiagnostics({
+      candidateTrain: summary(1, 0.95, 1),
+      candidateValidation: summary(0.7, 0.95, 1),
+      baselineTrain: summary(1, 0.95, 1),
+      baselineValidation: summary(0.9, 0.95, 1),
+      enforced: true,
+    });
+
+    expect(gate.enforced).toBe(true);
+    expect(gate.passed).toBe(false);
+    expect(gate.checks.map((check) => check.split)).toEqual(
+      expect.arrayContaining(['train', 'validation']),
+    );
+    expect(gate.checks.some((check) => (check.split as string) === 'test')).toBe(false);
+    expect(gate.checks.find((check) => check.name.includes('rep-count'))?.passed).toBe(false);
   });
 
   it('candidate search keeps compact summaries without per-case arrays', () => {

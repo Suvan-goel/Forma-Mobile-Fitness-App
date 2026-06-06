@@ -1,4 +1,6 @@
 import { barbellCurlDefinition } from '../definitions/barbellCurl';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   buildReplayFrameCache,
   replayRecording,
@@ -327,11 +329,25 @@ function interpolate(from: number, to: number, frames: number): number[] {
 }
 
 function fullRepPath(): number[] {
+  return repPathToTop(TOP_WRIST_Y);
+}
+
+function repPathToTop(topWristY: number): number[] {
   return [
     ...Array(16).fill(EXTENDED_WRIST_Y),
-    ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 16),
-    ...Array(4).fill(TOP_WRIST_Y),
-    ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 18),
+    ...interpolate(EXTENDED_WRIST_Y, topWristY, 16),
+    ...Array(4).fill(topWristY),
+    ...interpolate(topWristY, EXTENDED_WRIST_Y, 18),
+    ...Array(8).fill(EXTENDED_WRIST_Y),
+  ];
+}
+
+function slowFullRepPath(): number[] {
+  return [
+    ...Array(16).fill(EXTENDED_WRIST_Y),
+    ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 36),
+    ...Array(12).fill(TOP_WRIST_Y),
+    ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 42),
     ...Array(8).fill(EXTENDED_WRIST_Y),
   ];
 }
@@ -370,6 +386,16 @@ function halfRepPath(): number[] {
     ...Array(16).fill(EXTENDED_WRIST_Y),
     ...interpolate(EXTENDED_WRIST_Y, HALF_WRIST_Y, 16),
     ...interpolate(HALF_WRIST_Y, EXTENDED_WRIST_Y, 18),
+    ...Array(8).fill(EXTENDED_WRIST_Y),
+  ];
+}
+
+function shortIncompleteFlexPath(): number[] {
+  return [
+    ...Array(16).fill(EXTENDED_WRIST_Y),
+    ...interpolate(EXTENDED_WRIST_Y, 1.04, 24),
+    ...Array(8).fill(1.04),
+    ...interpolate(1.04, EXTENDED_WRIST_Y, 24),
     ...Array(8).fill(EXTENDED_WRIST_Y),
   ];
 }
@@ -446,30 +472,59 @@ function recordingWithHeadMotion(recording: LandmarkRecording): LandmarkRecordin
   );
 }
 
+const TORSO_UPPER_BODY_JOINTS = new Set([
+  'nose',
+  'left_ear',
+  'right_ear',
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+  'left_index',
+  'right_index',
+]);
+
 function recordingWithTorsoSwing(recording: LandmarkRecording): LandmarkRecording {
-  const upperBodyJoints = new Set([
-    'nose',
-    'left_ear',
-    'right_ear',
-    'left_shoulder',
-    'right_shoulder',
-    'left_elbow',
-    'right_elbow',
-    'left_wrist',
-    'right_wrist',
-    'left_index',
-    'right_index',
-  ]);
   return transformRecording(
     recording,
     (point, index) => {
-      if (!upperBodyJoints.has(point.name) || index < 18 || index > 52) return point;
+      if (!TORSO_UPPER_BODY_JOINTS.has(point.name) || index < 18 || index > 52) return point;
       const progress = index <= 35
         ? (index - 18) / (35 - 18)
         : (52 - index) / (52 - 35);
       return { ...point, z: (point.z ?? 0) + 1.0 * Math.max(0, progress) };
     },
     `${recording.metadata.description} with torso swing`,
+  );
+}
+
+function recordingWithTorsoSpike(
+  recording: LandmarkRecording,
+  startIndex: number,
+  frameCount: number,
+  depthOffset: number,
+): LandmarkRecording {
+  return transformRecording(
+    recording,
+    (point, index) => (
+      TORSO_UPPER_BODY_JOINTS.has(point.name) && index >= startIndex && index < startIndex + frameCount
+        ? { ...point, z: (point.z ?? 0) + depthOffset }
+        : point
+    ),
+    `${recording.metadata.description} with torso spike`,
+  );
+}
+
+function recordingWithSustainedTorsoSeesaw(recording: LandmarkRecording): LandmarkRecording {
+  return transformRecording(
+    recording,
+    (point, index) => {
+      if (!TORSO_UPPER_BODY_JOINTS.has(point.name) || index < 30 || index > 85) return point;
+      return { ...point, z: (point.z ?? 0) + (index < 58 ? -0.5 : 0.5) };
+    },
+    `${recording.metadata.description} with sustained torso seesaw`,
   );
 }
 
@@ -487,6 +542,10 @@ function recordingWithSmallPoseNoise(recording: LandmarkRecording): LandmarkReco
     },
     `${recording.metadata.description} with small deterministic noise`,
   );
+}
+
+function loadLandmarkFixture(relativePath: string): LandmarkRecording {
+  return JSON.parse(fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8')) as LandmarkRecording;
 }
 
 function recordingWithFrontalCompletionOnly(recording: LandmarkRecording): LandmarkRecording {
@@ -881,6 +940,43 @@ describe('Barbell Curl synthetic replay coverage', () => {
     });
   });
 
+  it('does not elevate a short torso spike to torso_fail', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      recordingWithTorsoSpike(
+        buildRecording('synthetic slow curl with torso spike', slowFullRepPath(), 'front'),
+        58,
+        2,
+        3,
+      ),
+    );
+    const metrics = result.reps[0]?.diagnostics?.metrics;
+
+    expect(result.finalRepCount).toBe(1);
+    expect(metrics?.torsoDeltaRaw.value).toBeGreaterThan(28);
+    expect(metrics?.torsoDelta.value).toBeLessThan(28);
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.torso_fail']).toMatchObject({
+      triggered: false,
+    });
+    expect(result.reps[0]?.issueIds).not.toContain('barbell-curl.torso_fail');
+  });
+
+  it('still flags sustained severe torso movement as torso_fail', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      recordingWithSustainedTorsoSeesaw(
+        buildRecording('synthetic slow curl with sustained torso movement', slowFullRepPath(), 'front'),
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0]?.diagnostics?.metrics.torsoDelta.value).toBeGreaterThan(28);
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.torso_fail']).toMatchObject({
+      triggered: true,
+    });
+    expect(result.reps[0]?.issueIds).toContain('barbell-curl.torso_fail');
+  });
+
   it('keeps a clean front rep stable under small deterministic pose noise', () => {
     const result = replayRecording(
       barbellCurlDefinition,
@@ -890,6 +986,74 @@ describe('Barbell Curl synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.repScores[0]).toBeGreaterThanOrEqual(80);
     expect(result.feedbackMessages).toEqual([]);
+  });
+
+  it('does not emit ROM or asymmetry issues for hard-negative one-sided ROM compression', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      loadLandmarkFixture('datasets/form-heuristics/landmarks/validation/barbell-curl/val08-hard-negative-front.json'),
+      { confidenceGating: true },
+    );
+
+    expect(result.finalRepCount).toBe(6);
+    for (const rep of result.reps) {
+      expect(rep.issueIds).not.toContain('barbell-curl.incomplete_rom');
+      expect(rep.issueIds).not.toContain('barbell-curl.asymmetry');
+      expect(rep.diagnostics?.metrics.romShortfallEvidence.label).toBe('right_only');
+      expect(rep.diagnostics?.cues['barbell-curl.incomplete_rom']).toMatchObject({
+        triggered: false,
+      });
+      expect(rep.diagnostics?.cues['barbell-curl.asymmetry']).toMatchObject({
+        triggered: false,
+      });
+    }
+  });
+
+  it('does not diagnose mild one-sided ROM variation as asymmetry', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildDualRecording(
+        'synthetic mild one-sided ROM variation',
+        fullRepPath(),
+        repPathToTop(1.12),
+        'front',
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0]?.issueIds).not.toContain('barbell-curl.asymmetry');
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry']).toMatchObject({
+      eligible: true,
+      triggered: false,
+    });
+  });
+
+  it('still flags clear amplitude asymmetry when endpoint and ROM evidence agree', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildDualRecording(
+        'synthetic clear one-sided amplitude asymmetry',
+        fullRepPath(),
+        repPathToTop(1.08),
+        'front',
+      ),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0]?.issueIds).toContain('barbell-curl.asymmetry');
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry'].triggered).toBe(true);
+  });
+
+  it('still flags clear bilateral incomplete ROM', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildRecording('synthetic bilateral incomplete ROM', repPathToTop(1.1), 'front'),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0]?.issueIds).toContain('barbell-curl.incomplete_rom');
+    expect(result.reps[0]?.diagnostics?.metrics.romShortfallEvidence.label).toBe('bilateral');
+    expect(result.reps[0]?.diagnostics?.cues['barbell-curl.incomplete_rom'].triggered).toBe(true);
   });
 
   it('does not emit front-only cues from a frontal completion frame without sustained front support', () => {
@@ -1181,6 +1345,33 @@ describe('Barbell Curl synthetic replay coverage', () => {
 
     expect(result.finalRepCount).toBe(0);
     expect(result.repTraces).toEqual([]);
+  });
+
+  it('does not count a short-top setup movement before counting is armed', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildSegmentedRecording('synthetic short-top setup then clean curl', [
+        { path: shortIncompleteFlexPath() },
+        { path: fullRepPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(1);
+    expect(result.reps[0]?.issueIds).toEqual([]);
+  });
+
+  it('counts a repeated short-top curl as incomplete_flex after a valid rep', () => {
+    const result = replayRecording(
+      barbellCurlDefinition,
+      buildSegmentedRecording('synthetic clean curl then short-top curl', [
+        { path: fullRepPath() },
+        { path: shortIncompleteFlexPath() },
+      ]),
+    );
+
+    expect(result.finalRepCount).toBe(2);
+    expect(result.reps[1]?.issueIds).toContain('barbell-curl.incomplete_flex');
+    expect(result.reps[1]?.diagnostics?.metrics.romRatio.value).toBeLessThan(0.19);
   });
 
   it('does not complete a rep from held smoothed ratios during active landmark dropout', () => {

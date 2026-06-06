@@ -34,6 +34,7 @@ import type {
   EvaluationMetrics,
   EvaluationTotals,
   QualityCoverageMetrics,
+  RepEvaluation,
 } from '../src/utils/exercises/dataset';
 import type {
   DiagnosticTuningEntry,
@@ -78,8 +79,149 @@ export interface OptimizerCommandOptions {
   checkpointPath?: string | null;
   resumeCheckpoint?: boolean;
   checkpointEvery?: number;
+  enforceCleanFpGates?: boolean;
   search: OptimizerSearchOptions;
   minCases: MinimumSplitCases;
+}
+
+export type CleanRepBucketKey =
+  | 'cleanFront'
+  | 'hardNegativeClean'
+  | 'issueRecordingClean'
+  | 'partialViewClean'
+  | 'unscorable';
+
+export interface FalsePositiveIssueCount {
+  issueId: string;
+  count: number;
+}
+
+export interface CleanRepBucketSummary {
+  cleanReps: number;
+  falsePositiveReps: number;
+  falsePositiveRate: number;
+  falseIssueCount: number;
+  averageFalseIssuesPerCleanRep: number;
+  topFalsePositiveIssueIds: FalsePositiveIssueCount[];
+}
+
+export interface PerIssueCleanFalsePositiveSummary {
+  issueId: string;
+  cleanFalsePositiveCount: number;
+  cleanFalsePositiveRate: number;
+  hardNegativeCleanFalsePositiveCount: number;
+  splitBreakdown: Record<'train' | 'validation' | 'test', number>;
+  topRecordings: Array<{ recording: string; count: number }>;
+}
+
+export interface AsymmetrySubCueSummary {
+  cleanFalsePositiveCount: number;
+  truePositiveCount: number;
+  falseNegativeCount: number;
+}
+
+export interface RomFalsePositiveExample {
+  recording: string;
+  split: string;
+  repIndex: number | null;
+  expectedStartMs: number | null;
+  expectedEndMs: number | null;
+  predictedStartMs: number | null;
+  predictedEndMs: number | null;
+  romRatio: number | null;
+  romMinThreshold: number | null;
+  minCurlRatio: number | null;
+  returnMaxCurlRatio: number | null;
+  incompleteFlexTriggered: boolean | null;
+  incompleteExtendTriggered: boolean | null;
+  incompleteRomTriggered: boolean | null;
+  incompleteRomEmitted: boolean;
+  incompleteRomSuppressedByPrecedence: boolean;
+  view: string | null;
+  scorable: boolean | null;
+  reliability: Record<string, unknown> | null;
+}
+
+export interface TorsoFalsePositiveExample {
+  recording: string;
+  split: string;
+  repIndex: number | null;
+  issueId: string;
+  expectedStartMs: number | null;
+  expectedEndMs: number | null;
+  predictedStartMs: number | null;
+  predictedEndMs: number | null;
+  torsoDelta: number | null;
+  threshold: number | null;
+  torsoSampleCount: number | null;
+  trackingInterrupted: boolean | null;
+  reacquiredTracking: boolean | null;
+  spikeOrSustained: 'single_spike' | 'sustained' | 'unknown';
+  poseOutlierSignals: {
+    outlierCandidate: boolean | null;
+    largeDelta: boolean | null;
+    boneLengthJump: boolean | null;
+  };
+  reliabilityReasons: string[];
+}
+
+export interface RepCountBucketSummary {
+  cases: number;
+  repCountCorrect: number;
+  repCountAccuracy: number;
+}
+
+export interface CleanSafetySummary {
+  totalCleanScorableReps: number;
+  buckets: Record<CleanRepBucketKey, CleanRepBucketSummary>;
+  perIssueCleanFalsePositives: Record<string, PerIssueCleanFalsePositiveSummary>;
+  asymmetrySubCues: Record<string, AsymmetrySubCueSummary>;
+  romFalsePositiveDiagnostics: {
+    count: number;
+    examples: RomFalsePositiveExample[];
+  };
+  torsoFalsePositiveDiagnostics: {
+    count: number;
+    examples: TorsoFalsePositiveExample[];
+  };
+  repCountBuckets: Record<
+    'cleanFront' | 'hardNegativeClean' | 'issueRecording' | 'partialView' | 'unscorable',
+    RepCountBucketSummary
+  >;
+}
+
+export interface CleanFpGateCheck {
+  name: string;
+  split: 'train' | 'validation';
+  candidateRate: number | null;
+  baselineRate: number | null;
+  absoluteCap: number;
+  minImprovement: number;
+  passed: boolean;
+  reason: string;
+}
+
+export interface CleanFpGateDiagnostics {
+  enforced: boolean;
+  passed: boolean;
+  checks: CleanFpGateCheck[];
+}
+
+export interface CandidateDiagnosticScores {
+  currentScore: number;
+  legacyScore: number;
+  cleanSafetyFirstScore: number;
+  repCountGatedScore: number;
+  issueF1AfterCleanGateScore: number;
+}
+
+export interface CandidateSafetyMetrics {
+  cleanFpRateTrain: number | null;
+  cleanFpRateValidation: number | null;
+  hardNegativeCleanFpRateTrain: number | null;
+  hardNegativeCleanFpRateValidation: number | null;
+  trainRepCountAccuracy: number | null;
+  validationRepCountAccuracy: number | null;
 }
 
 export interface EvaluationSummary {
@@ -87,6 +229,7 @@ export interface EvaluationSummary {
   metrics: EvaluationMetrics;
   qualityCoverage?: QualityCoverageMetrics;
   diagnosticSummary?: DiagnosticEvaluationSummary;
+  cleanSafety?: CleanSafetySummary;
 }
 
 export interface EvaluatedCandidateSummary {
@@ -97,6 +240,7 @@ export interface EvaluatedCandidateSummary {
   evaluation: EvaluationSummary;
   score: number;
   legacyScore: number;
+  diagnosticScores?: CandidateDiagnosticScores;
 }
 
 interface CandidateEvaluationBatch {
@@ -169,6 +313,9 @@ export interface ExerciseOptimisationReport {
     evaluation: EvaluationSummary;
     score: number;
     legacyScore: number;
+    diagnosticScores?: CandidateDiagnosticScores;
+    cleanFpGateDiagnostics?: CleanFpGateDiagnostics;
+    safetyMetrics?: CandidateSafetyMetrics;
   }>;
 }
 
@@ -373,6 +520,14 @@ class OptimizerCheckpointManager {
     this.evaluatedByKey.set(key, { key, ...candidate });
   }
 
+  shouldSave(force = false): boolean {
+    const evaluatedCount = this.evaluatedByKey.size;
+    return (
+      force ||
+      evaluatedCount - this.lastSavedEvaluatedCount >= Math.max(1, this.saveEvery)
+    );
+  }
+
   maybeSave(args: {
     phase: string;
     refinementRound: number;
@@ -497,6 +652,451 @@ function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
   };
 }
 
+function safeRate(numerator: number, denominator: number): number {
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function sortedCounts(map: Map<string, number>): FalsePositiveIssueCount[] {
+  return Array.from(map.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([issueId, count]) => ({ issueId, count }));
+}
+
+function sourceRecordingName(sourceVideo: string): string {
+  return path.basename(sourceVideo, path.extname(sourceVideo));
+}
+
+function labelText(datasetCase: DatasetCase): string {
+  return JSON.stringify([
+    datasetCase.label.sourceVideo,
+    datasetCase.label.notes,
+    datasetCase.label.captureMetadata,
+    ...datasetCase.label.reps.map((rep) => rep.notes),
+  ]).toLowerCase();
+}
+
+function isHardNegativeCleanRecording(datasetCase: DatasetCase): boolean {
+  const text = labelText(datasetCase);
+  return (
+    text.includes('hard-negative') ||
+    text.includes('hard negative') ||
+    text.includes('clean stress') ||
+    text.includes('natural')
+  );
+}
+
+function repLabelView(datasetCase: DatasetCase, repIndex: number | null): string {
+  const labelRep =
+    typeof repIndex === 'number'
+      ? datasetCase.label.reps.find((rep) => rep.index === repIndex)
+      : undefined;
+  return labelRep?.view ?? datasetCase.label.captureMetadata?.cameraView ?? 'unknown';
+}
+
+function isPartialViewValue(view: string | undefined): boolean {
+  return view === 'side' || view === 'oblique' || view === 'frontish';
+}
+
+function isPartialViewRep(datasetCase: DatasetCase, rep: RepEvaluation): boolean {
+  return isPartialViewValue(repLabelView(datasetCase, rep.expectedRepIndex));
+}
+
+function isPartialViewRecording(datasetCase: DatasetCase): boolean {
+  const captureView = datasetCase.label.captureMetadata?.cameraView;
+  return (
+    isPartialViewValue(captureView) ||
+    datasetCase.label.reps.some((rep) => isPartialViewValue(rep.view))
+  );
+}
+
+function hasIssueLabel(datasetCase: DatasetCase): boolean {
+  return datasetCase.label.reps.some((rep) => rep.issueIds.length > 0);
+}
+
+function isCleanScorableRecording(datasetCase: DatasetCase): boolean {
+  return datasetCase.label.reps.every(
+    (rep) => (rep.scorable ?? true) && rep.issueIds.length === 0,
+  );
+}
+
+function isCleanFrontRecording(datasetCase: DatasetCase): boolean {
+  return isCleanScorableRecording(datasetCase) && !isPartialViewRecording(datasetCase);
+}
+
+function recordingBuckets(datasetCase: DatasetCase): Array<keyof CleanSafetySummary['repCountBuckets']> {
+  const buckets: Array<keyof CleanSafetySummary['repCountBuckets']> = [];
+  if (isCleanFrontRecording(datasetCase)) buckets.push('cleanFront');
+  if (isHardNegativeCleanRecording(datasetCase) && isCleanScorableRecording(datasetCase)) {
+    buckets.push('hardNegativeClean');
+  }
+  if (hasIssueLabel(datasetCase)) buckets.push('issueRecording');
+  if (isPartialViewRecording(datasetCase)) buckets.push('partialView');
+  if (datasetCase.label.reps.some((rep) => rep.scorable === false)) buckets.push('unscorable');
+  return buckets;
+}
+
+function emptyBucketSummary(): CleanRepBucketSummary {
+  return {
+    cleanReps: 0,
+    falsePositiveReps: 0,
+    falsePositiveRate: 0,
+    falseIssueCount: 0,
+    averageFalseIssuesPerCleanRep: 0,
+    topFalsePositiveIssueIds: [],
+  };
+}
+
+function emptyMutableBucket() {
+  return {
+    cleanReps: 0,
+    falsePositiveReps: 0,
+    falseIssueCount: 0,
+    issues: new Map<string, number>(),
+  };
+}
+
+function finalizeBucket(bucket: ReturnType<typeof emptyMutableBucket>): CleanRepBucketSummary {
+  return {
+    cleanReps: bucket.cleanReps,
+    falsePositiveReps: bucket.falsePositiveReps,
+    falsePositiveRate: safeRate(bucket.falsePositiveReps, bucket.cleanReps),
+    falseIssueCount: bucket.falseIssueCount,
+    averageFalseIssuesPerCleanRep: safeRate(bucket.falseIssueCount, bucket.cleanReps),
+    topFalsePositiveIssueIds: sortedCounts(bucket.issues).slice(0, 10),
+  };
+}
+
+function emptyRepCountBucket(): RepCountBucketSummary {
+  return { cases: 0, repCountCorrect: 0, repCountAccuracy: 0 };
+}
+
+function finalizeRepCountBucket(bucket: RepCountBucketSummary): RepCountBucketSummary {
+  return {
+    ...bucket,
+    repCountAccuracy: safeRate(bucket.repCountCorrect, bucket.cases),
+  };
+}
+
+function metricValue(rep: RepEvaluation, key: string): number | null {
+  const value = rep.predictedDiagnostics?.metrics[key]?.value;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function metricSampleCount(rep: RepEvaluation, key: string): number | null {
+  const sampleCount = rep.predictedDiagnostics?.metrics[key]?.sampleCount;
+  return typeof sampleCount === 'number' && Number.isFinite(sampleCount) ? sampleCount : null;
+}
+
+function cueThreshold(rep: RepEvaluation, issueId: string): number | null {
+  const threshold = rep.predictedDiagnostics?.cues[issueId]?.thresholdValue;
+  return typeof threshold === 'number' && Number.isFinite(threshold) ? threshold : null;
+}
+
+function cueTriggered(rep: RepEvaluation, issueId: string): boolean | null {
+  const cue = rep.predictedDiagnostics?.cues[issueId];
+  return cue ? cue.triggered : null;
+}
+
+function cleanSafetyReliability(rep: RepEvaluation): Record<string, unknown> | null {
+  const reliability = rep.predictedDiagnostics?.reliability;
+  if (!reliability) return null;
+  return {
+    countabilityCandidate: reliability.countabilityCandidate,
+    scoreabilityCandidate: reliability.scoreabilityCandidate,
+    reasons: reliability.reasons,
+    safeCueFamilies: reliability.safeCueFamilies,
+    unsafeCueFamilies: reliability.unsafeCueFamilies,
+    suppressedIssueIds: reliability.suppressedIssueIds ?? [],
+  };
+}
+
+function asymmetrySubCueTriggers(rep: RepEvaluation): string[] {
+  const cue = rep.predictedDiagnostics?.cues['barbell-curl.asymmetry'];
+  if (!cue?.eligible) return ['ineligible'];
+  const threshold = cue.thresholdValue;
+  const thresholdObject =
+    threshold && typeof threshold === 'object' && !Array.isArray(threshold) ? threshold : {};
+  const result: string[] = [];
+  const minRatioThreshold = thresholdObject.minRatio;
+  const romRatioThreshold = thresholdObject.romRatio;
+  const syncDeltaThreshold = thresholdObject.syncDelta;
+  const minRatio = metricValue(rep, 'asymmetryMinRatio');
+  const romRatio = metricValue(rep, 'asymmetryRomRatio');
+  const syncDelta = metricValue(rep, 'syncDelta');
+  if (
+    typeof minRatioThreshold === 'number' &&
+    minRatio !== null &&
+    minRatio > minRatioThreshold
+  ) {
+    result.push('minRatio');
+  }
+  if (
+    typeof romRatioThreshold === 'number' &&
+    romRatio !== null &&
+    romRatio > romRatioThreshold
+  ) {
+    result.push('romRatio');
+  }
+  if (
+    typeof syncDeltaThreshold === 'number' &&
+    syncDelta !== null &&
+    syncDelta > syncDeltaThreshold
+  ) {
+    result.push('syncDelta');
+  }
+  if (result.length === 0 && cue.triggered) return ['unknown'];
+  return result.length === 0 ? ['none'] : result;
+}
+
+function incrementCount(map: Map<string, number>, key: string, amount = 1): void {
+  map.set(key, (map.get(key) ?? 0) + amount);
+}
+
+export function buildCleanSafetySummary(
+  caseEvaluations: CaseEvaluation[],
+  datasetCases: DatasetCase[],
+): CleanSafetySummary {
+  const bySource = new Map(datasetCases.map((datasetCase) => [datasetCase.label.sourceVideo, datasetCase]));
+  const bucketKeys: CleanRepBucketKey[] = [
+    'cleanFront',
+    'hardNegativeClean',
+    'issueRecordingClean',
+    'partialViewClean',
+    'unscorable',
+  ];
+  const buckets = Object.fromEntries(
+    bucketKeys.map((key) => [key, emptyMutableBucket()]),
+  ) as Record<CleanRepBucketKey, ReturnType<typeof emptyMutableBucket>>;
+  const perIssue = new Map<string, {
+    issueId: string;
+    cleanFalsePositiveCount: number;
+    hardNegativeCleanFalsePositiveCount: number;
+    splitBreakdown: Record<'train' | 'validation' | 'test', number>;
+    recordings: Map<string, number>;
+  }>();
+  const asymmetrySubCues = new Map<string, AsymmetrySubCueSummary>();
+  const repCountBuckets = {
+    cleanFront: emptyRepCountBucket(),
+    hardNegativeClean: emptyRepCountBucket(),
+    issueRecording: emptyRepCountBucket(),
+    partialView: emptyRepCountBucket(),
+    unscorable: emptyRepCountBucket(),
+  };
+  const romExamples: RomFalsePositiveExample[] = [];
+  const torsoExamples: TorsoFalsePositiveExample[] = [];
+  let totalCleanScorableReps = 0;
+
+  const asymmetrySummary = (key: string): AsymmetrySubCueSummary => {
+    const existing = asymmetrySubCues.get(key);
+    if (existing) return existing;
+    const created = {
+      cleanFalsePositiveCount: 0,
+      truePositiveCount: 0,
+      falseNegativeCount: 0,
+    };
+    asymmetrySubCues.set(key, created);
+    return created;
+  };
+
+  for (const caseEvaluation of caseEvaluations) {
+    const datasetCase = bySource.get(caseEvaluation.sourceVideo);
+    if (!datasetCase) continue;
+    for (const bucketName of recordingBuckets(datasetCase)) {
+      const bucket = repCountBuckets[bucketName];
+      bucket.cases += 1;
+      if (caseEvaluation.repCountCorrect) bucket.repCountCorrect += 1;
+    }
+
+    const recording = sourceRecordingName(caseEvaluation.sourceVideo);
+    const hardNegativeClean =
+      isHardNegativeCleanRecording(datasetCase) && isCleanScorableRecording(datasetCase);
+    const cleanFrontRecording = isCleanFrontRecording(datasetCase);
+    const issueRecording = hasIssueLabel(datasetCase);
+
+    for (const rep of caseEvaluation.reps) {
+      if (rep.matchStatus === 'extra_predicted') continue;
+      const predictedIssues = rep.predictedIssueIds;
+      const isCleanScorableRep = rep.expectedClean && rep.expectedScorable;
+      const repBuckets: CleanRepBucketKey[] = [];
+      if (isCleanScorableRep) {
+        totalCleanScorableReps += 1;
+        if (cleanFrontRecording) repBuckets.push('cleanFront');
+        if (hardNegativeClean) repBuckets.push('hardNegativeClean');
+        if (issueRecording) repBuckets.push('issueRecordingClean');
+        if (isPartialViewRep(datasetCase, rep)) repBuckets.push('partialViewClean');
+      } else if (!rep.expectedScorable) {
+        repBuckets.push('unscorable');
+      }
+
+      for (const bucketName of repBuckets) {
+        const bucket = buckets[bucketName];
+        bucket.cleanReps += 1;
+        if (predictedIssues.length > 0) {
+          bucket.falsePositiveReps += 1;
+          bucket.falseIssueCount += predictedIssues.length;
+          for (const issueId of predictedIssues) incrementCount(bucket.issues, issueId);
+        }
+      }
+
+      if (isCleanScorableRep && predictedIssues.length > 0) {
+        for (const issueId of predictedIssues) {
+          const issue = perIssue.get(issueId) ?? {
+            issueId,
+            cleanFalsePositiveCount: 0,
+            hardNegativeCleanFalsePositiveCount: 0,
+            splitBreakdown: { train: 0, validation: 0, test: 0 },
+            recordings: new Map<string, number>(),
+          };
+          issue.cleanFalsePositiveCount += 1;
+          if (hardNegativeClean) issue.hardNegativeCleanFalsePositiveCount += 1;
+          issue.splitBreakdown[caseEvaluation.split] += 1;
+          incrementCount(issue.recordings, recording);
+          perIssue.set(issueId, issue);
+        }
+      }
+
+      const expectedAsymmetry = rep.expectedIssueIds.includes('barbell-curl.asymmetry');
+      const predictedAsymmetry = predictedIssues.includes('barbell-curl.asymmetry');
+      if (isCleanScorableRep && predictedAsymmetry) {
+        for (const subCue of asymmetrySubCueTriggers(rep)) {
+          asymmetrySummary(subCue).cleanFalsePositiveCount += 1;
+        }
+      } else if (expectedAsymmetry && predictedAsymmetry) {
+        for (const subCue of asymmetrySubCueTriggers(rep)) {
+          asymmetrySummary(subCue).truePositiveCount += 1;
+        }
+      } else if (expectedAsymmetry && !predictedAsymmetry) {
+        for (const subCue of asymmetrySubCueTriggers(rep)) {
+          asymmetrySummary(subCue).falseNegativeCount += 1;
+        }
+      }
+
+      if (
+        isCleanScorableRep &&
+        predictedIssues.includes('barbell-curl.incomplete_rom') &&
+        romExamples.length < 20
+      ) {
+        const romThreshold = cueThreshold(rep, 'barbell-curl.incomplete_rom');
+        const rawRomBelowThreshold =
+          romThreshold !== null &&
+          metricValue(rep, 'romRatio') !== null &&
+          metricValue(rep, 'romRatio')! < romThreshold;
+        const flexTriggered = cueTriggered(rep, 'barbell-curl.incomplete_flex');
+        const extendTriggered = cueTriggered(rep, 'barbell-curl.incomplete_extend');
+        const romTriggered = cueTriggered(rep, 'barbell-curl.incomplete_rom');
+        romExamples.push({
+          recording,
+          split: caseEvaluation.split,
+          repIndex: rep.expectedRepIndex,
+          expectedStartMs: rep.expectedStartMs,
+          expectedEndMs: rep.expectedEndMs,
+          predictedStartMs: rep.predictedStartMs,
+          predictedEndMs: rep.predictedEndMs,
+          romRatio: metricValue(rep, 'romRatio'),
+          romMinThreshold: romThreshold,
+          minCurlRatio: metricValue(rep, 'minCurlRatio'),
+          returnMaxCurlRatio: metricValue(rep, 'returnMaxCurlRatio'),
+          incompleteFlexTriggered: flexTriggered,
+          incompleteExtendTriggered: extendTriggered,
+          incompleteRomTriggered: romTriggered,
+          incompleteRomEmitted: predictedIssues.includes('barbell-curl.incomplete_rom'),
+          incompleteRomSuppressedByPrecedence:
+            rawRomBelowThreshold && romTriggered === false && Boolean(flexTriggered || extendTriggered),
+          view: rep.predictedDiagnostics?.view ?? rep.predictedView ?? null,
+          scorable: rep.predictedDiagnostics?.scorable ?? rep.predictedScorable ?? null,
+          reliability: cleanSafetyReliability(rep),
+        });
+      }
+
+      const torsoIssue = predictedIssues.find(
+        (issueId) =>
+          issueId === 'barbell-curl.torso_warn' || issueId === 'barbell-curl.torso_fail',
+      );
+      if (isCleanScorableRep && torsoIssue && torsoExamples.length < 20) {
+        const reasons = rep.predictedDiagnostics?.reliability?.reasons ?? [];
+        const reasonText = reasons.join(' ').toLowerCase();
+        const torsoSampleCount = metricSampleCount(rep, 'torsoDelta');
+        torsoExamples.push({
+          recording,
+          split: caseEvaluation.split,
+          repIndex: rep.expectedRepIndex,
+          issueId: torsoIssue,
+          expectedStartMs: rep.expectedStartMs,
+          expectedEndMs: rep.expectedEndMs,
+          predictedStartMs: rep.predictedStartMs,
+          predictedEndMs: rep.predictedEndMs,
+          torsoDelta: metricValue(rep, 'torsoDelta'),
+          threshold: cueThreshold(rep, torsoIssue),
+          torsoSampleCount,
+          trackingInterrupted:
+            reasons.length === 0
+              ? null
+              : /missing|stale|lost|dropout|malformed|low_visibility|low_presence/.test(reasonText),
+          reacquiredTracking: null,
+          spikeOrSustained:
+            torsoSampleCount === null
+              ? 'unknown'
+              : torsoSampleCount <= 1
+                ? 'single_spike'
+                : 'sustained',
+          poseOutlierSignals: {
+            outlierCandidate: reasons.length === 0 ? null : /outlier/.test(reasonText),
+            largeDelta: reasons.length === 0 ? null : /large[_ -]?delta/.test(reasonText),
+            boneLengthJump: reasons.length === 0 ? null : /bone[_ -]?length/.test(reasonText),
+          },
+          reliabilityReasons: reasons,
+        });
+      }
+    }
+  }
+
+  return {
+    totalCleanScorableReps,
+    buckets: Object.fromEntries(
+      bucketKeys.map((key) => [key, finalizeBucket(buckets[key])]),
+    ) as Record<CleanRepBucketKey, CleanRepBucketSummary>,
+    perIssueCleanFalsePositives: Object.fromEntries(
+      Array.from(perIssue.values())
+        .sort((a, b) => b.cleanFalsePositiveCount - a.cleanFalsePositiveCount || a.issueId.localeCompare(b.issueId))
+        .map((issue) => [
+          issue.issueId,
+          {
+            issueId: issue.issueId,
+            cleanFalsePositiveCount: issue.cleanFalsePositiveCount,
+            cleanFalsePositiveRate: safeRate(issue.cleanFalsePositiveCount, totalCleanScorableReps),
+            hardNegativeCleanFalsePositiveCount: issue.hardNegativeCleanFalsePositiveCount,
+            splitBreakdown: issue.splitBreakdown,
+            topRecordings: Array.from(issue.recordings.entries())
+              .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+              .slice(0, 10)
+              .map(([recording, count]) => ({ recording, count })),
+          },
+        ]),
+    ),
+    asymmetrySubCues: Object.fromEntries(
+      Array.from(asymmetrySubCues.entries()).sort(([a], [b]) => a.localeCompare(b)),
+    ),
+    romFalsePositiveDiagnostics: {
+      count:
+        perIssue.get('barbell-curl.incomplete_rom')?.cleanFalsePositiveCount ?? 0,
+      examples: romExamples,
+    },
+    torsoFalsePositiveDiagnostics: {
+      count:
+        (perIssue.get('barbell-curl.torso_warn')?.cleanFalsePositiveCount ?? 0) +
+        (perIssue.get('barbell-curl.torso_fail')?.cleanFalsePositiveCount ?? 0),
+      examples: torsoExamples,
+    },
+    repCountBuckets: {
+      cleanFront: finalizeRepCountBucket(repCountBuckets.cleanFront),
+      hardNegativeClean: finalizeRepCountBucket(repCountBuckets.hardNegativeClean),
+      issueRecording: finalizeRepCountBucket(repCountBuckets.issueRecording),
+      partialView: finalizeRepCountBucket(repCountBuckets.partialView),
+      unscorable: finalizeRepCountBucket(repCountBuckets.unscorable),
+    },
+  };
+}
+
 function scoreLegacyEvaluationSummary(evaluation: EvaluationSummary): number {
   return (
     evaluation.metrics.repCountAccuracy * 10000 +
@@ -537,6 +1137,159 @@ function scoreEvaluationSummary(
   return selectionMode === 'diagnostic'
     ? scoreDiagnosticEvaluationSummary(evaluation)
     : scoreLegacyEvaluationSummary(evaluation);
+}
+
+function hardNegativeCleanFpRate(evaluation: EvaluationSummary | null | undefined): number | null {
+  return evaluation?.cleanSafety?.buckets.hardNegativeClean.falsePositiveRate ?? null;
+}
+
+function cleanSafetyFirstScore(evaluation: EvaluationSummary): number {
+  const diagnostic = evaluation.diagnosticSummary;
+  const diagnosticIssueF1 = diagnostic?.weightedIssueF1 ?? evaluation.metrics.issueF1;
+  const cleanFpRate = evaluation.metrics.cleanRepFalsePositiveRate;
+  const hardNegativeFpRate = hardNegativeCleanFpRate(evaluation) ?? cleanFpRate;
+  return (
+    evaluation.metrics.repCountAccuracy * 1000 +
+    diagnosticIssueF1 * 500 -
+    cleanFpRate * 1500 -
+    hardNegativeFpRate * 1000 +
+    evaluation.metrics.scorableAccuracy * 10 +
+    evaluation.metrics.viewAccuracy * 5
+  );
+}
+
+function candidateDiagnosticScores(
+  evaluation: EvaluationSummary,
+  selectionMode: OptimizerSelectionMode,
+  baseline?: EvaluationSummary | null,
+  cleanGate?: CleanFpGateDiagnostics,
+): CandidateDiagnosticScores {
+  const currentScore = scoreEvaluationSummary(evaluation, selectionMode);
+  const legacyScore = scoreLegacyEvaluationSummary(evaluation);
+  const diagnosticIssueF1 = evaluation.diagnosticSummary?.weightedIssueF1 ?? evaluation.metrics.issueF1;
+  const repCountGatePassed =
+    !baseline || evaluation.metrics.repCountAccuracy >= baseline.metrics.repCountAccuracy - 0.05;
+  const cleanGatePassed = cleanGate ? cleanGate.passed : true;
+  return {
+    currentScore,
+    legacyScore,
+    cleanSafetyFirstScore: cleanSafetyFirstScore(evaluation),
+    repCountGatedScore: repCountGatePassed ? currentScore : -1_000_000_000,
+    issueF1AfterCleanGateScore: cleanGatePassed ? diagnosticIssueF1 * 1000 : -1_000_000_000,
+  };
+}
+
+const DEFAULT_CLEAN_FP_GATE_CAP = 0.5;
+const DEFAULT_HARD_NEGATIVE_CLEAN_FP_GATE_CAP = 0.5;
+const DEFAULT_MIN_CLEAN_FP_IMPROVEMENT = 0.05;
+const DEFAULT_MAX_VALIDATION_REP_COUNT_REGRESSION = 0.1;
+
+function gateCheck(args: {
+  name: string;
+  split: 'train' | 'validation';
+  candidateRate: number | null;
+  baselineRate: number | null;
+  absoluteCap: number;
+  minImprovement: number;
+}): CleanFpGateCheck {
+  const { candidateRate, baselineRate, absoluteCap, minImprovement } = args;
+  if (candidateRate === null) {
+    return {
+      ...args,
+      passed: true,
+      reason: 'No eligible clean reps for this gate.',
+    };
+  }
+  const improvement =
+    baselineRate === null ? 0 : baselineRate - candidateRate;
+  const passed = candidateRate <= absoluteCap || improvement >= minImprovement;
+  return {
+    ...args,
+    passed,
+    reason: passed
+      ? `Passed: rate ${candidateRate.toFixed(4)} is under cap ${absoluteCap.toFixed(4)} or improved by ${improvement.toFixed(4)}.`
+      : `Failed: rate ${candidateRate.toFixed(4)} exceeds cap ${absoluteCap.toFixed(4)} and improvement ${improvement.toFixed(4)} is below ${minImprovement.toFixed(4)}.`,
+  };
+}
+
+export function buildCleanFpGateDiagnostics(args: {
+  candidateTrain: EvaluationSummary | null;
+  candidateValidation: EvaluationSummary | null;
+  baselineTrain: EvaluationSummary | null;
+  baselineValidation: EvaluationSummary | null;
+  enforced: boolean;
+}): CleanFpGateDiagnostics {
+  const checks: CleanFpGateCheck[] = [
+    gateCheck({
+      name: 'train clean FP cap',
+      split: 'train',
+      candidateRate: args.candidateTrain?.metrics.cleanRepFalsePositiveRate ?? null,
+      baselineRate: args.baselineTrain?.metrics.cleanRepFalsePositiveRate ?? null,
+      absoluteCap: DEFAULT_CLEAN_FP_GATE_CAP,
+      minImprovement: 0,
+    }),
+    gateCheck({
+      name: 'train hard-negative clean FP cap',
+      split: 'train',
+      candidateRate: hardNegativeCleanFpRate(args.candidateTrain),
+      baselineRate: hardNegativeCleanFpRate(args.baselineTrain),
+      absoluteCap: DEFAULT_HARD_NEGATIVE_CLEAN_FP_GATE_CAP,
+      minImprovement: 0,
+    }),
+    gateCheck({
+      name: 'validation clean FP cap',
+      split: 'validation',
+      candidateRate: args.candidateValidation?.metrics.cleanRepFalsePositiveRate ?? null,
+      baselineRate: args.baselineValidation?.metrics.cleanRepFalsePositiveRate ?? null,
+      absoluteCap: DEFAULT_CLEAN_FP_GATE_CAP,
+      minImprovement: DEFAULT_MIN_CLEAN_FP_IMPROVEMENT,
+    }),
+    gateCheck({
+      name: 'validation hard-negative clean FP cap',
+      split: 'validation',
+      candidateRate: hardNegativeCleanFpRate(args.candidateValidation),
+      baselineRate: hardNegativeCleanFpRate(args.baselineValidation),
+      absoluteCap: DEFAULT_HARD_NEGATIVE_CLEAN_FP_GATE_CAP,
+      minImprovement: DEFAULT_MIN_CLEAN_FP_IMPROVEMENT,
+    }),
+  ];
+  if (args.candidateValidation && args.baselineValidation) {
+    const regression =
+      args.baselineValidation.metrics.repCountAccuracy -
+      args.candidateValidation.metrics.repCountAccuracy;
+    const passed = regression <= DEFAULT_MAX_VALIDATION_REP_COUNT_REGRESSION;
+    checks.push({
+      name: 'validation rep-count regression tolerance',
+      split: 'validation',
+      candidateRate: args.candidateValidation.metrics.repCountAccuracy,
+      baselineRate: args.baselineValidation.metrics.repCountAccuracy,
+      absoluteCap: args.baselineValidation.metrics.repCountAccuracy,
+      minImprovement: -DEFAULT_MAX_VALIDATION_REP_COUNT_REGRESSION,
+      passed,
+      reason: passed
+        ? `Passed: validation rep-count regression ${regression.toFixed(4)} is within tolerance.`
+        : `Failed: validation rep-count regression ${regression.toFixed(4)} exceeds tolerance ${DEFAULT_MAX_VALIDATION_REP_COUNT_REGRESSION.toFixed(4)}.`,
+    });
+  }
+  return {
+    enforced: args.enforced,
+    passed: checks.every((check) => check.passed),
+    checks,
+  };
+}
+
+function candidateSafetyMetrics(args: {
+  train: EvaluationSummary | null;
+  validation: EvaluationSummary | null;
+}): CandidateSafetyMetrics {
+  return {
+    cleanFpRateTrain: args.train?.metrics.cleanRepFalsePositiveRate ?? null,
+    cleanFpRateValidation: args.validation?.metrics.cleanRepFalsePositiveRate ?? null,
+    hardNegativeCleanFpRateTrain: hardNegativeCleanFpRate(args.train),
+    hardNegativeCleanFpRateValidation: hardNegativeCleanFpRate(args.validation),
+    trainRepCountAccuracy: args.train?.metrics.repCountAccuracy ?? null,
+    validationRepCountAccuracy: args.validation?.metrics.repCountAccuracy ?? null,
+  };
 }
 
 function sortEvaluatedCandidates<T extends { score: number; legacyScore: number }>(candidates: T[]): T[] {
@@ -799,6 +1552,140 @@ function combineDiagnosticSummaries(
   };
 }
 
+function combineCleanSafetySummaries(
+  summaries: Array<EvaluationSummary | null>,
+): CleanSafetySummary | undefined {
+  const parts = summaries
+    .map((summary) => summary?.cleanSafety)
+    .filter((summary): summary is CleanSafetySummary => Boolean(summary));
+  if (parts.length === 0) return undefined;
+
+  const bucketKeys: CleanRepBucketKey[] = [
+    'cleanFront',
+    'hardNegativeClean',
+    'issueRecordingClean',
+    'partialViewClean',
+    'unscorable',
+  ];
+  const buckets = Object.fromEntries(
+    bucketKeys.map((key) => [key, emptyMutableBucket()]),
+  ) as Record<CleanRepBucketKey, ReturnType<typeof emptyMutableBucket>>;
+  for (const part of parts) {
+    for (const key of bucketKeys) {
+      const source = part.buckets[key] ?? emptyBucketSummary();
+      buckets[key].cleanReps += source.cleanReps;
+      buckets[key].falsePositiveReps += source.falsePositiveReps;
+      buckets[key].falseIssueCount += source.falseIssueCount;
+      for (const issue of source.topFalsePositiveIssueIds) {
+        incrementCount(buckets[key].issues, issue.issueId, issue.count);
+      }
+    }
+  }
+
+  const totalCleanScorableReps = parts.reduce(
+    (total, part) => total + part.totalCleanScorableReps,
+    0,
+  );
+  const perIssue = new Map<string, PerIssueCleanFalsePositiveSummary & { recordings: Map<string, number> }>();
+  for (const part of parts) {
+    for (const issue of Object.values(part.perIssueCleanFalsePositives)) {
+      const target = perIssue.get(issue.issueId) ?? {
+        issueId: issue.issueId,
+        cleanFalsePositiveCount: 0,
+        cleanFalsePositiveRate: 0,
+        hardNegativeCleanFalsePositiveCount: 0,
+        splitBreakdown: { train: 0, validation: 0, test: 0 },
+        topRecordings: [],
+        recordings: new Map<string, number>(),
+      };
+      target.cleanFalsePositiveCount += issue.cleanFalsePositiveCount;
+      target.hardNegativeCleanFalsePositiveCount += issue.hardNegativeCleanFalsePositiveCount;
+      target.splitBreakdown.train += issue.splitBreakdown.train;
+      target.splitBreakdown.validation += issue.splitBreakdown.validation;
+      target.splitBreakdown.test += issue.splitBreakdown.test;
+      for (const recording of issue.topRecordings) {
+        incrementCount(target.recordings, recording.recording, recording.count);
+      }
+      perIssue.set(issue.issueId, target);
+    }
+  }
+
+  const asymmetrySubCues = new Map<string, AsymmetrySubCueSummary>();
+  for (const part of parts) {
+    for (const [key, source] of Object.entries(part.asymmetrySubCues)) {
+      const target = asymmetrySubCues.get(key) ?? {
+        cleanFalsePositiveCount: 0,
+        truePositiveCount: 0,
+        falseNegativeCount: 0,
+      };
+      target.cleanFalsePositiveCount += source.cleanFalsePositiveCount;
+      target.truePositiveCount += source.truePositiveCount;
+      target.falseNegativeCount += source.falseNegativeCount;
+      asymmetrySubCues.set(key, target);
+    }
+  }
+
+  const repCountBucketKeys: Array<keyof CleanSafetySummary['repCountBuckets']> = [
+    'cleanFront',
+    'hardNegativeClean',
+    'issueRecording',
+    'partialView',
+    'unscorable',
+  ];
+  const repCountBuckets = Object.fromEntries(
+    repCountBucketKeys.map((key) => [key, emptyRepCountBucket()]),
+  ) as CleanSafetySummary['repCountBuckets'];
+  for (const part of parts) {
+    for (const key of repCountBucketKeys) {
+      repCountBuckets[key].cases += part.repCountBuckets[key].cases;
+      repCountBuckets[key].repCountCorrect += part.repCountBuckets[key].repCountCorrect;
+    }
+  }
+
+  return {
+    totalCleanScorableReps,
+    buckets: Object.fromEntries(
+      bucketKeys.map((key) => [key, finalizeBucket(buckets[key])]),
+    ) as Record<CleanRepBucketKey, CleanRepBucketSummary>,
+    perIssueCleanFalsePositives: Object.fromEntries(
+      Array.from(perIssue.values())
+        .sort((a, b) => b.cleanFalsePositiveCount - a.cleanFalsePositiveCount || a.issueId.localeCompare(b.issueId))
+        .map((issue) => [
+          issue.issueId,
+          {
+            issueId: issue.issueId,
+            cleanFalsePositiveCount: issue.cleanFalsePositiveCount,
+            cleanFalsePositiveRate: safeRate(issue.cleanFalsePositiveCount, totalCleanScorableReps),
+            hardNegativeCleanFalsePositiveCount: issue.hardNegativeCleanFalsePositiveCount,
+            splitBreakdown: issue.splitBreakdown,
+            topRecordings: Array.from(issue.recordings.entries())
+              .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+              .slice(0, 10)
+              .map(([recording, count]) => ({ recording, count })),
+          },
+        ]),
+    ),
+    asymmetrySubCues: Object.fromEntries(
+      Array.from(asymmetrySubCues.entries()).sort(([a], [b]) => a.localeCompare(b)),
+    ),
+    romFalsePositiveDiagnostics: {
+      count: parts.reduce((total, part) => total + part.romFalsePositiveDiagnostics.count, 0),
+      examples: parts.flatMap((part) => part.romFalsePositiveDiagnostics.examples).slice(0, 20),
+    },
+    torsoFalsePositiveDiagnostics: {
+      count: parts.reduce((total, part) => total + part.torsoFalsePositiveDiagnostics.count, 0),
+      examples: parts.flatMap((part) => part.torsoFalsePositiveDiagnostics.examples).slice(0, 20),
+    },
+    repCountBuckets: {
+      cleanFront: finalizeRepCountBucket(repCountBuckets.cleanFront),
+      hardNegativeClean: finalizeRepCountBucket(repCountBuckets.hardNegativeClean),
+      issueRecording: finalizeRepCountBucket(repCountBuckets.issueRecording),
+      partialView: finalizeRepCountBucket(repCountBuckets.partialView),
+      unscorable: finalizeRepCountBucket(repCountBuckets.unscorable),
+    },
+  };
+}
+
 function combineSummaries(summaries: Array<EvaluationSummary | null>): EvaluationSummary | null {
   const totals = emptyTotals();
   let hasAny = false;
@@ -813,6 +1700,7 @@ function combineSummaries(summaries: Array<EvaluationSummary | null>): Evaluatio
         metrics: metricsFromTotals(totals),
         qualityCoverage: combineQualityCoverageSummaries(summaries),
         diagnosticSummary: combineDiagnosticSummaries(summaries),
+        cleanSafety: combineCleanSafetySummaries(summaries),
       }
     : null;
 }
@@ -883,6 +1771,7 @@ export function parseOptimizerCommandOptions(argv: string[]): OptimizerCommandOp
     checkpointPath: flagValue(argv, '--checkpoint'),
     resumeCheckpoint: hasFlag(argv, '--resume') || hasFlag(argv, '--resume-checkpoint'),
     checkpointEvery: parsePositiveIntegerFlag(argv, '--checkpoint-every'),
+    enforceCleanFpGates: hasFlag(argv, '--enforce-clean-fp-gates'),
     search: {
       randomCandidates: parseNonNegativeIntegerFlag(argv, '--random-candidates'),
       survivorCount:
@@ -912,22 +1801,20 @@ export function evaluateCasesCompact(
   runtime: EvaluationRuntimeOptions = {},
 ): EvaluationSummary | null {
   if (cases.length === 0) return null;
-  const detailed = runtime.profiler?.time(runtime.profileSection ?? 'evaluation', () =>
-    summarizeEvaluations(
-      cases.map((datasetCase) =>
-        evaluateCase(datasetCase, replayCaseForOptimizer(definition, datasetCase, config, runtime)),
-      ),
-    ),
-  ) ?? summarizeEvaluations(
+  const caseEvaluations = runtime.profiler?.time(runtime.profileSection ?? 'evaluation', () =>
     cases.map((datasetCase) =>
       evaluateCase(datasetCase, replayCaseForOptimizer(definition, datasetCase, config, runtime)),
     ),
+  ) ?? cases.map((datasetCase) =>
+    evaluateCase(datasetCase, replayCaseForOptimizer(definition, datasetCase, config, runtime)),
   );
+  const detailed = summarizeEvaluations(caseEvaluations);
   return {
     totals: detailed.totals,
     metrics: detailed.metrics,
     qualityCoverage: detailed.qualityCoverage,
     diagnosticSummary: detailed.diagnosticSummary,
+    cleanSafety: buildCleanSafetySummary(caseEvaluations, cases),
   };
 }
 
@@ -957,13 +1844,19 @@ export function evaluateCasesDetailed(
   );
 }
 
-function compactSummary(evaluation: DatasetEvaluation | null): EvaluationSummary | null {
+function compactSummary(
+  evaluation: DatasetEvaluation | null,
+  datasetCases?: DatasetCase[],
+): EvaluationSummary | null {
   if (!evaluation) return null;
   return {
     totals: evaluation.totals,
     metrics: evaluation.metrics,
     qualityCoverage: evaluation.qualityCoverage,
     diagnosticSummary: evaluation.diagnosticSummary,
+    cleanSafety: datasetCases
+      ? buildCleanSafetySummary(evaluation.cases, datasetCases)
+      : undefined,
   };
 }
 
@@ -999,14 +1892,17 @@ function evaluateSplitCompact(
   runtime: EvaluationRuntimeOptions = {},
 ): EvaluationBySplit<EvaluationSummary> {
   const caseEvaluations = evaluateCaseEvaluations(definition, cases, config, runtime);
+  const trainCases = cases.filter((datasetCase) => datasetCase.label.split === 'train');
+  const validationCases = cases.filter((datasetCase) => datasetCase.label.split === 'validation');
+  const testCases = cases.filter((datasetCase) => datasetCase.label.split === 'test');
   const train = summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'train'));
   const validation = summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'validation'));
   const test = summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'test'));
   return {
-    all: compactSummary(summarizeCaseEvaluations(caseEvaluations)),
-    train: compactSummary(train),
-    validation: compactSummary(validation),
-    test: compactSummary(test),
+    all: compactSummary(summarizeCaseEvaluations(caseEvaluations), cases),
+    train: compactSummary(train, trainCases),
+    validation: compactSummary(validation, validationCases),
+    test: compactSummary(test, testCases),
   };
 }
 
@@ -1308,11 +2204,12 @@ function evaluateCandidatesCompact(
         evaluation,
         score: scoreEvaluationSummary(evaluation, selectionMode),
         legacyScore: scoreLegacyEvaluationSummary(evaluation),
+        diagnosticScores: candidateDiagnosticScores(evaluation, selectionMode),
       };
       evaluated.push(summary);
       runtime.checkpoint?.recordEvaluated(summary);
-      if (checkpointArgs) {
-        runtime.checkpoint?.maybeSave({
+      if (checkpointArgs && runtime.checkpoint?.shouldSave()) {
+        runtime.checkpoint.save({
           phase: checkpointArgs.phase,
           refinementRound: checkpointArgs.refinementRound,
           evaluated: [...checkpointArgs.currentEvaluated, ...evaluated],
@@ -1693,6 +2590,7 @@ export function optimizeExercise(
         evaluation: baselineSelection,
         score: scoreEvaluationSummary(baselineSelection, selectionMode),
         legacyScore: scoreLegacyEvaluationSummary(baselineSelection),
+        diagnosticScores: candidateDiagnosticScores(baselineSelection, selectionMode, baselineSelection),
       }
     : null;
   const selectionBatch = evaluateCandidatesCompact(
@@ -1714,10 +2612,49 @@ export function optimizeExercise(
       rejectedCandidateExamples: search.rejectedCandidateExamples,
     },
   );
-  const rankedSelection = sortEvaluatedCandidates(
+  const rankedSelectionRaw = sortEvaluatedCandidates(
     baselineCandidate ? [baselineCandidate, ...selectionBatch.evaluated] : selectionBatch.evaluated,
   );
-  const winner = rankedSelection[0];
+  const searchCandidateById = new Map(search.candidates.map((candidate) => [candidate.id, candidate]));
+  const rankedSelectionWithDiagnostics = rankedSelectionRaw.map((candidate) => {
+    const trainEvaluation =
+      candidate.id === 'baseline'
+        ? baseline.train
+        : searchCandidateById.get(candidate.id)?.evaluation ?? null;
+    const validationEvaluation =
+      selection.split === 'validation'
+        ? candidate.evaluation
+        : candidate.id === 'baseline'
+          ? baseline.validation
+          : null;
+    const cleanFpGateDiagnostics = buildCleanFpGateDiagnostics({
+      candidateTrain: trainEvaluation,
+      candidateValidation: validationEvaluation,
+      baselineTrain: baseline.train,
+      baselineValidation: baseline.validation,
+      enforced: Boolean(options.enforceCleanFpGates),
+    });
+    return {
+      ...candidate,
+      diagnosticScores: candidateDiagnosticScores(
+        candidate.evaluation,
+        selectionMode,
+        baselineSelection,
+        cleanFpGateDiagnostics,
+      ),
+      cleanFpGateDiagnostics,
+      safetyMetrics: candidateSafetyMetrics({
+        train: trainEvaluation,
+        validation: validationEvaluation,
+      }),
+    };
+  });
+  const winnerPool = options.enforceCleanFpGates
+    ? rankedSelectionWithDiagnostics.filter(
+        (candidate) => candidate.id === 'baseline' || candidate.cleanFpGateDiagnostics.passed,
+      )
+    : rankedSelectionWithDiagnostics;
+  const winner = winnerPool[0];
 
   const searchWithSelectionRejects = {
     ...search,
@@ -1813,7 +2750,7 @@ export function optimizeExercise(
           profileSection: 'winnerDetailedEvaluation',
         })
       : undefined,
-    rankedSelection: rankedSelection.slice(0, 10),
+    rankedSelection: rankedSelectionWithDiagnostics.slice(0, 10),
   };
 }
 
@@ -1879,7 +2816,7 @@ function discoverExercisesForCommand(options: OptimizerCommandOptions): {
 
 function stripEvaluationSummaryDiagnostics<T extends EvaluationSummary | null>(summary: T): T {
   if (!summary) return summary;
-  const { diagnosticSummary: _diagnosticSummary, ...rest } = summary;
+  const { diagnosticSummary: _diagnosticSummary, cleanSafety: _cleanSafety, ...rest } = summary;
   return rest as T;
 }
 
@@ -1943,6 +2880,7 @@ function stripExerciseReportDiagnostics(report: ExerciseOptimisationReport): Exe
       candidates: report.search.candidates.map((candidate) => ({
         ...candidate,
         evaluation: stripEvaluationSummaryDiagnostics(candidate.evaluation),
+        diagnosticScores: undefined,
       })),
     },
     baseline: stripSummarySplitDiagnostics(report.baseline),
@@ -1958,6 +2896,9 @@ function stripExerciseReportDiagnostics(report: ExerciseOptimisationReport): Exe
     rankedSelection: report.rankedSelection.map((candidate) => ({
       ...candidate,
       evaluation: stripEvaluationSummaryDiagnostics(candidate.evaluation),
+      diagnosticScores: undefined,
+      cleanFpGateDiagnostics: undefined,
+      safetyMetrics: undefined,
     })),
   };
 }
