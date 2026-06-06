@@ -1,5 +1,10 @@
 import { barbellCurlDefinition } from '../definitions/barbellCurl';
-import { replayRecording, replayRecordingVerbose } from './replayRunner';
+import {
+  buildReplayFrameCache,
+  replayRecording,
+  replayRecordingVerbose,
+  replayRecordingWithFrameCache,
+} from './replayRunner';
 import type { LandmarkRecording } from './types';
 import type { Keypoint } from '../../poseAnalysis';
 import type {
@@ -716,6 +721,21 @@ describe('Barbell Curl synthetic replay coverage', () => {
       unsafeCueFamilies: [],
       suppressedIssueIds: [],
     });
+  });
+
+  it('matches cached and uncached replay-frame evaluation exactly', () => {
+    const recording = recordingWithV2PoseMetadata(
+      buildRecording('synthetic cached clean v2 front curl', fullRepPath(), 'front'),
+    );
+
+    const uncached = replayRecording(barbellCurlDefinition, recording, { confidenceGating: true });
+    const cached = replayRecordingWithFrameCache(
+      barbellCurlDefinition,
+      buildReplayFrameCache(recording),
+      { confidenceGating: true },
+    );
+
+    expect(cached).toEqual(uncached);
   });
 
   it('uses frame timestamps instead of JS callback time for live rep timing', () => {

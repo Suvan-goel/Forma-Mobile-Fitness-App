@@ -1,1 +1,6 @@
-export { replayRecording, replayRecordingVerbose } from '../replay';
+export {
+  buildReplayFrameCache,
+  replayRecording,
+  replayRecordingVerbose,
+  replayRecordingWithFrameCache,
+} from '../replay';

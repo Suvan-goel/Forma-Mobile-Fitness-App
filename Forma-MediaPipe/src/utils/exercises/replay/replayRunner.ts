@@ -23,6 +23,7 @@ import type {
   FrameTrace,
   FsmTransition,
   LandmarkRecording,
+  ReplayFrameCache,
   ReplayRepQuality,
   RepTrace,
   ReplayOptions,
@@ -131,6 +132,35 @@ function firstReplayableFrameTimestamp(recording: LandmarkRecording): number | n
   return recording.frames.find((frame) => !shouldSkipFrameForCurrentReplay(frame))?.timestamp ?? null;
 }
 
+export function buildReplayFrameCache(recording: LandmarkRecording): ReplayFrameCache {
+  const frameGapTracker = createPoseFrameGapTracker();
+  let previousPoseState: PoseState | null = null;
+  const frames: ReplayFrameCache['frames'] = [];
+
+  for (let frameIndex = 0; frameIndex < recording.frames.length; frameIndex++) {
+    const frame = recording.frames[frameIndex];
+    if (shouldSkipFrameForCurrentReplay(frame)) continue;
+    const frameGap = frameGapTracker.observe(frame.timestamp);
+    const poseState = poseStateFromLandmarkRecordingFrame(frame, {
+      schemaVersion: recording.schemaVersion,
+      previousPoseState,
+      ...frameGap,
+    });
+    previousPoseState = poseState;
+    frames.push({
+      frameIndex,
+      timestamp: frame.timestamp,
+      keypoints: frame.keypoints,
+      frameContext: frameContextForReplay(frame, frameGap, poseState),
+    });
+  }
+
+  return {
+    firstReplayableFrameTimestamp: frames[0]?.timestamp ?? null,
+    frames,
+  };
+}
+
 export function replayRecording(
   definition: ExerciseDefinition,
   recording: LandmarkRecording,
@@ -216,6 +246,95 @@ export function replayRecording(
           );
         }
         repStartedAt = state.repQualityWindowActive === undefined ? frame.timestamp : null;
+        lastRepCount = state.repCount;
+      }
+    }
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  return {
+    finalRepCount: state.repCount,
+    repScores,
+    feedbackMessages,
+    reps,
+    qualitySummary: summarizeSetTrackingQuality(repQualities),
+  };
+}
+
+export function replayRecordingWithFrameCache(
+  definition: ExerciseDefinition,
+  frameCache: ReplayFrameCache,
+  options?: ReplayOptions,
+): ReplayResult {
+  const activeDefinition = resolveDefinition(definition, options);
+  let state = activeDefinition.createState();
+  const qualityProfile = resolveExerciseQualityProfile(activeDefinition);
+  const qualityTracker = new PoseQualityTracker();
+  const repQualityAccumulator = new RepQualityWindowAccumulator();
+  const repQualities: ReplayRepQuality[] = [];
+  const repScores: number[] = [];
+  const feedbackMessages: string[] = [];
+  const reps: ReplayRepPrediction[] = [];
+  let lastRepCount = 0;
+  let repStartedAt: number | null =
+    state.repQualityWindowActive === undefined ? frameCache.firstReplayableFrameTimestamp : null;
+  let previousQualityWindowActive = false;
+  const originalDateNow = Date.now;
+  const baseTimeMs = 0;
+
+  try {
+    for (const cachedFrame of frameCache.frames) {
+      Date.now = () => timestampToDateNow(baseTimeMs, cachedFrame.timestamp);
+      const frameContext = cachedFrame.frameContext;
+      const quality = qualityTracker.update(cachedFrame.keypoints, qualityProfile, {
+        frameBoundsKeypoints: frameContext.imageKeypoints,
+      });
+      state = activeDefinition.update(cachedFrame.keypoints, state, frameContext);
+      state.quality = quality;
+      const qualityWindowActive = state.repQualityWindowActive ?? true;
+      if (state.repQualityWindowActive !== undefined && qualityWindowActive && !previousQualityWindowActive) {
+        repStartedAt = cachedFrame.timestamp;
+      }
+      previousQualityWindowActive = state.repQualityWindowActive !== undefined ? qualityWindowActive : false;
+      const repQuality = repQualityAccumulator.recordFrame(quality, state);
+
+      if (state.repCount > lastRepCount) {
+        const completedRepQuality = repQuality ?? {
+          status: quality.status,
+          confidence: quality.confidence,
+          scorable: quality.canScoreRep,
+          totalFrames: 1,
+          lowConfidenceFrames: quality.status === 'low' || quality.status === 'lost' ? 1 : 0,
+          warnings: quality.warnings,
+          message: quality.message,
+        };
+        if (state.lastRepResult) {
+          const adjustedRepQuality = adjustRepQualityForExercise(completedRepQuality, state.lastRepResult);
+          const score = state.lastRepResult.score;
+          const messages =
+            options?.confidenceGating && !adjustedRepQuality.scorable
+              ? [getUnscoredRepFeedback(adjustedRepQuality)]
+              : state.lastRepResult.messages;
+          repQualities.push(adjustedRepQuality);
+          repScores.push(score);
+          feedbackMessages.push(...messages);
+          reps.push(
+            buildRepPrediction(
+              activeDefinition,
+              state.lastRepResult.repIndex,
+              score,
+              state.lastRepResult.messages,
+              state.lastRepResult.issueIds,
+              state.lastRepResult.diagnostics,
+              cachedFrame.timestamp,
+              repStartedAt,
+              adjustedRepQuality,
+              options?.confidenceGating ?? false,
+            ),
+          );
+        }
+        repStartedAt = state.repQualityWindowActive === undefined ? cachedFrame.timestamp : null;
         lastRepCount = state.repCount;
       }
     }

@@ -128,6 +128,18 @@ export interface ReplayOptions {
 
 export interface ReplayFrameContext extends ExerciseFrameContext {}
 
+export interface ReplayCachedFrame {
+  frameIndex: number;
+  timestamp: number;
+  keypoints: Keypoint[];
+  frameContext: ExerciseFrameContext;
+}
+
+export interface ReplayFrameCache {
+  firstReplayableFrameTimestamp: number | null;
+  frames: ReplayCachedFrame[];
+}
+
 /** Per-frame debug sample captured during verbose replay. */
 export interface FrameTrace {
   frameIndex: number;

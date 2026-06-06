@@ -8,7 +8,12 @@ export {
   createLandmarkRecordingFrame,
   poseMetadataForRecording,
 } from './recordingSchema';
-export { replayRecording, replayRecordingVerbose } from './replayRunner';
+export {
+  buildReplayFrameCache,
+  replayRecording,
+  replayRecordingVerbose,
+  replayRecordingWithFrameCache,
+} from './replayRunner';
 export {
   formatCameraStatusReplayReport,
   replayCameraAnalysisStatus,
@@ -64,6 +69,8 @@ export type {
   LandmarkRecordingSchemaVersion,
   LandmarkRecordingScoreSource,
   QualityCoverage,
+  ReplayCachedFrame,
+  ReplayFrameCache,
   ReplayOptions,
   ReplayFrameContext,
   ReplayRepQuality,

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { performance } from 'perf_hooks';
 
 import '../src/utils/exercises/definitions/register';
 import { ExerciseRegistry } from '../src/utils/exercises/ExerciseRegistry';
@@ -20,7 +21,13 @@ import {
   setConfigValue,
 } from '../src/utils/exercises/heuristicConfig';
 import { replayRecording, slugifyExerciseName } from '../src/utils/exercises/replay';
+import {
+  buildReplayFrameCache,
+  replayRecordingWithFrameCache,
+  type ReplayFrameCache,
+} from '../src/utils/exercises/replay';
 import type {
+  CaseEvaluation,
   DatasetCase,
   DatasetEvaluation,
   DiagnosticEvaluationSummary,
@@ -66,6 +73,11 @@ export interface OptimizerCommandOptions {
   apply?: boolean;
   silent: boolean;
   reportPath: string | null;
+  profile?: boolean;
+  useReplayCache?: boolean;
+  checkpointPath?: string | null;
+  resumeCheckpoint?: boolean;
+  checkpointEvery?: number;
   search: OptimizerSearchOptions;
   minCases: MinimumSplitCases;
 }
@@ -101,6 +113,7 @@ export interface SearchResult {
   options: Required<OptimizerSearchOptions>;
   sourceBreakdown: Record<CandidateSource, number>;
   diagnosticFallbackReason?: string;
+  checkpointPath?: string;
 }
 
 export interface MinimumSplitGate {
@@ -166,15 +179,254 @@ export interface DatasetOptimisationReport {
   confidenceGating: boolean;
   baseline: EvaluationSummary | null;
   exercises: ExerciseOptimisationReport[];
+  profile?: OptimizerProfileReport;
 }
 
 const OPTIMIZER_CONFIDENCE_GATING = true;
+const CHECKPOINT_VERSION = 1;
+const DEFAULT_CHECKPOINT_EVERY = 25;
 
 export const DEFAULT_MIN_SPLIT_CASES: MinimumSplitCases = {
   train: 1,
   validation: 1,
   test: 1,
 };
+
+export interface OptimizerProfileSection {
+  count: number;
+  totalMs: number;
+  minMs: number;
+  maxMs: number;
+  bytes?: number;
+}
+
+export interface OptimizerProfileReport {
+  startedAt: string;
+  endedAt: string;
+  totalMs: number;
+  sections: Record<string, OptimizerProfileSection>;
+}
+
+interface OptimizerRuntimeContext {
+  replayCache?: WeakMap<DatasetCase, ReplayFrameCache>;
+  profiler?: OptimizerProfiler;
+  checkpoint?: OptimizerCheckpointManager;
+  checkpointPath?: string | null;
+  resumeCheckpoint?: boolean;
+  checkpointEvery?: number;
+}
+
+interface EvaluationRuntimeOptions {
+  replayCache?: WeakMap<DatasetCase, ReplayFrameCache>;
+  profiler?: OptimizerProfiler;
+  profileSection?: string;
+  splitProfileSections?: Partial<Record<DatasetCase['label']['split'], string>>;
+}
+
+interface OptimizerCheckpointCandidate {
+  key: string;
+  id: string;
+  source: CandidateSource;
+  changedPaths?: string[];
+  config: ExerciseHeuristicConfig;
+  evaluation: EvaluationSummary;
+  score: number;
+  legacyScore: number;
+}
+
+interface OptimizerCheckpointData {
+  version: typeof CHECKPOINT_VERSION;
+  exerciseName: string;
+  selectionMode: OptimizerSelectionMode;
+  options: Required<OptimizerSearchOptions>;
+  seed: number;
+  phase: string;
+  refinementRound: number;
+  elapsedMs: number;
+  generatedCandidateCount: number;
+  generatedCandidates: Array<Pick<InstrumentedCandidateConfig, 'id' | 'source' | 'changedPaths' | 'config'>>;
+  evaluatedCandidateCount: number;
+  evaluatedCandidates: OptimizerCheckpointCandidate[];
+  survivorIds: string[];
+  bestCandidates: OptimizerCheckpointCandidate[];
+  rejectedCandidates: number;
+  rejectedCandidateExamples: string[];
+  updatedAt: string;
+}
+
+export class OptimizerProfiler {
+  private readonly startedAtMs = performance.now();
+  private readonly startedAt = new Date().toISOString();
+  private readonly sections = new Map<string, OptimizerProfileSection>();
+
+  record(section: string, durationMs: number, bytes = 0): void {
+    const current = this.sections.get(section);
+    if (!current) {
+      this.sections.set(section, {
+        count: 1,
+        totalMs: durationMs,
+        minMs: durationMs,
+        maxMs: durationMs,
+        ...(bytes > 0 ? { bytes } : {}),
+      });
+      return;
+    }
+    current.count += 1;
+    current.totalMs += durationMs;
+    current.minMs = Math.min(current.minMs, durationMs);
+    current.maxMs = Math.max(current.maxMs, durationMs);
+    if (bytes > 0) current.bytes = (current.bytes ?? 0) + bytes;
+  }
+
+  time<T>(section: string, fn: () => T): T {
+    const start = performance.now();
+    try {
+      return fn();
+    } finally {
+      this.record(section, performance.now() - start);
+    }
+  }
+
+  report(): OptimizerProfileReport {
+    return {
+      startedAt: this.startedAt,
+      endedAt: new Date().toISOString(),
+      totalMs: performance.now() - this.startedAtMs,
+      sections: Object.fromEntries(this.sections.entries()),
+    };
+  }
+}
+
+function candidateCheckpointKey(candidate: Pick<InstrumentedCandidateConfig, 'id' | 'config'>): string {
+  return `${candidate.id}:${JSON.stringify(candidate.config)}`;
+}
+
+class OptimizerCheckpointManager {
+  private data: OptimizerCheckpointData | null = null;
+  private readonly evaluatedByKey = new Map<string, OptimizerCheckpointCandidate>();
+  private generatedCandidates: OptimizerCheckpointData['generatedCandidates'] = [];
+  private lastSavedEvaluatedCount = 0;
+  private readonly startedAtMs = performance.now();
+
+  constructor(
+    private readonly checkpointPath: string,
+    private readonly exerciseName: string,
+    private readonly selectionMode: OptimizerSelectionMode,
+    private readonly options: Required<OptimizerSearchOptions>,
+    private readonly saveEvery: number,
+    resume: boolean,
+  ) {
+    if (!resume || !fs.existsSync(checkpointPath)) return;
+    const loaded = JSON.parse(fs.readFileSync(checkpointPath, 'utf-8')) as OptimizerCheckpointData;
+    if (
+      loaded.version !== CHECKPOINT_VERSION ||
+      loaded.exerciseName !== exerciseName ||
+      loaded.selectionMode !== selectionMode ||
+      JSON.stringify(loaded.options) !== JSON.stringify(options)
+    ) {
+      throw new Error(`Checkpoint ${checkpointPath} does not match this optimizer run.`);
+    }
+    this.data = loaded;
+    for (const candidate of loaded.evaluatedCandidates) {
+      this.evaluatedByKey.set(candidate.key, candidate);
+    }
+    this.generatedCandidates = loaded.generatedCandidates ?? [];
+    this.lastSavedEvaluatedCount = loaded.evaluatedCandidateCount;
+  }
+
+  get path(): string {
+    return this.checkpointPath;
+  }
+
+  setGeneratedCandidates(candidates: InstrumentedCandidateConfig[]): void {
+    const existing = new Set(this.generatedCandidates.map((candidate) => candidateCheckpointKey(candidate)));
+    for (const candidate of candidates) {
+      const key = candidateCheckpointKey(candidate);
+      if (existing.has(key)) continue;
+      existing.add(key);
+      this.generatedCandidates.push({
+        id: candidate.id,
+        source: candidate.source,
+        changedPaths: candidate.changedPaths,
+        config: candidate.config,
+      });
+    }
+  }
+
+  getEvaluated(candidate: InstrumentedCandidateConfig): EvaluatedCandidateSummary | null {
+    const checkpoint = this.evaluatedByKey.get(candidateCheckpointKey(candidate));
+    if (!checkpoint) return null;
+    return {
+      id: checkpoint.id,
+      source: checkpoint.source,
+      changedPaths: checkpoint.changedPaths,
+      config: checkpoint.config,
+      evaluation: checkpoint.evaluation,
+      score: checkpoint.score,
+      legacyScore: checkpoint.legacyScore,
+    };
+  }
+
+  recordEvaluated(candidate: EvaluatedCandidateSummary): void {
+    const key = candidateCheckpointKey(candidate);
+    if (this.evaluatedByKey.has(key)) return;
+    this.evaluatedByKey.set(key, { key, ...candidate });
+  }
+
+  maybeSave(args: {
+    phase: string;
+    refinementRound: number;
+    evaluated: EvaluatedCandidateSummary[];
+    rejectedCandidates: number;
+    rejectedCandidateExamples: string[];
+    force?: boolean;
+  }): void {
+    const evaluatedCount = this.evaluatedByKey.size;
+    if (
+      !args.force &&
+      evaluatedCount - this.lastSavedEvaluatedCount < Math.max(1, this.saveEvery)
+    ) {
+      return;
+    }
+    this.save(args);
+  }
+
+  save(args: {
+    phase: string;
+    refinementRound: number;
+    evaluated: EvaluatedCandidateSummary[];
+    rejectedCandidates: number;
+    rejectedCandidateExamples: string[];
+  }): void {
+    const evaluatedCandidates = Array.from(this.evaluatedByKey.values());
+    const best = topEvaluatedCandidates(args.evaluated, this.options.survivorCount)
+      .map((candidate) => this.evaluatedByKey.get(candidateCheckpointKey(candidate)))
+      .filter((candidate): candidate is OptimizerCheckpointCandidate => Boolean(candidate));
+    this.data = {
+      version: CHECKPOINT_VERSION,
+      exerciseName: this.exerciseName,
+      selectionMode: this.selectionMode,
+      options: this.options,
+      seed: this.options.seed,
+      phase: args.phase,
+      refinementRound: args.refinementRound,
+      elapsedMs: performance.now() - this.startedAtMs,
+      generatedCandidateCount: this.generatedCandidates.length,
+      generatedCandidates: this.generatedCandidates,
+      evaluatedCandidateCount: evaluatedCandidates.length,
+      evaluatedCandidates,
+      survivorIds: topEvaluatedCandidates(args.evaluated, this.options.survivorCount).map(
+        (candidate) => candidate.id,
+      ),
+      bestCandidates: best,
+      rejectedCandidates: args.rejectedCandidates,
+      rejectedCandidateExamples: args.rejectedCandidateExamples.slice(0, 5),
+      updatedAt: new Date().toISOString(),
+    };
+    writeJson(this.checkpointPath, this.data);
+    this.lastSavedEvaluatedCount = evaluatedCandidates.length;
+  }
+}
 
 function emptyTotals(): EvaluationTotals {
   return {
@@ -369,11 +621,31 @@ function replayCaseForOptimizer(
   definition: ExerciseDefinition,
   datasetCase: DatasetCase,
   config?: ExerciseHeuristicConfig,
+  runtime: EvaluationRuntimeOptions = {},
 ) {
-  return replayRecording(definition, datasetCase.recording, {
+  const options = {
     ...(config ? { heuristicConfig: config } : {}),
     confidenceGating: OPTIMIZER_CONFIDENCE_GATING,
-  });
+  };
+  const frameCache = runtime.replayCache?.get(datasetCase);
+  return frameCache
+    ? replayRecordingWithFrameCache(definition, frameCache, options)
+    : replayRecording(definition, datasetCase.recording, options);
+}
+
+export function buildOptimizerReplayCache(
+  cases: DatasetCase[],
+  profiler?: OptimizerProfiler,
+): WeakMap<DatasetCase, ReplayFrameCache> {
+  const cache = new WeakMap<DatasetCase, ReplayFrameCache>();
+  const totalStart = performance.now();
+  for (const datasetCase of cases) {
+    const caseStart = performance.now();
+    cache.set(datasetCase, buildReplayFrameCache(datasetCase.recording));
+    profiler?.record('poseStateFrameContextPreparation', performance.now() - caseStart);
+  }
+  profiler?.record('replayFramePreparation', performance.now() - totalStart);
+  return cache;
 }
 
 function combineQualityCoverageSummaries(
@@ -578,6 +850,14 @@ function parseNonNegativeIntegerFlag(argv: string[], flag: string): number | und
   return parsed;
 }
 
+function parsePositiveIntegerFlag(argv: string[], flag: string): number | undefined {
+  const parsed = parseNonNegativeIntegerFlag(argv, flag);
+  if (parsed !== undefined && parsed <= 0) {
+    throw new Error(`${flag} must be a positive integer.`);
+  }
+  return parsed;
+}
+
 function parseSelectionMode(argv: string[]): OptimizerSelectionMode {
   const value = flagValue(argv, '--selection-mode') ?? 'diagnostic';
   if (value !== 'current' && value !== 'diagnostic') {
@@ -598,6 +878,11 @@ export function parseOptimizerCommandOptions(argv: string[]): OptimizerCommandOp
     apply,
     silent: hasFlag(argv, '--silent'),
     reportPath: flagValue(argv, '--report'),
+    profile: hasFlag(argv, '--profile'),
+    useReplayCache: !hasFlag(argv, '--no-replay-cache'),
+    checkpointPath: flagValue(argv, '--checkpoint'),
+    resumeCheckpoint: hasFlag(argv, '--resume') || hasFlag(argv, '--resume-checkpoint'),
+    checkpointEvery: parsePositiveIntegerFlag(argv, '--checkpoint-every'),
     search: {
       randomCandidates: parseNonNegativeIntegerFlag(argv, '--random-candidates'),
       survivorCount:
@@ -624,11 +909,18 @@ export function evaluateCasesCompact(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
   config?: ExerciseHeuristicConfig,
+  runtime: EvaluationRuntimeOptions = {},
 ): EvaluationSummary | null {
   if (cases.length === 0) return null;
-  const detailed = summarizeEvaluations(
+  const detailed = runtime.profiler?.time(runtime.profileSection ?? 'evaluation', () =>
+    summarizeEvaluations(
+      cases.map((datasetCase) =>
+        evaluateCase(datasetCase, replayCaseForOptimizer(definition, datasetCase, config, runtime)),
+      ),
+    ),
+  ) ?? summarizeEvaluations(
     cases.map((datasetCase) =>
-      evaluateCase(datasetCase, replayCaseForOptimizer(definition, datasetCase, config)),
+      evaluateCase(datasetCase, replayCaseForOptimizer(definition, datasetCase, config, runtime)),
     ),
   );
   return {
@@ -643,40 +935,78 @@ export function evaluateCasesDetailed(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
   config?: ExerciseHeuristicConfig,
+  runtime: EvaluationRuntimeOptions = {},
 ): DatasetEvaluation | null {
   if (cases.length === 0) return null;
-  return summarizeEvaluations(
+  return runtime.profiler?.time(runtime.profileSection ?? 'evaluationDetailed', () =>
+    summarizeEvaluations(
+      cases.map((datasetCase) =>
+        evaluateCase(
+          datasetCase,
+          replayCaseForOptimizer(definition, datasetCase, config, runtime),
+        ),
+      ),
+    ),
+  ) ?? summarizeEvaluations(
     cases.map((datasetCase) =>
       evaluateCase(
         datasetCase,
-        replayCaseForOptimizer(definition, datasetCase, config),
+        replayCaseForOptimizer(definition, datasetCase, config, runtime),
       ),
     ),
   );
+}
+
+function compactSummary(evaluation: DatasetEvaluation | null): EvaluationSummary | null {
+  if (!evaluation) return null;
+  return {
+    totals: evaluation.totals,
+    metrics: evaluation.metrics,
+    qualityCoverage: evaluation.qualityCoverage,
+    diagnosticSummary: evaluation.diagnosticSummary,
+  };
+}
+
+function evaluateCaseEvaluations(
+  definition: ExerciseDefinition,
+  cases: DatasetCase[],
+  config?: ExerciseHeuristicConfig,
+  runtime: EvaluationRuntimeOptions = {},
+): CaseEvaluation[] {
+  if (cases.length === 0) return [];
+  const evaluateOne = (datasetCase: DatasetCase) => {
+    const run = () =>
+      evaluateCase(datasetCase, replayCaseForOptimizer(definition, datasetCase, config, runtime));
+    const splitSection = runtime.splitProfileSections?.[datasetCase.label.split];
+    return runtime.profiler && splitSection ? runtime.profiler.time(splitSection, run) : run();
+  };
+  if (runtime.splitProfileSections) {
+    return cases.map(evaluateOne);
+  }
+  return runtime.profiler?.time(runtime.profileSection ?? 'evaluation', () =>
+    cases.map(evaluateOne),
+  ) ?? cases.map(evaluateOne);
+}
+
+function summarizeCaseEvaluations(cases: CaseEvaluation[]): DatasetEvaluation | null {
+  return cases.length > 0 ? summarizeEvaluations(cases) : null;
 }
 
 function evaluateSplitCompact(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
   config?: ExerciseHeuristicConfig,
+  runtime: EvaluationRuntimeOptions = {},
 ): EvaluationBySplit<EvaluationSummary> {
+  const caseEvaluations = evaluateCaseEvaluations(definition, cases, config, runtime);
+  const train = summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'train'));
+  const validation = summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'validation'));
+  const test = summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'test'));
   return {
-    all: evaluateCasesCompact(definition, cases, config),
-    train: evaluateCasesCompact(
-      definition,
-      cases.filter((datasetCase) => datasetCase.label.split === 'train'),
-      config,
-    ),
-    validation: evaluateCasesCompact(
-      definition,
-      cases.filter((datasetCase) => datasetCase.label.split === 'validation'),
-      config,
-    ),
-    test: evaluateCasesCompact(
-      definition,
-      cases.filter((datasetCase) => datasetCase.label.split === 'test'),
-      config,
-    ),
+    all: compactSummary(summarizeCaseEvaluations(caseEvaluations)),
+    train: compactSummary(train),
+    validation: compactSummary(validation),
+    test: compactSummary(test),
   };
 }
 
@@ -684,24 +1014,14 @@ function evaluateSplitDetailed(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
   config?: ExerciseHeuristicConfig,
+  runtime: EvaluationRuntimeOptions = {},
 ): EvaluationBySplit<DatasetEvaluation> {
+  const caseEvaluations = evaluateCaseEvaluations(definition, cases, config, runtime);
   return {
-    all: evaluateCasesDetailed(definition, cases, config),
-    train: evaluateCasesDetailed(
-      definition,
-      cases.filter((datasetCase) => datasetCase.label.split === 'train'),
-      config,
-    ),
-    validation: evaluateCasesDetailed(
-      definition,
-      cases.filter((datasetCase) => datasetCase.label.split === 'validation'),
-      config,
-    ),
-    test: evaluateCasesDetailed(
-      definition,
-      cases.filter((datasetCase) => datasetCase.label.split === 'test'),
-      config,
-    ),
+    all: summarizeCaseEvaluations(caseEvaluations),
+    train: summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'train')),
+    validation: summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'validation')),
+    test: summarizeCaseEvaluations(caseEvaluations.filter((item) => item.split === 'test')),
   };
 }
 
@@ -726,32 +1046,46 @@ function cueMatchesDiagnosticEntry(cue: RepCueDiagnostic, entry: DiagnosticTunin
   return true;
 }
 
-function valuesForDiagnosticEntry(
+type DiagnosticMatchedRep = Pick<
+  CaseEvaluation['matchedReps'][number],
+  'expectedIssueIds' | 'predictedDiagnostics'
+>;
+
+function diagnosticMatchedRepsForCases(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
+  runtime: EvaluationRuntimeOptions = {},
+): DiagnosticMatchedRep[] {
+  const matchedReps: DiagnosticMatchedRep[] = [];
+  for (const datasetCase of cases) {
+    const prediction = replayCaseForOptimizer(definition, datasetCase, undefined, runtime);
+    const evaluation = evaluateCase(datasetCase, prediction);
+    matchedReps.push(...evaluation.matchedReps);
+  }
+  return matchedReps;
+}
+
+function valuesForDiagnosticEntry(
+  matchedReps: DiagnosticMatchedRep[],
   entry: DiagnosticTuningEntry,
 ): { positives: number[]; negatives: number[]; skippedReason?: string } {
   const positives: number[] = [];
   const negatives: number[] = [];
 
-  for (const datasetCase of cases) {
-    const prediction = replayCaseForOptimizer(definition, datasetCase);
-    const evaluation = evaluateCase(datasetCase, prediction);
-    for (const rep of evaluation.matchedReps) {
-      const cue = rep.predictedDiagnostics?.cues[entry.issueId];
-      const metric = rep.predictedDiagnostics?.metrics[entry.metricKey];
-      if (!cue || !metric || !cue.eligible || !metric.eligible) continue;
-      if (!cueMatchesDiagnosticEntry(cue, entry)) continue;
-      if (typeof metric.value !== 'number' || !Number.isFinite(metric.value)) continue;
-      if (
-        entry.minEligibleSamples !== undefined &&
-        (metric.sampleCount ?? cue.support ?? 0) < entry.minEligibleSamples
-      ) {
-        continue;
-      }
-      if (rep.expectedIssueIds.includes(entry.issueId)) positives.push(metric.value);
-      else negatives.push(metric.value);
+  for (const rep of matchedReps) {
+    const cue = rep.predictedDiagnostics?.cues[entry.issueId];
+    const metric = rep.predictedDiagnostics?.metrics[entry.metricKey];
+    if (!cue || !metric || !cue.eligible || !metric.eligible) continue;
+    if (!cueMatchesDiagnosticEntry(cue, entry)) continue;
+    if (typeof metric.value !== 'number' || !Number.isFinite(metric.value)) continue;
+    if (
+      entry.minEligibleSamples !== undefined &&
+      (metric.sampleCount ?? cue.support ?? 0) < entry.minEligibleSamples
+    ) {
+      continue;
     }
+    if (rep.expectedIssueIds.includes(entry.issueId)) positives.push(metric.value);
+    else negatives.push(metric.value);
   }
 
   const minPositiveCases = entry.minPositiveCases ?? 2;
@@ -808,6 +1142,7 @@ function thresholdCandidatesFromValues(
 function generateDiagnosticCandidates(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
+  runtime: EvaluationRuntimeOptions = {},
 ): { candidates: InstrumentedCandidateConfig[]; fallbackReasons: string[] } {
   const spec = definition.tunableSpec;
   if (!definition.heuristicConfig || !spec?.diagnosticTuning || spec.diagnosticTuning.length === 0) {
@@ -816,6 +1151,9 @@ function generateDiagnosticCandidates(
 
   const candidates: InstrumentedCandidateConfig[] = [];
   const fallbackReasons: string[] = [];
+  const matchedReps = runtime.profiler?.time('diagnosticExtraction', () =>
+    diagnosticMatchedRepsForCases(definition, cases, runtime),
+  ) ?? diagnosticMatchedRepsForCases(definition, cases, runtime);
 
   for (const entry of spec.diagnosticTuning) {
     const tunable = findTunable(spec, entry.thresholdPath);
@@ -832,7 +1170,7 @@ function generateDiagnosticCandidates(
       fallbackReasons.push(`${entry.issueId} threshold ${entry.thresholdPath} is not numeric.`);
       continue;
     }
-    const values = valuesForDiagnosticEntry(definition, cases, entry);
+    const values = valuesForDiagnosticEntry(matchedReps, entry);
     if (values.skippedReason) {
       fallbackReasons.push(values.skippedReason);
       continue;
@@ -920,6 +1258,14 @@ function evaluateCandidatesCompact(
   cases: DatasetCase[],
   candidates: InstrumentedCandidateConfig[],
   selectionMode: OptimizerSelectionMode = 'diagnostic',
+  runtime: OptimizerRuntimeContext = {},
+  checkpointArgs?: {
+    phase: string;
+    refinementRound: number;
+    currentEvaluated: EvaluatedCandidateSummary[];
+    rejectedCandidates: number;
+    rejectedCandidateExamples: string[];
+  },
 ): CandidateEvaluationBatch {
   const spec = definition.tunableSpec;
   if (!spec) return { evaluated: [], rejectedCount: candidates.length, rejectedExamples: [] };
@@ -940,9 +1286,21 @@ function evaluateCandidatesCompact(
       continue;
     }
 
-    const evaluation = evaluateCasesCompact(definition, cases, candidate.config);
+    const cachedEvaluation = runtime.checkpoint?.getEvaluated(candidate);
+    if (cachedEvaluation) {
+      evaluated.push(cachedEvaluation);
+      continue;
+    }
+
+    const evaluation = evaluateCasesCompact(definition, cases, candidate.config, {
+      replayCache: runtime.replayCache,
+      profiler: runtime.profiler,
+      profileSection: checkpointArgs?.phase === 'selection'
+        ? 'validationEvaluation'
+        : 'candidateTrainEvaluation',
+    });
     if (evaluation) {
-      evaluated.push({
+      const summary = {
         id: candidate.id,
         source: candidate.source,
         changedPaths: candidate.changedPaths,
@@ -950,7 +1308,21 @@ function evaluateCandidatesCompact(
         evaluation,
         score: scoreEvaluationSummary(evaluation, selectionMode),
         legacyScore: scoreLegacyEvaluationSummary(evaluation),
-      });
+      };
+      evaluated.push(summary);
+      runtime.checkpoint?.recordEvaluated(summary);
+      if (checkpointArgs) {
+        runtime.checkpoint?.maybeSave({
+          phase: checkpointArgs.phase,
+          refinementRound: checkpointArgs.refinementRound,
+          evaluated: [...checkpointArgs.currentEvaluated, ...evaluated],
+          rejectedCandidates: checkpointArgs.rejectedCandidates + rejectedCount,
+          rejectedCandidateExamples: [
+            ...checkpointArgs.rejectedCandidateExamples,
+            ...rejectedExamples,
+          ].slice(0, 5),
+        });
+      }
     }
   }
 
@@ -974,6 +1346,7 @@ export function searchExercise(
   searchCases: DatasetCase[],
   searchOptions: OptimizerSearchOptions,
   selectionMode: OptimizerSelectionMode = 'diagnostic',
+  runtime: OptimizerRuntimeContext = {},
 ): SearchResult {
   const fallbackOptions: Required<OptimizerSearchOptions> = {
     randomCandidates: searchOptions.randomCandidates ?? definition.tunableSpec?.search?.randomCandidates ?? 500,
@@ -982,6 +1355,22 @@ export function searchExercise(
       searchOptions.refinementRounds ?? definition.tunableSpec?.search?.refinementRounds ?? 2,
     seed: searchOptions.seed ?? definition.tunableSpec?.search?.seed ?? 1337,
   };
+  const checkpointPath = runtime.checkpointPath
+    ? path.resolve(process.cwd(), runtime.checkpointPath)
+    : null;
+  const checkpoint = runtime.checkpoint ?? (
+    checkpointPath
+      ? new OptimizerCheckpointManager(
+          checkpointPath,
+          definition.name,
+          selectionMode,
+          fallbackOptions,
+          runtime.checkpointEvery ?? DEFAULT_CHECKPOINT_EVERY,
+          runtime.resumeCheckpoint ?? false,
+        )
+      : undefined
+  );
+  const searchRuntime = { ...runtime, checkpoint };
   const emptyResult = {
     candidates: [],
     specIssues: [],
@@ -989,6 +1378,7 @@ export function searchExercise(
     rejectedCandidateExamples: [],
     options: fallbackOptions,
     sourceBreakdown: emptySourceBreakdown(),
+    ...(checkpointPath ? { checkpointPath } : {}),
   };
   if (!definition.heuristicConfig || !definition.tunableSpec || searchCases.length === 0) {
     return emptyResult;
@@ -1005,24 +1395,53 @@ export function searchExercise(
   let rejectedCandidates = 0;
   const rejectedCandidateExamples: string[] = [];
 
-  const randomCandidates: InstrumentedCandidateConfig[] = generateRandomCandidates(
+  const randomCandidates: InstrumentedCandidateConfig[] = (searchRuntime.profiler?.time('candidateGeneration', () =>
+    generateRandomCandidates(
+      definition.heuristicConfig!,
+      spec,
+      searchOptions,
+    ),
+  ) ?? generateRandomCandidates(
     definition.heuristicConfig,
     spec,
     searchOptions,
-  ).map((candidate) => ({ ...candidate, source: 'random' }));
+  )).map((candidate) => ({ ...candidate, source: 'random' }));
 
-  const diagnostic = generateDiagnosticCandidates(definition, searchCases);
+  const diagnostic = generateDiagnosticCandidates(definition, searchCases, {
+    replayCache: searchRuntime.replayCache,
+    profiler: searchRuntime.profiler,
+  });
+  checkpoint?.setGeneratedCandidates([...randomCandidates, ...diagnostic.candidates]);
   const randomBatch = evaluateCandidatesCompact(
     definition,
     searchCases,
     randomCandidates,
     selectionMode,
+    searchRuntime,
+    {
+      phase: 'random',
+      refinementRound: 0,
+      currentEvaluated: [],
+      rejectedCandidates,
+      rejectedCandidateExamples,
+    },
   );
   const diagnosticBatch = evaluateCandidatesCompact(
     definition,
     searchCases,
     diagnostic.candidates,
     selectionMode,
+    searchRuntime,
+    {
+      phase: 'diagnostic',
+      refinementRound: 0,
+      currentEvaluated: randomBatch.evaluated,
+      rejectedCandidates: rejectedCandidates + randomBatch.rejectedCount,
+      rejectedCandidateExamples: [
+        ...rejectedCandidateExamples,
+        ...randomBatch.rejectedExamples,
+      ].slice(0, 5),
+    },
   );
   const diagnosticCombos = combineDiagnosticCandidates(
     definition.heuristicConfig,
@@ -1034,6 +1453,19 @@ export function searchExercise(
     searchCases,
     diagnosticCombos,
     selectionMode,
+    searchRuntime,
+    {
+      phase: 'diagnostic-combo',
+      refinementRound: 0,
+      currentEvaluated: [...randomBatch.evaluated, ...diagnosticBatch.evaluated],
+      rejectedCandidates:
+        rejectedCandidates + randomBatch.rejectedCount + diagnosticBatch.rejectedCount,
+      rejectedCandidateExamples: [
+        ...rejectedCandidateExamples,
+        ...randomBatch.rejectedExamples,
+        ...diagnosticBatch.rejectedExamples,
+      ].slice(0, 5),
+    },
   );
   let evaluated = sortEvaluatedCandidates([
     ...randomBatch.evaluated,
@@ -1058,11 +1490,20 @@ export function searchExercise(
         ? [candidate.id.split('-r')[1]?.split('-').slice(1, -1).join('-')].filter(Boolean)
         : undefined,
     }));
+    checkpoint?.setGeneratedCandidates([...randomCandidates, ...diagnostic.candidates, ...diagnosticCombos, ...refined]);
     const refinedBatch = evaluateCandidatesCompact(
       definition,
       searchCases,
       refined,
       selectionMode,
+      searchRuntime,
+      {
+        phase: 'refined',
+        refinementRound: round,
+        currentEvaluated: evaluated,
+        rejectedCandidates,
+        rejectedCandidateExamples: rejectedCandidateExamples.slice(0, 5),
+      },
     );
     rejectedCandidates += refinedBatch.rejectedCount;
     rejectedCandidateExamples.push(...refinedBatch.rejectedExamples);
@@ -1070,6 +1511,13 @@ export function searchExercise(
   }
 
   const topCandidates = topEvaluatedCandidates(evaluated, fallbackOptions.survivorCount);
+  checkpoint?.save({
+    phase: 'complete',
+    refinementRound: fallbackOptions.refinementRounds,
+    evaluated,
+    rejectedCandidates,
+    rejectedCandidateExamples,
+  });
   return {
     candidates: topCandidates,
     specIssues,
@@ -1077,6 +1525,7 @@ export function searchExercise(
     rejectedCandidateExamples: rejectedCandidateExamples.slice(0, 5),
     options: fallbackOptions,
     sourceBreakdown: sourceBreakdownFor(topCandidates),
+    ...(checkpointPath ? { checkpointPath } : {}),
     diagnosticFallbackReason:
       diagnostic.candidates.length === 0 && diagnostic.fallbackReasons.length > 0
         ? diagnostic.fallbackReasons.slice(0, 5).join(' ')
@@ -1145,6 +1594,7 @@ export function optimizeExercise(
   exerciseCases: DatasetCase[],
   loadSummary: DatasetLoadSummary,
   options: OptimizerCommandOptions,
+  runtime: OptimizerRuntimeContext = {},
 ): ExerciseOptimisationReport {
   const definition = ExerciseRegistry.get(exerciseName);
   if (!definition) throw new Error(`No registered exercise definition for "${exerciseName}"`);
@@ -1158,7 +1608,16 @@ export function optimizeExercise(
   const splitGate = minimumSplitGate(splitCounts, options.minCases);
   const selection = selectionCasesFor(trainCases, validationCases, exerciseCases);
 
-  const baseline = evaluateSplitCompact(definition, exerciseCases);
+  const baseline = evaluateSplitCompact(definition, exerciseCases, undefined, {
+    replayCache: runtime.replayCache,
+    profiler: runtime.profiler,
+    profileSection: 'baselineEvaluation',
+    splitProfileSections: {
+      train: 'baselineTrainEvaluation',
+      validation: 'baselineValidationEvaluation',
+      test: 'baselineTestEvaluation',
+    },
+  });
   const baselineSelection = evaluationForSplit(selection.split, baseline);
   const supportsConfigVariants = Boolean(definition.createVariant && definition.tunableSpec);
   const canAutoApply = Boolean(
@@ -1186,7 +1645,11 @@ export function optimizeExercise(
     search: emptySearchResult(options.search),
     baseline,
     baselineCaseDetails: options.includeCaseDetails
-      ? evaluateSplitDetailed(definition, exerciseCases)
+      ? evaluateSplitDetailed(definition, exerciseCases, undefined, {
+          replayCache: runtime.replayCache,
+          profiler: runtime.profiler,
+          profileSection: 'baselineDetailedEvaluation',
+        })
       : undefined,
     winner: {
       id: null,
@@ -1213,7 +1676,7 @@ export function optimizeExercise(
     };
   }
 
-  const search = searchExercise(definition, trainCases, options.search, selectionMode);
+  const search = searchExercise(definition, trainCases, options.search, selectionMode, runtime);
   if (search.specIssues.length > 0) {
     return {
       ...baseReport,
@@ -1242,6 +1705,14 @@ export function optimizeExercise(
       config: candidate.config,
     })),
     selectionMode,
+    { replayCache: runtime.replayCache, profiler: runtime.profiler },
+    {
+      phase: 'selection',
+      refinementRound: options.search.refinementRounds ?? definition.tunableSpec?.search?.refinementRounds ?? 0,
+      currentEvaluated: [],
+      rejectedCandidates: search.rejectedCandidates,
+      rejectedCandidateExamples: search.rejectedCandidateExamples,
+    },
   );
   const rankedSelection = sortEvaluatedCandidates(
     baselineCandidate ? [baselineCandidate, ...selectionBatch.evaluated] : selectionBatch.evaluated,
@@ -1261,7 +1732,16 @@ export function optimizeExercise(
     return { ...baseReport, search: searchWithSelectionRejects, reason: 'No candidate could be evaluated.' };
   }
 
-  const winnerEvaluations = evaluateSplitCompact(definition, exerciseCases, winner.config);
+  const winnerEvaluations = evaluateSplitCompact(definition, exerciseCases, winner.config, {
+    replayCache: runtime.replayCache,
+    profiler: runtime.profiler,
+    profileSection: 'winnerEvaluation',
+    splitProfileSections: {
+      train: 'winnerTrainEvaluation',
+      validation: 'winnerValidationEvaluation',
+      test: 'winnerTestEvaluation',
+    },
+  });
   const winnerSelection = evaluationForSplit(selection.split, winnerEvaluations);
 
   if (!winnerSelection) {
@@ -1327,7 +1807,11 @@ export function optimizeExercise(
       test: winnerEvaluations.test,
     },
     winnerCaseDetails: options.includeCaseDetails
-      ? evaluateSplitDetailed(definition, exerciseCases, winner.config)
+      ? evaluateSplitDetailed(definition, exerciseCases, winner.config, {
+          replayCache: runtime.replayCache,
+          profiler: runtime.profiler,
+          profileSection: 'winnerDetailedEvaluation',
+        })
       : undefined,
     rankedSelection: rankedSelection.slice(0, 10),
   };
@@ -1344,10 +1828,30 @@ function writeOptimizationReport(
   reportName: string,
   report: unknown,
   options: OptimizerCommandOptions,
+  profiler?: OptimizerProfiler,
 ): string {
   const targetPath = reportPathFor(options, reportName);
+  if (!profiler) {
+    writeJson(targetPath, report);
+    return targetPath;
+  }
+  const start = performance.now();
   writeJson(targetPath, report);
+  profiler.record('reportWriting', performance.now() - start);
   return targetPath;
+}
+
+function checkpointPathForExercise(
+  options: OptimizerCommandOptions,
+  exerciseName: string,
+  exerciseCount: number,
+): string | null {
+  if (!options.checkpointPath) return null;
+  const resolved = path.resolve(process.cwd(), options.checkpointPath);
+  if (exerciseCount <= 1) return resolved;
+  const ext = path.extname(resolved) || '.json';
+  const base = ext ? resolved.slice(0, -ext.length) : resolved;
+  return `${base}_${slugifyExerciseName(exerciseName)}${ext}`;
 }
 
 function resolveTargetDefinition(exerciseFilter: string | null): ExerciseDefinition | undefined {
@@ -1462,18 +1966,40 @@ export function runDatasetOptimize(options: OptimizerCommandOptions): {
   report: DatasetOptimisationReport;
   reportPath: string;
 } {
+  const profiler = options.profile ? new OptimizerProfiler() : undefined;
   const datasetRoot = path.resolve(process.cwd(), options.datasetRoot ?? DATASET_ROOT);
   const { exercises, targetDefinition } = discoverExercisesForCommand(options);
   const exerciseReports: ExerciseOptimisationReport[] = [];
 
   for (const exerciseName of exercises) {
-    const { cases, summary } = loadDatasetCasesWithSummary({
+    const { cases, summary } = profiler?.time('datasetLoading', () =>
+      loadDatasetCasesWithSummary({
+        datasetRoot,
+        exerciseName,
+        logSkippedDrafts: false,
+        profile: {
+          onLabelParsed: (event) => profiler.record('labelParsing', event.durationMs, event.bytes),
+          onLandmarkParsed: (event) => profiler.record('landmarkJsonParsing', event.durationMs, event.bytes),
+        },
+      }),
+    ) ?? loadDatasetCasesWithSummary({
       datasetRoot,
       exerciseName,
       logSkippedDrafts: false,
     });
     if (cases.length === 0) continue;
-    exerciseReports.push(optimizeExercise(exerciseName, cases, summary, options));
+    const replayCache = options.useReplayCache === false
+      ? undefined
+      : buildOptimizerReplayCache(cases, profiler);
+    exerciseReports.push(
+      optimizeExercise(exerciseName, cases, summary, options, {
+        replayCache,
+        profiler,
+        checkpointPath: checkpointPathForExercise(options, exerciseName, exercises.length),
+        resumeCheckpoint: options.resumeCheckpoint,
+        checkpointEvery: options.checkpointEvery,
+      }),
+    );
   }
   const reportExerciseReports =
     options.includeDiagnostics === false
@@ -1492,7 +2018,11 @@ export function runDatasetOptimize(options: OptimizerCommandOptions): {
   const reportName = targetDefinition
     ? `optimization_${slugifyExerciseName(targetDefinition.name)}`
     : 'optimization';
-  const reportPath = writeOptimizationReport(reportName, report, options);
+  const reportPath = writeOptimizationReport(reportName, report, options, profiler);
+  if (profiler) {
+    report.profile = profiler.report();
+    writeJson(reportPath, report);
+  }
   return { report, reportPath };
 }
 
@@ -1514,6 +2044,20 @@ export function formatOptimizerConsoleSummary(args: {
     lines.push('');
     lines.push(`${exercise.exerciseName}: ${exercise.reason}`);
     lines.push(formatLoadSummary(exercise.loadSummary));
+  }
+
+  if (args.report.profile) {
+    lines.push('');
+    lines.push('Optimizer profile');
+    const sections = Object.entries(args.report.profile.sections)
+      .sort(([, a], [, b]) => b.totalMs - a.totalMs)
+      .slice(0, 12);
+    for (const [name, section] of sections) {
+      const bytes = section.bytes ? `, ${(section.bytes / 1024 / 1024).toFixed(1)} MB` : '';
+      lines.push(
+        `${name}: ${section.totalMs.toFixed(1)}ms across ${section.count} call(s)${bytes}`,
+      );
+    }
   }
 
   lines.push(`Report: ${args.reportPath}`);

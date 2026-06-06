@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { performance } from 'perf_hooks';
 
 import '../src/utils/exercises/definitions/register';
 import { ExerciseRegistry } from '../src/utils/exercises/ExerciseRegistry';
@@ -34,6 +35,18 @@ export interface LoadDatasetCasesOptions {
   includeTemplates?: boolean;
   requireLandmarks?: boolean;
   logSkippedDrafts?: boolean;
+  profile?: DatasetLoadProfileSink;
+}
+
+export interface DatasetLoadProfileEvent {
+  filePath: string;
+  bytes: number;
+  durationMs: number;
+}
+
+export interface DatasetLoadProfileSink {
+  onLabelParsed?: (event: DatasetLoadProfileEvent) => void;
+  onLandmarkParsed?: (event: DatasetLoadProfileEvent) => void;
 }
 
 export interface DatasetLoadSummary {
@@ -61,6 +74,21 @@ export interface DiscoverDatasetExercisesOptions {
 
 export function readJson<T>(filePath: string): T {
   return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
+}
+
+function readJsonProfiled<T>(
+  filePath: string,
+  onParsed?: (event: DatasetLoadProfileEvent) => void,
+): T {
+  const start = performance.now();
+  const text = fs.readFileSync(filePath, 'utf-8');
+  const parsed = JSON.parse(text) as T;
+  onParsed?.({
+    filePath,
+    bytes: Buffer.byteLength(text),
+    durationMs: performance.now() - start,
+  });
+  return parsed;
 }
 
 export function writeJson(filePath: string, payload: unknown): void {
@@ -198,7 +226,7 @@ export function loadDatasetCasesWithSummary(
       summary.templateLabelsSkipped += 1;
       continue;
     }
-    const label = readJson<ExerciseLabelFile>(labelPath);
+    const label = readJsonProfiled<ExerciseLabelFile>(labelPath, options.profile?.onLabelParsed);
     if (isDraftLabel(label) && !includeDrafts) {
       summary.draftLabelsSkipped += 1;
       continue;
@@ -220,7 +248,10 @@ export function loadDatasetCasesWithSummary(
       summary.missingLandmarksSkipped += 1;
       continue;
     }
-    const recording = readJson<LandmarkRecording>(recordingPath);
+    const recording = readJsonProfiled<LandmarkRecording>(
+      recordingPath,
+      options.profile?.onLandmarkParsed,
+    );
     summary.landmarkFilesRead += 1;
     const datasetCase = { label, recording, labelPath, recordingPath };
     const issues = validateDatasetCase(datasetCase, knownIssueIds);

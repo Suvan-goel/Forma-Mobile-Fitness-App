@@ -18,6 +18,7 @@ import { getConfigValue } from '../src/utils/exercises/heuristicConfig';
 import { replayRecording } from '../src/utils/exercises/replay';
 import {
   DEFAULT_MIN_SPLIT_CASES,
+  buildOptimizerReplayCache,
   evaluateCasesCompact,
   evaluateCasesDetailed,
   minimumSplitGate,
@@ -319,6 +320,22 @@ describe('dataset optimiser scaling helpers', () => {
     });
   });
 
+  it('parses profiling and checkpoint flags', () => {
+    expect(parseOptimizerCommandOptions([
+      '--profile',
+      '--checkpoint',
+      '/tmp/checkpoint.json',
+      '--resume-checkpoint',
+      '--checkpoint-every',
+      '10',
+    ])).toMatchObject({
+      profile: true,
+      checkpointPath: '/tmp/checkpoint.json',
+      resumeCheckpoint: true,
+      checkpointEvery: 10,
+    });
+  });
+
   it('compact evaluation matches detailed evaluation totals and metrics', () => {
     const definition = makeSyntheticExercise('Scaling Synthetic Compact', {
       thresholds: { COMPLETE_AT: 0.5 },
@@ -333,6 +350,17 @@ describe('dataset optimiser scaling helpers', () => {
       qualityCoverage: detailed?.qualityCoverage,
       diagnosticSummary: detailed?.diagnosticSummary,
     });
+  });
+
+  it('cached compact evaluation matches uncached compact evaluation', () => {
+    const definition = makeSyntheticExercise('Scaling Synthetic Cached Compact', {
+      thresholds: { COMPLETE_AT: 0.5 },
+    });
+    const cases = [syntheticCase(definition.name, 'train')];
+
+    expect(evaluateCasesCompact(definition, cases, undefined, {
+      replayCache: buildOptimizerReplayCache(cases),
+    })).toEqual(evaluateCasesCompact(definition, cases));
   });
 
   it('prints score metrics only when reviewed score ranges exist', () => {
