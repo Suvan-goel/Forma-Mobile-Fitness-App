@@ -381,6 +381,16 @@ function fastCurlUpPath(): number[] {
   ];
 }
 
+function fastShortFullRepPath(): number[] {
+  return [
+    ...Array(16).fill(EXTENDED_WRIST_Y),
+    ...interpolate(EXTENDED_WRIST_Y, TOP_WRIST_Y, 4),
+    ...Array(4).fill(TOP_WRIST_Y),
+    ...interpolate(TOP_WRIST_Y, EXTENDED_WRIST_Y, 4),
+    ...Array(8).fill(EXTENDED_WRIST_Y),
+  ];
+}
+
 function halfRepPath(): number[] {
   return [
     ...Array(16).fill(EXTENDED_WRIST_Y),
@@ -1284,6 +1294,38 @@ describe('Barbell Curl synthetic replay coverage', () => {
       scoreabilityCandidate: 'notScoreable',
       weakChains: expect.arrayContaining(['leftArm', 'rightArm', 'torso']),
     });
+  });
+
+  it('does not count a short unscorable setup candidate before a clean rep', () => {
+    const setupPath = fastShortFullRepPath();
+    const recording = buildSegmentedRecording('synthetic weak setup candidate then clean curl', [
+      { path: setupPath },
+      { path: fullRepPath() },
+    ]);
+    const state = replayRecordingWithPoseState(recording, (_frame, index) => (
+      index < setupPath.length
+        ? { leftArm: 'partial', rightArm: 'partial', torso: 'partial' }
+        : {}
+    ));
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.scorable).toBe(true);
+  });
+
+  it('does not count a short unscorable trailing candidate after a clean rep', () => {
+    const cleanPath = fullRepPath();
+    const recording = buildSegmentedRecording('synthetic clean curl then weak trailing candidate', [
+      { path: cleanPath },
+      { path: fastShortFullRepPath() },
+    ]);
+    const state = replayRecordingWithPoseState(recording, (_frame, index) => (
+      index >= cleanPath.length
+        ? { leftArm: 'partial', rightArm: 'partial', torso: 'partial' }
+        : {}
+    ));
+
+    expect(state.repCount).toBe(1);
+    expect(state.lastRepResult?.scorable).toBe(true);
   });
 
   it('marks bilateral-only cues ineligible from side/oblique views', () => {

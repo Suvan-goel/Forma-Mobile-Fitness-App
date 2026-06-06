@@ -143,6 +143,10 @@ const FRONT_SHORT_PARTIAL_MIN_PRIMARY_ROM = 0.06;
 const FRONT_SHORT_PARTIAL_MIN_SECONDARY_ROM = 0.04;
 const FRONT_SHORT_PARTIAL_MIN_DURATION_SEC = 0.45;
 const FRONT_SHORT_PARTIAL_MAX_DURATION_SEC = 3.5;
+const UNSCORABLE_SETUP_SUPPRESSION_MAX_DURATION_SEC = 1.5;
+const UNSCORABLE_TRAILING_SUPPRESSION_MAX_DURATION_SEC = 1.25;
+const UNSCORABLE_SETUP_LOW_ROM_MAX = 0.45;
+const UNSCORABLE_SETUP_SHORT_MOTION_MAX_DURATION_SEC = 0.6;
 
 /** Warm-up: require N consecutive stable frames before enabling FSM */
 const WARMUP_REQUIRED = 12;          // ~0.6s at 20fps
@@ -2731,6 +2735,36 @@ function isCountableFrontShortPartial(
   return frontShortPartialParticipated(repWindow);
 }
 
+function shouldSuppressUnscorableCountCandidate(
+  state: BarbellCurlState,
+  repWindow: RepWindow,
+  viewQuality: RepViewQualityDiagnostic,
+  reliability: RepReliabilityInterpretation | null,
+  finalScorable: boolean,
+): boolean {
+  if (finalScorable) return false;
+
+  const duration = repWindow.tEnd - repWindow.tStart;
+  const setupRom = Math.max(sideRomRatio(repWindow, 'left'), sideRomRatio(repWindow, 'right'));
+  const countability = reliability?.countabilityCandidate ?? 'countable';
+  const repCountUnsafe = reliability?.unsafeCueFamilies.includes('repCount') ?? false;
+  const clearlyUnsafe = viewQuality.viewUnknown || countability === 'notCountable' || repCountUnsafe;
+
+  if (!clearlyUnsafe) return false;
+
+  if (state.repCount === 0) {
+    return (
+      duration <= UNSCORABLE_SETUP_SUPPRESSION_MAX_DURATION_SEC &&
+      (
+        setupRom < UNSCORABLE_SETUP_LOW_ROM_MAX ||
+        duration <= UNSCORABLE_SETUP_SHORT_MOTION_MAX_DURATION_SEC
+      )
+    );
+  }
+
+  return duration <= UNSCORABLE_TRAILING_SUPPRESSION_MAX_DURATION_SEC;
+}
+
 /** Complete a rep: evaluate form, update state, reset FSMs. */
 function completeRep(
   newState: BarbellCurlState,
@@ -2750,6 +2784,17 @@ function completeRep(
   const allowedCueFamilies = safeCueFamilySet(reliabilityInterpretation);
   const reliabilityAllowsScoring = reliabilityInterpretation?.scoreabilityCandidate !== 'notScoreable';
   const finalScorable = scorable && reliabilityAllowsScoring;
+
+  if (shouldSuppressUnscorableCountCandidate(
+    newState,
+    repWindow,
+    viewQuality,
+    reliabilityInterpretation,
+    finalScorable,
+  )) {
+    resetBarbellCurlRepTracking(newState);
+    return;
+  }
 
   newState.repCount++;
 
