@@ -5,6 +5,12 @@
   "landmarkFile": "landmarks/training/barbell-curl/train11-focus-shoulder-fail-a.json",
   "split": "train",
   "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-barbell-curl-001",
+    "sessionId": "barbell-curl-session-001",
+    "cameraSetupId": "barbell-curl-tripod-1p5m-similar",
+    "reviewerConfidence": "high"
+  },
   "expectedReps": 6,
   "reps": [
     {

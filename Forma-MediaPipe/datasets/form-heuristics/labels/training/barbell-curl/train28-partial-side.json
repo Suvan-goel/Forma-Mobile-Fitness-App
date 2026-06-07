@@ -6,9 +6,9 @@
   "split": "train",
   "reviewStatus": "reviewed",
   "captureMetadata": {
-    "subjectId": "subject-anonymous-barbell-curl-1",
-    "sessionId": "train28-partial-side",
-    "cameraSetupId": "train28-partial-side-camera",
+    "subjectId": "subject-barbell-curl-001",
+    "sessionId": "barbell-curl-session-002",
+    "cameraSetupId": "barbell-curl-tripod-1p5m-similar",
     "environmentId": "environment-anonymous-gym",
     "collectionMode": "staged",
     "deviceModel": "unknown",
@@ -16,7 +16,7 @@
     "cameraSide": "unknown",
     "lightingCondition": "bright",
     "reviewerId": "codex",
-    "reviewerConfidence": "medium",
+    "reviewerConfidence": "high",
     "reviewerViewConfidence": "usable"
   },
   "expectedReps": 5,

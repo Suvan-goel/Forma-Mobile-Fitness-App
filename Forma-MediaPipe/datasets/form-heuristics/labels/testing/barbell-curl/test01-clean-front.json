@@ -5,6 +5,12 @@
   "landmarkFile": "landmarks/testing/barbell-curl/test01-clean-front.json",
   "split": "test",
   "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-barbell-curl-001",
+    "sessionId": "barbell-curl-session-002",
+    "cameraSetupId": "barbell-curl-tripod-1p5m-similar",
+    "reviewerConfidence": "high"
+  },
   "expectedReps": 5,
   "reps": [
     {

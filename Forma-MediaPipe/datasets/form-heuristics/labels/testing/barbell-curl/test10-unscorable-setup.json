@@ -6,9 +6,9 @@
   "split": "test",
   "reviewStatus": "reviewed",
   "captureMetadata": {
-    "subjectId": "subject-anonymous-barbell-curl-1",
-    "sessionId": "test10-unscorable-setup",
-    "cameraSetupId": "test10-unscorable-setup-camera",
+    "subjectId": "subject-barbell-curl-001",
+    "sessionId": "barbell-curl-session-002",
+    "cameraSetupId": "barbell-curl-tripod-1p5m-similar",
     "environmentId": "environment-anonymous-gym",
     "collectionMode": "staged",
     "deviceModel": "unknown",
@@ -16,7 +16,7 @@
     "cameraSide": "unknown",
     "lightingCondition": "bright",
     "reviewerId": "codex",
-    "reviewerConfidence": "medium",
+    "reviewerConfidence": "high",
     "reviewerViewConfidence": "poor"
   },
   "expectedReps": 3,
