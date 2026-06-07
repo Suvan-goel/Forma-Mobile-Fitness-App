@@ -248,7 +248,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
                 icon={Volume2}
                 iconColor={COLORS.textSecondary}
                 label="Trainer Voice"
-                sub={selectedTrainer ? `${selectedTrainer.name} · ${selectedTrainer.specialty}` : 'Default trainer'}
+                sub={selectedTrainer ? selectedTrainer.name : 'Default trainer'}
                 onPress={() => navigation.navigate('TrainerPicker')}
               />
             </View>

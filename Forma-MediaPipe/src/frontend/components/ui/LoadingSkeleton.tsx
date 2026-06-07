@@ -4,7 +4,7 @@
  */
 
 import React, { memo, useEffect, useRef } from 'react';
-import { StyleSheet, Animated, ViewStyle, DimensionValue } from 'react-native';
+import { StyleSheet, Animated, View, ViewStyle, DimensionValue } from 'react-native';
 import { COLORS, CARD_RADIUS } from '../../constants/theme';
 
 type SkeletonVariant = 'card' | 'text' | 'circle' | 'button';
@@ -51,14 +51,12 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = memo(({
           width: width ?? '100%',
           height: height ?? 100,
           borderRadius: CARD_RADIUS,
-          backgroundColor: COLORS.cardBackground,
         };
       case 'text':
         return {
           width: width ?? '80%',
           height: height ?? 16,
           borderRadius: 4,
-          backgroundColor: COLORS.cardBackground,
         };
       case 'circle':
         const size = height ?? 48;
@@ -66,14 +64,12 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = memo(({
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: COLORS.cardBackground,
         };
       case 'button':
         return {
           width: width ?? '100%',
           height: height ?? 56,
           borderRadius: 28,
-          backgroundColor: COLORS.cardBackground,
         };
       default:
         return {};
@@ -81,19 +77,31 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = memo(({
   };
 
   return (
-    <Animated.View
+    <View
       style={[
         styles.base,
         getVariantStyles(),
-        { opacity },
         style,
       ]}
-    />
+      pointerEvents="none"
+    >
+      <Animated.View
+        style={[
+          styles.fill,
+          { opacity },
+        ]}
+      />
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
   base: {
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+  },
+  fill: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.cardBackground,
   },
 });

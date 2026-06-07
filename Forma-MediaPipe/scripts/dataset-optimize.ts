@@ -786,7 +786,8 @@ class OptimizerCheckpointManager {
       repCountStability: args.repCountStability,
       updatedAt: new Date().toISOString(),
     };
-    writeJson(this.checkpointPath, this.data);
+    fs.mkdirSync(path.dirname(this.checkpointPath), { recursive: true });
+    fs.writeFileSync(this.checkpointPath, `${JSON.stringify(this.data)}\n`);
     this.lastSavedEvaluatedCount = evaluatedCandidates.length;
   }
 }

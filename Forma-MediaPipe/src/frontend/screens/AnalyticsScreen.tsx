@@ -55,6 +55,8 @@ const PERSONAL_BESTS_CARD_GRADIENT: readonly [string, string, string] = [
   'rgba(44, 49, 53, 0.80)',
 ];
 type ProgressTab = 'overview' | 'personalBests' | 'leaderboard';
+const TOP_TAB_RAIL_INSET = 3;
+const TOP_TAB_ACTIVE_VERTICAL_OFFSET = -0.5;
 
 const EXERCISE_THUMBS: Record<string, any> = {
   'Barbell Squat': require('../assets/exercises/barbell_squat.png'),
@@ -541,21 +543,22 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(24, 26, 28, 0.78)',
-    padding: 3,
+    padding: TOP_TAB_RAIL_INSET,
     overflow: 'hidden',
   },
   topTab: {
     flex: 1,
-    height: '100%',
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
   },
   topTabActive: {
     width: '100%',
-    height: '100%',
+    flex: 1,
     borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
+    transform: [{ translateY: TOP_TAB_ACTIVE_VERTICAL_OFFSET }],
     borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.04)',
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
@@ -573,7 +576,7 @@ const styles = StyleSheet.create({
     width: 1,
     height: 17,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    marginHorizontal: 2,
+    marginHorizontal: TOP_TAB_RAIL_INSET,
   },
 
   /* Card label */

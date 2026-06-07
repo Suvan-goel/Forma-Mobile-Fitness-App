@@ -61,12 +61,12 @@ function createDeps(options: {
 function ttsBody() {
   return {
     text: '  Stand   tall.  ',
-    voiceId: 'c6SfcYrb2t09NHXiT80T',
+    voiceId: '56bWURjYFHyYyVf490Dp',
     voiceSettings: {
-      stability: 0.62,
-      similarity_boost: 0.87,
-      speed: 0.97,
-      style: 0.06,
+      stability: 0.55,
+      similarity_boost: 0.8,
+      speed: 0.96,
+      style: 0,
     },
   };
 }

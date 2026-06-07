@@ -1,9 +1,9 @@
 const trainer = {
-  id: 'marcus',
-  name: 'Marcus',
-  voiceId: 'voice-selected',
-  voiceSettings: { speed: 0.97, stability: 0.62, similarity: 0.87, styleExaggeration: 0.06 },
-  previewGreeting: "Hey, I'm Marcus. Stay controlled.",
+  id: 'ava',
+  name: 'Ava',
+  voiceId: '56bWURjYFHyYyVf490Dp',
+  voiceSettings: { speed: 0.96, stability: 0.55, similarity: 0.8, styleExaggeration: 0 },
+  previewGreeting: "Hey, I'm Ava. Let's get started.",
   greeting: 'Fallback greeting.',
 };
 
@@ -55,7 +55,7 @@ describe('trainer TTS cue packs', () => {
     expect(prefetchSpeech).toHaveBeenCalled();
     expect(prefetchSpeech.mock.calls[0][0]).toBe(trainer.previewGreeting);
     for (const call of prefetchSpeech.mock.calls) {
-      expect(call[1]).toEqual(expect.objectContaining({ voiceId: 'voice-selected' }));
+      expect(call[1]).toEqual(expect.objectContaining({ voiceId: '56bWURjYFHyYyVf490Dp' }));
       expect(call[2]).toEqual({ purpose: 'prefetch', timeoutMs: 12000 });
     }
   });

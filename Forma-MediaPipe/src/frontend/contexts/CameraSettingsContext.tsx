@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CAMERA_SETTINGS_KEY } from '../../utils/storageKeys';
 import type { PoseModelName } from 'expo-pose-detection';
 import { DEV_FEATURES_ENABLED } from '../../config/devFeatures';
+import { DEFAULT_TRAINER_ID, TRAINERS } from '../constants/trainers';
 
 export type CameraSettings = {
   showFeedback: boolean;
@@ -38,10 +39,16 @@ const defaultSettings: CameraSettings = {
   debugMode: false,
   restTimerEnabled: false,
   restTimerDurationSeconds: 90,
-  selectedTrainerId: 'marcus',
+  selectedTrainerId: DEFAULT_TRAINER_ID,
   autoScreenRecording: false,
   poseModel: 'pose_landmarker_heavy',
 };
+
+const TRAINER_IDS = new Set(TRAINERS.map((trainer) => trainer.id));
+
+function normalizeTrainerId(id: unknown): string {
+  return typeof id === 'string' && TRAINER_IDS.has(id) ? id : DEFAULT_TRAINER_ID;
+}
 
 const CameraSettingsContext = createContext<CameraSettingsContextValue | null>(null);
 
@@ -70,7 +77,16 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
         if (typeof saved.debugMode === 'boolean') setDebugModeRaw(saved.debugMode);
         if (typeof saved.restTimerEnabled === 'boolean') setRestTimerEnabledRaw(saved.restTimerEnabled);
         if (typeof saved.restTimerDurationSeconds === 'number') setRestTimerDurationSecondsRaw(saved.restTimerDurationSeconds);
-        if (typeof saved.selectedTrainerId === 'string') setSelectedTrainerIdRaw(saved.selectedTrainerId);
+        if ('selectedTrainerId' in saved) {
+          const normalizedTrainerId = normalizeTrainerId(saved.selectedTrainerId);
+          setSelectedTrainerIdRaw(normalizedTrainerId);
+          if (saved.selectedTrainerId !== normalizedTrainerId) {
+            AsyncStorage.setItem(
+              CAMERA_SETTINGS_KEY,
+              JSON.stringify({ ...saved, selectedTrainerId: normalizedTrainerId }),
+            ).catch(() => { /* ignore migration write errors */ });
+          }
+        }
         if (typeof saved.autoScreenRecording === 'boolean') setAutoScreenRecordingRaw(saved.autoScreenRecording);
         if (
           (DEV_FEATURES_ENABLED || saved.devFeaturesEnabled === true) &&
@@ -130,8 +146,9 @@ export const CameraSettingsProvider: React.FC<{ children: React.ReactNode }> = (
   }, [persistSetting]);
 
   const setSelectedTrainerId = useCallback((id: string) => {
-    setSelectedTrainerIdRaw(id);
-    persistSetting('selectedTrainerId', id);
+    const normalizedTrainerId = normalizeTrainerId(id);
+    setSelectedTrainerIdRaw(normalizedTrainerId);
+    persistSetting('selectedTrainerId', normalizedTrainerId);
   }, [persistSetting]);
 
   const setAutoScreenRecording = useCallback((value: boolean) => {

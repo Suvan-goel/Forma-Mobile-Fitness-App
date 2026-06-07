@@ -23,7 +23,7 @@ const defaults: WorkoutPreferences = {
   showFeedback: true,
   isTTSEnabled: true,
   showSkeletonOverlay: false,
-  selectedTrainerId: 'marcus',
+  selectedTrainerId: 'ava',
   weeklyTrainingTarget: '3-4',
   autoScreenRecording: false,
 };

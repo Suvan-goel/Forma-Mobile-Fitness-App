@@ -18,6 +18,8 @@ const TABS: { key: SocialTab; label: string }[] = [
   { key: 'activity', label: 'Activity' },
   { key: 'friends', label: 'Friends' },
 ];
+const TAB_RAIL_INSET = 3;
+const TAB_ACTIVE_VERTICAL_OFFSET = -0.5;
 
 export const SocialTabSelector: React.FC<SocialTabSelectorProps> = memo(({ activeTab, onTabChange }) => {
   return (
@@ -72,21 +74,22 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
     backgroundColor: 'rgba(24, 26, 28, 0.78)',
-    padding: 3,
+    padding: TAB_RAIL_INSET,
     overflow: 'hidden',
   },
   tab: {
     flex: 1,
-    height: '100%',
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabActive: {
     width: '100%',
-    height: '100%',
+    flex: 1,
     borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
+    transform: [{ translateY: TAB_ACTIVE_VERTICAL_OFFSET }],
     borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.04)',
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
@@ -104,6 +107,6 @@ const styles = StyleSheet.create({
     width: 1,
     height: 17,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    marginHorizontal: 2,
+    marginHorizontal: TAB_RAIL_INSET,
   },
 });

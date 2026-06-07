@@ -5,12 +5,14 @@ export const TTS_MODEL_ID = 'eleven_flash_v2_5' as const;
 const MAX_TEXT_LENGTH = 240;
 const ALLOWED_VOICE_IDS = new Set([
   '21m00Tcm4TlvDq8ikWAM',
-  '8N2ng9i2uiUWqstgmWlH',
-  'l4Coq6695JDX9xtLqXDE',
-  'uJCs8Cm3vdGWEkXI6wUX',
-  'c6SfcYrb2t09NHXiT80T',
-  'l30f87tf05uxyknGdDw6',
-  'MdeqL1TMyZWz86QOELK8',
+  '56bWURjYFHyYyVf490Dp',
+  'rfkTsdZrVWEVhDycUYn9',
+  '19STyYD15bswVz51nqLf',
+  'qSeXEcewz7tA0Q0qk9fH',
+  'VlUmeC1Uzj3NnwiVR9K9',
+  'lUTamkMw7gOzZbFIwmq4',
+  '1t1EeRixsJrKbiF1zwM6',
+  'xYo5z1CSHgIA8XSPGcsR',
 ]);
 
 const corsHeaders = {

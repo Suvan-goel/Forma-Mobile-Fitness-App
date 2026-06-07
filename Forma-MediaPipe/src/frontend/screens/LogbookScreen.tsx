@@ -295,8 +295,26 @@ interface WorkoutCardProps {
 }
 
 const CARD_INNER_HEIGHT = 122;
+const LOGBOOK_SKELETON_HEIGHT = 110;
 const CARD_GAP = CARD_VERTICAL_GAP;
 const DELETE_AREA_WIDTH = 72;
+
+const LogbookCardSkeleton: React.FC = memo(() => (
+  <View style={styles.cardSkeletonRow} pointerEvents="none">
+    <View style={styles.cardSkeletonThumb}>
+      <LoadingSkeleton variant="circle" height={42} />
+    </View>
+    <View style={styles.cardSkeletonContent}>
+      <LoadingSkeleton variant="text" height={15} style={{ width: '72%' }} />
+      <LoadingSkeleton variant="text" height={10} style={{ width: '48%' }} />
+      <LoadingSkeleton variant="text" height={10} style={{ width: '38%' }} />
+    </View>
+    <View style={styles.cardSkeletonRight}>
+      <LoadingSkeleton variant="circle" height={44} />
+      <LoadingSkeleton variant="text" height={8} style={{ width: 16 }} />
+    </View>
+  </View>
+));
 
 const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ session, onDelete, index }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -371,51 +389,53 @@ const WorkoutCard: React.FC<WorkoutCardProps & { index: number }> = memo(({ sess
         style={{ transform: [{ translateX }] }}
         {...panResponder.panHandlers}
       >
-        <TouchableOpacity
-          style={styles.cardOuter}
-          activeOpacity={0.82}
-          onPress={handlePress}
-        >
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
+        <View style={styles.cardOuter}>
+          <TouchableOpacity
+            style={styles.cardTouchable}
+            activeOpacity={0.82}
+            onPress={handlePress}
           >
-            <View style={styles.cardGlassEdge}>
-              <View style={styles.cardLayout}>
-                <View style={styles.workoutThumb}>
-                  <Image
-                    source={getWorkoutThumb(session, index)}
-                    style={styles.workoutThumbImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{session.name}</Text>
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaItem}>
-                      <Text style={styles.metaText}>{session.date}</Text>
-                    </View>
-                    <View style={styles.metaDot} />
-                    <View style={styles.metaItem}>
-                      <Text style={styles.metaText}>{session.duration}</Text>
-                    </View>
+            <LinearGradient
+              colors={[...CARD_GRADIENT_COLORS]}
+              start={CARD_GRADIENT_START}
+              end={CARD_GRADIENT_END}
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardGlassEdge}>
+                <View style={styles.cardLayout}>
+                  <View style={styles.workoutThumb}>
+                    <Image
+                      source={getWorkoutThumb(session, index)}
+                      style={styles.workoutThumbImage}
+                      resizeMode="contain"
+                    />
                   </View>
-                  <Text style={styles.exerciseSummary} numberOfLines={1}>
-                    {session.totalSets} sets · {session.totalReps} reps
-                  </Text>
-                </View>
-                <View style={styles.cardRight}>
-                  <View style={[styles.scoreBadge, { borderColor: getScoreColor(session.formScore) }]}>
-                    <MonoText style={[styles.scoreValue, { color: getScoreColor(session.formScore) }]}>{session.formScore}</MonoText>
+                  <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{session.name}</Text>
+                    <View style={styles.metaRow}>
+                      <View style={styles.metaItem}>
+                        <Text style={styles.metaText}>{session.date}</Text>
+                      </View>
+                      <View style={styles.metaDot} />
+                      <View style={styles.metaItem}>
+                        <Text style={styles.metaText}>{session.duration}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.exerciseSummary} numberOfLines={1}>
+                      {session.totalSets} sets · {session.totalReps} reps
+                    </Text>
                   </View>
-                  <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  <View style={styles.cardRight}>
+                    <View style={[styles.scoreBadge, { borderColor: getScoreColor(session.formScore) }]}>
+                      <MonoText style={[styles.scoreValue, { color: getScoreColor(session.formScore) }]}>{session.formScore}</MonoText>
+                    </View>
+                    <ChevronRight size={14} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  </View>
                 </View>
               </View>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     </View>
   );
@@ -434,6 +454,7 @@ export const LogbookScreen: React.FC = () => {
   const { onScroll } = useScroll();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const hasAnimated = useRef(false);
+  const hasFocusedOnce = useRef(false);
 
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -449,6 +470,10 @@ export const LogbookScreen: React.FC = () => {
   const { deleteWorkout } = useDeleteWorkout();
   useFocusEffect(
     React.useCallback(() => {
+      if (!hasFocusedOnce.current) {
+        hasFocusedOnce.current = true;
+        return;
+      }
       refetch();
     }, [refetch]),
   );
@@ -778,10 +803,11 @@ export const LogbookScreen: React.FC = () => {
             <LoadingSkeleton variant="text" height={38} style={{ width: 180, marginBottom: SPACING.sm }} />
             <LoadingSkeleton variant="text" height={12} style={{ width: 120 }} />
           </View>
-          <LoadingSkeleton variant="card" height={110} style={{ marginBottom: 12 }} />
-          <LoadingSkeleton variant="card" height={110} style={{ marginBottom: 12 }} />
-          <LoadingSkeleton variant="card" height={110} style={{ marginBottom: 12 }} />
-          <LoadingSkeleton variant="card" height={110} />
+          <View style={styles.cardSkeletonList}>
+            {[0, 1, 2, 3].map((item) => (
+              <LogbookCardSkeleton key={item} />
+            ))}
+          </View>
         </View>
       </View>
     );
@@ -935,7 +961,7 @@ export const LogbookScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             onScroll={onScroll}
             scrollEventThrottle={16}
-            removeClippedSubviews={true}
+            removeClippedSubviews={false}
             initialNumToRender={5}
             maxToRenderPerBatch={5}
             windowSize={5}
@@ -957,6 +983,30 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.screenHorizontal,
     paddingTop: SPACING.xl,
+  },
+  cardSkeletonList: {
+    gap: CARD_GAP,
+  },
+  cardSkeletonRow: {
+    height: LOGBOOK_SKELETON_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 11,
+  },
+  cardSkeletonThumb: {
+    width: 104,
+    alignItems: 'center',
+  },
+  cardSkeletonContent: {
+    flex: 1,
+    gap: 9,
+    minWidth: 0,
+  },
+  cardSkeletonRight: {
+    width: 50,
+    alignItems: 'center',
+    gap: 8,
   },
   errorWrap: {
     flex: 1,
@@ -1104,24 +1154,18 @@ const styles = StyleSheet.create({
   cardOuter: {
     height: CARD_INNER_HEIGHT,
     borderRadius: 13,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-      },
-      android: { elevation: 2 },
-    }),
+    ...CARD_SHADOW,
+  },
+  cardTouchable: {
+    flex: 1,
+    borderRadius: 13,
   },
   cardGradient: {
     backgroundColor: COLORS.cardBackground,
     flex: 1,
     borderRadius: 13,
-
-    ...CARD_SHADOW,
     overflow: 'hidden',
-},
+  },
   cardGlassEdge: {
     flex: 1,
     flexDirection: 'row',

@@ -7,7 +7,7 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CircleUserRound, UserRound, Volume2, VolumeX } from 'lucide-react-native';
+import { Volume2, VolumeX } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import {
@@ -26,6 +26,8 @@ import { TRAINERS, type Trainer } from '../constants/trainers';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import {
   cancelSpeech,
+  createVoiceSnapshot,
+  prefetchSpeech,
   setActiveVoiceId,
   setActiveVoiceSettings,
   speakWithElevenLabs,
@@ -33,8 +35,11 @@ import {
 import { cancelTrainerCuePackWarming, warmTrainerCuePack } from '../../backend/services/ttsCuePack';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
-const MALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'male');
-const FEMALE_TRAINERS = TRAINERS.filter((t) => t.gender === 'female');
+const MALE_TRAINER_IDS = new Set(['malik', 'leo', 'miles', 'theo']);
+const FEMALE_TRAINER_IDS = new Set(['ava', 'isla', 'naomi', 'clara']);
+const MALE_TRAINERS = TRAINERS.filter((trainer) => MALE_TRAINER_IDS.has(trainer.id));
+const FEMALE_TRAINERS = TRAINERS.filter((trainer) => FEMALE_TRAINER_IDS.has(trainer.id));
+const PICKER_TRAINERS = [...MALE_TRAINERS, ...FEMALE_TRAINERS];
 
 function getTrainerPreviewGreeting(trainer: Trainer): string {
   return trainer.previewGreeting ?? trainer.greeting;
@@ -65,6 +70,14 @@ export const TrainerPickerScreen: React.FC = () => {
 
   useFocusEffect(
     useCallback(() => {
+      PICKER_TRAINERS.forEach((trainer) => {
+        const snapshot = createVoiceSnapshot(trainer.voiceId, trainer.voiceSettings);
+        prefetchSpeech(getTrainerPreviewGreeting(trainer), snapshot, {
+          purpose: 'prefetch',
+          timeoutMs: 12000,
+        }).catch(() => {});
+      });
+
       return () => {
         cancelSpeech('trainer-preview').catch(() => {});
       };
@@ -133,20 +146,36 @@ export const TrainerPickerScreen: React.FC = () => {
               <Text style={[styles.trainerName, isSelected && styles.trainerNameSelected]}>
                 {trainer.name}
               </Text>
-              <Text style={styles.trainerAge}>{trainer.age}</Text>
-              <View style={[styles.specialtyBadge, isSelected && styles.specialtyBadgeSelected]}>
-                <Text style={[styles.specialtyText, isSelected && styles.specialtyTextSelected]}>
-                  {trainer.specialty}
-                </Text>
-              </View>
             </View>
-            <Text style={styles.trainerDescription}>{trainer.description}</Text>
+            <Text style={styles.trainerDescription}>
+              {trainer.description}
+            </Text>
           </View>
         </TouchableOpacity>
         {!isLast && <View style={styles.rowDivider} />}
       </View>
     );
   };
+
+  const renderTrainerSection = (title: string, trainers: Trainer[], isFirst = false) => (
+    <View style={!isFirst && styles.sectionGroupSpaced}>
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionLabel}>{title}</Text>
+      </View>
+      <LinearGradient
+        colors={[...CARD_GRADIENT_COLORS]}
+        start={CARD_GRADIENT_START}
+        end={CARD_GRADIENT_END}
+        style={styles.cardGradient}
+      >
+        <View style={styles.cardEdge}>
+          {trainers.map((trainer, index) =>
+            renderTrainerRow(trainer, index, trainers.length)
+          )}
+        </View>
+      </LinearGradient>
+    </View>
+  );
 
   return (
     <ScreenBackground style={[styles.container, { paddingTop: insets.top }]}>
@@ -181,45 +210,8 @@ export const TrainerPickerScreen: React.FC = () => {
             Choose a trainer whose coaching style fits how you like to train. Your selection sets the voice used for all spoken cues.
           </Text>
 
-          {/* Male Trainers */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <UserRound size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>MALE</Text>
-            </View>
-          </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
-              {MALE_TRAINERS.map((trainer, index) =>
-                renderTrainerRow(trainer, index, MALE_TRAINERS.length)
-              )}
-            </View>
-          </LinearGradient>
-
-          {/* Female Trainers */}
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionLabelRow}>
-              <CircleUserRound size={13} color={COLORS.accent} strokeWidth={1.5} />
-              <Text style={styles.sectionLabel}>FEMALE</Text>
-            </View>
-          </View>
-          <LinearGradient
-            colors={[...CARD_GRADIENT_COLORS]}
-            start={CARD_GRADIENT_START}
-            end={CARD_GRADIENT_END}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardEdge}>
-              {FEMALE_TRAINERS.map((trainer, index) =>
-                renderTrainerRow(trainer, index, FEMALE_TRAINERS.length)
-              )}
-            </View>
-          </LinearGradient>
+          {renderTrainerSection('MALE VOICES', MALE_TRAINERS, true)}
+          {renderTrainerSection('FEMALE VOICES', FEMALE_TRAINERS)}
         </Animated.View>
       </Animated.ScrollView>
     </ScreenBackground>
@@ -254,24 +246,20 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 8,
   },
-
-  /* Section Headers (matches Home) */
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 16,
     marginBottom: 7,
   },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   sectionLabel: {
     fontFamily: FONTS.display.bold,
     fontSize: 9.5,
     color: COLORS.textSecondary,
     letterSpacing: 1.3,
+  },
+  sectionGroupSpaced: {
+    marginTop: 12,
   },
 
   /* Cards (matches Home) */
@@ -281,14 +269,14 @@ const styles = StyleSheet.create({
 
     ...CARD_SHADOW,
     overflow: 'hidden',
-},
+  },
   cardEdge: {
     borderRadius: CARD_RADIUS,
     borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.085)',
     borderTopColor: 'rgba(255, 255, 255, 0.13)',
     paddingHorizontal: 12,
-    paddingVertical: 2,
+    paddingVertical: 6,
   },
 
   /* Trainer Rows */
@@ -340,46 +328,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   trainerName: {
     fontFamily: FONTS.display.semibold,
-    fontSize: 12.5,
+    fontSize: 13,
     color: COLORS.textSecondary,
     lineHeight: 20,
   },
   trainerNameSelected: {
     fontFamily: FONTS.display.regular,
     color: COLORS.text,
-  },
-  trainerAge: {
-    fontFamily: FONTS.mono.regular,
-    fontVariant: ['tabular-nums'],
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    lineHeight: 20,
-  },
-  specialtyBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 7,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  specialtyBadgeSelected: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-  },
-  specialtyText: {
-    fontFamily: FONTS.ui.regular,
-    fontSize: 10,
-    color: COLORS.textTertiary,
-    letterSpacing: 0.3,
-  },
-  specialtyTextSelected: {
-    color: '#A78BFA',
   },
   trainerDescription: {
     fontFamily: FONTS.ui.regular,

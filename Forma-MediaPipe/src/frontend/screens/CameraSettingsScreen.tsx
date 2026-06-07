@@ -44,7 +44,7 @@ import { ScreenBackground } from '../components/ui/ScreenBackground';
 import { SettingsHeader } from '../components/ui/SettingsHeader';
 import { useCameraSettings } from '../contexts/CameraSettingsContext';
 import { MonoText } from '../components/typography/MonoText';
-import { TRAINERS } from '../constants/trainers';
+import { DEFAULT_TRAINER_ID, TRAINERS } from '../constants/trainers';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 /* ── Scroll Wheel Picker ─────────────────── */
@@ -282,7 +282,10 @@ export const CameraSettingsScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const currentTrainerName = TRAINERS.find((t) => t.id === selectedTrainerId)?.name ?? 'Maya';
+  const currentTrainerName =
+    TRAINERS.find((t) => t.id === selectedTrainerId)?.name ??
+    TRAINERS.find((t) => t.id === DEFAULT_TRAINER_ID)?.name ??
+    'Ava';
 
   const currentMinutes = Math.floor(restTimerDurationSeconds / 60);
   const currentSeconds = restTimerDurationSeconds % 60;

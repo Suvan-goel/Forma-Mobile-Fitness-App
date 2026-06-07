@@ -351,7 +351,13 @@ export const WorkoutDetailsScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
           <ChevronLeft size={24} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{workout.name.toUpperCase()}</Text>
+        <Text
+          style={[styles.headerTitle, styles.workoutHeaderTitle]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {workout.name.toUpperCase()}
+        </Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -510,6 +516,12 @@ const styles = StyleSheet.create({
     ...PAGE_TITLE_TEXT,
     textAlign: 'center',
     marginHorizontal: SPACING.sm,
+  },
+  workoutHeaderTitle: {
+    minWidth: 0,
+    textAlign: 'left',
+    writingDirection: 'ltr',
+    paddingLeft: 1,
   },
   placeholder: {
     width: 36,
