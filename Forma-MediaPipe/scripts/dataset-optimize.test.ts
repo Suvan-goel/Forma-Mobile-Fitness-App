@@ -412,11 +412,23 @@ describe('dataset optimiser scaling helpers', () => {
       '--resume-checkpoint',
       '--checkpoint-every',
       '10',
+      '--diverse-survivors',
+      '--diverse-survivor-per-source',
+      '12',
+      '--validation-pool-size',
+      '128',
     ])).toMatchObject({
       profile: true,
       checkpointPath: '/tmp/checkpoint.json',
       resumeCheckpoint: true,
       checkpointEvery: 10,
+      diverseSurvivors: true,
+      diverseSurvivorPerSource: 12,
+      validationPoolSize: 128,
+    });
+
+    expect(parseOptimizerCommandOptions(['--no-diverse-survivors'])).toMatchObject({
+      diverseSurvivors: false,
     });
   });
 
@@ -791,7 +803,7 @@ describe('dataset optimiser scaling helpers', () => {
       ],
       { randomCandidates: 12, refinementRounds: 1, survivorCount: 8, seed: 1 },
       'diagnostic',
-      { tunableGroup: 'issue-feedback' },
+      { tunableGroup: 'issue-feedback', diverseSurvivors: false },
     );
 
     expect(result.candidates.length).toBeGreaterThan(0);
@@ -1073,6 +1085,93 @@ describe('dataset optimiser scaling helpers', () => {
     expect(report.winner.validation?.metrics.issueF1).toBeGreaterThan(report.baseline.validation?.metrics.issueF1 ?? 0);
   });
 
+  it('issue-feedback mode reports diversified refinement and validation pools', () => {
+    const name = 'Diagnostic Synthetic Diverse Funnel';
+    const definition = makeDiagnosticSyntheticExercise(name, {
+      thresholds: { COMPLETE_AT: 0.5 },
+      formThresholds: { WARN_AT: 0.9 },
+    });
+    registerExercise(definition);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 0.8, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 0.65, [diagnosticSyntheticIssueId], 'train-mild-positive'),
+      splitDiagnosticCase(name, 'train', 0.55, [], 'train-clean'),
+      splitDiagnosticCase(name, 'train', 0.72, [], 'train-hard-clean'),
+      splitDiagnosticCase(name, 'validation', 0.8, [diagnosticSyntheticIssueId], 'validation-positive'),
+      splitDiagnosticCase(name, 'validation', 0.55, [], 'validation-clean'),
+      splitDiagnosticCase(name, 'test', 0.8, [diagnosticSyntheticIssueId], 'test-positive'),
+    ];
+
+    const report = optimizeExercise(
+      name,
+      cases,
+      loadSummary(cases.length),
+      optimizerOptions(name, {
+        search: { randomCandidates: 60, refinementRounds: 1, survivorCount: 2, seed: 7 },
+        diverseSurvivorPerSource: 4,
+        validationPoolSize: 12,
+      }),
+    );
+
+    const funnel = report.search.issueFeedbackFunnel;
+    expect(funnel?.enabled).toBe(true);
+    expect(funnel?.diverseSurvivors).toBe(true);
+    expect(funnel?.refinementSeedSources[0]?.selectedSize).toBeGreaterThan(2);
+    expect(funnel?.validationPool?.selectedSize).toBeGreaterThan(2);
+    expect(funnel?.validationPool?.selectedSize).toBeLessThanOrEqual(12);
+    expect(funnel?.validationPool?.sourceCounts.map((source) => source.source)).toEqual(
+      expect.arrayContaining(['current-score', 'clean-safety-first', 'lowest-clean-fp-stable']),
+    );
+    expect(
+      funnel?.refinementSeedSources[0]?.sourceCounts.find((source) => source.source === 'clean-safety-first')?.admitted,
+    ).toBeGreaterThan(0);
+    expect(
+      funnel?.validationPool?.sourceCounts.find((source) => source.source === 'clean-safety-first')?.admitted,
+    ).toBeGreaterThan(0);
+    expect(funnel?.validationPool?.uniqueLineageCount).toBeGreaterThan(1);
+    expect(Object.keys(funnel?.validationPool?.candidateSources ?? {}).length).toBe(
+      funnel?.validationPool?.selectedSize,
+    );
+    expect(report.search.candidates.length).toBe(funnel?.validationPool?.selectedSize);
+  });
+
+  it('issue-feedback mode can admit candidates through alternate rankings', () => {
+    const name = 'Diagnostic Synthetic Alternate Funnel';
+    const definition = makeDiagnosticSyntheticExercise(name, {
+      thresholds: { COMPLETE_AT: 0.5 },
+      formThresholds: { WARN_AT: 0.9 },
+    });
+    registerExercise(definition);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 0.8, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 0.55, [], 'train-clean'),
+      splitDiagnosticCase(name, 'train', 0.75, [], 'train-hard-clean'),
+      splitDiagnosticCase(name, 'validation', 0.8, [diagnosticSyntheticIssueId], 'validation-positive'),
+      splitDiagnosticCase(name, 'validation', 0.55, [], 'validation-clean'),
+      splitDiagnosticCase(name, 'test', 0.8, [diagnosticSyntheticIssueId], 'test-positive'),
+    ];
+
+    const report = optimizeExercise(
+      name,
+      cases,
+      loadSummary(cases.length),
+      optimizerOptions(name, {
+        search: { randomCandidates: 80, refinementRounds: 1, survivorCount: 1, seed: 11 },
+        diverseSurvivorPerSource: 6,
+        validationPoolSize: 16,
+      }),
+    );
+    const refinementSources = report.search.issueFeedbackFunnel?.refinementSeedSources[0]?.candidateSources ?? {};
+    const validationSources = report.search.issueFeedbackFunnel?.validationPool?.candidateSources ?? {};
+
+    expect(Object.values(refinementSources).some((sources) =>
+      sources.some((source) => source !== 'current-score'),
+    )).toBe(true);
+    expect(Object.values(validationSources).some((sources) =>
+      sources.some((source) => source !== 'current-score'),
+    )).toBe(true);
+  });
+
   it('default all-tunable mode does not enable issue-feedback rep-count rejection', () => {
     const name = 'Diagnostic Synthetic All Mode Unchanged';
     const definition = makeDiagnosticSyntheticExercise(
@@ -1103,6 +1202,7 @@ describe('dataset optimiser scaling helpers', () => {
 
     expect(report.tunableGroup).toBe('all');
     expect(report.issueOnlySummary).toBeUndefined();
+    expect(report.search.issueFeedbackFunnel).toBeUndefined();
     expect(report.search.rejectedCandidateExamples.join(' ')).not.toContain('rep-count instability');
   });
 

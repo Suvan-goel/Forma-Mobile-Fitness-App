@@ -82,6 +82,9 @@ export interface OptimizerCommandOptions {
   checkpointEvery?: number;
   enforceCleanFpGates?: boolean;
   tunableGroup?: OptimizerTunableGroup;
+  diverseSurvivors?: boolean;
+  diverseSurvivorPerSource?: number;
+  validationPoolSize?: number;
   search: OptimizerSearchOptions;
   minCases: MinimumSplitCases;
 }
@@ -202,6 +205,52 @@ export interface IssueOnlyReportSummary {
   winnerPredictedRepsBySplit: RepCountStabilityBySplit;
   baseline: EvaluationBySplit<IssueOnlyMetricSnapshot>;
   winner: EvaluationBySplit<IssueOnlyMetricSnapshot>;
+}
+
+export interface CandidatePoolLineageCount {
+  lineage: string;
+  count: number;
+}
+
+export interface CandidatePoolSourceCount {
+  source: string;
+  considered: number;
+  admitted: number;
+  duplicates: number;
+}
+
+export interface CandidatePoolDiagnostics {
+  enabled: boolean;
+  purpose: 'refinement' | 'validation';
+  requestedSize: number;
+  selectedSize: number;
+  dedupeInputCount: number;
+  dedupeDuplicateCount: number;
+  uniqueLineageCount: number;
+  topLineages: CandidatePoolLineageCount[];
+  dominantLineage: CandidatePoolLineageCount | null;
+  dominantLineageShare: number;
+  sourceCounts: CandidatePoolSourceCount[];
+  candidateSources: Record<string, string[]>;
+}
+
+export interface IssueFeedbackFunnelDiagnostics {
+  enabled: boolean;
+  diverseSurvivors: boolean;
+  diverseSurvivorPerSource: number;
+  validationPoolTargetSize: number;
+  refinementSeedSources: CandidatePoolDiagnostics[];
+  validationPool: CandidatePoolDiagnostics | null;
+  winnerAdmissionSources?: string[];
+  smokeLikeRandom40Family: {
+    generated: boolean;
+    evaluated: boolean;
+    refined: boolean;
+    inRefinementSeeds: boolean;
+    inValidationPool: boolean;
+    refinementCandidateIds: string[];
+    validationCandidateIds: string[];
+  };
 }
 
 export type CleanRepBucketKey =
@@ -379,6 +428,7 @@ export interface SearchResult {
   sourceBreakdown: Record<CandidateSource, number>;
   diagnosticFallbackReason?: string;
   checkpointPath?: string;
+  issueFeedbackFunnel?: IssueFeedbackFunnelDiagnostics;
 }
 
 export interface MinimumSplitGate {
@@ -455,9 +505,12 @@ export interface DatasetOptimisationReport {
 }
 
 const OPTIMIZER_CONFIDENCE_GATING = true;
-const CHECKPOINT_VERSION = 2;
+const CHECKPOINT_VERSION = 3;
 const DEFAULT_CHECKPOINT_EVERY = 25;
 const MAX_REP_COUNT_STABILITY_REJECTION_EXAMPLES = 50;
+const DEFAULT_ISSUE_FEEDBACK_VALIDATION_POOL_SIZE = 256;
+const DEFAULT_ISSUE_FEEDBACK_MIN_DIVERSE_PER_SOURCE = 8;
+const DEFAULT_POOL_LINEAGE_REPORT_LIMIT = 10;
 
 export const DEFAULT_MIN_SPLIT_CASES: MinimumSplitCases = {
   train: 1,
@@ -492,6 +545,9 @@ interface OptimizerRuntimeContext {
   repCountBaseline?: EvaluationSummary | null;
   repCountBaselineSplit?: SelectionSplit | 'train' | 'validation';
   repCountStability?: RepCountStabilityTracker;
+  diverseSurvivors?: boolean;
+  diverseSurvivorPerSource?: number;
+  validationPoolSize?: number;
 }
 
 interface EvaluationRuntimeOptions {
@@ -510,6 +566,13 @@ interface OptimizerCheckpointCandidate {
   evaluation: EvaluationSummary;
   score: number;
   legacyScore: number;
+  diagnosticScores?: CandidateDiagnosticScores;
+}
+
+interface OptimizerCheckpointFunnelOptions {
+  diverseSurvivors: boolean;
+  diverseSurvivorPerSource: number;
+  validationPoolSize: number;
 }
 
 interface OptimizerCheckpointData {
@@ -518,6 +581,7 @@ interface OptimizerCheckpointData {
   selectionMode: OptimizerSelectionMode;
   tunableGroup: OptimizerTunableGroup;
   options: Required<OptimizerSearchOptions>;
+  funnelOptions: OptimizerCheckpointFunnelOptions;
   seed: number;
   phase: string;
   refinementRound: number;
@@ -594,6 +658,7 @@ class OptimizerCheckpointManager {
     private readonly selectionMode: OptimizerSelectionMode,
     private readonly tunableGroup: OptimizerTunableGroup,
     private readonly options: Required<OptimizerSearchOptions>,
+    private readonly funnelOptions: OptimizerCheckpointFunnelOptions,
     private readonly saveEvery: number,
     resume: boolean,
   ) {
@@ -605,7 +670,8 @@ class OptimizerCheckpointManager {
       loaded.exerciseName !== exerciseName ||
       loaded.selectionMode !== selectionMode ||
       loadedTunableGroup !== tunableGroup ||
-      JSON.stringify(loaded.options) !== JSON.stringify(options)
+      JSON.stringify(loaded.options) !== JSON.stringify(options) ||
+      JSON.stringify(loaded.funnelOptions) !== JSON.stringify(funnelOptions)
     ) {
       throw new Error(`Checkpoint ${checkpointPath} does not match this optimizer run.`);
     }
@@ -647,6 +713,7 @@ class OptimizerCheckpointManager {
       evaluation: checkpoint.evaluation,
       score: checkpoint.score,
       legacyScore: checkpoint.legacyScore,
+      diagnosticScores: checkpoint.diagnosticScores,
     };
   }
 
@@ -701,6 +768,7 @@ class OptimizerCheckpointManager {
       selectionMode: this.selectionMode,
       tunableGroup: this.tunableGroup,
       options: this.options,
+      funnelOptions: this.funnelOptions,
       seed: this.options.seed,
       phase: args.phase,
       refinementRound: args.refinementRound,
@@ -1568,6 +1636,266 @@ function topEvaluatedCandidates<T extends { score: number; legacyScore: number }
   return sortEvaluatedCandidates(candidates).slice(0, count);
 }
 
+function mergeEvaluatedCandidates(
+  existing: EvaluatedCandidateSummary[],
+  added: EvaluatedCandidateSummary[],
+): EvaluatedCandidateSummary[] {
+  const byKey = new Map<string, EvaluatedCandidateSummary>();
+  for (const candidate of [...existing, ...added]) {
+    byKey.set(candidateCheckpointKey(candidate), candidate);
+  }
+  return sortEvaluatedCandidates(Array.from(byKey.values()));
+}
+
+function candidateLineageId(candidateId: string): string {
+  const refinementMarker = candidateId.search(/-r\d+-/);
+  return refinementMarker >= 0 ? candidateId.slice(0, refinementMarker) : candidateId;
+}
+
+function configDedupeKey(candidate: Pick<EvaluatedCandidateSummary, 'config'>): string {
+  return JSON.stringify(candidate.config);
+}
+
+function issueSummaryF1(summary: {
+  truePositiveCount: number;
+  falsePositiveCount: number;
+  falseNegativeCount: number;
+}): number {
+  const precisionDenominator = summary.truePositiveCount + summary.falsePositiveCount;
+  const recallDenominator = summary.truePositiveCount + summary.falseNegativeCount;
+  const precision = precisionDenominator === 0 ? 0 : summary.truePositiveCount / precisionDenominator;
+  const recall = recallDenominator === 0 ? 0 : summary.truePositiveCount / recallDenominator;
+  return precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
+}
+
+function candidatePerIssueF1(candidate: EvaluatedCandidateSummary, issueId: string): number {
+  const summary = candidate.evaluation.diagnosticSummary?.issueSummaries[issueId];
+  return summary ? issueSummaryF1(summary) : 0;
+}
+
+function trainRepCountStable(
+  candidate: EvaluatedCandidateSummary,
+  baseline: EvaluationSummary | null | undefined,
+): boolean {
+  if (!baseline) return true;
+  if (candidate.evaluation.totals.predictedReps !== baseline.totals.predictedReps) return false;
+  if (candidate.evaluation.metrics.repCountAccuracy !== baseline.metrics.repCountAccuracy) return false;
+  const candidateCases = candidate.evaluation.repCountSnapshot?.perCasePredictedReps ?? [];
+  const baselineCases = baseline.repCountSnapshot?.perCasePredictedReps ?? [];
+  if (candidateCases.length === 0 || baselineCases.length === 0) return true;
+  const byVideo = new Map(baselineCases.map((snapshot) => [snapshot.sourceVideo, snapshot]));
+  return candidateCases.every((snapshot) => {
+    const baselineSnapshot = byVideo.get(snapshot.sourceVideo);
+    return (
+      baselineSnapshot &&
+      baselineSnapshot.predictedReps === snapshot.predictedReps &&
+      baselineSnapshot.repCountCorrect === snapshot.repCountCorrect
+    );
+  });
+}
+
+function numericScore(value: number | null | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function sortedByDiagnosticScore(
+  candidates: EvaluatedCandidateSummary[],
+  scoreName: keyof CandidateDiagnosticScores,
+): EvaluatedCandidateSummary[] {
+  return [...candidates].sort((a, b) =>
+    numericScore(b.diagnosticScores?.[scoreName], -Infinity) -
+      numericScore(a.diagnosticScores?.[scoreName], -Infinity) ||
+    b.score - a.score ||
+    b.legacyScore - a.legacyScore,
+  );
+}
+
+function candidatePoolLineageCounts(candidates: EvaluatedCandidateSummary[]): CandidatePoolLineageCount[] {
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const lineage = candidateLineageId(candidate.id);
+    counts.set(lineage, (counts.get(lineage) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([lineage, count]) => ({ lineage, count }))
+    .sort((a, b) => b.count - a.count || a.lineage.localeCompare(b.lineage));
+}
+
+function emptyCandidatePoolDiagnostics(
+  purpose: CandidatePoolDiagnostics['purpose'],
+): CandidatePoolDiagnostics {
+  return {
+    enabled: false,
+    purpose,
+    requestedSize: 0,
+    selectedSize: 0,
+    dedupeInputCount: 0,
+    dedupeDuplicateCount: 0,
+    uniqueLineageCount: 0,
+    topLineages: [],
+    dominantLineage: null,
+    dominantLineageShare: 0,
+    sourceCounts: [],
+    candidateSources: {},
+  };
+}
+
+function buildCandidatePoolDiagnostics(args: {
+  purpose: CandidatePoolDiagnostics['purpose'];
+  requestedSize: number;
+  candidates: EvaluatedCandidateSummary[];
+  sourceCounts: CandidatePoolSourceCount[];
+  candidateSources: Record<string, string[]>;
+  dedupeInputCount: number;
+  dedupeDuplicateCount: number;
+}): CandidatePoolDiagnostics {
+  const topLineages = candidatePoolLineageCounts(args.candidates).slice(0, DEFAULT_POOL_LINEAGE_REPORT_LIMIT);
+  const dominantLineage = topLineages[0] ?? null;
+  return {
+    enabled: true,
+    purpose: args.purpose,
+    requestedSize: args.requestedSize,
+    selectedSize: args.candidates.length,
+    dedupeInputCount: args.dedupeInputCount,
+    dedupeDuplicateCount: args.dedupeDuplicateCount,
+    uniqueLineageCount: candidatePoolLineageCounts(args.candidates).length,
+    topLineages,
+    dominantLineage,
+    dominantLineageShare: dominantLineage && args.candidates.length > 0
+      ? dominantLineage.count / args.candidates.length
+      : 0,
+    sourceCounts: args.sourceCounts,
+    candidateSources: args.candidateSources,
+  };
+}
+
+function buildDiversifiedCandidatePool(args: {
+  purpose: CandidatePoolDiagnostics['purpose'];
+  candidates: EvaluatedCandidateSummary[];
+  baseline: EvaluationSummary | null | undefined;
+  survivorCount: number;
+  perSource: number;
+  targetSize: number;
+}): { candidates: EvaluatedCandidateSummary[]; diagnostics: CandidatePoolDiagnostics } {
+  const selected = new Map<string, EvaluatedCandidateSummary>();
+  const configKeys = new Set<string>();
+  const sourceCounts = new Map<string, CandidatePoolSourceCount>();
+  const candidateSources: Record<string, string[]> = {};
+  let dedupeInputCount = 0;
+  let dedupeDuplicateCount = 0;
+  const stableCandidates = args.candidates.filter((candidate) => trainRepCountStable(candidate, args.baseline));
+  const perSource = Math.max(1, args.perSource);
+  const requestedSize = Math.max(args.survivorCount, args.targetSize);
+
+  const sourceCounter = (source: string): CandidatePoolSourceCount => {
+    const current = sourceCounts.get(source);
+    if (current) return current;
+    const created = { source, considered: 0, admitted: 0, duplicates: 0 };
+    sourceCounts.set(source, created);
+    return created;
+  };
+
+  const admit = (source: string, ranked: EvaluatedCandidateSummary[], limit: number) => {
+    const considered = ranked.slice(0, Math.max(0, limit));
+    const counter = sourceCounter(source);
+    counter.considered += considered.length;
+    for (const candidate of considered) {
+      dedupeInputCount += 1;
+      if (selected.has(candidate.id)) {
+        counter.duplicates += 1;
+        const sources = candidateSources[candidate.id] ?? [];
+        if (!sources.includes(source)) sources.push(source);
+        candidateSources[candidate.id] = sources;
+        continue;
+      }
+      const configKey = configDedupeKey(candidate);
+      if (configKeys.has(configKey)) {
+        counter.duplicates += 1;
+        dedupeDuplicateCount += 1;
+        continue;
+      }
+      if (selected.size >= requestedSize) continue;
+      selected.set(candidate.id, candidate);
+      configKeys.add(configKey);
+      counter.admitted += 1;
+      candidateSources[candidate.id] = [source];
+    }
+  };
+
+  const currentScore = sortEvaluatedCandidates(args.candidates);
+  admit('current-score', currentScore, args.survivorCount);
+  admit('clean-safety-first', sortedByDiagnosticScore(args.candidates, 'cleanSafetyFirstScore'), perSource);
+  admit('issue-f1-after-clean-gate', sortedByDiagnosticScore(args.candidates, 'issueF1AfterCleanGateScore'), perSource);
+  admit('rep-count-gated-score', sortedByDiagnosticScore(args.candidates, 'repCountGatedScore'), perSource);
+  admit(
+    'lowest-clean-fp-stable',
+    [...stableCandidates].sort((a, b) =>
+      a.evaluation.metrics.cleanRepFalsePositiveRate - b.evaluation.metrics.cleanRepFalsePositiveRate ||
+      b.evaluation.metrics.issueF1 - a.evaluation.metrics.issueF1 ||
+      b.score - a.score,
+    ),
+    perSource,
+  );
+  admit(
+    'lowest-hard-negative-clean-fp-stable',
+    [...stableCandidates].sort((a, b) =>
+      numericScore(hardNegativeCleanFpRate(a.evaluation), Infinity) -
+        numericScore(hardNegativeCleanFpRate(b.evaluation), Infinity) ||
+      a.evaluation.metrics.cleanRepFalsePositiveRate - b.evaluation.metrics.cleanRepFalsePositiveRate ||
+      b.score - a.score,
+    ),
+    perSource,
+  );
+  admit(
+    'low-clean-useful-f1',
+    [...stableCandidates].sort((a, b) =>
+      (b.evaluation.metrics.issueF1 * (1 - b.evaluation.metrics.cleanRepFalsePositiveRate)) -
+        (a.evaluation.metrics.issueF1 * (1 - a.evaluation.metrics.cleanRepFalsePositiveRate)) ||
+      b.score - a.score,
+    ),
+    perSource,
+  );
+
+  const issueIds = Array.from(new Set(args.candidates.flatMap((candidate) =>
+    Object.keys(candidate.evaluation.diagnosticSummary?.issueSummaries ?? {}),
+  ))).sort();
+  const perIssueLimit = Math.max(1, Math.ceil(perSource / 4));
+  for (const issueId of issueIds) {
+    admit(
+      `per-issue-f1:${issueId}`,
+      [...stableCandidates].sort((a, b) =>
+        candidatePerIssueF1(b, issueId) - candidatePerIssueF1(a, issueId) ||
+        b.score - a.score,
+      ),
+      perIssueLimit,
+    );
+  }
+
+  const lineageSeen = new Set<string>();
+  const diverseLineageCandidates: EvaluatedCandidateSummary[] = [];
+  for (const candidate of currentScore) {
+    const lineage = candidateLineageId(candidate.id);
+    if (lineageSeen.has(lineage)) continue;
+    lineageSeen.add(lineage);
+    diverseLineageCandidates.push(candidate);
+  }
+  admit('diverse-lineage-current-score', diverseLineageCandidates, Math.max(perSource, args.survivorCount));
+
+  const candidates = Array.from(selected.values());
+  return {
+    candidates,
+    diagnostics: buildCandidatePoolDiagnostics({
+      purpose: args.purpose,
+      requestedSize,
+      candidates,
+      sourceCounts: Array.from(sourceCounts.values()),
+      candidateSources,
+      dedupeInputCount,
+      dedupeDuplicateCount,
+    }),
+  };
+}
+
 function emptySourceBreakdown(): Record<CandidateSource, number> {
   return { baseline: 0, random: 0, refined: 0, diagnostic: 0 };
 }
@@ -1578,6 +1906,80 @@ function sourceBreakdownFor(candidates: EvaluatedCandidateSummary[]): Record<Can
     result[candidate.source] += 1;
   }
   return result;
+}
+
+function issueFeedbackDiverseSurvivorsEnabled(
+  tunableGroup: OptimizerTunableGroup,
+  runtime: OptimizerRuntimeContext,
+): boolean {
+  return tunableGroup === 'issue-feedback' && runtime.diverseSurvivors !== false;
+}
+
+function issueFeedbackDiversePerSource(
+  survivorCount: number,
+  runtime: OptimizerRuntimeContext,
+): number {
+  return runtime.diverseSurvivorPerSource ??
+    Math.max(survivorCount, DEFAULT_ISSUE_FEEDBACK_MIN_DIVERSE_PER_SOURCE);
+}
+
+function issueFeedbackValidationPoolSize(
+  survivorCount: number,
+  runtime: OptimizerRuntimeContext,
+): number {
+  return runtime.validationPoolSize ??
+    Math.max(survivorCount, DEFAULT_ISSUE_FEEDBACK_VALIDATION_POOL_SIZE);
+}
+
+function smokeLikeRandom40FamilyDiagnostics(args: {
+  generated: Array<Pick<InstrumentedCandidateConfig, 'id'>>;
+  evaluated: Array<Pick<EvaluatedCandidateSummary, 'id'>>;
+  refinementPools: CandidatePoolDiagnostics[];
+  validationPool: CandidatePoolDiagnostics | null;
+}): IssueFeedbackFunnelDiagnostics['smokeLikeRandom40Family'] {
+  const isRandom40 = (id: string) => id === 'random-40' || id.startsWith('random-40-');
+  const generatedIds = args.generated.map((candidate) => candidate.id).filter(isRandom40);
+  const evaluatedIds = args.evaluated.map((candidate) => candidate.id).filter(isRandom40);
+  const refinementCandidateIds = Array.from(new Set(args.refinementPools.flatMap((pool) =>
+    Object.keys(pool.candidateSources).filter(isRandom40),
+  ))).sort();
+  const validationCandidateIds = args.validationPool
+    ? Object.keys(args.validationPool.candidateSources).filter(isRandom40).sort()
+    : [];
+  return {
+    generated: generatedIds.length > 0,
+    evaluated: evaluatedIds.length > 0,
+    refined: generatedIds.some((id) => /-r\d+-/.test(id)),
+    inRefinementSeeds: refinementCandidateIds.length > 0,
+    inValidationPool: validationCandidateIds.length > 0,
+    refinementCandidateIds,
+    validationCandidateIds,
+  };
+}
+
+function emptyIssueFeedbackFunnelDiagnostics(args: {
+  enabled: boolean;
+  diverseSurvivors: boolean;
+  diverseSurvivorPerSource: number;
+  validationPoolTargetSize: number;
+}): IssueFeedbackFunnelDiagnostics {
+  return {
+    enabled: args.enabled,
+    diverseSurvivors: args.diverseSurvivors,
+    diverseSurvivorPerSource: args.diverseSurvivorPerSource,
+    validationPoolTargetSize: args.validationPoolTargetSize,
+    refinementSeedSources: [],
+    validationPool: null,
+    smokeLikeRandom40Family: {
+      generated: false,
+      evaluated: false,
+      refined: false,
+      inRefinementSeeds: false,
+      inValidationPool: false,
+      refinementCandidateIds: [],
+      validationCandidateIds: [],
+    },
+  };
 }
 
 function issueOptimizerSearchSpec(spec: TunableSpec): TunableSpec {
@@ -2291,6 +2693,13 @@ export function parseOptimizerCommandOptions(argv: string[]): OptimizerCommandOp
     checkpointEvery: parsePositiveIntegerFlag(argv, '--checkpoint-every'),
     enforceCleanFpGates: hasFlag(argv, '--enforce-clean-fp-gates'),
     tunableGroup: parseTunableGroup(argv),
+    diverseSurvivors: hasFlag(argv, '--no-diverse-survivors')
+      ? false
+      : hasFlag(argv, '--diverse-survivors')
+        ? true
+        : undefined,
+    diverseSurvivorPerSource: parsePositiveIntegerFlag(argv, '--diverse-survivor-per-source'),
+    validationPoolSize: parsePositiveIntegerFlag(argv, '--validation-pool-size'),
     search: {
       randomCandidates: parseNonNegativeIntegerFlag(argv, '--random-candidates'),
       survivorCount:
@@ -2809,6 +3218,15 @@ export function searchExercise(
     ? path.resolve(process.cwd(), runtime.checkpointPath)
     : null;
   const tunableGroup = runtime.tunableGroup ?? 'all';
+  const diverseSurvivors = issueFeedbackDiverseSurvivorsEnabled(tunableGroup, runtime);
+  const diverseSurvivorPerSource = issueFeedbackDiversePerSource(fallbackOptions.survivorCount, runtime);
+  const validationPoolTargetSize = issueFeedbackValidationPoolSize(fallbackOptions.survivorCount, runtime);
+  const issueFeedbackFunnel = emptyIssueFeedbackFunnelDiagnostics({
+    enabled: tunableGroup === 'issue-feedback',
+    diverseSurvivors,
+    diverseSurvivorPerSource,
+    validationPoolTargetSize,
+  });
   const checkpoint = runtime.checkpoint ?? (
     checkpointPath
       ? new OptimizerCheckpointManager(
@@ -2817,6 +3235,11 @@ export function searchExercise(
           selectionMode,
           tunableGroup,
           fallbackOptions,
+          {
+            diverseSurvivors,
+            diverseSurvivorPerSource,
+            validationPoolSize: validationPoolTargetSize,
+          },
           runtime.checkpointEvery ?? DEFAULT_CHECKPOINT_EVERY,
           runtime.resumeCheckpoint ?? false,
         )
@@ -2830,6 +3253,7 @@ export function searchExercise(
     options: fallbackOptions,
     sourceBreakdown: emptySourceBreakdown(),
     ...(checkpointPath ? { checkpointPath } : {}),
+    ...(tunableGroup === 'issue-feedback' ? { issueFeedbackFunnel } : {}),
   };
   if (!definition.heuristicConfig || !definition.tunableSpec || searchCases.length === 0) {
     return emptyResult;
@@ -2875,7 +3299,11 @@ export function searchExercise(
     replayCache: searchRuntime.replayCache,
     profiler: searchRuntime.profiler,
   }, spec);
-  checkpoint?.setGeneratedCandidates([...randomCandidates, ...diagnostic.candidates]);
+  const generatedCandidates: InstrumentedCandidateConfig[] = [
+    ...randomCandidates,
+    ...diagnostic.candidates,
+  ];
+  checkpoint?.setGeneratedCandidates(generatedCandidates);
   const randomBatch = evaluateCandidatesCompact(
     definition,
     searchCases,
@@ -2912,6 +3340,7 @@ export function searchExercise(
     topEvaluatedCandidates(diagnosticBatch.evaluated, Math.min(fallbackOptions.survivorCount, 8)),
     Math.min(fallbackOptions.survivorCount, 8),
   );
+  generatedCandidates.push(...diagnosticCombos);
   const diagnosticComboBatch = evaluateCandidatesCompact(
     definition,
     searchCases,
@@ -2931,18 +3360,37 @@ export function searchExercise(
       ].slice(0, 5),
     },
   );
+  checkpoint?.setGeneratedCandidates(generatedCandidates);
   let evaluated = sortEvaluatedCandidates([
     ...randomBatch.evaluated,
     ...diagnosticBatch.evaluated,
     ...diagnosticComboBatch.evaluated,
   ]);
+  let allEvaluatedForDiverse = evaluated;
   rejectedCandidates += randomBatch.rejectedCount;
   rejectedCandidates += diagnosticBatch.rejectedCount + diagnosticComboBatch.rejectedCount;
   rejectedCandidateExamples.push(...randomBatch.rejectedExamples);
   rejectedCandidateExamples.push(...diagnosticBatch.rejectedExamples, ...diagnosticComboBatch.rejectedExamples);
 
   for (let round = 1; round <= fallbackOptions.refinementRounds; round++) {
-    const survivors = topEvaluatedCandidates(evaluated, fallbackOptions.survivorCount);
+    const refinementSeedPool = diverseSurvivors
+      ? buildDiversifiedCandidatePool({
+          purpose: 'refinement',
+          candidates: allEvaluatedForDiverse,
+          baseline: searchRuntime.repCountBaseline,
+          survivorCount: fallbackOptions.survivorCount,
+          perSource: diverseSurvivorPerSource,
+          targetSize: Math.min(
+            validationPoolTargetSize,
+            Math.max(fallbackOptions.survivorCount, diverseSurvivorPerSource * 8),
+          ),
+        })
+      : {
+          candidates: topEvaluatedCandidates(evaluated, fallbackOptions.survivorCount),
+          diagnostics: emptyCandidatePoolDiagnostics('refinement'),
+        };
+    const survivors = refinementSeedPool.candidates;
+    if (diverseSurvivors) issueFeedbackFunnel.refinementSeedSources.push(refinementSeedPool.diagnostics);
     if (survivors.length === 0) break;
 
     const refined: InstrumentedCandidateConfig[] = dedupeCandidates(
@@ -2954,7 +3402,8 @@ export function searchExercise(
         ? changedTunablePaths(definition.heuristicConfig, candidate.config, spec)
         : undefined,
     }));
-    checkpoint?.setGeneratedCandidates([...randomCandidates, ...diagnostic.candidates, ...diagnosticCombos, ...refined]);
+    generatedCandidates.push(...refined);
+    checkpoint?.setGeneratedCandidates(generatedCandidates);
     const refinedBatch = evaluateCandidatesCompact(
       definition,
       searchCases,
@@ -2971,14 +3420,38 @@ export function searchExercise(
     );
     rejectedCandidates += refinedBatch.rejectedCount;
     rejectedCandidateExamples.push(...refinedBatch.rejectedExamples);
-    evaluated = sortEvaluatedCandidates([...survivors, ...refinedBatch.evaluated]);
+    if (diverseSurvivors) {
+      allEvaluatedForDiverse = mergeEvaluatedCandidates(allEvaluatedForDiverse, refinedBatch.evaluated);
+      evaluated = mergeEvaluatedCandidates(survivors, refinedBatch.evaluated);
+    } else {
+      evaluated = sortEvaluatedCandidates([...survivors, ...refinedBatch.evaluated]);
+    }
   }
 
-  const topCandidates = topEvaluatedCandidates(evaluated, fallbackOptions.survivorCount);
+  const validationPool = diverseSurvivors
+    ? buildDiversifiedCandidatePool({
+        purpose: 'validation',
+        candidates: allEvaluatedForDiverse,
+        baseline: searchRuntime.repCountBaseline,
+        survivorCount: fallbackOptions.survivorCount,
+        perSource: diverseSurvivorPerSource,
+        targetSize: validationPoolTargetSize,
+      })
+    : null;
+  if (validationPool) issueFeedbackFunnel.validationPool = validationPool.diagnostics;
+  issueFeedbackFunnel.smokeLikeRandom40Family = smokeLikeRandom40FamilyDiagnostics({
+    generated: generatedCandidates,
+    evaluated: allEvaluatedForDiverse,
+    refinementPools: issueFeedbackFunnel.refinementSeedSources,
+    validationPool: issueFeedbackFunnel.validationPool,
+  });
+  const topCandidates = validationPool?.candidates ??
+    topEvaluatedCandidates(evaluated, fallbackOptions.survivorCount);
+  const checkpointEvaluated = diverseSurvivors ? allEvaluatedForDiverse : evaluated;
   checkpoint?.save({
     phase: 'complete',
     refinementRound: fallbackOptions.refinementRounds,
-    evaluated,
+    evaluated: checkpointEvaluated,
     rejectedCandidates,
     rejectedCandidateExamples,
     repCountStability: repCountStabilityCheckpointSummary(searchRuntime.repCountStability),
@@ -2991,6 +3464,7 @@ export function searchExercise(
     options: fallbackOptions,
     sourceBreakdown: sourceBreakdownFor(topCandidates),
     ...(checkpointPath ? { checkpointPath } : {}),
+    ...(tunableGroup === 'issue-feedback' ? { issueFeedbackFunnel } : {}),
     diagnosticFallbackReason:
       diagnostic.candidates.length === 0 && diagnostic.fallbackReasons.length > 0
         ? diagnostic.fallbackReasons.slice(0, 5).join(' ')
@@ -3153,6 +3627,9 @@ export function optimizeExercise(
   const search = searchExercise(definition, trainCases, options.search, selectionMode, {
     ...runtime,
     tunableGroup,
+    diverseSurvivors: options.diverseSurvivors,
+    diverseSurvivorPerSource: options.diverseSurvivorPerSource,
+    validationPoolSize: options.validationPoolSize,
     repCountBaseline: baseline.train,
     repCountBaselineSplit: 'train',
     repCountStability,
@@ -3247,7 +3724,7 @@ export function optimizeExercise(
     : rankedSelectionWithDiagnostics;
   const winner = winnerPool[0];
 
-  const searchWithSelectionRejects = {
+  const searchWithSelectionRejectsBase = {
     ...search,
     rejectedCandidates: search.rejectedCandidates + selectionBatch.rejectedCount,
     rejectedCandidateExamples: [
@@ -3255,6 +3732,17 @@ export function optimizeExercise(
       ...selectionBatch.rejectedExamples,
     ].slice(0, 5),
   };
+  const searchWithSelectionRejects = search.issueFeedbackFunnel
+    ? {
+        ...searchWithSelectionRejectsBase,
+        issueFeedbackFunnel: {
+          ...search.issueFeedbackFunnel,
+          winnerAdmissionSources: winner
+            ? search.issueFeedbackFunnel.validationPool?.candidateSources[winner.id] ?? []
+            : [],
+        },
+      }
+    : searchWithSelectionRejectsBase;
 
   if (!winner) {
     return { ...baseReport, search: searchWithSelectionRejects, reason: 'No candidate could be evaluated.' };
