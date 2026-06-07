@@ -4,7 +4,14 @@ import {
   getLabelableIssues,
   isIssueLabelableForView,
 } from '../dataset/labelPolicy';
-import type { DatasetSplit, ExerciseLabelFile, RepIssueSeverity, RepViewLabel } from '../dataset/types';
+import type {
+  DatasetSplit,
+  ExerciseCaptureMetadata,
+  ExerciseLabelFile,
+  LabelReviewStatus,
+  RepIssueSeverity,
+  RepViewLabel,
+} from '../dataset/types';
 
 export type MlAuditLevel = 'error' | 'warning';
 
@@ -39,9 +46,50 @@ export interface MlLabelAuditReport {
     reps: number;
     scorableReps: number;
     unscorableReps: number;
+    reviewedFilesMissingMetadata: number;
   };
   issueCounts: Record<string, { positive: number; negative: number; severityCounts: Record<RepIssueSeverity, number> }>;
+  metadataConvention: MlMetadataConvention;
+  metadataPatchWorkflow: MlMetadataPatchWorkflow;
+  metadataPatchTemplate: MlMetadataPatchTemplateEntry[];
   findings: MlAuditFinding[];
+}
+
+export interface MlMetadataConvention {
+  requiredReviewedFields: string[];
+  existingConvention: {
+    subjectId: string;
+    sessionId: string;
+    cameraSetupId: string;
+    reviewerConfidence: string;
+  };
+  placeholderValuesToAvoid: string[];
+}
+
+export interface MlMetadataPatchWorkflow {
+  format: 'json';
+  instructions: string[];
+  dryRunCommand: string;
+  applyCommand: string;
+}
+
+export interface MlMetadataPatchTemplateEntry {
+  labelPath: string;
+  sourceVideo: string;
+  split: DatasetSplit;
+  reviewStatus?: LabelReviewStatus;
+  missingFields: string[];
+  existingCaptureMetadata: ExerciseCaptureMetadata;
+  patch: {
+    captureMetadata: {
+      subjectId?: string | null;
+      participantId?: string | null;
+      sessionId?: string | null;
+      cameraSetupId?: string | null;
+      reviewerConfidence?: string | null;
+    };
+  };
+  notes: string[];
 }
 
 export interface MlSplitAuditOptions {
@@ -70,6 +118,18 @@ export interface MlSplitAuditReport {
 
 const SEVERITIES: RepIssueSeverity[] = ['none', 'mild', 'moderate', 'severe'];
 const SPLITS: DatasetSplit[] = ['train', 'validation', 'test'];
+const REQUIRED_REVIEWED_METADATA_FIELDS = [
+  'captureMetadata.subjectId or captureMetadata.participantId',
+  'captureMetadata.sessionId',
+  'captureMetadata.cameraSetupId',
+  'captureMetadata.reviewerConfidence',
+];
+const PLACEHOLDER_VALUES_TO_AVOID = [
+  'subject-unknown',
+  'session-unknown',
+  'camera-setup-unknown',
+  'unknown subject/session/camera grouping keys',
+];
 
 function finding(level: MlAuditLevel, code: string, path: string, message: string): MlAuditFinding {
   return { level, code, path, message };
@@ -85,6 +145,75 @@ function subjectId(label: ExerciseLabelFile): string | undefined {
 
 function hasText(value: string | undefined): value is string {
   return typeof value === 'string' && value.trim() !== '';
+}
+
+function recordingSlug(label: ExerciseLabelFile): string {
+  const withoutDirs = label.sourceVideo.split('/').pop() ?? label.sourceVideo;
+  return withoutDirs.replace(/\.[^.]+$/, '');
+}
+
+function metadataConvention(): MlMetadataConvention {
+  return {
+    requiredReviewedFields: REQUIRED_REVIEWED_METADATA_FIELDS,
+    existingConvention: {
+      subjectId: 'Use a stable anonymized participant key that is consistent across recordings from the same participant. Avoid split-specific placeholder keys when the same person appears in multiple splits.',
+      sessionId: 'Use a stable capture-session key. Existing Barbell Curl labels often use the recording slug when each recording is its own session.',
+      cameraSetupId: 'Use a stable camera setup key. Existing per-recording Barbell Curl labels commonly use "<recording-slug>-camera".',
+      reviewerConfidence: 'Use the reviewer confidence enum from the label schema: high, medium, low, or unknown.',
+    },
+    placeholderValuesToAvoid: PLACEHOLDER_VALUES_TO_AVOID,
+  };
+}
+
+function metadataPatchWorkflow(): MlMetadataPatchWorkflow {
+  return {
+    format: 'json',
+    dryRunCommand: 'npm run ml:patch-metadata -- --patch path/to/metadata-patch.json',
+    applyCommand: 'npm run ml:patch-metadata -- --patch path/to/metadata-patch.json --apply',
+    instructions: [
+      'Copy metadataPatchTemplate from this audit report into a sidecar JSON file, or keep the whole audit report and pass it directly to the patch command.',
+      'Replace null metadata values with manually verified values. The patch command refuses empty placeholder fields and defaults to dry-run mode.',
+      'Use --apply only after reviewing the dry-run output. The patcher only updates captureMetadata and leaves reps, labels, timings, and reviewStatus unchanged.',
+    ],
+  };
+}
+
+function reviewedMetadataMissingFields(label: ExerciseLabelFile): string[] {
+  const fields: string[] = [];
+  if (!hasText(subjectId(label))) fields.push('subjectIdOrParticipantId');
+  if (!hasText(label.captureMetadata?.sessionId)) fields.push('sessionId');
+  if (!hasText(label.captureMetadata?.cameraSetupId)) fields.push('cameraSetupId');
+  if (!hasText(label.captureMetadata?.reviewerConfidence)) fields.push('reviewerConfidence');
+  return fields;
+}
+
+function buildMetadataPatchTemplateEntry(
+  reference: LabelFileReference,
+  missingFields: string[],
+): MlMetadataPatchTemplateEntry {
+  const { label } = reference;
+  const slug = recordingSlug(label);
+  return {
+    labelPath: reference.labelPath ?? label.sourceVideo,
+    sourceVideo: label.sourceVideo,
+    split: label.split,
+    reviewStatus: label.reviewStatus,
+    missingFields,
+    existingCaptureMetadata: label.captureMetadata ?? {},
+    patch: {
+      captureMetadata: {
+        subjectId: missingFields.includes('subjectIdOrParticipantId') ? null : label.captureMetadata?.subjectId,
+        participantId: label.captureMetadata?.participantId,
+        sessionId: missingFields.includes('sessionId') ? null : label.captureMetadata?.sessionId,
+        cameraSetupId: missingFields.includes('cameraSetupId') ? null : label.captureMetadata?.cameraSetupId,
+        reviewerConfidence: missingFields.includes('reviewerConfidence') ? null : label.captureMetadata?.reviewerConfidence,
+      },
+    },
+    notes: [
+      'Fill values manually from recording provenance. Do not reuse subject/session/camera placeholders unless they are genuinely correct.',
+      `Existing per-recording convention would make session/camera keys resemble "${slug}" and "${slug}-camera", but the audit does not auto-apply those values.`,
+    ],
+  };
 }
 
 function issueScorable(definition: ExerciseDefinition, view: RepViewLabel | undefined, scorable: boolean | undefined, issueId: string): boolean {
@@ -118,6 +247,8 @@ export function buildMlLabelAuditReport(options: MlLabelAuditOptions): MlLabelAu
   let reps = 0;
   let scorableReps = 0;
   let unscorableReps = 0;
+  let reviewedFilesMissingMetadata = 0;
+  const metadataPatchTemplate: MlMetadataPatchTemplateEntry[] = [];
 
   for (const reference of options.labels) {
     const { label } = reference;
@@ -130,16 +261,21 @@ export function buildMlLabelAuditReport(options: MlLabelAuditOptions): MlLabelAu
     }
 
     if (!isDraft) {
-      if (!hasText(subjectId(label))) {
+      const missingMetadataFields = reviewedMetadataMissingFields(label);
+      if (missingMetadataFields.length > 0) {
+        reviewedFilesMissingMetadata += 1;
+        metadataPatchTemplate.push(buildMetadataPatchTemplateEntry(reference, missingMetadataFields));
+      }
+      if (missingMetadataFields.includes('subjectIdOrParticipantId')) {
         findings.push(finding('error', 'missing_subject_id', labelPath(reference, '.captureMetadata'), 'Reviewed labels must include captureMetadata.subjectId or participantId.'));
       }
-      if (!hasText(label.captureMetadata?.sessionId)) {
+      if (missingMetadataFields.includes('sessionId')) {
         findings.push(finding('error', 'missing_session_id', labelPath(reference, '.captureMetadata.sessionId'), 'Reviewed labels must include captureMetadata.sessionId.'));
       }
-      if (!hasText(label.captureMetadata?.cameraSetupId)) {
+      if (missingMetadataFields.includes('cameraSetupId')) {
         findings.push(finding('error', 'missing_camera_setup_id', labelPath(reference, '.captureMetadata.cameraSetupId'), 'Reviewed labels must include captureMetadata.cameraSetupId.'));
       }
-      if (!hasText(label.captureMetadata?.reviewerConfidence)) {
+      if (missingMetadataFields.includes('reviewerConfidence')) {
         findings.push(finding('error', 'missing_reviewer_confidence', labelPath(reference, '.captureMetadata.reviewerConfidence'), 'Reviewed labels must include captureMetadata.reviewerConfidence.'));
       }
     }
@@ -198,8 +334,12 @@ export function buildMlLabelAuditReport(options: MlLabelAuditOptions): MlLabelAu
       reps,
       scorableReps,
       unscorableReps,
+      reviewedFilesMissingMetadata,
     },
     issueCounts,
+    metadataConvention: metadataConvention(),
+    metadataPatchWorkflow: metadataPatchWorkflow(),
+    metadataPatchTemplate,
     findings,
   };
 }

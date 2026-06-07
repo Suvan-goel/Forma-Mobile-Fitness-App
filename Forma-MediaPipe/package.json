@@ -24,6 +24,7 @@
     "ml:export": "tsx scripts/ml-export-dataset.ts",
     "ml:audit-labels": "tsx scripts/ml-audit-labels.ts",
     "ml:audit-splits": "tsx scripts/ml-audit-splits.ts",
+    "ml:patch-metadata": "tsx scripts/ml-patch-label-metadata.ts",
     "ml:train": "python3 scripts/ml-train.py",
     "ml:evaluate": "python3 scripts/ml-evaluate.py",
     "ml:review-errors": "python3 scripts/ml-review-errors.py",

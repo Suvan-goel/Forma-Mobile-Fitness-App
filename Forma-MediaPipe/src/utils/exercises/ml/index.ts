@@ -33,6 +33,9 @@ export type {
 } from './types';
 export type {
   LabelFileReference,
+  MlMetadataConvention,
+  MlMetadataPatchTemplateEntry,
+  MlMetadataPatchWorkflow,
   MlAuditFinding,
   MlAuditLevel,
   MlLabelAuditOptions,

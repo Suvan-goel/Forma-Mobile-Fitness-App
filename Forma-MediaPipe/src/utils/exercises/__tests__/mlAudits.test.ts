@@ -81,6 +81,25 @@ describe('ML label and split audits', () => {
       'missing_camera_setup_id',
       'missing_reviewer_confidence',
     ]));
+    expect(report.summary.reviewedFilesMissingMetadata).toBe(1);
+    expect(report.metadataPatchTemplate).toHaveLength(1);
+    expect(report.metadataPatchTemplate[0]).toMatchObject({
+      missingFields: [
+        'subjectIdOrParticipantId',
+        'sessionId',
+        'cameraSetupId',
+        'reviewerConfidence',
+      ],
+      patch: {
+        captureMetadata: {
+          subjectId: null,
+          sessionId: null,
+          cameraSetupId: null,
+          reviewerConfidence: null,
+        },
+      },
+    });
+    expect(report.metadataPatchWorkflow.dryRunCommand).toContain('ml:patch-metadata');
   });
 
   it('detects subject, session, and camera setup leakage across holdout splits', () => {

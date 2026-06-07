@@ -48,6 +48,8 @@ export function runMlAuditLabelsCommand(argv = process.argv.slice(2)): void {
   console.log(`Labels: ${report.summary.labelFiles}`);
   console.log(`Reviewed: ${report.summary.reviewedFiles}`);
   console.log(`Draft: ${report.summary.draftFiles}`);
+  console.log(`Reviewed missing metadata: ${report.summary.reviewedFilesMissingMetadata}`);
+  console.log(`Metadata patch entries: ${report.metadataPatchTemplate.length}`);
   console.log(`Findings: ${report.findings.length}`);
   console.log(`Passed: ${report.passed ? 'yes' : 'no'}`);
   console.log(`Report: ${repoRelative(reportPath)}`);
