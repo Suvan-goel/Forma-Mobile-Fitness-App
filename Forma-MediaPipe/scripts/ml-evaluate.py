@@ -39,6 +39,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gate-validation-clean-fp-cap", type=float, default=0.25, help="Report gate cap for validation clean false-positive rate.")
     parser.add_argument("--gate-validation-hard-negative-fp-cap", type=float, default=0.0, help="Report gate cap for validation hard-negative clean false-positive rate.")
     parser.add_argument("--gate-min-validation-recall", type=float, default=0.05, help="Report gate minimum validation recall to avoid clean safety by destroying all recall.")
+    parser.add_argument("--issue-policy-min-precision", type=float, default=0.35, help="Validation precision floor for optimized issue-specific hybrid policies.")
+    parser.add_argument("--issue-policy-clean-fp-row-cap", type=int, default=1, help="Per-issue validation clean false-positive row cap for optimized issue-specific hybrid policies.")
+    parser.add_argument("--issue-policy-hard-negative-fp-row-cap", type=int, default=0, help="Per-issue validation hard-negative clean false-positive row cap for optimized issue-specific hybrid policies.")
+    parser.add_argument("--issue-policy-partial-view-fp-row-cap", type=int, default=0, help="Per-issue validation partial-view clean false-positive row cap for optimized issue-specific hybrid policies.")
     parser.add_argument("--predictions", help="Predictions CSV. Defaults to latest_predictions.csv.")
     return parser.parse_args()
 
@@ -189,6 +193,89 @@ def per_issue_clean_false_positives(
     return result
 
 
+def issue_suffix(label_column: str) -> str:
+    return label_column.removeprefix("label_issue__")
+
+
+def issue_slug(label_column: str) -> str:
+    return issue_suffix(label_column).replace("_", ".")
+
+
+def issue_severity_column(label_column: str) -> str:
+    return f"label_issue_severity__{issue_suffix(label_column)}"
+
+
+def numeric_int_series(df: pd.DataFrame, column: str, default: int = 0) -> pd.Series:
+    if column not in df.columns:
+        return pd.Series([default] * len(df), index=df.index)
+    return pd.to_numeric(df[column], errors="coerce").fillna(default).astype(int)
+
+
+def numeric_float_series(df: pd.DataFrame, column: str, default: float = 0.0) -> pd.Series:
+    if column not in df.columns:
+        return pd.Series([default] * len(df), index=df.index)
+    return pd.to_numeric(df[column], errors="coerce").fillna(default).astype(float)
+
+
+def severity_metrics(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    prediction_columns: dict[str, str],
+) -> dict[str, Any]:
+    groups = {
+        "mildIssues": {"mild"},
+        "clearModerateSevereIssues": {"clear", "moderate", "severe"},
+        "unknownSeverityIssues": {"", "unknown", "nan", "none"},
+    }
+    result: dict[str, Any] = {
+        "available": any(issue_severity_column(label_column) in df.columns for label_column in label_columns),
+        "note": "Severity metrics count labelled positive issues only. Precision is reported in the aggregate/per-issue tables because negative rows do not have a severity.",
+        "groups": {},
+        "perIssue": {},
+    }
+    for group_name, accepted in groups.items():
+        positives = 0
+        true_positives = 0
+        false_negatives = 0
+        for label_column in label_columns:
+            severity_column = issue_severity_column(label_column)
+            if severity_column not in df.columns:
+                continue
+            labelled = numeric_int_series(df, label_column)
+            predicted = numeric_int_series(df, prediction_columns[label_column])
+            severities = df[severity_column].fillna("").astype(str).str.lower()
+            mask = (labelled == 1) & severities.isin(accepted)
+            positives += int(mask.sum())
+            true_positives += int(((predicted == 1) & mask).sum())
+            false_negatives += int(((predicted == 0) & mask).sum())
+        result["groups"][group_name] = {
+            "positiveSupport": positives,
+            "truePositives": true_positives,
+            "falseNegatives": false_negatives,
+            "recall": 1.0 if positives == 0 else true_positives / positives,
+        }
+    for label_column in label_columns:
+        severity_column = issue_severity_column(label_column)
+        if severity_column not in df.columns:
+            continue
+        labelled = numeric_int_series(df, label_column)
+        predicted = numeric_int_series(df, prediction_columns[label_column])
+        severities = df[severity_column].fillna("").astype(str).str.lower()
+        issue_result: dict[str, Any] = {}
+        for group_name, accepted in groups.items():
+            mask = (labelled == 1) & severities.isin(accepted)
+            positive_support = int(mask.sum())
+            true_positives = int(((predicted == 1) & mask).sum())
+            issue_result[group_name] = {
+                "positiveSupport": positive_support,
+                "truePositives": true_positives,
+                "falseNegatives": int(((predicted == 0) & mask).sum()),
+                "recall": 1.0 if positive_support == 0 else true_positives / positive_support,
+            }
+        result["perIssue"][label_column] = issue_result
+    return result
+
+
 def safety_slice_metrics(
     df: pd.DataFrame,
     label_columns: list[str],
@@ -250,6 +337,7 @@ def evaluate_prediction_set(
         "microIssueF1": aggregate["f1"],
         "cleanRepFalsePositiveRate": clean_false_positive_rate(df, list(prediction_columns.values())),
         "safety": safety_slice_metrics(df, label_columns, prediction_columns),
+        "severity": severity_metrics(df, label_columns, prediction_columns),
         "falseNegativesByIssue": false_negatives_by_issue,
         "perIssue": per_issue,
     }
@@ -264,7 +352,12 @@ def bootstrap_f1(df: pd.DataFrame, label_columns: list[str], prediction_columns:
     for _ in range(iterations):
         sample_indexes = [rng.choice(indexes) for _ in indexes]
         sample = df.loc[sample_indexes]
-        values.append(float(evaluate_prediction_set(sample, label_columns, prediction_columns)["aggregate"]["f1"]))
+        all_true: list[int] = []
+        all_pred: list[int] = []
+        for label_column in label_columns:
+            all_true.extend(numeric_int_series(sample, label_column).tolist())
+            all_pred.extend(numeric_int_series(sample, prediction_columns[label_column]).tolist())
+        values.append(float(binary_metrics(all_true, all_pred)["f1"]))
     values.sort()
     return {
         "available": True,
@@ -304,7 +397,7 @@ def transition_metrics_for_issue(y_true: pd.Series, heuristic: pd.Series, ml: pd
 
 
 def issue_name(label_column: str) -> str:
-    return label_column.removeprefix("label_issue__").replace("_", ".")
+    return issue_slug(label_column)
 
 
 def issue_clean_fp_count(df: pd.DataFrame, prediction_column: str, mask: pd.Series | None = None) -> int:
@@ -315,6 +408,51 @@ def issue_clean_fp_count(df: pd.DataFrame, prediction_column: str, mask: pd.Seri
     return int(predictions.sum())
 
 
+def false_positive_rows_for_series(
+    df: pd.DataFrame,
+    prediction: pd.Series,
+    mask: pd.Series | None = None,
+) -> int:
+    clean_rows = clean_rows_for(df, mask)
+    if len(clean_rows) == 0:
+        return 0
+    aligned = pd.to_numeric(prediction.reindex(clean_rows.index), errors="coerce").fillna(0).astype(int)
+    return int(aligned.sum())
+
+
+def issue_candidate_summary_from_series(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic: pd.Series,
+    ml: pd.Series,
+    candidate: pd.Series,
+) -> dict[str, Any]:
+    metrics = binary_metrics(
+        numeric_int_series(validation, label_column).tolist(),
+        pd.to_numeric(candidate.reindex(validation.index), errors="coerce").fillna(0).astype(int).tolist(),
+    )
+    transitions = transition_metrics_for_issue(
+        validation[label_column],
+        heuristic.reindex(validation.index),
+        ml.reindex(validation.index),
+        candidate.reindex(validation.index),
+    )
+    clean_rows = false_positive_rows_for_series(validation, candidate)
+    hard_negative_rows = false_positive_rows_for_series(validation, candidate, hard_negative_mask(validation))
+    clean_front_rows = false_positive_rows_for_series(validation, candidate, clean_front_mask(validation))
+    issue_recording_rows = false_positive_rows_for_series(validation, candidate, issue_recording_mask(validation, [label_column]))
+    partial_view_rows = false_positive_rows_for_series(validation, candidate, partial_view_mask(validation))
+    return {
+        **metrics,
+        **transitions,
+        "cleanFalsePositiveRows": clean_rows,
+        "hardNegativeFalsePositiveRows": hard_negative_rows,
+        "cleanFrontFalsePositiveRows": clean_front_rows,
+        "issueRecordingCleanFalsePositiveRows": issue_recording_rows,
+        "partialViewCleanFalsePositiveRows": partial_view_rows,
+    }
+
+
 def issue_candidate_summary(
     validation: pd.DataFrame,
     label_column: str,
@@ -322,22 +460,13 @@ def issue_candidate_summary(
     ml_column: str,
     candidate_column: str,
 ) -> dict[str, Any]:
-    metrics = binary_metrics(
-        pd.to_numeric(validation[label_column], errors="coerce").fillna(0).astype(int).tolist(),
-        pd.to_numeric(validation[candidate_column], errors="coerce").fillna(0).astype(int).tolist(),
-    )
-    transitions = transition_metrics_for_issue(
-        validation[label_column],
+    return issue_candidate_summary_from_series(
+        validation,
+        label_column,
         validation[heuristic_column],
         validation[ml_column],
         validation[candidate_column],
     )
-    return {
-        **metrics,
-        **transitions,
-        "cleanFalsePositiveRows": issue_clean_fp_count(validation, candidate_column),
-        "hardNegativeFalsePositiveRows": issue_clean_fp_count(validation, candidate_column, hard_negative_mask(validation)),
-    }
 
 
 def hybrid_transition_metrics(
@@ -370,6 +499,92 @@ def hybrid_transition_metrics(
         "aggregate": aggregate,
         "perIssue": per_issue,
     }
+
+
+def row_example(
+    row: pd.Series,
+    issue: str,
+    probability: float | None = None,
+    policy_choice: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    suffix = issue.replace(".", "_")
+    cue_prefix = f"feature__diagnostic.cue.{suffix}"
+    example = {
+        "sourceVideo": row.get("source_video"),
+        "labelFile": row.get("label_file"),
+        "recordingFile": row.get("recording_file"),
+        "split": row.get("split"),
+        "repIndex": int(row.get("rep_index", -1)) if pd.notna(row.get("rep_index", None)) else None,
+        "startMs": row.get("start_ms"),
+        "endMs": row.get("end_ms"),
+        "issueId": issue,
+        "labelView": row.get("label_view"),
+        "labelScorable": row.get("label_scorable"),
+        "heuristicScorable": row.get("heuristic_scorable"),
+        "qualityStatus": row.get("heuristic_quality_status"),
+        "probability": probability,
+        "severity": row.get(f"label_issue_severity__{suffix}"),
+        "policy": policy_choice.get("selected") if policy_choice else None,
+        "suppressThreshold": policy_choice.get("suppressThreshold") if policy_choice else None,
+        "addThreshold": policy_choice.get("addThreshold") if policy_choice else None,
+        "cueEligible": row.get(f"{cue_prefix}.eligible"),
+        "cueMargin": row.get(f"{cue_prefix}.margin"),
+        "cueSupport": row.get(f"{cue_prefix}.support"),
+        "cueTriggered": row.get(f"{cue_prefix}.triggered"),
+        "issueScorableFeature": row.get(f"feature__scorable.issue.{suffix}"),
+        "diagnosticScorableFeature": row.get("feature__diagnostic.scorable"),
+    }
+    return {key: value for key, value in example.items() if value is not None and not (isinstance(value, float) and pd.isna(value))}
+
+
+def policy_review_examples(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    heuristic_columns: dict[str, str],
+    ml_columns: dict[str, str],
+    policy_columns: dict[str, str],
+    probability_columns: dict[str, str],
+    policy_choices: dict[str, Any] | None = None,
+    limit: int = 20,
+) -> dict[str, list[dict[str, Any]]]:
+    categories = {
+        "mlTruePositivesAdded": [],
+        "mlFalsePositivesAdded": [],
+        "heuristicFalsePositivesSuppressedByMl": [],
+        "heuristicTruePositivesSuppressedByMl": [],
+        "remainingHighImpactFalseNegatives": [],
+        "remainingCleanFalsePositives": [],
+    }
+    clean = numeric_int_series(df, "label_clean")
+    for label_column in label_columns:
+        issue = issue_name(label_column)
+        choice = policy_choices.get(label_column) if policy_choices else None
+        truth = numeric_int_series(df, label_column)
+        heuristic = numeric_int_series(df, heuristic_columns[label_column])
+        policy = numeric_int_series(df, policy_columns[label_column])
+        probability = numeric_float_series(df, probability_columns[label_column])
+        severity_column = issue_severity_column(label_column)
+        severities = df[severity_column].fillna("").astype(str).str.lower() if severity_column in df.columns else pd.Series([""] * len(df), index=df.index)
+        clear_or_unknown = severities.isin({"clear", "moderate", "severe", "", "unknown", "nan", "none"})
+        masks = {
+            "mlTruePositivesAdded": (truth == 1) & (heuristic == 0) & (policy == 1),
+            "mlFalsePositivesAdded": (truth == 0) & (heuristic == 0) & (policy == 1),
+            "heuristicFalsePositivesSuppressedByMl": (truth == 0) & (heuristic == 1) & (policy == 0),
+            "heuristicTruePositivesSuppressedByMl": (truth == 1) & (heuristic == 1) & (policy == 0),
+            "remainingHighImpactFalseNegatives": (truth == 1) & (policy == 0) & clear_or_unknown,
+            "remainingCleanFalsePositives": (clean == 1) & (policy == 1),
+        }
+        for category, mask in masks.items():
+            indexes = list(df[mask].index)
+            reverse = category in {"mlTruePositivesAdded", "mlFalsePositivesAdded", "remainingCleanFalsePositives"}
+            indexes.sort(key=lambda index: float(probability.loc[index]), reverse=reverse)
+            for index in indexes[:limit]:
+                categories[category].append(row_example(df.loc[index], issue, float(probability.loc[index]), choice))
+    for category, examples in categories.items():
+        reverse = category in {"mlTruePositivesAdded", "mlFalsePositivesAdded", "remainingCleanFalsePositives"}
+        examples.sort(key=lambda item: float(item.get("probability", 0.0)), reverse=reverse)
+        categories[category] = examples[:limit]
+    return categories
 
 
 def gate_results(
@@ -627,6 +842,342 @@ def materialize_issue_policy(
     return policy_columns
 
 
+def issue_prediction_scorable_mask(df: pd.DataFrame) -> pd.Series:
+    mask = numeric_int_series(df, "heuristic_scorable", 1) == 1
+    if "feature__diagnostic.scorable" in df.columns:
+        mask = mask & (numeric_float_series(df, "feature__diagnostic.scorable", 1.0) >= 0.5)
+    return mask
+
+
+def issue_add_eligibility_mask(df: pd.DataFrame, label_column: str) -> pd.Series:
+    suffix = issue_suffix(label_column)
+    mask = issue_prediction_scorable_mask(df)
+    for column in [
+        f"feature__scorable.issue.{suffix}",
+        f"feature__diagnostic.cue.{suffix}.eligible",
+    ]:
+        if column in df.columns:
+            mask = mask & (numeric_float_series(df, column, 0.0) >= 0.5)
+    return mask
+
+
+def policy_candidate_series(
+    df: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    probability_column: str,
+    policy: str,
+    suppress_threshold: float | None = None,
+    add_threshold: float | None = None,
+) -> pd.Series:
+    heuristic = numeric_int_series(df, heuristic_column)
+    probability = numeric_float_series(df, probability_column)
+    scorable = issue_prediction_scorable_mask(df)
+    add_eligible = issue_add_eligibility_mask(df, label_column)
+    if policy == "heuristic-only":
+        result = heuristic
+    elif policy == "disabled":
+        result = pd.Series([0] * len(df), index=df.index)
+    elif policy in {"suppress-only", "suppress-only-high-precision"}:
+        threshold = 0.25 if suppress_threshold is None else suppress_threshold
+        result = ((heuristic == 1) & (probability > threshold)).astype(int)
+    elif policy in {"ml-add-only-high-confidence", "hard-negative-safe-add"}:
+        threshold = 0.75 if add_threshold is None else add_threshold
+        result = ((heuristic == 1) | ((probability >= threshold) & add_eligible)).astype(int)
+    elif policy == "suppress-and-add":
+        suppress = 0.25 if suppress_threshold is None else suppress_threshold
+        add = 0.75 if add_threshold is None else add_threshold
+        result = pd.Series(heuristic.tolist(), index=df.index).astype(int)
+        result[(heuristic == 1) & (probability <= suppress)] = 0
+        result[(heuristic == 0) & (probability >= add) & add_eligible] = 1
+    else:
+        raise ValueError(f"Unknown issue policy: {policy}")
+    return result.where(scorable, 0).astype(int)
+
+
+def issue_policy_severity_summary(
+    validation: pd.DataFrame,
+    label_column: str,
+    prediction: pd.Series,
+) -> dict[str, Any]:
+    severity_column = issue_severity_column(label_column)
+    if severity_column not in validation.columns:
+        return {"available": False}
+    result: dict[str, Any] = {"available": True}
+    labelled = numeric_int_series(validation, label_column)
+    predicted = pd.to_numeric(prediction.reindex(validation.index), errors="coerce").fillna(0).astype(int)
+    severities = validation[severity_column].fillna("").astype(str).str.lower()
+    for name, accepted in {
+        "mildIssues": {"mild"},
+        "clearModerateSevereIssues": {"clear", "moderate", "severe"},
+        "unknownSeverityIssues": {"", "unknown", "nan", "none"},
+    }.items():
+        mask = (labelled == 1) & severities.isin(accepted)
+        support = int(mask.sum())
+        true_positives = int(((predicted == 1) & mask).sum())
+        result[name] = {
+            "positiveSupport": support,
+            "truePositives": true_positives,
+            "falseNegatives": int(((predicted == 0) & mask).sum()),
+            "recall": 1.0 if support == 0 else true_positives / support,
+        }
+    return result
+
+
+def issue_policy_allowed(
+    summary: dict[str, Any],
+    heuristic_summary: dict[str, Any],
+    policy: str,
+    args: argparse.Namespace,
+) -> bool:
+    if policy == "heuristic-only":
+        return True
+    if policy == "disabled":
+        return float(heuristic_summary["f1"]) == 0.0 and int(heuristic_summary["cleanFalsePositiveRows"]) > 0
+    if int(summary["hardNegativeFalsePositiveRows"]) > args.issue_policy_hard_negative_fp_row_cap:
+        return False
+    if int(summary["partialViewCleanFalsePositiveRows"]) > args.issue_policy_partial_view_fp_row_cap:
+        return False
+    allowed_clean_rows = min(
+        int(heuristic_summary["cleanFalsePositiveRows"]),
+        args.issue_policy_clean_fp_row_cap,
+    )
+    if int(summary["cleanFalsePositiveRows"]) > allowed_clean_rows:
+        return False
+    if int(summary["truePositives"]) > 0 and float(summary["precision"]) < args.issue_policy_min_precision:
+        return False
+    if int(summary["truePositives"]) == 0 and int(heuristic_summary["truePositives"]) > 0:
+        return False
+    if float(summary["f1"]) < float(heuristic_summary["f1"]):
+        return False
+    if policy in {"ml-add-only-high-confidence", "hard-negative-safe-add", "suppress-and-add"}:
+        if int(summary["hybridTruePositivesAdded"]) <= 0:
+            return False
+        if int(summary["hardNegativeFalsePositiveRows"]) > 0:
+            return False
+    return True
+
+
+def optimized_issue_policy_candidates(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    probability_column: str,
+    args: argparse.Namespace,
+) -> list[dict[str, Any]]:
+    heuristic = numeric_int_series(validation, heuristic_column)
+    ml = numeric_int_series(validation, ml_column)
+    labelled = numeric_int_series(validation, label_column)
+    probability = numeric_float_series(validation, probability_column)
+    scorable = issue_prediction_scorable_mask(validation)
+    add_eligible = issue_add_eligibility_mask(validation, label_column)
+    clean = numeric_int_series(validation, "label_clean") == 1
+    hard_negative = hard_negative_mask(validation)
+    clean_front = clean_front_mask(validation)
+    issue_recording = issue_recording_mask(validation, [label_column])
+    partial_view = partial_view_mask(validation)
+    severity_column = issue_severity_column(label_column)
+    severities = (
+        validation[severity_column].fillna("").astype(str).str.lower()
+        if severity_column in validation.columns
+        else pd.Series([""] * len(validation), index=validation.index)
+    )
+    candidates: list[dict[str, Any]] = []
+
+    def local_policy_series(policy: str, suppress_threshold: float | None = None, add_threshold: float | None = None) -> pd.Series:
+        if policy == "heuristic-only":
+            result = heuristic
+        elif policy == "disabled":
+            result = pd.Series([0] * len(validation), index=validation.index)
+        elif policy in {"suppress-only", "suppress-only-high-precision"}:
+            threshold = 0.25 if suppress_threshold is None else suppress_threshold
+            result = ((heuristic == 1) & (probability > threshold)).astype(int)
+        elif policy in {"ml-add-only-high-confidence", "hard-negative-safe-add"}:
+            threshold = 0.75 if add_threshold is None else add_threshold
+            result = ((heuristic == 1) | ((probability >= threshold) & add_eligible)).astype(int)
+        elif policy == "suppress-and-add":
+            suppress = 0.25 if suppress_threshold is None else suppress_threshold
+            add = 0.75 if add_threshold is None else add_threshold
+            result = pd.Series(heuristic.tolist(), index=validation.index).astype(int)
+            result[(heuristic == 1) & (probability <= suppress)] = 0
+            result[(heuristic == 0) & (probability >= add) & add_eligible] = 1
+        else:
+            raise ValueError(f"Unknown issue policy: {policy}")
+        return result.where(scorable, 0).astype(int)
+
+    def local_severity_summary(prediction: pd.Series) -> dict[str, Any]:
+        if severity_column not in validation.columns:
+            return {"available": False}
+        result: dict[str, Any] = {"available": True}
+        for name, accepted in {
+            "mildIssues": {"mild"},
+            "clearModerateSevereIssues": {"clear", "moderate", "severe"},
+            "unknownSeverityIssues": {"", "unknown", "nan", "none"},
+        }.items():
+            mask = (labelled == 1) & severities.isin(accepted)
+            support = int(mask.sum())
+            true_positives = int(((prediction == 1) & mask).sum())
+            result[name] = {
+                "positiveSupport": support,
+                "truePositives": true_positives,
+                "falseNegatives": int(((prediction == 0) & mask).sum()),
+                "recall": 1.0 if support == 0 else true_positives / support,
+            }
+        return result
+
+    def local_summary(candidate: pd.Series) -> dict[str, Any]:
+        metrics = binary_metrics(labelled.tolist(), candidate.tolist())
+        transitions = transition_metrics_for_issue(labelled, heuristic, ml, candidate)
+        return {
+            **metrics,
+            **transitions,
+            "cleanFalsePositiveRows": int(candidate[clean].sum()),
+            "hardNegativeFalsePositiveRows": int(candidate[clean & hard_negative].sum()),
+            "cleanFrontFalsePositiveRows": int(candidate[clean & clean_front].sum()),
+            "issueRecordingCleanFalsePositiveRows": int(candidate[clean & issue_recording].sum()),
+            "partialViewCleanFalsePositiveRows": int(candidate[clean & partial_view].sum()),
+            "severity": local_severity_summary(candidate),
+        }
+
+    def add_candidate(policy: str, suppress_threshold: float | None = None, add_threshold: float | None = None) -> None:
+        prediction = local_policy_series(policy, suppress_threshold, add_threshold)
+        summary = local_summary(prediction)
+        summary["policy"] = policy
+        summary["suppressThreshold"] = suppress_threshold
+        summary["addThreshold"] = add_threshold
+        candidates.append(summary)
+
+    add_candidate("heuristic-only")
+    add_candidate("disabled")
+    for threshold in [index / 100 for index in range(5, 51, 5)]:
+        add_candidate("suppress-only", suppress_threshold=threshold)
+    for threshold in [index / 100 for index in range(5, 31, 5)]:
+        add_candidate("suppress-only-high-precision", suppress_threshold=threshold)
+    for threshold in [index / 100 for index in range(55, 96, 5)]:
+        add_candidate("ml-add-only-high-confidence", add_threshold=threshold)
+        add_candidate("hard-negative-safe-add", add_threshold=threshold)
+    for suppress_threshold in [index / 100 for index in range(5, 46, 5)]:
+        for add_threshold in [index / 100 for index in range(55, 96, 5)]:
+            add_candidate("suppress-and-add", suppress_threshold=suppress_threshold, add_threshold=add_threshold)
+    return candidates
+
+
+def choose_optimized_issue_policy(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    probability_column: str,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    candidates = optimized_issue_policy_candidates(
+        validation,
+        label_column,
+        heuristic_column,
+        ml_column,
+        probability_column,
+        args,
+    )
+    heuristic_summary = next(candidate for candidate in candidates if candidate["policy"] == "heuristic-only")
+    allowed = [
+        candidate
+        for candidate in candidates
+        if issue_policy_allowed(candidate, heuristic_summary, str(candidate["policy"]), args)
+    ]
+    if not allowed:
+        allowed = [heuristic_summary]
+    chosen = max(
+        allowed,
+        key=lambda item: (
+            float(item["f1"]),
+            float(item["recall"]),
+            float(item["precision"]),
+            int(item["hybridTruePositivesAdded"]),
+            int(item["heuristicFalsePositivesSuppressedByMl"]),
+            -int(item["cleanFalsePositiveRows"]),
+            -int(item["hardNegativeFalsePositiveRows"]),
+            -float(1.0 if item["addThreshold"] is None else item["addThreshold"]),
+        ),
+    )
+    top_candidates = sorted(
+        candidates,
+        key=lambda item: (
+            bool(issue_policy_allowed(item, heuristic_summary, str(item["policy"]), args)),
+            float(item["f1"]),
+            float(item["recall"]),
+            float(item["precision"]),
+            -int(item["cleanFalsePositiveRows"]),
+            -int(item["hardNegativeFalsePositiveRows"]),
+        ),
+        reverse=True,
+    )[:8]
+    return {
+        "issueId": issue_name(label_column),
+        "selected": chosen["policy"],
+        "suppressThreshold": chosen["suppressThreshold"],
+        "addThreshold": chosen["addThreshold"],
+        "readyForUserFacingFeedback": bool(
+            chosen["policy"] not in {"disabled"}
+            and int(chosen["hardNegativeFalsePositiveRows"]) <= args.issue_policy_hard_negative_fp_row_cap
+            and int(chosen["cleanFalsePositiveRows"]) <= args.issue_policy_clean_fp_row_cap
+            and float(chosen["precision"]) >= args.issue_policy_min_precision
+            and float(chosen["f1"]) > 0
+        ),
+        "recommendation": "ready_for_shadow_review" if chosen["policy"] not in {"disabled"} and float(chosen["f1"]) > 0 else "hide_until_more_data",
+        "heuristic": heuristic_summary,
+        "selectedValidationMetrics": chosen,
+        "allowedCandidateCount": len(allowed),
+        "candidateCount": len(candidates),
+        "topValidationCandidates": top_candidates,
+        "gates": {
+            "minPrecision": args.issue_policy_min_precision,
+            "cleanFpRowCap": args.issue_policy_clean_fp_row_cap,
+            "hardNegativeFpRowCap": args.issue_policy_hard_negative_fp_row_cap,
+            "partialViewFpRowCap": args.issue_policy_partial_view_fp_row_cap,
+        },
+    }
+
+
+def select_optimized_issue_policy_sources(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    model: str,
+    heuristic_columns: dict[str, str],
+    ml_columns: dict[str, str],
+    probability_columns: dict[str, str],
+    args: argparse.Namespace,
+) -> tuple[dict[str, str], dict[str, Any]]:
+    validation = df[df["split"] == "validation"].copy()
+    choices: dict[str, Any] = {}
+    policy_columns: dict[str, str] = {}
+    column_prefix = safe_model_column_part(model)
+    policy_part = "optimizedIssueHybrid"
+    for label_column in label_columns:
+        choice = choose_optimized_issue_policy(
+            validation,
+            label_column,
+            heuristic_columns[label_column],
+            ml_columns[label_column],
+            probability_columns[label_column],
+            args,
+        )
+        suffix = issue_suffix(label_column)
+        output_column = f"eval_{column_prefix}__policy_{safe_model_column_part(policy_part)}__{suffix}"
+        df[output_column] = policy_candidate_series(
+            df,
+            label_column,
+            heuristic_columns[label_column],
+            probability_columns[label_column],
+            str(choice["selected"]),
+            choice["suppressThreshold"],
+            choice["addThreshold"],
+        )
+        policy_columns[label_column] = output_column
+        choices[label_column] = choice
+    return policy_columns, choices
+
+
 def select_issue_specific_policy_sources(
     df: pd.DataFrame,
     label_columns: list[str],
@@ -768,6 +1319,20 @@ def build_policy_prediction_sets(
         )
         policies[policy_name] = materialize_issue_policy(df, label_columns, model, policy_name, selected_sources)
         selection["issueSpecificChoices"][policy_name] = choices
+    optimized_columns, optimized_choices = select_optimized_issue_policy_sources(
+        df,
+        label_columns,
+        model,
+        heuristic_columns,
+        ml_columns,
+        {
+            label_column: f"ml__{model}__{label_column}__prob"
+            for label_column in label_columns
+        },
+        args,
+    )
+    policies["optimizedIssueHybrid"] = optimized_columns
+    selection["issueSpecificChoices"]["optimizedIssueHybrid"] = optimized_choices
     return policies, selection
 
 
@@ -820,6 +1385,7 @@ def split_reports_for_model(
             for policy_name, prediction_columns in policy_prediction_sets.items()
             if policy_name not in {"heuristicOnly", "mlOnly"}
         }
+        optimized_policy_columns = policy_prediction_sets.get("optimizedIssueHybrid")
         split_reports[split] = {
             "rowCount": len(subset),
             "heuristicOnly": evaluate_prediction_set(subset, label_columns, heuristic_prediction_columns),
@@ -838,6 +1404,17 @@ def split_reports_for_model(
                 hybrid_prediction_columns,
             ),
             "policyDeltas": policy_deltas,
+            "policyReviewExamples": {
+                "optimizedIssueHybrid": policy_review_examples(
+                    subset,
+                    label_columns,
+                    heuristic_prediction_columns,
+                    ml_prediction_columns,
+                    optimized_policy_columns,
+                    ml_probability_columns,
+                    policy_selection.get("issueSpecificChoices", {}).get("optimizedIssueHybrid", {}),
+                )
+            } if optimized_policy_columns else {},
             "policySelection": policy_selection,
             "bootstrap": {
                 "heuristicOnly": bootstrap_f1(subset, label_columns, heuristic_prediction_columns),
@@ -999,6 +1576,30 @@ def recommendation(report: dict[str, Any], label_columns: list[str], split: str)
     }
 
 
+def json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
+    if isinstance(value, Path):
+        return str(value)
+    if hasattr(value, "item") and callable(value.item):
+        try:
+            return json_safe(value.item())
+        except (TypeError, ValueError):
+            pass
+    if isinstance(value, float) and pd.isna(value):
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return value
+
+
 def main() -> int:
     args = parse_args()
     exercise_dir = Path(args.ml_dir) / args.exercise
@@ -1034,6 +1635,10 @@ def main() -> int:
             "validationCleanFpCap": args.gate_validation_clean_fp_cap,
             "validationHardNegativeFpCap": args.gate_validation_hard_negative_fp_cap,
             "minValidationRecall": args.gate_min_validation_recall,
+            "issuePolicyMinPrecision": args.issue_policy_min_precision,
+            "issuePolicyCleanFpRowCap": args.issue_policy_clean_fp_row_cap,
+            "issuePolicyHardNegativeFpRowCap": args.issue_policy_hard_negative_fp_row_cap,
+            "issuePolicyPartialViewFpRowCap": args.issue_policy_partial_view_fp_row_cap,
         },
         "rowCount": len(df),
         "candidateCounts": candidate_counts,
@@ -1048,6 +1653,7 @@ def main() -> int:
         "splits": split_reports,
     }
     report["integrationRecommendation"] = recommendation(report, label_columns, decision_split)
+    report = json_safe(report)
 
     output_dir = exercise_dir / "models"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1065,6 +1671,9 @@ def main() -> int:
         print(f"Heuristic F1: {split['heuristicOnly']['aggregate']['f1']:.3f}")
         print(f"ML F1: {split['mlOnly']['aggregate']['f1']:.3f}")
         print(f"Hybrid F1: {split['hybridConservative']['aggregate']['f1']:.3f}")
+        optimized = split.get("hybridPolicies", {}).get("optimizedIssueHybrid")
+        if optimized:
+            print(f"Optimized issue hybrid F1: {optimized['aggregate']['f1']:.3f}")
     print(f"Recommendation: {decision['status']} ({decision['reason']})")
     print(f"Report: {report_path}")
     return 0
