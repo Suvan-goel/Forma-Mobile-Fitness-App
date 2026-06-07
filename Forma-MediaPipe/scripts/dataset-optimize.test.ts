@@ -125,6 +125,7 @@ function makeDiagnosticSyntheticExercise(
   options: {
     cueMetricKeys?: string[];
     cueThresholdPath?: string | string[];
+    countWarnAlso?: boolean;
   } = {},
 ): ExerciseDefinition {
   const completeAt = Number(getConfigValue(config, 'thresholds.COMPLETE_AT'));
@@ -154,7 +155,8 @@ function makeDiagnosticSyntheticExercise(
     update: (keypoints, state): ExerciseState => {
       const internal = state._internal as { completed: boolean };
       const x = keypoints[0]?.x ?? 0;
-      if (internal.completed || x < completeAt) return state;
+      const countAt = options.countWarnAlso ? warnAt : completeAt;
+      if (internal.completed || x < countAt) return state;
       const triggered = x >= warnAt;
       const diagnostics: RepDiagnostics = {
         exerciseName: name,
@@ -261,6 +263,86 @@ function diagnosticSyntheticCase(
   };
 }
 
+function diagnosticSyntheticZeroRepCase(
+  exerciseName: string,
+  split: ExerciseLabelFile['split'],
+  peakX: number,
+  suffix: string,
+): DatasetCase {
+  return {
+    label: {
+      schemaVersion: 1,
+      exerciseName,
+      sourceVideo: `videos/${exerciseName}/${split}-${suffix}.mp4`,
+      split,
+      reviewStatus: 'reviewed',
+      expectedReps: 0,
+      reps: [],
+    },
+    recording: {
+      exerciseName,
+      metadata: {},
+      frames: [
+        { timestamp: 0, keypoints: [{ name: 'demo', x: 0.2, y: 0, score: 1 } as Keypoint] },
+        { timestamp: 500, keypoints: [{ name: 'demo', x: peakX, y: 0, score: 1 } as Keypoint] },
+      ],
+    },
+  };
+}
+
+function splitDiagnosticCase(
+  exerciseName: string,
+  split: ExerciseLabelFile['split'],
+  peakX: number,
+  issueIds: string[],
+  suffix: string,
+): DatasetCase {
+  const datasetCase = diagnosticSyntheticCase(exerciseName, peakX, issueIds);
+  datasetCase.label.split = split;
+  datasetCase.label.sourceVideo = `videos/${exerciseName}/${split}-${suffix}.mp4`;
+  return datasetCase;
+}
+
+function registerExercise(definition: ExerciseDefinition): void {
+  if (!ExerciseRegistry.has(definition.name)) {
+    ExerciseRegistry.register(definition);
+  }
+}
+
+function loadSummary(casesLoaded: number): Parameters<typeof optimizeExercise>[2] {
+  return {
+    labelFilesDiscovered: casesLoaded,
+    templateLabelsSkipped: 0,
+    draftLabelsSkipped: 0,
+    exerciseLabelsSkipped: 0,
+    splitLabelsSkipped: 0,
+    missingLandmarksSkipped: 0,
+    landmarkFilesRead: casesLoaded,
+    casesLoaded,
+  };
+}
+
+function optimizerOptions(
+  exerciseName: string,
+  overrides: Partial<Parameters<typeof optimizeExercise>[3]> = {},
+): Parameters<typeof optimizeExercise>[3] {
+  return {
+    exerciseFilter: exerciseName,
+    dryRun: true,
+    includeCaseDetails: false,
+    includeDiagnostics: true,
+    selectionMode: 'diagnostic',
+    apply: false,
+    silent: true,
+    reportPath: null,
+    enforceCleanFpGates: true,
+    tunableGroup: 'issue-feedback',
+    search: { randomCandidates: 20, refinementRounds: 0, survivorCount: 8, seed: 1 },
+    minCases: DEFAULT_MIN_SPLIT_CASES,
+    ...overrides,
+  };
+}
+
 describe('dataset optimiser scaling helpers', () => {
   it('parses standalone CLI flags for search, reports, case details, and split gates', () => {
     const options = parseOptimizerCommandOptions([
@@ -335,6 +417,21 @@ describe('dataset optimiser scaling helpers', () => {
       checkpointPath: '/tmp/checkpoint.json',
       resumeCheckpoint: true,
       checkpointEvery: 10,
+    });
+  });
+
+  it('parses issue-only tunable group aliases', () => {
+    expect(parseOptimizerCommandOptions(['--tunable-group', 'issue-feedback'])).toMatchObject({
+      tunableGroup: 'issue-feedback',
+    });
+    expect(parseOptimizerCommandOptions(['--optimize-issues-only'])).toMatchObject({
+      tunableGroup: 'issue-feedback',
+    });
+    expect(parseOptimizerCommandOptions(['--freeze-count-tunables'])).toMatchObject({
+      tunableGroup: 'issue-feedback',
+    });
+    expect(parseOptimizerCommandOptions(['--tunable-group', 'all'])).toMatchObject({
+      tunableGroup: 'all',
     });
   });
 
@@ -680,6 +777,31 @@ describe('dataset optimiser scaling helpers', () => {
     expect(result.candidates[0].evaluation).toHaveProperty('metrics');
   });
 
+  it('issue-feedback tunable group freezes FSM tunables across search candidates', () => {
+    const definition = makeDiagnosticSyntheticExercise('Diagnostic Synthetic Issue Only Search', {
+      thresholds: { COMPLETE_AT: 0.5 },
+      formThresholds: { WARN_AT: 0.9 },
+    });
+
+    const result = searchExercise(
+      definition,
+      [
+        diagnosticSyntheticCase(definition.name, 0.8, [diagnosticSyntheticIssueId]),
+        diagnosticSyntheticCase(definition.name, 0.55, []),
+      ],
+      { randomCandidates: 12, refinementRounds: 1, survivorCount: 8, seed: 1 },
+      'diagnostic',
+      { tunableGroup: 'issue-feedback' },
+    );
+
+    expect(result.candidates.length).toBeGreaterThan(0);
+    expect(result.candidates.some((candidate) => candidate.source === 'diagnostic')).toBe(true);
+    for (const candidate of result.candidates) {
+      expect(getConfigValue(candidate.config, 'thresholds.COMPLETE_AT')).toBe(0.5);
+      expect(candidate.changedPaths ?? []).not.toContain('thresholds.COMPLETE_AT');
+    }
+  });
+
   it('does not vary score-only tunables during issue-optimizer search', () => {
     const definition = makeSyntheticExercise('Scoring Tunable Synthetic Candidate', {
       thresholds: { COMPLETE_AT: 0.7 },
@@ -815,6 +937,242 @@ describe('dataset optimiser scaling helpers', () => {
     );
 
     expect(result.diagnosticFallbackReason).toContain('no diagnosticTuning metadata');
+  });
+
+  it('reports issue-only active/frozen tunables and rep-count stability rejections', () => {
+    const name = 'Diagnostic Synthetic Issue Only Report';
+    const definition = makeDiagnosticSyntheticExercise(
+      name,
+      {
+        thresholds: { COMPLETE_AT: 0.2 },
+        formThresholds: { WARN_AT: 0.4 },
+      },
+      { countWarnAlso: true },
+    );
+    registerExercise(definition);
+    const trainPositive = diagnosticSyntheticCase(name, 0.8, [diagnosticSyntheticIssueId]);
+    const trainClean = diagnosticSyntheticCase(name, 0.45, []);
+    const validationPositive = diagnosticSyntheticCase(name, 0.8, [diagnosticSyntheticIssueId]);
+    validationPositive.label.split = 'validation';
+    const testClean = diagnosticSyntheticCase(name, 0.45, []);
+    testClean.label.split = 'test';
+
+    const report = optimizeExercise(
+      name,
+      [trainPositive, trainClean, validationPositive, testClean],
+      loadSummary(4),
+      optimizerOptions(name, { search: { randomCandidates: 20, refinementRounds: 0, survivorCount: 6, seed: 1 } }),
+    );
+
+    expect(report.tunableGroup).toBe('issue-feedback');
+    expect(report.activeTunables.map((tunable) => tunable.path)).toContain('formThresholds.WARN_AT');
+    expect(report.frozenTunables.map((tunable) => tunable.path)).toContain('thresholds.COMPLETE_AT');
+    expect(report.issueOnlySummary?.enabled).toBe(true);
+    expect(report.issueOnlySummary?.repCountStabilityRejectCount).toBeGreaterThan(0);
+    expect(report.issueOnlySummary?.repCountStabilityWarningCount).toBe(0);
+    expect(report.issueOnlySummary?.mixedUnsafeTunables).toContain('formThresholds.WARN_AT');
+    expect(report.issueOnlySummary?.baselinePredictedRepsBySplit.validation?.predictedReps).toBe(1);
+    expect(report.issueOnlySummary?.winnerPredictedRepsBySplit.validation?.predictedReps).toBe(1);
+    expect(report.issueOnlySummary?.baseline.validation?.perIssue[0]).toMatchObject({
+      issueId: diagnosticSyntheticIssueId,
+    });
+  });
+
+  it('issue-feedback mode rejects candidates that change validation predicted reps', () => {
+    const name = 'Diagnostic Synthetic Validation Count Reject';
+    const definition = makeDiagnosticSyntheticExercise(
+      name,
+      {
+        thresholds: { COMPLETE_AT: 0.2 },
+        formThresholds: { WARN_AT: 0.4 },
+      },
+      { countWarnAlso: true },
+    );
+    registerExercise(definition);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 1.1, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 1.05, [], 'train-clean'),
+      splitDiagnosticCase(name, 'validation', 0.45, [diagnosticSyntheticIssueId], 'validation-sensitive'),
+      splitDiagnosticCase(name, 'test', 1.1, [], 'test-stable'),
+    ];
+
+    const report = optimizeExercise(
+      name,
+      cases,
+      loadSummary(cases.length),
+      optimizerOptions(name, { search: { randomCandidates: 40, refinementRounds: 0, survivorCount: 12, seed: 2 } }),
+    );
+
+    expect(report.issueOnlySummary?.rejectedForValidationRepCountChange).toBeGreaterThan(0);
+    expect(report.issueOnlySummary?.repCountStabilityRejectedExamples.some((example) =>
+      example.split === 'validation' && example.changedTotalPredictedReps,
+    )).toBe(true);
+    expect(report.rankedSelection.every((candidate) =>
+      candidate.id === 'baseline' ||
+      candidate.evaluation.totals.predictedReps === report.baseline.validation?.totals.predictedReps,
+    )).toBe(true);
+  });
+
+  it('issue-feedback mode rejects candidates that change validation rep-count accuracy', () => {
+    const name = 'Diagnostic Synthetic Validation Accuracy Reject';
+    const definition = makeDiagnosticSyntheticExercise(
+      name,
+      {
+        thresholds: { COMPLETE_AT: 0.2 },
+        formThresholds: { WARN_AT: 0.4 },
+      },
+      { countWarnAlso: true },
+    );
+    registerExercise(definition);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 1.1, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 1.05, [], 'train-clean'),
+      splitDiagnosticCase(name, 'validation', 0.45, [diagnosticSyntheticIssueId], 'validation-expected'),
+      diagnosticSyntheticZeroRepCase(name, 'validation', 0.35, 'validation-zero'),
+      splitDiagnosticCase(name, 'test', 1.1, [], 'test-stable'),
+    ];
+
+    const report = optimizeExercise(
+      name,
+      cases,
+      loadSummary(cases.length),
+      optimizerOptions(name, { search: { randomCandidates: 40, refinementRounds: 0, survivorCount: 12, seed: 2 } }),
+    );
+
+    expect(report.issueOnlySummary?.rejectedForValidationRepCountChange).toBeGreaterThan(0);
+    expect(report.issueOnlySummary?.repCountStabilityRejectedExamples.some((example) =>
+      example.split === 'validation' && example.changedRepCountAccuracy,
+    )).toBe(true);
+  });
+
+  it('issue-feedback mode accepts candidates that preserve rep counts and improve issue metrics', () => {
+    const name = 'Diagnostic Synthetic Issue Stable Improvement';
+    const definition = makeDiagnosticSyntheticExercise(name, {
+      thresholds: { COMPLETE_AT: 0.5 },
+      formThresholds: { WARN_AT: 0.9 },
+    });
+    registerExercise(definition);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 0.8, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 0.55, [], 'train-clean'),
+      splitDiagnosticCase(name, 'validation', 0.8, [diagnosticSyntheticIssueId], 'validation-positive'),
+      splitDiagnosticCase(name, 'validation', 0.55, [], 'validation-clean'),
+      splitDiagnosticCase(name, 'test', 0.8, [diagnosticSyntheticIssueId], 'test-positive'),
+    ];
+
+    const report = optimizeExercise(
+      name,
+      cases,
+      loadSummary(cases.length),
+      optimizerOptions(name, { search: { randomCandidates: 0, refinementRounds: 0, survivorCount: 8, seed: 1 } }),
+    );
+
+    expect(report.issueOnlySummary?.repCountStabilityRejectCount).toBe(0);
+    expect(report.winner.id).not.toBe('baseline');
+    expect(report.winner.validation?.totals.predictedReps).toBe(report.baseline.validation?.totals.predictedReps);
+    expect(report.winner.validation?.metrics.issueF1).toBeGreaterThan(report.baseline.validation?.metrics.issueF1 ?? 0);
+  });
+
+  it('default all-tunable mode does not enable issue-feedback rep-count rejection', () => {
+    const name = 'Diagnostic Synthetic All Mode Unchanged';
+    const definition = makeDiagnosticSyntheticExercise(
+      name,
+      {
+        thresholds: { COMPLETE_AT: 0.2 },
+        formThresholds: { WARN_AT: 0.4 },
+      },
+      { countWarnAlso: true },
+    );
+    registerExercise(definition);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 1.1, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 0.45, [], 'train-sensitive'),
+      splitDiagnosticCase(name, 'validation', 0.45, [diagnosticSyntheticIssueId], 'validation-sensitive'),
+      splitDiagnosticCase(name, 'test', 0.45, [], 'test-sensitive'),
+    ];
+
+    const report = optimizeExercise(
+      name,
+      cases,
+      loadSummary(cases.length),
+      optimizerOptions(name, {
+        tunableGroup: 'all',
+        search: { randomCandidates: 20, refinementRounds: 0, survivorCount: 8, seed: 1 },
+      }),
+    );
+
+    expect(report.tunableGroup).toBe('all');
+    expect(report.issueOnlySummary).toBeUndefined();
+    expect(report.search.rejectedCandidateExamples.join(' ')).not.toContain('rep-count instability');
+  });
+
+  it('issue-feedback rep-count rejection does not use test split during search', () => {
+    const name = 'Diagnostic Synthetic Test Split Ignored';
+    const definition = makeDiagnosticSyntheticExercise(
+      name,
+      {
+        thresholds: { COMPLETE_AT: 0.2 },
+        formThresholds: { WARN_AT: 0.4 },
+      },
+      { countWarnAlso: true },
+    );
+    registerExercise(definition);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 1.1, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 1.05, [], 'train-clean'),
+      splitDiagnosticCase(name, 'validation', 1.1, [diagnosticSyntheticIssueId], 'validation-positive'),
+      splitDiagnosticCase(name, 'validation', 1.05, [], 'validation-clean'),
+      splitDiagnosticCase(name, 'test', 0.45, [], 'test-sensitive'),
+    ];
+
+    const report = optimizeExercise(
+      name,
+      cases,
+      loadSummary(cases.length),
+      optimizerOptions(name, { search: { randomCandidates: 30, refinementRounds: 0, survivorCount: 12, seed: 3 } }),
+    );
+
+    expect(report.issueOnlySummary?.repCountStabilityRejectedExamples.some((example) => (example.split as string) === 'test')).toBe(false);
+    expect(report.issueOnlySummary?.rejectedForValidationRepCountChange).toBe(0);
+  });
+
+  it('writes rep-count stability rejection summary into checkpoints', () => {
+    const name = 'Diagnostic Synthetic Checkpoint Reject Summary';
+    const definition = makeDiagnosticSyntheticExercise(
+      name,
+      {
+        thresholds: { COMPLETE_AT: 0.2 },
+        formThresholds: { WARN_AT: 0.4 },
+      },
+      { countWarnAlso: true },
+    );
+    registerExercise(definition);
+    const checkpointPath = path.join(os.tmpdir(), `optimizer-${Date.now()}-${Math.random()}.json`);
+    const cases = [
+      splitDiagnosticCase(name, 'train', 0.8, [diagnosticSyntheticIssueId], 'train-positive'),
+      splitDiagnosticCase(name, 'train', 0.45, [], 'train-sensitive'),
+      splitDiagnosticCase(name, 'validation', 0.8, [diagnosticSyntheticIssueId], 'validation-positive'),
+      splitDiagnosticCase(name, 'test', 0.8, [], 'test-stable'),
+    ];
+
+    try {
+      const report = optimizeExercise(
+        name,
+        cases,
+        loadSummary(cases.length),
+        optimizerOptions(name, { search: { randomCandidates: 20, refinementRounds: 0, survivorCount: 8, seed: 1 } }),
+        { checkpointPath, checkpointEvery: 1 },
+      );
+      const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf-8')) as {
+        repCountStability?: { rejectCount: number; rejectedForTrainRepCountChange: number };
+      };
+
+      expect(report.issueOnlySummary?.repCountStabilityRejectCount).toBeGreaterThan(0);
+      expect(checkpoint.repCountStability?.rejectCount).toBeGreaterThan(0);
+      expect(checkpoint.repCountStability?.rejectedForTrainRepCountChange).toBeGreaterThan(0);
+    } finally {
+      if (fs.existsSync(checkpointPath)) fs.unlinkSync(checkpointPath);
+    }
   });
 
   it('blocks auto-apply when minimum split counts are below thresholds', () => {

@@ -56,6 +56,7 @@ import {
 
 export type SelectionSplit = 'validation' | 'train' | 'all' | 'none';
 export type OptimizerSelectionMode = 'current' | 'diagnostic';
+export type OptimizerTunableGroup = 'all' | 'issue-feedback';
 type CandidateSource = 'baseline' | 'random' | 'refined' | 'diagnostic';
 
 export interface MinimumSplitCases {
@@ -80,8 +81,127 @@ export interface OptimizerCommandOptions {
   resumeCheckpoint?: boolean;
   checkpointEvery?: number;
   enforceCleanFpGates?: boolean;
+  tunableGroup?: OptimizerTunableGroup;
   search: OptimizerSearchOptions;
   minCases: MinimumSplitCases;
+}
+
+export interface TunableReportEntry {
+  path: string;
+  currentValue: number | null;
+  min: number;
+  max: number;
+  step: number;
+  kind: NumericTunable['kind'];
+  affectsRepCountingOrFsm: boolean;
+  affectsIssueDetectionOnly: boolean;
+  affectsBoth: boolean;
+  recommendedGroup: 'count-fsm' | 'issue-feedback' | 'mixed-unsafe';
+  activeInSearch: boolean;
+  reason: string;
+}
+
+export interface RepCountStabilityWarning {
+  candidateId: string;
+  source: CandidateSource;
+  split: SelectionSplit | 'train' | 'validation';
+  changedPaths: string[];
+  reason: string;
+  changedTotalPredictedReps: boolean;
+  changedRepCountAccuracy: boolean;
+  changedPerCasePredictedReps: boolean;
+  baselinePredictedReps: number;
+  candidatePredictedReps: number;
+  baselineRepCountAccuracy: number;
+  candidateRepCountAccuracy: number;
+  changedCasePredictedReps?: RepCountCaseChange[];
+}
+
+interface RepCountStabilityTracker {
+  warningCount: number;
+  warnings: RepCountStabilityWarning[];
+  rejectCount: number;
+  rejectedExamples: RepCountStabilityWarning[];
+  rejectedForTrainRepCountChange: number;
+  rejectedForValidationRepCountChange: number;
+  mixedUnsafeTunablePaths: Set<string>;
+}
+
+export interface RepCountCaseSnapshot {
+  sourceVideo: string;
+  split: DatasetCase['label']['split'];
+  expectedReps: number;
+  predictedReps: number;
+  repCountCorrect: boolean;
+}
+
+export interface RepCountCaseChange {
+  sourceVideo: string;
+  baselinePredictedReps: number;
+  candidatePredictedReps: number;
+  baselineRepCountCorrect: boolean;
+  candidateRepCountCorrect: boolean;
+}
+
+export interface RepCountStabilitySplitSnapshot {
+  expectedReps: number;
+  predictedReps: number;
+  repCountAccuracy: number;
+  perCasePredictedReps: RepCountCaseSnapshot[];
+}
+
+export type RepCountStabilityBySplit = EvaluationBySplit<RepCountStabilitySplitSnapshot>;
+
+interface RepCountStabilityCheckpointSummary {
+  rejectCount: number;
+  warningCount: number;
+  rejectedForTrainRepCountChange: number;
+  rejectedForValidationRepCountChange: number;
+  mixedUnsafeTunables: string[];
+}
+
+export interface PerIssueMetricReport {
+  issueId: string;
+  truePositiveCount: number;
+  falsePositiveCount: number;
+  falseNegativeCount: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  cleanFalsePositiveCount: number;
+  hardNegativeCleanFalsePositiveCount: number;
+}
+
+export interface IssueOnlyMetricSnapshot {
+  repCountAccuracy: number | null;
+  predictedReps: number | null;
+  expectedReps: number | null;
+  cleanRepFalsePositiveRate: number | null;
+  hardNegativeCleanFalsePositiveRate: number | null;
+  issuePrecision: number | null;
+  issueRecall: number | null;
+  issueF1: number | null;
+  weightedIssuePrecision: number | null;
+  weightedIssueRecall: number | null;
+  weightedIssueF1: number | null;
+  perIssue: PerIssueMetricReport[];
+}
+
+export interface IssueOnlyReportSummary {
+  enabled: boolean;
+  candidateChangedRepCountAccuracy: boolean;
+  warningCount: number;
+  warnings: RepCountStabilityWarning[];
+  mixedUnsafeTunables: string[];
+  repCountStabilityRejectCount: number;
+  repCountStabilityWarningCount: number;
+  rejectedForTrainRepCountChange: number;
+  rejectedForValidationRepCountChange: number;
+  repCountStabilityRejectedExamples: RepCountStabilityWarning[];
+  baselinePredictedRepsBySplit: RepCountStabilityBySplit;
+  winnerPredictedRepsBySplit: RepCountStabilityBySplit;
+  baseline: EvaluationBySplit<IssueOnlyMetricSnapshot>;
+  winner: EvaluationBySplit<IssueOnlyMetricSnapshot>;
 }
 
 export type CleanRepBucketKey =
@@ -227,6 +347,7 @@ export interface CandidateSafetyMetrics {
 export interface EvaluationSummary {
   totals: EvaluationTotals;
   metrics: EvaluationMetrics;
+  repCountSnapshot?: RepCountStabilitySplitSnapshot;
   qualityCoverage?: QualityCoverageMetrics;
   diagnosticSummary?: DiagnosticEvaluationSummary;
   cleanSafety?: CleanSafetySummary;
@@ -290,9 +411,12 @@ export interface ExerciseOptimisationReport {
   applied: boolean;
   dryRun: boolean;
   selectionMode: OptimizerSelectionMode;
+  tunableGroup: OptimizerTunableGroup;
   reason: string;
   tunedConfigPath: string | null;
   selectionSplit: SelectionSplit;
+  activeTunables: TunableReportEntry[];
+  frozenTunables: TunableReportEntry[];
   search: SearchResult;
   baseline: EvaluationBySplit<EvaluationSummary>;
   baselineCaseDetails?: EvaluationBySplit<DatasetEvaluation>;
@@ -317,6 +441,7 @@ export interface ExerciseOptimisationReport {
     cleanFpGateDiagnostics?: CleanFpGateDiagnostics;
     safetyMetrics?: CandidateSafetyMetrics;
   }>;
+  issueOnlySummary?: IssueOnlyReportSummary;
 }
 
 export interface DatasetOptimisationReport {
@@ -330,8 +455,9 @@ export interface DatasetOptimisationReport {
 }
 
 const OPTIMIZER_CONFIDENCE_GATING = true;
-const CHECKPOINT_VERSION = 1;
+const CHECKPOINT_VERSION = 2;
 const DEFAULT_CHECKPOINT_EVERY = 25;
+const MAX_REP_COUNT_STABILITY_REJECTION_EXAMPLES = 50;
 
 export const DEFAULT_MIN_SPLIT_CASES: MinimumSplitCases = {
   train: 1,
@@ -361,6 +487,11 @@ interface OptimizerRuntimeContext {
   checkpointPath?: string | null;
   resumeCheckpoint?: boolean;
   checkpointEvery?: number;
+  tunableGroup?: OptimizerTunableGroup;
+  tunableSpec?: TunableSpec;
+  repCountBaseline?: EvaluationSummary | null;
+  repCountBaselineSplit?: SelectionSplit | 'train' | 'validation';
+  repCountStability?: RepCountStabilityTracker;
 }
 
 interface EvaluationRuntimeOptions {
@@ -385,6 +516,7 @@ interface OptimizerCheckpointData {
   version: typeof CHECKPOINT_VERSION;
   exerciseName: string;
   selectionMode: OptimizerSelectionMode;
+  tunableGroup: OptimizerTunableGroup;
   options: Required<OptimizerSearchOptions>;
   seed: number;
   phase: string;
@@ -398,6 +530,7 @@ interface OptimizerCheckpointData {
   bestCandidates: OptimizerCheckpointCandidate[];
   rejectedCandidates: number;
   rejectedCandidateExamples: string[];
+  repCountStability?: RepCountStabilityCheckpointSummary;
   updatedAt: string;
 }
 
@@ -459,16 +592,19 @@ class OptimizerCheckpointManager {
     private readonly checkpointPath: string,
     private readonly exerciseName: string,
     private readonly selectionMode: OptimizerSelectionMode,
+    private readonly tunableGroup: OptimizerTunableGroup,
     private readonly options: Required<OptimizerSearchOptions>,
     private readonly saveEvery: number,
     resume: boolean,
   ) {
     if (!resume || !fs.existsSync(checkpointPath)) return;
     const loaded = JSON.parse(fs.readFileSync(checkpointPath, 'utf-8')) as OptimizerCheckpointData;
+    const loadedTunableGroup = loaded.tunableGroup ?? 'all';
     if (
       loaded.version !== CHECKPOINT_VERSION ||
       loaded.exerciseName !== exerciseName ||
       loaded.selectionMode !== selectionMode ||
+      loadedTunableGroup !== tunableGroup ||
       JSON.stringify(loaded.options) !== JSON.stringify(options)
     ) {
       throw new Error(`Checkpoint ${checkpointPath} does not match this optimizer run.`);
@@ -534,6 +670,7 @@ class OptimizerCheckpointManager {
     evaluated: EvaluatedCandidateSummary[];
     rejectedCandidates: number;
     rejectedCandidateExamples: string[];
+    repCountStability?: RepCountStabilityCheckpointSummary;
     force?: boolean;
   }): void {
     const evaluatedCount = this.evaluatedByKey.size;
@@ -552,6 +689,7 @@ class OptimizerCheckpointManager {
     evaluated: EvaluatedCandidateSummary[];
     rejectedCandidates: number;
     rejectedCandidateExamples: string[];
+    repCountStability?: RepCountStabilityCheckpointSummary;
   }): void {
     const evaluatedCandidates = Array.from(this.evaluatedByKey.values());
     const best = topEvaluatedCandidates(args.evaluated, this.options.survivorCount)
@@ -561,6 +699,7 @@ class OptimizerCheckpointManager {
       version: CHECKPOINT_VERSION,
       exerciseName: this.exerciseName,
       selectionMode: this.selectionMode,
+      tunableGroup: this.tunableGroup,
       options: this.options,
       seed: this.options.seed,
       phase: args.phase,
@@ -576,6 +715,7 @@ class OptimizerCheckpointManager {
       bestCandidates: best,
       rejectedCandidates: args.rejectedCandidates,
       rejectedCandidateExamples: args.rejectedCandidateExamples.slice(0, 5),
+      repCountStability: args.repCountStability,
       updatedAt: new Date().toISOString(),
     };
     writeJson(this.checkpointPath, this.data);
@@ -654,6 +794,52 @@ function metricsFromTotals(totals: EvaluationTotals): EvaluationMetrics {
 
 function safeRate(numerator: number, denominator: number): number {
   return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function repCountSnapshotFromCaseEvaluations(
+  caseEvaluations: CaseEvaluation[],
+): RepCountStabilitySplitSnapshot {
+  const totals = emptyTotals();
+  for (const caseEvaluation of caseEvaluations) {
+    addTotals(totals, caseEvaluation.totals);
+  }
+  return {
+    expectedReps: totals.expectedReps,
+    predictedReps: totals.predictedReps,
+    repCountAccuracy: metricsFromTotals(totals).repCountAccuracy,
+    perCasePredictedReps: caseEvaluations
+      .map((caseEvaluation) => ({
+        sourceVideo: caseEvaluation.sourceVideo,
+        split: caseEvaluation.split,
+        expectedReps: caseEvaluation.expectedReps,
+        predictedReps: caseEvaluation.predictedReps,
+        repCountCorrect: caseEvaluation.repCountCorrect,
+      }))
+      .sort((a, b) => a.sourceVideo.localeCompare(b.sourceVideo)),
+  };
+}
+
+function repCountSnapshotFromSummary(
+  summary: EvaluationSummary | null,
+): RepCountStabilitySplitSnapshot | null {
+  if (!summary) return null;
+  return summary.repCountSnapshot ?? {
+    expectedReps: summary.totals.expectedReps,
+    predictedReps: summary.totals.predictedReps,
+    repCountAccuracy: summary.metrics.repCountAccuracy,
+    perCasePredictedReps: [],
+  };
+}
+
+function repCountSplitSnapshots(
+  summaries: EvaluationBySplit<EvaluationSummary>,
+): RepCountStabilityBySplit {
+  return {
+    all: repCountSnapshotFromSummary(summaries.all),
+    train: repCountSnapshotFromSummary(summaries.train),
+    validation: repCountSnapshotFromSummary(summaries.validation),
+    test: repCountSnapshotFromSummary(summaries.test),
+  };
 }
 
 function sortedCounts(map: Map<string, number>): FalsePositiveIssueCount[] {
@@ -1292,6 +1478,85 @@ function candidateSafetyMetrics(args: {
   };
 }
 
+function issueMetricReport(summary: EvaluationSummary | null): PerIssueMetricReport[] {
+  if (!summary?.diagnosticSummary) return [];
+  return Object.values(summary.diagnosticSummary.issueSummaries)
+    .map((issue) => {
+      const precisionDenominator = issue.truePositiveCount + issue.falsePositiveCount;
+      const recallDenominator = issue.truePositiveCount + issue.falseNegativeCount;
+      const precision = precisionDenominator === 0 ? 1 : issue.truePositiveCount / precisionDenominator;
+      const recall = recallDenominator === 0 ? 1 : issue.truePositiveCount / recallDenominator;
+      const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
+      const cleanFp = summary.cleanSafety?.perIssueCleanFalsePositives[issue.issueId];
+      return {
+        issueId: issue.issueId,
+        truePositiveCount: issue.truePositiveCount,
+        falsePositiveCount: issue.falsePositiveCount,
+        falseNegativeCount: issue.falseNegativeCount,
+        precision,
+        recall,
+        f1,
+        cleanFalsePositiveCount: cleanFp?.cleanFalsePositiveCount ?? 0,
+        hardNegativeCleanFalsePositiveCount: cleanFp?.hardNegativeCleanFalsePositiveCount ?? 0,
+      };
+    })
+    .sort((a, b) => a.issueId.localeCompare(b.issueId));
+}
+
+function issueOnlyMetricSnapshot(summary: EvaluationSummary | null): IssueOnlyMetricSnapshot | null {
+  if (!summary) return null;
+  return {
+    repCountAccuracy: summary.metrics.repCountAccuracy,
+    predictedReps: summary.totals.predictedReps,
+    expectedReps: summary.totals.expectedReps,
+    cleanRepFalsePositiveRate: summary.metrics.cleanRepFalsePositiveRate,
+    hardNegativeCleanFalsePositiveRate: hardNegativeCleanFpRate(summary),
+    issuePrecision: summary.metrics.issuePrecision,
+    issueRecall: summary.metrics.issueRecall,
+    issueF1: summary.metrics.issueF1,
+    weightedIssuePrecision: summary.diagnosticSummary?.weightedIssuePrecision ?? null,
+    weightedIssueRecall: summary.diagnosticSummary?.weightedIssueRecall ?? null,
+    weightedIssueF1: summary.diagnosticSummary?.weightedIssueF1 ?? null,
+    perIssue: issueMetricReport(summary),
+  };
+}
+
+function issueOnlySplitSnapshots(
+  summaries: EvaluationBySplit<EvaluationSummary>,
+): EvaluationBySplit<IssueOnlyMetricSnapshot> {
+  return {
+    all: issueOnlyMetricSnapshot(summaries.all),
+    train: issueOnlyMetricSnapshot(summaries.train),
+    validation: issueOnlyMetricSnapshot(summaries.validation),
+    test: issueOnlyMetricSnapshot(summaries.test),
+  };
+}
+
+function buildIssueOnlyReportSummary(args: {
+  enabled: boolean;
+  tracker: RepCountStabilityTracker;
+  baseline: EvaluationBySplit<EvaluationSummary>;
+  winner: EvaluationBySplit<EvaluationSummary>;
+}): IssueOnlyReportSummary | undefined {
+  if (!args.enabled) return undefined;
+  return {
+    enabled: true,
+    candidateChangedRepCountAccuracy: args.tracker.warningCount > 0 || args.tracker.rejectCount > 0,
+    warningCount: args.tracker.warningCount,
+    warnings: args.tracker.warnings,
+    mixedUnsafeTunables: Array.from(args.tracker.mixedUnsafeTunablePaths).sort(),
+    repCountStabilityRejectCount: args.tracker.rejectCount,
+    repCountStabilityWarningCount: args.tracker.warningCount,
+    rejectedForTrainRepCountChange: args.tracker.rejectedForTrainRepCountChange,
+    rejectedForValidationRepCountChange: args.tracker.rejectedForValidationRepCountChange,
+    repCountStabilityRejectedExamples: args.tracker.rejectedExamples,
+    baselinePredictedRepsBySplit: repCountSplitSnapshots(args.baseline),
+    winnerPredictedRepsBySplit: repCountSplitSnapshots(args.winner),
+    baseline: issueOnlySplitSnapshots(args.baseline),
+    winner: issueOnlySplitSnapshots(args.winner),
+  };
+}
+
 function sortEvaluatedCandidates<T extends { score: number; legacyScore: number }>(candidates: T[]): T[] {
   return [...candidates].sort((a, b) => b.score - a.score || b.legacyScore - a.legacyScore);
 }
@@ -1322,10 +1587,127 @@ function issueOptimizerSearchSpec(spec: TunableSpec): TunableSpec {
   };
 }
 
+function effectiveTunableGroup(options?: Pick<OptimizerCommandOptions, 'tunableGroup'>): OptimizerTunableGroup {
+  return options?.tunableGroup ?? 'all';
+}
+
+function filterDiagnosticTuningForTunables(spec: TunableSpec, activePaths: Set<string>): TunableSpec['diagnosticTuning'] {
+  return spec.diagnosticTuning?.filter((entry) => activePaths.has(entry.thresholdPath));
+}
+
+function filterTunableSpecForGroup(spec: TunableSpec, group: OptimizerTunableGroup): TunableSpec {
+  if (group === 'all') return spec;
+  const tunables = spec.tunables.filter((tunable) =>
+    tunable.kind === 'feedback' && !tunable.path.startsWith('viewQualityThresholds.'),
+  );
+  const activePaths = new Set(tunables.map((tunable) => tunable.path));
+  return {
+    ...spec,
+    tunables,
+    diagnosticTuning: filterDiagnosticTuningForTunables(spec, activePaths),
+  };
+}
+
+function optimizerSearchSpecForCases(
+  spec: TunableSpec,
+  cases: DatasetCase[],
+  group: OptimizerTunableGroup,
+): TunableSpec {
+  const scoreAwareSpec = hasScoreRangeLabels(cases) ? spec : issueOptimizerSearchSpec(spec);
+  return filterTunableSpecForGroup(scoreAwareSpec, group);
+}
+
 function hasScoreRangeLabels(cases: DatasetCase[]): boolean {
   return cases.some((datasetCase) =>
     datasetCase.label.reps.some((rep) => rep.scorable !== false && rep.expectedScoreRange),
   );
+}
+
+function classifyTunable(pathName: string, kind: NumericTunable['kind']): Omit<
+  TunableReportEntry,
+  'path' | 'currentValue' | 'min' | 'max' | 'step' | 'kind' | 'activeInSearch'
+> {
+  const countOnly = new Set([
+    'thresholds.EXTENDED_ENTER',
+    'thresholds.EXTENDED_EXIT',
+    'thresholds.FLEXED_ENTER',
+    'thresholds.FLEXED_EXIT',
+    'thresholds.FLEXED_EXIT_DELTA',
+    'thresholds.MIN_REP_TIME',
+    'thresholds.MIN_PARTIAL_ROM',
+    'thresholds.MIN_ARM_PARTICIPATION_ROM',
+    'thresholds.MIN_DOWN_GUARD',
+  ]);
+  const mixedUnsafe = new Set([
+    'thresholds.ROM_MIN',
+    'thresholds.SYNC_WINDOW',
+  ]);
+  const viewSupport = pathName.startsWith('viewQualityThresholds.');
+
+  if (viewSupport) {
+    return {
+      affectsRepCountingOrFsm: true,
+      affectsIssueDetectionOnly: false,
+      affectsBoth: true,
+      recommendedGroup: 'mixed-unsafe',
+      reason: 'View/scoreability support threshold can alter count suppression; frozen in issue-feedback mode.',
+    };
+  }
+  if (countOnly.has(pathName)) {
+    return {
+      affectsRepCountingOrFsm: true,
+      affectsIssueDetectionOnly: false,
+      affectsBoth: false,
+      recommendedGroup: 'count-fsm',
+      reason: 'Rep-window/FSM threshold; frozen in issue-feedback mode.',
+    };
+  }
+  if (mixedUnsafe.has(pathName)) {
+    return {
+      affectsRepCountingOrFsm: kind === 'fsm',
+      affectsIssueDetectionOnly: false,
+      affectsBoth: true,
+      recommendedGroup: 'mixed-unsafe',
+      reason: 'Issue cue threshold in the FSM threshold namespace; frozen until explicitly isolated.',
+    };
+  }
+  if (kind === 'feedback') {
+    return {
+      affectsRepCountingOrFsm: false,
+      affectsIssueDetectionOnly: true,
+      affectsBoth: false,
+      recommendedGroup: 'issue-feedback',
+      reason: 'Form-feedback issue threshold; allowed in issue-feedback mode.',
+    };
+  }
+  return {
+    affectsRepCountingOrFsm: kind === 'fsm',
+    affectsIssueDetectionOnly: false,
+    affectsBoth: kind !== 'fsm',
+    recommendedGroup: kind === 'fsm' ? 'count-fsm' : 'mixed-unsafe',
+    reason: `${kind} tunable is not part of issue-feedback mode.`,
+  };
+}
+
+function tunableReportEntries(
+  definition: ExerciseDefinition,
+  searchSpec: TunableSpec | null,
+): TunableReportEntry[] {
+  const activePaths = new Set(searchSpec?.tunables.map((tunable) => tunable.path) ?? []);
+  const baseConfig = definition.heuristicConfig;
+  return (definition.tunableSpec?.tunables ?? []).map((tunable) => {
+    const currentValue = baseConfig ? getConfigValue(baseConfig, tunable.path) : null;
+    return {
+      path: tunable.path,
+      currentValue: typeof currentValue === 'number' && Number.isFinite(currentValue) ? currentValue : null,
+      min: tunable.min,
+      max: tunable.max,
+      step: tunable.step,
+      kind: tunable.kind,
+      activeInSearch: activePaths.has(tunable.path),
+      ...classifyTunable(tunable.path, tunable.kind),
+    };
+  });
 }
 
 function changedTunablePaths(
@@ -1336,6 +1718,122 @@ function changedTunablePaths(
   return spec.tunables
     .map((tunable) => tunable.path)
     .filter((pathName) => getConfigValue(baseConfig, pathName) !== getConfigValue(candidateConfig, pathName));
+}
+
+function createRepCountStabilityTracker(): RepCountStabilityTracker {
+  return {
+    warningCount: 0,
+    warnings: [],
+    rejectCount: 0,
+    rejectedExamples: [],
+    rejectedForTrainRepCountChange: 0,
+    rejectedForValidationRepCountChange: 0,
+    mixedUnsafeTunablePaths: new Set<string>(),
+  };
+}
+
+function repCountCaseChanges(
+  baseline: RepCountStabilitySplitSnapshot | undefined,
+  candidate: RepCountStabilitySplitSnapshot | undefined,
+): RepCountCaseChange[] {
+  if (!baseline || !candidate) return [];
+  const baselineByVideo = new Map(
+    baseline.perCasePredictedReps.map((entry) => [entry.sourceVideo, entry]),
+  );
+  const changes: RepCountCaseChange[] = [];
+  for (const candidateCase of candidate.perCasePredictedReps) {
+    const baselineCase = baselineByVideo.get(candidateCase.sourceVideo);
+    if (!baselineCase) continue;
+    if (
+      baselineCase.predictedReps === candidateCase.predictedReps &&
+      baselineCase.repCountCorrect === candidateCase.repCountCorrect
+    ) {
+      continue;
+    }
+    changes.push({
+      sourceVideo: candidateCase.sourceVideo,
+      baselinePredictedReps: baselineCase.predictedReps,
+      candidatePredictedReps: candidateCase.predictedReps,
+      baselineRepCountCorrect: baselineCase.repCountCorrect,
+      candidateRepCountCorrect: candidateCase.repCountCorrect,
+    });
+  }
+  return changes;
+}
+
+function buildRepCountStabilityEvent(args: {
+  runtime: OptimizerRuntimeContext;
+  definition: ExerciseDefinition;
+  spec: TunableSpec;
+  candidate: InstrumentedCandidateConfig;
+  evaluation: EvaluationSummary;
+}): RepCountStabilityWarning | null {
+  if (args.runtime.tunableGroup !== 'issue-feedback') return null;
+  const baseline = args.runtime.repCountBaseline;
+  if (!baseline || !args.definition.heuristicConfig) return null;
+
+  const predictedChanged = args.evaluation.totals.predictedReps !== baseline.totals.predictedReps;
+  const accuracyChanged = args.evaluation.metrics.repCountAccuracy !== baseline.metrics.repCountAccuracy;
+  const changedCases = repCountCaseChanges(baseline.repCountSnapshot, args.evaluation.repCountSnapshot);
+  const perCaseChanged = changedCases.length > 0;
+  if (!predictedChanged && !accuracyChanged && !perCaseChanged) return null;
+
+  const changedPaths = args.candidate.changedPaths?.length
+    ? args.candidate.changedPaths
+    : changedTunablePaths(args.definition.heuristicConfig, args.candidate.config, args.spec);
+  const split = args.runtime.repCountBaselineSplit ?? 'train';
+  const reasons: string[] = [];
+  if (predictedChanged) {
+    reasons.push(`predicted reps ${baseline.totals.predictedReps} -> ${args.evaluation.totals.predictedReps}`);
+  }
+  if (accuracyChanged) {
+    reasons.push(
+      `rep-count accuracy ${baseline.metrics.repCountAccuracy.toFixed(4)} -> ${args.evaluation.metrics.repCountAccuracy.toFixed(4)}`,
+    );
+  }
+  if (perCaseChanged) {
+    reasons.push(`${changedCases.length} per-recording rep-count change(s)`);
+  }
+  return {
+    candidateId: args.candidate.id,
+    source: args.candidate.source,
+    split,
+    changedPaths,
+    reason: `Issue-feedback rep-count instability on ${split}: ${reasons.join('; ')}.`,
+    changedTotalPredictedReps: predictedChanged,
+    changedRepCountAccuracy: accuracyChanged,
+    changedPerCasePredictedReps: perCaseChanged,
+    baselinePredictedReps: baseline.totals.predictedReps,
+    candidatePredictedReps: args.evaluation.totals.predictedReps,
+    baselineRepCountAccuracy: baseline.metrics.repCountAccuracy,
+    candidateRepCountAccuracy: args.evaluation.metrics.repCountAccuracy,
+    changedCasePredictedReps: changedCases.slice(0, 10),
+  };
+}
+
+function recordRepCountStabilityRejection(
+  tracker: RepCountStabilityTracker,
+  event: RepCountStabilityWarning,
+): void {
+  event.changedPaths.forEach((pathName) => tracker.mixedUnsafeTunablePaths.add(pathName));
+  tracker.rejectCount += 1;
+  if (event.split === 'train') tracker.rejectedForTrainRepCountChange += 1;
+  if (event.split === 'validation') tracker.rejectedForValidationRepCountChange += 1;
+  if (tracker.rejectedExamples.length >= MAX_REP_COUNT_STABILITY_REJECTION_EXAMPLES) return;
+  tracker.rejectedExamples.push(event);
+}
+
+function repCountStabilityCheckpointSummary(
+  tracker: RepCountStabilityTracker | undefined,
+): RepCountStabilityCheckpointSummary | undefined {
+  if (!tracker) return undefined;
+  return {
+    rejectCount: tracker.rejectCount,
+    warningCount: tracker.warningCount,
+    rejectedForTrainRepCountChange: tracker.rejectedForTrainRepCountChange,
+    rejectedForValidationRepCountChange: tracker.rejectedForValidationRepCountChange,
+    mixedUnsafeTunables: Array.from(tracker.mixedUnsafeTunablePaths).sort(),
+  };
 }
 
 function diagnosticSupportGate(args: {
@@ -1698,6 +2196,14 @@ function combineSummaries(summaries: Array<EvaluationSummary | null>): Evaluatio
     ? {
         totals,
         metrics: metricsFromTotals(totals),
+        repCountSnapshot: {
+          expectedReps: totals.expectedReps,
+          predictedReps: totals.predictedReps,
+          repCountAccuracy: metricsFromTotals(totals).repCountAccuracy,
+          perCasePredictedReps: summaries
+            .flatMap((summary) => summary?.repCountSnapshot?.perCasePredictedReps ?? [])
+            .sort((a, b) => a.sourceVideo.localeCompare(b.sourceVideo)),
+        },
         qualityCoverage: combineQualityCoverageSummaries(summaries),
         diagnosticSummary: combineDiagnosticSummaries(summaries),
         cleanSafety: combineCleanSafetySummaries(summaries),
@@ -1754,6 +2260,18 @@ function parseSelectionMode(argv: string[]): OptimizerSelectionMode {
   return value;
 }
 
+function parseTunableGroup(argv: string[]): OptimizerTunableGroup | undefined {
+  if (hasFlag(argv, '--optimize-issues-only') || hasFlag(argv, '--freeze-count-tunables')) {
+    return 'issue-feedback';
+  }
+  const value = flagValue(argv, '--tunable-group');
+  if (value === null) return undefined;
+  if (value !== 'all' && value !== 'issue-feedback') {
+    throw new Error('--tunable-group must be "all" or "issue-feedback".');
+  }
+  return value;
+}
+
 export function parseOptimizerCommandOptions(argv: string[]): OptimizerCommandOptions {
   const apply = hasFlag(argv, '--apply') && !hasFlag(argv, '--dry-run');
   return {
@@ -1772,6 +2290,7 @@ export function parseOptimizerCommandOptions(argv: string[]): OptimizerCommandOp
     resumeCheckpoint: hasFlag(argv, '--resume') || hasFlag(argv, '--resume-checkpoint'),
     checkpointEvery: parsePositiveIntegerFlag(argv, '--checkpoint-every'),
     enforceCleanFpGates: hasFlag(argv, '--enforce-clean-fp-gates'),
+    tunableGroup: parseTunableGroup(argv),
     search: {
       randomCandidates: parseNonNegativeIntegerFlag(argv, '--random-candidates'),
       survivorCount:
@@ -1812,6 +2331,7 @@ export function evaluateCasesCompact(
   return {
     totals: detailed.totals,
     metrics: detailed.metrics,
+    repCountSnapshot: repCountSnapshotFromCaseEvaluations(caseEvaluations),
     qualityCoverage: detailed.qualityCoverage,
     diagnosticSummary: detailed.diagnosticSummary,
     cleanSafety: buildCleanSafetySummary(caseEvaluations, cases),
@@ -1852,6 +2372,7 @@ function compactSummary(
   return {
     totals: evaluation.totals,
     metrics: evaluation.metrics,
+    repCountSnapshot: repCountSnapshotFromCaseEvaluations(evaluation.cases),
     qualityCoverage: evaluation.qualityCoverage,
     diagnosticSummary: evaluation.diagnosticSummary,
     cleanSafety: datasetCases
@@ -2039,8 +2560,9 @@ function generateDiagnosticCandidates(
   definition: ExerciseDefinition,
   cases: DatasetCase[],
   runtime: EvaluationRuntimeOptions = {},
+  searchSpec?: TunableSpec,
 ): { candidates: InstrumentedCandidateConfig[]; fallbackReasons: string[] } {
-  const spec = definition.tunableSpec;
+  const spec = searchSpec ?? definition.tunableSpec;
   if (!definition.heuristicConfig || !spec?.diagnosticTuning || spec.diagnosticTuning.length === 0) {
     return { candidates: [], fallbackReasons: ['Exercise has no diagnosticTuning metadata.'] };
   }
@@ -2163,7 +2685,7 @@ function evaluateCandidatesCompact(
     rejectedCandidateExamples: string[];
   },
 ): CandidateEvaluationBatch {
-  const spec = definition.tunableSpec;
+  const spec = runtime.tunableSpec ?? definition.tunableSpec;
   if (!spec) return { evaluated: [], rejectedCount: candidates.length, rejectedExamples: [] };
 
   const evaluated: EvaluatedCandidateSummary[] = [];
@@ -2184,6 +2706,21 @@ function evaluateCandidatesCompact(
 
     const cachedEvaluation = runtime.checkpoint?.getEvaluated(candidate);
     if (cachedEvaluation) {
+      const rejection = buildRepCountStabilityEvent({
+        runtime,
+        definition,
+        spec,
+        candidate,
+        evaluation: cachedEvaluation.evaluation,
+      });
+      if (rejection) {
+        rejectedCount += 1;
+        if (runtime.repCountStability) {
+          recordRepCountStabilityRejection(runtime.repCountStability, rejection);
+        }
+        if (rejectedExamples.length < 5) rejectedExamples.push(`${candidate.id}: ${rejection.reason}`);
+        continue;
+      }
       evaluated.push(cachedEvaluation);
       continue;
     }
@@ -2196,6 +2733,21 @@ function evaluateCandidatesCompact(
         : 'candidateTrainEvaluation',
     });
     if (evaluation) {
+      const rejection = buildRepCountStabilityEvent({
+        runtime,
+        definition,
+        spec,
+        candidate,
+        evaluation,
+      });
+      if (rejection) {
+        rejectedCount += 1;
+        if (runtime.repCountStability) {
+          recordRepCountStabilityRejection(runtime.repCountStability, rejection);
+        }
+        if (rejectedExamples.length < 5) rejectedExamples.push(`${candidate.id}: ${rejection.reason}`);
+        continue;
+      }
       const summary = {
         id: candidate.id,
         source: candidate.source,
@@ -2218,6 +2770,7 @@ function evaluateCandidatesCompact(
             ...checkpointArgs.rejectedCandidateExamples,
             ...rejectedExamples,
           ].slice(0, 5),
+          repCountStability: repCountStabilityCheckpointSummary(runtime.repCountStability),
         });
       }
     }
@@ -2255,19 +2808,20 @@ export function searchExercise(
   const checkpointPath = runtime.checkpointPath
     ? path.resolve(process.cwd(), runtime.checkpointPath)
     : null;
+  const tunableGroup = runtime.tunableGroup ?? 'all';
   const checkpoint = runtime.checkpoint ?? (
     checkpointPath
       ? new OptimizerCheckpointManager(
           checkpointPath,
           definition.name,
           selectionMode,
+          tunableGroup,
           fallbackOptions,
           runtime.checkpointEvery ?? DEFAULT_CHECKPOINT_EVERY,
           runtime.resumeCheckpoint ?? false,
         )
       : undefined
   );
-  const searchRuntime = { ...runtime, checkpoint };
   const emptyResult = {
     candidates: [],
     specIssues: [],
@@ -2281,13 +2835,26 @@ export function searchExercise(
     return emptyResult;
   }
 
-  const spec = hasScoreRangeLabels(searchCases)
-    ? definition.tunableSpec
-    : issueOptimizerSearchSpec(definition.tunableSpec);
+  const spec = optimizerSearchSpecForCases(definition.tunableSpec, searchCases, tunableGroup);
   const specIssues = validateTunableSpec(definition.heuristicConfig, spec);
   if (specIssues.length > 0) {
     return { ...emptyResult, specIssues };
   }
+  const searchRepCountBaseline =
+    tunableGroup === 'issue-feedback'
+      ? runtime.repCountBaseline ?? evaluateCasesCompact(definition, searchCases, undefined, {
+          replayCache: runtime.replayCache,
+          profiler: runtime.profiler,
+          profileSection: 'baselineTrainEvaluation',
+        })
+      : runtime.repCountBaseline;
+  const searchRuntime = {
+    ...runtime,
+    checkpoint,
+    tunableSpec: spec,
+    repCountBaseline: searchRepCountBaseline,
+    repCountBaselineSplit: runtime.repCountBaselineSplit ?? 'train',
+  };
 
   let rejectedCandidates = 0;
   const rejectedCandidateExamples: string[] = [];
@@ -2307,7 +2874,7 @@ export function searchExercise(
   const diagnostic = generateDiagnosticCandidates(definition, searchCases, {
     replayCache: searchRuntime.replayCache,
     profiler: searchRuntime.profiler,
-  });
+  }, spec);
   checkpoint?.setGeneratedCandidates([...randomCandidates, ...diagnostic.candidates]);
   const randomBatch = evaluateCandidatesCompact(
     definition,
@@ -2383,8 +2950,8 @@ export function searchExercise(
     ).map((candidate) => ({
       ...candidate,
       source: 'refined',
-      changedPaths: candidate.id.includes('.')
-        ? [candidate.id.split('-r')[1]?.split('-').slice(1, -1).join('-')].filter(Boolean)
+      changedPaths: definition.heuristicConfig
+        ? changedTunablePaths(definition.heuristicConfig, candidate.config, spec)
         : undefined,
     }));
     checkpoint?.setGeneratedCandidates([...randomCandidates, ...diagnostic.candidates, ...diagnosticCombos, ...refined]);
@@ -2414,6 +2981,7 @@ export function searchExercise(
     evaluated,
     rejectedCandidates,
     rejectedCandidateExamples,
+    repCountStability: repCountStabilityCheckpointSummary(searchRuntime.repCountStability),
   });
   return {
     candidates: topCandidates,
@@ -2496,6 +3064,7 @@ export function optimizeExercise(
   const definition = ExerciseRegistry.get(exerciseName);
   if (!definition) throw new Error(`No registered exercise definition for "${exerciseName}"`);
   const selectionMode = options.selectionMode ?? 'diagnostic';
+  const tunableGroup = effectiveTunableGroup(options);
   const shouldApply = options.apply ?? false;
 
   const trainCases = exerciseCases.filter((datasetCase) => datasetCase.label.split === 'train');
@@ -2504,6 +3073,11 @@ export function optimizeExercise(
   const splitCounts = splitCountsFor(exerciseCases);
   const splitGate = minimumSplitGate(splitCounts, options.minCases);
   const selection = selectionCasesFor(trainCases, validationCases, exerciseCases);
+  const searchSpec = definition.tunableSpec
+    ? optimizerSearchSpecForCases(definition.tunableSpec, trainCases, tunableGroup)
+    : null;
+  const tunableEntries = tunableReportEntries(definition, searchSpec);
+  const repCountStability = createRepCountStabilityTracker();
 
   const baseline = evaluateSplitCompact(definition, exerciseCases, undefined, {
     replayCache: runtime.replayCache,
@@ -2536,9 +3110,12 @@ export function optimizeExercise(
     applied: false,
     dryRun: options.dryRun,
     selectionMode,
+    tunableGroup,
     reason: '',
     tunedConfigPath: definition.tunedConfigPath ?? null,
     selectionSplit: selection.split,
+    activeTunables: tunableEntries.filter((tunable) => tunable.activeInSearch),
+    frozenTunables: tunableEntries.filter((tunable) => !tunable.activeInSearch),
     search: emptySearchResult(options.search),
     baseline,
     baselineCaseDetails: options.includeCaseDetails
@@ -2573,7 +3150,13 @@ export function optimizeExercise(
     };
   }
 
-  const search = searchExercise(definition, trainCases, options.search, selectionMode, runtime);
+  const search = searchExercise(definition, trainCases, options.search, selectionMode, {
+    ...runtime,
+    tunableGroup,
+    repCountBaseline: baseline.train,
+    repCountBaselineSplit: 'train',
+    repCountStability,
+  });
   if (search.specIssues.length > 0) {
     return {
       ...baseReport,
@@ -2603,7 +3186,15 @@ export function optimizeExercise(
       config: candidate.config,
     })),
     selectionMode,
-    { replayCache: runtime.replayCache, profiler: runtime.profiler },
+    {
+      replayCache: runtime.replayCache,
+      profiler: runtime.profiler,
+      tunableGroup,
+      tunableSpec: searchSpec ?? undefined,
+      repCountBaseline: baselineSelection,
+      repCountBaselineSplit: selection.split,
+      repCountStability,
+    },
     {
       phase: 'selection',
       refinementRound: options.search.refinementRounds ?? definition.tunableSpec?.search?.refinementRounds ?? 0,
@@ -2751,6 +3342,12 @@ export function optimizeExercise(
         })
       : undefined,
     rankedSelection: rankedSelectionWithDiagnostics.slice(0, 10),
+    issueOnlySummary: buildIssueOnlyReportSummary({
+      enabled: tunableGroup === 'issue-feedback',
+      tracker: repCountStability,
+      baseline,
+      winner: winnerEvaluations,
+    }),
   };
 }
 
@@ -2984,6 +3581,11 @@ export function formatOptimizerConsoleSummary(args: {
   for (const exercise of args.report.exercises) {
     lines.push('');
     lines.push(`${exercise.exerciseName}: ${exercise.reason}`);
+    if (exercise.tunableGroup !== 'all') {
+      lines.push(
+        `Tunable group: ${exercise.tunableGroup} (${exercise.activeTunables.length} active, ${exercise.frozenTunables.length} frozen, ${exercise.issueOnlySummary?.repCountStabilityRejectCount ?? 0} rep-count stability reject(s), ${exercise.issueOnlySummary?.repCountStabilityWarningCount ?? 0} warning(s))`,
+      );
+    }
     lines.push(formatLoadSummary(exercise.loadSummary));
   }
 
