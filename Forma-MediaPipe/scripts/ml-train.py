@@ -15,7 +15,8 @@ from typing import Any
 try:
     import joblib
     import pandas as pd
-    from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+    from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
     from sklearn.impute import SimpleImputer
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
@@ -43,7 +44,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model-kinds",
         default="logistic,hist_gradient",
-        help="Comma-separated model kinds: logistic,random_forest,hist_gradient,xgboost,lightgbm.",
+        help=(
+            "Comma-separated model kinds: logistic,logistic_calibrated_sigmoid,"
+            "logistic_calibrated_isotonic,random_forest,extra_trees,hist_gradient,"
+            "xgboost,lightgbm,catboost. Calibration suffixes _calibrated_sigmoid "
+            "and _calibrated_isotonic are supported for sklearn-backed models."
+        ),
     )
     return parser.parse_args()
 
@@ -102,7 +108,7 @@ def calibration_buckets(y_true: list[int], probabilities: list[float], bucket_co
     return buckets
 
 
-def make_model(kind: str) -> Pipeline:
+def make_uncalibrated_model(kind: str) -> Any:
     if kind == "logistic":
         return Pipeline(
             steps=[
@@ -116,6 +122,22 @@ def make_model(kind: str) -> Pipeline:
             steps=[
                 ("imputer", SimpleImputer(strategy="median")),
                 ("classifier", RandomForestClassifier(n_estimators=250, min_samples_leaf=2, class_weight="balanced", random_state=42)),
+            ],
+        )
+    if kind == "extra_trees":
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                (
+                    "classifier",
+                    ExtraTreesClassifier(
+                        n_estimators=300,
+                        min_samples_leaf=2,
+                        class_weight="balanced",
+                        random_state=42,
+                        n_jobs=-1,
+                    ),
+                ),
             ],
         )
     if kind == "hist_gradient":
@@ -147,18 +169,53 @@ def make_model(kind: str) -> Pipeline:
                 ("classifier", LGBMClassifier(n_estimators=250, learning_rate=0.05, class_weight="balanced", random_state=42)),
             ],
         )
+    if kind == "catboost":
+        try:
+            from catboost import CatBoostClassifier  # type: ignore
+        except ModuleNotFoundError as exc:
+            raise ValueError("catboost model requested but catboost is not installed.") from exc
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                (
+                    "classifier",
+                    CatBoostClassifier(
+                        iterations=250,
+                        learning_rate=0.05,
+                        depth=4,
+                        auto_class_weights="Balanced",
+                        random_seed=42,
+                        verbose=False,
+                    ),
+                ),
+            ],
+        )
     raise ValueError(f"Unknown model kind: {kind}")
 
 
-def predict_probability(model: Pipeline, x_frame: pd.DataFrame) -> list[float]:
-    classifier = model[-1]
-    if hasattr(classifier, "predict_proba"):
+def make_model(kind: str) -> Any:
+    calibration_suffixes = {
+        "_calibrated_sigmoid": "sigmoid",
+        "_calibrated_isotonic": "isotonic",
+    }
+    if kind == "logistic_calibrated":
+        kind = "logistic_calibrated_sigmoid"
+    for suffix, method in calibration_suffixes.items():
+        if kind.endswith(suffix):
+            base_kind = kind.removesuffix(suffix)
+            base_model = make_uncalibrated_model(base_kind)
+            return CalibratedClassifierCV(estimator=base_model, method=method, cv=3)
+    return make_uncalibrated_model(kind)
+
+
+def predict_probability(model: Any, x_frame: pd.DataFrame) -> list[float]:
+    if hasattr(model, "predict_proba"):
         return [float(value) for value in model.predict_proba(x_frame)[:, 1]]
     return [float(value) for value in model.predict(x_frame)]
 
 
-def feature_importance(model: Pipeline, feature_columns: list[str]) -> list[dict[str, Any]]:
-    classifier = model[-1]
+def feature_importance(model: Any, feature_columns: list[str]) -> list[dict[str, Any]]:
+    classifier = model[-1] if isinstance(model, Pipeline) else model
     values = getattr(classifier, "feature_importances_", None)
     if values is None:
         values = getattr(classifier, "coef_", None)
@@ -352,6 +409,7 @@ def main() -> int:
                 model_path,
             )
             target_report["modelPath"] = str(model_path)
+            target_report["modelSizeBytes"] = model_path.stat().st_size
             report["models"][kind][target] = target_report
 
     predictions_path = model_dir / "predictions.csv"

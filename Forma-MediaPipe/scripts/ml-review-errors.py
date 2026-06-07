@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -84,6 +85,10 @@ def key_feature_values(row: pd.Series) -> dict[str, Any]:
     return result
 
 
+def safe_path_part(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9]+", "_", value).strip("_") or "model"
+
+
 def category_for(truth: int, heuristic: int, ml: int, probability: float, pose_confidence: float, view: str, args: argparse.Namespace) -> str:
     if heuristic == 1 and truth == 0 and probability <= args.suppress_threshold:
         return "heuristic_false_positive_suppressed_by_ml"
@@ -160,7 +165,7 @@ def main() -> int:
     output_dir = Path(args.ml_dir) / args.exercise / "models"
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
-    base = output_dir / f"error_review_{args.run}_{timestamp}"
+    base = output_dir / f"error_review_{args.run}_{safe_path_part(args.model)}_{timestamp}"
     json_path = base.with_suffix(".json")
     csv_path = base.with_suffix(".csv")
     json_path.write_text(json.dumps({"generatedAt": datetime.now(timezone.utc).isoformat(), "predictionsCsv": str(path), "rows": rows}, indent=2) + "\n")

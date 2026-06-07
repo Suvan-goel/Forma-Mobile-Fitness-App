@@ -8,12 +8,14 @@ import json
 import random
 import re
 import sys
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 try:
     import pandas as pd
+    from pandas.errors import PerformanceWarning
 except ModuleNotFoundError as exc:
     print(
         "Missing ML Python dependencies. Install them with:\n"
@@ -21,6 +23,8 @@ except ModuleNotFoundError as exc:
         file=sys.stderr,
     )
     raise SystemExit(2) from exc
+
+warnings.simplefilter("ignore", PerformanceWarning)
 
 
 def parse_args() -> argparse.Namespace:
@@ -299,6 +303,43 @@ def transition_metrics_for_issue(y_true: pd.Series, heuristic: pd.Series, ml: pd
     }
 
 
+def issue_name(label_column: str) -> str:
+    return label_column.removeprefix("label_issue__").replace("_", ".")
+
+
+def issue_clean_fp_count(df: pd.DataFrame, prediction_column: str, mask: pd.Series | None = None) -> int:
+    clean_rows = clean_rows_for(df, mask)
+    if len(clean_rows) == 0:
+        return 0
+    predictions = pd.to_numeric(clean_rows[prediction_column], errors="coerce").fillna(0).astype(int)
+    return int(predictions.sum())
+
+
+def issue_candidate_summary(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    candidate_column: str,
+) -> dict[str, Any]:
+    metrics = binary_metrics(
+        pd.to_numeric(validation[label_column], errors="coerce").fillna(0).astype(int).tolist(),
+        pd.to_numeric(validation[candidate_column], errors="coerce").fillna(0).astype(int).tolist(),
+    )
+    transitions = transition_metrics_for_issue(
+        validation[label_column],
+        validation[heuristic_column],
+        validation[ml_column],
+        validation[candidate_column],
+    )
+    return {
+        **metrics,
+        **transitions,
+        "cleanFalsePositiveRows": issue_clean_fp_count(validation, candidate_column),
+        "hardNegativeFalsePositiveRows": issue_clean_fp_count(validation, candidate_column, hard_negative_mask(validation)),
+    }
+
+
 def hybrid_transition_metrics(
     df: pd.DataFrame,
     label_columns: list[str],
@@ -463,12 +504,13 @@ def prepare_model_predictions(
     label_columns: list[str],
     model: str,
     args: argparse.Namespace,
-) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, int]]:
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, int]]:
     heuristic_prediction_columns: dict[str, str] = {}
     ml_prediction_columns: dict[str, str] = {}
     hybrid_prediction_columns: dict[str, str] = {}
     suppression_prediction_columns: dict[str, str] = {}
     additive_prediction_columns: dict[str, str] = {}
+    suppress_and_add_prediction_columns: dict[str, str] = {}
     ml_probability_columns: dict[str, str] = {}
     candidate_counts = {"suppressedHeuristicIssues": 0, "mlOnlyIssues": 0}
     heuristic_scorable = pd.to_numeric(df.get("heuristic_scorable", 1), errors="coerce").fillna(1).astype(int)
@@ -488,6 +530,7 @@ def prepare_model_predictions(
         hybrid_column = f"eval_{column_prefix}__hybrid__{suffix}"
         suppression_column = f"eval_{column_prefix}__ml_suppression__{suffix}"
         additive_column = f"eval_{column_prefix}__ml_additive__{suffix}"
+        suppress_and_add_column = f"eval_{column_prefix}__ml_suppress_and_add__{suffix}"
         heuristic_eval_column = f"eval_{column_prefix}__heuristic__{suffix}"
 
         df[heuristic_eval_column] = pd.to_numeric(df[heuristic_column], errors="coerce").fillna(0).astype(int)
@@ -500,6 +543,7 @@ def prepare_model_predictions(
         hybrid_values: list[int] = []
         suppression_values: list[int] = []
         additive_values: list[int] = []
+        suppress_and_add_values: list[int] = []
         for index, probability in enumerate(probabilities.tolist()):
             heuristic_value = int(df.iloc[index][heuristic_eval_column])
             ml_value = int(df.iloc[index][ml_pred_column])
@@ -508,6 +552,7 @@ def prepare_model_predictions(
                 hybrid_values.append(0)
                 suppression_values.append(0)
                 additive_values.append(0)
+                suppress_and_add_values.append(0)
                 continue
             if heuristic_value == 1 and probability <= args.suppress_threshold:
                 candidate_counts["suppressedHeuristicIssues"] += 1
@@ -517,6 +562,12 @@ def prepare_model_predictions(
             if heuristic_value == 0 and probability >= args.add_threshold:
                 candidate_counts["mlOnlyIssues"] += 1
             additive_values.append(1 if heuristic_value == 1 or probability >= args.add_threshold else 0)
+            if heuristic_value == 1 and probability <= args.suppress_threshold:
+                suppress_and_add_values.append(0)
+            elif heuristic_value == 0 and probability >= args.add_threshold:
+                suppress_and_add_values.append(1)
+            else:
+                suppress_and_add_values.append(heuristic_value)
 
             if confidence < args.min_confidence:
                 hybrid_values.append(heuristic_value)
@@ -532,12 +583,14 @@ def prepare_model_predictions(
         df[hybrid_column] = hybrid_values
         df[suppression_column] = suppression_values
         df[additive_column] = additive_values
+        df[suppress_and_add_column] = suppress_and_add_values
 
         heuristic_prediction_columns[label_column] = heuristic_eval_column
         ml_prediction_columns[label_column] = ml_pred_column
         hybrid_prediction_columns[label_column] = hybrid_column
         suppression_prediction_columns[label_column] = suppression_column
         additive_prediction_columns[label_column] = additive_column
+        suppress_and_add_prediction_columns[label_column] = suppress_and_add_column
         ml_probability_columns[label_column] = ml_prob_column
 
     return (
@@ -546,6 +599,7 @@ def prepare_model_predictions(
         hybrid_prediction_columns,
         suppression_prediction_columns,
         additive_prediction_columns,
+        suppress_and_add_prediction_columns,
         ml_probability_columns,
         candidate_counts,
     )
@@ -555,11 +609,175 @@ def safe_model_column_part(model: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "_", model).strip("_")
 
 
+def materialize_issue_policy(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    model: str,
+    policy_name: str,
+    source_columns: dict[str, str],
+) -> dict[str, str]:
+    policy_columns: dict[str, str] = {}
+    column_prefix = safe_model_column_part(model)
+    policy_part = safe_model_column_part(policy_name)
+    for label_column in label_columns:
+        suffix = label_column.removeprefix("label_issue__")
+        policy_column = f"eval_{column_prefix}__policy_{policy_part}__{suffix}"
+        df[policy_column] = pd.to_numeric(df[source_columns[label_column]], errors="coerce").fillna(0).astype(int)
+        policy_columns[label_column] = policy_column
+    return policy_columns
+
+
+def select_issue_specific_policy_sources(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    candidate_sets: dict[str, dict[str, str]],
+    heuristic_columns: dict[str, str],
+    ml_columns: dict[str, str],
+    mode: str,
+    args: argparse.Namespace,
+) -> tuple[dict[str, str], dict[str, Any]]:
+    validation = df[df["split"] == "validation"].copy()
+    choices: dict[str, Any] = {}
+    selected: dict[str, str] = {}
+    for label_column in label_columns:
+        heuristic_column = heuristic_columns[label_column]
+        heuristic_summary = issue_candidate_summary(
+            validation,
+            label_column,
+            heuristic_column,
+            ml_columns[label_column],
+            heuristic_column,
+        )
+        candidate_summaries = {
+            name: issue_candidate_summary(
+                validation,
+                label_column,
+                heuristic_column,
+                ml_columns[label_column],
+                columns[label_column],
+            )
+            for name, columns in candidate_sets.items()
+        }
+
+        chosen_name = "heuristicOnly"
+        if mode == "issueSpecificSuppressOnly":
+            suppress = candidate_summaries["suppressOnly"]
+            if (
+                suppress["heuristicFalsePositivesSuppressedByMl"] > 0
+                and suppress["heuristicTruePositivesSuppressedByMl"] == 0
+                and float(suppress["f1"]) >= float(heuristic_summary["f1"])
+            ):
+                chosen_name = "suppressOnly"
+        elif mode == "highPrecisionHybrid":
+            valid = [
+                (name, summary)
+                for name, summary in candidate_summaries.items()
+                if name != "mlOnly"
+                and float(summary["precision"]) >= max(0.8, float(heuristic_summary["precision"]))
+                and int(summary["cleanFalsePositiveRows"]) <= int(heuristic_summary["cleanFalsePositiveRows"])
+                and int(summary["hardNegativeFalsePositiveRows"]) <= int(heuristic_summary["hardNegativeFalsePositiveRows"])
+                and float(summary["f1"]) >= float(heuristic_summary["f1"])
+            ]
+            if valid:
+                chosen_name = max(
+                    valid,
+                    key=lambda item: (
+                        float(item[1]["precision"]),
+                        float(item[1]["f1"]),
+                        -int(item[1]["cleanFalsePositiveRows"]),
+                        int(item[1]["mlOnlyTruePositivesAdded"]),
+                    ),
+                )[0]
+        elif mode == "hardNegativeSafeHybrid":
+            valid = [
+                (name, summary)
+                for name, summary in candidate_summaries.items()
+                if name != "mlOnly"
+                and int(summary["hardNegativeFalsePositiveRows"]) <= int(heuristic_summary["hardNegativeFalsePositiveRows"])
+                and float(summary["hardNegativeFalsePositiveRows"]) <= args.gate_validation_hard_negative_fp_cap * max(1, int(false_positive_slice(validation, [heuristic_column], hard_negative_mask(validation))["cleanRows"]))
+                and int(summary["cleanFalsePositiveRows"]) <= int(heuristic_summary["cleanFalsePositiveRows"])
+                and float(summary["f1"]) >= float(heuristic_summary["f1"])
+            ]
+            if valid:
+                chosen_name = max(
+                    valid,
+                    key=lambda item: (
+                        float(item[1]["f1"]),
+                        float(item[1]["precision"]),
+                        -int(item[1]["hardNegativeFalsePositiveRows"]),
+                        -int(item[1]["cleanFalsePositiveRows"]),
+                        int(item[1]["mlOnlyTruePositivesAdded"]),
+                    ),
+                )[0]
+        else:
+            raise ValueError(f"Unknown issue-specific policy mode: {mode}")
+
+        selected[label_column] = candidate_sets[chosen_name][label_column]
+        choices[label_column] = {
+            "issueId": issue_name(label_column),
+            "selected": chosen_name,
+            "heuristic": heuristic_summary,
+            "candidates": candidate_summaries,
+        }
+    return selected, choices
+
+
+def build_policy_prediction_sets(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    model: str,
+    heuristic_columns: dict[str, str],
+    ml_columns: dict[str, str],
+    hybrid_columns: dict[str, str],
+    suppression_columns: dict[str, str],
+    additive_columns: dict[str, str],
+    suppress_and_add_columns: dict[str, str],
+    args: argparse.Namespace,
+) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:
+    base_sets = {
+        "heuristicOnly": heuristic_columns,
+        "mlOnly": ml_columns,
+        "logisticStyleCurrentHybridBaseline": hybrid_columns,
+        "suppressOnly": suppression_columns,
+        "addOnly": additive_columns,
+        "suppressAndAdd": suppress_and_add_columns,
+    }
+    policies: dict[str, dict[str, str]] = {
+        **base_sets,
+    }
+    selection: dict[str, Any] = {
+        "selectionSplit": "validation",
+        "issueSpecificChoices": {},
+    }
+    issue_candidate_sets = {
+        "heuristicOnly": heuristic_columns,
+        "mlOnly": ml_columns,
+        "suppressOnly": suppression_columns,
+        "addOnly": additive_columns,
+        "suppressAndAdd": suppress_and_add_columns,
+    }
+    for policy_name in ["issueSpecificSuppressOnly", "highPrecisionHybrid", "hardNegativeSafeHybrid"]:
+        selected_sources, choices = select_issue_specific_policy_sources(
+            df,
+            label_columns,
+            issue_candidate_sets,
+            heuristic_columns,
+            ml_columns,
+            policy_name,
+            args,
+        )
+        policies[policy_name] = materialize_issue_policy(df, label_columns, model, policy_name, selected_sources)
+        selection["issueSpecificChoices"][policy_name] = choices
+    return policies, selection
+
+
 def split_reports_for_model(
     df: pd.DataFrame,
     label_columns: list[str],
-    columns: tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, int]],
+    columns: tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, int]],
     args: argparse.Namespace,
+    model: str,
+    include_bootstrap: bool = True,
 ) -> dict[str, Any]:
     (
         heuristic_prediction_columns,
@@ -567,13 +785,41 @@ def split_reports_for_model(
         hybrid_prediction_columns,
         suppression_prediction_columns,
         additive_prediction_columns,
+        suppress_and_add_prediction_columns,
         ml_probability_columns,
         _candidate_counts,
     ) = columns
+    policy_prediction_sets, policy_selection = build_policy_prediction_sets(
+        df,
+        label_columns,
+        model,
+        heuristic_prediction_columns,
+        ml_prediction_columns,
+        hybrid_prediction_columns,
+        suppression_prediction_columns,
+        additive_prediction_columns,
+        suppress_and_add_prediction_columns,
+        args,
+    )
     split_reports: dict[str, Any] = {}
     present_splits = [split for split in ["train", "validation", "test"] if int((df["split"] == split).sum()) > 0]
     for split in present_splits:
         subset = df[df["split"] == split].copy()
+        policy_reports = {
+            policy_name: evaluate_prediction_set(subset, label_columns, prediction_columns)
+            for policy_name, prediction_columns in policy_prediction_sets.items()
+        }
+        policy_deltas = {
+            policy_name: hybrid_transition_metrics(
+                subset,
+                label_columns,
+                heuristic_prediction_columns,
+                ml_prediction_columns,
+                prediction_columns,
+            )
+            for policy_name, prediction_columns in policy_prediction_sets.items()
+            if policy_name not in {"heuristicOnly", "mlOnly"}
+        }
         split_reports[split] = {
             "rowCount": len(subset),
             "heuristicOnly": evaluate_prediction_set(subset, label_columns, heuristic_prediction_columns),
@@ -582,6 +828,8 @@ def split_reports_for_model(
             "hybridConservative": evaluate_prediction_set(subset, label_columns, hybrid_prediction_columns),
             "heuristicWithMlSuppressions": evaluate_prediction_set(subset, label_columns, suppression_prediction_columns),
             "heuristicWithMlAdditionalFlags": evaluate_prediction_set(subset, label_columns, additive_prediction_columns),
+            "heuristicWithMlSuppressAndAdd": evaluate_prediction_set(subset, label_columns, suppress_and_add_prediction_columns),
+            "hybridPolicies": policy_reports,
             "hybridDeltas": hybrid_transition_metrics(
                 subset,
                 label_columns,
@@ -589,11 +837,13 @@ def split_reports_for_model(
                 ml_prediction_columns,
                 hybrid_prediction_columns,
             ),
+            "policyDeltas": policy_deltas,
+            "policySelection": policy_selection,
             "bootstrap": {
                 "heuristicOnly": bootstrap_f1(subset, label_columns, heuristic_prediction_columns),
                 "mlOnly": bootstrap_f1(subset, label_columns, ml_prediction_columns),
                 "hybridConservative": bootstrap_f1(subset, label_columns, hybrid_prediction_columns),
-            },
+            } if include_bootstrap else {"available": False, "reason": "disabled_for_nested_model_comparison"},
             "byView": group_breakdown(subset, "label_view", label_columns, hybrid_prediction_columns),
             "bySubject": group_breakdown(subset, "subject_id", label_columns, hybrid_prediction_columns),
             "bySession": group_breakdown(subset, "session_id", label_columns, hybrid_prediction_columns),
@@ -615,6 +865,16 @@ def split_reports_for_model(
                     args.gate_validation_hard_negative_fp_cap,
                     args.gate_min_validation_recall,
                 ),
+                **{
+                    f"policy.{policy_name}": gate_results(
+                        policy_report,
+                        args.gate_validation_clean_fp_cap,
+                        args.gate_validation_hard_negative_fp_cap,
+                        args.gate_min_validation_recall,
+                    )
+                    for policy_name, policy_report in policy_reports.items()
+                    if policy_name != "heuristicOnly"
+                },
             }
     return split_reports
 
@@ -646,13 +906,17 @@ def build_model_comparison(
     for model in models:
         working = df.copy()
         columns = prepare_model_predictions(working, label_columns, model, args)
-        split_reports = split_reports_for_model(working, label_columns, columns, args)
+        split_reports = split_reports_for_model(working, label_columns, columns, args, model, include_bootstrap=False)
         for split, split_report in split_reports.items():
             split_bucket = comparison["splits"].setdefault(split, {})
             if "heuristicOnly" not in split_bucket:
                 split_bucket["heuristicOnly"] = compact_prediction_summary(split_report["heuristicOnly"])
             split_bucket[f"{model}.mlOnly"] = compact_prediction_summary(split_report["mlOnly"])
             split_bucket[f"{model}.hybridConservative"] = compact_prediction_summary(split_report["hybridConservative"])
+            for policy_name, policy_report in split_report.get("hybridPolicies", {}).items():
+                if policy_name in {"heuristicOnly", "mlOnly"}:
+                    continue
+                split_bucket[f"{model}.policy.{policy_name}"] = compact_prediction_summary(policy_report)
             if split == "validation":
                 split_bucket[f"{model}.gates"] = split_report["gateResults"]
     return comparison
@@ -752,7 +1016,7 @@ def main() -> int:
 
     selected_columns = prepare_model_predictions(df, label_columns, args.model, args)
     candidate_counts = selected_columns[-1]
-    split_reports = split_reports_for_model(df, label_columns, selected_columns, args)
+    split_reports = split_reports_for_model(df, label_columns, selected_columns, args, args.model)
     present_splits = [split for split in ["train", "validation", "test"] if split in split_reports]
     models_available = detected_models(pd.read_csv(predictions_path))
 
@@ -776,6 +1040,11 @@ def main() -> int:
         "issueSupportCounts": {column: int(pd.to_numeric(df[column], errors="coerce").fillna(0).sum()) for column in label_columns},
         "thresholdPolicyReport": threshold_policy_report(pd.read_csv(predictions_path), label_columns, args.model, args),
         "modelComparison": build_model_comparison(pd.read_csv(predictions_path), label_columns, models_available, args),
+        "externalHoldoutWorkflow": {
+            "status": "documented_only",
+            "summary": "Export a separate reviewed holdout into a predictions CSV with the same feature/label columns, run trained models against it without fitting, then pass it with --predictions for evaluation. Do not copy holdout rows into train/validation/test used for threshold or policy selection.",
+            "currentCliSupport": "ml:evaluate can read an explicit --predictions CSV; scoring a fresh external holdout still needs an export/predict command that reuses trained artifacts without refitting.",
+        },
         "splits": split_reports,
     }
     report["integrationRecommendation"] = recommendation(report, label_columns, decision_split)
