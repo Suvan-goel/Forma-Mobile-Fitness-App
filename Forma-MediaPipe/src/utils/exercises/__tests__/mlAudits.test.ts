@@ -271,4 +271,295 @@ print(json.dumps({"ok": True}))
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('selects grouped rep-level policies with acceptable-borderline safety accounting offline only', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ml-grouped-policy-'));
+    const annotationsPath = join(tempDir, 'annotations.json');
+    writeFileSync(annotationsPath, JSON.stringify({
+      schemaVersion: 1,
+      annotations: [
+        {
+          recordingId: 'val08-hard-negative-front',
+          repIndex: 2,
+          startMs: 11250,
+          endMs: 13500,
+          acceptableBorderlineGroups: ['shoulder_issue'],
+          reviewerNotes: 'Mild shoulder assistance is acceptable as grouped shoulder feedback.',
+        },
+      ],
+    }));
+
+    const script = String.raw`
+import argparse
+import importlib.util
+import json
+import sys
+import pandas as pd
+
+module_path = sys.argv[1]
+annotations_path = sys.argv[2]
+spec = importlib.util.spec_from_file_location("ml_evaluate_test", module_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+label = "label_issue__barbell_curl_shoulder_issue"
+heuristic = "heuristic_shoulder"
+ml = "ml_shoulder"
+prob = "ml__logistic__label_issue__barbell_curl_shoulder_issue__prob"
+df = pd.DataFrame([
+    {
+        "source_video": "videos/validation/barbell-curl/val08-hard-negative-front.mp4",
+        "label_file": "labels/validation/barbell-curl/val08-hard-negative-front.json",
+        "recording_file": "landmarks/validation/barbell-curl/val08-hard-negative-front.json",
+        "split": "validation",
+        "rep_index": 2,
+        "expected_start_ms": 11250,
+        "expected_end_ms": 13500,
+        "label_clean": 1,
+        label: 0,
+        heuristic: 0,
+        ml: 1,
+        prob: 0.95,
+        "heuristic_scorable": 1,
+        "feature__diagnostic.scorable": 1,
+    },
+    {
+        "source_video": "videos/validation/barbell-curl/val01-shoulder-front.mp4",
+        "label_file": "labels/validation/barbell-curl/val01-shoulder-front.json",
+        "recording_file": "landmarks/validation/barbell-curl/val01-shoulder-front.json",
+        "split": "validation",
+        "rep_index": 1,
+        "expected_start_ms": 1000,
+        "expected_end_ms": 3000,
+        "label_clean": 0,
+        label: 1,
+        heuristic: 0,
+        ml: 1,
+        prob: 0.92,
+        "heuristic_scorable": 1,
+        "feature__diagnostic.scorable": 1,
+    },
+    {
+        "source_video": "videos/validation/barbell-curl/val02-shoulder-front.mp4",
+        "label_file": "labels/validation/barbell-curl/val02-shoulder-front.json",
+        "recording_file": "landmarks/validation/barbell-curl/val02-shoulder-front.json",
+        "split": "validation",
+        "rep_index": 1,
+        "expected_start_ms": 1000,
+        "expected_end_ms": 3000,
+        "label_clean": 0,
+        label: 1,
+        heuristic: 0,
+        ml: 1,
+        prob: 0.81,
+        "heuristic_scorable": 1,
+        "feature__diagnostic.scorable": 1,
+    },
+    {
+        "source_video": "videos/validation/barbell-curl/val03-clean-front.mp4",
+        "label_file": "labels/validation/barbell-curl/val03-clean-front.json",
+        "recording_file": "landmarks/validation/barbell-curl/val03-clean-front.json",
+        "split": "validation",
+        "rep_index": 1,
+        "expected_start_ms": 1000,
+        "expected_end_ms": 3000,
+        "label_clean": 1,
+        label: 0,
+        heuristic: 0,
+        ml: 0,
+        prob: 0.4,
+        "heuristic_scorable": 1,
+        "feature__diagnostic.scorable": 1,
+    },
+])
+args = argparse.Namespace(
+    grouped_policy_min_precision=0.75,
+    grouped_policy_clean_fp_row_cap=0,
+    grouped_policy_hard_negative_fp_row_cap=0,
+    grouped_policy_partial_view_fp_row_cap=0,
+)
+with_annotations = module.choose_grouped_tolerant_threshold_policy(
+    df,
+    label,
+    heuristic,
+    ml,
+    prob,
+    args,
+    module.load_review_annotations(annotations_path),
+)
+without_annotations = module.choose_grouped_tolerant_threshold_policy(
+    df,
+    label,
+    heuristic,
+    ml,
+    prob,
+    args,
+    module.load_review_annotations(None),
+)
+assert with_annotations["selected"] == "ml-threshold-tolerant-optimized", with_annotations
+assert with_annotations["threshold"] == 0.81, with_annotations
+metrics = with_annotations["validationMetrics"]
+assert metrics["strictHardNegativeFalsePositiveRows"] == 1, metrics
+assert metrics["hardNegativeUnacceptableFalsePositiveRows"] == 0, metrics
+assert metrics["hardNegativeAcceptableBorderlineWarningRows"] == 1, metrics
+assert metrics["tolerantTruePositives"] == 2, metrics
+assert without_annotations["selected"] == "disabled", without_annotations
+assert int(df["label_clean"].sum()) == 2
+print(json.dumps({"ok": True}))
+`;
+
+    try {
+      const output = execFileSync('python3', ['-c', script, join(process.cwd(), 'scripts/ml-evaluate.py'), annotationsPath], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          PYTHONDONTWRITEBYTECODE: '1',
+        },
+        encoding: 'utf8',
+      });
+      expect(JSON.parse(output)).toEqual({ ok: true });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('prunes only training features while reporting removed feature groups', () => {
+    const script = String.raw`
+import importlib.util
+import json
+import sys
+import pandas as pd
+
+module_path = sys.argv[1]
+spec = importlib.util.spec_from_file_location("ml_train_test", module_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+df = pd.DataFrame({
+    "feature__demo.all_null": [None, None, None, None],
+    "feature__demo.single": [5, 5, 5, 5],
+    "feature__demo.low_variance": [1.0, 1.000001, 1.0, 1.0],
+    "feature__demo.missing": [1.0, None, None, None],
+    "feature__demo.keep": [1, 2, 3, 4],
+})
+features = list(df.columns)
+selected, report = module.prune_feature_columns(
+    df,
+    features,
+    True,
+    0.000001,
+    0.5,
+)
+assert selected == ["feature__demo.keep"], selected
+assert report["beforeCount"] == 5, report
+assert report["afterCount"] == 1, report
+assert report["removedByReason"]["allNull"] == 1, report
+assert report["removedByReason"]["singleValued"] == 1, report
+assert report["removedByReason"]["nearZeroVariance"] == 1, report
+assert report["removedByReason"]["excessiveMissingness"] == 1, report
+assert report["removedByGroup"]["demo.all_null"] == 1, report
+print(json.dumps({"ok": True}))
+`;
+
+    const output = execFileSync('python3', ['-c', script, join(process.cwd(), 'scripts/ml-train.py')], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PYTHONDONTWRITEBYTECODE: '1',
+      },
+      encoding: 'utf8',
+    });
+    expect(JSON.parse(output)).toEqual({ ok: true });
+  });
+
+  it('can select a validation-only direct evidence gate for grouped torso false positives', () => {
+    const script = String.raw`
+import argparse
+import importlib.util
+import json
+import sys
+import pandas as pd
+
+module_path = sys.argv[1]
+spec = importlib.util.spec_from_file_location("ml_evaluate_test", module_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+label = "label_issue__barbell_curl_torso_issue"
+heuristic = "heuristic_torso"
+ml = "ml_torso"
+evidence = "feature__diagnostic.metric.torsodelta.value"
+df = pd.DataFrame([
+    {
+        "source_video": "videos/validation/barbell-curl/val-clean-front.mp4",
+        "label_file": "labels/validation/barbell-curl/val-clean-front.json",
+        "recording_file": "landmarks/validation/barbell-curl/val-clean-front.json",
+        "split": "validation",
+        "rep_index": 1,
+        "label_clean": 1,
+        label: 0,
+        heuristic: 0,
+        ml: 1,
+        evidence: 0.1,
+    },
+    {
+        "source_video": "videos/validation/barbell-curl/val-torso-front.mp4",
+        "label_file": "labels/validation/barbell-curl/val-torso-front.json",
+        "recording_file": "landmarks/validation/barbell-curl/val-torso-front.json",
+        "split": "validation",
+        "rep_index": 1,
+        "label_clean": 0,
+        label: 1,
+        heuristic: 0,
+        ml: 1,
+        evidence: 0.8,
+    },
+    {
+        "source_video": "videos/validation/barbell-curl/val-torso-front.mp4",
+        "label_file": "labels/validation/barbell-curl/val-torso-front.json",
+        "recording_file": "landmarks/validation/barbell-curl/val-torso-front.json",
+        "split": "validation",
+        "rep_index": 2,
+        "label_clean": 0,
+        label: 1,
+        heuristic: 0,
+        ml: 1,
+        evidence: 0.9,
+    },
+])
+base = pd.Series([1, 1, 1], index=df.index)
+args = argparse.Namespace(
+    grouped_policy_min_precision=0.75,
+    grouped_policy_clean_fp_row_cap=0,
+    grouped_policy_hard_negative_fp_row_cap=0,
+    grouped_policy_partial_view_fp_row_cap=0,
+)
+choice = module.choose_grouped_direct_evidence_gate_policy(
+    df,
+    label,
+    heuristic,
+    ml,
+    base,
+    args,
+    module.load_review_annotations(None),
+)
+assert choice["selected"] == "direct-evidence-gated", choice
+assert choice["evidenceColumn"] == evidence, choice
+assert choice["validationMetrics"]["cleanUnacceptableFalsePositiveRows"] == 0, choice
+pred = module.apply_grouped_direct_evidence_gate(df, label, base, choice)
+assert pred.tolist() == [0, 1, 1], pred.tolist()
+assert int(df["label_clean"].sum()) == 1
+print(json.dumps({"ok": True}))
+`;
+
+    const output = execFileSync('python3', ['-c', script, join(process.cwd(), 'scripts/ml-evaluate.py')], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PYTHONDONTWRITEBYTECODE: '1',
+      },
+      encoding: 'utf8',
+    });
+    expect(JSON.parse(output)).toEqual({ ok: true });
+  });
 });

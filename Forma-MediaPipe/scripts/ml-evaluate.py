@@ -1380,6 +1380,31 @@ BARBELL_CURL_GROUPED_FEEDBACK_TARGETS: dict[str, dict[str, Any]] = {
 }
 
 
+BARBELL_CURL_GROUPED_DIRECT_EVIDENCE_FEATURES: dict[str, list[str]] = {
+    "label_issue__barbell_curl_rom_issue": [
+        "feature__diagnostic.cue.barbell_curl_incomplete_flex.margin",
+        "feature__diagnostic.cue.barbell_curl_incomplete_extend.margin",
+        "feature__diagnostic.cue.barbell_curl_incomplete_rom.margin",
+        "feature__diagnostic.metric.romshortfallevidence.value",
+    ],
+    "label_issue__barbell_curl_torso_issue": [
+        "feature__diagnostic.cue.barbell_curl_torso_warn.margin",
+        "feature__diagnostic.cue.barbell_curl_torso_fail.margin",
+        "feature__diagnostic.metric.torsodelta.value",
+        "feature__diagnostic.metric.torsodeltaraw.value",
+        "feature__v2.torso.robust_abs_delta_p90_minus_p10",
+        "feature__v2.torso.full.abs_lean_deg.range",
+        "feature__v2.torso.full.abs_lean_deg.p90",
+        "feature__v2.torso.concentric.abs_lean_deg.range",
+        "feature__v2.torso.concentric.abs_lean_deg.p90",
+        "feature__v2.torso.concentric.sustained_lean_frames",
+        "feature__v2.torso.eccentric.abs_lean_deg.range",
+        "feature__v2.torso.eccentric.abs_lean_deg.p90",
+        "feature__v2.torso.eccentric.sustained_lean_frames",
+    ],
+}
+
+
 def review_annotation_template() -> dict[str, Any]:
     return {
         "schemaVersion": 1,
@@ -1900,6 +1925,77 @@ def disabled_grouped_candidate(
     return summary
 
 
+def tolerant_grouped_candidate_summary_from_series(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic: pd.Series,
+    ml: pd.Series,
+    candidate: pd.Series,
+    review_annotations: dict[str, Any],
+) -> dict[str, Any]:
+    strict_summary = grouped_candidate_summary_from_series(validation, label_column, heuristic, ml, candidate)
+    candidate_column = f"__tolerant_candidate_{issue_suffix(label_column)}"
+    tmp = validation.copy()
+    tmp[candidate_column] = pd.to_numeric(candidate.reindex(validation.index), errors="coerce").fillna(0).astype(int)
+    tolerant_summary = tolerant_grouped_policy_metrics(
+        tmp,
+        [label_column],
+        {label_column: candidate_column},
+        review_annotations,
+    )
+    per_group = tolerant_summary.get("perGroup", {}).get(label_column, {})
+    tolerant_issue = per_group.get("tolerant", {}) if isinstance(per_group, dict) else {}
+    strict_issue = per_group.get("strict", {}) if isinstance(per_group, dict) else {}
+    merged = dict(strict_summary)
+    merged.update({
+        "strictMetrics": {
+            "truePositives": strict_summary["truePositives"],
+            "falsePositives": strict_summary["falsePositives"],
+            "falseNegatives": strict_summary["falseNegatives"],
+            "precision": strict_summary["precision"],
+            "recall": strict_summary["recall"],
+            "f1": strict_summary["f1"],
+            "cleanFalsePositiveRows": strict_summary["cleanFalsePositiveRows"],
+            "hardNegativeFalsePositiveRows": strict_summary["hardNegativeFalsePositiveRows"],
+            "partialViewCleanFalsePositiveRows": strict_summary["partialViewCleanFalsePositiveRows"],
+        },
+        "tolerantMetrics": tolerant_summary,
+        "tolerantTruePositives": int(tolerant_issue.get("truePositives", 0)),
+        "tolerantFalsePositives": int(tolerant_issue.get("falsePositives", 0)),
+        "tolerantFalseNegatives": int(tolerant_issue.get("falseNegatives", 0)),
+        "tolerantPrecision": float(tolerant_issue.get("precision", 0.0)),
+        "tolerantRecall": float(tolerant_issue.get("recall", 0.0)),
+        "tolerantF1": float(tolerant_issue.get("f1", 0.0)),
+        "strictTruePositives": int(strict_issue.get("truePositives", strict_summary["truePositives"])),
+        "strictFalsePositives": int(strict_issue.get("falsePositives", strict_summary["falsePositives"])),
+        "strictFalseNegatives": int(strict_issue.get("falseNegatives", strict_summary["falseNegatives"])),
+        "strictPrecision": float(strict_issue.get("precision", strict_summary["precision"])),
+        "strictRecall": float(strict_issue.get("recall", strict_summary["recall"])),
+        "strictF1": float(strict_issue.get("f1", strict_summary["f1"])),
+        "strictCleanFalsePositiveRows": int(tolerant_summary.get("strictCleanFalsePositiveRows", strict_summary["cleanFalsePositiveRows"])),
+        "cleanUnacceptableFalsePositiveRows": int(tolerant_summary.get("cleanUnacceptableFalsePositiveRows", strict_summary["cleanFalsePositiveRows"])),
+        "cleanAcceptableBorderlineWarningRows": int(tolerant_summary.get("cleanAcceptableBorderlineWarningRows", 0)),
+        "strictHardNegativeFalsePositiveRows": int(tolerant_summary.get("strictHardNegativeFalsePositiveRows", strict_summary["hardNegativeFalsePositiveRows"])),
+        "hardNegativeUnacceptableFalsePositiveRows": int(tolerant_summary.get("hardNegativeUnacceptableFalsePositiveRows", strict_summary["hardNegativeFalsePositiveRows"])),
+        "hardNegativeAcceptableBorderlineWarningRows": int(tolerant_summary.get("hardNegativeAcceptableBorderlineWarningRows", 0)),
+    })
+    return merged
+
+
+def grouped_tolerant_policy_allowed(summary: dict[str, Any], args: argparse.Namespace) -> bool:
+    if int(summary["hardNegativeUnacceptableFalsePositiveRows"]) > args.grouped_policy_hard_negative_fp_row_cap:
+        return False
+    if int(summary["partialViewCleanFalsePositiveRows"]) > args.grouped_policy_partial_view_fp_row_cap:
+        return False
+    if int(summary["cleanUnacceptableFalsePositiveRows"]) > args.grouped_policy_clean_fp_row_cap:
+        return False
+    if int(summary["tolerantTruePositives"]) <= 0:
+        return False
+    if float(summary["tolerantPrecision"]) < args.grouped_policy_min_precision:
+        return False
+    return True
+
+
 def grouped_threshold_candidates(
     validation: pd.DataFrame,
     label_column: str,
@@ -1921,6 +2017,59 @@ def grouped_threshold_candidates(
         })
         candidates.append(summary)
     candidates.append(disabled_grouped_candidate(validation, label_column, heuristic, ml))
+    return candidates
+
+
+def grouped_tolerant_threshold_candidates(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    probability_column: str,
+    args: argparse.Namespace,
+    review_annotations: dict[str, Any],
+) -> list[dict[str, Any]]:
+    heuristic = numeric_int_series(validation, heuristic_column)
+    ml = numeric_int_series(validation, ml_column)
+    candidates: list[dict[str, Any]] = []
+    for threshold in [index / 100 for index in range(50, 100)]:
+        prediction = grouped_threshold_series(validation, label_column, probability_column, threshold)
+        summary = tolerant_grouped_candidate_summary_from_series(
+            validation,
+            label_column,
+            heuristic,
+            ml,
+            prediction,
+            review_annotations,
+        )
+        summary.update({
+            "policy": "ml-threshold-tolerant-optimized",
+            "threshold": threshold,
+            "allowed": grouped_tolerant_policy_allowed(summary, args),
+        })
+        candidates.append(summary)
+    disabled = disabled_grouped_candidate(validation, label_column, heuristic, ml)
+    disabled.update({
+        "tolerantMetrics": tolerant_grouped_policy_metrics(
+            validation.assign(**{f"__disabled_{issue_suffix(label_column)}": 0}),
+            [label_column],
+            {label_column: f"__disabled_{issue_suffix(label_column)}"},
+            review_annotations,
+        ),
+        "tolerantTruePositives": 0,
+        "tolerantFalsePositives": 0,
+        "tolerantFalseNegatives": disabled["falseNegatives"],
+        "tolerantPrecision": 1.0,
+        "tolerantRecall": 0.0,
+        "tolerantF1": 0.0,
+        "strictCleanFalsePositiveRows": 0,
+        "cleanUnacceptableFalsePositiveRows": 0,
+        "cleanAcceptableBorderlineWarningRows": 0,
+        "strictHardNegativeFalsePositiveRows": 0,
+        "hardNegativeUnacceptableFalsePositiveRows": 0,
+        "hardNegativeAcceptableBorderlineWarningRows": 0,
+    })
+    candidates.append(disabled)
     return candidates
 
 
@@ -1995,6 +2144,246 @@ def choose_grouped_threshold_policy(
             reverse=True,
         )[:8],
     }
+
+
+def choose_grouped_tolerant_threshold_policy(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    probability_column: str,
+    args: argparse.Namespace,
+    review_annotations: dict[str, Any],
+) -> dict[str, Any]:
+    candidates = grouped_tolerant_threshold_candidates(
+        validation,
+        label_column,
+        heuristic_column,
+        ml_column,
+        probability_column,
+        args,
+        review_annotations,
+    )
+    allowed = [candidate for candidate in candidates if bool(candidate.get("allowed"))]
+    if not allowed:
+        chosen = next(candidate for candidate in candidates if candidate["policy"] == "disabled")
+    else:
+        chosen = max(
+            allowed,
+            key=lambda item: (
+                float(item["tolerantF1"]),
+                grouped_clear_recall(item),
+                float(item["tolerantRecall"]),
+                float(item["tolerantPrecision"]),
+                -int(item["cleanUnacceptableFalsePositiveRows"]),
+                -int(item["hardNegativeUnacceptableFalsePositiveRows"]),
+                -int(item["cleanAcceptableBorderlineWarningRows"]),
+                float(item["strictF1"]),
+                0.0 if item["threshold"] is None else float(item["threshold"]),
+            ),
+        )
+    return {
+        "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+        "labelColumn": label_column,
+        "feedbackText": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackText"],
+        "selected": chosen["policy"],
+        "threshold": chosen["threshold"],
+        "validationMetrics": chosen,
+        "allowedCandidateCount": len(allowed),
+        "candidateCount": len(candidates),
+        "selectionMetric": "validation tolerant F1 with unacceptable clean/hard-negative FP gates; test is final reporting only",
+        "topValidationCandidates": sorted(
+            candidates,
+            key=lambda item: (
+                bool(item.get("allowed")),
+                float(item.get("tolerantF1", 0.0)),
+                grouped_clear_recall(item),
+                float(item.get("tolerantRecall", 0.0)),
+                float(item.get("tolerantPrecision", 0.0)),
+                -int(item.get("cleanUnacceptableFalsePositiveRows", 0)),
+                -int(item.get("hardNegativeUnacceptableFalsePositiveRows", 0)),
+                -int(item.get("cleanAcceptableBorderlineWarningRows", 0)),
+                float(item.get("strictF1", item.get("f1", 0.0))),
+                0.0 if item.get("threshold") is None else float(item["threshold"]),
+            ),
+            reverse=True,
+        )[:8],
+    }
+
+
+def direct_evidence_thresholds(validation: pd.DataFrame, column: str, base_prediction: pd.Series) -> list[float]:
+    values = pd.to_numeric(validation[column], errors="coerce")
+    base_mask = pd.to_numeric(base_prediction.reindex(validation.index), errors="coerce").fillna(0).astype(int) == 1
+    candidate_values = values[base_mask & values.notna()]
+    if len(candidate_values) == 0:
+        candidate_values = values[values.notna()]
+    if len(candidate_values) == 0:
+        return []
+    unique_values = sorted({float(value) for value in candidate_values.tolist()})
+    if len(unique_values) <= 25:
+        return unique_values
+    quantiles = candidate_values.quantile([index / 20 for index in range(0, 20)] + [0.975]).dropna()
+    return sorted({float(value) for value in quantiles.tolist()})
+
+
+def grouped_direct_evidence_candidates(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    base_prediction: pd.Series,
+    args: argparse.Namespace,
+    review_annotations: dict[str, Any],
+) -> list[dict[str, Any]]:
+    heuristic = numeric_int_series(validation, heuristic_column)
+    ml = numeric_int_series(validation, ml_column)
+    base = pd.to_numeric(base_prediction.reindex(validation.index), errors="coerce").fillna(0).astype(int)
+    candidates: list[dict[str, Any]] = []
+    for evidence_column in BARBELL_CURL_GROUPED_DIRECT_EVIDENCE_FEATURES.get(label_column, []):
+        if evidence_column not in validation.columns:
+            continue
+        evidence = pd.to_numeric(validation[evidence_column], errors="coerce")
+        for threshold in direct_evidence_thresholds(validation, evidence_column, base):
+            prediction = (base == 1) & (evidence.fillna(float("-inf")) >= threshold)
+            summary = tolerant_grouped_candidate_summary_from_series(
+                validation,
+                label_column,
+                heuristic,
+                ml,
+                prediction.astype(int),
+                review_annotations,
+            )
+            summary.update({
+                "policy": "direct-evidence-gated",
+                "threshold": threshold,
+                "evidenceColumn": evidence_column,
+                "allowed": grouped_tolerant_policy_allowed(summary, args),
+            })
+            candidates.append(summary)
+    base_summary = tolerant_grouped_candidate_summary_from_series(
+        validation,
+        label_column,
+        heuristic,
+        ml,
+        base,
+        review_annotations,
+    )
+    base_summary.update({
+        "policy": "no-direct-evidence-gate",
+        "threshold": None,
+        "evidenceColumn": None,
+        "allowed": grouped_tolerant_policy_allowed(base_summary, args),
+    })
+    candidates.append(base_summary)
+    return candidates
+
+
+def choose_grouped_direct_evidence_gate_policy(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    base_prediction: pd.Series,
+    args: argparse.Namespace,
+    review_annotations: dict[str, Any],
+) -> dict[str, Any]:
+    if label_column not in BARBELL_CURL_GROUPED_DIRECT_EVIDENCE_FEATURES:
+        base_summary = tolerant_grouped_candidate_summary_from_series(
+            validation,
+            label_column,
+            numeric_int_series(validation, heuristic_column),
+            numeric_int_series(validation, ml_column),
+            pd.to_numeric(base_prediction.reindex(validation.index), errors="coerce").fillna(0).astype(int),
+            review_annotations,
+        )
+        return {
+            "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+            "labelColumn": label_column,
+            "feedbackText": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackText"],
+            "selected": "base-tolerant-optimized",
+            "threshold": None,
+            "evidenceColumn": None,
+            "validationMetrics": base_summary,
+            "allowedCandidateCount": 0,
+            "candidateCount": 0,
+            "selectionMetric": "No direct-evidence gate configured for this grouped feedback.",
+            "topValidationCandidates": [],
+        }
+    candidates = grouped_direct_evidence_candidates(
+        validation,
+        label_column,
+        heuristic_column,
+        ml_column,
+        base_prediction,
+        args,
+        review_annotations,
+    )
+    gated_allowed = [
+        candidate
+        for candidate in candidates
+        if bool(candidate.get("allowed")) and candidate.get("policy") == "direct-evidence-gated"
+    ]
+    if gated_allowed:
+        chosen = max(
+            gated_allowed,
+            key=lambda item: (
+                float(item["tolerantF1"]),
+                -int(item["cleanUnacceptableFalsePositiveRows"]),
+                -int(item["hardNegativeUnacceptableFalsePositiveRows"]),
+                grouped_clear_recall(item),
+                float(item["tolerantRecall"]),
+                float(item["tolerantPrecision"]),
+                float(item["strictF1"]),
+                0.0 if item["threshold"] is None else float(item["threshold"]),
+            ),
+        )
+    else:
+        chosen = next(candidate for candidate in candidates if candidate["policy"] == "no-direct-evidence-gate")
+        chosen = dict(chosen)
+        chosen["fallbackReason"] = "No direct-evidence gate passed validation safety gates."
+    return {
+        "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+        "labelColumn": label_column,
+        "feedbackText": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackText"],
+        "selected": chosen["policy"],
+        "threshold": chosen.get("threshold"),
+        "evidenceColumn": chosen.get("evidenceColumn"),
+        "validationMetrics": chosen,
+        "allowedCandidateCount": len(gated_allowed),
+        "candidateCount": len(candidates),
+        "selectionMetric": "Validation-selected direct evidence gate for ROM/torso only; test is final reporting only.",
+        "topValidationCandidates": sorted(
+            candidates,
+            key=lambda item: (
+                bool(item.get("allowed")),
+                item.get("policy") == "direct-evidence-gated",
+                float(item.get("tolerantF1", 0.0)),
+                -int(item.get("cleanUnacceptableFalsePositiveRows", 0)),
+                -int(item.get("hardNegativeUnacceptableFalsePositiveRows", 0)),
+                grouped_clear_recall(item),
+                float(item.get("tolerantRecall", 0.0)),
+                float(item.get("tolerantPrecision", 0.0)),
+                float(item.get("strictF1", item.get("f1", 0.0))),
+                0.0 if item.get("threshold") is None else float(item["threshold"]),
+            ),
+            reverse=True,
+        )[:8],
+    }
+
+
+def apply_grouped_direct_evidence_gate(
+    df: pd.DataFrame,
+    label_column: str,
+    base_prediction: pd.Series,
+    choice: dict[str, Any],
+) -> pd.Series:
+    evidence_column = choice.get("evidenceColumn")
+    threshold = choice.get("threshold")
+    base = pd.to_numeric(base_prediction.reindex(df.index), errors="coerce").fillna(0).astype(int)
+    if not evidence_column or threshold is None or evidence_column not in df.columns:
+        return base
+    evidence = pd.to_numeric(df[evidence_column], errors="coerce").fillna(float("-inf"))
+    return ((base == 1) & (evidence >= float(threshold))).astype(int)
 
 
 def group_source_series(df: pd.DataFrame) -> pd.Series:
@@ -2194,6 +2583,7 @@ def build_grouped_feedback_report(
     validation = df[df["split"] == "validation"].copy()
     if len(validation) == 0:
         return {"available": False, "reason": "no_validation_rows"}
+    review_annotations = review_annotations or load_review_annotations(None)
 
     column_prefix = safe_model_column_part(model)
     optimized_fine_columns = {
@@ -2207,8 +2597,12 @@ def build_grouped_feedback_report(
 
     strict_choices: dict[str, Any] = {}
     conservative_choices: dict[str, Any] = {}
+    tolerant_optimized_choices: dict[str, Any] = {}
+    direct_evidence_gate_choices: dict[str, Any] = {}
     strict_series: dict[str, pd.Series] = {}
     conservative_series: dict[str, pd.Series] = {}
+    tolerant_optimized_series: dict[str, pd.Series] = {}
+    direct_evidence_gate_series: dict[str, pd.Series] = {}
     high_confidence_series: dict[str, pd.Series] = {}
     collapsed_fine_series: dict[str, pd.Series] = {}
     for label_column in grouped_labels:
@@ -2230,8 +2624,18 @@ def build_grouped_feedback_report(
             args,
             mode="conservative",
         )
+        tolerant_optimized_choice = choose_grouped_tolerant_threshold_policy(
+            validation,
+            label_column,
+            heuristic_group_columns[label_column],
+            ml_group_columns[label_column],
+            probability_group_columns[label_column],
+            args,
+            review_annotations,
+        )
         strict_choices[label_column] = strict_choice
         conservative_choices[label_column] = conservative_choice
+        tolerant_optimized_choices[label_column] = tolerant_optimized_choice
         strict_series[label_column] = grouped_threshold_series(
             df,
             label_column,
@@ -2243,6 +2647,28 @@ def build_grouped_feedback_report(
             label_column,
             probability_group_columns[label_column],
             conservative_choice["threshold"],
+        )
+        tolerant_optimized_series[label_column] = grouped_threshold_series(
+            df,
+            label_column,
+            probability_group_columns[label_column],
+            tolerant_optimized_choice["threshold"],
+        )
+        direct_evidence_gate_choice = choose_grouped_direct_evidence_gate_policy(
+            validation,
+            label_column,
+            heuristic_group_columns[label_column],
+            ml_group_columns[label_column],
+            tolerant_optimized_series[label_column].reindex(validation.index),
+            args,
+            review_annotations,
+        )
+        direct_evidence_gate_choices[label_column] = direct_evidence_gate_choice
+        direct_evidence_gate_series[label_column] = apply_grouped_direct_evidence_gate(
+            df,
+            label_column,
+            tolerant_optimized_series[label_column],
+            direct_evidence_gate_choice,
         )
         high_confidence_series[label_column] = grouped_threshold_series(
             df,
@@ -2272,11 +2698,12 @@ def build_grouped_feedback_report(
         "repLevelOnlyHighConfidence": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelOnlyHighConfidence", high_confidence_series),
         "repLevelConservative": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelConservative", conservative_series),
         "repLevelStrictF1": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelStrictF1", strict_series),
+        "repLevelTolerantOptimized": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelTolerantOptimized", tolerant_optimized_series),
+        "repLevelTolerantOptimizedDirectEvidenceGate": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelTolerantOptimizedDirectEvidenceGate", direct_evidence_gate_series),
         "repLevelPlusSetBackupBroadcast": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelPlusSetBackupBroadcast", rep_plus_set_series),
         "setLevelOnlyBroadcast": materialize_grouped_policy_columns(df, grouped_labels, model, "setLevelOnlyBroadcast", set_backup_series),
     }
     split_reports = grouped_split_reports(df, grouped_labels, policy_columns, probability_group_columns)
-    review_annotations = review_annotations or load_review_annotations(None)
     tolerant_policy_comparison = grouped_tolerant_policy_comparison(
         df,
         grouped_labels,
@@ -2292,6 +2719,8 @@ def build_grouped_feedback_report(
         subset_series = {
             "repLevelOnlyHighConfidence": {label: high_confidence_series[label].reindex(subset.index) for label in grouped_labels},
             "repLevelConservative": {label: conservative_series[label].reindex(subset.index) for label in grouped_labels},
+            "repLevelTolerantOptimized": {label: tolerant_optimized_series[label].reindex(subset.index) for label in grouped_labels},
+            "repLevelTolerantOptimizedDirectEvidenceGate": {label: direct_evidence_gate_series[label].reindex(subset.index) for label in grouped_labels},
             "repLevelPlusSetBackup": {label: rep_plus_set_series[label].reindex(subset.index) for label in grouped_labels},
             "setLevelOnly": {label: set_backup_series[label].reindex(subset.index) for label in grouped_labels},
             "fineOptimizedCollapsedToGroups": {label: collapsed_fine_series[label].reindex(subset.index) for label in grouped_labels},
@@ -2303,9 +2732,16 @@ def build_grouped_feedback_report(
 
     per_target: dict[str, Any] = {}
     for label_column in grouped_labels:
-        target_columns = {label_column: policy_columns["repLevelConservative"][label_column]}
+        selected_policy_name = "repLevelTolerantOptimized" if review_annotations.get("provided") else "repLevelConservative"
+        target_columns = {label_column: policy_columns[selected_policy_name][label_column]}
         target_probability = {label_column: probability_group_columns[label_column]}
         target_summary = grouped_policy_test_summary(df, [label_column], target_columns, target_probability)
+        conservative_target_summary = grouped_policy_test_summary(
+            df,
+            [label_column],
+            {label_column: policy_columns["repLevelConservative"][label_column]},
+            target_probability,
+        )
         validation_summary = target_summary.get("validation", {})
         validation_aggregate = validation_summary.get("aggregate", {}) if isinstance(validation_summary, dict) else {}
         validation_safety = validation_summary.get("safety", {}) if isinstance(validation_summary, dict) else {}
@@ -2329,8 +2765,11 @@ def build_grouped_feedback_report(
             "eligibilityFeaturesUsed": grouped_feedback_eligibility_columns(df, label_column),
             "strictSelection": strict_choices[label_column],
             "conservativeSelection": conservative_choices[label_column],
-            "selectedRepPolicy": "repLevelConservative",
+            "tolerantOptimizedSelection": tolerant_optimized_choices[label_column],
+            "directEvidenceGateSelection": direct_evidence_gate_choices[label_column],
+            "selectedRepPolicy": selected_policy_name,
             "validationAndTestMetrics": target_summary,
+            "conservativeValidationAndTestMetrics": conservative_target_summary,
             "readyForShadowMode": bool(
                 conservative_choices[label_column]["threshold"] is not None
                 and float(validation_aggregate.get("f1", 0.0)) > 0
@@ -2362,6 +2801,24 @@ def build_grouped_feedback_report(
             probability_group_columns,
             {},
         )
+        review_examples["testRepLevelTolerantOptimized"] = policy_review_examples(
+            test_subset,
+            grouped_labels,
+            heuristic_group_columns,
+            ml_group_columns,
+            policy_columns["repLevelTolerantOptimized"],
+            probability_group_columns,
+            tolerant_optimized_choices,
+        )
+        review_examples["testRepLevelTolerantOptimizedDirectEvidenceGate"] = policy_review_examples(
+            test_subset,
+            grouped_labels,
+            heuristic_group_columns,
+            ml_group_columns,
+            policy_columns["repLevelTolerantOptimizedDirectEvidenceGate"],
+            probability_group_columns,
+            direct_evidence_gate_choices,
+        )
 
     return {
         "available": True,
@@ -2388,6 +2845,8 @@ def build_grouped_feedback_report(
             "validationCleanFpRowCap": args.grouped_policy_clean_fp_row_cap,
             "validationHardNegativeFpRowCap": args.grouped_policy_hard_negative_fp_row_cap,
             "validationPartialViewFpRowCap": args.grouped_policy_partial_view_fp_row_cap,
+            "tolerantOptimizedPolicy": "When --review-annotations is provided, validation selection may count acceptable-borderline grouped warnings separately from unacceptable false positives. Strict metrics are still reported unchanged.",
+            "directEvidenceGatePolicy": "Offline diagnostic policy: ROM/torso predictions from repLevelTolerantOptimized may be gated by validation-selected direct evidence features. Shoulder/tempo currently fall back to the tolerant optimized policy.",
         },
         "reviewAnnotations": {
             "provided": bool(review_annotations.get("provided")),
@@ -2406,6 +2865,8 @@ def build_grouped_feedback_report(
         "thresholdSelection": {
             "strictF1": strict_choices,
             "conservative": conservative_choices,
+            "tolerantOptimized": tolerant_optimized_choices,
+            "directEvidenceGate": direct_evidence_gate_choices,
         },
         "perTargetRecommendation": per_target,
         "repLevelPolicyComparison": split_reports,
@@ -2449,7 +2910,35 @@ def build_grouped_feedback_report(
                     if split in set_reports
                 },
             },
-            "D_setLevelOnly": {
+            "D_repLevelTolerantOptimized": {
+                "repLevelPolicy": "repLevelTolerantOptimized",
+                "setLevelPolicy": "any tolerant-optimized rep",
+                "selectionSplit": "validation",
+                "usesReviewAnnotationsForSelection": bool(review_annotations.get("provided")),
+                "splits": {
+                    split: {
+                        "rep": split_reports[split]["repLevelTolerantOptimized"],
+                        "set": set_reports[split]["repLevelTolerantOptimized"],
+                    }
+                    for split in split_reports
+                    if split in set_reports
+                },
+            },
+            "E_repLevelTolerantOptimizedDirectEvidenceGate": {
+                "repLevelPolicy": "repLevelTolerantOptimizedDirectEvidenceGate",
+                "setLevelPolicy": "any tolerant-optimized rep after validation-selected ROM/torso direct-evidence gates",
+                "selectionSplit": "validation",
+                "usesTestForSelection": False,
+                "splits": {
+                    split: {
+                        "rep": split_reports[split]["repLevelTolerantOptimizedDirectEvidenceGate"],
+                        "set": set_reports[split]["repLevelTolerantOptimizedDirectEvidenceGate"],
+                    }
+                    for split in split_reports
+                    if split in set_reports
+                },
+            },
+            "F_setLevelOnly": {
                 "repLevelPolicy": "none",
                 "setLevelPolicy": f"show set summary if >= {args.grouped_set_min_reps} eligible reps have p >= {args.grouped_set_threshold}",
                 "splits": {

@@ -40,6 +40,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-recall", type=float, default=0.65, help="Minimum validation recall when tuning thresholds.")
     parser.add_argument("--feature-allow-regex", help="Only include feature columns matching this regex.")
     parser.add_argument("--feature-block-regex", help="Exclude feature columns matching this regex.")
+    parser.add_argument("--prune-features", action="store_true", help="Training-only cleanup: ignore all-null, single-valued, near-zero variance, and excessive-missingness feature columns.")
+    parser.add_argument("--near-zero-variance-threshold", type=float, default=0.0, help="When --prune-features is set, drop numeric features with variance at or below this threshold. 0 keeps only exactly single-valued pruning.")
+    parser.add_argument("--max-feature-missing-rate", type=float, default=1.0, help="When --prune-features is set, drop features with a missing rate greater than this value. 1 disables missingness pruning.")
     parser.add_argument("--require-holdout", action="store_true", help="Exit non-zero if validation/test splits are missing.")
     parser.add_argument(
         "--model-kinds",
@@ -47,8 +50,9 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Comma-separated model kinds: logistic,logistic_calibrated_sigmoid,"
             "logistic_calibrated_isotonic,random_forest,extra_trees,hist_gradient,"
-            "xgboost,lightgbm,catboost. Calibration suffixes _calibrated_sigmoid "
-            "and _calibrated_isotonic are supported for sklearn-backed models."
+            "logistic_l2_strong,logistic_l1,logistic_elasticnet,xgboost,lightgbm,"
+            "catboost. Calibration suffixes _calibrated_sigmoid and "
+            "_calibrated_isotonic are supported for sklearn-backed models."
         ),
     )
     return parser.parse_args()
@@ -115,6 +119,51 @@ def make_uncalibrated_model(kind: str) -> Any:
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scaler", StandardScaler()),
                 ("classifier", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
+            ],
+        )
+    if kind == "logistic_l2_strong":
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+                ("classifier", LogisticRegression(max_iter=2000, C=0.2, class_weight="balanced", random_state=42)),
+            ],
+        )
+    if kind == "logistic_l1":
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+                (
+                    "classifier",
+                    LogisticRegression(
+                        max_iter=2000,
+                        penalty="l1",
+                        solver="liblinear",
+                        C=0.5,
+                        class_weight="balanced",
+                        random_state=42,
+                    ),
+                ),
+            ],
+        )
+    if kind == "logistic_elasticnet":
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+                (
+                    "classifier",
+                    LogisticRegression(
+                        max_iter=3000,
+                        penalty="elasticnet",
+                        solver="saga",
+                        C=0.5,
+                        l1_ratio=0.5,
+                        class_weight="balanced",
+                        random_state=42,
+                    ),
+                ),
             ],
         )
     if kind == "random_forest":
@@ -238,6 +287,88 @@ def select_feature_columns(columns: list[str], allow_regex: str | None, block_re
     return features
 
 
+def feature_group(column: str) -> str:
+    parts = column.removeprefix("feature__").split(".")
+    if len(parts) >= 2:
+        return ".".join(parts[:2])
+    return parts[0] if parts else "unknown"
+
+
+def prune_feature_columns(
+    df: pd.DataFrame,
+    feature_columns: list[str],
+    enabled: bool,
+    near_zero_variance_threshold: float,
+    max_missing_rate: float,
+) -> tuple[list[str], dict[str, Any]]:
+    report: dict[str, Any] = {
+        "enabled": enabled,
+        "schemaCompatibility": "Training-only pruning: features.csv is unchanged; ignored columns are omitted from model featureColumns.",
+        "beforeCount": len(feature_columns),
+        "afterCount": len(feature_columns),
+        "removedCount": 0,
+        "nearZeroVarianceThreshold": near_zero_variance_threshold,
+        "maxMissingRate": max_missing_rate,
+        "removedByReason": {
+            "allNull": 0,
+            "singleValued": 0,
+            "nearZeroVariance": 0,
+            "excessiveMissingness": 0,
+        },
+        "removedByGroup": {},
+        "removedFeatures": [],
+    }
+    if not enabled:
+        return feature_columns, report
+    if not (0.0 <= max_missing_rate <= 1.0):
+        raise SystemExit("--max-feature-missing-rate must be between 0 and 1.")
+    if near_zero_variance_threshold < 0:
+        raise SystemExit("--near-zero-variance-threshold must be >= 0.")
+
+    selected: list[str] = []
+    removed_features: list[dict[str, Any]] = []
+    group_counts: dict[str, int] = {}
+    reason_counts = report["removedByReason"]
+    row_count = len(df)
+    for column in feature_columns:
+        series = pd.to_numeric(df[column], errors="coerce")
+        non_null_count = int(series.notna().sum())
+        missing_rate = 1.0 if row_count == 0 else 1 - (non_null_count / row_count)
+        unique_count = int(series.nunique(dropna=True))
+        variance = 0.0 if non_null_count <= 1 else float(series.var(skipna=True))
+        reason: str | None = None
+        if non_null_count == 0:
+            reason = "allNull"
+        elif max_missing_rate < 1.0 and missing_rate > max_missing_rate:
+            reason = "excessiveMissingness"
+        elif unique_count <= 1:
+            reason = "singleValued"
+        elif near_zero_variance_threshold > 0 and variance <= near_zero_variance_threshold:
+            reason = "nearZeroVariance"
+
+        if reason is None:
+            selected.append(column)
+            continue
+        group = feature_group(column)
+        reason_counts[reason] += 1
+        group_counts[group] = group_counts.get(group, 0) + 1
+        removed_features.append({
+            "feature": column,
+            "reason": reason,
+            "group": group,
+            "nonNullCount": non_null_count,
+            "missingRate": missing_rate,
+            "uniqueCount": unique_count,
+            "variance": variance,
+        })
+
+    report["afterCount"] = len(selected)
+    report["removedCount"] = len(removed_features)
+    report["removedByGroup"] = dict(sorted(group_counts.items(), key=lambda item: (-item[1], item[0])))
+    report["removedFeatures"] = removed_features
+    return selected, report
+
+
 def select_targets(label_columns: list[str], target_arg: str) -> list[str]:
     if target_arg == "all":
         return label_columns + ["target__has_issue"]
@@ -309,7 +440,14 @@ def main() -> int:
     if df.empty:
         raise SystemExit(f"Feature CSV has no rows: {csv_path}")
 
-    feature_columns = select_feature_columns(list(df.columns), args.feature_allow_regex, args.feature_block_regex)
+    raw_feature_columns = select_feature_columns(list(df.columns), args.feature_allow_regex, args.feature_block_regex)
+    feature_columns, feature_pruning_report = prune_feature_columns(
+        df,
+        raw_feature_columns,
+        args.prune_features,
+        args.near_zero_variance_threshold,
+        args.max_feature_missing_rate,
+    )
     label_columns = [column for column in df.columns if column.startswith("label_issue__")]
     if not feature_columns:
         raise SystemExit("No usable feature__ columns found in exported CSV.")
@@ -346,10 +484,15 @@ def main() -> int:
             "modelKinds": model_kinds,
             "featureAllowRegex": args.feature_allow_regex,
             "featureBlockRegex": args.feature_block_regex,
+            "pruneFeatures": args.prune_features,
+            "nearZeroVarianceThreshold": args.near_zero_variance_threshold,
+            "maxFeatureMissingRate": args.max_feature_missing_rate,
         },
         "productionClaimValid": holdout_valid,
         "productionClaimBlockers": [] if holdout_valid else ["validation_or_test_split_missing"],
         "featureCount": len(feature_columns),
+        "featureCountBeforePruning": len(raw_feature_columns),
+        "featurePruning": feature_pruning_report,
         "rowCount": len(df),
         "splitCounts": {split: int((df["split"] == split).sum()) for split in ["train", "validation", "test"]},
         "targets": target_columns,
@@ -426,6 +569,9 @@ def main() -> int:
 
     print(f"Rows: {len(df)}")
     print(f"Features: {len(feature_columns)}")
+    if args.prune_features:
+        print(f"Features before pruning: {feature_pruning_report['beforeCount']}")
+        print(f"Features removed by pruning: {feature_pruning_report['removedCount']}")
     print(f"Experiment: {experiment_id}")
     print(f"Production claim valid: {report['productionClaimValid']}")
     print(f"Model dir: {model_dir}")
