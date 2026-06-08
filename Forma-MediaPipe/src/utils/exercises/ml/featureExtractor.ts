@@ -7,9 +7,9 @@ import {
   isIssueLabelableForView,
 } from '../dataset/labelPolicy';
 import type { RepLabel, RepViewLabel } from '../dataset/types';
-import type { ReplayRepPrediction, ReplayResultVerbose } from '../replay';
+import type { LandmarkRecordingFrame, ReplayRepPrediction, ReplayResultVerbose } from '../replay';
 import { slugifyExerciseName } from '../replay';
-import type { ExerciseDefinition, RepCueDiagnostic, RepMetricDiagnostic } from '../types';
+import type { ExerciseDefinition, RepCueDiagnostic, RepDiagnostics, RepMetricDiagnostic } from '../types';
 import {
   ML_FEATURE_SCHEMA_VERSION,
   ML_REP_EXAMPLE_SCHEMA_VERSION,
@@ -45,6 +45,24 @@ export interface BuildMlRepExamplesResult {
   examples: MlRepExample[];
   skippedMissingMatchedPrediction: number;
   skippedMissingDiagnostics: number;
+}
+
+export interface BuildRuntimeMlFeatureVectorOptions {
+  definition: ExerciseDefinition;
+  frames: LandmarkRecordingFrame[];
+  repIndex: number;
+  durationMs: number;
+  score: number | null;
+  issueIds: string[];
+  messages: string[];
+  scorable?: boolean | null;
+  confidence?: number | null;
+  qualityStatus?: string;
+  qualityWarnings?: unknown[];
+  diagnostics?: RepDiagnostics;
+  view?: RepViewLabel;
+  overlapMs?: number | null;
+  completionDeltaMs?: number | null;
 }
 
 function finiteOrNull(value: unknown): number | null {
@@ -1235,6 +1253,91 @@ function buildFeatures(
   }
 
   return features;
+}
+
+function prefixRuntimeFeatures(features: MlFeatureVector): MlFeatureVector {
+  return Object.fromEntries(
+    Object.entries(features).map(([key, value]) => [`feature__${key}`, value]),
+  );
+}
+
+export function buildRuntimeMlFeatureVector(options: BuildRuntimeMlFeatureVectorOptions): MlFeatureVector {
+  const features: MlFeatureVector = {};
+  const frames = options.frames;
+  const durationMs = Math.max(0, options.durationMs);
+  const diagnostics = options.diagnostics;
+
+  setFeature(features, 'rep.duration_ms', durationMs);
+  setFeature(features, 'rep.frame_count', frames.length);
+  setFeature(features, 'rep.fps_estimate', durationMs > 0 ? (frames.length * 1000) / durationMs : null);
+  setFeature(features, 'rep.overlap_ms', options.overlapMs);
+  setFeature(features, 'rep.completion_delta_ms', options.completionDeltaMs);
+  setFeature(features, 'rep.start_confidence', frames[0] ? mean(frameKeypoints(frames[0]).map((keypoint) => keypoint.score)) : null);
+  setFeature(features, 'rep.end_confidence', frames[frames.length - 1] ? mean(frameKeypoints(frames[frames.length - 1]).map((keypoint) => keypoint.score)) : null);
+
+  setFeature(features, 'heuristic.score', options.score);
+  setFeature(features, 'heuristic.issue_count', options.issueIds.length);
+  setBooleanFeature(features, 'heuristic.has_issue', options.issueIds.length > 0);
+  setBooleanFeature(features, 'heuristic.scorable', options.scorable ?? diagnostics?.scorable);
+
+  setFeature(features, 'pose.confidence', options.confidence);
+  setFeature(features, 'pose.warning_count', options.qualityWarnings?.length ?? 0);
+  for (const status of POSE_QUALITY_STATUSES) {
+    setBooleanFeature(features, `pose.status.${status}`, options.qualityStatus === status);
+  }
+
+  for (const issueId of options.issueIds) {
+    setBooleanFeature(features, `heuristic.issue.${safeFeaturePart(issueId)}`, true);
+  }
+
+  if (diagnostics) {
+    setBooleanFeature(features, 'diagnostic.scorable', diagnostics.scorable);
+    for (const [view, value] of Object.entries({
+      front: diagnostics.view === 'front',
+      side: diagnostics.view === 'side',
+      oblique: diagnostics.view === 'oblique',
+      unknown: diagnostics.view === 'unknown',
+    })) {
+      setBooleanFeature(features, `diagnostic.view.${view}`, value);
+    }
+
+    for (const metric of Object.values(diagnostics.metrics).sort((a, b) => a.key.localeCompare(b.key))) {
+      addDiagnosticMetricFeatures(features, metric);
+    }
+    for (const cue of Object.values(diagnostics.cues).sort((a, b) => a.issueId.localeCompare(b.issueId))) {
+      addDiagnosticCueFeatures(features, cue);
+    }
+  }
+
+  addKeypointStats(features, frames);
+  for (const joint of ['left_wrist', 'right_wrist', 'left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder']) {
+    addVelocityStats(features, frames, joint);
+  }
+  addAngleStats(features, frames, 'left');
+  addAngleStats(features, frames, 'right');
+  addTorsoStats(features, frames);
+  addSymmetryStats(features, frames);
+  addPhaseTimingFeatures(features, frames);
+  addMlFeatureV2(features, frames, diagnostics);
+
+  const view = options.view ?? diagnostics?.view ?? 'unknown';
+  const mask = issueScorableMask(
+    options.definition,
+    {
+      index: options.repIndex,
+      startMs: 0,
+      endMs: durationMs,
+      issueIds: [],
+      view,
+      scorable: options.scorable ?? diagnostics?.scorable ?? true,
+    },
+    view,
+  );
+  for (const [issueId, scorable] of Object.entries(mask)) {
+    setBooleanFeature(features, `scorable.issue.${safeFeaturePart(issueId)}`, scorable);
+  }
+
+  return prefixRuntimeFeatures(features);
 }
 
 function findPrediction(

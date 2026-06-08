@@ -1,4 +1,5 @@
 export {
+  buildRuntimeMlFeatureVector,
   buildMlRepExamples,
   collectFeatureNames,
   safeColumnPart,
@@ -16,6 +17,7 @@ export {
 export type {
   BuildMlRepExamplesOptions,
   BuildMlRepExamplesResult,
+  BuildRuntimeMlFeatureVectorOptions,
 } from './featureExtractor';
 export type {
   ExportMlDatasetInput,

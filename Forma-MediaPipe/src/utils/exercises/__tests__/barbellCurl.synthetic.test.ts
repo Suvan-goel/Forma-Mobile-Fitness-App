@@ -1,4 +1,5 @@
 import { barbellCurlDefinition } from '../definitions/barbellCurl';
+import { BARBELL_CURL_GROUPED_FEEDBACK_FLAG } from '../ml/runtime/barbellCurlGroupedFeedback';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -755,6 +756,30 @@ describe('Barbell Curl synthetic replay coverage', () => {
     });
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.asymmetry'].eligible).toBe(true);
     expect(result.reps[0]?.diagnostics?.cues['barbell-curl.elbow_flare'].eligible).toBe(true);
+  });
+
+  it('attaches grouped ML feedback diagnostics behind the feature flag without changing rep count', () => {
+    const previous = process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
+    try {
+      const result = replayRecording(
+        barbellCurlDefinition,
+        buildRecording('synthetic clean front curl with grouped feedback flag', fullRepPath(), 'front'),
+      );
+
+      expect(result.finalRepCount).toBe(1);
+      expect(result.repScores[0]).toBeGreaterThanOrEqual(85);
+      expect(result.reps[0]?.diagnostics?.mlGroupedFeedback).toMatchObject({
+        enabled: true,
+        applied: true,
+        policyId: 'barbell-curl-grouped-feedback-v1-20260608T183615Z',
+        modelRunId: '2026-06-08T17-27-07Z',
+      });
+      expect(result.reps[0]?.messages.length ?? 0).toBeLessThanOrEqual(1);
+    } finally {
+      if (previous === undefined) delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+      else process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = previous;
+    }
   });
 
   it('keeps a clean full-reliability runtime PoseState rep unchanged', () => {

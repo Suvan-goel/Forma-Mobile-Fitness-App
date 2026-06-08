@@ -208,6 +208,41 @@ export interface RepViewCueGatingDiagnostic {
   partialViewScoringAllowed: boolean;
 }
 
+export interface RepMlGroupedFeedbackDiagnostic {
+  enabled: boolean;
+  applied: boolean;
+  policyId: string;
+  modelRunId: string;
+  featureSchemaVersion: string;
+  latencyMs?: number;
+  heuristicIssueIds?: string[];
+  selectedIssueId?: string | null;
+  selectedMessage?: string | null;
+  issueIds: string[];
+  messages: string[];
+  warnings?: string[];
+  featureMissingness?: Record<string, { missing: number; total: number }>;
+  predictions: Array<{
+    issueId: string;
+    message: string;
+    policyName: string;
+    probability?: number | null;
+    threshold?: number | null;
+    eligible: boolean;
+    predicted: boolean;
+    skippedReason?: string;
+    childPredictions?: Array<{
+      issueId: string;
+      policy: string;
+      probability?: number | null;
+      heuristicPresent: boolean;
+      eligible: boolean;
+      predicted: boolean;
+      skippedReason?: string;
+    }>;
+  }>;
+}
+
 export interface RepDiagnostics {
   exerciseName: string;
   repIndex: number;
@@ -217,6 +252,7 @@ export interface RepDiagnostics {
   viewQuality?: RepViewQualityDiagnostic;
   reliability?: RepReliabilityDiagnostic;
   viewCueGating?: RepViewCueGatingDiagnostic;
+  mlGroupedFeedback?: RepMlGroupedFeedbackDiagnostic;
   metrics: Record<string, RepMetricDiagnostic>;
   cues: Record<string, RepCueDiagnostic>;
 }

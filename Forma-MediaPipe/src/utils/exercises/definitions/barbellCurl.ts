@@ -53,6 +53,13 @@ import type {
   RepViewQualityDiagnostic,
   RepResult as FrameworkRepResult,
 } from '../types';
+import { buildRuntimeMlFeatureVector } from '../ml/featureExtractor';
+import {
+  isBarbellCurlGroupedFeedbackEnabled,
+  logBarbellCurlGroupedFeedbackEnabledOnce,
+  predictBarbellCurlGroupedFeedback,
+} from '../ml/runtime/barbellCurlGroupedFeedback';
+import type { LandmarkRecordingFrame } from '../replay';
 import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
 
 // ============================================================================
@@ -236,6 +243,80 @@ const BARBELL_CURL_MESSAGE_CUE_FAMILIES: Record<string, string> = {
   "Control the lowering — don't drop the weight.": 'tempo',
   'Arms are uneven — curl both sides together.': 'bilateralSymmetry',
 };
+
+const BARBELL_CURL_FEEDBACK_TO_ISSUE: Record<string, string> = {
+  'Flex more at the top of the curl.': 'incomplete_flex',
+  'Extend fully at the bottom.': 'incomplete_extend',
+  'Incomplete rep — curl all the way up and fully extend.': 'incomplete_rom',
+  'Too much shoulder involvement — reduce the weight.': 'shoulder_fail',
+  'Upper arms moving — keep elbows pinned to your sides.': 'shoulder_warn',
+  'Excessive body swing — this is cheating the rep.': 'torso_fail',
+  "Don't swing your torso — stay upright and controlled.": 'torso_warn',
+  'Slow down — control the curl.': 'tempo_up',
+  "Control the lowering — don't drop the weight.": 'tempo_down',
+  'Arms are uneven — curl both sides together.': 'asymmetry',
+  "Keep your elbows in — don't flare them out to the sides.": 'elbow_flare',
+  "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
+  'Use a fuller range of motion.': 'ROM_issue',
+  'Keep your torso still.': 'torso_issue',
+  'Avoid using your shoulders to lift the bar.': 'shoulder_issue',
+  'Control the speed of the rep.': 'tempo_issue',
+};
+
+const BARBELL_CURL_ML_FEATURE_DEFINITION = {
+  name: 'Barbell Curl',
+  ttsConfig: {
+    feedbackToIssue: BARBELL_CURL_FEEDBACK_TO_ISSUE,
+  },
+} as ExerciseDefinition;
+
+function issueIdsForBarbellCurlMessages(messages: string[]): string[] {
+  const issueIds = new Set<string>();
+  for (const message of messages) {
+    const issueType = BARBELL_CURL_FEEDBACK_TO_ISSUE[message];
+    if (issueType) issueIds.add(`barbell-curl.${issueType}`);
+  }
+  return Array.from(issueIds);
+}
+
+function logBarbellCurlMlFeedbackRep(
+  repIndex: number,
+  heuristicIssueIds: string[],
+  mlFeedback: ReturnType<typeof predictBarbellCurlGroupedFeedback>,
+): void {
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return;
+  const probabilities = Object.fromEntries(
+    mlFeedback.predictions.map((prediction) => [
+      prediction.issueId,
+      typeof prediction.probability === 'number' ? Number(prediction.probability.toFixed(4)) : null,
+    ]),
+  );
+  const gates = Object.fromEntries(
+    mlFeedback.predictions.map((prediction) => [
+      prediction.issueId,
+      prediction.predicted ? 'pass' : prediction.skippedReason ?? 'blocked',
+    ]),
+  );
+  const blocked = Object.fromEntries(
+    mlFeedback.predictions
+      .filter((prediction) => !prediction.predicted && prediction.skippedReason)
+      .map((prediction) => [prediction.issueId, prediction.skippedReason]),
+  );
+  console.info('[BarbellCurlMLFeedback]', {
+    rep: repIndex,
+    enabled: true,
+    policy: mlFeedback.policyId,
+    modelRunId: mlFeedback.modelRunId,
+    groups: mlFeedback.issueIds,
+    probs: probabilities,
+    gates,
+    blocked,
+    selectedMessage: mlFeedback.selectedMessage,
+    latencyMs: Number(mlFeedback.latencyMs.toFixed(2)),
+    heuristicIssueIds,
+    featureMissingness: mlFeedback.featureMissingness,
+  });
+}
 
 const BARBELL_CURL_QUALITY_PROFILE: NonNullable<ExerciseDefinition['qualityProfile']> = {
   exerciseName: 'Barbell Curl',
@@ -965,6 +1046,7 @@ interface RepWindow {
   /** Current-frame ratio sample validity for diagnostics and view quality. */
   ratioSamples: Record<CurlSide, RepRatioSampleCounts>;
   viewSamples: RepViewSamples;
+  frames: LandmarkRecordingFrame[];
   reliability: ReturnType<typeof createPoseStateReliabilityAggregator>;
   metadata: RepMetadata;
 }
@@ -1001,6 +1083,7 @@ interface RepResult {
   tDown: number;
   score: number;
   messages: string[];
+  issueIds?: string[];
   scorable?: boolean;
   qualityWarnings?: FrameworkRepResult['qualityWarnings'];
   diagnostics?: FrameworkRepResult['diagnostics'];
@@ -1132,6 +1215,7 @@ function initRepWindow(tStart: number, countingSide: CurlSide | null = null): Re
       primaryLeft: 0,
       primaryRight: 0,
     },
+    frames: [],
     reliability: createPoseStateReliabilityAggregator(),
     metadata: {
       landmarkSource: 'image',
@@ -1144,6 +1228,35 @@ function initRepWindow(tStart: number, countingSide: CurlSide | null = null): Re
       completionView: null,
       selectedSideAtCompletion: null,
       syncDelta: null,
+    },
+  };
+}
+
+function cloneKeypointsForMl(keypoints: Keypoint[] | undefined): Keypoint[] | undefined {
+  return keypoints?.map((keypoint) => ({ ...keypoint }));
+}
+
+function runtimeLandmarkFrameForMl(
+  keypoints: Keypoint[],
+  frameContext: ExerciseFrameContext | undefined,
+  timestampMs: number,
+): LandmarkRecordingFrame {
+  const worldKeypoints = cloneKeypointsForMl(frameContext?.worldKeypoints);
+  const imageKeypoints = cloneKeypointsForMl(frameContext?.imageKeypoints);
+  return {
+    timestamp: timestampMs,
+    timestampMs,
+    status: 'poseDetected',
+    keypoints: cloneKeypointsForMl(keypoints) ?? [],
+    ...(worldKeypoints ? { worldKeypoints } : {}),
+    ...(imageKeypoints ? { imageKeypoints } : {}),
+    primarySource: frameContext?.primarySource ?? (worldKeypoints ? 'world' : 'image'),
+    frameContext: {
+      trackingInterrupted: frameContext?.trackingInterrupted === true,
+      ...(typeof frameContext?.silentGapMs === 'number' ? { silentGapMs: frameContext.silentGapMs } : {}),
+      ...(typeof frameContext?.reacquisitionFrameIndex === 'number'
+        ? { reacquisitionFrameIndex: frameContext.reacquisitionFrameIndex }
+        : {}),
     },
   };
 }
@@ -2477,6 +2590,7 @@ function updateBarbellCurlState(
     window.metadata.torsoAnchorSources[rawResult.torsoAnchorSource]++;
     window.tEnd = t;
     window.frameCount++;
+    window.frames.push(runtimeLandmarkFrameForMl(keypoints, frameContext, timestampMs));
     if (frameContext?.poseState) {
       window.reliability.observe(frameContext.poseState);
     }
@@ -2831,6 +2945,78 @@ function completeRep(
     finalScorable,
   );
   const finalScore = finalScorable ? score : 0;
+  const heuristicIssueIds = issueIdsForBarbellCurlMessages(finalMessages);
+  let resultMessages = finalMessages;
+  let resultIssueIds = heuristicIssueIds;
+
+  if (isBarbellCurlGroupedFeedbackEnabled()) {
+    logBarbellCurlGroupedFeedbackEnabledOnce();
+    try {
+      const featureVector = buildRuntimeMlFeatureVector({
+        definition: BARBELL_CURL_ML_FEATURE_DEFINITION,
+        frames: repWindow.frames,
+        repIndex: newState.repCount,
+        durationMs: Math.max(0, (repWindow.tEnd - repWindow.tStart) * 1000),
+        score: finalScore,
+        issueIds: heuristicIssueIds,
+        messages: finalMessages,
+        scorable: finalScorable,
+        qualityWarnings,
+        diagnostics,
+        view: diagnostics.view,
+      });
+      const mlFeedback = predictBarbellCurlGroupedFeedback({
+        features: featureVector,
+        heuristicIssueIds,
+      });
+      diagnostics.mlGroupedFeedback = {
+        enabled: mlFeedback.enabled,
+        applied: mlFeedback.applied,
+        policyId: mlFeedback.policyId,
+        modelRunId: mlFeedback.modelRunId,
+        featureSchemaVersion: mlFeedback.featureSchemaVersion,
+        latencyMs: mlFeedback.latencyMs,
+        heuristicIssueIds: mlFeedback.heuristicIssueIds,
+        selectedIssueId: mlFeedback.selectedIssueId,
+        selectedMessage: mlFeedback.selectedMessage,
+        issueIds: mlFeedback.issueIds,
+        messages: mlFeedback.messages,
+        featureMissingness: mlFeedback.featureMissingness,
+        predictions: mlFeedback.predictions,
+        ...(mlFeedback.warnings.length > 0 ? { warnings: mlFeedback.warnings } : {}),
+      };
+      resultMessages = mlFeedback.messages;
+      resultIssueIds = mlFeedback.issueIds;
+      logBarbellCurlMlFeedbackRep(newState.repCount, heuristicIssueIds, mlFeedback);
+      if (
+        mlFeedback.warnings.length > 0 &&
+        !(typeof process !== 'undefined' && process.env.NODE_ENV === 'test')
+      ) {
+        console.warn('[BarbellCurlMLFeedback] grouped feedback warnings', mlFeedback.warnings);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      diagnostics.mlGroupedFeedback = {
+        enabled: true,
+        applied: false,
+        policyId: 'barbell-curl-grouped-feedback-v1-20260608T183615Z',
+        modelRunId: '2026-06-08T17-27-07Z',
+        featureSchemaVersion: 'rep-features-v2',
+        latencyMs: 0,
+        heuristicIssueIds,
+        selectedIssueId: null,
+        selectedMessage: null,
+        issueIds: [],
+        messages: [],
+        featureMissingness: {},
+        warnings: [message],
+        predictions: [],
+      };
+      if (!(typeof process !== 'undefined' && process.env.NODE_ENV === 'test')) {
+        console.warn('[BarbellCurlMLFeedback] falling back to heuristic feedback', message);
+      }
+    }
+  }
 
   newState.lastRepResult = {
     repIndex: newState.repCount,
@@ -2839,7 +3025,8 @@ function completeRep(
     tUp,
     tDown,
     score: finalScore,
-    messages: finalMessages,
+    messages: resultMessages,
+    issueIds: resultIssueIds,
     scorable: finalScorable,
     qualityWarnings,
     diagnostics,
@@ -2849,8 +3036,8 @@ function completeRep(
 
   if (!finalScorable) {
     newState.feedback = 'Form view unclear.';
-  } else if (finalMessages.length > 0) {
-    newState.feedback = finalMessages.join('\n');
+  } else if (resultMessages.length > 0) {
+    newState.feedback = resultMessages.join('\n');
   } else {
     newState.feedback = viewAngle.zone === 'frontal' ? 'Great rep!' : 'Good rep.';
   }
@@ -2982,6 +3169,7 @@ export function createBarbellCurlDefinition(
           repIndex: newInternal.lastRepResult.repIndex,
           score: newInternal.lastRepResult.score,
           messages: newInternal.lastRepResult.messages,
+          issueIds: newInternal.lastRepResult.issueIds,
           scorable: newInternal.lastRepResult.scorable,
           qualityWarnings: newInternal.lastRepResult.qualityWarnings,
           diagnostics: newInternal.lastRepResult.diagnostics,
@@ -3028,21 +3216,12 @@ export function createBarbellCurlDefinition(
     createBarbellCurlDefinition(mergeHeuristicConfig(config, variantConfig)),
 
   ttsConfig: {
-    feedbackToIssue: {
-      'Flex more at the top of the curl.': 'incomplete_flex',
-      'Extend fully at the bottom.': 'incomplete_extend',
-      'Incomplete rep — curl all the way up and fully extend.': 'incomplete_rom',
-      'Too much shoulder involvement — reduce the weight.': 'shoulder_fail',
-      'Upper arms moving — keep elbows pinned to your sides.': 'shoulder_warn',
-      'Excessive body swing — this is cheating the rep.': 'torso_fail',
-      "Don't swing your torso — stay upright and controlled.": 'torso_warn',
-      'Slow down — control the curl.': 'tempo_up',
-      "Control the lowering — don't drop the weight.": 'tempo_down',
-      'Arms are uneven — curl both sides together.': 'asymmetry',
-      "Keep your elbows in — don't flare them out to the sides.": 'elbow_flare',
-      "Tuck your elbows in — they're drifting outward.": 'elbow_flare',
-    },
+    feedbackToIssue: BARBELL_CURL_FEEDBACK_TO_ISSUE,
     feedbackPriorities: {
+      'Use a fuller range of motion.': 80,
+      'Keep your torso still.': 70,
+      'Avoid using your shoulders to lift the bar.': 60,
+      'Control the speed of the rep.': 50,
       'Too much shoulder involvement — reduce the weight.': 60,
       'Excessive body swing — this is cheating the rep.': 60,
       'Upper arms moving — keep elbows pinned to your sides.': 50,
@@ -3057,6 +3236,42 @@ export function createBarbellCurlDefinition(
       'Arms are uneven — curl both sides together.': 20,
     },
     issueDefinitions: [
+      {
+        issueType: 'ROM_issue',
+        priority: 80,
+        messages: [
+          'Use a fuller range of motion.',
+          'Make the next rep fuller.',
+          'Give me the full range.',
+        ],
+      },
+      {
+        issueType: 'torso_issue',
+        priority: 70,
+        messages: [
+          'Keep your torso still.',
+          'Stay steady through the rep.',
+          'Brace and keep the body quiet.',
+        ],
+      },
+      {
+        issueType: 'shoulder_issue',
+        priority: 60,
+        messages: [
+          'Avoid using your shoulders.',
+          'Keep the lift in your arms, not your shoulders.',
+          'Quiet shoulders on the next rep.',
+        ],
+      },
+      {
+        issueType: 'tempo_issue',
+        priority: 50,
+        messages: [
+          'Control the speed of the rep.',
+          'Keep the tempo controlled.',
+          'Smooth the rep out.',
+        ],
+      },
       {
         issueType: 'elbow_flare',
         priority: 30,
@@ -3082,6 +3297,10 @@ export function createBarbellCurlDefinition(
     'Arms are uneven — curl both sides together.': 'Focus on symmetry — curl both arms at the same speed.',
     "Keep your elbows in — don't flare them out to the sides.": 'Keep elbows pinned to your sides — flaring reduces bicep isolation.',
     "Tuck your elbows in — they're drifting outward.": 'Focus on keeping elbows close to your body throughout the curl.',
+    'Use a fuller range of motion.': 'Use a fuller range of motion across the curl.',
+    'Avoid using your shoulders to lift the bar.': 'Keep shoulders quiet so the biceps do the work.',
+    'Keep your torso still.': 'Brace and keep torso movement controlled.',
+    'Control the speed of the rep.': 'Keep the rep smooth and controlled.',
   },
   };
 }
