@@ -284,11 +284,19 @@ function logBarbellCurlMlFeedbackRep(
   heuristicIssueIds: string[],
   mlFeedback: ReturnType<typeof predictBarbellCurlGroupedFeedback>,
 ): void {
-  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return;
+  if (
+    typeof __DEV__ === 'undefined' ||
+    !__DEV__ ||
+    (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID))
+  ) {
+    return;
+  }
+  const round = (value: number | null | undefined): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? Number(value.toFixed(4)) : null;
   const probabilities = Object.fromEntries(
     mlFeedback.predictions.map((prediction) => [
       prediction.issueId,
-      typeof prediction.probability === 'number' ? Number(prediction.probability.toFixed(4)) : null,
+      round(prediction.probability),
     ]),
   );
   const gates = Object.fromEntries(
@@ -302,20 +310,84 @@ function logBarbellCurlMlFeedbackRep(
       .filter((prediction) => !prediction.predicted && prediction.skippedReason)
       .map((prediction) => [prediction.issueId, prediction.skippedReason]),
   );
+  const groupDiagnostics = Object.fromEntries(
+    mlFeedback.predictions.map((prediction) => [
+      prediction.issueId,
+      {
+        probability: round(prediction.probability),
+        threshold: prediction.threshold,
+        probabilityPass: prediction.probabilityGate?.passes ?? null,
+        directEvidence: prediction.directEvidence
+          ? {
+              feature: prediction.directEvidence.featureColumn,
+              value: round(prediction.directEvidence.value),
+              threshold: Number(prediction.directEvidence.threshold.toFixed(4)),
+              pass: prediction.directEvidence.passes,
+              missing: prediction.directEvidence.missing,
+            }
+          : null,
+        safety: prediction.safety
+          ? {
+              scorable: prediction.safety.scorable,
+              childEligibility: prediction.safety.childEligibility.map((child) => ({
+                issueId: child.issueId,
+                eligible: child.eligible,
+                scorableIssue: {
+                  value: round(child.scorableIssue.value),
+                  pass: child.scorableIssue.passes,
+                  missing: child.scorableIssue.missing,
+                },
+                cueEligible: {
+                  value: round(child.cueEligible.value),
+                  pass: child.cueEligible.passes,
+                  missing: child.cueEligible.missing,
+                },
+              })),
+            }
+          : null,
+        blockedReason: prediction.predicted ? null : prediction.skippedReason ?? 'blocked',
+        debugFeatures: prediction.debugFeatures
+          ? Object.fromEntries(
+              Object.entries(prediction.debugFeatures).map(([feature, value]) => [feature, round(value)]),
+            )
+          : undefined,
+        missingImportantFeatures: prediction.missingImportantFeatures,
+        shadowAlternatives: prediction.shadowAlternatives,
+      },
+    ]),
+  );
   console.info('[BarbellCurlMLFeedback]', {
     rep: repIndex,
     enabled: true,
     policy: mlFeedback.policyId,
     modelRunId: mlFeedback.modelRunId,
     groups: mlFeedback.issueIds,
+    candidateProbabilityGroups: mlFeedback.candidateProbabilityGroups,
+    candidateGateBlockedGroups: mlFeedback.candidateGateBlockedGroups,
+    finalPredictedGroups: mlFeedback.finalPredictedGroups,
     probs: probabilities,
     gates,
     blocked,
+    groupDiagnostics,
     selectedMessage: mlFeedback.selectedMessage,
     latencyMs: Number(mlFeedback.latencyMs.toFixed(2)),
     heuristicIssueIds,
     featureMissingness: mlFeedback.featureMissingness,
   });
+  const shadowAlternatives = mlFeedback.predictions
+    .filter((prediction) => prediction.shadowAlternatives?.length)
+    .flatMap((prediction) =>
+      (prediction.shadowAlternatives ?? []).map((alternative) => ({
+        group: prediction.issueId,
+        ...alternative,
+      })),
+    );
+  if (shadowAlternatives.length > 0) {
+    console.info('[BarbellCurlMLShadowAlt]', {
+      rep: repIndex,
+      alternatives: shadowAlternatives,
+    });
+  }
 }
 
 const BARBELL_CURL_QUALITY_PROFILE: NonNullable<ExerciseDefinition['qualityProfile']> = {
@@ -2982,6 +3054,9 @@ function completeRep(
         issueIds: mlFeedback.issueIds,
         messages: mlFeedback.messages,
         featureMissingness: mlFeedback.featureMissingness,
+        candidateProbabilityGroups: mlFeedback.candidateProbabilityGroups,
+        candidateGateBlockedGroups: mlFeedback.candidateGateBlockedGroups,
+        finalPredictedGroups: mlFeedback.finalPredictedGroups,
         predictions: mlFeedback.predictions,
         ...(mlFeedback.warnings.length > 0 ? { warnings: mlFeedback.warnings } : {}),
       };

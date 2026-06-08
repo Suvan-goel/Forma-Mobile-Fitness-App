@@ -1,6 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { barbellCurlDefinition } from '../definitions/barbellCurl';
+import { evaluateCase } from '../dataset';
+import type { DatasetCase } from '../dataset';
 import {
+  buildMlRepExamples,
+  buildRuntimeMlFeatureVector,
+} from '../ml/featureExtractor';
+import { replayRecordingVerbose } from '../replay';
+import {
+  BARBELL_CURL_GROUPED_FEEDBACK_POLICY,
   BARBELL_CURL_GROUPED_FEEDBACK_FLAG,
   isBarbellCurlGroupedFeedbackEnabled,
   predictBarbellCurlGroupedFeedback,
@@ -46,6 +55,53 @@ function readCsvRows(filePath: string): Array<Record<string, string>> {
   });
 }
 
+function loadDatasetCase(folder: 'validation' | 'testing', stem: string): DatasetCase {
+  const repoRoot = process.cwd();
+  const labelPath = path.join(
+    repoRoot,
+    'datasets/form-heuristics/labels',
+    folder,
+    'barbell-curl',
+    `${stem}.json`,
+  );
+  const recordingPath = path.join(
+    repoRoot,
+    'datasets/form-heuristics/landmarks',
+    folder,
+    'barbell-curl',
+    `${stem}.json`,
+  );
+  return {
+    label: JSON.parse(fs.readFileSync(labelPath, 'utf8')),
+    recording: JSON.parse(fs.readFileSync(recordingPath, 'utf8')),
+    labelPath,
+    recordingPath,
+  };
+}
+
+function withGroupedFeedbackDisabled<T>(callback: () => T): T {
+  const previousFlag = process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+  const previousLegacyFlag = process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+  process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '0';
+  delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+  try {
+    return callback();
+  } finally {
+    if (previousFlag === undefined) delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+    else process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = previousFlag;
+    if (previousLegacyFlag === undefined) delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+    else process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK = previousLegacyFlag;
+  }
+}
+
+function unprefixFeatureColumn(column: string): string {
+  return column.startsWith('feature__') ? column.slice('feature__'.length) : column;
+}
+
+function nullableFeature(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 describe('Barbell Curl grouped ML feedback runtime policy', () => {
   const originalFlag = process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
   const originalLegacyFlag = process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
@@ -57,9 +113,15 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
     else process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK = originalLegacyFlag;
   });
 
-  it('is disabled by default and enabled by the Expo public flag', () => {
+  it('is enabled by default and can be disabled by the Expo public flag', () => {
     delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
     delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+    expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(true);
+
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '0';
+    expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(false);
+
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = 'false';
     expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(false);
 
     process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
@@ -164,5 +226,110 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
         8,
       );
     }
+  });
+
+  it('matches offline ROM and torso model features on representative saved replay windows', () => {
+    withGroupedFeedbackDisabled(() => {
+      const cases = [
+        {
+          folder: 'validation' as const,
+          stem: 'val06-multi-rom-tempo',
+          repIndex: 2,
+          groupId: 'barbell-curl.ROM_issue',
+          modelId: 'rom',
+        },
+        {
+          folder: 'testing' as const,
+          stem: 'test05-focus-torso-warn',
+          repIndex: 2,
+          groupId: 'barbell-curl.torso_issue',
+          modelId: 'torso',
+        },
+      ];
+
+      for (const parityCase of cases) {
+        const datasetCase = loadDatasetCase(parityCase.folder, parityCase.stem);
+        const replay = replayRecordingVerbose(barbellCurlDefinition, datasetCase.recording, {
+          confidenceGating: true,
+        });
+        const caseEvaluation = evaluateCase(datasetCase, replay);
+        const built = buildMlRepExamples({
+          definition: barbellCurlDefinition,
+          datasetCase,
+          replay,
+          caseEvaluation,
+          labelFile: datasetCase.labelPath,
+          recordingFile: datasetCase.recordingPath,
+        });
+        const example = built.examples.find((candidate) => candidate.repIndex === parityCase.repIndex);
+        const matchedRep = caseEvaluation.matchedReps.find(
+          (candidate) => candidate.expectedRepIndex === parityCase.repIndex,
+        );
+        const label = datasetCase.label.reps.find((candidate) => candidate.index === parityCase.repIndex);
+        const prediction = replay.reps.find((candidate) => candidate.repIndex === matchedRep?.predictedRepIndex);
+
+        expect(example).toBeDefined();
+        expect(matchedRep).toBeDefined();
+        expect(label).toBeDefined();
+        expect(prediction).toBeDefined();
+        if (!example || !matchedRep || !label || !prediction) continue;
+
+        const frames = datasetCase.recording.frames.filter(
+          (frame) => frame.timestamp >= label.startMs && frame.timestamp <= label.endMs,
+        );
+        const runtimeFeatures = buildRuntimeMlFeatureVector({
+          definition: barbellCurlDefinition,
+          frames,
+          repIndex: label.index,
+          durationMs: label.endMs - label.startMs,
+          score: prediction.score,
+          issueIds: prediction.issueIds,
+          messages: prediction.messages,
+          scorable: prediction.scorable ?? matchedRep.predictedScorable ?? null,
+          confidence: prediction.confidence,
+          qualityStatus: prediction.qualityStatus,
+          qualityWarnings: prediction.qualityWarnings,
+          diagnostics: matchedRep.predictedDiagnostics,
+          view: matchedRep.predictedView,
+          overlapMs: matchedRep.overlapMs,
+          completionDeltaMs: matchedRep.completionDeltaMs,
+        });
+
+        const model = BARBELL_CURL_GROUPED_FEEDBACK_POLICY.models[parityCase.modelId];
+        expect(model).toBeDefined();
+        for (const column of model.featureColumns) {
+          const offlineValue = nullableFeature(example.features[unprefixFeatureColumn(column)]);
+          const runtimeValue = nullableFeature(runtimeFeatures[column]);
+          if (offlineValue === null || runtimeValue === null) {
+            expect(runtimeValue).toBe(offlineValue);
+          } else {
+            expect(runtimeValue).toBeCloseTo(offlineValue, 10);
+          }
+        }
+
+        const offlineFeatures = Object.fromEntries(
+          Object.entries(example.features).map(([key, value]) => [`feature__${key}`, value]),
+        );
+        const offlineResult = predictBarbellCurlGroupedFeedback({
+          features: offlineFeatures,
+          heuristicIssueIds: example.heuristic.issueIds,
+        });
+        const runtimeResult = predictBarbellCurlGroupedFeedback({
+          features: runtimeFeatures,
+          heuristicIssueIds: prediction.issueIds,
+        });
+        const offlinePrediction = offlineResult.predictions.find(
+          (candidate) => candidate.issueId === parityCase.groupId,
+        );
+        const runtimePrediction = runtimeResult.predictions.find(
+          (candidate) => candidate.issueId === parityCase.groupId,
+        );
+
+        expect(runtimePrediction?.probability ?? 0).toBeCloseTo(offlinePrediction?.probability ?? 0, 10);
+        expect(runtimePrediction?.probabilityGate).toEqual(offlinePrediction?.probabilityGate);
+        expect(runtimePrediction?.directEvidence).toEqual(offlinePrediction?.directEvidence);
+        expect(runtimePrediction?.predicted).toBe(offlinePrediction?.predicted);
+      }
+    });
   });
 });

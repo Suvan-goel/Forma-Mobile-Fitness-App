@@ -222,6 +222,12 @@ export interface RepMlGroupedFeedbackDiagnostic {
   messages: string[];
   warnings?: string[];
   featureMissingness?: Record<string, { missing: number; total: number }>;
+  candidateProbabilityGroups?: string[];
+  candidateGateBlockedGroups?: Array<{
+    issueId: string;
+    reason: string;
+  }>;
+  finalPredictedGroups?: string[];
   predictions: Array<{
     issueId: string;
     message: string;
@@ -231,6 +237,57 @@ export interface RepMlGroupedFeedbackDiagnostic {
     eligible: boolean;
     predicted: boolean;
     skippedReason?: string;
+    probabilityGate?: {
+      threshold: number | null;
+      passes: boolean;
+    };
+    safety?: {
+      scorable: boolean;
+      heuristicScorable: {
+        featureColumn: string;
+        value: number | null;
+        passes: boolean;
+        missing: boolean;
+      };
+      diagnosticScorable: {
+        featureColumn: string;
+        value: number | null;
+        passes: boolean;
+        missing: boolean;
+      };
+      childEligibility: Array<{
+        issueId: string;
+        eligible: boolean;
+        scorableIssue: {
+          featureColumn: string;
+          value: number | null;
+          passes: boolean;
+          missing: boolean;
+        };
+        cueEligible: {
+          featureColumn: string;
+          value: number | null;
+          passes: boolean;
+          missing: boolean;
+        };
+      }>;
+    };
+    directEvidence?: {
+      featureColumn: string;
+      value: number | null;
+      threshold: number;
+      passes: boolean;
+      missing: boolean;
+    };
+    debugFeatures?: Record<string, number | null>;
+    missingImportantFeatures?: string[];
+    shadowAlternatives?: Array<{
+      id: string;
+      wouldPredict: boolean;
+      reason: string;
+      probabilityThreshold?: number;
+      directEvidenceRequired?: boolean;
+    }>;
     childPredictions?: Array<{
       issueId: string;
       policy: string;

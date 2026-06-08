@@ -108,6 +108,48 @@ export interface BarbellCurlGroupedChildPrediction {
   skippedReason?: string;
 }
 
+export interface BarbellCurlGroupedBooleanGateDiagnostic {
+  featureColumn: string;
+  value: number | null;
+  passes: boolean;
+  missing: boolean;
+}
+
+export interface BarbellCurlGroupedNumericGateDiagnostic {
+  featureColumn: string;
+  value: number | null;
+  threshold: number;
+  passes: boolean;
+  missing: boolean;
+}
+
+export interface BarbellCurlGroupedProbabilityGateDiagnostic {
+  threshold: number | null;
+  passes: boolean;
+}
+
+export interface BarbellCurlGroupedChildEligibilityDiagnostic {
+  issueId: string;
+  eligible: boolean;
+  scorableIssue: BarbellCurlGroupedBooleanGateDiagnostic;
+  cueEligible: BarbellCurlGroupedBooleanGateDiagnostic;
+}
+
+export interface BarbellCurlGroupedSafetyDiagnostic {
+  scorable: boolean;
+  heuristicScorable: BarbellCurlGroupedBooleanGateDiagnostic;
+  diagnosticScorable: BarbellCurlGroupedBooleanGateDiagnostic;
+  childEligibility: BarbellCurlGroupedChildEligibilityDiagnostic[];
+}
+
+export interface BarbellCurlGroupedShadowAlternativeDiagnostic {
+  id: string;
+  wouldPredict: boolean;
+  reason: string;
+  probabilityThreshold?: number;
+  directEvidenceRequired?: boolean;
+}
+
 export interface BarbellCurlGroupedPrediction {
   issueId: string;
   message: string;
@@ -119,6 +161,17 @@ export interface BarbellCurlGroupedPrediction {
   predicted: boolean;
   skippedReason?: string;
   childPredictions?: BarbellCurlGroupedChildPrediction[];
+  probabilityGate?: BarbellCurlGroupedProbabilityGateDiagnostic;
+  safety?: BarbellCurlGroupedSafetyDiagnostic;
+  directEvidence?: BarbellCurlGroupedNumericGateDiagnostic;
+  debugFeatures?: Record<string, number | null>;
+  missingImportantFeatures?: string[];
+  shadowAlternatives?: BarbellCurlGroupedShadowAlternativeDiagnostic[];
+}
+
+export interface BarbellCurlGroupedCandidateGateBlock {
+  issueId: string;
+  reason: string;
 }
 
 export interface BarbellCurlGroupedFeedbackResult {
@@ -134,6 +187,9 @@ export interface BarbellCurlGroupedFeedbackResult {
   selectedIssueId: string | null;
   selectedMessage: string | null;
   predictions: BarbellCurlGroupedPrediction[];
+  candidateProbabilityGroups: string[];
+  candidateGateBlockedGroups: BarbellCurlGroupedCandidateGateBlock[];
+  finalPredictedGroups: string[];
   featureMissingness: Record<string, { missing: number; total: number }>;
   warnings: string[];
 }
@@ -141,6 +197,47 @@ export interface BarbellCurlGroupedFeedbackResult {
 export const BARBELL_CURL_GROUPED_FEEDBACK_POLICY = policyJson as unknown as BarbellCurlGroupedPolicy;
 
 let loggedEnabled = false;
+
+const ROM_GROUP_ID = 'barbell-curl.ROM_issue';
+const TORSO_GROUP_ID = 'barbell-curl.torso_issue';
+
+const IMPORTANT_DEBUG_FEATURES_BY_GROUP: Record<string, string[]> = {
+  [ROM_GROUP_ID]: [
+    'feature__diagnostic.metric.romratio.value',
+    'feature__diagnostic.metric.mincurlratio.value',
+    'feature__diagnostic.metric.returnmaxcurlratio.value',
+    'feature__diagnostic.metric.rawleftmincurlratio.value',
+    'feature__diagnostic.metric.rawrightmincurlratio.value',
+    'feature__diagnostic.cue.barbell_curl_incomplete_rom.margin',
+    'feature__diagnostic.cue.barbell_curl_incomplete_rom.eligible',
+    'feature__diagnostic.cue.barbell_curl_incomplete_flex.margin',
+    'feature__diagnostic.cue.barbell_curl_incomplete_extend.margin',
+    'feature__v2.rom.flexion.selected_arm.top_shortfall_from_0_19.p75',
+    'feature__v2.rom.extension.selected_arm.bottom_shortfall_from_0_92.p75',
+    'feature__v2.rom.selected_arm.curl_ratio.min',
+    'feature__v2.rom.selected_arm.curl_ratio.max',
+    'feature__v2.rom.bilateral.curl_ratio.mean',
+    'feature__v2.view.front_support_ratio',
+    'feature__v2.view.support_ratio',
+  ],
+  [TORSO_GROUP_ID]: [
+    'feature__diagnostic.metric.torsodeltaraw.value',
+    'feature__diagnostic.metric.torsodelta.value',
+    'feature__diagnostic.cue.barbell_curl_torso_warn.margin',
+    'feature__diagnostic.cue.barbell_curl_torso_fail.margin',
+    'feature__diagnostic.cue.barbell_curl_torso_warn.eligible',
+    'feature__diagnostic.cue.barbell_curl_torso_fail.eligible',
+    'feature__v2.torso.robust_abs_delta_p90_minus_p10',
+    'feature__v2.torso.full.sustained_lean_above_3deg.support_ratio',
+    'feature__v2.torso.full.sustained_lean_above_5deg.support_ratio',
+    'feature__v2.torso.raw_delta.max',
+    'feature__v2.torso.raw_delta.range',
+    'feature__v2.reliability.safe_cue_family_count',
+    'feature__v2.reliability.unsafe_cue_family_count',
+    'feature__v2.view.front_support_ratio',
+    'feature__v2.view.support_ratio',
+  ],
+};
 
 function flagValue(): string | undefined {
   if (typeof process === 'undefined') return undefined;
@@ -150,15 +247,24 @@ function flagValue(): string | undefined {
 
 export function isBarbellCurlGroupedFeedbackEnabled(): boolean {
   const value = flagValue();
-  return value === '1' || value?.toLowerCase() === 'true';
+  if (value === undefined) return true;
+  const normalized = value.toLowerCase();
+  return normalized !== '0' && normalized !== 'false' && normalized !== 'off';
 }
 
 export function logBarbellCurlGroupedFeedbackEnabledOnce(): void {
   if (loggedEnabled || !isBarbellCurlGroupedFeedbackEnabled()) return;
   loggedEnabled = true;
-  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') return;
+  if (
+    typeof __DEV__ === 'undefined' ||
+    !__DEV__ ||
+    (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID))
+  ) {
+    return;
+  }
+  const source = flagValue() === undefined ? 'default-on' : `${BARBELL_CURL_GROUPED_FEEDBACK_FLAG}=${flagValue()}`;
   console.info(
-    `[BarbellCurlMLFeedback] ${BARBELL_CURL_GROUPED_FEEDBACK_FLAG}=1; using ${BARBELL_CURL_GROUPED_FEEDBACK_POLICY.policyId}`,
+    `[BarbellCurlMLFeedback] ${source}; using ${BARBELL_CURL_GROUPED_FEEDBACK_POLICY.policyId}`,
   );
 }
 
@@ -252,6 +358,31 @@ function isTruthyFeature(features: FeatureVector, column: string): boolean {
   return (featureValue(features, column) ?? 0) >= 0.5;
 }
 
+function booleanGate(features: FeatureVector, column: string): BarbellCurlGroupedBooleanGateDiagnostic {
+  const value = featureValue(features, column);
+  return {
+    featureColumn: column,
+    value,
+    passes: (value ?? 0) >= 0.5,
+    missing: value === null,
+  };
+}
+
+function numericGate(
+  features: FeatureVector,
+  column: string,
+  threshold: number,
+): BarbellCurlGroupedNumericGateDiagnostic {
+  const value = featureValue(features, column);
+  return {
+    featureColumn: column,
+    value,
+    threshold,
+    passes: value !== null && value >= threshold,
+    missing: value === null,
+  };
+}
+
 function scorable(features: FeatureVector): boolean {
   const heuristicScorable = featureValue(features, 'feature__heuristic.scorable');
   const diagnosticScorable = featureValue(features, 'feature__diagnostic.scorable');
@@ -269,6 +400,105 @@ function issueAddEligible(features: FeatureVector, issueId: string): boolean {
 
 function groupedEligible(features: FeatureVector, issueIds: string[]): boolean {
   return scorable(features) && issueIds.some((issueId) => issueAddEligible(features, issueId));
+}
+
+function groupChildIssueIds(group: RuntimeGroup): string[] {
+  return group.kind === 'collapsed_fine_policy'
+    ? group.childPolicies.map((child) => child.issueId)
+    : group.childIssueIds;
+}
+
+function issueEligibilityDetails(
+  features: FeatureVector,
+  issueId: string,
+): BarbellCurlGroupedChildEligibilityDiagnostic {
+  const suffix = safeIssuePart(issueId);
+  const scorableIssue = booleanGate(features, `feature__scorable.issue.${suffix}`);
+  const cueEligible = booleanGate(features, `feature__diagnostic.cue.${suffix}.eligible`);
+  return {
+    issueId,
+    eligible: scorable(features) && scorableIssue.passes && cueEligible.passes,
+    scorableIssue,
+    cueEligible,
+  };
+}
+
+function groupSafetyDetails(
+  features: FeatureVector,
+  issueIds: string[],
+): BarbellCurlGroupedSafetyDiagnostic {
+  return {
+    scorable: scorable(features),
+    heuristicScorable: booleanGate(features, 'feature__heuristic.scorable'),
+    diagnosticScorable: booleanGate(features, 'feature__diagnostic.scorable'),
+    childEligibility: issueIds.map((issueId) => issueEligibilityDetails(features, issueId)),
+  };
+}
+
+function debugFeatureSnapshot(groupId: string, features: FeatureVector): {
+  debugFeatures?: Record<string, number | null>;
+  missingImportantFeatures?: string[];
+} {
+  const columns = IMPORTANT_DEBUG_FEATURES_BY_GROUP[groupId];
+  if (!columns) return {};
+  const debugFeatures = Object.fromEntries(
+    columns.map((column) => [column, featureValue(features, column)]),
+  );
+  return {
+    debugFeatures,
+    missingImportantFeatures: columns.filter((column) => debugFeatures[column] === null),
+  };
+}
+
+function shadowAlternativesForGroup(
+  group: RuntimeGroup,
+  probability: number | null,
+  eligible: boolean,
+  directEvidence?: BarbellCurlGroupedNumericGateDiagnostic,
+): BarbellCurlGroupedShadowAlternativeDiagnostic[] | undefined {
+  if (probability === null) return undefined;
+  if (group.id === ROM_GROUP_ID) {
+    const relaxedThreshold = 0.75;
+    return [
+      {
+        id: 'rom_threshold_0_75',
+        probabilityThreshold: relaxedThreshold,
+        wouldPredict: probability >= relaxedThreshold && eligible,
+        reason: eligible ? 'relaxed_probability_threshold' : 'blocked_by_safety_or_cue_gate',
+      },
+    ];
+  }
+  if (group.id === TORSO_GROUP_ID) {
+    const relaxedThreshold = 0.55;
+    return [
+      {
+        id: 'torso_probability_only',
+        probabilityThreshold: group.kind === 'thresholded_model_with_direct_evidence' ? group.threshold : undefined,
+        directEvidenceRequired: false,
+        wouldPredict:
+          group.kind === 'thresholded_model_with_direct_evidence' &&
+          probability >= group.threshold &&
+          eligible,
+        reason: eligible ? 'runtime_threshold_without_direct_evidence_gate' : 'blocked_by_safety_or_cue_gate',
+      },
+      {
+        id: 'torso_threshold_0_55_with_direct_evidence',
+        probabilityThreshold: relaxedThreshold,
+        directEvidenceRequired: true,
+        wouldPredict: probability >= relaxedThreshold && eligible && (directEvidence?.passes ?? false),
+        reason: directEvidence?.passes
+          ? (eligible ? 'relaxed_probability_threshold' : 'blocked_by_safety_or_cue_gate')
+          : 'blocked_by_direct_evidence_gate',
+      },
+      {
+        id: 'torso_direct_evidence_only',
+        directEvidenceRequired: true,
+        wouldPredict: eligible && (directEvidence?.passes ?? false),
+        reason: directEvidence?.passes ? 'direct_evidence_passes' : 'blocked_by_direct_evidence_gate',
+      },
+    ];
+  }
+  return undefined;
 }
 
 function modelById(modelId: string): RuntimeModel | null {
@@ -346,6 +576,8 @@ function evaluateGroup(
       eligible: false,
       predicted: false,
       skippedReason: 'rep_not_scorable',
+      safety: groupSafetyDetails(features, groupChildIssueIds(group)),
+      ...debugFeatureSnapshot(group.id, features),
     };
   }
 
@@ -366,6 +598,7 @@ function evaluateGroup(
       eligible,
       predicted,
       childPredictions,
+      safety: groupSafetyDetails(features, group.childPolicies.map((child) => child.issueId)),
       ...(!eligible ? { skippedReason: 'no_child_cue_eligible' } : {}),
     };
   }
@@ -382,23 +615,32 @@ function evaluateGroup(
       eligible: false,
       predicted: false,
       skippedReason: 'model_unavailable',
+      safety: groupSafetyDetails(features, group.childIssueIds),
+      ...debugFeatureSnapshot(group.id, features),
     };
   }
 
   const probability = predictModel(model, features);
+  const safety = groupSafetyDetails(features, group.childIssueIds);
   const eligible = groupedEligible(features, group.childIssueIds);
-  let predicted = probability >= group.threshold && eligible;
+  const probabilityGate = {
+    threshold: group.threshold,
+    passes: probability >= group.threshold,
+  };
+  let directEvidence: BarbellCurlGroupedNumericGateDiagnostic | undefined;
+  let predicted = probabilityGate.passes && eligible;
   let skippedReason: string | undefined;
 
   if (!eligible) skippedReason = 'no_child_cue_eligible';
+  else if (!probabilityGate.passes) skippedReason = 'probability_below_threshold';
   if (group.kind === 'thresholded_model_with_direct_evidence') {
-    const evidence = featureValue(features, group.directEvidence.featureColumn);
-    const evidencePasses = evidence !== null && evidence >= group.directEvidence.threshold;
-    predicted = predicted && evidencePasses;
-    if (probability >= group.threshold && eligible && !evidencePasses) {
+    directEvidence = numericGate(features, group.directEvidence.featureColumn, group.directEvidence.threshold);
+    predicted = predicted && directEvidence.passes;
+    if (probabilityGate.passes && eligible && !directEvidence.passes) {
       skippedReason = 'direct_evidence_gate_failed';
     }
   }
+  const shadowAlternatives = shadowAlternativesForGroup(group, probability, eligible, directEvidence);
 
   return {
     issueId: group.id,
@@ -409,6 +651,11 @@ function evaluateGroup(
     threshold: group.threshold,
     eligible,
     predicted,
+    probabilityGate,
+    safety,
+    ...(directEvidence ? { directEvidence } : {}),
+    ...debugFeatureSnapshot(group.id, features),
+    ...(shadowAlternatives ? { shadowAlternatives } : {}),
     ...(skippedReason ? { skippedReason } : {}),
   };
 }
@@ -450,6 +697,16 @@ export function predictBarbellCurlGroupedFeedback(input: {
     .filter((prediction) => prediction.predicted)
     .sort((a, b) => b.priority - a.priority);
   const top = selected[0] ?? null;
+  const candidateProbabilityGroups = predictions
+    .filter((prediction) => prediction.probabilityGate?.passes)
+    .map((prediction) => prediction.issueId);
+  const candidateGateBlockedGroups = predictions
+    .filter((prediction) => prediction.probabilityGate?.passes && !prediction.predicted)
+    .map((prediction) => ({
+      issueId: prediction.issueId,
+      reason: prediction.skippedReason ?? 'blocked',
+    }));
+  const finalPredictedGroups = selected.map((prediction) => prediction.issueId);
 
   return {
     enabled: true,
@@ -464,6 +721,9 @@ export function predictBarbellCurlGroupedFeedback(input: {
     selectedIssueId: top?.issueId ?? null,
     selectedMessage: top?.message ?? null,
     predictions,
+    candidateProbabilityGroups,
+    candidateGateBlockedGroups,
+    finalPredictedGroups,
     featureMissingness,
     warnings,
   };

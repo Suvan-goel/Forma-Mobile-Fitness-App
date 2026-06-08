@@ -65,7 +65,7 @@ export const TRAINERS: Trainer[] = [
     name: 'Leo',
     description: 'Focused, professional, and composed, with a strong coach-like presence.',
     voiceId: 'lUTamkMw7gOzZbFIwmq4',
-    voiceSettings: { speed: 0.94, stability: 0.62, similarity: 0.82, styleExaggeration: 0 },
+    voiceSettings: { speed: 0.9, stability: 0.62, similarity: 0.82, styleExaggeration: 0 },
     greeting: "I'm Leo. Stay focused, let's work.",
   },
   {
@@ -73,7 +73,7 @@ export const TRAINERS: Trainer[] = [
     name: 'Miles',
     description: 'Casual, direct, and motivating, with a realistic personal-trainer feel.',
     voiceId: '1t1EeRixsJrKbiF1zwM6',
-    voiceSettings: { speed: 0.98, stability: 0.52, similarity: 0.78, styleExaggeration: 0 },
+    voiceSettings: { speed: 0.94, stability: 0.52, similarity: 0.78, styleExaggeration: 0 },
     greeting: "Hey, I'm Miles. Let's get after it.",
   },
   {

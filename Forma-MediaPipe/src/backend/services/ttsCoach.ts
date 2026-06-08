@@ -16,6 +16,7 @@ import {
   speakWithElevenLabs,
   isElevenLabsAvailable,
   playPreparedSpeech,
+  cancelSpeech,
   type PreparedSpeech,
   type SpeechOptions,
 } from './elevenlabsTTS';
@@ -60,6 +61,34 @@ const DEFAULT_STATE: CoachState = {
 };
 
 let state: CoachState = { ...DEFAULT_STATE };
+let activeSpeechToken = 0;
+
+type PendingCoachSpeech = {
+  text: string;
+  options: SpeechOptions;
+  queuedAt: number;
+};
+
+const PENDING_COACH_SPEECH_MAX_AGE_MS = 8000;
+
+let pendingCoachSpeech: PendingCoachSpeech | null = null;
+
+function beginSpeech(): number {
+  activeSpeechToken += 1;
+  state.isSpeaking = true;
+  return activeSpeechToken;
+}
+
+function finishSpeech(token: number): boolean {
+  if (activeSpeechToken !== token) return false;
+  state.isSpeaking = false;
+  return true;
+}
+
+function invalidateActiveSpeech(): void {
+  activeSpeechToken += 1;
+  state.isSpeaking = false;
+}
 
 async function speakFeedback(candidate: FeedbackIssueCandidate): Promise<void> {
   state.lastSpokenIssue = candidate.issueType;
@@ -186,13 +215,19 @@ export async function onSetEnded(
 
   // Wait for any current speech to finish before speaking summary
   await waitForSilence(3000); // max 3s wait
-  state.isSpeaking = true;
+  pendingCoachSpeech = null;
+  if (state.isSpeaking) {
+    invalidateActiveSpeech();
+    await cancelSpeech('coach').catch(() => {});
+    await cancelSpeech('set-start').catch(() => {});
+  }
+  const speechToken = beginSpeech();
   try {
     await speakWithElevenLabs(summary, { purpose: 'summary' });
   } catch {
     // Swallow — TTS failure shouldn't block navigation
   } finally {
-    state.isSpeaking = false;
+    finishSpeech(speechToken);
   }
 }
 
@@ -201,6 +236,8 @@ export async function onSetEnded(
  */
 export function resetCoachState(): void {
   state = { ...DEFAULT_STATE };
+  invalidateActiveSpeech();
+  pendingCoachSpeech = null;
 }
 
 export function getSetStartMessage(exerciseName: string): string {
@@ -218,6 +255,11 @@ export async function onSetStarted(
   preparedSpeech?: PreparedSpeech | null
 ): Promise<void> {
   if (!isElevenLabsAvailable()) return;
+  pendingCoachSpeech = null;
+  invalidateActiveSpeech();
+  await cancelSpeech('coach').catch(() => {});
+  await cancelSpeech('summary').catch(() => {});
+  await cancelSpeech('set-start').catch(() => {});
   const message = messageOverride ?? pickSetStartMessage(exerciseName);
   await trySpeak(message, { purpose: 'set-start' }, preparedSpeech);
 }
@@ -226,7 +268,8 @@ export async function onSetStarted(
  * Stop any current speech (e.g. when user disables TTS).
  */
 export function stopCoach(): void {
-  state.isSpeaking = false;
+  invalidateActiveSpeech();
+  pendingCoachSpeech = null;
   import('./elevenlabsTTS').then(({ stopSpeech }) => stopSpeech()).catch(() => {});
 }
 
@@ -234,17 +277,42 @@ export function stopCoach(): void {
 // INTERNAL
 // ============================================================================
 
-/**
- * Try to speak a message. If already speaking, drop the message (no interrupt).
- */
 async function trySpeak(
   text: string,
   options: SpeechOptions = { purpose: 'coach' },
   preparedSpeech?: PreparedSpeech | null
 ): Promise<void> {
-  if (!text || state.isSpeaking) return;
+  const normalizedOptions: SpeechOptions = {
+    ...options,
+    purpose: options.purpose ?? 'coach',
+  };
 
-  state.isSpeaking = true;
+  if (!text) return;
+
+  if (state.isSpeaking) {
+    if (!preparedSpeech && normalizedOptions.purpose === 'coach') {
+      pendingCoachSpeech = {
+        text,
+        options: normalizedOptions,
+        queuedAt: Date.now(),
+      };
+    }
+    return;
+  }
+
+  const completedAsCurrentSpeech = await speakNow(text, normalizedOptions, preparedSpeech);
+  if (completedAsCurrentSpeech) {
+    await flushPendingCoachSpeech();
+  }
+}
+
+async function speakNow(
+  text: string,
+  options: SpeechOptions,
+  preparedSpeech?: PreparedSpeech | null
+): Promise<boolean> {
+  const speechToken = beginSpeech();
+  let completedAsCurrentSpeech = false;
   try {
     if (preparedSpeech) {
       await playPreparedSpeech(preparedSpeech, options);
@@ -254,8 +322,19 @@ async function trySpeak(
   } catch {
     // Swallow — TTS failure shouldn't crash the app
   } finally {
-    state.isSpeaking = false;
+    completedAsCurrentSpeech = finishSpeech(speechToken);
   }
+  return completedAsCurrentSpeech;
+}
+
+async function flushPendingCoachSpeech(): Promise<void> {
+  if (state.isSpeaking || !pendingCoachSpeech) return;
+
+  const pending = pendingCoachSpeech;
+  pendingCoachSpeech = null;
+  if (Date.now() - pending.queuedAt > PENDING_COACH_SPEECH_MAX_AGE_MS) return;
+
+  await trySpeak(pending.text, pending.options);
 }
 
 /**

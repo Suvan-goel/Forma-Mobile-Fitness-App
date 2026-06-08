@@ -722,6 +722,17 @@ function replayRecordingWithPoseState(
 }
 
 describe('Barbell Curl synthetic replay coverage', () => {
+  const originalGroupedFeedbackFlag = process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+
+  beforeEach(() => {
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '0';
+  });
+
+  afterAll(() => {
+    if (originalGroupedFeedbackFlag === undefined) delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+    else process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = originalGroupedFeedbackFlag;
+  });
+
   it('counts a clean front-facing full rep', () => {
     const result = replayRecording(
       barbellCurlDefinition,
