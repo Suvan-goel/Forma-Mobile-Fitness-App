@@ -121,6 +121,7 @@ function addPercentileStats(features: MlFeatureVector, prefix: string, values: n
   setFeature(features, `${prefix}.p50`, percentile(values, 0.5));
   setFeature(features, `${prefix}.p75`, percentile(values, 0.75));
   setFeature(features, `${prefix}.p90`, percentile(values, 0.9));
+  setFeature(features, `${prefix}.p95`, percentile(values, 0.95));
 }
 
 function countWithin(values: number[], predicate: (value: number) => boolean): number | null {
@@ -228,6 +229,90 @@ function addEndpointHoldFeatures(features: MlFeatureVector, prefix: string, valu
   setFeature(features, `${prefix}.bottom_hold_frames`, bottomFrames);
   setFeature(features, `${prefix}.top_hold_ratio`, ratio(topFrames, values.length));
   setFeature(features, `${prefix}.bottom_hold_ratio`, ratio(bottomFrames, values.length));
+}
+
+function medianFrameIntervalMs(frames: DatasetCase['recording']['frames']): number | null {
+  if (frames.length < 2) return null;
+  const intervals: number[] = [];
+  for (let index = 1; index < frames.length; index += 1) {
+    const dt = frames[index].timestamp - frames[index - 1].timestamp;
+    if (Number.isFinite(dt) && dt > 0) intervals.push(dt);
+  }
+  return percentile(intervals, 0.5);
+}
+
+function phaseDurationMs(frames: DatasetCase['recording']['frames']): number | null {
+  if (frames.length < 2) return null;
+  return Math.max(0, frames[frames.length - 1].timestamp - frames[0].timestamp);
+}
+
+function longestRun(values: number[], predicate: (value: number) => boolean): number {
+  let current = 0;
+  let longest = 0;
+  for (const value of values) {
+    if (predicate(value)) {
+      current += 1;
+      longest = Math.max(longest, current);
+    } else {
+      current = 0;
+    }
+  }
+  return longest;
+}
+
+function robustRange(values: number[], low = 0.1, high = 0.9): number | null {
+  const lowValue = percentile(values, low);
+  const highValue = percentile(values, high);
+  return lowValue !== null && highValue !== null ? highValue - lowValue : null;
+}
+
+function setSupportFeatures(features: MlFeatureVector, prefix: string, values: number[], predicate: (value: number) => boolean): void {
+  if (values.length === 0) {
+    setFeature(features, `${prefix}.support_frames`, null);
+    setFeature(features, `${prefix}.support_ratio`, null);
+    setFeature(features, `${prefix}.longest_run_frames`, null);
+    return;
+  }
+  const supportFrames = values.filter(predicate).length;
+  setFeature(features, `${prefix}.support_frames`, supportFrames);
+  setFeature(features, `${prefix}.support_ratio`, supportFrames / values.length);
+  setFeature(features, `${prefix}.longest_run_frames`, longestRun(values, predicate));
+}
+
+function estimatedSampleDurationMs(sampleCount: number, sourceFrames: DatasetCase['recording']['frames']): number | null {
+  const intervalMs = medianFrameIntervalMs(sourceFrames);
+  return intervalMs === null ? null : sampleCount * intervalMs;
+}
+
+function normalizedShortfall(value: number | null, target: number): number | null {
+  if (value === null || target <= 0) return null;
+  return Math.max(0, target - value) / target;
+}
+
+function frameAverageWristY(frame: DatasetCase['recording']['frames'][number], reliableOnly = false): number | null {
+  const keypoints = frameKeypoints(frame);
+  const values: number[] = [];
+  for (const side of ['left', 'right'] as const) {
+    const wrist = keypointByName(keypoints, `${side}_wrist`);
+    if (!wrist) continue;
+    if (reliableOnly && !keypointReliable(wrist)) continue;
+    if (Number.isFinite(wrist.y)) values.push(wrist.y);
+  }
+  return values.length === 0 ? null : values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function framesAtOrBelowWristQuantile(
+  frames: DatasetCase['recording']['frames'],
+  quantile: number,
+): DatasetCase['recording']['frames'] {
+  const samples = frames
+    .map((frame, index) => {
+      const y = frameAverageWristY(frame, true);
+      return y === null ? null : { index, y };
+    })
+    .filter((sample): sample is { index: number; y: number } => sample !== null);
+  const cutoff = percentile(samples.map((sample) => sample.y), quantile);
+  return cutoff === null ? [] : samples.filter((sample) => sample.y <= cutoff).map((sample) => frames[sample.index]);
 }
 
 function addKeypointStats(
@@ -459,6 +544,33 @@ function wristYSamples(frames: DatasetCase['recording']['frames'], side: ArmSide
   return values;
 }
 
+function extensionRatiosFromAngles(angles: number[]): number[] {
+  return angles.map((angle) => angle / 180).filter((value) => Number.isFinite(value));
+}
+
+function addBottomExtensionFeatures(
+  features: MlFeatureVector,
+  prefix: string,
+  angles: number[],
+  sourceFrames: DatasetCase['recording']['frames'],
+  phaseFrames: DatasetCase['recording']['frames'],
+): void {
+  const ratios = extensionRatiosFromAngles(angles);
+  const shortfallFrom92 = ratios.map((value) => Math.max(0, 0.92 - value));
+  const shortfallFrom95 = ratios.map((value) => Math.max(0, 0.95 - value));
+  addPercentileStats(features, `${prefix}.bottom_elbow_angle_deg`, angles);
+  addPercentileStats(features, `${prefix}.bottom_extension_ratio`, ratios);
+  addPercentileStats(features, `${prefix}.bottom_shortfall_from_0_92`, shortfallFrom92);
+  addPercentileStats(features, `${prefix}.bottom_shortfall_from_0_95`, shortfallFrom95);
+  setFeature(features, `${prefix}.bottom_reliable_frame_count`, angles.length);
+  setFeature(features, `${prefix}.bottom_reliable_frame_ratio`, phaseFrames.length === 0 ? null : angles.length / phaseFrames.length);
+  setFeature(features, `${prefix}.bottom_hold_duration_ms`, estimatedSampleDurationMs(angles.length, sourceFrames));
+  setFeature(features, `${prefix}.bottom_endpoint_stability_std`, std(ratios, mean(ratios)));
+  setSupportFeatures(features, `${prefix}.short_extension_below_0_88`, ratios, (value) => value <= 0.88);
+  setSupportFeatures(features, `${prefix}.short_extension_below_0_90`, ratios, (value) => value <= 0.9);
+  setSupportFeatures(features, `${prefix}.extension_shortfall_above_0_04`, shortfallFrom92, (value) => value >= 0.04);
+}
+
 function addMlFeatureV2RomEndpointFeatures(
   features: MlFeatureVector,
   frames: DatasetCase['recording']['frames'],
@@ -501,6 +613,49 @@ function addMlFeatureV2RomEndpointFeatures(
   setFeature(features, 'v2.rom.selected_arm.rom_deg', selectedRom);
   addEndpointHoldFeatures(features, 'v2.rom.selected_arm.elbow_angle_deg', selectedAngles, true);
 
+  const bottomLeft = armAngleSamples(split.bottom, 'left', true);
+  const bottomRight = armAngleSamples(split.bottom, 'right', true);
+  const bottomBilateral = bottomLeft
+    .map((left, index) => averageNullable(left, bottomRight[index] ?? null))
+    .filter((value): value is number => value !== null);
+  const bottomSelected = selectedSide === 'left'
+    ? bottomLeft
+    : selectedSide === 'right'
+      ? bottomRight
+      : bottomBilateral;
+  addBottomExtensionFeatures(features, 'v2.rom.extension.left', bottomLeft, frames, split.bottom);
+  addBottomExtensionFeatures(features, 'v2.rom.extension.right', bottomRight, frames, split.bottom);
+  addBottomExtensionFeatures(features, 'v2.rom.extension.bilateral', bottomBilateral, frames, split.bottom);
+  addBottomExtensionFeatures(features, 'v2.rom.extension.selected_arm', bottomSelected, frames, split.bottom);
+  const selectedBottomRatioP50 = percentile(extensionRatiosFromAngles(bottomSelected), 0.5);
+  const bilateralBottomRatioP50 = percentile(extensionRatiosFromAngles(bottomBilateral), 0.5);
+  const leftBottomRatioP50 = percentile(extensionRatiosFromAngles(bottomLeft), 0.5);
+  const rightBottomRatioP50 = percentile(extensionRatiosFromAngles(bottomRight), 0.5);
+  setFeature(
+    features,
+    'v2.rom.extension.selected_vs_bilateral_bottom_ratio_diff',
+    selectedBottomRatioP50 !== null && bilateralBottomRatioP50 !== null
+      ? Math.abs(selectedBottomRatioP50 - bilateralBottomRatioP50)
+      : null,
+  );
+  setFeature(
+    features,
+    'v2.rom.extension.left_right_bottom_ratio_diff',
+    leftBottomRatioP50 !== null && rightBottomRatioP50 !== null
+      ? Math.abs(leftBottomRatioP50 - rightBottomRatioP50)
+      : null,
+  );
+  setFeature(
+    features,
+    'v2.rom.extension.selected_arm.bottom_extension_margin_from_0_92',
+    selectedBottomRatioP50 === null ? null : selectedBottomRatioP50 - 0.92,
+  );
+  setFeature(
+    features,
+    'v2.rom.extension.selected_arm.normalized_shortfall_from_0_92',
+    normalizedShortfall(selectedBottomRatioP50, 0.92),
+  );
+
   for (const [name, phaseFrames] of Object.entries({
     concentric: split.first,
     eccentric: split.second,
@@ -512,38 +667,147 @@ function addMlFeatureV2RomEndpointFeatures(
     const phaseBilateral = phaseLeft
       .map((left, index) => averageNullable(left, phaseRight[index] ?? null))
       .filter((value): value is number => value !== null);
+    const phaseSelected = selectedSide === 'left'
+      ? phaseLeft
+      : selectedSide === 'right'
+        ? phaseRight
+        : phaseBilateral;
     addPercentileStats(features, `v2.rom.phase.${name}.bilateral_elbow_angle_deg`, phaseBilateral);
+    addPercentileStats(features, `v2.rom.phase.${name}.selected_arm_elbow_angle_deg`, phaseSelected);
     setFeature(features, `v2.rom.phase.${name}.frame_count`, phaseFrames.length);
+    setFeature(
+      features,
+      `v2.rom.phase.${name}.selected_reliable_frame_ratio`,
+      phaseFrames.length === 0 ? null : phaseSelected.length / phaseFrames.length,
+    );
   }
 }
 
 function phaseWristVelocities(frames: DatasetCase['recording']['frames']): number[] {
-  const velocities: number[] = [];
+  return wristVelocityDetails(frames, false).absolute;
+}
+
+interface WristVelocityDetails {
+  absolute: number[];
+  upward: number[];
+  downward: number[];
+  signed: number[];
+  pairCount: number;
+  reliablePairCount: number;
+  gapCount: number;
+  maxGapMs: number | null;
+}
+
+function wristVelocityDetails(frames: DatasetCase['recording']['frames'], reliableOnly: boolean): WristVelocityDetails {
+  const absolute: number[] = [];
+  const upward: number[] = [];
+  const downward: number[] = [];
+  const signed: number[] = [];
+  let reliablePairCount = 0;
+  let gapCount = 0;
+  let maxGapMs: number | null = null;
+  const medianInterval = medianFrameIntervalMs(frames);
   for (let index = 1; index < frames.length; index += 1) {
-    const previous = frameKeypoints(frames[index - 1]);
-    const current = frameKeypoints(frames[index]);
-    const prevY = averageNullable(sideWristY(previous, 'left'), sideWristY(previous, 'right'));
-    const currY = averageNullable(sideWristY(current, 'left'), sideWristY(current, 'right'));
+    const dtMs = frames[index].timestamp - frames[index - 1].timestamp;
+    if (!Number.isFinite(dtMs) || dtMs <= 0) continue;
+    if (medianInterval !== null && dtMs > medianInterval * 2.5) gapCount += 1;
+    maxGapMs = maxGapMs === null ? dtMs : Math.max(maxGapMs, dtMs);
+    const previous = frameAverageWristY(frames[index - 1], reliableOnly);
+    const current = frameAverageWristY(frames[index], reliableOnly);
+    const prevReliable = frameAverageWristY(frames[index - 1], true) !== null;
+    const currReliable = frameAverageWristY(frames[index], true) !== null;
+    if (prevReliable && currReliable) reliablePairCount += 1;
+    const prevY = previous;
+    const currY = current;
     if (prevY === null || currY === null) continue;
-    const dt = Math.max(0.001, (frames[index].timestamp - frames[index - 1].timestamp) / 1000);
-    velocities.push(Math.abs(currY - prevY) / dt);
+    const dt = Math.max(0.001, dtMs / 1000);
+    const signedVelocity = (prevY - currY) / dt;
+    signed.push(signedVelocity);
+    absolute.push(Math.abs(signedVelocity));
+    if (signedVelocity > 0) upward.push(signedVelocity);
+    if (signedVelocity < 0) downward.push(Math.abs(signedVelocity));
   }
-  return velocities;
+  return {
+    absolute,
+    upward,
+    downward,
+    signed,
+    pairCount: Math.max(0, frames.length - 1),
+    reliablePairCount,
+    gapCount,
+    maxGapMs,
+  };
+}
+
+function addTempoPhaseFeatures(
+  features: MlFeatureVector,
+  prefix: string,
+  phaseFrames: DatasetCase['recording']['frames'],
+  sourceFrames: DatasetCase['recording']['frames'],
+): void {
+  const velocity = wristVelocityDetails(phaseFrames, false);
+  const reliableVelocity = wristVelocityDetails(phaseFrames, true);
+  const duration = phaseDurationMs(phaseFrames);
+  addPercentileStats(features, `${prefix}.wrist_velocity`, velocity.absolute);
+  addPercentileStats(features, `${prefix}.reliable_wrist_velocity`, reliableVelocity.absolute);
+  addPercentileStats(features, `${prefix}.upward_wrist_velocity`, velocity.upward);
+  addPercentileStats(features, `${prefix}.downward_wrist_velocity`, velocity.downward);
+  setFeature(features, `${prefix}.duration_ms`, duration);
+  setFeature(features, `${prefix}.sample_count`, phaseFrames.length);
+  setFeature(features, `${prefix}.velocity_sample_count`, velocity.absolute.length);
+  setFeature(features, `${prefix}.reliable_velocity_sample_count`, reliableVelocity.absolute.length);
+  setFeature(
+    features,
+    `${prefix}.reliable_velocity_sample_ratio`,
+    velocity.pairCount === 0 ? null : reliableVelocity.absolute.length / velocity.pairCount,
+  );
+  setFeature(features, `${prefix}.phase_duration_reliability`, phaseFrames.length === 0 ? null : reliableVelocity.reliablePairCount / Math.max(1, phaseFrames.length - 1));
+  setFeature(features, `${prefix}.tracking_gap_count`, velocity.gapCount);
+  setFeature(features, `${prefix}.max_tracking_gap_ms`, velocity.maxGapMs);
+  setFeature(features, `${prefix}.estimated_sample_duration_ms`, estimatedSampleDurationMs(phaseFrames.length, sourceFrames));
+  for (const target of [700, 900, 1100, 1300]) {
+    setFeature(features, `${prefix}.duration_shortfall_${target}ms`, normalizedShortfall(duration, target));
+  }
+  const p75 = percentile(velocity.absolute, 0.75);
+  const p90 = percentile(velocity.absolute, 0.9);
+  const shortfall1100 = normalizedShortfall(duration, 1100);
+  setFeature(
+    features,
+    `${prefix}.fast_evidence`,
+    p90 === null
+      ? null
+      : p90 * (1 + (shortfall1100 ?? 0)),
+  );
+  setFeature(
+    features,
+    `${prefix}.sustained_fast_evidence`,
+    p75 === null
+      ? null
+      : p75 * (1 + (shortfall1100 ?? 0)),
+  );
 }
 
 function addMlFeatureV2TempoFeatures(features: MlFeatureVector, frames: DatasetCase['recording']['frames']): void {
   const split = splitFramesByWristEndpoint(frames);
-  const concentricDuration = split.first.length >= 2 ? split.first[split.first.length - 1].timestamp - split.first[0].timestamp : null;
-  const eccentricDuration = split.second.length >= 2 ? split.second[split.second.length - 1].timestamp - split.second[0].timestamp : null;
+  const concentricDuration = phaseDurationMs(split.first);
+  const eccentricDuration = phaseDurationMs(split.second);
   setFeature(features, 'v2.tempo.concentric_duration_ms', concentricDuration);
   setFeature(features, 'v2.tempo.eccentric_duration_ms', eccentricDuration);
+  setFeature(features, 'v2.tempo.up_phase_duration_ms', concentricDuration);
+  setFeature(features, 'v2.tempo.down_phase_duration_ms', eccentricDuration);
   setFeature(features, 'v2.tempo.concentric_eccentric_ratio', concentricDuration !== null && eccentricDuration !== null && eccentricDuration > 0
     ? concentricDuration / eccentricDuration
     : null);
+  setFeature(features, 'v2.tempo.up_down_duration_ratio', concentricDuration !== null && eccentricDuration !== null && eccentricDuration > 0
+    ? concentricDuration / eccentricDuration
+    : null);
+  setFeature(features, 'v2.tempo.duration_balance_abs_log_ratio', concentricDuration !== null && eccentricDuration !== null && concentricDuration > 0 && eccentricDuration > 0
+    ? Math.abs(Math.log(concentricDuration / eccentricDuration))
+    : null);
 
   for (const [name, phaseFrames] of Object.entries({ concentric: split.first, eccentric: split.second, full: frames })) {
+    addTempoPhaseFeatures(features, `v2.tempo.${name}`, phaseFrames, frames);
     const velocities = phaseWristVelocities(phaseFrames);
-    addPercentileStats(features, `v2.tempo.${name}.wrist_velocity`, velocities);
     const lowVelocity = percentile(velocities, 0.1);
     setFeature(features, `v2.tempo.${name}.low_velocity_frame_count`, lowVelocity === null ? null : velocities.filter((value) => value <= lowVelocity).length);
   }
@@ -552,13 +816,38 @@ function addMlFeatureV2TempoFeatures(features: MlFeatureVector, frames: DatasetC
   const bottomVelocities = phaseWristVelocities(split.bottom);
   setFeature(features, 'v2.tempo.top_pause_frames', fullLowVelocity === null ? null : topVelocities.filter((value) => value <= fullLowVelocity).length);
   setFeature(features, 'v2.tempo.bottom_pause_frames', fullLowVelocity === null ? null : bottomVelocities.filter((value) => value <= fullLowVelocity).length);
+  setFeature(
+    features,
+    'v2.tempo.top_pause_duration_ms',
+    fullLowVelocity === null ? null : estimatedSampleDurationMs(topVelocities.filter((value) => value <= fullLowVelocity).length, frames),
+  );
+  setFeature(
+    features,
+    'v2.tempo.bottom_pause_duration_ms',
+    fullLowVelocity === null ? null : estimatedSampleDurationMs(bottomVelocities.filter((value) => value <= fullLowVelocity).length, frames),
+  );
+  setFeature(features, 'v2.tempo.top_endpoint_sample_count', split.top.length);
+  setFeature(features, 'v2.tempo.bottom_endpoint_sample_count', split.bottom.length);
+  setFeature(features, 'v2.tempo.fast_up_evidence', features['v2.tempo.concentric.fast_evidence']);
+  setFeature(features, 'v2.tempo.fast_down_evidence', features['v2.tempo.eccentric.fast_evidence']);
+  setFeature(features, 'v2.tempo.fast_up_duration_shortfall_1100ms', features['v2.tempo.concentric.duration_shortfall_1100ms']);
+  setFeature(features, 'v2.tempo.fast_down_duration_shortfall_1100ms', features['v2.tempo.eccentric.duration_shortfall_1100ms']);
   setFeature(features, 'v2.tempo.phase_completeness', frames.length === 0 ? null : Math.min(split.first.length, split.second.length) / frames.length);
 }
 
-function shoulderMidpoint(frame: DatasetCase['recording']['frames'][number]): Keypoint | null {
+function shoulderMidpoint(frame: DatasetCase['recording']['frames'][number], reliableOnly = false): Keypoint | null {
   const keypoints = frameKeypoints(frame);
   const left = keypointByName(keypoints, 'left_shoulder');
   const right = keypointByName(keypoints, 'right_shoulder');
+  if (reliableOnly && (!keypointReliable(left) || !keypointReliable(right))) return null;
+  return left && right ? midpoint(left, right) : null;
+}
+
+function hipMidpoint(frame: DatasetCase['recording']['frames'][number], reliableOnly = false): Keypoint | null {
+  const keypoints = frameKeypoints(frame);
+  const left = keypointByName(keypoints, 'left_hip');
+  const right = keypointByName(keypoints, 'right_hip');
+  if (reliableOnly && (!keypointReliable(left) || !keypointReliable(right))) return null;
   return left && right ? midpoint(left, right) : null;
 }
 
@@ -575,41 +864,174 @@ function torsoLeanSample(frame: DatasetCase['recording']['frames'][number]): num
   return Math.atan2(shoulderMid.x - hipMid.x, Math.abs(shoulderMid.y - hipMid.y) || 0.001) * (180 / Math.PI);
 }
 
-function addMlFeatureV2ShoulderTorsoFeatures(features: MlFeatureVector, frames: DatasetCase['recording']['frames']): void {
+function shoulderRelativeToHipVector(frame: DatasetCase['recording']['frames'][number]): { x: number; y: number; z: number } | null {
+  const shoulder = shoulderMidpoint(frame, true);
+  const hip = hipMidpoint(frame, true);
+  if (!shoulder || !hip) return null;
+  const keypoints = frameKeypoints(frame);
+  const normalizer = normalizerFromTorso(keypoints);
+  if (normalizer === null) return null;
+  return {
+    x: (shoulder.x - hip.x) / normalizer,
+    y: (shoulder.y - hip.y) / normalizer,
+    z: ((shoulder.z ?? 0) - (hip.z ?? 0)) / normalizer,
+  };
+}
+
+function vectorDistance(
+  a: { x: number; y: number; z: number },
+  b: { x: number; y: number; z: number },
+): number {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
+}
+
+function sideShoulderAngle(frame: DatasetCase['recording']['frames'][number], side: ArmSide): number | null {
+  const keypoints = frameKeypoints(frame);
+  if (!armReliable(keypoints, side)) return null;
+  const elbow = keypointByName(keypoints, `${side}_elbow`);
+  const shoulder = keypointByName(keypoints, `${side}_shoulder`);
+  const hip = keypointByName(keypoints, `${side}_hip`);
+  if (!elbow || !shoulder || !hip || !keypointReliable(hip)) return null;
+  return calculateAngle(elbow, shoulder, hip);
+}
+
+function firstNonNull<T>(values: Array<T | null>): T | null {
+  for (const value of values) {
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function addMlFeatureV2ShoulderTorsoFeatures(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+  diagnostics?: ReplayRepPrediction['diagnostics'],
+): void {
   const split = splitFramesByWristEndpoint(frames);
-  const baseShoulder = frames[0] ? shoulderMidpoint(frames[0]) : null;
+  const selectedSide = diagnostics?.selectedSide === 'right' ? 'right' : diagnostics?.selectedSide === 'left' ? 'left' : null;
+  const topHalf = framesAtOrBelowWristQuantile(frames, 0.5);
+  const baseShoulder = firstNonNull(frames.map((frame) => shoulderMidpoint(frame, true)));
+  const baseHip = firstNonNull(frames.map((frame) => hipMidpoint(frame, true)));
+  const baseRelative = firstNonNull(frames.map(shoulderRelativeToHipVector));
+  const baseLeftShoulderAngle = firstNonNull(frames.map((frame) => sideShoulderAngle(frame, 'left')));
+  const baseRightShoulderAngle = firstNonNull(frames.map((frame) => sideShoulderAngle(frame, 'right')));
   const shoulderDrift = (phaseFrames: DatasetCase['recording']['frames']) => phaseFrames
     .map((frame) => {
-      const current = shoulderMidpoint(frame);
+      const current = shoulderMidpoint(frame, true);
       return current && baseShoulder ? distance(current, baseShoulder) : null;
     })
     .filter((value): value is number => value !== null);
+  const hipDrift = (phaseFrames: DatasetCase['recording']['frames']) => phaseFrames
+    .map((frame) => {
+      const current = hipMidpoint(frame, true);
+      return current && baseHip ? distance(current, baseHip) : null;
+    })
+    .filter((value): value is number => value !== null);
+  const relativeDrift = (phaseFrames: DatasetCase['recording']['frames']) => phaseFrames
+    .map((frame) => {
+      const current = shoulderRelativeToHipVector(frame);
+      return current && baseRelative ? vectorDistance(current, baseRelative) : null;
+    })
+    .filter((value): value is number => value !== null);
+  const upperArmAngleChange = (phaseFrames: DatasetCase['recording']['frames'], side: ArmSide) => {
+    const base = side === 'left' ? baseLeftShoulderAngle : baseRightShoulderAngle;
+    return phaseFrames
+      .map((frame) => {
+        const angle = sideShoulderAngle(frame, side);
+        return angle !== null && base !== null ? Math.abs(angle - base) : null;
+      })
+      .filter((value): value is number => value !== null);
+  };
   const torsoLean = (phaseFrames: DatasetCase['recording']['frames']) => phaseFrames
     .map(torsoLeanSample)
     .filter((value): value is number => value !== null);
 
-  for (const [name, phaseFrames] of Object.entries({ full: frames, concentric: split.first, eccentric: split.second, top_endpoint: split.top })) {
+  for (const [name, phaseFrames] of Object.entries({
+    full: frames,
+    concentric: split.first,
+    eccentric: split.second,
+    top_half: topHalf,
+    top_endpoint: split.top,
+  })) {
     const shoulder = shoulderDrift(phaseFrames);
     const shoulderP90 = percentile(shoulder, 0.9);
+    const shoulderP75 = percentile(shoulder, 0.75);
     addPercentileStats(features, `v2.shoulder.${name}.drift`, shoulder);
     setFeature(features, `v2.shoulder.${name}.sustained_drift_frames`, shoulderP90 === null ? null : shoulder.filter((value) => value >= shoulderP90).length);
+    setFeature(features, `v2.shoulder.${name}.support_ratio`, phaseFrames.length === 0 ? null : shoulder.length / phaseFrames.length);
+    setSupportFeatures(features, `v2.shoulder.${name}.drift_above_0_03`, shoulder, (value) => value >= 0.03);
+    setSupportFeatures(features, `v2.shoulder.${name}.drift_above_0_05`, shoulder, (value) => value >= 0.05);
+    setSupportFeatures(features, `v2.shoulder.${name}.sustained_drift_above_p75`, shoulder, (value) => shoulderP75 !== null && value >= shoulderP75);
+
+    const relativeShoulder = relativeDrift(phaseFrames);
+    addPercentileStats(features, `v2.shoulder.${name}.relative_to_hip_drift`, relativeShoulder);
+    setSupportFeatures(features, `v2.shoulder.${name}.relative_to_hip_drift_above_0_03`, relativeShoulder, (value) => value >= 0.03);
+    setSupportFeatures(features, `v2.shoulder.${name}.relative_to_hip_drift_above_0_05`, relativeShoulder, (value) => value >= 0.05);
+
+    const leftUpperArm = upperArmAngleChange(phaseFrames, 'left');
+    const rightUpperArm = upperArmAngleChange(phaseFrames, 'right');
+    const selectedUpperArm = selectedSide === 'left'
+      ? leftUpperArm
+      : selectedSide === 'right'
+        ? rightUpperArm
+        : leftUpperArm
+          .map((left, index) => averageNullable(left, rightUpperArm[index] ?? null))
+          .filter((value): value is number => value !== null);
+    addPercentileStats(features, `v2.shoulder.${name}.upper_arm_angle_change.left`, leftUpperArm);
+    addPercentileStats(features, `v2.shoulder.${name}.upper_arm_angle_change.right`, rightUpperArm);
+    addPercentileStats(features, `v2.shoulder.${name}.upper_arm_angle_change.selected`, selectedUpperArm);
+    setSupportFeatures(features, `v2.shoulder.${name}.upper_arm_angle_change.selected_above_8deg`, selectedUpperArm, (value) => value >= 8);
+    setSupportFeatures(features, `v2.shoulder.${name}.upper_arm_angle_change.selected_above_12deg`, selectedUpperArm, (value) => value >= 12);
 
     const torso = torsoLean(phaseFrames);
     const absTorso = torso.map(Math.abs);
     const torsoP90 = percentile(absTorso, 0.9);
+    const torsoP95 = percentile(absTorso, 0.95);
+    const torsoMax = absTorso.length === 0 ? null : Math.max(...absTorso);
     addPercentileStats(features, `v2.torso.${name}.lean_deg`, torso);
     addPercentileStats(features, `v2.torso.${name}.abs_lean_deg`, absTorso);
     setFeature(features, `v2.torso.${name}.sustained_lean_frames`, torsoP90 === null ? null : absTorso.filter((value) => value >= torsoP90).length);
     setFeature(features, `v2.torso.${name}.reliable_frame_ratio`, phaseFrames.length === 0 ? null : torso.length / phaseFrames.length);
+    setFeature(features, `v2.torso.${name}.robust_abs_delta_p75_minus_p25`, robustRange(absTorso, 0.25, 0.75));
+    setFeature(features, `v2.torso.${name}.robust_abs_delta_p90_minus_p10`, robustRange(absTorso, 0.1, 0.9));
+    setFeature(features, `v2.torso.${name}.robust_abs_delta_p95_minus_p05`, robustRange(absTorso, 0.05, 0.95));
+    setFeature(
+      features,
+      `v2.torso.${name}.outlier_spike_indicator`,
+      torsoMax !== null && torsoP95 !== null ? torsoMax - torsoP95 : null,
+    );
+    setFeature(
+      features,
+      `v2.torso.${name}.raw_vs_robust_spike_ratio`,
+      torsoMax !== null && torsoP90 !== null
+        ? torsoMax / Math.max(0.000001, torsoP90)
+        : null,
+    );
+    setSupportFeatures(features, `v2.torso.${name}.sustained_lean_above_3deg`, absTorso, (value) => value >= 3);
+    setSupportFeatures(features, `v2.torso.${name}.sustained_lean_above_5deg`, absTorso, (value) => value >= 5);
+    setSupportFeatures(features, `v2.torso.${name}.sustained_lean_above_8deg`, absTorso, (value) => value >= 8);
+
+    const hip = hipDrift(phaseFrames);
+    addPercentileStats(features, `v2.torso.${name}.anchor.hip_mid_drift`, hip);
   }
 
   const fullTorso = torsoLean(frames).map(Math.abs);
   const p10 = percentile(fullTorso, 0.1);
   const p90 = percentile(fullTorso, 0.9);
+  const p05 = percentile(fullTorso, 0.05);
+  const p95 = percentile(fullTorso, 0.95);
   const maxValue = fullTorso.length === 0 ? null : Math.max(...fullTorso);
   setFeature(features, 'v2.torso.robust_abs_delta_p90_minus_p10', p10 !== null && p90 !== null ? p90 - p10 : null);
+  setFeature(features, 'v2.torso.robust_abs_delta_p95_minus_p05', p05 !== null && p95 !== null ? p95 - p05 : null);
+  setFeature(features, 'v2.torso.robust_abs_delta_p75_minus_p25', robustRange(fullTorso, 0.25, 0.75));
   setFeature(features, 'v2.torso.outlier_spike_abs_delta', maxValue !== null && p90 !== null ? maxValue - p90 : null);
+  setFeature(features, 'v2.torso.raw_vs_robust_spike_ratio', maxValue !== null && p90 !== null ? maxValue / Math.max(0.000001, p90) : null);
   setFeature(features, 'v2.torso.anchor_reliable_frame_ratio', frames.length === 0 ? null : fullTorso.length / frames.length);
+  const firstQuarter = frames.slice(0, Math.max(1, Math.ceil(frames.length / 4)));
+  const firstQuarterAbsTorso = torsoLean(firstQuarter).map(Math.abs);
+  setFeature(features, 'v2.torso.baseline_stability.first_quarter_abs_lean_std', std(firstQuarterAbsTorso, mean(firstQuarterAbsTorso)));
+  setFeature(features, 'v2.torso.baseline_stability.first_quarter_robust_abs_delta_p90_minus_p10', robustRange(firstQuarterAbsTorso, 0.1, 0.9));
+  setBooleanFeature(features, 'v2.shoulder.selected_side_available', selectedSide !== null);
 }
 
 function elbowFlareOffset(frame: DatasetCase['recording']['frames'][number], side: ArmSide): number | null {
@@ -696,7 +1118,7 @@ function addMlFeatureV2(
 ): void {
   addMlFeatureV2RomEndpointFeatures(features, frames, diagnostics);
   addMlFeatureV2TempoFeatures(features, frames);
-  addMlFeatureV2ShoulderTorsoFeatures(features, frames);
+  addMlFeatureV2ShoulderTorsoFeatures(features, frames, diagnostics);
   addMlFeatureV2ElbowAsymmetryFeatures(features, frames);
   addMlFeatureV2ReliabilityFeatures(features, frames, diagnostics);
 }

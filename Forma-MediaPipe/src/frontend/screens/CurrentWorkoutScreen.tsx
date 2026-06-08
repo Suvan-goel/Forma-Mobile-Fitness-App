@@ -839,7 +839,7 @@ export const CurrentWorkoutScreen: React.FC = () => {
           onPress={() => navigation.navigate('WorkoutSettings')}
           activeOpacity={0.7}
         >
-          <CogIcon size={20} color={COLORS.textSecondary} />
+          <CogIcon size={22} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 

@@ -34,7 +34,6 @@ import {
   BookOpen,
   Camera,
   LayoutTemplate,
-  Settings as SettingsIcon,
   Clock,
   Dumbbell,
 } from 'lucide-react-native';
@@ -56,6 +55,7 @@ import {
 import { useCurrentWorkout } from '../contexts/CurrentWorkoutContext';
 import { MonoText } from '../components/typography/MonoText';
 import { AppHeader } from '../components/ui/AppHeader';
+import CogIcon from '../components/icons/CogIcon';
 import { CameraSetupGuide } from './CameraSetupGuide';
 import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
@@ -407,11 +407,7 @@ export const RecordLandingScreen: React.FC = () => {
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <SettingsIcon
-                size={20}
-                color={COLORS.textSecondary}
-                strokeWidth={1.6}
-              />
+              <CogIcon size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         }

@@ -1,18 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Platform, Animated, Image, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
   ChevronDown,
-  Target,
   AlignLeft,
-  Dumbbell,
-  Video,
-  Calendar,
-  Clock,
-  Layers,
 } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -47,7 +41,17 @@ type WorkoutDetailsScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetai
 type WorkoutDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetails'>;
 
 const SUMMARY_RING_SIZE = 82;
-const SUMMARY_RING_STROKE = 7;
+const SUMMARY_RING_STROKE = 5;
+const DETAIL_ICONS = {
+  summary: require('../assets/generated/workout-detail-icons/summary.png'),
+  date: require('../assets/generated/workout-detail-icons/date.png'),
+  duration: require('../assets/generated/workout-detail-icons/duration.png'),
+  exercises: require('../assets/generated/workout-detail-icons/exercises.png'),
+  sets: require('../assets/generated/workout-detail-icons/sets.png'),
+  reps: require('../assets/generated/workout-detail-icons/reps.png'),
+  form: require('../assets/generated/workout-detail-icons/form.png'),
+  video: require('../assets/generated/workout-detail-icons/video.png'),
+} as const satisfies Record<string, ImageSourcePropType>;
 
 const getScoreStatus = (score: number): string => {
   if (score >= 90) return 'Excellent form';
@@ -150,8 +154,12 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                 {exercise.sets.length} set{exercise.sets.length === 1 ? '' : 's'} · {totalReps} reps
               </Text>
             </View>
-            <View style={[styles.avgScoreBadge, { backgroundColor: getScoreTint(avgScore) }]}>
-              <Target size={10} color={avgScoreColor} strokeWidth={1.5} />
+            <View style={styles.avgScoreBadge}>
+              <Image
+                source={DETAIL_ICONS.form}
+                style={[styles.avgScoreIcon, { tintColor: avgScoreColor }]}
+                resizeMode="contain"
+              />
               <MonoText style={[styles.avgScoreText, { color: avgScoreColor }]}>{avgScore}</MonoText>
             </View>
           </View>
@@ -185,7 +193,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                     {set.weight > 0 ? `${set.weight} lbs` : '—'}
                   </Text>
                   <View style={[styles.scoreCellRow, styles.colScore]}>
-                    <MonoText style={[styles.scoreText, { color: scoreColor, backgroundColor: getScoreTint(set.formScore) }]}>
+                    <MonoText style={[styles.scoreText, { color: scoreColor }]}>
                       {set.formScore}
                     </MonoText>
                     {set.notes && (
@@ -208,10 +216,13 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, recordings, onPla
                       }
                     }}
                   >
-                    <Video
-                      size={13}
-                      color={recording ? COLORS.accent : 'rgba(255, 255, 255, 0.12)'}
-                      strokeWidth={1.5}
+                    <Image
+                      source={DETAIL_ICONS.video}
+                      style={[
+                        styles.videoIcon,
+                        { tintColor: recording ? COLORS.accent : 'rgba(255, 255, 255, 0.12)' },
+                      ]}
+                      resizeMode="contain"
                     />
                   </TouchableOpacity>
                 </TouchableOpacity>
@@ -338,10 +349,10 @@ export const WorkoutDetailsScreen: React.FC = () => {
     : 0;
   const formScoreColor = getScoreColor(avgFormScore);
   const summaryStats = [
-    { label: 'Duration', value: workout.duration, icon: Clock, color: COLORS.green },
-    { label: 'Exercises', value: `${workout.exercises.length}`, icon: Dumbbell, color: COLORS.accent },
-    { label: 'Sets', value: `${totalSets}`, icon: Layers, color: COLORS.yellow },
-    { label: 'Reps', value: `${totalReps}`, icon: Target, color: COLORS.textSecondary },
+    { label: 'Duration', value: workout.duration, icon: DETAIL_ICONS.duration, color: COLORS.green },
+    { label: 'Exercises', value: `${workout.exercises.length}`, icon: DETAIL_ICONS.exercises, color: COLORS.accent },
+    { label: 'Sets', value: `${totalSets}`, icon: DETAIL_ICONS.sets, color: COLORS.yellow },
+    { label: 'Reps', value: `${totalReps}`, icon: DETAIL_ICONS.reps, color: COLORS.textSecondary },
   ];
 
   return (
@@ -383,11 +394,19 @@ export const WorkoutDetailsScreen: React.FC = () => {
             <View style={styles.summaryEdge}>
               <View style={styles.summaryHeaderRow}>
                 <View style={styles.summaryTitleRow}>
-                  <Target size={12} color={COLORS.accent} strokeWidth={1.5} />
+                  <Image
+                    source={DETAIL_ICONS.summary}
+                    style={[styles.summaryTitleIcon, { tintColor: COLORS.accent }]}
+                    resizeMode="contain"
+                  />
                   <Text style={styles.summaryTitle}>WORKOUT SUMMARY</Text>
                 </View>
                 <View style={styles.summaryDatePill}>
-                  <Calendar size={11} color={COLORS.textTertiary} strokeWidth={1.5} />
+                  <Image
+                    source={DETAIL_ICONS.date}
+                    style={[styles.summaryDateIcon, { tintColor: COLORS.textTertiary }]}
+                    resizeMode="contain"
+                  />
                   <Text style={styles.summaryDatePillText}>{workout.date}</Text>
                 </View>
               </View>
@@ -405,9 +424,13 @@ export const WorkoutDetailsScreen: React.FC = () => {
               </View>
 
               <View style={styles.summaryStatsGrid}>
-                {summaryStats.map(({ label, value, icon: Icon, color }) => (
+                {summaryStats.map(({ label, value, icon, color }) => (
                   <View key={label} style={styles.summaryStatTile}>
-                    <Icon size={13} color={color} strokeWidth={1.5} />
+                    <Image
+                      source={icon}
+                      style={[styles.summaryStatIcon, { tintColor: color }]}
+                      resizeMode="contain"
+                    />
                     <View style={styles.summaryStatTextWrap}>
                       <Text style={styles.summaryStatLabel}>{label}</Text>
                       <Text style={styles.summaryStatValue} numberOfLines={1}>{value}</Text>
@@ -451,7 +474,11 @@ export const WorkoutDetailsScreen: React.FC = () => {
               ═══════════════════════════════════════════ */}
           <View style={styles.sectionRow}>
             <View style={styles.sectionLabelRow}>
-              <Dumbbell size={13} color={COLORS.accent} strokeWidth={1.5} />
+              <Image
+                source={DETAIL_ICONS.exercises}
+                style={[styles.sectionLabelIcon, { tintColor: COLORS.accent }]}
+                resizeMode="contain"
+              />
               <Text style={styles.sectionLabel}>EXERCISES</Text>
             </View>
             <Text style={styles.exerciseCount}>{workout.exercises.length}</Text>
@@ -560,6 +587,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  summaryTitleIcon: {
+    width: 18,
+    height: 18,
+  },
   summaryTitle: {
     fontFamily: FONTS.display.semibold,
     fontSize: 9,
@@ -576,6 +607,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  summaryDateIcon: {
+    width: 17,
+    height: 17,
   },
   summaryDatePillText: {
     fontFamily: FONTS.ui.regular,
@@ -643,6 +678,10 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.04)',
   },
+  summaryStatIcon: {
+    width: 22,
+    height: 22,
+  },
   summaryStatTextWrap: {
     flex: 1,
     gap: 1,
@@ -672,6 +711,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  sectionLabelIcon: {
+    width: 20,
+    height: 20,
   },
   sectionLabel: {
     fontFamily: FONTS.display.regular,
@@ -766,11 +809,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  avgScoreIcon: {
+    width: 16,
+    height: 16,
   },
   avgScoreText: {
     fontSize: 13,
@@ -850,9 +894,8 @@ const styles = StyleSheet.create({
   scoreText: {
     minWidth: 36,
     overflow: 'hidden',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     fontSize: 13.5,
     fontFamily: FONTS.mono.bold,
     fontVariant: ['tabular-nums'],
@@ -887,6 +930,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122, 85, 255, 0.10)',
+  },
+  videoIcon: {
+    width: 20,
+    height: 20,
   },
   videoButtonDisabled: {
     backgroundColor: 'rgba(255, 255, 255, 0.025)',

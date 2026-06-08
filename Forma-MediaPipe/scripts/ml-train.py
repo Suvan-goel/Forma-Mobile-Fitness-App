@@ -66,6 +66,87 @@ def safe_column_part(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
+BARBELL_CURL_GROUPED_LABEL_TO_FEATURE_GROUP: dict[str, str] = {
+    "label_issue__barbell_curl_rom_issue": "rom",
+    "label_issue__barbell_curl_incomplete_flex": "rom",
+    "label_issue__barbell_curl_incomplete_extend": "rom",
+    "label_issue__barbell_curl_incomplete_rom": "rom",
+    "label_issue__barbell_curl_shoulder_issue": "shoulder",
+    "label_issue__barbell_curl_shoulder_warn": "shoulder",
+    "label_issue__barbell_curl_shoulder_fail": "shoulder",
+    "label_issue__barbell_curl_torso_issue": "torso",
+    "label_issue__barbell_curl_torso_warn": "torso",
+    "label_issue__barbell_curl_torso_fail": "torso",
+    "label_issue__barbell_curl_tempo_issue": "tempo",
+    "label_issue__barbell_curl_tempo_up": "tempo",
+    "label_issue__barbell_curl_tempo_down": "tempo",
+}
+
+
+BARBELL_CURL_GROUPED_FEATURE_PATTERNS: dict[str, list[str]] = {
+    "rom": [
+        r"rom",
+        r"incomplete_(flex|extend|rom)",
+        r"endpoint",
+        r"extension",
+        r"flex",
+        r"elbow_angle",
+        r"selected_arm",
+        r"bilateral",
+        r"wrist_y",
+    ],
+    "shoulder": [
+        r"shoulder",
+        r"upper_arm",
+        r"shoulderdelta",
+        r"primaryshoulderdelta",
+        r"relative_to_hip",
+    ],
+    "torso": [
+        r"torso",
+        r"hip",
+        r"anchor",
+        r"lean",
+        r"torsodelta",
+        r"tracking",
+        r"stability",
+    ],
+    "tempo": [
+        r"tempo",
+        r"duration",
+        r"velocity",
+        r"pause",
+        r"phase",
+        r"fast_",
+        r"tracking_gap",
+    ],
+}
+
+
+BARBELL_CURL_RELIABILITY_VIEW_PATTERNS = [
+    r"reliab",
+    r"visible",
+    r"visibility",
+    r"dropout",
+    r"confidence",
+    r"score",
+    r"view",
+    r"scorable",
+    r"safety",
+    r"frame_count",
+    r"sample_count",
+    r"eligible",
+]
+
+
+BARBELL_CURL_SUBSET_MODEL_KINDS = {
+    "logistic",
+    "logistic_l1",
+    "logistic_l2_strong",
+    "logistic_elasticnet",
+}
+
+
 def binary_metrics(y_true: list[int], y_pred: list[int]) -> dict[str, float | int]:
     tp = sum(1 for truth, pred in zip(y_true, y_pred) if truth == 1 and pred == 1)
     fp = sum(1 for truth, pred in zip(y_true, y_pred) if truth == 0 and pred == 1)
@@ -381,6 +462,104 @@ def select_targets(label_columns: list[str], target_arg: str) -> list[str]:
     raise SystemExit(f"Target not found: {target_arg}. Available targets: {', '.join(label_columns)}")
 
 
+def feature_matches_any(column: str, patterns: list[str]) -> bool:
+    text = column.lower()
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def barbell_curl_feature_subset_columns(
+    feature_columns: list[str],
+    group: str,
+    include_reliability_view: bool,
+) -> list[str]:
+    patterns = BARBELL_CURL_GROUPED_FEATURE_PATTERNS[group][:]
+    if include_reliability_view:
+        patterns.extend(BARBELL_CURL_RELIABILITY_VIEW_PATTERNS)
+    return [column for column in feature_columns if feature_matches_any(column, patterns)]
+
+
+def build_barbell_curl_group_feature_sets(feature_columns: list[str]) -> dict[str, Any]:
+    return {
+        "groupSubset": {
+            group: barbell_curl_feature_subset_columns(feature_columns, group, include_reliability_view=False)
+            for group in BARBELL_CURL_GROUPED_FEATURE_PATTERNS
+        },
+        "groupSubsetReliabilityView": {
+            group: barbell_curl_feature_subset_columns(feature_columns, group, include_reliability_view=True)
+            for group in BARBELL_CURL_GROUPED_FEATURE_PATTERNS
+        },
+    }
+
+
+def build_training_jobs(
+    exercise: str,
+    model_kinds: list[str],
+    target_columns: list[str],
+    feature_columns: list[str],
+    pruned_all_feature_columns: list[str],
+) -> list[dict[str, Any]]:
+    jobs: list[dict[str, Any]] = [
+        {
+            "modelId": kind,
+            "baseKind": kind,
+            "featureMode": "all_features",
+            "targets": target_columns,
+            "defaultFeatureColumns": feature_columns,
+            "targetFeatureColumns": {},
+            "description": "Requested model kind trained with the selected global feature set.",
+        }
+        for kind in model_kinds
+    ]
+    if exercise != "barbell-curl":
+        return jobs
+
+    group_feature_sets = build_barbell_curl_group_feature_sets(feature_columns)
+    for kind in model_kinds:
+        if kind not in BARBELL_CURL_SUBSET_MODEL_KINDS:
+            continue
+        jobs.append({
+            "modelId": f"{kind}_pruned_all",
+            "baseKind": kind,
+            "featureMode": "pruned_all_features",
+            "targets": target_columns,
+            "defaultFeatureColumns": pruned_all_feature_columns or feature_columns,
+            "targetFeatureColumns": {},
+            "description": "Barbell Curl offline comparison: all targets trained with training-only pruned all-feature set.",
+        })
+        for mode, feature_sets in [
+            ("group_subset", group_feature_sets["groupSubset"]),
+            ("group_subset_relview", group_feature_sets["groupSubsetReliabilityView"]),
+        ]:
+            target_feature_columns: dict[str, list[str]] = {}
+            for target in target_columns:
+                group = BARBELL_CURL_GROUPED_LABEL_TO_FEATURE_GROUP.get(target)
+                if not group:
+                    continue
+                subset_columns = feature_sets.get(group, [])
+                if subset_columns:
+                    target_feature_columns[target] = subset_columns
+            jobs.append({
+                "modelId": f"{kind}_{mode}",
+                "baseKind": kind,
+                "featureMode": mode,
+                "targets": target_columns,
+                "defaultFeatureColumns": pruned_all_feature_columns or feature_columns,
+                "targetFeatureColumns": target_feature_columns,
+                "description": (
+                    "Barbell Curl offline comparison: grouped issue targets use domain-specific feature subsets"
+                    + (" plus reliability/view features." if mode.endswith("relview") else ".")
+                ),
+            })
+    return jobs
+
+
+def training_job_feature_columns(job: dict[str, Any], target: str) -> list[str]:
+    target_feature_columns = job.get("targetFeatureColumns", {})
+    if target in target_feature_columns:
+        return list(target_feature_columns[target])
+    return list(job["defaultFeatureColumns"])
+
+
 def tune_threshold(y_true: list[int], probabilities: list[float], default_threshold: float, min_recall: float) -> dict[str, Any]:
     if len(y_true) == 0:
         return {"threshold": default_threshold, "reason": "no_validation_rows", "metrics": None}
@@ -457,6 +636,13 @@ def main() -> int:
     df["target__has_issue"] = 1 - pd.to_numeric(df["label_clean"], errors="coerce").fillna(1).astype(int)
     target_columns = select_targets(label_columns, args.target)
     x_all = df[feature_columns].apply(pd.to_numeric, errors="coerce")
+    pruned_all_feature_columns, pruned_all_feature_pruning_report = prune_feature_columns(
+        df,
+        raw_feature_columns,
+        True,
+        args.near_zero_variance_threshold,
+        args.max_feature_missing_rate,
+    )
     train_mask = df["split"] == "train"
     validation_mask = df["split"] == "validation"
     test_mask = df["split"] == "test"
@@ -467,6 +653,13 @@ def main() -> int:
         raise SystemExit("Validation and test splits are required for production-oriented ML claims.")
 
     model_kinds = [kind.strip() for kind in args.model_kinds.split(",") if kind.strip()]
+    training_jobs = build_training_jobs(
+        args.exercise,
+        model_kinds,
+        target_columns,
+        feature_columns,
+        pruned_all_feature_columns,
+    )
     experiment_id = args.experiment_id or now_slug()
     model_dir = exercise_dir / "models" / experiment_id
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -487,46 +680,77 @@ def main() -> int:
             "pruneFeatures": args.prune_features,
             "nearZeroVarianceThreshold": args.near_zero_variance_threshold,
             "maxFeatureMissingRate": args.max_feature_missing_rate,
+            "derivedOfflineGroupedFeatureSubsetModels": args.exercise == "barbell-curl",
         },
         "productionClaimValid": holdout_valid,
         "productionClaimBlockers": [] if holdout_valid else ["validation_or_test_split_missing"],
         "featureCount": len(feature_columns),
         "featureCountBeforePruning": len(raw_feature_columns),
         "featurePruning": feature_pruning_report,
+        "prunedAllFeatureCount": len(pruned_all_feature_columns),
+        "prunedAllFeaturePruning": pruned_all_feature_pruning_report,
         "rowCount": len(df),
         "splitCounts": {split: int((df["split"] == split).sum()) for split in ["train", "validation", "test"]},
         "targets": target_columns,
+        "trainingJobs": [
+            {
+                "modelId": job["modelId"],
+                "baseKind": job["baseKind"],
+                "featureMode": job["featureMode"],
+                "targetCount": len(job["targets"]),
+                "defaultFeatureCount": len(job["defaultFeatureColumns"]),
+                "targetSpecificFeatureCounts": {
+                    target: len(columns)
+                    for target, columns in job.get("targetFeatureColumns", {}).items()
+                },
+                "description": job.get("description"),
+            }
+            for job in training_jobs
+        ],
         "models": {},
     }
 
-    for kind in model_kinds:
-        report["models"][kind] = {}
-        for target in target_columns:
+    for job in training_jobs:
+        kind = str(job["baseKind"])
+        model_id = str(job["modelId"])
+        report["models"][model_id] = {}
+        for target in job["targets"]:
+            target_feature_columns = training_job_feature_columns(job, target)
+            if not target_feature_columns:
+                report["models"][model_id][target] = {
+                    "trained": False,
+                    "reason": "feature_subset_empty",
+                    "featureMode": job["featureMode"],
+                }
+                continue
+            x_target = df[target_feature_columns].apply(pd.to_numeric, errors="coerce")
             y_all = pd.to_numeric(df[target], errors="coerce").fillna(0).astype(int)
             y_train = y_all[train_mask]
             if y_train.nunique() < 2:
-                report["models"][kind][target] = {
+                report["models"][model_id][target] = {
                     "trained": False,
                     "reason": "train_split_has_single_class",
                     "positiveTrainRows": int(y_train.sum()),
                     "trainRows": int(len(y_train)),
+                    "featureMode": job["featureMode"],
+                    "featureCount": len(target_feature_columns),
                 }
                 continue
 
             try:
                 model = make_model(kind)
             except ValueError as error:
-                report["models"][kind][target] = {"trained": False, "reason": str(error)}
+                report["models"][model_id][target] = {"trained": False, "reason": str(error), "baseKind": kind}
                 continue
 
-            model.fit(x_all[train_mask], y_train)
-            probabilities = predict_probability(model, x_all)
+            model.fit(x_target[train_mask], y_train)
+            probabilities = predict_probability(model, x_target)
             validation_probs = [float(value) for value in pd.Series(probabilities, index=df.index)[validation_mask].tolist()]
             validation_truth = [int(value) for value in y_all[validation_mask].tolist()]
             threshold_report = tune_threshold(validation_truth, validation_probs, args.default_threshold, args.min_recall)
             threshold = float(threshold_report["threshold"])
-            pred_column = f"ml__{kind}__{target}__pred"
-            prob_column = f"ml__{kind}__{target}__prob"
+            pred_column = f"ml__{model_id}__{target}__pred"
+            prob_column = f"ml__{model_id}__{target}__prob"
             predictions[prob_column] = probabilities
             predictions[pred_column] = [1 if value >= threshold else 0 for value in probabilities]
 
@@ -534,18 +758,24 @@ def main() -> int:
                 "trained": True,
                 "positiveTrainRows": int(y_train.sum()),
                 "trainRows": int(len(y_train)),
+                "baseKind": kind,
+                "modelId": model_id,
+                "featureMode": job["featureMode"],
+                "featureCount": len(target_feature_columns),
                 "threshold": threshold_report,
                 "metrics": split_metrics(df, target, y_all, probabilities, threshold),
-                "topFeatures": feature_importance(model, feature_columns),
+                "topFeatures": feature_importance(model, target_feature_columns),
             }
 
-            model_path = model_dir / f"{kind}__{target}.joblib"
+            model_path = model_dir / f"{model_id}__{target}.joblib"
             joblib.dump(
                 {
                     "model": model,
-                    "modelKind": kind,
+                    "modelKind": model_id,
+                    "baseKind": kind,
                     "target": target,
-                    "featureColumns": feature_columns,
+                    "featureColumns": target_feature_columns,
+                    "featureMode": job["featureMode"],
                     "threshold": threshold,
                     "experimentId": experiment_id,
                 },
@@ -574,6 +804,7 @@ def main() -> int:
         print(f"Features removed by pruning: {feature_pruning_report['removedCount']}")
     print(f"Experiment: {experiment_id}")
     print(f"Production claim valid: {report['productionClaimValid']}")
+    print(f"Model jobs: {len(training_jobs)}")
     print(f"Model dir: {model_dir}")
     print(f"Predictions: {predictions_path}")
     print(f"Metrics: {metrics_path}")

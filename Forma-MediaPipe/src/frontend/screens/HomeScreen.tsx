@@ -29,7 +29,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronRight,
-  Settings as SettingsIcon,
   Dumbbell,
   ClipboardList,
   FilePlus2,
@@ -53,6 +52,7 @@ import { useUser } from '../../backend/hooks/useUser';
 import { ErrorState } from '../components/ui/ErrorState';
 import { AppHeader } from '../components/ui/AppHeader';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import CogIcon from '../components/icons/CogIcon';
 import type { RootStackParamList } from '../app/RootNavigator';
 import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
@@ -297,11 +297,7 @@ export const HomeScreen: React.FC = () => {
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <SettingsIcon
-              size={20}
-              color={COLORS.textSecondary}
-              strokeWidth={1.6}
-            />
+            <CogIcon size={22} color={COLORS.textSecondary} />
           </TouchableOpacity>
         }
       />

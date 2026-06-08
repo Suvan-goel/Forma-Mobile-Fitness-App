@@ -14,7 +14,6 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, Animated, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Settings as SettingsIcon,
   Check,
   Trophy,
   Activity,
@@ -42,6 +41,7 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { TimeRangeSelector, TIME_RANGE_OPTIONS } from '../components/ui/TimeRangeSelector';
 import { TrendChart } from '../components/ui/TrendChart';
+import CogIcon from '../components/icons/CogIcon';
 import { LeaderboardView } from './social/LeaderboardView';
 import type { RootStackParamList } from '../app/RootNavigator';
 import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
@@ -220,7 +220,7 @@ export const AnalyticsScreen: React.FC = () => {
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               onPress={() => navigation.navigate('Settings')}
             >
-              <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+              <CogIcon size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         }

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  ImageSourcePropType,
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,19 +19,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Check,
-  Activity,
   ChevronRight,
-  Crown,
-  Flame,
-  Lock,
   Pencil,
-  Shield,
-  Sparkles,
-  Star,
-  Target,
-  Trophy,
-  Video,
-  Zap,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -53,6 +43,41 @@ import type { RootStackParamList } from '../app/RootNavigator';
 import { getBottomOverlayPadding } from '../utils/safeAreaSpacing';
 
 type UserProfileNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+type ProfileAchievement = {
+  id: string;
+  title: string;
+  subtitle: string;
+  meta: string;
+  icon: 'activity' | 'reward' | 'target';
+  rewardIconName?: string;
+  color?: string;
+};
+
+const PROFILE_ICONS = {
+  videoLibrary: require('../assets/generated/profile-icons/video-library.png'),
+  videoLibraryEmpty: require('../assets/generated/profile-icons/video-library-empty.png'),
+  rewardFirstStep: require('../assets/generated/profile-icons/reward-first-step.png'),
+  rewardTarget: require('../assets/generated/profile-icons/reward-target.png'),
+  rewardActivity: require('../assets/generated/profile-icons/reward-activity.png'),
+  rewardShield: require('../assets/generated/profile-icons/reward-shield.png'),
+  rewardStar: require('../assets/generated/profile-icons/reward-star.png'),
+} as const satisfies Record<string, ImageSourcePropType>;
+
+const REWARD_ICON_BY_NAME: Record<string, ImageSourcePropType> = {
+  Zap: PROFILE_ICONS.rewardFirstStep,
+  Target: PROFILE_ICONS.rewardTarget,
+  Activity: PROFILE_ICONS.rewardActivity,
+  Shield: PROFILE_ICONS.rewardShield,
+  Star: PROFILE_ICONS.rewardStar,
+  Flame: PROFILE_ICONS.rewardActivity,
+  Trophy: PROFILE_ICONS.rewardStar,
+  Crown: PROFILE_ICONS.rewardStar,
+  Lock: PROFILE_ICONS.rewardShield,
+};
+
+const getRewardIconSource = (iconName?: string): ImageSourcePropType =>
+  (iconName && REWARD_ICON_BY_NAME[iconName]) || PROFILE_ICONS.rewardStar;
 
 export const UserProfileScreen: React.FC = () => {
   const navigation = useNavigation<UserProfileNavigationProp>();
@@ -113,13 +138,15 @@ export const UserProfileScreen: React.FC = () => {
     ? `Latest: ${latestRecording.exerciseName} · Set ${latestRecording.setNumber}`
     : 'Review saved form recordings';
 
-  const achievements = useMemo(() => {
+  const achievements = useMemo<ProfileAchievement[]>(() => {
     const recentBadges = earnedRewards.slice(0, 2).map((reward) => ({
       id: reward.id,
       title: reward.title,
       subtitle: reward.description,
       meta: `${reward.category} badge`,
-      icon: 'badge' as const,
+      icon: 'reward' as const,
+      rewardIconName: reward.iconName,
+      color: reward.color,
     }));
 
     return [
@@ -130,7 +157,8 @@ export const UserProfileScreen: React.FC = () => {
               title: 'Form Streak',
               subtitle: `${streakDays} ${streakDays === 1 ? 'day' : 'days'} in a row`,
               meta: 'Active now',
-              icon: 'check' as const,
+              icon: 'activity' as const,
+              color: COLORS.green,
             },
           ]
         : []),
@@ -144,6 +172,7 @@ export const UserProfileScreen: React.FC = () => {
             : 'Keep training to unlock',
         meta: 'Weekly performance',
         icon: 'target' as const,
+        color: COLORS.primary,
       },
     ].slice(0, 3);
   }, [avgFormScore, earnedRewards, streakDays]);
@@ -318,45 +347,47 @@ export const UserProfileScreen: React.FC = () => {
           <ProfileCard>
             <Text style={styles.sectionTitle}>Recent Achievements</Text>
             <View style={styles.achievementList}>
-              {achievements.map((item, index) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.achievementRow,
-                    index === achievements.length - 1 &&
-                      styles.achievementRowLast,
-                  ]}
-                >
-                  <LinearGradient
-                    colors={
-                      item.icon === 'check'
-                        ? ['#62E5A9', '#269A67']
-                        : ['#8D67FF', '#4A2BB4']
-                    }
-                    style={styles.achievementIcon}
+              {achievements.map((item, index) => {
+                const iconColor = item.color ?? COLORS.primary;
+                const iconSource =
+                  item.icon === 'reward'
+                    ? getRewardIconSource(item.rewardIconName)
+                    : item.icon === 'activity'
+                      ? PROFILE_ICONS.rewardActivity
+                      : PROFILE_ICONS.rewardTarget;
+
+                return (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.achievementRow,
+                      index === achievements.length - 1 &&
+                        styles.achievementRowLast,
+                    ]}
                   >
-                    {item.icon === 'check' ? (
-                      <Check size={20} color="#FFFFFF" strokeWidth={2.5} />
-                    ) : null}
-                    {item.icon === 'badge' ? (
-                      <Sparkles size={19} color="#FFFFFF" strokeWidth={2.1} />
-                    ) : null}
-                    {item.icon === 'target' ? (
-                      <Target size={19} color="#FFFFFF" strokeWidth={2.1} />
-                    ) : null}
-                  </LinearGradient>
-                  <View style={styles.achievementText}>
-                    <Text style={styles.achievementTitle}>{item.title}</Text>
-                    <Text style={styles.achievementSubtitle}>
-                      {item.subtitle}
-                    </Text>
-                    <Text style={styles.achievementMeta}>{item.meta}</Text>
+                    <View style={styles.achievementIcon}>
+                      <Image
+                        source={iconSource}
+                        style={[
+                          styles.achievementIconImage,
+                          { tintColor: iconColor },
+                        ]}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <View style={styles.achievementText}>
+                      <Text style={styles.achievementTitle}>{item.title}</Text>
+                      <Text style={styles.achievementSubtitle}>
+                        {item.subtitle}
+                      </Text>
+                      <Text style={styles.achievementMeta}>{item.meta}</Text>
+                    </View>
+                    <View style={styles.statusDot}>
+                      <Check size={12} color={COLORS.green} strokeWidth={3} />
+                    </View>
                   </View>
-                  <View style={styles.statusDot}>
-                    <Check size={12} color={COLORS.green} strokeWidth={3} />
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </ProfileCard>
         </Animated.View>
@@ -432,11 +463,19 @@ const VideoLibraryCard = ({
               colors={['rgba(122,85,255,0.24)', 'rgba(255,255,255,0.035)']}
               style={styles.videoPreviewFallback}
             >
-              <Video size={24} color={COLORS.primary} strokeWidth={1.7} />
+              <Image
+                source={PROFILE_ICONS.videoLibraryEmpty}
+                style={[styles.videoPreviewIcon, { tintColor: COLORS.primary }]}
+                resizeMode="contain"
+              />
             </LinearGradient>
           )}
           <View style={styles.playBadge}>
-            <Video size={12} color={COLORS.text} strokeWidth={2} />
+            <Image
+              source={PROFILE_ICONS.videoLibrary}
+              style={[styles.playBadgeIcon, { tintColor: COLORS.text }]}
+              resizeMode="contain"
+            />
           </View>
         </View>
 
@@ -489,27 +528,13 @@ const RewardIcon = ({
   size: number;
   color: string;
 }) => {
-  switch (iconName) {
-    case 'Zap':
-      return <Zap size={size} color={color} strokeWidth={1.5} />;
-    case 'Target':
-      return <Target size={size} color={color} strokeWidth={1.5} />;
-    case 'Activity':
-      return <Activity size={size} color={color} strokeWidth={1.5} />;
-    case 'Shield':
-      return <Shield size={size} color={color} strokeWidth={1.5} />;
-    case 'Star':
-      return <Star size={size} color={color} strokeWidth={1.5} />;
-    case 'Flame':
-      return <Flame size={size} color={color} strokeWidth={1.5} />;
-    case 'Crown':
-      return <Crown size={size} color={color} strokeWidth={1.5} />;
-    case 'Lock':
-      return <Lock size={size} color={color} strokeWidth={1.5} />;
-    case 'Trophy':
-    default:
-      return <Trophy size={size} color={color} strokeWidth={1.5} />;
-  }
+  return (
+    <Image
+      source={getRewardIconSource(iconName)}
+      style={{ width: size, height: size, tintColor: color }}
+      resizeMode="contain"
+    />
+  );
 };
 
 const styles = StyleSheet.create({
@@ -646,6 +671,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  videoPreviewIcon: {
+    width: 38,
+    height: 38,
+  },
   playBadge: {
     position: 'absolute',
     right: 6,
@@ -658,6 +687,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(122,85,255,0.92)',
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.18)',
+  },
+  playBadgeIcon: {
+    width: 14,
+    height: 14,
   },
   videoLibraryCopy: {
     flex: 1,
@@ -821,9 +854,12 @@ const styles = StyleSheet.create({
   achievementIcon: {
     width: 38,
     height: 38,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  achievementIconImage: {
+    width: 25,
+    height: 25,
   },
   achievementText: {
     flex: 1,

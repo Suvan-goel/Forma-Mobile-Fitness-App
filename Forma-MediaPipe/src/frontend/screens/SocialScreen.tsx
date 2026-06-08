@@ -4,12 +4,13 @@
 
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet, TouchableOpacity } from 'react-native';
-import { Settings as SettingsIcon, UserPlus } from 'lucide-react-native';
+import { UserPlus } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { AppHeader } from '../components/ui/AppHeader';
+import CogIcon from '../components/icons/CogIcon';
 import { SocialTabSelector, SocialTab } from '../components/ui/SocialTabSelector';
 import { FriendsView } from './social/FriendsView';
 import { ActivityView } from './social/ActivityView';
@@ -66,7 +67,7 @@ export const SocialScreen: React.FC = memo(() => {
             {activeTab === 'friends' ? (
               <UserPlus size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
             ) : (
-              <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+              <CogIcon size={22} color={COLORS.textSecondary} />
             )}
           </TouchableOpacity>
         }

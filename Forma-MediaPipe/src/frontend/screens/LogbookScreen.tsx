@@ -25,10 +25,10 @@ import {
   X,
   Check,
   BookOpen,
-  Settings as SettingsIcon,
 } from 'lucide-react-native';
 import { MonoText } from '../components/typography/MonoText';
 import { AppHeader } from '../components/ui/AppHeader';
+import CogIcon from '../components/icons/CogIcon';
 import { COLORS, SPACING, FONTS, CARD_GRADIENT_COLORS, CARD_GRADIENT_START, CARD_GRADIENT_END, CARD_RADIUS, CARD_RADIUS_SM, CARD_VERTICAL_GAP, getScoreColor ,
   CARD_SHADOW
 } from '../constants/theme';
@@ -838,7 +838,7 @@ export const LogbookScreen: React.FC = () => {
               style={styles.headerIconBtn}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <SettingsIcon size={20} color={COLORS.textSecondary} strokeWidth={1.6} />
+              <CogIcon size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         }
