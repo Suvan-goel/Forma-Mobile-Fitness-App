@@ -30,11 +30,11 @@ import {
   ChevronRight,
   Info,
   Settings as SettingsIcon,
-  Play,
-  BookOpen,
-  Plus,
-  Trophy,
-  Zap,
+  Dumbbell,
+  ClipboardList,
+  FilePlus2,
+  Medal,
+  Flag,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -395,11 +395,10 @@ export const HomeScreen: React.FC = () => {
                   end={{ x: 1, y: 0 }}
                   style={styles.startBtn}
                 >
-                  <Play
+                  <Dumbbell
                     size={14}
                     color="#FFFFFF"
-                    strokeWidth={2.5}
-                    fill="#FFFFFF"
+                    strokeWidth={2.1}
                   />
                   <Text style={styles.startBtnText}>Start Workout</Text>
                 </LinearGradient>
@@ -421,10 +420,10 @@ export const HomeScreen: React.FC = () => {
                 style={styles.actionBtnGradient}
               >
                 <View style={styles.actionBtnEdge}>
-                  <BookOpen
+                  <ClipboardList
                     size={15}
                     color={COLORS.textSecondary}
-                    strokeWidth={1.6}
+                    strokeWidth={1.7}
                   />
                   <Text style={styles.actionBtnText}>Choose Template</Text>
                 </View>
@@ -442,7 +441,7 @@ export const HomeScreen: React.FC = () => {
                 style={styles.actionBtnGradient}
               >
                 <View style={styles.actionBtnEdge}>
-                  <Plus size={15} color={COLORS.textSecondary} strokeWidth={2} />
+                  <FilePlus2 size={15} color={COLORS.textSecondary} strokeWidth={1.7} />
                   <Text style={styles.actionBtnText}>Create New</Text>
                 </View>
               </LinearGradient>
@@ -517,7 +516,7 @@ export const HomeScreen: React.FC = () => {
                       },
                     ]}
                   >
-                    <Trophy
+                    <Medal
                       size={18}
                       color={homeData.nextBadge?.color ?? COLORS.primary}
                       strokeWidth={1.7}
@@ -594,7 +593,7 @@ export const HomeScreen: React.FC = () => {
                         ]}
                       >
                         <View style={styles.challengeTop}>
-                          <Zap
+                          <Flag
                             size={12}
                             color={isComplete ? COLORS.green : COLORS.accent}
                             strokeWidth={1.6}
