@@ -20,6 +20,7 @@ import {
   Animated,
   TouchableOpacity,
   Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
@@ -28,13 +29,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronRight,
-  Info,
   Settings as SettingsIcon,
   Dumbbell,
   ClipboardList,
   FilePlus2,
   Medal,
-  Flag,
 } from 'lucide-react-native';
 import {
   COLORS,
@@ -59,6 +58,14 @@ import { getTabScreenBottomPadding } from '../utils/safeAreaSpacing';
 
 const RING_SIZE = 108;
 const RING_STROKE = 7;
+const CHALLENGE_ICONS: Record<string, ImageSourcePropType> = {
+  workouts: require('../assets/generated/home-icons/challenge-workouts.png'),
+  reps: require('../assets/generated/home-icons/challenge-reps.png'),
+  form: require('../assets/generated/home-icons/challenge-form.png'),
+  streak: require('../assets/generated/home-icons/challenge-streak.png'),
+  duration: require('../assets/generated/home-icons/challenge-duration.png'),
+};
+const DEFAULT_CHALLENGE_ICON = CHALLENGE_ICONS.workouts;
 
 const ScoreRing: React.FC<{
   score: number;
@@ -357,13 +364,8 @@ export const HomeScreen: React.FC = () => {
             <View style={styles.readinessEdge}>
               <View style={[styles.cardLabelRow, styles.readinessLabelRow]}>
                 <Text style={[styles.cardLabel, styles.snapshotLabel]}>
-                  FORM READINESS
+                  RECENT PERFORMANCE
                 </Text>
-                <Info
-                  size={13}
-                  color={COLORS.textTertiary}
-                  strokeWidth={1.8}
-                />
               </View>
 
               <View style={styles.readinessBody}>
@@ -508,14 +510,7 @@ export const HomeScreen: React.FC = () => {
                       {homeData.nextBadge?.name ?? 'All badges unlocked'}
                     </Text>
                   </View>
-                  <View
-                    style={[
-                      styles.rewardIcon,
-                      {
-                        borderColor: `${homeData.nextBadge?.color ?? COLORS.primary}33`,
-                      },
-                    ]}
-                  >
+                  <View style={styles.rewardIcon}>
                     <Medal
                       size={18}
                       color={homeData.nextBadge?.color ?? COLORS.primary}
@@ -581,6 +576,7 @@ export const HomeScreen: React.FC = () => {
                           )
                         : 0;
                     const isComplete = challenge.completed;
+                    const challengeIcon = CHALLENGE_ICONS[challenge.id] ?? DEFAULT_CHALLENGE_ICON;
                     return (
                       <TouchableOpacity
                         key={challenge.id}
@@ -593,10 +589,13 @@ export const HomeScreen: React.FC = () => {
                         ]}
                       >
                         <View style={styles.challengeTop}>
-                          <Flag
-                            size={12}
-                            color={isComplete ? COLORS.green : COLORS.accent}
-                            strokeWidth={1.6}
+                          <Image
+                            source={challengeIcon}
+                            style={[
+                              styles.challengeIcon,
+                              { tintColor: isComplete ? COLORS.green : COLORS.accent },
+                            ]}
+                            resizeMode="contain"
                           />
                           <Text style={styles.challengeTitle} numberOfLines={1}>
                             {challenge.title}
@@ -899,11 +898,8 @@ const styles = StyleSheet.create({
   rewardIcon: {
     width: 38,
     height: 38,
-    borderRadius: 12,
-    borderWidth: 0.5,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   rewardMetaRow: {
     flexDirection: 'row',
@@ -976,6 +972,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
+  },
+  challengeIcon: {
+    width: 17,
+    height: 17,
   },
   challengeTitle: {
     flex: 1,

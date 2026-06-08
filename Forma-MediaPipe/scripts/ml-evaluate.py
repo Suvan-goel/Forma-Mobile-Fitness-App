@@ -1402,6 +1402,31 @@ BARBELL_CURL_GROUPED_DIRECT_EVIDENCE_FEATURES: dict[str, list[str]] = {
         "feature__v2.torso.eccentric.abs_lean_deg.p90",
         "feature__v2.torso.eccentric.sustained_lean_frames",
     ],
+    "label_issue__barbell_curl_shoulder_issue": [
+        "feature__diagnostic.cue.barbell_curl_shoulder_warn.margin",
+        "feature__diagnostic.cue.barbell_curl_shoulder_fail.margin",
+        "feature__diagnostic.metric.shoulderdelta.value",
+        "feature__diagnostic.metric.primaryshoulderdelta.value",
+        "feature__diagnostic.metric.leftshoulderdelta.value",
+        "feature__diagnostic.metric.rightshoulderdelta.value",
+        "feature__v2.shoulder.full.drift.p90",
+        "feature__v2.shoulder.full.drift.range",
+        "feature__v2.shoulder.full.sustained_drift_frames",
+        "feature__v2.shoulder.concentric.drift.p90",
+        "feature__v2.shoulder.concentric.sustained_drift_frames",
+        "feature__v2.shoulder.top_endpoint.drift.p90",
+        "feature__v2.shoulder.top_endpoint.sustained_drift_frames",
+    ],
+    "label_issue__barbell_curl_tempo_issue": [
+        "feature__diagnostic.cue.barbell_curl_tempo_up.margin",
+        "feature__diagnostic.cue.barbell_curl_tempo_down.margin",
+        "feature__diagnostic.metric.tup.value",
+        "feature__diagnostic.metric.tdown.value",
+        "feature__v2.tempo.concentric.wrist_velocity.p90",
+        "feature__v2.tempo.concentric.wrist_velocity.max",
+        "feature__v2.tempo.eccentric.wrist_velocity.p90",
+        "feature__v2.tempo.eccentric.wrist_velocity.max",
+    ],
 }
 
 
@@ -2351,7 +2376,7 @@ def choose_grouped_direct_evidence_gate_policy(
         "validationMetrics": chosen,
         "allowedCandidateCount": len(gated_allowed),
         "candidateCount": len(candidates),
-        "selectionMetric": "Validation-selected direct evidence gate for ROM/torso only; test is final reporting only.",
+        "selectionMetric": "Validation-selected direct evidence gate where configured; test is final reporting only.",
         "topValidationCandidates": sorted(
             candidates,
             key=lambda item: (
@@ -2530,6 +2555,323 @@ def grouped_split_reports(
     return reports
 
 
+def grouped_policy_transition_reports(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    heuristic_columns: dict[str, str],
+    ml_columns: dict[str, str],
+    policy_columns: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    reports: dict[str, Any] = {}
+    for split in ["train", "validation", "test"]:
+        subset = df[df["split"] == split].copy()
+        if len(subset) == 0:
+            continue
+        reports[split] = {
+            policy_name: hybrid_transition_metrics(
+                subset,
+                grouped_labels,
+                heuristic_columns,
+                ml_columns,
+                columns,
+            )
+            for policy_name, columns in policy_columns.items()
+            if policy_name not in {"heuristicGrouped", "mlOnlyGrouped"}
+        }
+    return reports
+
+
+def grouped_policy_feedback_row_reports(
+    df: pd.DataFrame,
+    policy_columns: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    reports: dict[str, Any] = {}
+    clean = numeric_int_series(df, "label_clean") == 1
+    for split in ["train", "validation", "test"]:
+        subset = df[df["split"] == split].copy()
+        if len(subset) == 0:
+            continue
+        split_clean = clean.loc[subset.index]
+        reports[split] = {}
+        for policy_name, columns in policy_columns.items():
+            prediction_columns = [column for column in columns.values() if column in subset.columns]
+            if not prediction_columns:
+                reports[split][policy_name] = {
+                    "rows": int(len(subset)),
+                    "feedbackRows": 0,
+                    "feedbackRate": 0.0,
+                    "cleanFeedbackRows": 0,
+                    "cleanFeedbackRate": 0.0,
+                }
+                continue
+            predicted_any = (
+                subset[prediction_columns]
+                .apply(pd.to_numeric, errors="coerce")
+                .fillna(0)
+                .astype(int)
+                .sum(axis=1)
+                > 0
+            )
+            clean_rows = int(split_clean.sum())
+            clean_feedback_rows = int((predicted_any & split_clean).sum())
+            reports[split][policy_name] = {
+                "rows": int(len(subset)),
+                "feedbackRows": int(predicted_any.sum()),
+                "feedbackRate": 0.0 if len(subset) == 0 else float(predicted_any.mean()),
+                "cleanRows": clean_rows,
+                "cleanFeedbackRows": clean_feedback_rows,
+                "cleanFeedbackRate": 0.0 if clean_rows == 0 else clean_feedback_rows / clean_rows,
+            }
+    return reports
+
+
+def grouped_policy_family(policy_name: str) -> str:
+    if policy_name == "heuristicGrouped":
+        return "heuristic"
+    if policy_name == "mlOnlyGrouped":
+        return "ml_only"
+    if policy_name == "fineOptimizedCollapsedToGroups":
+        return "fine_label_collapsed"
+    if "SetBackup" in policy_name or policy_name == "setLevelOnlyBroadcast":
+        return "set_level_or_backup"
+    if "TorsoDisabled" in policy_name:
+        return "torso_disabled"
+    if "DirectEvidenceGate" in policy_name:
+        return "direct_evidence_gate"
+    return "rep_level_policy"
+
+
+def compact_grouped_prediction_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(report, dict) or "aggregate" not in report:
+        return None
+    aggregate = report.get("aggregate", {})
+    safety = report.get("safety", {}).get("slices", {}) if isinstance(report.get("safety"), dict) else {}
+    all_clean = safety.get("allClean", {})
+    hard_negative = safety.get("hardNegativeClean", {})
+    partial_view = safety.get("partialViewClean", {})
+    severity = report.get("severity", {}).get("groups", {}) if isinstance(report.get("severity"), dict) else {}
+    mild = severity.get("mildIssues", {})
+    clear = severity.get("clearModerateSevereIssues", {})
+    return {
+        "precision": float(aggregate.get("precision", 0.0)),
+        "recall": float(aggregate.get("recall", 0.0)),
+        "f1": float(aggregate.get("f1", 0.0)),
+        "truePositives": int(aggregate.get("truePositives", 0)),
+        "falsePositives": int(aggregate.get("falsePositives", 0)),
+        "falseNegatives": int(aggregate.get("falseNegatives", 0)),
+        "cleanFalsePositiveRate": float(report.get("cleanRepFalsePositiveRate", 0.0)),
+        "cleanFalsePositiveRows": int(all_clean.get("falsePositiveRows", 0)),
+        "cleanRows": int(all_clean.get("cleanRows", 0)),
+        "hardNegativeFalsePositiveRate": float(hard_negative.get("falsePositiveRate", 0.0)),
+        "hardNegativeFalsePositiveRows": int(hard_negative.get("falsePositiveRows", 0)),
+        "hardNegativeCleanRows": int(hard_negative.get("cleanRows", 0)),
+        "partialViewFalsePositiveRate": float(partial_view.get("falsePositiveRate", 0.0)),
+        "partialViewFalsePositiveRows": int(partial_view.get("falsePositiveRows", 0)),
+        "mildRecall": float(mild.get("recall", 0.0)),
+        "mildPositiveSupport": int(mild.get("positiveSupport", 0)),
+        "clearRecall": float(clear.get("recall", 0.0)),
+        "clearPositiveSupport": int(clear.get("positiveSupport", 0)),
+    }
+
+
+def compact_tolerant_grouped_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(report, dict) or not bool(report.get("available", False)):
+        return None
+    strict = report.get("strictAggregate", {})
+    tolerant = report.get("tolerantAggregate", {})
+    return {
+        "strictPrecision": float(strict.get("precision", 0.0)),
+        "strictRecall": float(strict.get("recall", 0.0)),
+        "strictF1": float(strict.get("f1", 0.0)),
+        "tolerantPrecision": float(tolerant.get("precision", 0.0)),
+        "tolerantRecall": float(tolerant.get("recall", 0.0)),
+        "tolerantF1": float(tolerant.get("f1", 0.0)),
+        "strictCleanFalsePositiveRows": int(report.get("strictCleanFalsePositiveRows", 0)),
+        "strictCleanFalsePositiveRate": float(report.get("strictCleanFalsePositiveRate", 0.0)),
+        "cleanUnacceptableFalsePositiveRows": int(report.get("cleanUnacceptableFalsePositiveRows", 0)),
+        "cleanUnacceptableFalsePositiveRate": float(report.get("cleanUnacceptableFalsePositiveRate", 0.0)),
+        "cleanAcceptableBorderlineWarningRows": int(report.get("cleanAcceptableBorderlineWarningRows", 0)),
+        "strictHardNegativeFalsePositiveRows": int(report.get("strictHardNegativeFalsePositiveRows", 0)),
+        "strictHardNegativeFalsePositiveRate": float(report.get("strictHardNegativeFalsePositiveRate", 0.0)),
+        "hardNegativeUnacceptableFalsePositiveRows": int(report.get("hardNegativeUnacceptableFalsePositiveRows", 0)),
+        "hardNegativeUnacceptableFalsePositiveRate": float(report.get("hardNegativeUnacceptableFalsePositiveRate", 0.0)),
+        "hardNegativeAcceptableBorderlineWarningRows": int(report.get("hardNegativeAcceptableBorderlineWarningRows", 0)),
+    }
+
+
+def compact_grouped_set_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(report, dict) or "aggregate" not in report:
+        return None
+    aggregate = report.get("aggregate", {})
+    clean_fp_groups = 0
+    clean_negative_groups = 0
+    hard_fp_groups = 0
+    hard_negative_groups = 0
+    for metrics in report.get("perGroup", {}).values():
+        clean_fp_groups += int(metrics.get("allCleanFalsePositiveGroups", 0))
+        clean_negative_groups += int(metrics.get("allCleanNegativeGroups", 0))
+        hard_fp_groups += int(metrics.get("hardNegativeFalsePositiveGroups", 0))
+        hard_negative_groups += int(metrics.get("hardNegativeCleanGroups", 0))
+    return {
+        "precision": float(aggregate.get("precision", 0.0)),
+        "recall": float(aggregate.get("recall", 0.0)),
+        "f1": float(aggregate.get("f1", 0.0)),
+        "truePositives": int(aggregate.get("truePositives", 0)),
+        "falsePositives": int(aggregate.get("falsePositives", 0)),
+        "falseNegatives": int(aggregate.get("falseNegatives", 0)),
+        "cleanFalsePositiveGroups": clean_fp_groups,
+        "cleanNegativeGroups": clean_negative_groups,
+        "cleanFalsePositiveRate": 0.0 if clean_negative_groups == 0 else clean_fp_groups / clean_negative_groups,
+        "hardNegativeFalsePositiveGroups": hard_fp_groups,
+        "hardNegativeCleanGroups": hard_negative_groups,
+        "hardNegativeFalsePositiveRate": 0.0 if hard_negative_groups == 0 else hard_fp_groups / hard_negative_groups,
+    }
+
+
+def grouped_set_policy_name(policy_name: str) -> str | None:
+    mapping = {
+        "fineOptimizedCollapsedToGroups": "fineOptimizedCollapsedToGroups",
+        "repLevelOnlyHighConfidence": "repLevelOnlyHighConfidence",
+        "repLevelConservative": "repLevelConservative",
+        "repLevelTolerantOptimized": "repLevelTolerantOptimized",
+        "repLevelTolerantOptimizedDirectEvidenceGate": "repLevelTolerantOptimizedDirectEvidenceGate",
+        "repLevelTolerantOptimizedTorsoDisabled": "repLevelTolerantOptimizedTorsoDisabled",
+        "repLevelTolerantOptimizedTorsoSetBackupBroadcast": "repLevelTolerantOptimizedTorsoSetBackup",
+        "repLevelPlusSetBackupBroadcast": "repLevelPlusSetBackup",
+        "setLevelOnlyBroadcast": "setLevelOnly",
+    }
+    return mapping.get(policy_name)
+
+
+def grouped_leaderboard_flags(validation: dict[str, Any] | None, tolerant_validation: dict[str, Any] | None) -> dict[str, Any]:
+    if not validation:
+        return {"strictSafe": False, "productTolerantSafe": False, "exploratoryHighRecallSafe": False}
+    unacceptable_clean = (
+        float(tolerant_validation.get("cleanUnacceptableFalsePositiveRate", validation["cleanFalsePositiveRate"]))
+        if tolerant_validation
+        else float(validation["cleanFalsePositiveRate"])
+    )
+    unacceptable_hard_rows = (
+        int(tolerant_validation.get("hardNegativeUnacceptableFalsePositiveRows", validation["hardNegativeFalsePositiveRows"]))
+        if tolerant_validation
+        else int(validation["hardNegativeFalsePositiveRows"])
+    )
+    return {
+        "strictSafe": bool(
+            validation["precision"] >= 0.85
+            and validation["cleanFalsePositiveRate"] <= 0.05
+            and int(validation["hardNegativeFalsePositiveRows"]) == 0
+        ),
+        "productTolerantSafe": bool(
+            validation["precision"] >= 0.85
+            and unacceptable_clean <= 0.05
+            and unacceptable_hard_rows == 0
+        ),
+        "exploratoryHighRecallSafe": bool(
+            validation["precision"] >= 0.70
+            and unacceptable_clean <= 0.10
+            and unacceptable_hard_rows == 0
+        ),
+        "usesReviewAnnotations": bool(tolerant_validation is not None),
+        "validationUnacceptableCleanFalsePositiveRate": unacceptable_clean,
+        "validationUnacceptableHardNegativeFalsePositiveRows": unacceptable_hard_rows,
+    }
+
+
+def grouped_leaderboard_rank_score(validation: dict[str, Any] | None, tolerant_validation: dict[str, Any] | None) -> float:
+    if not validation:
+        return float("-inf")
+    validation_f1 = float(validation["f1"])
+    if tolerant_validation:
+        validation_f1 = float(tolerant_validation.get("tolerantF1", validation_f1))
+        clean_rate = float(tolerant_validation.get("cleanUnacceptableFalsePositiveRate", validation["cleanFalsePositiveRate"]))
+        hard_rows = int(tolerant_validation.get("hardNegativeUnacceptableFalsePositiveRows", validation["hardNegativeFalsePositiveRows"]))
+    else:
+        clean_rate = float(validation["cleanFalsePositiveRate"])
+        hard_rows = int(validation["hardNegativeFalsePositiveRows"])
+    clean_penalty = max(0.0, clean_rate - 0.05) * 5.0
+    return (
+        validation_f1
+        + 0.25 * float(validation["clearRecall"])
+        + 0.10 * float(validation["precision"])
+        - clean_penalty
+        - 1.50 * hard_rows
+    )
+
+
+def grouped_leaderboard_recommendations(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    def best(predicate: Any, metric: str = "rankScore") -> dict[str, Any] | None:
+        eligible = [entry for entry in entries if predicate(entry)]
+        if not eligible:
+            return None
+        return max(eligible, key=lambda entry: float(entry.get(metric, float("-inf"))))
+
+    return {
+        "selectionSplit": "validation",
+        "testUsage": "final_reporting_only",
+        "bestStrictSafe": best(lambda entry: bool(entry.get("validationFlags", {}).get("strictSafe"))),
+        "bestProductTolerant": best(lambda entry: bool(entry.get("validationFlags", {}).get("productTolerantSafe"))),
+        "bestExploratoryHighRecall": best(lambda entry: bool(entry.get("validationFlags", {}).get("exploratoryHighRecallSafe"))),
+        "bestSetLevelBackup": best(
+            lambda entry: entry.get("family") == "set_level_or_backup"
+            and bool(entry.get("validationFlags", {}).get("productTolerantSafe"))
+        ),
+        "selectionDoesNotUseTest": True,
+    }
+
+
+def grouped_feedback_leaderboard_entries(
+    model: str,
+    split_reports: dict[str, Any],
+    tolerant_policy_comparison: dict[str, Any],
+    set_reports: dict[str, Any],
+    transition_reports: dict[str, Any],
+    feedback_row_reports: dict[str, Any],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    validation_policies = split_reports.get("validation", {})
+    tolerant_splits = tolerant_policy_comparison.get("splits", {}) if tolerant_policy_comparison.get("available") else {}
+    for policy_name in sorted(validation_policies.keys()):
+        set_policy_name = grouped_set_policy_name(policy_name)
+        validation = compact_grouped_prediction_report(split_reports.get("validation", {}).get(policy_name))
+        tolerant_validation = compact_tolerant_grouped_report(tolerant_splits.get("validation", {}).get(policy_name))
+        entry = {
+            "candidateId": f"{model}.{policy_name}",
+            "model": model,
+            "policy": policy_name,
+            "family": grouped_policy_family(policy_name),
+            "selectionSplit": "validation",
+            "testUsage": "final_reporting_only",
+            "rankScore": grouped_leaderboard_rank_score(validation, tolerant_validation),
+            "validationFlags": grouped_leaderboard_flags(validation, tolerant_validation),
+            "train": compact_grouped_prediction_report(split_reports.get("train", {}).get(policy_name)),
+            "validation": validation,
+            "test": compact_grouped_prediction_report(split_reports.get("test", {}).get(policy_name)),
+            "tolerantTrain": compact_tolerant_grouped_report(tolerant_splits.get("train", {}).get(policy_name)),
+            "tolerantValidation": tolerant_validation,
+            "tolerantTest": compact_tolerant_grouped_report(tolerant_splits.get("test", {}).get(policy_name)),
+            "transitionTrain": transition_reports.get("train", {}).get(policy_name),
+            "transitionValidation": transition_reports.get("validation", {}).get(policy_name),
+            "transitionTest": transition_reports.get("test", {}).get(policy_name),
+            "feedbackRowsTrain": feedback_row_reports.get("train", {}).get(policy_name),
+            "feedbackRowsValidation": feedback_row_reports.get("validation", {}).get(policy_name),
+            "feedbackRowsTest": feedback_row_reports.get("test", {}).get(policy_name),
+            "setTrain": compact_grouped_set_report(set_reports.get("train", {}).get(set_policy_name)) if set_policy_name else None,
+            "setValidation": compact_grouped_set_report(set_reports.get("validation", {}).get(set_policy_name)) if set_policy_name else None,
+            "setTest": compact_grouped_set_report(set_reports.get("test", {}).get(set_policy_name)) if set_policy_name else None,
+        }
+        entries.append(entry)
+    entries.sort(
+        key=lambda entry: (
+            bool(entry.get("validationFlags", {}).get("productTolerantSafe")),
+            bool(entry.get("validationFlags", {}).get("strictSafe")),
+            float(entry.get("rankScore", float("-inf"))),
+        ),
+        reverse=True,
+    )
+    return entries
+
+
 def grouped_policy_test_summary(
     df: pd.DataFrame,
     grouped_labels: list[str],
@@ -2690,6 +3032,23 @@ def build_grouped_feedback_report(
         args.grouped_set_min_reps,
     )
     rep_plus_set_series = combine_grouped_series(grouped_labels, conservative_series, set_backup_series)
+    torso_label = "label_issue__barbell_curl_torso_issue"
+    torso_disabled_series = {
+        label_column: (
+            pd.Series([0] * len(df), index=df.index)
+            if label_column == torso_label
+            else tolerant_optimized_series[label_column]
+        )
+        for label_column in grouped_labels
+    }
+    torso_set_backup_series = {
+        label_column: (
+            set_backup_series[label_column]
+            if label_column == torso_label
+            else tolerant_optimized_series[label_column]
+        )
+        for label_column in grouped_labels
+    }
 
     policy_columns = {
         "heuristicGrouped": heuristic_group_columns,
@@ -2700,6 +3059,8 @@ def build_grouped_feedback_report(
         "repLevelStrictF1": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelStrictF1", strict_series),
         "repLevelTolerantOptimized": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelTolerantOptimized", tolerant_optimized_series),
         "repLevelTolerantOptimizedDirectEvidenceGate": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelTolerantOptimizedDirectEvidenceGate", direct_evidence_gate_series),
+        "repLevelTolerantOptimizedTorsoDisabled": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelTolerantOptimizedTorsoDisabled", torso_disabled_series),
+        "repLevelTolerantOptimizedTorsoSetBackupBroadcast": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelTolerantOptimizedTorsoSetBackupBroadcast", torso_set_backup_series),
         "repLevelPlusSetBackupBroadcast": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelPlusSetBackupBroadcast", rep_plus_set_series),
         "setLevelOnlyBroadcast": materialize_grouped_policy_columns(df, grouped_labels, model, "setLevelOnlyBroadcast", set_backup_series),
     }
@@ -2710,6 +3071,14 @@ def build_grouped_feedback_report(
         policy_columns,
         review_annotations,
     )
+    transition_reports = grouped_policy_transition_reports(
+        df,
+        grouped_labels,
+        heuristic_group_columns,
+        ml_group_columns,
+        policy_columns,
+    )
+    feedback_row_reports = grouped_policy_feedback_row_reports(df, policy_columns)
 
     set_reports: dict[str, Any] = {}
     for split in ["train", "validation", "test"]:
@@ -2721,6 +3090,8 @@ def build_grouped_feedback_report(
             "repLevelConservative": {label: conservative_series[label].reindex(subset.index) for label in grouped_labels},
             "repLevelTolerantOptimized": {label: tolerant_optimized_series[label].reindex(subset.index) for label in grouped_labels},
             "repLevelTolerantOptimizedDirectEvidenceGate": {label: direct_evidence_gate_series[label].reindex(subset.index) for label in grouped_labels},
+            "repLevelTolerantOptimizedTorsoDisabled": {label: torso_disabled_series[label].reindex(subset.index) for label in grouped_labels},
+            "repLevelTolerantOptimizedTorsoSetBackup": {label: torso_set_backup_series[label].reindex(subset.index) for label in grouped_labels},
             "repLevelPlusSetBackup": {label: rep_plus_set_series[label].reindex(subset.index) for label in grouped_labels},
             "setLevelOnly": {label: set_backup_series[label].reindex(subset.index) for label in grouped_labels},
             "fineOptimizedCollapsedToGroups": {label: collapsed_fine_series[label].reindex(subset.index) for label in grouped_labels},
@@ -2820,6 +3191,15 @@ def build_grouped_feedback_report(
             direct_evidence_gate_choices,
         )
 
+    leaderboard_entries = grouped_feedback_leaderboard_entries(
+        model,
+        split_reports,
+        tolerant_policy_comparison,
+        set_reports,
+        transition_reports,
+        feedback_row_reports,
+    )
+
     return {
         "available": True,
         "scope": "offline_shadow_evaluation_only",
@@ -2846,7 +3226,9 @@ def build_grouped_feedback_report(
             "validationHardNegativeFpRowCap": args.grouped_policy_hard_negative_fp_row_cap,
             "validationPartialViewFpRowCap": args.grouped_policy_partial_view_fp_row_cap,
             "tolerantOptimizedPolicy": "When --review-annotations is provided, validation selection may count acceptable-borderline grouped warnings separately from unacceptable false positives. Strict metrics are still reported unchanged.",
-            "directEvidenceGatePolicy": "Offline diagnostic policy: ROM/torso predictions from repLevelTolerantOptimized may be gated by validation-selected direct evidence features. Shoulder/tempo currently fall back to the tolerant optimized policy.",
+            "directEvidenceGatePolicy": "Offline diagnostic policy: grouped predictions from repLevelTolerantOptimized may be gated by validation-selected direct evidence features where configured. Test remains final-reporting only.",
+            "torsoDisabledPolicy": "Offline comparison only: repLevelTolerantOptimizedTorsoDisabled suppresses the grouped torso issue while leaving other grouped policies unchanged.",
+            "torsoSetBackupPolicy": "Offline comparison only: repLevelTolerantOptimizedTorsoSetBackupBroadcast uses tolerant optimized rep-level predictions for non-torso groups and set-level backup broadcast for torso.",
         },
         "reviewAnnotations": {
             "provided": bool(review_annotations.get("provided")),
@@ -2871,7 +3253,14 @@ def build_grouped_feedback_report(
         "perTargetRecommendation": per_target,
         "repLevelPolicyComparison": split_reports,
         "tolerantPolicyComparison": tolerant_policy_comparison,
+        "policyTransitionComparison": transition_reports,
+        "policyFeedbackRows": feedback_row_reports,
         "setLevelPolicyComparison": set_reports,
+        "leaderboard": {
+            "entries": leaderboard_entries,
+            "recommendations": grouped_leaderboard_recommendations(leaderboard_entries),
+            "definition": "Ranks grouped-feedback candidates by validation-only score with strict and product-tolerant safety flags. Test metrics are included only for final reporting.",
+        },
         "productPolicyComparison": {
             "A_repLevelOnlyHighConfidence": {
                 "repLevelPolicy": "repLevelOnlyHighConfidence",
@@ -2926,7 +3315,7 @@ def build_grouped_feedback_report(
             },
             "E_repLevelTolerantOptimizedDirectEvidenceGate": {
                 "repLevelPolicy": "repLevelTolerantOptimizedDirectEvidenceGate",
-                "setLevelPolicy": "any tolerant-optimized rep after validation-selected ROM/torso direct-evidence gates",
+                "setLevelPolicy": "any tolerant-optimized rep after validation-selected direct-evidence gates",
                 "selectionSplit": "validation",
                 "usesTestForSelection": False,
                 "splits": {
@@ -2938,7 +3327,35 @@ def build_grouped_feedback_report(
                     if split in set_reports
                 },
             },
-            "F_setLevelOnly": {
+            "F_repLevelTolerantOptimizedTorsoDisabled": {
+                "repLevelPolicy": "repLevelTolerantOptimizedTorsoDisabled",
+                "setLevelPolicy": "any tolerant-optimized rep with grouped torso issue disabled",
+                "selectionSplit": "validation",
+                "usesTestForSelection": False,
+                "splits": {
+                    split: {
+                        "rep": split_reports[split]["repLevelTolerantOptimizedTorsoDisabled"],
+                        "set": set_reports[split]["repLevelTolerantOptimizedTorsoDisabled"],
+                    }
+                    for split in split_reports
+                    if split in set_reports
+                },
+            },
+            "G_repLevelTolerantOptimizedTorsoSetBackup": {
+                "repLevelPolicy": "repLevelTolerantOptimizedTorsoSetBackupBroadcast",
+                "setLevelPolicy": f"torso uses backup if >= {args.grouped_set_min_reps} eligible reps have p >= {args.grouped_set_threshold}; other groups use tolerant-optimized reps",
+                "selectionSplit": "validation",
+                "usesTestForSelection": False,
+                "splits": {
+                    split: {
+                        "repBroadcastForAnalysisOnly": split_reports[split]["repLevelTolerantOptimizedTorsoSetBackupBroadcast"],
+                        "set": set_reports[split]["repLevelTolerantOptimizedTorsoSetBackup"],
+                    }
+                    for split in split_reports
+                    if split in set_reports
+                },
+            },
+            "H_setLevelOnly": {
                 "repLevelPolicy": "none",
                 "setLevelPolicy": f"show set summary if >= {args.grouped_set_min_reps} eligible reps have p >= {args.grouped_set_threshold}",
                 "splits": {
@@ -3123,6 +3540,76 @@ def build_model_comparison(
     return comparison
 
 
+def build_unified_grouped_feedback_leaderboard(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    models: list[str],
+    args: argparse.Namespace,
+    review_annotations: dict[str, Any],
+) -> dict[str, Any]:
+    if args.exercise != "barbell-curl":
+        return {"available": False, "reason": "grouped_feedback_leaderboard_currently_scoped_to_barbell_curl"}
+    grouped_labels = grouped_feedback_label_columns(label_columns)
+    if not grouped_labels:
+        return {"available": False, "reason": "no_grouped_barbell_curl_targets_present"}
+    entries: list[dict[str, Any]] = []
+    per_model: dict[str, Any] = {}
+    warnings: list[dict[str, str]] = []
+    for model in models:
+        working = df.copy()
+        try:
+            columns = prepare_model_predictions(working, label_columns, model, args)
+            # Materialize optimized fine-label policy columns before collapsing them into grouped feedback.
+            split_reports_for_model(working, label_columns, columns, args, model, include_bootstrap=False)
+            grouped_report = build_grouped_feedback_report(
+                working,
+                label_columns,
+                columns,
+                args,
+                model,
+                review_annotations,
+            )
+        except Exception as exc:  # pragma: no cover - defensive report generation path
+            warnings.append({"model": model, "warning": str(exc)})
+            continue
+        if not grouped_report.get("available"):
+            per_model[model] = {
+                "available": False,
+                "reason": grouped_report.get("reason"),
+            }
+            continue
+        model_entries = grouped_report.get("leaderboard", {}).get("entries", [])
+        entries.extend(model_entries)
+        per_model[model] = {
+            "available": True,
+            "entryCount": len(model_entries),
+            "recommendations": grouped_report.get("leaderboard", {}).get("recommendations", {}),
+        }
+    entries.sort(
+        key=lambda entry: (
+            bool(entry.get("validationFlags", {}).get("productTolerantSafe")),
+            bool(entry.get("validationFlags", {}).get("strictSafe")),
+            float(entry.get("rankScore", float("-inf"))),
+        ),
+        reverse=True,
+    )
+    return {
+        "available": True,
+        "scope": "offline_shadow_evaluation_only",
+        "selectionSplit": "validation",
+        "testUsage": "final_reporting_only",
+        "models": models,
+        "entryCount": len(entries),
+        "entries": entries,
+        "top50ByValidationRank": entries[:50],
+        "recommendations": grouped_leaderboard_recommendations(entries),
+        "perModel": per_model,
+        "warnings": warnings,
+        "definition": "Unified Barbell Curl grouped-feedback leaderboard. Candidate ranking and recommendations use validation metrics only; test metrics are included as final-only development diagnostics, not proof of production generalization.",
+        "liveBehaviorChanged": False,
+    }
+
+
 def pose_quality_bucket(confidence: Any) -> str:
     try:
         value = float(confidence)
@@ -3277,6 +3764,13 @@ def main() -> int:
         "thresholdPolicyReport": threshold_policy_report(pd.read_csv(predictions_path), label_columns, args.model, args),
         "groupedFeedback": build_grouped_feedback_report(df, label_columns, selected_columns, args, args.model, review_annotations),
         "modelComparison": build_model_comparison(pd.read_csv(predictions_path), label_columns, models_available, args),
+        "unifiedGroupedFeedbackLeaderboard": build_unified_grouped_feedback_leaderboard(
+            pd.read_csv(predictions_path),
+            label_columns,
+            models_available,
+            args,
+            review_annotations,
+        ),
         "externalHoldoutWorkflow": {
             "status": "documented_only",
             "summary": "Export a separate reviewed holdout into a predictions CSV with the same feature/label columns, run trained models against it without fitting, then pass it with --predictions for evaluation. Do not copy holdout rows into train/validation/test used for threshold or policy selection.",
