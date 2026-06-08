@@ -1,5 +1,6 @@
 import type { CaseEvaluation, DatasetCase, DatasetSplit } from '../dataset';
 import { evaluateCase, summarizeEvaluations } from '../dataset';
+import type { RepIssueSeverity } from '../dataset/types';
 import type { ReplayResultVerbose } from '../replay';
 import { replayRecordingVerbose, slugifyExerciseName } from '../replay';
 import type { ExerciseDefinition } from '../types';
@@ -15,6 +16,87 @@ import {
   type MlFeatureStatistics,
   type MlRepExample,
 } from './types';
+
+interface GroupedIssueTarget {
+  issueId: string;
+  childIssueIds: string[];
+}
+
+const GROUPED_ISSUE_TARGETS: Record<string, GroupedIssueTarget[]> = {
+  'barbell-curl': [
+    {
+      issueId: 'barbell-curl.rom_issue',
+      childIssueIds: [
+        'barbell-curl.incomplete_flex',
+        'barbell-curl.incomplete_extend',
+        'barbell-curl.incomplete_rom',
+      ],
+    },
+    {
+      issueId: 'barbell-curl.shoulder_issue',
+      childIssueIds: [
+        'barbell-curl.shoulder_warn',
+        'barbell-curl.shoulder_fail',
+      ],
+    },
+    {
+      issueId: 'barbell-curl.torso_issue',
+      childIssueIds: [
+        'barbell-curl.torso_warn',
+        'barbell-curl.torso_fail',
+      ],
+    },
+    {
+      issueId: 'barbell-curl.tempo_issue',
+      childIssueIds: [
+        'barbell-curl.tempo_up',
+        'barbell-curl.tempo_down',
+      ],
+    },
+  ],
+};
+
+const SEVERITY_RANK: Record<RepIssueSeverity, number> = {
+  none: 0,
+  mild: 1,
+  moderate: 2,
+  severe: 3,
+};
+
+function groupedTargetsForExercise(exerciseName: string): GroupedIssueTarget[] {
+  return GROUPED_ISSUE_TARGETS[slugifyExerciseName(exerciseName)] ?? [];
+}
+
+function groupedTargetsForIssue(
+  groupedTargets: GroupedIssueTarget[],
+  issueId: string,
+): GroupedIssueTarget[] {
+  return groupedTargets.filter((target) => target.issueId === issueId);
+}
+
+function groupedIssuePresent(example: MlRepExample, target: GroupedIssueTarget): boolean {
+  const labelSet = new Set(example.labels.issueIds);
+  return target.childIssueIds.some((issueId) => labelSet.has(issueId));
+}
+
+function groupedHeuristicPresent(example: MlRepExample, target: GroupedIssueTarget): boolean {
+  const heuristicSet = new Set(example.heuristic.issueIds);
+  return target.childIssueIds.some((issueId) => heuristicSet.has(issueId));
+}
+
+function groupedIssueScorable(example: MlRepExample, target: GroupedIssueTarget): boolean {
+  return target.childIssueIds.some((issueId) => example.labels.issueScorable[issueId]);
+}
+
+function groupedIssueSeverity(example: MlRepExample, target: GroupedIssueTarget): RepIssueSeverity | '' {
+  let best: RepIssueSeverity | '' = '';
+  for (const issueId of target.childIssueIds) {
+    const severity = example.labels.issueSeverities?.[issueId];
+    if (!severity) continue;
+    if (best === '' || SEVERITY_RANK[severity] > SEVERITY_RANK[best]) best = severity;
+  }
+  return best;
+}
 
 export interface ExportMlDatasetInput {
   exerciseName: string;
@@ -123,8 +205,10 @@ function featureStatistics(examples: MlRepExample[], featureNames: string[]): Re
 export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResult {
   const examples: MlRepExample[] = [];
   const caseEvaluations: CaseEvaluation[] = [];
+  const groupedTargets = groupedTargetsForExercise(input.exerciseName);
   const splitBuckets: Partial<Record<DatasetSplit, MlDatasetSummaryBucket>> = {};
   const issueCounts: Record<string, number> = {};
+  const groupedIssueCounts: Record<string, number> = {};
   const heuristicIssueCounts: Record<string, number> = {};
   const issueSupportBySplit: MlDatasetManifest['issueSupportBySplit'] = {};
   const viewCounts: Record<string, number> = {};
@@ -159,6 +243,14 @@ export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResu
     for (const example of built.examples) {
       incrementCounts(issueCounts, example.labels.issueIds);
       incrementCounts(heuristicIssueCounts, example.heuristic.issueIds);
+      for (const target of groupedTargets) {
+        if (groupedIssuePresent(example, target)) {
+          incrementCount(groupedIssueCounts, target.issueId);
+        }
+        if (groupedHeuristicPresent(example, target)) {
+          incrementCount(heuristicIssueCounts, target.issueId);
+        }
+      }
       incrementCount(viewCounts, example.labels.view);
       incrementCount(scorableCounts, example.labels.scorable ? 'scorable' : 'unscorable');
       incrementCount(subjectCounts, example.grouping.subjectId ?? example.grouping.participantId);
@@ -167,15 +259,23 @@ export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResu
       const splitIssueCounts = issueSupportBySplit[example.split] ?? {};
       issueSupportBySplit[example.split] = splitIssueCounts;
       incrementCounts(splitIssueCounts, example.labels.issueIds);
+      for (const target of groupedTargets) {
+        if (groupedIssuePresent(example, target)) {
+          incrementCount(splitIssueCounts, target.issueId);
+        }
+      }
     }
   }
 
   const featureNames = collectFeatureNames(examples);
   const stats = featureStatistics(examples, featureNames);
+  const labelIssueIds = Array.from(new Set([
+    ...Object.keys(issueCounts),
+    ...Object.keys(groupedIssueCounts),
+    ...groupedTargets.map((target) => target.issueId),
+  ])).sort();
   const labelColumns = Object.fromEntries(
-    Object.keys(issueCounts)
-      .sort()
-      .map((issueId) => [issueId, `label_issue__${safeColumnPart(issueId)}`]),
+    labelIssueIds.map((issueId) => [issueId, `label_issue__${safeColumnPart(issueId)}`]),
   );
 
   const manifest: MlDatasetManifest = {
@@ -196,6 +296,8 @@ export function buildMlDataset(input: ExportMlDatasetInput): ExportMlDatasetResu
     },
     splits: splitBuckets,
     issueCounts,
+    groupedIssueCounts,
+    groupedIssueTargets: Object.fromEntries(groupedTargets.map((target) => [target.issueId, target.childIssueIds])),
     heuristicIssueCounts,
     issueSupportBySplit,
     viewCounts,
@@ -273,6 +375,7 @@ export function mlExampleToCsvRow(
   labelColumns: Record<string, string>,
   heuristicIssueIds: string[],
 ): Record<string, string | number> {
+  const groupedTargets = groupedTargetsForExercise(example.exerciseName);
   const row: Record<string, string | number> = {
     id: example.id,
     exercise_name: example.exerciseName,
@@ -321,14 +424,22 @@ export function mlExampleToCsvRow(
 
   const labelSet = new Set(example.labels.issueIds);
   for (const [issueId, column] of Object.entries(labelColumns)) {
-    row[column] = labelSet.has(issueId) ? 1 : 0;
-    row[`label_issue_scorable__${safeColumnPart(issueId)}`] = example.labels.issueScorable[issueId] ? 1 : 0;
-    row[`label_issue_severity__${safeColumnPart(issueId)}`] = example.labels.issueSeverities?.[issueId] ?? '';
+    const grouped = groupedTargetsForIssue(groupedTargets, issueId)[0];
+    row[column] = grouped ? (groupedIssuePresent(example, grouped) ? 1 : 0) : labelSet.has(issueId) ? 1 : 0;
+    row[`label_issue_scorable__${safeColumnPart(issueId)}`] = grouped
+      ? groupedIssueScorable(example, grouped) ? 1 : 0
+      : example.labels.issueScorable[issueId] ? 1 : 0;
+    row[`label_issue_severity__${safeColumnPart(issueId)}`] = grouped
+      ? groupedIssueSeverity(example, grouped)
+      : example.labels.issueSeverities?.[issueId] ?? '';
   }
 
   const heuristicSet = new Set(example.heuristic.issueIds);
   for (const issueId of heuristicIssueIds) {
-    row[`heuristic_issue__${safeColumnPart(issueId)}`] = heuristicSet.has(issueId) ? 1 : 0;
+    const grouped = groupedTargetsForIssue(groupedTargets, issueId)[0];
+    row[`heuristic_issue__${safeColumnPart(issueId)}`] = grouped
+      ? groupedHeuristicPresent(example, grouped) ? 1 : 0
+      : heuristicSet.has(issueId) ? 1 : 0;
   }
 
   for (const featureName of featureNames) {

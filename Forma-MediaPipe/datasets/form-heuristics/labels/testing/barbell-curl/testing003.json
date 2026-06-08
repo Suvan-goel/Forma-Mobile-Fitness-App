@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/testing/barbell-curl/testing003.mp4",
+  "landmarkFile": "landmarks/testing/barbell-curl/testing003.json",
+  "split": "test",
+  "reviewStatus": "draft",
+  "expectedReps": 10,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 1250,
+      "endMs": 2250,
+      "issueIds": [
+        "barbell-curl.tempo_up",
+        "barbell-curl.tempo_down"
+      ],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 3250,
+      "endMs": 4250,
+      "issueIds": [
+        "barbell-curl.tempo_up",
+        "barbell-curl.tempo_down"
+      ],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 5000,
+      "endMs": 6250,
+      "issueIds": [
+        "barbell-curl.tempo_down"
+      ],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 6750,
+      "endMs": 8250,
+      "issueIds": [
+        "barbell-curl.tempo_down"
+      ],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 8750,
+      "endMs": 10750,
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 11750,
+      "endMs": 14500,
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 7,
+      "startMs": 15000,
+      "endMs": 18000,
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 8,
+      "startMs": 18250,
+      "endMs": 21000,
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 9,
+      "startMs": 21000,
+      "endMs": 23000,
+      "issueIds": [],
+      "view": "unknown",
+      "scorable": true
+    },
+    {
+      "index": 10,
+      "startMs": 23375,
+      "endMs": 25000,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "notes": "Starts from a forward dip and rises into the curl.",
+      "view": "unknown",
+      "scorable": true
+    }
+  ],
+  "notes": "Human-reviewed from video. Ten visible reps labelled from visible movement start through return to extension. Wrist-curl suggestions were not approved because wrist position is not reliably visible from this oblique angle; elbow-flare suggestions were not approved because outward elbow drift is not clear enough from the camera angle. The final rep is labelled for visible torso momentum."
+}

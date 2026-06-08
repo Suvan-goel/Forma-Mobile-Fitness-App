@@ -9,7 +9,7 @@ import type {
 import type { PoseQualityStatus, PoseQualityWarning } from '../shared/poseQuality';
 
 export const ML_REP_EXAMPLE_SCHEMA_VERSION = 1;
-export const ML_FEATURE_SCHEMA_VERSION = 'rep-features-v1';
+export const ML_FEATURE_SCHEMA_VERSION = 'rep-features-v2';
 
 export type MlFeatureValue = number | null;
 export type MlFeatureVector = Record<string, MlFeatureValue>;
@@ -116,6 +116,8 @@ export interface MlDatasetManifest {
   };
   splits: Partial<Record<DatasetSplit, MlDatasetSummaryBucket>>;
   issueCounts: Record<string, number>;
+  groupedIssueCounts?: Record<string, number>;
+  groupedIssueTargets?: Record<string, string[]>;
   heuristicIssueCounts: Record<string, number>;
   issueSupportBySplit: Partial<Record<DatasetSplit, Record<string, number>>>;
   viewCounts: Record<string, number>;

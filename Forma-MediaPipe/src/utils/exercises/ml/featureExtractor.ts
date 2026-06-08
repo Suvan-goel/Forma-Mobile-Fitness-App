@@ -103,6 +103,36 @@ function addStats(features: MlFeatureVector, prefix: string, values: number[]): 
   setFeature(features, `${prefix}.std`, std(values, average));
 }
 
+function percentile(values: number[], quantile: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = (sorted.length - 1) * quantile;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower];
+  const weight = index - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+function addPercentileStats(features: MlFeatureVector, prefix: string, values: number[]): void {
+  addStats(features, prefix, values);
+  setFeature(features, `${prefix}.p10`, percentile(values, 0.1));
+  setFeature(features, `${prefix}.p25`, percentile(values, 0.25));
+  setFeature(features, `${prefix}.p50`, percentile(values, 0.5));
+  setFeature(features, `${prefix}.p75`, percentile(values, 0.75));
+  setFeature(features, `${prefix}.p90`, percentile(values, 0.9));
+}
+
+function countWithin(values: number[], predicate: (value: number) => boolean): number | null {
+  if (values.length === 0) return null;
+  return values.filter(predicate).length;
+}
+
+function ratio(numerator: number | null, denominator: number): number | null {
+  if (numerator === null || denominator === 0) return null;
+  return numerator / denominator;
+}
+
 function keypointByName(keypoints: Keypoint[] | undefined, name: string): Keypoint | undefined {
   return keypoints?.find((keypoint) => keypoint.name === name);
 }
@@ -124,6 +154,80 @@ function midpoint(a: Keypoint, b: Keypoint): Keypoint {
     z: ((a.z ?? 0) + (b.z ?? 0)) / 2,
     score: Math.min(a.score, b.score),
   };
+}
+
+function keypointReliable(keypoint: Keypoint | undefined): keypoint is Keypoint {
+  return !!keypoint && Number.isFinite(keypoint.score) && keypoint.score >= VISIBILITY_THRESHOLD;
+}
+
+type ArmSide = 'left' | 'right';
+
+function armReliable(keypoints: Keypoint[], side: ArmSide): boolean {
+  return (
+    keypointReliable(keypointByName(keypoints, `${side}_shoulder`)) &&
+    keypointReliable(keypointByName(keypoints, `${side}_elbow`)) &&
+    keypointReliable(keypointByName(keypoints, `${side}_wrist`))
+  );
+}
+
+function torsoReliable(keypoints: Keypoint[]): boolean {
+  return (
+    keypointReliable(keypointByName(keypoints, 'left_shoulder')) &&
+    keypointReliable(keypointByName(keypoints, 'right_shoulder')) &&
+    keypointReliable(keypointByName(keypoints, 'left_hip')) &&
+    keypointReliable(keypointByName(keypoints, 'right_hip'))
+  );
+}
+
+function normalizerFromTorso(keypoints: Keypoint[]): number | null {
+  const leftShoulder = keypointByName(keypoints, 'left_shoulder');
+  const rightShoulder = keypointByName(keypoints, 'right_shoulder');
+  const leftHip = keypointByName(keypoints, 'left_hip');
+  const rightHip = keypointByName(keypoints, 'right_hip');
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+  const torso = distance(midpoint(leftShoulder, rightShoulder), midpoint(leftHip, rightHip));
+  return torso > 0 ? torso : null;
+}
+
+function sideElbowAngle(keypoints: Keypoint[], side: ArmSide): number | null {
+  const shoulder = keypointByName(keypoints, `${side}_shoulder`);
+  const elbow = keypointByName(keypoints, `${side}_elbow`);
+  const wrist = keypointByName(keypoints, `${side}_wrist`);
+  if (!shoulder || !elbow || !wrist) return null;
+  return calculateAngle(shoulder, elbow, wrist);
+}
+
+function sideWristY(keypoints: Keypoint[], side: ArmSide): number | null {
+  const wrist = keypointByName(keypoints, `${side}_wrist`);
+  return wrist && Number.isFinite(wrist.y) ? wrist.y : null;
+}
+
+function averageNullable(a: number | null, b: number | null): number | null {
+  if (a === null && b === null) return null;
+  if (a === null) return b;
+  if (b === null) return a;
+  return (a + b) / 2;
+}
+
+function addEndpointHoldFeatures(features: MlFeatureVector, prefix: string, values: number[], lowIsTop: boolean): void {
+  if (values.length === 0) {
+    setFeature(features, `${prefix}.top_hold_frames`, null);
+    setFeature(features, `${prefix}.bottom_hold_frames`, null);
+    setFeature(features, `${prefix}.top_hold_ratio`, null);
+    setFeature(features, `${prefix}.bottom_hold_ratio`, null);
+    return;
+  }
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = Math.max(0.000001, maxValue - minValue);
+  const lowBand = minValue + range * 0.1;
+  const highBand = maxValue - range * 0.1;
+  const topFrames = countWithin(values, (value) => lowIsTop ? value <= lowBand : value >= highBand);
+  const bottomFrames = countWithin(values, (value) => lowIsTop ? value >= highBand : value <= lowBand);
+  setFeature(features, `${prefix}.top_hold_frames`, topFrames);
+  setFeature(features, `${prefix}.bottom_hold_frames`, bottomFrames);
+  setFeature(features, `${prefix}.top_hold_ratio`, ratio(topFrames, values.length));
+  setFeature(features, `${prefix}.bottom_hold_ratio`, ratio(bottomFrames, values.length));
 }
 
 function addKeypointStats(
@@ -304,6 +408,299 @@ function addPhaseTimingFeatures(
   setFeature(features, 'phase.wrist_y_range', Math.max(...ys) - Math.min(...ys));
 }
 
+function splitFramesByWristEndpoint(frames: DatasetCase['recording']['frames']): {
+  first: DatasetCase['recording']['frames'];
+  second: DatasetCase['recording']['frames'];
+  top: DatasetCase['recording']['frames'];
+  bottom: DatasetCase['recording']['frames'];
+} {
+  const samples = frames
+    .map((frame, index) => {
+      const keypoints = frameKeypoints(frame);
+      const y = averageNullable(sideWristY(keypoints, 'left'), sideWristY(keypoints, 'right'));
+      return y === null ? null : { index, y };
+    })
+    .filter((sample): sample is { index: number; y: number } => sample !== null);
+
+  if (samples.length === 0) return { first: frames, second: [], top: [], bottom: [] };
+
+  const topCutoff = percentile(samples.map((sample) => sample.y), 0.1);
+  const bottomCutoff = percentile(samples.map((sample) => sample.y), 0.9);
+  const top = topCutoff === null ? [] : samples.filter((sample) => sample.y <= topCutoff).map((sample) => frames[sample.index]);
+  const bottom = bottomCutoff === null ? [] : samples.filter((sample) => sample.y >= bottomCutoff).map((sample) => frames[sample.index]);
+  const extreme = samples.reduce((best, sample) => sample.y < best.y ? sample : best, samples[0]);
+  return {
+    first: frames.slice(0, extreme.index + 1),
+    second: frames.slice(extreme.index),
+    top,
+    bottom,
+  };
+}
+
+function armAngleSamples(frames: DatasetCase['recording']['frames'], side: ArmSide, reliableOnly = false): number[] {
+  const values: number[] = [];
+  for (const frame of frames) {
+    const keypoints = frameKeypoints(frame);
+    if (reliableOnly && !armReliable(keypoints, side)) continue;
+    const angle = sideElbowAngle(keypoints, side);
+    if (angle !== null && Number.isFinite(angle)) values.push(angle);
+  }
+  return values;
+}
+
+function wristYSamples(frames: DatasetCase['recording']['frames'], side: ArmSide, reliableOnly = false): number[] {
+  const values: number[] = [];
+  for (const frame of frames) {
+    const keypoints = frameKeypoints(frame);
+    if (reliableOnly && !armReliable(keypoints, side)) continue;
+    const y = sideWristY(keypoints, side);
+    if (y !== null && Number.isFinite(y)) values.push(y);
+  }
+  return values;
+}
+
+function addMlFeatureV2RomEndpointFeatures(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+  diagnostics?: ReplayRepPrediction['diagnostics'],
+): void {
+  const split = splitFramesByWristEndpoint(frames);
+  const selectedSide = diagnostics?.selectedSide === 'right' ? 'right' : diagnostics?.selectedSide === 'left' ? 'left' : null;
+  const leftAngles = armAngleSamples(frames, 'left', true);
+  const rightAngles = armAngleSamples(frames, 'right', true);
+  const leftWrist = wristYSamples(frames, 'left', true);
+  const rightWrist = wristYSamples(frames, 'right', true);
+  const leftRom = leftAngles.length === 0 ? null : Math.max(...leftAngles) - Math.min(...leftAngles);
+  const rightRom = rightAngles.length === 0 ? null : Math.max(...rightAngles) - Math.min(...rightAngles);
+
+  for (const [side, angles, wrist, rom] of [
+    ['left', leftAngles, leftWrist, leftRom],
+    ['right', rightAngles, rightWrist, rightRom],
+  ] as const) {
+    addPercentileStats(features, `v2.rom.${side}.elbow_angle_deg`, angles);
+    addPercentileStats(features, `v2.rom.${side}.wrist_y`, wrist);
+    setFeature(features, `v2.rom.${side}.rom_deg`, rom);
+    setFeature(features, `v2.rom.${side}.reliable_frame_count`, angles.length);
+    setFeature(features, `v2.rom.${side}.reliable_frame_ratio`, frames.length === 0 ? null : angles.length / frames.length);
+    addEndpointHoldFeatures(features, `v2.rom.${side}.elbow_angle_deg`, angles, true);
+  }
+
+  const pairedBilateralAngles = leftAngles
+    .map((left, index) => averageNullable(left, rightAngles[index] ?? null))
+    .filter((value): value is number => value !== null);
+  addPercentileStats(features, 'v2.rom.bilateral.elbow_angle_deg', pairedBilateralAngles);
+  setFeature(features, 'v2.rom.bilateral.average_rom_deg', mean([leftRom, rightRom].filter((value): value is number => value !== null)));
+  setFeature(features, 'v2.rom.left_right_rom_diff_deg', leftRom !== null && rightRom !== null ? Math.abs(leftRom - rightRom) : null);
+  setFeature(features, 'v2.rom.left_right_rom_ratio', leftRom !== null && rightRom !== null && Math.max(leftRom, rightRom) > 0
+    ? Math.min(leftRom, rightRom) / Math.max(leftRom, rightRom)
+    : null);
+
+  const selectedAngles = selectedSide === 'left' ? leftAngles : selectedSide === 'right' ? rightAngles : pairedBilateralAngles;
+  const selectedRom = selectedSide === 'left' ? leftRom : selectedSide === 'right' ? rightRom : mean([leftRom, rightRom].filter((value): value is number => value !== null));
+  addPercentileStats(features, 'v2.rom.selected_arm.elbow_angle_deg', selectedAngles);
+  setFeature(features, 'v2.rom.selected_arm.rom_deg', selectedRom);
+  addEndpointHoldFeatures(features, 'v2.rom.selected_arm.elbow_angle_deg', selectedAngles, true);
+
+  for (const [name, phaseFrames] of Object.entries({
+    concentric: split.first,
+    eccentric: split.second,
+    top_endpoint: split.top,
+    bottom_endpoint: split.bottom,
+  })) {
+    const phaseLeft = armAngleSamples(phaseFrames, 'left', true);
+    const phaseRight = armAngleSamples(phaseFrames, 'right', true);
+    const phaseBilateral = phaseLeft
+      .map((left, index) => averageNullable(left, phaseRight[index] ?? null))
+      .filter((value): value is number => value !== null);
+    addPercentileStats(features, `v2.rom.phase.${name}.bilateral_elbow_angle_deg`, phaseBilateral);
+    setFeature(features, `v2.rom.phase.${name}.frame_count`, phaseFrames.length);
+  }
+}
+
+function phaseWristVelocities(frames: DatasetCase['recording']['frames']): number[] {
+  const velocities: number[] = [];
+  for (let index = 1; index < frames.length; index += 1) {
+    const previous = frameKeypoints(frames[index - 1]);
+    const current = frameKeypoints(frames[index]);
+    const prevY = averageNullable(sideWristY(previous, 'left'), sideWristY(previous, 'right'));
+    const currY = averageNullable(sideWristY(current, 'left'), sideWristY(current, 'right'));
+    if (prevY === null || currY === null) continue;
+    const dt = Math.max(0.001, (frames[index].timestamp - frames[index - 1].timestamp) / 1000);
+    velocities.push(Math.abs(currY - prevY) / dt);
+  }
+  return velocities;
+}
+
+function addMlFeatureV2TempoFeatures(features: MlFeatureVector, frames: DatasetCase['recording']['frames']): void {
+  const split = splitFramesByWristEndpoint(frames);
+  const concentricDuration = split.first.length >= 2 ? split.first[split.first.length - 1].timestamp - split.first[0].timestamp : null;
+  const eccentricDuration = split.second.length >= 2 ? split.second[split.second.length - 1].timestamp - split.second[0].timestamp : null;
+  setFeature(features, 'v2.tempo.concentric_duration_ms', concentricDuration);
+  setFeature(features, 'v2.tempo.eccentric_duration_ms', eccentricDuration);
+  setFeature(features, 'v2.tempo.concentric_eccentric_ratio', concentricDuration !== null && eccentricDuration !== null && eccentricDuration > 0
+    ? concentricDuration / eccentricDuration
+    : null);
+
+  for (const [name, phaseFrames] of Object.entries({ concentric: split.first, eccentric: split.second, full: frames })) {
+    const velocities = phaseWristVelocities(phaseFrames);
+    addPercentileStats(features, `v2.tempo.${name}.wrist_velocity`, velocities);
+    const lowVelocity = percentile(velocities, 0.1);
+    setFeature(features, `v2.tempo.${name}.low_velocity_frame_count`, lowVelocity === null ? null : velocities.filter((value) => value <= lowVelocity).length);
+  }
+  const fullLowVelocity = percentile(phaseWristVelocities(frames), 0.15);
+  const topVelocities = phaseWristVelocities(split.top);
+  const bottomVelocities = phaseWristVelocities(split.bottom);
+  setFeature(features, 'v2.tempo.top_pause_frames', fullLowVelocity === null ? null : topVelocities.filter((value) => value <= fullLowVelocity).length);
+  setFeature(features, 'v2.tempo.bottom_pause_frames', fullLowVelocity === null ? null : bottomVelocities.filter((value) => value <= fullLowVelocity).length);
+  setFeature(features, 'v2.tempo.phase_completeness', frames.length === 0 ? null : Math.min(split.first.length, split.second.length) / frames.length);
+}
+
+function shoulderMidpoint(frame: DatasetCase['recording']['frames'][number]): Keypoint | null {
+  const keypoints = frameKeypoints(frame);
+  const left = keypointByName(keypoints, 'left_shoulder');
+  const right = keypointByName(keypoints, 'right_shoulder');
+  return left && right ? midpoint(left, right) : null;
+}
+
+function torsoLeanSample(frame: DatasetCase['recording']['frames'][number]): number | null {
+  const keypoints = frameKeypoints(frame);
+  if (!torsoReliable(keypoints)) return null;
+  const leftShoulder = keypointByName(keypoints, 'left_shoulder');
+  const rightShoulder = keypointByName(keypoints, 'right_shoulder');
+  const leftHip = keypointByName(keypoints, 'left_hip');
+  const rightHip = keypointByName(keypoints, 'right_hip');
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+  const shoulderMid = midpoint(leftShoulder, rightShoulder);
+  const hipMid = midpoint(leftHip, rightHip);
+  return Math.atan2(shoulderMid.x - hipMid.x, Math.abs(shoulderMid.y - hipMid.y) || 0.001) * (180 / Math.PI);
+}
+
+function addMlFeatureV2ShoulderTorsoFeatures(features: MlFeatureVector, frames: DatasetCase['recording']['frames']): void {
+  const split = splitFramesByWristEndpoint(frames);
+  const baseShoulder = frames[0] ? shoulderMidpoint(frames[0]) : null;
+  const shoulderDrift = (phaseFrames: DatasetCase['recording']['frames']) => phaseFrames
+    .map((frame) => {
+      const current = shoulderMidpoint(frame);
+      return current && baseShoulder ? distance(current, baseShoulder) : null;
+    })
+    .filter((value): value is number => value !== null);
+  const torsoLean = (phaseFrames: DatasetCase['recording']['frames']) => phaseFrames
+    .map(torsoLeanSample)
+    .filter((value): value is number => value !== null);
+
+  for (const [name, phaseFrames] of Object.entries({ full: frames, concentric: split.first, eccentric: split.second, top_endpoint: split.top })) {
+    const shoulder = shoulderDrift(phaseFrames);
+    const shoulderP90 = percentile(shoulder, 0.9);
+    addPercentileStats(features, `v2.shoulder.${name}.drift`, shoulder);
+    setFeature(features, `v2.shoulder.${name}.sustained_drift_frames`, shoulderP90 === null ? null : shoulder.filter((value) => value >= shoulderP90).length);
+
+    const torso = torsoLean(phaseFrames);
+    const absTorso = torso.map(Math.abs);
+    const torsoP90 = percentile(absTorso, 0.9);
+    addPercentileStats(features, `v2.torso.${name}.lean_deg`, torso);
+    addPercentileStats(features, `v2.torso.${name}.abs_lean_deg`, absTorso);
+    setFeature(features, `v2.torso.${name}.sustained_lean_frames`, torsoP90 === null ? null : absTorso.filter((value) => value >= torsoP90).length);
+    setFeature(features, `v2.torso.${name}.reliable_frame_ratio`, phaseFrames.length === 0 ? null : torso.length / phaseFrames.length);
+  }
+
+  const fullTorso = torsoLean(frames).map(Math.abs);
+  const p10 = percentile(fullTorso, 0.1);
+  const p90 = percentile(fullTorso, 0.9);
+  const maxValue = fullTorso.length === 0 ? null : Math.max(...fullTorso);
+  setFeature(features, 'v2.torso.robust_abs_delta_p90_minus_p10', p10 !== null && p90 !== null ? p90 - p10 : null);
+  setFeature(features, 'v2.torso.outlier_spike_abs_delta', maxValue !== null && p90 !== null ? maxValue - p90 : null);
+  setFeature(features, 'v2.torso.anchor_reliable_frame_ratio', frames.length === 0 ? null : fullTorso.length / frames.length);
+}
+
+function elbowFlareOffset(frame: DatasetCase['recording']['frames'][number], side: ArmSide): number | null {
+  const keypoints = frameKeypoints(frame);
+  if (!armReliable(keypoints, side)) return null;
+  const shoulder = keypointByName(keypoints, `${side}_shoulder`);
+  const elbow = keypointByName(keypoints, `${side}_elbow`);
+  const wrist = keypointByName(keypoints, `${side}_wrist`);
+  if (!shoulder || !elbow || !wrist) return null;
+  const torso = normalizerFromTorso(keypoints);
+  const fallback = Math.abs(shoulder.x - wrist.x);
+  const normalizer = torso ?? (fallback > 0 ? fallback : 1);
+  return Math.abs(elbow.x - ((shoulder.x + wrist.x) / 2)) / Math.max(0.000001, normalizer);
+}
+
+function addMlFeatureV2ElbowAsymmetryFeatures(features: MlFeatureVector, frames: DatasetCase['recording']['frames']): void {
+  const split = splitFramesByWristEndpoint(frames);
+  for (const [name, phaseFrames] of Object.entries({ full: frames, concentric: split.first, eccentric: split.second, top_half: split.top })) {
+    const leftFlare = phaseFrames.map((frame) => elbowFlareOffset(frame, 'left')).filter((value): value is number => value !== null);
+    const rightFlare = phaseFrames.map((frame) => elbowFlareOffset(frame, 'right')).filter((value): value is number => value !== null);
+    const bilateral = leftFlare
+      .map((left, index) => averageNullable(left, rightFlare[index] ?? null))
+      .filter((value): value is number => value !== null);
+    addPercentileStats(features, `v2.elbow_flare.${name}.left_offset`, leftFlare);
+    addPercentileStats(features, `v2.elbow_flare.${name}.right_offset`, rightFlare);
+    addPercentileStats(features, `v2.elbow_flare.${name}.bilateral_offset`, bilateral);
+    const p75 = percentile(bilateral, 0.75);
+    setFeature(features, `v2.elbow_flare.${name}.support_ratio_above_p75`, p75 === null || bilateral.length === 0 ? null : bilateral.filter((value) => value >= p75).length / bilateral.length);
+    const leftMean = mean(leftFlare);
+    const rightMean = mean(rightFlare);
+    setFeature(features, `v2.elbow_flare.${name}.left_right_consistency`, leftMean !== null && rightMean !== null
+      ? 1 - Math.abs(leftMean - rightMean) / Math.max(0.000001, Math.max(leftMean, rightMean))
+      : null);
+  }
+
+  const leftAngles = armAngleSamples(frames, 'left', true);
+  const rightAngles = armAngleSamples(frames, 'right', true);
+  const leftRange = leftAngles.length === 0 ? null : Math.max(...leftAngles) - Math.min(...leftAngles);
+  const rightRange = rightAngles.length === 0 ? null : Math.max(...rightAngles) - Math.min(...rightAngles);
+  setFeature(features, 'v2.asymmetry.reliability_weighted_rom_diff_deg', leftRange !== null && rightRange !== null ? Math.abs(leftRange - rightRange) : null);
+  setFeature(features, 'v2.asymmetry.left_right_reliability_imbalance', frames.length === 0 ? null : Math.abs(leftAngles.length - rightAngles.length) / frames.length);
+  setFeature(features, 'v2.asymmetry.left_right_endpoint_top_diff_deg', leftAngles.length > 0 && rightAngles.length > 0
+    ? Math.abs((percentile(leftAngles, 0.1) ?? 0) - (percentile(rightAngles, 0.1) ?? 0))
+    : null);
+  setFeature(features, 'v2.asymmetry.left_right_endpoint_bottom_diff_deg', leftAngles.length > 0 && rightAngles.length > 0
+    ? Math.abs((percentile(leftAngles, 0.9) ?? 0) - (percentile(rightAngles, 0.9) ?? 0))
+    : null);
+  const leftTopIndex = leftAngles.length === 0 ? null : leftAngles.indexOf(Math.min(...leftAngles));
+  const rightTopIndex = rightAngles.length === 0 ? null : rightAngles.indexOf(Math.min(...rightAngles));
+  setFeature(features, 'v2.asymmetry.top_endpoint_timing_delta_frames', leftTopIndex !== null && rightTopIndex !== null ? Math.abs(leftTopIndex - rightTopIndex) : null);
+}
+
+function addMlFeatureV2ReliabilityFeatures(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+  diagnostics?: ReplayRepPrediction['diagnostics'],
+): void {
+  const chainFrames = {
+    left_arm: frames.filter((frame) => armReliable(frameKeypoints(frame), 'left')).length,
+    right_arm: frames.filter((frame) => armReliable(frameKeypoints(frame), 'right')).length,
+    torso: frames.filter((frame) => torsoReliable(frameKeypoints(frame))).length,
+  };
+  for (const [chain, count] of Object.entries(chainFrames)) {
+    setFeature(features, `v2.reliability.${chain}.reliable_frame_count`, count);
+    setFeature(features, `v2.reliability.${chain}.reliable_frame_ratio`, frames.length === 0 ? null : count / frames.length);
+  }
+  setFeature(features, 'v2.reliability.usable_chain_count', diagnostics?.reliability?.usableChains.length ?? null);
+  setFeature(features, 'v2.reliability.weak_chain_count', diagnostics?.reliability?.weakChains.length ?? null);
+  setFeature(features, 'v2.reliability.safe_cue_family_count', diagnostics?.reliability?.safeCueFamilies.length ?? null);
+  setFeature(features, 'v2.reliability.unsafe_cue_family_count', diagnostics?.reliability?.unsafeCueFamilies.length ?? null);
+  setFeature(features, 'v2.reliability.view_blocked_cue_family_count', diagnostics?.viewCueGating?.viewBlockedCueFamilies.length ?? null);
+  setFeature(features, 'v2.reliability.pose_state_blocked_cue_family_count', diagnostics?.viewCueGating?.poseStateBlockedCueFamilies.length ?? null);
+  setFeature(features, 'v2.view.front_support_ratio', diagnostics?.metrics.frontViewSupportRatio?.value);
+  setFeature(features, 'v2.view.side_support_ratio', diagnostics?.metrics.sideViewSupportRatio?.value);
+  setFeature(features, 'v2.view.support_ratio', diagnostics?.metrics.viewSupportRatio?.value);
+  setBooleanFeature(features, 'v2.safety.scorable', diagnostics?.scorable);
+  setBooleanFeature(features, 'v2.safety.partial_view_scoring_allowed', diagnostics?.viewCueGating?.partialViewScoringAllowed);
+}
+
+function addMlFeatureV2(
+  features: MlFeatureVector,
+  frames: DatasetCase['recording']['frames'],
+  diagnostics?: ReplayRepPrediction['diagnostics'],
+): void {
+  addMlFeatureV2RomEndpointFeatures(features, frames, diagnostics);
+  addMlFeatureV2TempoFeatures(features, frames);
+  addMlFeatureV2ShoulderTorsoFeatures(features, frames);
+  addMlFeatureV2ElbowAsymmetryFeatures(features, frames);
+  addMlFeatureV2ReliabilityFeatures(features, frames, diagnostics);
+}
+
 function issueScorableMask(
   definition: ExerciseDefinition,
   label: RepLabel,
@@ -408,6 +805,7 @@ function buildFeatures(
   addTorsoStats(features, frames);
   addSymmetryStats(features, frames);
   addPhaseTimingFeatures(features, frames);
+  addMlFeatureV2(features, frames, diagnostics);
 
   const mask = issueScorableMask(definition, label, rep.predictedView);
   for (const [issueId, scorable] of Object.entries(mask)) {

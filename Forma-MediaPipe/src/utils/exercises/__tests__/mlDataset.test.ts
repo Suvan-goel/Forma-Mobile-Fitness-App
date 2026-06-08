@@ -275,4 +275,80 @@ describe('ML rep dataset export', () => {
     expect(row['feature__heuristic.score']).toBe(82);
     expect(row.subject_id).toBe('subject-a');
   });
+
+  it('exports Barbell Curl grouped issue targets without replacing fine labels', () => {
+    const barbellDefinition: ExerciseDefinition = {
+      ...definition,
+      name: 'Barbell Curl',
+      tunedConfigPath: 'src/utils/exercises/definitions/tuned/barbellCurl.json',
+      ttsConfig: {
+        feedbackToIssue: {
+          'Flex more.': 'incomplete_flex',
+        },
+      },
+    };
+    const barbellCase: DatasetCase = {
+      ...datasetCase,
+      label: {
+        ...datasetCase.label,
+        exerciseName: 'Barbell Curl',
+        reps: [
+          {
+            index: 1,
+            startMs: 0,
+            endMs: 1000,
+            issueIds: ['barbell-curl.incomplete_flex'],
+            issueSeverities: {
+              'barbell-curl.incomplete_flex': 'moderate',
+            },
+            view: 'front',
+            scorable: true,
+          },
+        ],
+      },
+      recording: {
+        ...recording,
+        exerciseName: 'Barbell Curl',
+      },
+    };
+
+    const result = buildMlDataset({
+      exerciseName: barbellDefinition.name,
+      definition: barbellDefinition,
+      cases: [barbellCase],
+      datasetRoot: 'datasets/form-heuristics',
+      includeDrafts: false,
+      discoveredLabelFiles: 1,
+      outputs: {
+        jsonl: 'datasets/form-heuristics/ml/barbell-curl/rep_examples.jsonl',
+        csv: 'datasets/form-heuristics/ml/barbell-curl/features.csv',
+        manifest: 'datasets/form-heuristics/ml/barbell-curl/manifest.json',
+      },
+      generatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    expect(result.manifest.labelColumns).toMatchObject({
+      'barbell-curl.incomplete_flex': 'label_issue__barbell_curl_incomplete_flex',
+      'barbell-curl.rom_issue': 'label_issue__barbell_curl_rom_issue',
+    });
+    expect(result.manifest.groupedIssueCounts).toMatchObject({
+      'barbell-curl.rom_issue': 1,
+    });
+    expect(result.manifest.groupedIssueTargets?.['barbell-curl.rom_issue']).toEqual([
+      'barbell-curl.incomplete_flex',
+      'barbell-curl.incomplete_extend',
+      'barbell-curl.incomplete_rom',
+    ]);
+
+    const row = mlExampleToCsvRow(
+      result.examples[0],
+      result.manifest.featureNames,
+      result.manifest.labelColumns,
+      Object.keys(result.manifest.labelColumns),
+    );
+    expect(row.label_issue__barbell_curl_incomplete_flex).toBe(1);
+    expect(row.label_issue__barbell_curl_rom_issue).toBe(1);
+    expect(row.label_issue_scorable__barbell_curl_rom_issue).toBe(1);
+    expect(row.label_issue_severity__barbell_curl_rom_issue).toBe('moderate');
+  });
 });

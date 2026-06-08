@@ -154,6 +154,7 @@ export function runMlExportDatasetCommand(argv = process.argv.slice(2)): void {
   const labelColumns = result.manifest.labelColumns;
   const heuristicIssueIds = Array.from(
     new Set([
+      ...Object.keys(result.manifest.labelColumns),
       ...Object.keys(result.manifest.heuristicIssueCounts),
       ...Object.keys(result.manifest.issueCounts),
     ]),
