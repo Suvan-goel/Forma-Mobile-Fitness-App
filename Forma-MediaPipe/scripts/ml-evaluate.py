@@ -43,6 +43,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--issue-policy-clean-fp-row-cap", type=int, default=1, help="Per-issue validation clean false-positive row cap for optimized issue-specific hybrid policies.")
     parser.add_argument("--issue-policy-hard-negative-fp-row-cap", type=int, default=0, help="Per-issue validation hard-negative clean false-positive row cap for optimized issue-specific hybrid policies.")
     parser.add_argument("--issue-policy-partial-view-fp-row-cap", type=int, default=0, help="Per-issue validation partial-view clean false-positive row cap for optimized issue-specific hybrid policies.")
+    parser.add_argument("--grouped-policy-min-precision", type=float, default=0.75, help="Validation precision floor for Barbell Curl grouped-feedback rep-level policies.")
+    parser.add_argument("--grouped-policy-clean-fp-row-cap", type=int, default=0, help="Validation clean false-positive row cap for Barbell Curl grouped-feedback rep-level policies.")
+    parser.add_argument("--grouped-policy-hard-negative-fp-row-cap", type=int, default=0, help="Validation hard-negative clean false-positive row cap for Barbell Curl grouped-feedback rep-level policies.")
+    parser.add_argument("--grouped-policy-partial-view-fp-row-cap", type=int, default=0, help="Validation partial-view clean false-positive row cap for Barbell Curl grouped-feedback rep-level policies.")
+    parser.add_argument("--grouped-set-threshold", type=float, default=0.85, help="ML probability threshold for grouped set-level backup feedback.")
+    parser.add_argument("--grouped-set-min-reps", type=int, default=2, help="Minimum eligible reps above threshold before grouped set-level backup feedback is shown.")
+    parser.add_argument("--review-annotations", help="Optional offline review-annotation JSON sidecar for product-tolerant grouped-feedback safety metrics.")
     parser.add_argument("--predictions", help="Predictions CSV. Defaults to latest_predictions.csv.")
     return parser.parse_args()
 
@@ -1336,6 +1343,1134 @@ def build_policy_prediction_sets(
     return policies, selection
 
 
+BARBELL_CURL_GROUPED_FEEDBACK_TARGETS: dict[str, dict[str, Any]] = {
+    "label_issue__barbell_curl_rom_issue": {
+        "feedbackId": "barbell-curl.ROM_issue",
+        "feedbackText": "Use a fuller range of motion.",
+        "childLabels": [
+            "label_issue__barbell_curl_incomplete_flex",
+            "label_issue__barbell_curl_incomplete_extend",
+            "label_issue__barbell_curl_incomplete_rom",
+        ],
+    },
+    "label_issue__barbell_curl_shoulder_issue": {
+        "feedbackId": "barbell-curl.shoulder_issue",
+        "feedbackText": "Avoid using your shoulders to lift the bar.",
+        "childLabels": [
+            "label_issue__barbell_curl_shoulder_warn",
+            "label_issue__barbell_curl_shoulder_fail",
+        ],
+    },
+    "label_issue__barbell_curl_torso_issue": {
+        "feedbackId": "barbell-curl.torso_issue",
+        "feedbackText": "Keep your torso still.",
+        "childLabels": [
+            "label_issue__barbell_curl_torso_warn",
+            "label_issue__barbell_curl_torso_fail",
+        ],
+    },
+    "label_issue__barbell_curl_tempo_issue": {
+        "feedbackId": "barbell-curl.tempo_issue",
+        "feedbackText": "Control the speed of the rep.",
+        "childLabels": [
+            "label_issue__barbell_curl_tempo_up",
+            "label_issue__barbell_curl_tempo_down",
+        ],
+    },
+}
+
+
+def review_annotation_template() -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "description": "Offline-only grouped-feedback review annotations. These never mutate label files and only affect product-tolerant reporting metrics when passed to ml:evaluate with --review-annotations.",
+        "annotations": [
+            {
+                "recordingId": "val08-hard-negative-front",
+                "repIndex": 2,
+                "startMs": 11250,
+                "endMs": 13500,
+                "acceptableBorderlineGroups": ["shoulder_issue"],
+                "acceptableBorderlineIssues": ["barbell-curl.shoulder_warn"],
+                "unacceptableGroups": [],
+                "possibleLabelAmbiguity": False,
+                "needsVisualReview": False,
+                "reviewerNotes": "Mild shoulder assistance; acceptable as a light grouped shoulder warning.",
+            }
+        ],
+    }
+
+
+def group_token(value: str) -> str:
+    token = str(value).strip().lower()
+    token = token.removeprefix("label_issue__")
+    token = token.replace("barbell-curl.", "")
+    token = token.replace("barbell_curl.", "")
+    token = token.replace("barbell_curl_", "")
+    token = token.replace("-", "_")
+    return token
+
+
+def grouped_label_for_review_name(value: Any) -> str | None:
+    token = group_token(str(value))
+    for label_column, config in BARBELL_CURL_GROUPED_FEEDBACK_TARGETS.items():
+        if token == group_token(label_column) or token == group_token(config["feedbackId"]):
+            return label_column
+        for child_label in config["childLabels"]:
+            if token == group_token(child_label) or token == group_token(issue_name(child_label)):
+                return label_column
+    return None
+
+
+def recording_id_for_review(value: Any) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    return Path(text).stem
+
+
+def row_recording_ids(row: pd.Series) -> set[str]:
+    ids: set[str] = set()
+    for column in ["source_video", "recording_file", "label_file"]:
+        if column in row.index:
+            ids.add(recording_id_for_review(row.get(column)))
+    return {item for item in ids if item}
+
+
+def int_or_none(value: Any) -> int | None:
+    try:
+        if pd.isna(value):
+            return None
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_review_group_list(values: Any, warnings_out: list[str], field: str) -> list[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        warnings_out.append(f"{field} should be a list; ignoring value.")
+        return []
+    groups: list[str] = []
+    for value in values:
+        group = grouped_label_for_review_name(value)
+        if group is None:
+            warnings_out.append(f"Unknown grouped feedback annotation value in {field}: {value}")
+            continue
+        if group not in groups:
+            groups.append(group)
+    return groups
+
+
+def load_review_annotations(path: str | None) -> dict[str, Any]:
+    if not path:
+        return {
+            "provided": False,
+            "path": None,
+            "annotations": [],
+            "warnings": [],
+            "template": review_annotation_template(),
+        }
+    annotation_path = Path(path)
+    if not annotation_path.exists():
+        raise SystemExit(f"Review annotations file not found: {annotation_path}")
+    try:
+        payload = json.loads(annotation_path.read_text())
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid review annotations JSON: {annotation_path}: {exc}") from exc
+    warnings_out: list[str] = []
+    raw_annotations = payload.get("annotations", [])
+    if not isinstance(raw_annotations, list):
+        raise SystemExit("Review annotations JSON must contain an annotations array.")
+    annotations: list[dict[str, Any]] = []
+    for index, raw in enumerate(raw_annotations):
+        if not isinstance(raw, dict):
+            warnings_out.append(f"Annotation {index} is not an object; ignoring it.")
+            continue
+        recording_id = recording_id_for_review(raw.get("recordingId") or raw.get("sourceVideo") or raw.get("recordingFile") or raw.get("labelFile"))
+        if not recording_id:
+            warnings_out.append(f"Annotation {index} is missing recordingId/sourceVideo/recordingFile/labelFile; ignoring it.")
+            continue
+        acceptable_groups = normalize_review_group_list(raw.get("acceptableBorderlineGroups"), warnings_out, f"annotations[{index}].acceptableBorderlineGroups")
+        acceptable_groups_from_issues = normalize_review_group_list(raw.get("acceptableBorderlineIssues"), warnings_out, f"annotations[{index}].acceptableBorderlineIssues")
+        unacceptable_groups = normalize_review_group_list(raw.get("unacceptableGroups"), warnings_out, f"annotations[{index}].unacceptableGroups")
+        annotations.append({
+            "recordingId": recording_id,
+            "repIndex": int_or_none(raw.get("repIndex")),
+            "startMs": int_or_none(raw.get("startMs")),
+            "endMs": int_or_none(raw.get("endMs")),
+            "acceptableBorderlineGroups": sorted(set(acceptable_groups + acceptable_groups_from_issues)),
+            "unacceptableGroups": sorted(set(unacceptable_groups)),
+            "possibleLabelAmbiguity": bool(raw.get("possibleLabelAmbiguity", False)),
+            "needsVisualReview": bool(raw.get("needsVisualReview", False)),
+            "reviewerNotes": raw.get("reviewerNotes") or raw.get("notes") or "",
+        })
+    return {
+        "provided": True,
+        "path": str(annotation_path),
+        "schemaVersion": payload.get("schemaVersion"),
+        "annotations": annotations,
+        "annotationCount": len(annotations),
+        "warnings": warnings_out,
+        "template": review_annotation_template(),
+    }
+
+
+def review_annotation_matches_row(annotation: dict[str, Any], row: pd.Series) -> bool:
+    if annotation["recordingId"] not in row_recording_ids(row):
+        return False
+    rep_index = annotation.get("repIndex")
+    if rep_index is not None and int_or_none(row.get("rep_index")) != rep_index:
+        return False
+    start_ms = annotation.get("startMs")
+    if start_ms is not None and int_or_none(row.get("expected_start_ms")) != start_ms:
+        return False
+    end_ms = annotation.get("endMs")
+    if end_ms is not None and int_or_none(row.get("expected_end_ms")) != end_ms:
+        return False
+    return True
+
+
+def row_review_annotations(row: pd.Series, review_annotations: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        annotation
+        for annotation in review_annotations.get("annotations", [])
+        if review_annotation_matches_row(annotation, row)
+    ]
+
+
+def review_status_for_group(row: pd.Series, label_column: str, review_annotations: dict[str, Any]) -> dict[str, Any]:
+    matches = row_review_annotations(row, review_annotations)
+    explicit_unacceptable = any(label_column in annotation.get("unacceptableGroups", []) for annotation in matches)
+    acceptable_borderline = any(label_column in annotation.get("acceptableBorderlineGroups", []) for annotation in matches)
+    possible_label_ambiguity = any(bool(annotation.get("possibleLabelAmbiguity")) for annotation in matches)
+    needs_visual_review = any(bool(annotation.get("needsVisualReview")) for annotation in matches)
+    notes = [
+        str(annotation.get("reviewerNotes"))
+        for annotation in matches
+        if annotation.get("reviewerNotes")
+    ]
+    if explicit_unacceptable:
+        category = "unacceptable"
+    elif acceptable_borderline:
+        category = "acceptable_borderline"
+    elif possible_label_ambiguity:
+        category = "possible_label_ambiguity"
+    elif needs_visual_review:
+        category = "needs_visual_review"
+    else:
+        category = "unannotated"
+    return {
+        "category": category,
+        "acceptableBorderline": acceptable_borderline and not explicit_unacceptable,
+        "explicitUnacceptable": explicit_unacceptable,
+        "possibleLabelAmbiguity": possible_label_ambiguity,
+        "needsVisualReview": needs_visual_review,
+        "reviewerNotes": notes,
+    }
+
+
+def tolerant_metric_values(tp: int, fp: int, fn: int) -> dict[str, Any]:
+    precision = 1.0 if tp + fp == 0 else tp / (tp + fp)
+    recall = 1.0 if tp + fn == 0 else tp / (tp + fn)
+    f1 = 0.0 if precision + recall == 0 else (2 * precision * recall) / (precision + recall)
+    return {
+        "truePositives": tp,
+        "falsePositives": fp,
+        "falseNegatives": fn,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+    }
+
+
+def tolerant_grouped_policy_metrics(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    prediction_columns: dict[str, str],
+    review_annotations: dict[str, Any],
+) -> dict[str, Any]:
+    all_tp = 0
+    all_fp = 0
+    all_fn = 0
+    strict_all_tp = 0
+    strict_all_fp = 0
+    strict_all_fn = 0
+    per_group: dict[str, Any] = {}
+    clean = numeric_int_series(df, "label_clean") == 1
+    hard_negative = hard_negative_mask(df)
+    strict_clean_rows: set[Any] = set()
+    strict_hard_negative_rows: set[Any] = set()
+    unacceptable_clean_rows: set[Any] = set()
+    unacceptable_hard_negative_rows: set[Any] = set()
+    acceptable_clean_rows: set[Any] = set()
+    acceptable_hard_negative_rows: set[Any] = set()
+    possible_ambiguity_rows: set[Any] = set()
+    visual_review_rows: set[Any] = set()
+    examples: list[dict[str, Any]] = []
+
+    for label_column in grouped_labels:
+        prediction_column = prediction_columns[label_column]
+        truth = numeric_int_series(df, label_column)
+        pred = numeric_int_series(df, prediction_column)
+        group_tp = 0
+        group_fp = 0
+        group_fn = 0
+        strict_group_tp = 0
+        strict_group_fp = 0
+        strict_group_fn = 0
+        acceptable_count = 0
+        unacceptable_count = 0
+        hard_acceptable_count = 0
+        hard_unacceptable_count = 0
+        strict_hard_count = 0
+        strict_clean_count = 0
+        for index, row in df.iterrows():
+            y = int(truth.loc[index])
+            p = int(pred.loc[index])
+            if y == 1 and p == 1:
+                group_tp += 1
+                strict_group_tp += 1
+            elif y == 1 and p == 0:
+                group_fn += 1
+                strict_group_fn += 1
+            elif y == 0 and p == 1:
+                strict_group_fp += 1
+                status = review_status_for_group(row, label_column, review_annotations)
+                is_clean = bool(clean.loc[index])
+                is_hard_negative = bool(hard_negative.loc[index])
+                if is_clean:
+                    strict_clean_count += 1
+                    strict_clean_rows.add(index)
+                if is_hard_negative and is_clean:
+                    strict_hard_count += 1
+                    strict_hard_negative_rows.add(index)
+                if status["possibleLabelAmbiguity"]:
+                    possible_ambiguity_rows.add(index)
+                if status["needsVisualReview"]:
+                    visual_review_rows.add(index)
+                if status["acceptableBorderline"]:
+                    acceptable_count += 1
+                    if is_clean:
+                        acceptable_clean_rows.add(index)
+                    if is_hard_negative and is_clean:
+                        acceptable_hard_negative_rows.add(index)
+                        hard_acceptable_count += 1
+                else:
+                    group_fp += 1
+                    unacceptable_count += 1
+                    if is_clean:
+                        unacceptable_clean_rows.add(index)
+                    if is_hard_negative and is_clean:
+                        unacceptable_hard_negative_rows.add(index)
+                        hard_unacceptable_count += 1
+                if is_hard_negative and is_clean:
+                    examples.append({
+                        "sourceVideo": row.get("source_video"),
+                        "labelFile": row.get("label_file"),
+                        "recordingFile": row.get("recording_file"),
+                        "repIndex": int_or_none(row.get("rep_index")),
+                        "startMs": int_or_none(row.get("expected_start_ms")),
+                        "endMs": int_or_none(row.get("expected_end_ms")),
+                        "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+                        "strictFalsePositive": True,
+                        "tolerantCategory": status["category"],
+                        "reviewerNotes": status["reviewerNotes"],
+                    })
+        all_tp += group_tp
+        all_fp += group_fp
+        all_fn += group_fn
+        strict_all_tp += strict_group_tp
+        strict_all_fp += strict_group_fp
+        strict_all_fn += strict_group_fn
+        per_group[label_column] = {
+            "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+            "strict": tolerant_metric_values(strict_group_tp, strict_group_fp, strict_group_fn),
+            "tolerant": tolerant_metric_values(group_tp, group_fp, group_fn),
+            "strictCleanFalsePositivePredictions": strict_clean_count,
+            "strictHardNegativeFalsePositivePredictions": strict_hard_count,
+            "acceptableBorderlinePredictions": acceptable_count,
+            "hardNegativeAcceptableBorderlinePredictions": hard_acceptable_count,
+            "unacceptableFalsePositivePredictions": unacceptable_count,
+            "hardNegativeUnacceptableFalsePositivePredictions": hard_unacceptable_count,
+        }
+
+    clean_rows = int(clean.sum())
+    hard_negative_clean_rows = int((clean & hard_negative).sum())
+    return {
+        "available": bool(review_annotations.get("provided")),
+        "strictAggregate": tolerant_metric_values(strict_all_tp, strict_all_fp, strict_all_fn),
+        "tolerantAggregate": tolerant_metric_values(all_tp, all_fp, all_fn),
+        "strictCleanFalsePositiveRows": len(strict_clean_rows),
+        "strictCleanFalsePositiveRate": 0.0 if clean_rows == 0 else len(strict_clean_rows) / clean_rows,
+        "cleanUnacceptableFalsePositiveRows": len(unacceptable_clean_rows),
+        "cleanUnacceptableFalsePositiveRate": 0.0 if clean_rows == 0 else len(unacceptable_clean_rows) / clean_rows,
+        "cleanAcceptableBorderlineWarningRows": len(acceptable_clean_rows),
+        "cleanAcceptableBorderlineWarningRate": 0.0 if clean_rows == 0 else len(acceptable_clean_rows) / clean_rows,
+        "strictHardNegativeFalsePositiveRows": len(strict_hard_negative_rows),
+        "strictHardNegativeFalsePositiveRate": 0.0 if hard_negative_clean_rows == 0 else len(strict_hard_negative_rows) / hard_negative_clean_rows,
+        "hardNegativeUnacceptableFalsePositiveRows": len(unacceptable_hard_negative_rows),
+        "hardNegativeUnacceptableFalsePositiveRate": 0.0 if hard_negative_clean_rows == 0 else len(unacceptable_hard_negative_rows) / hard_negative_clean_rows,
+        "hardNegativeAcceptableBorderlineWarningRows": len(acceptable_hard_negative_rows),
+        "hardNegativeAcceptableBorderlineWarningRate": 0.0 if hard_negative_clean_rows == 0 else len(acceptable_hard_negative_rows) / hard_negative_clean_rows,
+        "possibleLabelAmbiguityRows": len(possible_ambiguity_rows),
+        "needsVisualReviewRows": len(visual_review_rows),
+        "cleanRows": clean_rows,
+        "hardNegativeCleanRows": hard_negative_clean_rows,
+        "perGroup": per_group,
+        "hardNegativeExamples": examples[:30],
+        "definition": "Product-tolerant metrics keep strict metrics unchanged, but remove manually annotated acceptable-borderline grouped warnings from the unacceptable false-positive count. Possible ambiguity and visual-review annotations are reported but remain unacceptable unless also marked acceptableBorderline.",
+    }
+
+
+def grouped_tolerant_policy_comparison(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    policy_columns: dict[str, dict[str, str]],
+    review_annotations: dict[str, Any],
+) -> dict[str, Any]:
+    if not review_annotations.get("provided"):
+        return {
+            "available": False,
+            "reason": "No --review-annotations sidecar provided.",
+        }
+    reports: dict[str, Any] = {}
+    for split in ["train", "validation", "test"]:
+        subset = df[df["split"] == split].copy()
+        if len(subset) == 0:
+            continue
+        reports[split] = {
+            policy_name: tolerant_grouped_policy_metrics(subset, grouped_labels, columns, review_annotations)
+            for policy_name, columns in policy_columns.items()
+        }
+    return {
+        "available": True,
+        "selectionSplit": "validation",
+        "testUsage": "final_reporting_only",
+        "splits": reports,
+    }
+
+
+def grouped_feedback_label_columns(label_columns: list[str]) -> list[str]:
+    return [
+        label_column
+        for label_column in BARBELL_CURL_GROUPED_FEEDBACK_TARGETS
+        if label_column in label_columns
+    ]
+
+
+def grouped_feedback_probability_columns(grouped_labels: list[str], model: str) -> dict[str, str]:
+    return {
+        label_column: f"ml__{model}__{label_column}__prob"
+        for label_column in grouped_labels
+    }
+
+
+def grouped_feedback_eligibility_columns(df: pd.DataFrame, label_column: str) -> list[str]:
+    config = BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]
+    columns: list[str] = []
+    for child_label in config["childLabels"]:
+        suffix = issue_suffix(child_label)
+        for column in [
+            f"feature__scorable.issue.{suffix}",
+            f"feature__diagnostic.cue.{suffix}.eligible",
+        ]:
+            if column in df.columns:
+                columns.append(column)
+    return columns
+
+
+def grouped_feedback_eligibility_mask(df: pd.DataFrame, label_column: str) -> pd.Series:
+    mask = issue_prediction_scorable_mask(df)
+    child_masks: list[pd.Series] = []
+    config = BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]
+    for child_label in config["childLabels"]:
+        suffix = issue_suffix(child_label)
+        child_mask = pd.Series([True] * len(df), index=df.index)
+        found_child_feature = False
+        for column in [
+            f"feature__scorable.issue.{suffix}",
+            f"feature__diagnostic.cue.{suffix}.eligible",
+        ]:
+            if column in df.columns:
+                found_child_feature = True
+                child_mask = child_mask & (numeric_float_series(df, column, 0.0) >= 0.5)
+        if found_child_feature:
+            child_masks.append(child_mask)
+    if not child_masks:
+        return mask
+    child_eligible = child_masks[0]
+    for child_mask in child_masks[1:]:
+        child_eligible = child_eligible | child_mask
+    return mask & child_eligible
+
+
+def grouped_threshold_series(
+    df: pd.DataFrame,
+    label_column: str,
+    probability_column: str,
+    threshold: float | None,
+) -> pd.Series:
+    if threshold is None or probability_column not in df.columns:
+        return pd.Series([0] * len(df), index=df.index)
+    probabilities = numeric_float_series(df, probability_column)
+    eligible = grouped_feedback_eligibility_mask(df, label_column)
+    return ((probabilities >= threshold) & eligible).astype(int)
+
+
+def materialize_grouped_policy_columns(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    model: str,
+    policy_name: str,
+    series_by_label: dict[str, pd.Series],
+) -> dict[str, str]:
+    column_prefix = safe_model_column_part(model)
+    policy_part = safe_model_column_part(policy_name)
+    columns: dict[str, str] = {}
+    for label_column in grouped_labels:
+        suffix = issue_suffix(label_column)
+        output_column = f"eval_{column_prefix}__grouped_{policy_part}__{suffix}"
+        df[output_column] = pd.to_numeric(series_by_label[label_column].reindex(df.index), errors="coerce").fillna(0).astype(int)
+        columns[label_column] = output_column
+    return columns
+
+
+def collapsed_child_policy_series(
+    df: pd.DataFrame,
+    label_column: str,
+    source_columns: dict[str, str],
+) -> pd.Series:
+    config = BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]
+    result = pd.Series([0] * len(df), index=df.index)
+    for child_label in config["childLabels"]:
+        source_column = source_columns.get(child_label)
+        if source_column and source_column in df.columns:
+            result = (result | (numeric_int_series(df, source_column) == 1)).astype(int)
+    return result.where(issue_prediction_scorable_mask(df), 0).astype(int)
+
+
+def grouped_candidate_summary_from_series(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic: pd.Series,
+    ml: pd.Series,
+    candidate: pd.Series,
+) -> dict[str, Any]:
+    summary = issue_candidate_summary_from_series(validation, label_column, heuristic, ml, candidate)
+    summary["severity"] = issue_policy_severity_summary(validation, label_column, candidate)
+    return summary
+
+
+def grouped_policy_allowed(summary: dict[str, Any], args: argparse.Namespace) -> bool:
+    if int(summary["hardNegativeFalsePositiveRows"]) > args.grouped_policy_hard_negative_fp_row_cap:
+        return False
+    if int(summary["partialViewCleanFalsePositiveRows"]) > args.grouped_policy_partial_view_fp_row_cap:
+        return False
+    if int(summary["cleanFalsePositiveRows"]) > args.grouped_policy_clean_fp_row_cap:
+        return False
+    if int(summary["truePositives"]) <= 0:
+        return False
+    if float(summary["precision"]) < args.grouped_policy_min_precision:
+        return False
+    return True
+
+
+def grouped_clear_recall(summary: dict[str, Any]) -> float:
+    severity = summary.get("severity", {})
+    clear = severity.get("clearModerateSevereIssues", {}) if isinstance(severity, dict) else {}
+    return float(clear.get("recall", 0.0))
+
+
+def disabled_grouped_candidate(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic: pd.Series,
+    ml: pd.Series,
+) -> dict[str, Any]:
+    candidate = pd.Series([0] * len(validation), index=validation.index)
+    summary = grouped_candidate_summary_from_series(validation, label_column, heuristic, ml, candidate)
+    summary.update({
+        "policy": "disabled",
+        "threshold": None,
+        "allowed": False,
+        "disabledReason": "No validation threshold passed grouped safety gates with a true positive.",
+    })
+    return summary
+
+
+def grouped_threshold_candidates(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    probability_column: str,
+    args: argparse.Namespace,
+) -> list[dict[str, Any]]:
+    heuristic = numeric_int_series(validation, heuristic_column)
+    ml = numeric_int_series(validation, ml_column)
+    candidates: list[dict[str, Any]] = []
+    for threshold in [index / 100 for index in range(50, 100)]:
+        prediction = grouped_threshold_series(validation, label_column, probability_column, threshold)
+        summary = grouped_candidate_summary_from_series(validation, label_column, heuristic, ml, prediction)
+        summary.update({
+            "policy": "ml-threshold",
+            "threshold": threshold,
+            "allowed": grouped_policy_allowed(summary, args),
+        })
+        candidates.append(summary)
+    candidates.append(disabled_grouped_candidate(validation, label_column, heuristic, ml))
+    return candidates
+
+
+def choose_grouped_threshold_policy(
+    validation: pd.DataFrame,
+    label_column: str,
+    heuristic_column: str,
+    ml_column: str,
+    probability_column: str,
+    args: argparse.Namespace,
+    mode: str,
+) -> dict[str, Any]:
+    candidates = grouped_threshold_candidates(
+        validation,
+        label_column,
+        heuristic_column,
+        ml_column,
+        probability_column,
+        args,
+    )
+    allowed = [candidate for candidate in candidates if bool(candidate.get("allowed"))]
+    if not allowed:
+        chosen = next(candidate for candidate in candidates if candidate["policy"] == "disabled")
+    elif mode == "conservative":
+        chosen = max(
+            allowed,
+            key=lambda item: (
+                float(item["precision"]),
+                -int(item["cleanFalsePositiveRows"]),
+                -int(item["hardNegativeFalsePositiveRows"]),
+                grouped_clear_recall(item),
+                float(item["f1"]),
+                float(item["recall"]),
+                float(item["threshold"]),
+            ),
+        )
+    elif mode == "strict":
+        chosen = max(
+            allowed,
+            key=lambda item: (
+                float(item["f1"]),
+                grouped_clear_recall(item),
+                float(item["recall"]),
+                float(item["precision"]),
+                -int(item["cleanFalsePositiveRows"]),
+                -int(item["hardNegativeFalsePositiveRows"]),
+                float(item["threshold"]),
+            ),
+        )
+    else:
+        raise ValueError(f"Unknown grouped threshold mode: {mode}")
+    return {
+        "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+        "labelColumn": label_column,
+        "feedbackText": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackText"],
+        "selected": chosen["policy"],
+        "threshold": chosen["threshold"],
+        "validationMetrics": chosen,
+        "allowedCandidateCount": len(allowed),
+        "candidateCount": len(candidates),
+        "topValidationCandidates": sorted(
+            candidates,
+            key=lambda item: (
+                bool(item.get("allowed")),
+                float(item["f1"]),
+                grouped_clear_recall(item),
+                float(item["precision"]),
+                -int(item["cleanFalsePositiveRows"]),
+                -int(item["hardNegativeFalsePositiveRows"]),
+                0.0 if item["threshold"] is None else float(item["threshold"]),
+            ),
+            reverse=True,
+        )[:8],
+    }
+
+
+def group_source_series(df: pd.DataFrame) -> pd.Series:
+    for column in ["source_video", "recording_file", "label_file"]:
+        if column in df.columns:
+            return df[column].fillna("unknown").astype(str)
+    return pd.Series([str(index) for index in df.index], index=df.index)
+
+
+def set_level_grouped_metrics(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    series_by_label: dict[str, pd.Series],
+) -> dict[str, Any]:
+    source_values = group_source_series(df)
+    all_truth: list[int] = []
+    all_pred: list[int] = []
+    per_group: dict[str, Any] = {}
+    rows: list[dict[str, Any]] = []
+    clean = numeric_int_series(df, "label_clean") == 1
+    hard_negative = hard_negative_mask(df)
+    partial = partial_view_mask(df)
+    for label_column in grouped_labels:
+        truth_values: list[int] = []
+        pred_values: list[int] = []
+        clean_negative_groups = 0
+        clean_false_positive_groups = 0
+        all_clean_negative_groups = 0
+        all_clean_false_positive_groups = 0
+        hard_negative_groups = 0
+        hard_negative_false_positive_groups = 0
+        partial_negative_groups = 0
+        partial_false_positive_groups = 0
+        prediction = pd.to_numeric(series_by_label[label_column].reindex(df.index), errors="coerce").fillna(0).astype(int)
+        for source, indexes in source_values.groupby(source_values).groups.items():
+            index_list = list(indexes)
+            truth = int(numeric_int_series(df.loc[index_list], label_column).sum() > 0)
+            pred = int(prediction.loc[index_list].sum() > 0)
+            truth_values.append(truth)
+            pred_values.append(pred)
+            all_truth.append(truth)
+            all_pred.append(pred)
+            group_clean = int(truth == 0)
+            group_all_clean = bool(clean.loc[index_list].all())
+            group_hard_negative = bool(hard_negative.loc[index_list].any())
+            group_partial = bool(partial.loc[index_list].any())
+            if group_clean:
+                clean_negative_groups += 1
+                clean_false_positive_groups += int(pred == 1)
+            if group_clean and group_all_clean:
+                all_clean_negative_groups += 1
+                all_clean_false_positive_groups += int(pred == 1)
+            if group_clean and group_hard_negative:
+                hard_negative_groups += 1
+                hard_negative_false_positive_groups += int(pred == 1)
+            if group_clean and group_partial:
+                partial_negative_groups += 1
+                partial_false_positive_groups += int(pred == 1)
+            if truth != pred:
+                rows.append({
+                    "sourceVideo": str(source),
+                    "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+                    "truth": truth,
+                    "predicted": pred,
+                    "isAllCleanRecording": group_all_clean,
+                    "isHardNegative": group_hard_negative,
+                    "isPartialView": group_partial,
+                })
+        metrics = binary_metrics(truth_values, pred_values)
+        per_group[label_column] = {
+            **metrics,
+            "feedbackId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+            "cleanNegativeGroups": clean_negative_groups,
+            "cleanFalsePositiveGroups": clean_false_positive_groups,
+            "cleanFalsePositiveRate": 0.0 if clean_negative_groups == 0 else clean_false_positive_groups / clean_negative_groups,
+            "allCleanNegativeGroups": all_clean_negative_groups,
+            "allCleanFalsePositiveGroups": all_clean_false_positive_groups,
+            "allCleanFalsePositiveRate": 0.0 if all_clean_negative_groups == 0 else all_clean_false_positive_groups / all_clean_negative_groups,
+            "hardNegativeCleanGroups": hard_negative_groups,
+            "hardNegativeFalsePositiveGroups": hard_negative_false_positive_groups,
+            "hardNegativeFalsePositiveRate": 0.0 if hard_negative_groups == 0 else hard_negative_false_positive_groups / hard_negative_groups,
+            "partialViewNegativeGroups": partial_negative_groups,
+            "partialViewFalsePositiveGroups": partial_false_positive_groups,
+            "partialViewFalsePositiveRate": 0.0 if partial_negative_groups == 0 else partial_false_positive_groups / partial_negative_groups,
+        }
+    aggregate = binary_metrics(all_truth, all_pred)
+    return {
+        "aggregate": aggregate,
+        "perGroup": per_group,
+        "mismatchedGroups": rows[:30],
+        "definition": "Set-level metrics treat each source-video/grouped-feedback pair as one target. cleanNegativeGroups means the source-video has no label for that grouped feedback; allCleanNegativeGroups also requires all reps in the source-video to be label_clean=1.",
+    }
+
+
+def set_backup_grouped_series(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    probability_columns: dict[str, str],
+    threshold: float,
+    min_reps: int,
+) -> dict[str, pd.Series]:
+    source_values = group_source_series(df)
+    result: dict[str, pd.Series] = {}
+    for label_column in grouped_labels:
+        base = grouped_threshold_series(df, label_column, probability_columns[label_column], threshold)
+        prediction = pd.Series([0] * len(df), index=df.index)
+        for _source, indexes in source_values.groupby(source_values).groups.items():
+            index_list = list(indexes)
+            if int(base.loc[index_list].sum()) >= min_reps:
+                prediction.loc[index_list] = 1
+        result[label_column] = prediction.astype(int)
+    return result
+
+
+def combine_grouped_series(
+    grouped_labels: list[str],
+    left: dict[str, pd.Series],
+    right: dict[str, pd.Series],
+) -> dict[str, pd.Series]:
+    return {
+        label_column: (
+            pd.to_numeric(left[label_column], errors="coerce").fillna(0).astype(int)
+            | pd.to_numeric(right[label_column], errors="coerce").fillna(0).astype(int)
+        ).astype(int)
+        for label_column in grouped_labels
+    }
+
+
+def grouped_split_reports(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    policy_columns: dict[str, dict[str, str]],
+    probability_columns: dict[str, str],
+) -> dict[str, Any]:
+    reports: dict[str, Any] = {}
+    for split in ["train", "validation", "test"]:
+        subset = df[df["split"] == split].copy()
+        if len(subset) == 0:
+            continue
+        reports[split] = {
+            policy_name: evaluate_prediction_set(subset, grouped_labels, columns, probability_columns)
+            for policy_name, columns in policy_columns.items()
+        }
+    return reports
+
+
+def grouped_policy_test_summary(
+    df: pd.DataFrame,
+    grouped_labels: list[str],
+    policy_columns: dict[str, str],
+    probability_columns: dict[str, str],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for split in ["validation", "test"]:
+        subset = df[df["split"] == split].copy()
+        if len(subset) == 0:
+            continue
+        result[split] = evaluate_prediction_set(subset, grouped_labels, policy_columns, probability_columns)
+    return result
+
+
+def build_grouped_feedback_report(
+    df: pd.DataFrame,
+    label_columns: list[str],
+    columns: tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, int]],
+    args: argparse.Namespace,
+    model: str,
+    review_annotations: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if args.exercise != "barbell-curl":
+        return {"available": False, "reason": "grouped_feedback_report_currently_scoped_to_barbell_curl"}
+    grouped_labels = grouped_feedback_label_columns(label_columns)
+    if not grouped_labels:
+        return {"available": False, "reason": "no_grouped_barbell_curl_targets_present"}
+    (
+        heuristic_prediction_columns,
+        ml_prediction_columns,
+        _hybrid_prediction_columns,
+        _suppression_prediction_columns,
+        _additive_prediction_columns,
+        _suppress_and_add_prediction_columns,
+        ml_probability_columns,
+        _candidate_counts,
+    ) = columns
+    missing_probability_columns = [
+        column
+        for column in grouped_feedback_probability_columns(grouped_labels, model).values()
+        if column not in df.columns
+    ]
+    if missing_probability_columns:
+        return {
+            "available": False,
+            "reason": "missing_grouped_probability_columns",
+            "missingProbabilityColumns": missing_probability_columns,
+        }
+
+    validation = df[df["split"] == "validation"].copy()
+    if len(validation) == 0:
+        return {"available": False, "reason": "no_validation_rows"}
+
+    column_prefix = safe_model_column_part(model)
+    optimized_fine_columns = {
+        label_column: f"eval_{column_prefix}__policy_optimizedIssueHybrid__{issue_suffix(label_column)}"
+        for label_column in label_columns
+        if f"eval_{column_prefix}__policy_optimizedIssueHybrid__{issue_suffix(label_column)}" in df.columns
+    }
+    heuristic_group_columns = {label_column: heuristic_prediction_columns[label_column] for label_column in grouped_labels}
+    ml_group_columns = {label_column: ml_prediction_columns[label_column] for label_column in grouped_labels}
+    probability_group_columns = {label_column: ml_probability_columns[label_column] for label_column in grouped_labels}
+
+    strict_choices: dict[str, Any] = {}
+    conservative_choices: dict[str, Any] = {}
+    strict_series: dict[str, pd.Series] = {}
+    conservative_series: dict[str, pd.Series] = {}
+    high_confidence_series: dict[str, pd.Series] = {}
+    collapsed_fine_series: dict[str, pd.Series] = {}
+    for label_column in grouped_labels:
+        strict_choice = choose_grouped_threshold_policy(
+            validation,
+            label_column,
+            heuristic_group_columns[label_column],
+            ml_group_columns[label_column],
+            probability_group_columns[label_column],
+            args,
+            mode="strict",
+        )
+        conservative_choice = choose_grouped_threshold_policy(
+            validation,
+            label_column,
+            heuristic_group_columns[label_column],
+            ml_group_columns[label_column],
+            probability_group_columns[label_column],
+            args,
+            mode="conservative",
+        )
+        strict_choices[label_column] = strict_choice
+        conservative_choices[label_column] = conservative_choice
+        strict_series[label_column] = grouped_threshold_series(
+            df,
+            label_column,
+            probability_group_columns[label_column],
+            strict_choice["threshold"],
+        )
+        conservative_series[label_column] = grouped_threshold_series(
+            df,
+            label_column,
+            probability_group_columns[label_column],
+            conservative_choice["threshold"],
+        )
+        high_confidence_series[label_column] = grouped_threshold_series(
+            df,
+            label_column,
+            probability_group_columns[label_column],
+            0.95,
+        )
+        collapsed_fine_series[label_column] = collapsed_child_policy_series(
+            df,
+            label_column,
+            optimized_fine_columns,
+        )
+
+    set_backup_series = set_backup_grouped_series(
+        df,
+        grouped_labels,
+        probability_group_columns,
+        args.grouped_set_threshold,
+        args.grouped_set_min_reps,
+    )
+    rep_plus_set_series = combine_grouped_series(grouped_labels, conservative_series, set_backup_series)
+
+    policy_columns = {
+        "heuristicGrouped": heuristic_group_columns,
+        "mlOnlyGrouped": ml_group_columns,
+        "fineOptimizedCollapsedToGroups": materialize_grouped_policy_columns(df, grouped_labels, model, "fineOptimizedCollapsedToGroups", collapsed_fine_series),
+        "repLevelOnlyHighConfidence": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelOnlyHighConfidence", high_confidence_series),
+        "repLevelConservative": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelConservative", conservative_series),
+        "repLevelStrictF1": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelStrictF1", strict_series),
+        "repLevelPlusSetBackupBroadcast": materialize_grouped_policy_columns(df, grouped_labels, model, "repLevelPlusSetBackupBroadcast", rep_plus_set_series),
+        "setLevelOnlyBroadcast": materialize_grouped_policy_columns(df, grouped_labels, model, "setLevelOnlyBroadcast", set_backup_series),
+    }
+    split_reports = grouped_split_reports(df, grouped_labels, policy_columns, probability_group_columns)
+    review_annotations = review_annotations or load_review_annotations(None)
+    tolerant_policy_comparison = grouped_tolerant_policy_comparison(
+        df,
+        grouped_labels,
+        policy_columns,
+        review_annotations,
+    )
+
+    set_reports: dict[str, Any] = {}
+    for split in ["train", "validation", "test"]:
+        subset = df[df["split"] == split].copy()
+        if len(subset) == 0:
+            continue
+        subset_series = {
+            "repLevelOnlyHighConfidence": {label: high_confidence_series[label].reindex(subset.index) for label in grouped_labels},
+            "repLevelConservative": {label: conservative_series[label].reindex(subset.index) for label in grouped_labels},
+            "repLevelPlusSetBackup": {label: rep_plus_set_series[label].reindex(subset.index) for label in grouped_labels},
+            "setLevelOnly": {label: set_backup_series[label].reindex(subset.index) for label in grouped_labels},
+            "fineOptimizedCollapsedToGroups": {label: collapsed_fine_series[label].reindex(subset.index) for label in grouped_labels},
+        }
+        set_reports[split] = {
+            policy_name: set_level_grouped_metrics(subset, grouped_labels, series)
+            for policy_name, series in subset_series.items()
+        }
+
+    per_target: dict[str, Any] = {}
+    for label_column in grouped_labels:
+        target_columns = {label_column: policy_columns["repLevelConservative"][label_column]}
+        target_probability = {label_column: probability_group_columns[label_column]}
+        target_summary = grouped_policy_test_summary(df, [label_column], target_columns, target_probability)
+        validation_summary = target_summary.get("validation", {})
+        validation_aggregate = validation_summary.get("aggregate", {}) if isinstance(validation_summary, dict) else {}
+        validation_safety = validation_summary.get("safety", {}) if isinstance(validation_summary, dict) else {}
+        validation_hard_negative_rows = (
+            validation_safety.get("slices", {}).get("hardNegativeClean", {}).get("falsePositiveRows", 0)
+            if isinstance(validation_safety, dict)
+            else 0
+        )
+        validation_clean_rows = (
+            validation_safety.get("slices", {}).get("allClean", {}).get("falsePositiveRows", 0)
+            if isinstance(validation_safety, dict)
+            else 0
+        )
+        per_target[label_column] = {
+            "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+            "feedbackText": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackText"],
+            "childIssues": [
+                issue_name(child_label)
+                for child_label in BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["childLabels"]
+            ],
+            "eligibilityFeaturesUsed": grouped_feedback_eligibility_columns(df, label_column),
+            "strictSelection": strict_choices[label_column],
+            "conservativeSelection": conservative_choices[label_column],
+            "selectedRepPolicy": "repLevelConservative",
+            "validationAndTestMetrics": target_summary,
+            "readyForShadowMode": bool(
+                conservative_choices[label_column]["threshold"] is not None
+                and float(validation_aggregate.get("f1", 0.0)) > 0
+                and int(validation_clean_rows) <= args.grouped_policy_clean_fp_row_cap
+                and int(validation_hard_negative_rows) <= args.grouped_policy_hard_negative_fp_row_cap
+            ),
+            "readyForUserFacingFeedback": False,
+            "productionCaveat": "Requires fresh independent holdout and product review before live feedback.",
+        }
+
+    test_subset = df[df["split"] == "test"].copy()
+    review_examples = {}
+    if len(test_subset) > 0:
+        review_examples["testRepLevelConservative"] = policy_review_examples(
+            test_subset,
+            grouped_labels,
+            heuristic_group_columns,
+            ml_group_columns,
+            policy_columns["repLevelConservative"],
+            probability_group_columns,
+            conservative_choices,
+        )
+        review_examples["testFineOptimizedCollapsedToGroups"] = policy_review_examples(
+            test_subset,
+            grouped_labels,
+            heuristic_group_columns,
+            ml_group_columns,
+            policy_columns["fineOptimizedCollapsedToGroups"],
+            probability_group_columns,
+            {},
+        )
+
+    return {
+        "available": True,
+        "scope": "offline_shadow_evaluation_only",
+        "selectionSplit": "validation",
+        "testUsage": "final_reporting_only",
+        "model": model,
+        "groupedTargets": {
+            label_column: {
+                "issueId": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackId"],
+                "feedbackText": BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["feedbackText"],
+                "childIssues": [
+                    issue_name(child_label)
+                    for child_label in BARBELL_CURL_GROUPED_FEEDBACK_TARGETS[label_column]["childLabels"]
+                ],
+            }
+            for label_column in grouped_labels
+        },
+        "policyConfig": {
+            "repHighConfidenceThreshold": 0.95,
+            "setBackupThreshold": args.grouped_set_threshold,
+            "setBackupMinReps": args.grouped_set_min_reps,
+            "validationMinPrecision": args.grouped_policy_min_precision,
+            "validationCleanFpRowCap": args.grouped_policy_clean_fp_row_cap,
+            "validationHardNegativeFpRowCap": args.grouped_policy_hard_negative_fp_row_cap,
+            "validationPartialViewFpRowCap": args.grouped_policy_partial_view_fp_row_cap,
+        },
+        "reviewAnnotations": {
+            "provided": bool(review_annotations.get("provided")),
+            "path": review_annotations.get("path"),
+            "schemaVersion": review_annotations.get("schemaVersion"),
+            "annotationCount": review_annotations.get("annotationCount", 0),
+            "warnings": review_annotations.get("warnings", []),
+            "formatTemplate": review_annotations.get("template"),
+        },
+        "viewPoseCueSafety": {
+            "repLevelScorableGate": "Uses heuristic_scorable and feature__diagnostic.scorable when exported.",
+            "cueEligibilityGate": "Grouped ML additions require at least one child issue's exported scorable/cue eligibility feature to pass when those features exist.",
+            "unscorableHandling": "Predictions are forced off when rep-level scorable gates fail.",
+            "setLevelBackup": "Set-level backup is a summary-only policy in this report; it is not rep-completion-time feedback.",
+        },
+        "thresholdSelection": {
+            "strictF1": strict_choices,
+            "conservative": conservative_choices,
+        },
+        "perTargetRecommendation": per_target,
+        "repLevelPolicyComparison": split_reports,
+        "tolerantPolicyComparison": tolerant_policy_comparison,
+        "setLevelPolicyComparison": set_reports,
+        "productPolicyComparison": {
+            "A_repLevelOnlyHighConfidence": {
+                "repLevelPolicy": "repLevelOnlyHighConfidence",
+                "setLevelPolicy": "any high-confidence rep",
+                "splits": {
+                    split: {
+                        "rep": split_reports[split]["repLevelOnlyHighConfidence"],
+                        "set": set_reports[split]["repLevelOnlyHighConfidence"],
+                    }
+                    for split in split_reports
+                    if split in set_reports
+                },
+            },
+            "B_repLevelConservative": {
+                "repLevelPolicy": "repLevelConservative",
+                "setLevelPolicy": "any conservative rep",
+                "splits": {
+                    split: {
+                        "rep": split_reports[split]["repLevelConservative"],
+                        "set": set_reports[split]["repLevelConservative"],
+                    }
+                    for split in split_reports
+                    if split in set_reports
+                },
+            },
+            "C_repLevelPlusSetBackup": {
+                "repLevelPolicy": "repLevelConservative for immediate rep feedback",
+                "setLevelPolicy": f"backup if >= {args.grouped_set_min_reps} eligible reps have p >= {args.grouped_set_threshold}",
+                "splits": {
+                    split: {
+                        "repImmediate": split_reports[split]["repLevelConservative"],
+                        "repBroadcastForAnalysisOnly": split_reports[split]["repLevelPlusSetBackupBroadcast"],
+                        "set": set_reports[split]["repLevelPlusSetBackup"],
+                    }
+                    for split in split_reports
+                    if split in set_reports
+                },
+            },
+            "D_setLevelOnly": {
+                "repLevelPolicy": "none",
+                "setLevelPolicy": f"show set summary if >= {args.grouped_set_min_reps} eligible reps have p >= {args.grouped_set_threshold}",
+                "splits": {
+                    split: {
+                        "set": set_reports[split]["setLevelOnly"],
+                    }
+                    for split in set_reports
+                },
+            },
+        },
+        "reviewExamples": review_examples,
+        "inferenceAndTimingFeasibility": {
+            "repCompletionTime": "Rep-level high-confidence/conservative policies only need features and probabilities from the completed rep, plus exported scorable/cue eligibility gates.",
+            "requiresFutureSetContext": ["setLevelOnly", "repLevelPlusSetBackup.setBackup"],
+            "notIntegrated": True,
+        },
+        "freshHoldoutCaveat": "Preliminary: split audit still indicates leakage risk, so grouped feedback must remain offline/shadow until validated on a fresh independent holdout.",
+        "liveBehaviorChanged": False,
+    }
+
+
 def split_reports_for_model(
     df: pd.DataFrame,
     label_columns: list[str],
@@ -1618,6 +2753,7 @@ def main() -> int:
     selected_columns = prepare_model_predictions(df, label_columns, args.model, args)
     candidate_counts = selected_columns[-1]
     split_reports = split_reports_for_model(df, label_columns, selected_columns, args, args.model)
+    review_annotations = load_review_annotations(args.review_annotations)
     present_splits = [split for split in ["train", "validation", "test"] if split in split_reports]
     models_available = detected_models(pd.read_csv(predictions_path))
 
@@ -1639,11 +2775,18 @@ def main() -> int:
             "issuePolicyCleanFpRowCap": args.issue_policy_clean_fp_row_cap,
             "issuePolicyHardNegativeFpRowCap": args.issue_policy_hard_negative_fp_row_cap,
             "issuePolicyPartialViewFpRowCap": args.issue_policy_partial_view_fp_row_cap,
+            "groupedPolicyMinPrecision": args.grouped_policy_min_precision,
+            "groupedPolicyCleanFpRowCap": args.grouped_policy_clean_fp_row_cap,
+            "groupedPolicyHardNegativeFpRowCap": args.grouped_policy_hard_negative_fp_row_cap,
+            "groupedPolicyPartialViewFpRowCap": args.grouped_policy_partial_view_fp_row_cap,
+            "groupedSetThreshold": args.grouped_set_threshold,
+            "groupedSetMinReps": args.grouped_set_min_reps,
         },
         "rowCount": len(df),
         "candidateCounts": candidate_counts,
         "issueSupportCounts": {column: int(pd.to_numeric(df[column], errors="coerce").fillna(0).sum()) for column in label_columns},
         "thresholdPolicyReport": threshold_policy_report(pd.read_csv(predictions_path), label_columns, args.model, args),
+        "groupedFeedback": build_grouped_feedback_report(df, label_columns, selected_columns, args, args.model, review_annotations),
         "modelComparison": build_model_comparison(pd.read_csv(predictions_path), label_columns, models_available, args),
         "externalHoldoutWorkflow": {
             "status": "documented_only",
