@@ -2,9 +2,28 @@
 
 ## Overview
 
-Forma uses on-device pose estimation (MediaPipe BlazePose) to detect barbell curl reps and evaluate form in real time. The system is fully deterministic - no ML inference for form scoring. It runs at ~30fps analysis with throttled UI updates to keep the interface responsive.
+Forma uses on-device pose estimation (MediaPipe BlazePose) to detect barbell curl reps and evaluate form in real time. Rep counting, FSM transitions, and scoring are deterministic; optional grouped ML can only replace the final user-facing feedback grouping when explicitly enabled. It runs at ~30fps analysis with throttled UI updates to keep the interface responsive.
 
 Front view is the full-scoring target because both arms are visible for bilateral ROM, symmetry, and elbow-flare checks. Side or oblique views are supported as limited-signal fallback captures: reps can count from the visible primary arm, and only visible-arm cues are scored.
+
+### Grouped ML release flags
+
+Barbell Curl grouped ML feedback is release-gated and off by default. To enable it in a development or release environment, set:
+
+```
+EXPO_PUBLIC_ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK=1
+```
+
+The legacy `ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK=1` flag is still accepted when the Expo public flag is unset. Unset, `0`, and `false` all mean grouped ML feedback is disabled.
+
+Repeated fallback feedback is also off by default and only becomes user-facing when both flags are explicitly enabled:
+
+```
+EXPO_PUBLIC_ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK=1
+EXPO_PUBLIC_ENABLE_BARBELL_CURL_ML_GROUPED_FALLBACK_FEEDBACK=1
+```
+
+The runtime artifact is `src/utils/exercises/ml/runtime/barbellCurlGroupedFeedbackPolicy.json`. It is self-contained for app inference; `datasets/form-heuristics/ml/**`, `.joblib` files, `features.csv`, `latest_predictions.csv`, and `latest_evaluation.json` are offline-only training/evaluation artifacts and should not be required by app builds or committed unless intentionally promoted as small test fixtures.
 
 ---
 

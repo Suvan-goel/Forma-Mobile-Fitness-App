@@ -291,10 +291,17 @@ const IMPORTANT_DEBUG_FEATURES_BY_GROUP: Record<string, string[]> = {
   ],
 };
 
+function flagSetting(): { source: string; value: string } | null {
+  if (typeof process === 'undefined') return null;
+  const publicValue = process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+  if (publicValue !== undefined) return { source: BARBELL_CURL_GROUPED_FEEDBACK_FLAG, value: publicValue };
+  const legacyValue = process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+  if (legacyValue !== undefined) return { source: 'ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK', value: legacyValue };
+  return null;
+}
+
 function flagValue(): string | undefined {
-  if (typeof process === 'undefined') return undefined;
-  return process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG]
-    ?? process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+  return flagSetting()?.value;
 }
 
 function fallbackFlagValue(): string | undefined {
@@ -302,18 +309,18 @@ function fallbackFlagValue(): string | undefined {
   return process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG];
 }
 
+function explicitEnabled(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true';
+}
+
 export function isBarbellCurlGroupedFeedbackEnabled(): boolean {
-  const value = flagValue();
-  if (value === undefined) return true;
-  const normalized = value.toLowerCase();
-  return normalized !== '0' && normalized !== 'false' && normalized !== 'off';
+  return explicitEnabled(flagValue());
 }
 
 export function isBarbellCurlGroupedFallbackFeedbackEnabled(): boolean {
-  const value = fallbackFlagValue();
-  if (value === undefined) return false;
-  const normalized = value.toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'on';
+  return isBarbellCurlGroupedFeedbackEnabled() && explicitEnabled(fallbackFlagValue());
 }
 
 export function logBarbellCurlGroupedFeedbackEnabledOnce(): void {
@@ -326,7 +333,8 @@ export function logBarbellCurlGroupedFeedbackEnabledOnce(): void {
   ) {
     return;
   }
-  const source = flagValue() === undefined ? 'default-on' : `${BARBELL_CURL_GROUPED_FEEDBACK_FLAG}=${flagValue()}`;
+  const setting = flagSetting();
+  const source = setting ? `${setting.source}=${setting.value}` : 'disabled';
   console.info(
     `[BarbellCurlMLFeedback] ${source}; using ${BARBELL_CURL_GROUPED_FEEDBACK_POLICY.policyId}`,
   );

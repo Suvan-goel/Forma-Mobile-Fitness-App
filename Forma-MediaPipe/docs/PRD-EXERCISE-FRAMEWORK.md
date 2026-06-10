@@ -29,6 +29,14 @@ This PRD defines a **scalable exercise framework** that extracts shared infrastr
 - Changing the frontend/backend boundary or navigation architecture
 - Supporting multiple camera angles per exercise simultaneously
 
+### 2026 Addendum: Grouped Feedback Taxonomy
+
+Forma now has a shared grouped-feedback taxonomy in `src/utils/exercises/groupedFeedback.ts`. This is a configuration layer for future user-facing feedback grouping only; it does not change existing heuristic messages, scoring, rep counting, or camera/PoseState behavior.
+
+Fine-grained issue IDs remain the internal diagnostics and training labels. Grouped feedback categories are the future user-facing abstraction, but each exercise still owns its own heuristics, rep windows, view/cue safety, and any future ML policy. Shared taxonomy does not mean shared model weights.
+
+Barbell Curl is currently the only exercise with runtime grouped ML feedback, and that path remains feature-flagged and self-contained. The other exercise entries are taxonomy-only scaffolding until datasets, audits, and per-exercise runtime policies exist.
+
 ---
 
 ## 2. Current State — What Exists Today

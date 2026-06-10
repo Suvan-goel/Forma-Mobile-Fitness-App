@@ -1,18 +1,10 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { barbellCurlDefinition } from '../definitions/barbellCurl';
-import { evaluateCase } from '../dataset';
-import type { DatasetCase } from '../dataset';
-import {
-  buildMlRepExamples,
-  buildRuntimeMlFeatureVector,
-} from '../ml/featureExtractor';
-import { replayRecordingVerbose } from '../replay';
+import { cableRowDefinition } from '../definitions/cableRow';
 import {
   BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG,
   BARBELL_CURL_GROUPED_FEEDBACK_POLICY,
   BARBELL_CURL_GROUPED_FEEDBACK_FLAG,
   createBarbellCurlGroupedFallbackShadowState,
+  isBarbellCurlGroupedFallbackFeedbackEnabled,
   isBarbellCurlGroupedFeedbackEnabled,
   predictBarbellCurlGroupedFeedback,
 } from '../ml/runtime/barbellCurlGroupedFeedback';
@@ -68,86 +60,6 @@ function fallbackPolicy(
   return result.fallbackShadow?.policies.find((policy) => policy.name === name);
 }
 
-function parseCsvLine(line: string): string[] {
-  const cells: string[] = [];
-  let current = '';
-  let quoted = false;
-  for (let index = 0; index < line.length; index++) {
-    const char = line[index];
-    if (char === '"') {
-      if (quoted && line[index + 1] === '"') {
-        current += '"';
-        index++;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (char === ',' && !quoted) {
-      cells.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  cells.push(current);
-  return cells;
-}
-
-function readCsvRows(filePath: string): Array<Record<string, string>> {
-  const lines = fs.readFileSync(filePath, 'utf8').trimEnd().split(/\r?\n/);
-  const header = parseCsvLine(lines[0]);
-  return lines.slice(1).map((line) => {
-    const cells = parseCsvLine(line);
-    return Object.fromEntries(header.map((name, index) => [name, cells[index] ?? '']));
-  });
-}
-
-function loadDatasetCase(folder: 'validation' | 'testing', stem: string): DatasetCase {
-  const repoRoot = process.cwd();
-  const labelPath = path.join(
-    repoRoot,
-    'datasets/form-heuristics/labels',
-    folder,
-    'barbell-curl',
-    `${stem}.json`,
-  );
-  const recordingPath = path.join(
-    repoRoot,
-    'datasets/form-heuristics/landmarks',
-    folder,
-    'barbell-curl',
-    `${stem}.json`,
-  );
-  return {
-    label: JSON.parse(fs.readFileSync(labelPath, 'utf8')),
-    recording: JSON.parse(fs.readFileSync(recordingPath, 'utf8')),
-    labelPath,
-    recordingPath,
-  };
-}
-
-function withGroupedFeedbackDisabled<T>(callback: () => T): T {
-  const previousFlag = process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
-  const previousLegacyFlag = process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
-  process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '0';
-  delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
-  try {
-    return callback();
-  } finally {
-    if (previousFlag === undefined) delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
-    else process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = previousFlag;
-    if (previousLegacyFlag === undefined) delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
-    else process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK = previousLegacyFlag;
-  }
-}
-
-function unprefixFeatureColumn(column: string): string {
-  return column.startsWith('feature__') ? column.slice('feature__'.length) : column;
-}
-
-function nullableFeature(value: number | null | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
 describe('Barbell Curl grouped ML feedback runtime policy', () => {
   const originalFlag = process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
   const originalLegacyFlag = process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
@@ -162,10 +74,10 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
     else process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = originalFallbackFlag;
   });
 
-  it('is enabled by default and can be disabled by the Expo public flag', () => {
+  it('keeps grouped feedback disabled unless the base flag is explicitly enabled', () => {
     delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
     delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
-    expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(true);
+    expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(false);
 
     process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '0';
     expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(false);
@@ -175,6 +87,34 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
 
     process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
     expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(true);
+
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = 'true';
+    expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(true);
+  });
+
+  it('supports the legacy grouped-feedback flag only when the public flag is unset', () => {
+    delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+    process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK = 'true';
+    expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(true);
+
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '0';
+    expect(isBarbellCurlGroupedFeedbackEnabled()).toBe(false);
+  });
+
+  it('keeps fallback feedback disabled unless both grouped and fallback flags are explicitly enabled', () => {
+    delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+    delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+    delete process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG];
+    expect(isBarbellCurlGroupedFallbackFeedbackEnabled()).toBe(false);
+
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
+    expect(isBarbellCurlGroupedFallbackFeedbackEnabled()).toBe(false);
+
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
+    expect(isBarbellCurlGroupedFallbackFeedbackEnabled()).toBe(true);
+
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = 'false';
+    expect(isBarbellCurlGroupedFallbackFeedbackEnabled()).toBe(false);
   });
 
   it('fails closed when the completed rep is not scorable', () => {
@@ -519,184 +459,145 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
     expect(result.selectedMessage).toBeNull();
   });
 
-  it('matches frozen offline grouped-policy decisions on representative exported rows', () => {
-    const repoRoot = process.cwd();
-    const predictionsRows = readCsvRows(path.join(
-      repoRoot,
-      'datasets/form-heuristics/ml/barbell-curl/models/2026-06-08T17-27-07Z/predictions.csv',
-    ));
-    const audit = JSON.parse(fs.readFileSync(path.join(
-      repoRoot,
-      'datasets/form-heuristics/ml/barbell-curl/models/grouped_policy_combination_audit_2026-06-08T18-36-15Z.json',
-    ), 'utf8')) as {
-      rows: Array<{
-        sourceVideo: string;
-        repIndex: number;
-        groups: Record<string, {
-          issueId: string;
-          prediction: number;
-          candidateProbabilities: Record<string, number>;
-        }>;
-      }>;
-    };
+  it('gates fallback user-facing diagnostics behind the grouped feedback base flag', () => {
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
+    delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];
+    delete process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
+    const baseDisabledState = createBarbellCurlGroupedFallbackShadowState();
+    predictBarbellCurlGroupedFeedback({
+      features: romFallbackFeatures(),
+      heuristicIssueIds: ['barbell-curl.incomplete_flex'],
+      repIndex: 1,
+      fallbackShadowState: baseDisabledState,
+    });
+    const disabledResult = predictBarbellCurlGroupedFeedback({
+      features: romFallbackFeatures(),
+      heuristicIssueIds: ['barbell-curl.incomplete_flex'],
+      repIndex: 2,
+      fallbackShadowState: baseDisabledState,
+    });
+    expect(disabledResult.fallbackShadow?.fallbackUserFacingFlagEnabled).toBe(false);
 
-    const rowsByKey = new Map(
-      predictionsRows.map((row) => [`${row.source_video}::${row.rep_index}`, row]),
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = 'true';
+    const baseEnabledState = createBarbellCurlGroupedFallbackShadowState();
+    predictBarbellCurlGroupedFeedback({
+      features: romFallbackFeatures(),
+      heuristicIssueIds: ['barbell-curl.incomplete_flex'],
+      repIndex: 1,
+      fallbackShadowState: baseEnabledState,
+    });
+    const enabledResult = predictBarbellCurlGroupedFeedback({
+      features: romFallbackFeatures(),
+      heuristicIssueIds: ['barbell-curl.incomplete_flex'],
+      repIndex: 2,
+      fallbackShadowState: baseEnabledState,
+    });
+    expect(enabledResult.fallbackShadow?.fallbackUserFacingFlagEnabled).toBe(true);
+  });
+
+  it('validates the bundled runtime policy artifact shape without offline ML files', () => {
+    const policy = BARBELL_CURL_GROUPED_FEEDBACK_POLICY;
+    expect(policy.policyId).toBe('barbell-curl-grouped-feedback-v1-20260608T183615Z');
+    expect(policy.modelRunId).toBe('2026-06-08T17-27-07Z');
+    expect(policy.featureSchemaVersion).toBe('rep-features-v2');
+
+    const groups = Object.fromEntries(policy.groups.map((group) => [group.id, group as any]));
+    expect(Object.keys(groups).sort()).toEqual([
+      'barbell-curl.ROM_issue',
+      'barbell-curl.shoulder_issue',
+      'barbell-curl.tempo_issue',
+      'barbell-curl.torso_issue',
+    ]);
+    expect(groups['barbell-curl.ROM_issue']).toMatchObject({
+      kind: 'thresholded_model',
+      modelId: 'rom',
+      threshold: 0.85,
+    });
+    expect(groups['barbell-curl.torso_issue']).toMatchObject({
+      kind: 'thresholded_model_with_direct_evidence',
+      modelId: 'torso',
+      threshold: 0.67,
+      directEvidence: {
+        featureColumn: 'feature__diagnostic.metric.torsodeltaraw.value',
+      },
+    });
+    expect(groups['barbell-curl.shoulder_issue'].childPolicies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ issueId: 'barbell-curl.shoulder_warn', policy: 'heuristic-only' }),
+        expect.objectContaining({ issueId: 'barbell-curl.shoulder_fail', policy: 'ml-add-only-high-confidence' }),
+      ]),
     );
-    const groupLabels = [
-      'label_issue__barbell_curl_rom_issue',
-      'label_issue__barbell_curl_torso_issue',
-      'label_issue__barbell_curl_shoulder_issue',
-      'label_issue__barbell_curl_tempo_issue',
-    ];
-    const representativeRows = new Map<string, (typeof audit.rows)[number]>();
-    const cleanRow = audit.rows.find((row) => groupLabels.every((label) => row.groups[label]?.prediction === 0));
-    if (cleanRow) representativeRows.set(`${cleanRow.sourceVideo}::${cleanRow.repIndex}`, cleanRow);
-    for (const label of groupLabels) {
-      const positive = audit.rows.find((row) => row.groups[label]?.prediction === 1);
-      if (positive) representativeRows.set(`${positive.sourceVideo}::${positive.repIndex}`, positive);
-    }
 
-    expect(representativeRows.size).toBeGreaterThan(1);
-
-    for (const auditRow of representativeRows.values()) {
-      const csvRow = rowsByKey.get(`${auditRow.sourceVideo}::${auditRow.repIndex}`);
-      expect(csvRow).toBeDefined();
-      const features: Record<string, number | undefined> = {};
-      for (const [key, value] of Object.entries(csvRow ?? {})) {
-        if (!key.startsWith('feature__') || value === '') continue;
-        const numeric = Number(value);
-        if (Number.isFinite(numeric)) features[key] = numeric;
-      }
-      const heuristicIssueIds = (csvRow?.heuristic_issue_ids ?? '').split(';').filter(Boolean);
-      const result = predictBarbellCurlGroupedFeedback({ features, heuristicIssueIds });
-
-      for (const label of groupLabels) {
-        const expected = auditRow.groups[label];
-        const actual = result.predictions.find((prediction) => prediction.issueId === expected.issueId);
-        const actualValue = actual?.predicted ? 1 : 0;
-        if (actualValue !== expected.prediction) {
-          throw new Error(
-            `${auditRow.sourceVideo} rep ${auditRow.repIndex} ${expected.issueId}: expected ${expected.prediction}, got ${actualValue}; skipped=${actual?.skippedReason ?? 'none'} prob=${actual?.probability ?? 'none'}`,
-          );
+    for (const [modelId, model] of Object.entries(policy.models) as Array<[string, any]>) {
+      expect(['logistic_regression', 'random_forest']).toContain(model.kind);
+      expect(model.featureColumns.length).toBeGreaterThan(0);
+      expect(model.imputerStatistics).toHaveLength(model.featureColumns.length);
+      const imputedFeatureCount = model.imputerStatistics.filter((value: unknown) => typeof value === 'number').length;
+      if (model.kind === 'logistic_regression') {
+        expect(model.coef).toHaveLength(imputedFeatureCount);
+        expect(model.scalerMean).toHaveLength(imputedFeatureCount);
+        expect(model.scalerScale).toHaveLength(imputedFeatureCount);
+        expect(typeof model.intercept).toBe('number');
+      } else {
+        expect(modelId).toBe('torso');
+        expect(model.trees.length).toBeGreaterThan(0);
+        for (const tree of model.trees) {
+          expect(tree.childrenLeft).toHaveLength(tree.childrenRight.length);
+          expect(tree.feature).toHaveLength(tree.threshold.length);
+          expect(tree.positiveProbability).toHaveLength(tree.feature.length);
         }
       }
-
-      const rom = result.predictions.find((prediction) => prediction.issueId === 'barbell-curl.ROM_issue');
-      const torso = result.predictions.find((prediction) => prediction.issueId === 'barbell-curl.torso_issue');
-      expect(rom?.probability ?? 0).toBeCloseTo(
-        auditRow.groups.label_issue__barbell_curl_rom_issue.candidateProbabilities['logistic_l1_pruned_all.repLevelTolerantOptimized'],
-        8,
-      );
-      expect(torso?.probability ?? 0).toBeCloseTo(
-        auditRow.groups.label_issue__barbell_curl_torso_issue.candidateProbabilities['random_forest.repLevelTolerantOptimizedDirectEvidenceGate'],
-        8,
-      );
     }
   });
 
-  it('matches offline ROM and torso model features on representative saved replay windows', () => {
-    withGroupedFeedbackDisabled(() => {
-      const cases = [
-        {
-          folder: 'validation' as const,
-          stem: 'val06-multi-rom-tempo',
-          repIndex: 2,
-          groupId: 'barbell-curl.ROM_issue',
-          modelId: 'rom',
-        },
-        {
-          folder: 'testing' as const,
-          stem: 'test05-focus-torso-warn',
-          repIndex: 2,
-          groupId: 'barbell-curl.torso_issue',
-          modelId: 'torso',
-        },
-      ];
+  it('runs deterministic grouped-policy inference from inline fixtures only', () => {
+    const fixtures = [
+      {
+        name: 'clean scorable rep',
+        features: baseFeatures(true),
+        heuristicIssueIds: [],
+        expectedIssueIds: [],
+        expectedMessages: [],
+      },
+      {
+        name: 'heuristic shoulder warning collapsed to grouped cue',
+        features: baseFeatures(true),
+        heuristicIssueIds: ['barbell-curl.shoulder_warn'],
+        expectedIssueIds: ['barbell-curl.shoulder_issue'],
+        expectedMessages: ['Avoid using your shoulders to lift the bar.'],
+      },
+      {
+        name: 'ROM fallback evidence remains diagnostic-only',
+        features: romFallbackFeatures(),
+        heuristicIssueIds: ['barbell-curl.incomplete_flex'],
+        expectedIssueIds: [],
+        expectedMessages: [],
+      },
+    ];
 
-      for (const parityCase of cases) {
-        const datasetCase = loadDatasetCase(parityCase.folder, parityCase.stem);
-        const replay = replayRecordingVerbose(barbellCurlDefinition, datasetCase.recording, {
-          confidenceGating: true,
-        });
-        const caseEvaluation = evaluateCase(datasetCase, replay);
-        const built = buildMlRepExamples({
-          definition: barbellCurlDefinition,
-          datasetCase,
-          replay,
-          caseEvaluation,
-          labelFile: datasetCase.labelPath,
-          recordingFile: datasetCase.recordingPath,
-        });
-        const example = built.examples.find((candidate) => candidate.repIndex === parityCase.repIndex);
-        const matchedRep = caseEvaluation.matchedReps.find(
-          (candidate) => candidate.expectedRepIndex === parityCase.repIndex,
-        );
-        const label = datasetCase.label.reps.find((candidate) => candidate.index === parityCase.repIndex);
-        const prediction = replay.reps.find((candidate) => candidate.repIndex === matchedRep?.predictedRepIndex);
+    for (const fixture of fixtures) {
+      const result = predictBarbellCurlGroupedFeedback({
+        features: fixture.features,
+        heuristicIssueIds: fixture.heuristicIssueIds,
+      });
+      expect(result.policyId).toBe(BARBELL_CURL_GROUPED_FEEDBACK_POLICY.policyId);
+      expect(result.modelRunId).toBe(BARBELL_CURL_GROUPED_FEEDBACK_POLICY.modelRunId);
+      expect(result.issueIds).toEqual(fixture.expectedIssueIds);
+      expect(result.messages).toEqual(fixture.expectedMessages);
+      expect(result.predictions).toHaveLength(BARBELL_CURL_GROUPED_FEEDBACK_POLICY.groups.length);
+    }
+  });
 
-        expect(example).toBeDefined();
-        expect(matchedRep).toBeDefined();
-        expect(label).toBeDefined();
-        expect(prediction).toBeDefined();
-        if (!example || !matchedRep || !label || !prediction) continue;
+  it('does not attach grouped ML diagnostics to a non-Barbell exercise when flags are enabled', () => {
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
 
-        const frames = datasetCase.recording.frames.filter(
-          (frame) => frame.timestamp >= label.startMs && frame.timestamp <= label.endMs,
-        );
-        const runtimeFeatures = buildRuntimeMlFeatureVector({
-          definition: barbellCurlDefinition,
-          frames,
-          repIndex: label.index,
-          durationMs: label.endMs - label.startMs,
-          score: prediction.score,
-          issueIds: prediction.issueIds,
-          messages: prediction.messages,
-          scorable: prediction.scorable ?? matchedRep.predictedScorable ?? null,
-          confidence: prediction.confidence,
-          qualityStatus: prediction.qualityStatus,
-          qualityWarnings: prediction.qualityWarnings,
-          diagnostics: matchedRep.predictedDiagnostics,
-          view: matchedRep.predictedView,
-          overlapMs: matchedRep.overlapMs,
-          completionDeltaMs: matchedRep.completionDeltaMs,
-        });
-
-        const model = BARBELL_CURL_GROUPED_FEEDBACK_POLICY.models[parityCase.modelId];
-        expect(model).toBeDefined();
-        for (const column of model.featureColumns) {
-          const offlineValue = nullableFeature(example.features[unprefixFeatureColumn(column)]);
-          const runtimeValue = nullableFeature(runtimeFeatures[column]);
-          if (offlineValue === null || runtimeValue === null) {
-            expect(runtimeValue).toBe(offlineValue);
-          } else {
-            expect(runtimeValue).toBeCloseTo(offlineValue, 10);
-          }
-        }
-
-        const offlineFeatures = Object.fromEntries(
-          Object.entries(example.features).map(([key, value]) => [`feature__${key}`, value]),
-        );
-        const offlineResult = predictBarbellCurlGroupedFeedback({
-          features: offlineFeatures,
-          heuristicIssueIds: example.heuristic.issueIds,
-        });
-        const runtimeResult = predictBarbellCurlGroupedFeedback({
-          features: runtimeFeatures,
-          heuristicIssueIds: prediction.issueIds,
-        });
-        const offlinePrediction = offlineResult.predictions.find(
-          (candidate) => candidate.issueId === parityCase.groupId,
-        );
-        const runtimePrediction = runtimeResult.predictions.find(
-          (candidate) => candidate.issueId === parityCase.groupId,
-        );
-
-        expect(runtimePrediction?.probability ?? 0).toBeCloseTo(offlinePrediction?.probability ?? 0, 10);
-        expect(runtimePrediction?.probabilityGate).toEqual(offlinePrediction?.probabilityGate);
-        expect(runtimePrediction?.directEvidence).toEqual(offlinePrediction?.directEvidence);
-        expect(runtimePrediction?.predicted).toBe(offlinePrediction?.predicted);
-      }
+    const state = cableRowDefinition.update([], cableRowDefinition.createState(), {
+      primarySource: 'image',
+      cameraAnalysisStatusRequested: true,
     });
+
+    expect(state.repCount).toBe(0);
+    expect(state.lastRepResult?.diagnostics?.mlGroupedFeedback).toBeUndefined();
   });
 });

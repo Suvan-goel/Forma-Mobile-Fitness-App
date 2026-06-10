@@ -51,3 +51,6 @@ modules/expo-pose-detection/android/build/
 # local datasets
 datasets/RepCount/
 datasets/form-heuristics/ml/
+
+# local debug recordings
+scripts/recordings/*.json
