@@ -1,6 +1,8 @@
 import policyJson from './barbellCurlGroupedFeedbackPolicy.json';
 
 export const BARBELL_CURL_GROUPED_FEEDBACK_FLAG = 'EXPO_PUBLIC_ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK';
+export const BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG =
+  'EXPO_PUBLIC_ENABLE_BARBELL_CURL_ML_GROUPED_FALLBACK_FEEDBACK';
 
 type FeatureVector = Record<string, number | null | undefined>;
 
@@ -150,6 +152,55 @@ export interface BarbellCurlGroupedShadowAlternativeDiagnostic {
   directEvidenceRequired?: boolean;
 }
 
+export interface BarbellCurlGroupedRepeatedFallbackEvidence {
+  repIndex: number;
+  issueIds: string[];
+  passes: boolean;
+  blockReasons: string[];
+  flexMargin?: number | null;
+  torsoRawDelta?: number | null;
+  torsoRobustDelta?: number | null;
+  torsoSustained3Support?: number | null;
+  torsoSustained5Support?: number | null;
+  torsoProbability?: number | null;
+  directEvidencePass?: boolean;
+  sustainedEvidencePass?: boolean;
+  rawSpikeBlocked?: boolean;
+  cueSafetyPass: boolean;
+  scorable: boolean;
+  trackingClean: boolean;
+}
+
+export interface BarbellCurlGroupedFallbackShadowState {
+  romIncompleteFlexEvidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
+  torsoSustainedEvidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
+}
+
+export interface BarbellCurlGroupedFallbackPolicyDiagnostic {
+  name: string;
+  groupId: string;
+  message: string;
+  currentPolicyPredicted: boolean;
+  wouldPredict: boolean;
+  fallbackWouldPredict: boolean;
+  evidenceCount: number;
+  requiredEvidenceCount: number;
+  contributingReps: number[];
+  blockReasons: string[];
+  evidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
+}
+
+export interface BarbellCurlGroupedFallbackShadowDiagnostic {
+  policyName: 'barbellCurlGroupedWithRepeatedFallbackShadow';
+  fallbackUserFacingFlagEnabled: boolean;
+  existingMlGroupedPredictions: string[];
+  fallbackGroups: string[];
+  fallbackGroupsWouldShow: string[];
+  fallbackSelectedIssueId: string | null;
+  fallbackSelectedMessage: string | null;
+  policies: BarbellCurlGroupedFallbackPolicyDiagnostic[];
+}
+
 export interface BarbellCurlGroupedPrediction {
   issueId: string;
   message: string;
@@ -190,6 +241,7 @@ export interface BarbellCurlGroupedFeedbackResult {
   candidateProbabilityGroups: string[];
   candidateGateBlockedGroups: BarbellCurlGroupedCandidateGateBlock[];
   finalPredictedGroups: string[];
+  fallbackShadow?: BarbellCurlGroupedFallbackShadowDiagnostic;
   featureMissingness: Record<string, { missing: number; total: number }>;
   warnings: string[];
 }
@@ -245,11 +297,23 @@ function flagValue(): string | undefined {
     ?? process.env.ENABLE_BARBELL_CURL_ML_GROUPED_FEEDBACK;
 }
 
+function fallbackFlagValue(): string | undefined {
+  if (typeof process === 'undefined') return undefined;
+  return process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG];
+}
+
 export function isBarbellCurlGroupedFeedbackEnabled(): boolean {
   const value = flagValue();
   if (value === undefined) return true;
   const normalized = value.toLowerCase();
   return normalized !== '0' && normalized !== 'false' && normalized !== 'off';
+}
+
+export function isBarbellCurlGroupedFallbackFeedbackEnabled(): boolean {
+  const value = fallbackFlagValue();
+  if (value === undefined) return false;
+  const normalized = value.toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'on';
 }
 
 export function logBarbellCurlGroupedFeedbackEnabledOnce(): void {
@@ -398,6 +462,170 @@ function issueAddEligible(features: FeatureVector, issueId: string): boolean {
     && isTruthyFeature(features, `feature__diagnostic.cue.${suffix}.eligible`);
 }
 
+function heuristicIssuePresent(
+  features: FeatureVector,
+  heuristicIssueIds: Set<string>,
+  issueId: string,
+): boolean {
+  const suffix = safeIssuePart(issueId);
+  return heuristicIssueIds.has(issueId) || isTruthyFeature(features, `feature__heuristic.issue.${suffix}`);
+}
+
+function issueCueTriggeredOrPositiveMargin(features: FeatureVector, issueId: string): boolean {
+  const suffix = safeIssuePart(issueId);
+  return isTruthyFeature(features, `feature__diagnostic.cue.${suffix}.triggered`)
+    || (featureValue(features, `feature__diagnostic.cue.${suffix}.margin`) ?? 0) > 0;
+}
+
+function noTrackingInterruption(features: FeatureVector): boolean {
+  return (featureValue(features, 'feature__v2.tempo.full.tracking_gap_count') ?? 0) <= 0
+    && (featureValue(features, 'feature__v2.tempo.full.max_tracking_gap_ms') ?? 0) <= 0;
+}
+
+function cueReliabilitySafe(features: FeatureVector): boolean {
+  return (featureValue(features, 'feature__v2.reliability.unsafe_cue_family_count') ?? 0) <= 0;
+}
+
+function conservativeIssueAddEligible(features: FeatureVector, issueId: string): boolean {
+  return issueAddEligible(features, issueId)
+    && noTrackingInterruption(features)
+    && cueReliabilitySafe(features);
+}
+
+function trackingContaminationClean(features: FeatureVector): boolean {
+  return (featureValue(features, 'feature__v2.tempo.full.max_tracking_gap_ms') ?? 0) <= 250;
+}
+
+function torsoSustainedEvidence(features: FeatureVector): boolean {
+  const sustained3 = featureValue(features, 'feature__v2.torso.full.sustained_lean_above_3deg.support_ratio') ?? 0;
+  const sustained5 = featureValue(features, 'feature__v2.torso.full.sustained_lean_above_5deg.support_ratio') ?? 0;
+  return sustained3 >= 0.05 || sustained5 >= 0.05;
+}
+
+function torsoRobustAndSustainedEvidence(features: FeatureVector): boolean {
+  const robustDelta = featureValue(features, 'feature__v2.torso.robust_abs_delta_p90_minus_p10') ?? 0;
+  return robustDelta >= 1.2 && torsoSustainedEvidence(features);
+}
+
+function createFallbackEvidenceStore(): BarbellCurlGroupedRepeatedFallbackEvidence[] {
+  return [];
+}
+
+export function createBarbellCurlGroupedFallbackShadowState(): BarbellCurlGroupedFallbackShadowState {
+  return {
+    romIncompleteFlexEvidence: createFallbackEvidenceStore(),
+    torsoSustainedEvidence: createFallbackEvidenceStore(),
+  };
+}
+
+function upsertEvidence(
+  evidence: BarbellCurlGroupedRepeatedFallbackEvidence[],
+  next: BarbellCurlGroupedRepeatedFallbackEvidence,
+): void {
+  const existingIndex = evidence.findIndex((entry) => entry.repIndex === next.repIndex);
+  if (existingIndex >= 0) evidence[existingIndex] = next;
+  else evidence.push(next);
+  evidence.sort((a, b) => a.repIndex - b.repIndex);
+  if (evidence.length > 50) evidence.splice(0, evidence.length - 50);
+}
+
+function repeatedEvidence(
+  evidence: BarbellCurlGroupedRepeatedFallbackEvidence[],
+): BarbellCurlGroupedRepeatedFallbackEvidence[] {
+  return evidence.filter((entry) => entry.passes);
+}
+
+function finiteFeature(features: FeatureVector, column: string): number | null {
+  return featureValue(features, column);
+}
+
+function romRepeatedEvidenceForRep(
+  repIndex: number,
+  features: FeatureVector,
+  heuristicIssueIds: Set<string>,
+): BarbellCurlGroupedRepeatedFallbackEvidence {
+  const issueId = 'barbell-curl.incomplete_flex';
+  const flexMargin = finiteFeature(features, 'feature__diagnostic.cue.barbell_curl_incomplete_flex.margin');
+  const heuristicPresent = heuristicIssuePresent(features, heuristicIssueIds, issueId);
+  const scorableRep = scorable(features);
+  const cueSafetyPass = issueAddEligible(features, issueId) && cueReliabilitySafe(features);
+  const trackingClean = trackingContaminationClean(features);
+  const marginPass = flexMargin === null || flexMargin >= 0.04;
+  const blockReasons = [
+    ...(!heuristicPresent ? ['missing_heuristic_incomplete_flex'] : []),
+    ...(!scorableRep ? ['rep_not_scorable'] : []),
+    ...(!cueSafetyPass ? ['rom_cue_not_safe_or_eligible'] : []),
+    ...(!trackingClean ? ['tracking_interruption_contamination'] : []),
+    ...(!marginPass ? ['flex_margin_below_0_04'] : []),
+  ];
+  return {
+    repIndex,
+    issueIds: heuristicPresent ? [issueId] : [],
+    passes: blockReasons.length === 0,
+    blockReasons,
+    flexMargin,
+    cueSafetyPass,
+    scorable: scorableRep,
+    trackingClean,
+  };
+}
+
+function torsoRepeatedEvidenceForRep(
+  repIndex: number,
+  features: FeatureVector,
+  heuristicIssueIds: Set<string>,
+  torsoPrediction: BarbellCurlGroupedPrediction | undefined,
+): BarbellCurlGroupedRepeatedFallbackEvidence {
+  const warnIssue = 'barbell-curl.torso_warn';
+  const failIssue = 'barbell-curl.torso_fail';
+  const hasWarn = heuristicIssuePresent(features, heuristicIssueIds, warnIssue);
+  const hasFail = heuristicIssuePresent(features, heuristicIssueIds, failIssue);
+  const scorableRep = scorable(features);
+  const cueSafetyPass =
+    (issueAddEligible(features, warnIssue) || issueAddEligible(features, failIssue)) &&
+    cueReliabilitySafe(features);
+  const trackingClean = trackingContaminationClean(features);
+  const torsoRawDelta = finiteFeature(features, 'feature__diagnostic.metric.torsodeltaraw.value');
+  const torsoRobustDelta = finiteFeature(features, 'feature__v2.torso.robust_abs_delta_p90_minus_p10');
+  const torsoSustained3Support = finiteFeature(
+    features,
+    'feature__v2.torso.full.sustained_lean_above_3deg.support_ratio',
+  );
+  const torsoSustained5Support = finiteFeature(
+    features,
+    'feature__v2.torso.full.sustained_lean_above_5deg.support_ratio',
+  );
+  const directEvidencePass = torsoPrediction?.directEvidence?.passes ?? false;
+  const sustainedEvidencePass = torsoSustainedEvidence(features);
+  const rawSpikeBlocked = directEvidencePass && !sustainedEvidencePass;
+  const blockReasons = [
+    ...(!hasWarn && !hasFail ? ['missing_heuristic_torso_warn_or_fail'] : []),
+    ...(!scorableRep ? ['rep_not_scorable'] : []),
+    ...(!cueSafetyPass ? ['torso_cue_not_safe_or_eligible'] : []),
+    ...(!trackingClean ? ['tracking_interruption_contamination'] : []),
+    ...(!directEvidencePass ? ['direct_torso_evidence_failed'] : []),
+    ...(!sustainedEvidencePass ? ['sustained_torso_evidence_failed'] : []),
+    ...(rawSpikeBlocked ? ['raw_spike_contamination_signature'] : []),
+  ];
+  return {
+    repIndex,
+    issueIds: [hasWarn ? warnIssue : null, hasFail ? failIssue : null].filter(Boolean) as string[],
+    passes: blockReasons.length === 0,
+    blockReasons,
+    torsoRawDelta,
+    torsoRobustDelta,
+    torsoSustained3Support,
+    torsoSustained5Support,
+    torsoProbability: torsoPrediction?.probability ?? null,
+    directEvidencePass,
+    sustainedEvidencePass,
+    rawSpikeBlocked,
+    cueSafetyPass,
+    scorable: scorableRep,
+    trackingClean,
+  };
+}
+
 function groupedEligible(features: FeatureVector, issueIds: string[]): boolean {
   return scorable(features) && issueIds.some((issueId) => issueAddEligible(features, issueId));
 }
@@ -452,6 +680,8 @@ function debugFeatureSnapshot(groupId: string, features: FeatureVector): {
 
 function shadowAlternativesForGroup(
   group: RuntimeGroup,
+  features: FeatureVector,
+  heuristicIssueIds: Set<string>,
   probability: number | null,
   eligible: boolean,
   directEvidence?: BarbellCurlGroupedNumericGateDiagnostic,
@@ -459,6 +689,17 @@ function shadowAlternativesForGroup(
   if (probability === null) return undefined;
   if (group.id === ROM_GROUP_ID) {
     const relaxedThreshold = 0.75;
+    const incompleteFlex = 'barbell-curl.incomplete_flex';
+    const incompleteExtend = 'barbell-curl.incomplete_extend';
+    const incompleteRom = 'barbell-curl.incomplete_rom';
+    const hasIncompleteFlex = heuristicIssuePresent(features, heuristicIssueIds, incompleteFlex);
+    const hasIncompleteExtend = heuristicIssuePresent(features, heuristicIssueIds, incompleteExtend);
+    const hasIncompleteRom = heuristicIssuePresent(features, heuristicIssueIds, incompleteRom);
+    const flexEligible = issueAddEligible(features, incompleteFlex);
+    const flexSafe = conservativeIssueAddEligible(features, incompleteFlex);
+    const extendSafe = conservativeIssueAddEligible(features, incompleteExtend);
+    const romSafe = conservativeIssueAddEligible(features, incompleteRom);
+    const flexEndpointEvidence = issueCueTriggeredOrPositiveMargin(features, incompleteFlex);
     return [
       {
         id: 'rom_threshold_0_75',
@@ -466,10 +707,75 @@ function shadowAlternativesForGroup(
         wouldPredict: probability >= relaxedThreshold && eligible,
         reason: eligible ? 'relaxed_probability_threshold' : 'blocked_by_safety_or_cue_gate',
       },
+      {
+        id: 'rom_heuristic_incomplete_flex_fallback',
+        wouldPredict: hasIncompleteFlex && flexEligible,
+        reason: !flexEligible
+          ? 'blocked_by_incomplete_flex_safety_or_cue_gate'
+          : hasIncompleteFlex
+            ? 'heuristic_incomplete_flex_and_cue_gate_pass'
+            : 'blocked_by_missing_heuristic_incomplete_flex',
+      },
+      {
+        id: 'rom_heuristic_incomplete_flex_safe_fallback',
+        wouldPredict: hasIncompleteFlex && flexSafe,
+        reason: !flexSafe
+          ? 'blocked_by_incomplete_flex_conservative_safety_gate'
+          : hasIncompleteFlex
+            ? 'heuristic_incomplete_flex_and_conservative_safety_pass'
+            : 'blocked_by_missing_heuristic_incomplete_flex',
+      },
+      {
+        id: 'rom_heuristic_incomplete_flex_endpoint_fallback',
+        directEvidenceRequired: true,
+        wouldPredict: hasIncompleteFlex && flexSafe && flexEndpointEvidence,
+        reason: !flexSafe
+          ? 'blocked_by_incomplete_flex_conservative_safety_gate'
+          : !flexEndpointEvidence
+            ? 'blocked_by_incomplete_flex_endpoint_evidence'
+            : hasIncompleteFlex
+              ? 'heuristic_incomplete_flex_and_endpoint_evidence_pass'
+              : 'blocked_by_missing_heuristic_incomplete_flex',
+      },
+      {
+        id: 'rom_heuristic_flex_extend_fallback',
+        wouldPredict: (hasIncompleteFlex && flexSafe) || (hasIncompleteExtend && extendSafe),
+        reason:
+          (hasIncompleteFlex && flexSafe) || (hasIncompleteExtend && extendSafe)
+            ? 'heuristic_flex_or_extend_and_conservative_safety_pass'
+            : 'blocked_by_missing_safe_heuristic_flex_or_extend',
+      },
+      {
+        id: 'rom_heuristic_flex_extend_rom_fallback',
+        wouldPredict:
+          (hasIncompleteFlex && flexSafe) ||
+          (hasIncompleteExtend && extendSafe) ||
+          (hasIncompleteRom && romSafe),
+        reason:
+          (hasIncompleteFlex && flexSafe) ||
+          (hasIncompleteExtend && extendSafe) ||
+          (hasIncompleteRom && romSafe)
+            ? 'heuristic_rom_family_and_conservative_safety_pass'
+            : 'blocked_by_missing_safe_heuristic_rom_family_issue',
+      },
     ];
   }
   if (group.id === TORSO_GROUP_ID) {
     const relaxedThreshold = 0.55;
+    const hasHeuristicTorsoWarn = heuristicIssuePresent(features, heuristicIssueIds, 'barbell-curl.torso_warn');
+    const hasHeuristicTorsoFail = heuristicIssuePresent(features, heuristicIssueIds, 'barbell-curl.torso_fail');
+    const hasAnyHeuristicTorso =
+      hasHeuristicTorsoWarn ||
+      hasHeuristicTorsoFail ||
+      heuristicIssueIds.has(TORSO_GROUP_ID) ||
+      isTruthyFeature(features, 'feature__heuristic.issue.barbell_curl_torso_issue');
+    const hasFailHeuristic = hasHeuristicTorsoFail;
+    const hasWarnOrFailHeuristic = hasHeuristicTorsoWarn || hasFailHeuristic;
+    const fallbackEligible = eligible && (directEvidence?.passes ?? false);
+    const sustainedEvidence = torsoSustainedEvidence(features);
+    const robustAndSustainedEvidence = torsoRobustAndSustainedEvidence(features);
+    const rawSpikeContamination = fallbackEligible && !sustainedEvidence;
+    const directEvidenceAndRobust = fallbackEligible && robustAndSustainedEvidence;
     return [
       {
         id: 'torso_probability_only',
@@ -480,6 +786,73 @@ function shadowAlternativesForGroup(
           probability >= group.threshold &&
           eligible,
         reason: eligible ? 'runtime_threshold_without_direct_evidence_gate' : 'blocked_by_safety_or_cue_gate',
+      },
+      {
+        id: 'torso_heuristic_direct_evidence_fallback',
+        directEvidenceRequired: true,
+        wouldPredict: fallbackEligible && hasAnyHeuristicTorso,
+        reason: !eligible
+          ? 'blocked_by_safety_or_cue_gate'
+          : !(directEvidence?.passes ?? false)
+            ? 'blocked_by_direct_evidence_gate'
+            : hasAnyHeuristicTorso
+              ? 'heuristic_torso_and_direct_evidence_pass'
+              : 'blocked_by_missing_heuristic_torso_issue',
+      },
+      {
+        id: 'torso_fail_no_raw_spike_fallback',
+        directEvidenceRequired: true,
+        wouldPredict: fallbackEligible && hasFailHeuristic && !rawSpikeContamination,
+        reason: !eligible
+          ? 'blocked_by_safety_or_cue_gate'
+          : !(directEvidence?.passes ?? false)
+            ? 'blocked_by_direct_evidence_gate'
+            : rawSpikeContamination
+              ? 'blocked_by_raw_spike_contamination_signature'
+              : hasFailHeuristic
+                ? 'heuristic_torso_fail_and_no_raw_spike_signature'
+                : 'blocked_by_missing_heuristic_torso_fail',
+      },
+      {
+        id: 'torso_fail_rf05_robust_fallback',
+        probabilityThreshold: 0.5,
+        directEvidenceRequired: true,
+        wouldPredict: hasFailHeuristic && directEvidenceAndRobust && probability >= 0.5,
+        reason: !eligible
+          ? 'blocked_by_safety_or_cue_gate'
+          : !(directEvidence?.passes ?? false)
+            ? 'blocked_by_direct_evidence_gate'
+            : !robustAndSustainedEvidence
+              ? 'blocked_by_weak_robust_or_sustained_torso_evidence'
+              : probability < 0.5
+                ? 'blocked_by_torso_probability_below_0_5'
+                : hasFailHeuristic
+                  ? 'heuristic_torso_fail_rf05_and_robust_evidence_pass'
+                  : 'blocked_by_missing_heuristic_torso_fail',
+      },
+      {
+        id: 'torso_fail_only_fallback',
+        directEvidenceRequired: true,
+        wouldPredict: fallbackEligible && hasFailHeuristic,
+        reason: !eligible
+          ? 'blocked_by_safety_or_cue_gate'
+          : !(directEvidence?.passes ?? false)
+            ? 'blocked_by_direct_evidence_gate'
+            : hasFailHeuristic
+              ? 'heuristic_torso_fail_and_direct_evidence_pass'
+              : 'blocked_by_missing_heuristic_torso_fail',
+      },
+      {
+        id: 'torso_warn_fail_fallback',
+        directEvidenceRequired: true,
+        wouldPredict: fallbackEligible && hasWarnOrFailHeuristic,
+        reason: !eligible
+          ? 'blocked_by_safety_or_cue_gate'
+          : !(directEvidence?.passes ?? false)
+            ? 'blocked_by_direct_evidence_gate'
+            : hasWarnOrFailHeuristic
+              ? 'heuristic_torso_warn_or_fail_and_direct_evidence_pass'
+              : 'blocked_by_missing_heuristic_torso_warn_or_fail',
       },
       {
         id: 'torso_threshold_0_55_with_direct_evidence',
@@ -640,7 +1013,14 @@ function evaluateGroup(
       skippedReason = 'direct_evidence_gate_failed';
     }
   }
-  const shadowAlternatives = shadowAlternativesForGroup(group, probability, eligible, directEvidence);
+  const shadowAlternatives = shadowAlternativesForGroup(
+    group,
+    features,
+    heuristicIssueIds,
+    probability,
+    eligible,
+    directEvidence,
+  );
 
   return {
     issueId: group.id,
@@ -660,9 +1040,119 @@ function evaluateGroup(
   };
 }
 
+function groupPriority(predictions: BarbellCurlGroupedPrediction[], groupId: string): number {
+  return predictions.find((prediction) => prediction.issueId === groupId)?.priority ?? 0;
+}
+
+function groupMessage(predictions: BarbellCurlGroupedPrediction[], groupId: string): string {
+  return predictions.find((prediction) => prediction.issueId === groupId)?.message ?? '';
+}
+
+function fallbackPolicyDiagnostic(input: {
+  name: string;
+  groupId: string;
+  message: string;
+  currentPolicyPredicted: boolean;
+  currentRepIndex: number;
+  evidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
+  requiredEvidenceCount: number;
+}): BarbellCurlGroupedFallbackPolicyDiagnostic {
+  const contributingEvidence = repeatedEvidence(input.evidence);
+  const currentEvidence = input.evidence.find((entry) => entry.repIndex === input.currentRepIndex);
+  const currentRepContributes = currentEvidence?.passes ?? false;
+  const contributingReps = contributingEvidence.map((entry) => entry.repIndex);
+  const fallbackWouldPredict =
+    !input.currentPolicyPredicted &&
+    currentRepContributes &&
+    contributingEvidence.length >= input.requiredEvidenceCount;
+  const blockReasons = input.currentPolicyPredicted
+    ? ['current_ml_group_already_predicted']
+    : fallbackWouldPredict
+      ? []
+      : [
+          ...(!currentRepContributes ? ['current_rep_does_not_contribute_evidence'] : []),
+          `requires_${input.requiredEvidenceCount}_contributing_reps`,
+          ...Array.from(new Set(currentEvidence?.blockReasons ?? input.evidence.flatMap((entry) => entry.blockReasons))),
+        ];
+  return {
+    name: input.name,
+    groupId: input.groupId,
+    message: input.message,
+    currentPolicyPredicted: input.currentPolicyPredicted,
+    wouldPredict: input.currentPolicyPredicted || fallbackWouldPredict,
+    fallbackWouldPredict,
+    evidenceCount: contributingEvidence.length,
+    requiredEvidenceCount: input.requiredEvidenceCount,
+    contributingReps,
+    blockReasons,
+    evidence: input.evidence.slice(-8),
+  };
+}
+
+function computeFallbackShadow(input: {
+  repIndex: number;
+  features: FeatureVector;
+  heuristicIssueIds: Set<string>;
+  predictions: BarbellCurlGroupedPrediction[];
+  finalPredictedGroups: string[];
+  state: BarbellCurlGroupedFallbackShadowState;
+}): BarbellCurlGroupedFallbackShadowDiagnostic {
+  const romPrediction = input.predictions.find((prediction) => prediction.issueId === ROM_GROUP_ID);
+  const torsoPrediction = input.predictions.find((prediction) => prediction.issueId === TORSO_GROUP_ID);
+  upsertEvidence(
+    input.state.romIncompleteFlexEvidence,
+    romRepeatedEvidenceForRep(input.repIndex, input.features, input.heuristicIssueIds),
+  );
+  upsertEvidence(
+    input.state.torsoSustainedEvidence,
+    torsoRepeatedEvidenceForRep(input.repIndex, input.features, input.heuristicIssueIds, torsoPrediction),
+  );
+
+  const policies = [
+    fallbackPolicyDiagnostic({
+      name: 'rom_repeated_incomplete_flex_fallback',
+      groupId: ROM_GROUP_ID,
+      message: romPrediction?.message ?? 'Use a fuller range of motion.',
+      currentPolicyPredicted: romPrediction?.predicted ?? false,
+      currentRepIndex: input.repIndex,
+      evidence: input.state.romIncompleteFlexEvidence,
+      requiredEvidenceCount: 2,
+    }),
+    fallbackPolicyDiagnostic({
+      name: 'torso_repeated_sustained_fallback',
+      groupId: TORSO_GROUP_ID,
+      message: torsoPrediction?.message ?? 'Keep your torso still.',
+      currentPolicyPredicted: torsoPrediction?.predicted ?? false,
+      currentRepIndex: input.repIndex,
+      evidence: input.state.torsoSustainedEvidence,
+      requiredEvidenceCount: 2,
+    }),
+  ];
+  const fallbackGroups = policies
+    .filter((policy) => policy.fallbackWouldPredict)
+    .map((policy) => policy.groupId);
+  const fallbackGroupsWouldShow = Array.from(new Set([...input.finalPredictedGroups, ...fallbackGroups]));
+  const fallbackSelectedIssueId = fallbackGroupsWouldShow
+    .slice()
+    .sort((a, b) => groupPriority(input.predictions, b) - groupPriority(input.predictions, a))[0] ?? null;
+
+  return {
+    policyName: 'barbellCurlGroupedWithRepeatedFallbackShadow',
+    fallbackUserFacingFlagEnabled: isBarbellCurlGroupedFallbackFeedbackEnabled(),
+    existingMlGroupedPredictions: input.finalPredictedGroups,
+    fallbackGroups,
+    fallbackGroupsWouldShow,
+    fallbackSelectedIssueId,
+    fallbackSelectedMessage: fallbackSelectedIssueId ? groupMessage(input.predictions, fallbackSelectedIssueId) : null,
+    policies,
+  };
+}
+
 export function predictBarbellCurlGroupedFeedback(input: {
   features: FeatureVector;
   heuristicIssueIds: string[];
+  repIndex?: number;
+  fallbackShadowState?: BarbellCurlGroupedFallbackShadowState;
 }): BarbellCurlGroupedFeedbackResult {
   const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const warnings: string[] = [];
@@ -707,6 +1197,16 @@ export function predictBarbellCurlGroupedFeedback(input: {
       reason: prediction.skippedReason ?? 'blocked',
     }));
   const finalPredictedGroups = selected.map((prediction) => prediction.issueId);
+  const fallbackShadow = input.fallbackShadowState
+    ? computeFallbackShadow({
+        repIndex: input.repIndex ?? 0,
+        features: input.features,
+        heuristicIssueIds,
+        predictions,
+        finalPredictedGroups,
+        state: input.fallbackShadowState,
+      })
+    : undefined;
 
   return {
     enabled: true,
@@ -724,6 +1224,7 @@ export function predictBarbellCurlGroupedFeedback(input: {
     candidateProbabilityGroups,
     candidateGateBlockedGroups,
     finalPredictedGroups,
+    ...(fallbackShadow ? { fallbackShadow } : {}),
     featureMissingness,
     warnings,
   };

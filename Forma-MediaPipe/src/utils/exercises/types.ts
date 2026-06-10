@@ -228,6 +228,45 @@ export interface RepMlGroupedFeedbackDiagnostic {
     reason: string;
   }>;
   finalPredictedGroups?: string[];
+  fallbackShadow?: {
+    policyName: string;
+    fallbackUserFacingFlagEnabled?: boolean;
+    existingMlGroupedPredictions: string[];
+    fallbackGroups: string[];
+    fallbackGroupsWouldShow: string[];
+    fallbackSelectedIssueId?: string | null;
+    fallbackSelectedMessage?: string | null;
+    policies: Array<{
+      name: string;
+      groupId: string;
+      message: string;
+      currentPolicyPredicted: boolean;
+      wouldPredict: boolean;
+      fallbackWouldPredict: boolean;
+      evidenceCount: number;
+      requiredEvidenceCount: number;
+      contributingReps: number[];
+      blockReasons: string[];
+      evidence: Array<{
+        repIndex: number;
+        issueIds: string[];
+        passes: boolean;
+        blockReasons: string[];
+        flexMargin?: number | null;
+        torsoRawDelta?: number | null;
+        torsoRobustDelta?: number | null;
+        torsoSustained3Support?: number | null;
+        torsoSustained5Support?: number | null;
+        torsoProbability?: number | null;
+        directEvidencePass?: boolean;
+        sustainedEvidencePass?: boolean;
+        rawSpikeBlocked?: boolean;
+        cueSafetyPass: boolean;
+        scorable: boolean;
+        trackingClean: boolean;
+      }>;
+    }>;
+  };
   predictions: Array<{
     issueId: string;
     message: string;

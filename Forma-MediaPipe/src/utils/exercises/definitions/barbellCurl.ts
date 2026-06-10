@@ -55,9 +55,11 @@ import type {
 } from '../types';
 import { buildRuntimeMlFeatureVector } from '../ml/featureExtractor';
 import {
+  createBarbellCurlGroupedFallbackShadowState,
   isBarbellCurlGroupedFeedbackEnabled,
   logBarbellCurlGroupedFeedbackEnabledOnce,
   predictBarbellCurlGroupedFeedback,
+  type BarbellCurlGroupedFallbackShadowState,
 } from '../ml/runtime/barbellCurlGroupedFeedback';
 import type { LandmarkRecordingFrame } from '../replay';
 import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
@@ -356,6 +358,14 @@ function logBarbellCurlMlFeedbackRep(
       },
     ]),
   );
+  const fallbackShadow = mlFeedback.fallbackShadow;
+  const fallbackPolicies = fallbackShadow?.policies ?? [];
+  const fallbackBlockReasons = Object.fromEntries(
+    fallbackPolicies.map((policy) => [policy.name, policy.blockReasons]),
+  );
+  const fallbackEvidenceCounts = Object.fromEntries(
+    fallbackPolicies.map((policy) => [policy.name, policy.evidenceCount]),
+  );
   console.info('[BarbellCurlMLFeedback]', {
     rep: repIndex,
     enabled: true,
@@ -365,6 +375,11 @@ function logBarbellCurlMlFeedbackRep(
     candidateProbabilityGroups: mlFeedback.candidateProbabilityGroups,
     candidateGateBlockedGroups: mlFeedback.candidateGateBlockedGroups,
     finalPredictedGroups: mlFeedback.finalPredictedGroups,
+    shadowFallbackGroups: fallbackShadow?.fallbackGroups ?? [],
+    fallbackGroupsWouldShow: fallbackShadow?.fallbackGroupsWouldShow ?? mlFeedback.finalPredictedGroups,
+    fallbackSelectedMessage: fallbackShadow?.fallbackSelectedMessage ?? mlFeedback.selectedMessage,
+    repeatedFallbackEvidenceCounts: fallbackEvidenceCounts,
+    fallbackBlockReasons,
     probs: probabilities,
     gates,
     blocked,
@@ -386,6 +401,27 @@ function logBarbellCurlMlFeedbackRep(
     console.info('[BarbellCurlMLShadowAlt]', {
       rep: repIndex,
       alternatives: shadowAlternatives,
+    });
+  }
+  if (fallbackShadow) {
+    console.info('[BarbellCurlMLFallbackShadow]', {
+      rep: repIndex,
+      policy: fallbackShadow.policyName,
+      currentGroups: fallbackShadow.existingMlGroupedPredictions,
+      fallbackGroups: fallbackShadow.fallbackGroups,
+      fallbackGroupsWouldShow: fallbackShadow.fallbackGroupsWouldShow,
+      fallbackSelectedMessage: fallbackShadow.fallbackSelectedMessage,
+      fallbackUserFacingFlagEnabled: fallbackShadow.fallbackUserFacingFlagEnabled,
+      policies: fallbackShadow.policies.map((policy) => ({
+        name: policy.name,
+        group: policy.groupId,
+        wouldPredict: policy.wouldPredict,
+        fallbackWouldPredict: policy.fallbackWouldPredict,
+        evidenceCount: policy.evidenceCount,
+        contributingReps: policy.contributingReps,
+        blockReasons: policy.blockReasons,
+        selectedMessage: policy.message,
+      })),
     });
   }
 }
@@ -1190,6 +1226,8 @@ interface BarbellCurlState {
   viewAngle: ViewAngle;
   /** Consecutive stable frames seen — FSM disabled until >= WARMUP_REQUIRED */
   warmupFrames: number;
+  /** Dev-visible, shadow-only set evidence for grouped ML fallback candidates. */
+  mlFallbackShadowState: BarbellCurlGroupedFallbackShadowState;
 }
 
 // ============================================================================
@@ -1362,6 +1400,7 @@ function initializeBarbellCurlState(): BarbellCurlState {
     lastFeedbackTime: 0,
     viewAngle: { angleDeg: 0, smoothedAngleDeg: 0, zone: 'frontal', primarySide: 'both' },
     warmupFrames: 0,
+    mlFallbackShadowState: createBarbellCurlGroupedFallbackShadowState(),
   };
 }
 
@@ -3040,6 +3079,8 @@ function completeRep(
       const mlFeedback = predictBarbellCurlGroupedFeedback({
         features: featureVector,
         heuristicIssueIds,
+        repIndex: newState.repCount,
+        fallbackShadowState: newState.mlFallbackShadowState,
       });
       diagnostics.mlGroupedFeedback = {
         enabled: mlFeedback.enabled,
@@ -3057,6 +3098,7 @@ function completeRep(
         candidateProbabilityGroups: mlFeedback.candidateProbabilityGroups,
         candidateGateBlockedGroups: mlFeedback.candidateGateBlockedGroups,
         finalPredictedGroups: mlFeedback.finalPredictedGroups,
+        fallbackShadow: mlFeedback.fallbackShadow,
         predictions: mlFeedback.predictions,
         ...(mlFeedback.warnings.length > 0 ? { warnings: mlFeedback.warnings } : {}),
       };
