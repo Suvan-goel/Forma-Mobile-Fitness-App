@@ -388,7 +388,7 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
   );
 
   it('keeps clean v2 PoseState machine ab crunches fully scoreable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       machineAbCrunchDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic clean full-reliability v2 machine ab crunch', fullRepPath()),
@@ -418,10 +418,13 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
       unsafeCueFamilies: [],
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'full'
+    ))).toBe(true);
   });
 
   it('keeps weak non-critical arm and wrist joints countable and scoreable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       machineAbCrunchDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic weak arms v2 machine ab crunch', fullRepPath()),
@@ -450,6 +453,9 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
       unsafeCueFamilies: expect.arrayContaining(['auxiliaryArmCue']),
       suppressedIssueIds: expect.arrayContaining(['machine-ab-crunches.arm_pull']),
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'limited'
+    ))).toBe(true);
   });
 
   it('suppresses weak selected hip-angle cue families while preserving count in v2 replay', () => {
@@ -771,7 +777,7 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
   });
 
   it('marks a poor side-view rep unscorable while still counting clear movement', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       machineAbCrunchDefinition,
       buildRecording('synthetic front-ish machine ab crunch', fullRepPath(), { sideView: 'front' }),
     );
@@ -784,6 +790,9 @@ describe('Machine Ab Crunch synthetic replay coverage', () => {
     expect(result.reps[0].diagnostics?.view).toBe('front');
     expect(result.reps[0].diagnostics?.viewQuality?.sideConfirmed).toBe(false);
     expect(result.reps[0].diagnostics?.viewQuality?.frontishConfirmed).toBe(true);
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'countOnly'
+    ))).toBe(true);
     expect(result.reps[0].diagnostics?.cues['machine-ab-crunches.side_view_uncertain'].metricKeys).toEqual([
       'sideViewConfidence',
       'sideViewMinConfidence',

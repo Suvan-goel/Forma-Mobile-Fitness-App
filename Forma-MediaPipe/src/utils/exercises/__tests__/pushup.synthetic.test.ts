@@ -550,7 +550,7 @@ describe('Push-Up synthetic replay coverage', () => {
   });
 
   it('keeps clean v2 PoseState push-ups fully scoreable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       pushupDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic clean full-reliability v2 pushup', fullRepPath(), {
@@ -583,10 +583,13 @@ describe('Push-Up synthetic replay coverage', () => {
       unsafeCueFamilies: [],
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'full'
+    ))).toBe(true);
   });
 
   it('keeps one weak non-selected arm countable when the selected side and torso are reliable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       pushupDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic selected-side reliable v2 pushup', fullRepPath(), {
@@ -611,6 +614,9 @@ describe('Push-Up synthetic replay coverage', () => {
       safeCueFamilies: expect.arrayContaining(['armDepth', 'elbowPath', 'wristHandPlacement', 'bodyLine']),
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'limited'
+    ))).toBe(true);
   });
 
   it('keeps selected-side v2 push-ups scoreable when only the hidden side is weak', () => {
@@ -821,6 +827,9 @@ describe('Push-Up synthetic replay coverage', () => {
     expect(result.frameTraces.some(trace => (
       Array.isArray(trace.debugInfo.setupWarnings) &&
       trace.debugInfo.setupWarnings.includes('not_side_view')
+    ))).toBe(true);
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'countOnly'
     ))).toBe(true);
     expect(collectLiveWarnings(recording)).toContain('side_view_uncertain');
   });

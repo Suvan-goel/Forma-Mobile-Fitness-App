@@ -463,7 +463,7 @@ describe('Leg Extension synthetic replay coverage', () => {
   );
 
   it('keeps clean v2 PoseState leg extensions fully scoreable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       legExtensionsDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic clean full-reliability v2 leg extension', fullRepPath(), {
@@ -495,10 +495,13 @@ describe('Leg Extension synthetic replay coverage', () => {
       unsafeCueFamilies: [],
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'full'
+    ))).toBe(true);
   });
 
   it('keeps one weak non-selected leg countable when the selected leg and torso are reliable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       legExtensionsDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic selected-leg reliable v2 leg extension', fullRepPath(), {
@@ -531,6 +534,9 @@ describe('Leg Extension synthetic replay coverage', () => {
       unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'limited'
+    ))).toBe(true);
   });
 
   it('suppresses weak selected-leg distal cues while leaving torso setup feedback safe in v2 replay', () => {
@@ -619,7 +625,7 @@ describe('Leg Extension synthetic replay coverage', () => {
   });
 
   it('counts front-ish leg extensions but marks them unscorable for side-view uncertainty', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       legExtensionsDefinition,
       buildRecording('synthetic front-ish leg extension', fullRepPath(), { sideOffset: 0.25 }),
       { confidenceGating: true },
@@ -631,6 +637,9 @@ describe('Leg Extension synthetic replay coverage', () => {
     expect(result.feedbackMessages[0]).toContain('Turn side-on so I can judge your form.');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
     expect(result.reps[0].diagnostics?.metrics.sideViewConfidence.value).toBeLessThan(0.45);
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'countOnly'
+    ))).toBe(true);
   });
 
   it('keeps one clear side-view leg chain scorable when the far side is hidden', () => {

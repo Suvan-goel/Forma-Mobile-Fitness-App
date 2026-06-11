@@ -35,8 +35,10 @@ import {
   interpretPoseStateReliabilitySummary,
   type RepReliabilityInterpretation,
 } from '../shared/reliabilityInterpretation';
+import { cameraStatusFromExerciseFeedbackReadiness } from '../shared/liveAnalysisStatus';
 import tunedConfig from './tuned/pushup.json';
 import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
+import type { CameraAnalysisStatus } from '../shared/cameraAnalysisStatus';
 
 // ============================================================================
 // CONSTANTS & THRESHOLDS (module-private)
@@ -1108,6 +1110,150 @@ function pushupSetupQualityWarnings(setupQuality: PushupSetupQuality | null | un
     }
   }
   return Array.from(warnings);
+}
+
+const PUSHUP_STATUS_WARNING_PRIORITY: PushupSetupWarning[] = [
+  'not_side_view',
+  'camera_too_close',
+  'full_body_not_visible',
+  'arm_chain_hidden',
+  'lower_body_hidden',
+  'body_not_horizontal',
+  'shoulder_wrist_misaligned',
+];
+
+function pushupSetupWarningAnalysisStatus(
+  warnings: PushupSetupWarning[],
+  reasonPrefix: string,
+): CameraAnalysisStatus | null {
+  const warning = PUSHUP_STATUS_WARNING_PRIORITY.find(candidate => warnings.includes(candidate));
+  if (!warning) return null;
+
+  if (warning === 'not_side_view') {
+    return cameraStatusFromExerciseFeedbackReadiness({
+      viewReady: false,
+      viewRequired: 'side',
+      viewCurrent: 'front',
+      fullReason: `${reasonPrefix}_full_feedback`,
+      viewBlockedReason: `${reasonPrefix}_not_side_view`,
+      viewBlockedMessage: 'Turn side-on for full form analysis',
+    });
+  }
+
+  const countOnlyMessage =
+    warning === 'camera_too_close'
+      ? 'Move the camera back.'
+      : warning === 'full_body_not_visible'
+        ? 'Keep your full body inside the frame.'
+        : warning === 'arm_chain_hidden'
+          ? 'Keep your arms visible.'
+          : warning === 'lower_body_hidden'
+            ? 'Keep your feet inside the frame.'
+            : 'Set up in a clear plank for form feedback.';
+
+  return cameraStatusFromExerciseFeedbackReadiness({
+    viewReady: true,
+    viewRequired: 'side',
+    viewCurrent: 'side',
+    scorable: false,
+    fullReason: `${reasonPrefix}_full_feedback`,
+    countOnlyReason: `${reasonPrefix}_${warning}`,
+    countOnlyMessage,
+  });
+}
+
+function pushupQualityWarningAnalysisStatus(
+  warnings: FrameworkRepResult['qualityWarnings'],
+  reasonPrefix: string,
+): CameraAnalysisStatus | null {
+  const warningSet = new Set(warnings ?? []);
+  if (warningSet.has('side_view_uncertain')) {
+    return cameraStatusFromExerciseFeedbackReadiness({
+      viewReady: false,
+      viewRequired: 'side',
+      viewCurrent: 'front',
+      fullReason: `${reasonPrefix}_full_feedback`,
+      viewBlockedReason: `${reasonPrefix}_side_view_uncertain`,
+      viewBlockedMessage: 'Turn side-on for full form analysis',
+    });
+  }
+
+  const countOnlyMessage = warningSet.has('move_camera_back')
+    ? 'Move the camera back.'
+    : warningSet.has('keep_full_body_in_frame')
+      ? 'Keep your full body inside the frame.'
+      : warningSet.has('arms_hidden')
+        ? 'Keep your arms visible.'
+        : warningSet.has('feet_hidden')
+          ? 'Keep your feet inside the frame.'
+          : warningSet.has('missing_required_joints')
+            ? 'Count only - keep key joints visible'
+            : null;
+
+  if (!countOnlyMessage) return null;
+  return cameraStatusFromExerciseFeedbackReadiness({
+    viewReady: true,
+    viewRequired: 'side',
+    viewCurrent: 'side',
+    scorable: false,
+    fullReason: `${reasonPrefix}_full_feedback`,
+    countOnlyReason: `${reasonPrefix}_quality_warning`,
+    countOnlyMessage,
+  });
+}
+
+function pushupSetupAnalysisStatus(setupQuality: PushupSetupQuality | null | undefined): CameraAnalysisStatus | null {
+  if (!setupQuality) return null;
+  if (setupQuality.acceptable) {
+    return cameraStatusFromExerciseFeedbackReadiness({
+      viewReady: true,
+      viewRequired: 'side',
+      viewCurrent: 'side',
+      fullReason: 'pushup_setup_full_feedback',
+    });
+  }
+  return pushupSetupWarningAnalysisStatus(setupQuality.warnings, 'pushup_setup');
+}
+
+function pushupRepWindowAnalysisStatus(
+  repWindow: PushupRepWindow,
+  visibleSide: 'left' | 'right',
+): CameraAnalysisStatus | null {
+  if (repWindow.frameCount < 3) return null;
+  if (setupWarningRate(repWindow) > 0.4) {
+    const warning = dominantSetupWarning(repWindow);
+    const setupStatus = pushupSetupWarningAnalysisStatus(
+      warning ? [warning] : [],
+      'pushup_live_setup',
+    );
+    if (setupStatus) return setupStatus;
+  }
+
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide)?.interpretation ?? null;
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability,
+    viewReady: true,
+    viewRequired: 'side',
+    viewCurrent: pushupDiagnosticView(repWindow),
+    scorable: pushupQualityScorable(repWindow),
+    fullReason: 'pushup_live_full_feedback',
+  });
+}
+
+function pushupCompletedRepAnalysisStatus(
+  repResult: Pick<FrameworkRepResult, 'scorable' | 'qualityWarnings' | 'diagnostics'> | null,
+): CameraAnalysisStatus | null {
+  if (!repResult) return null;
+  const warningStatus = pushupQualityWarningAnalysisStatus(repResult.qualityWarnings, 'pushup_completed');
+  if (warningStatus) return warningStatus;
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability: repResult.diagnostics?.reliability ?? null,
+    viewReady: true,
+    viewRequired: 'side',
+    viewCurrent: repResult.diagnostics?.view,
+    scorable: repResult.scorable,
+    fullReason: 'pushup_completed_full_feedback',
+  });
 }
 
 function pushupDiagnosticView(repWindow: PushupRepWindow): NonNullable<FrameworkRepResult['diagnostics']>['view'] {
@@ -2311,6 +2457,7 @@ export function createPushupDefinition(
       debugInfo: {},
       repQualityWindowActive: false,
       liveQualityWarnings: [],
+      liveAnalysisStatus: null,
       _internal: withPushupConfig(config, () => initializePushupState()),
     }),
 
@@ -2330,6 +2477,7 @@ export function createPushupDefinition(
         }
         : null;
       const completedNewRep = newInternal.repCount > state.repCount;
+      const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
       const liveQualityWarnings = Array.from(new Set([
         ...(pushupSetupQualityWarnings(newInternal.lastSetupQuality) ?? []),
         ...(newInternal.repWindow
@@ -2338,6 +2486,16 @@ export function createPushupDefinition(
             ? (lastRepResult?.qualityWarnings ?? [])
             : []),
       ]));
+      const liveAnalysisStatus = updateLiveCameraAnalysis
+        ? newInternal.repWindow
+          ? pushupRepWindowAnalysisStatus(
+              newInternal.repWindow,
+              newInternal.activeSide ?? newInternal.visibleSide,
+            )
+          : completedNewRep
+            ? pushupCompletedRepAnalysisStatus(lastRepResult)
+            : pushupSetupAnalysisStatus(newInternal.lastSetupQuality)
+        : (state.liveAnalysisStatus ?? null);
 
       return {
         repCount: newInternal.repCount,
@@ -2347,6 +2505,7 @@ export function createPushupDefinition(
         debugInfo: getPushupDebugInfo(newInternal) as unknown as Record<string, unknown>,
         repQualityWindowActive: newInternal.repWindow !== null,
         liveQualityWarnings,
+        liveAnalysisStatus,
         _internal: newInternal,
       };
     },

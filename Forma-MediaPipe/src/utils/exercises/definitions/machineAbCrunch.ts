@@ -40,7 +40,9 @@ import {
   interpretPoseStateReliabilitySummary,
   type RepReliabilityInterpretation,
 } from '../shared/reliabilityInterpretation';
+import { cameraStatusFromExerciseFeedbackReadiness } from '../shared/liveAnalysisStatus';
 import tunedConfig from './tuned/machineAbCrunch.json';
+import type { CameraAnalysisStatus } from '../shared/cameraAnalysisStatus';
 
 import type {
   ExerciseDefinition,
@@ -777,6 +779,57 @@ function abCrunchQualityWarnings(repWindow: RepWindow): FrameworkRepResult['qual
   if (!sideViewIsScorable(repWindow)) warnings.push('side_view_uncertain');
   if (!hipConfidenceIsScorable(repWindow)) warnings.push('missing_required_joints');
   return warnings;
+}
+
+function abCrunchSetupAnalysisStatus(state: AbCrunchState): CameraAnalysisStatus | null {
+  if (state.setupSideViewConfidences.length < SETUP_SIDE_VIEW_MIN_SAMPLES) return null;
+  const average = state.setupSideViewConfidences.reduce((sum, value) => sum + value, 0) /
+    state.setupSideViewConfidences.length;
+  const min = Math.min(...state.setupSideViewConfidences);
+  const sideReady =
+    average >= FORM_THRESHOLDS.SIDE_VIEW_AVG_CONFIDENCE_MIN &&
+    min >= FORM_THRESHOLDS.SIDE_VIEW_MIN_CONFIDENCE_MIN;
+  return cameraStatusFromExerciseFeedbackReadiness({
+    viewReady: sideReady,
+    viewRequired: 'side',
+    viewCurrent: sideReady ? 'side' : 'front',
+    fullReason: 'machine_ab_crunch_setup_side_view_ready',
+    viewBlockedReason: 'machine_ab_crunch_setup_side_view_uncertain',
+    viewBlockedMessage: 'Turn side-on for full form analysis',
+  });
+}
+
+function abCrunchRepWindowAnalysisStatus(repWindow: RepWindow): CameraAnalysisStatus | null {
+  if (!hasSideViewEvidence(repWindow)) return null;
+  const viewQuality = buildAbCrunchViewQuality(repWindow);
+  const reliability = reliabilityInterpretationForRepWindow(repWindow)?.interpretation ?? null;
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability,
+    viewReady: viewQuality.sideConfirmed,
+    viewRequired: 'side',
+    viewCurrent: diagnosticsViewFor(viewQuality),
+    scorable: hipConfidenceIsScorable(repWindow),
+    fullReason: 'machine_ab_crunch_live_full_feedback',
+    viewBlockedReason: 'machine_ab_crunch_side_view_uncertain',
+    viewBlockedMessage: 'Turn side-on for full form analysis',
+  });
+}
+
+function abCrunchCompletedRepAnalysisStatus(
+  repResult: Pick<FrameworkRepResult, 'scorable' | 'qualityWarnings' | 'diagnostics'> | null,
+): CameraAnalysisStatus | null {
+  if (!repResult?.diagnostics) return null;
+  const qualityWarnings = repResult.qualityWarnings ?? [];
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability: repResult.diagnostics.reliability ?? null,
+    viewReady: !qualityWarnings.includes('side_view_uncertain'),
+    viewRequired: 'side',
+    viewCurrent: repResult.diagnostics.view,
+    scorable: repResult.scorable,
+    fullReason: 'machine_ab_crunch_completed_full_feedback',
+    viewBlockedReason: 'machine_ab_crunch_completed_side_view_uncertain',
+    viewBlockedMessage: 'Turn side-on for full form analysis',
+  });
 }
 
 function tempoJerkTriggered(repWindow: RepWindow): boolean {
@@ -2049,6 +2102,7 @@ export function createMachineAbCrunchDefinition(
     debugInfo: {},
     repQualityWindowActive: false,
     liveQualityWarnings: [],
+    liveAnalysisStatus: null,
     _internal: withMachineAbCrunchConfig(config, () => initializeState()),
   }),
 
@@ -2067,11 +2121,19 @@ export function createMachineAbCrunchDefinition(
       }
       : null;
     const completedNewRep = internal.repCount > state.repCount;
+    const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
     const liveQualityWarnings = internal.repWindow
       ? abCrunchQualityWarnings(internal.repWindow)
       : completedNewRep
         ? (lastRepResult?.qualityWarnings ?? [])
         : [];
+    const liveAnalysisStatus = updateLiveCameraAnalysis
+      ? internal.repWindow
+        ? abCrunchRepWindowAnalysisStatus(internal.repWindow)
+        : completedNewRep
+          ? abCrunchCompletedRepAnalysisStatus(lastRepResult)
+          : abCrunchSetupAnalysisStatus(internal)
+      : (state.liveAnalysisStatus ?? null);
 
     return {
       repCount: internal.repCount,
@@ -2081,6 +2143,7 @@ export function createMachineAbCrunchDefinition(
       debugInfo: getDebugInfo(internal) as unknown as Record<string, unknown>,
       repQualityWindowActive: internal.repWindow !== null,
       liveQualityWarnings,
+      liveAnalysisStatus,
       _internal: internal,
     };
   },

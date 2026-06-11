@@ -49,7 +49,9 @@ import {
   interpretPoseStateReliabilitySummary,
   type RepReliabilityInterpretation,
 } from '../shared/reliabilityInterpretation';
+import { cameraStatusFromExerciseFeedbackReadiness } from '../shared/liveAnalysisStatus';
 import type { PoseStateReliabilitySummary } from '../../pose/PoseState';
+import type { CameraAnalysisStatus } from '../shared/cameraAnalysisStatus';
 import tunedConfig from './tuned/squat.json';
 
 // ============================================================================
@@ -1794,6 +1796,47 @@ function squatQualityWarnings(analysis: Pick<SquatMetricSnapshot, 'scorable' | '
   return analysis.sideConfirmed
     ? ['missing_required_joints']
     : ['view_uncertain'];
+}
+
+function squatRepWindowAnalysisStatus(
+  repWindow: SquatRepWindow,
+  visibleSide: SquatSide,
+): CameraAnalysisStatus | null {
+  const analysis = analyzeSquatRep(repWindow);
+  if (analysis.viewQuality.sampleCount < FORM_THRESHOLDS.VIEW_MIN_SAMPLES) return null;
+
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide)?.interpretation ?? null;
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability,
+    viewReady: analysis.sideConfirmed,
+    viewRequired: 'side',
+    viewCurrent: analysis.view,
+    scorable: analysis.scorable,
+    fullReason: 'barbell_squat_live_full_feedback',
+    viewBlockedReason: analysis.view === 'unknown'
+      ? 'barbell_squat_view_uncertain'
+      : 'barbell_squat_side_view_uncertain',
+    viewBlockedMessage: 'Turn side-on for full form analysis',
+  });
+}
+
+function squatCompletedRepAnalysisStatus(
+  repResult: Pick<FrameworkRepResult, 'scorable' | 'qualityWarnings' | 'diagnostics'> | null,
+): CameraAnalysisStatus | null {
+  if (!repResult?.diagnostics) return null;
+  const qualityWarnings = repResult.qualityWarnings ?? [];
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability: repResult.diagnostics.reliability ?? null,
+    viewReady: !qualityWarnings.includes('side_view_uncertain') && !qualityWarnings.includes('view_uncertain'),
+    viewRequired: 'side',
+    viewCurrent: repResult.diagnostics.view,
+    scorable: repResult.scorable,
+    fullReason: 'barbell_squat_completed_full_feedback',
+    viewBlockedReason: qualityWarnings.includes('view_uncertain')
+      ? 'barbell_squat_completed_view_uncertain'
+      : 'barbell_squat_completed_side_view_uncertain',
+    viewBlockedMessage: 'Turn side-on for full form analysis',
+  });
 }
 
 function cueFamilyAllowed(allowedCueFamilies: ReadonlySet<string> | undefined, family: string): boolean {
@@ -3822,6 +3865,7 @@ export function createSquatDefinition(
       debugInfo: {},
       repQualityWindowActive: false,
       liveQualityWarnings: [],
+      liveAnalysisStatus: null,
       _internal: withSquatConfig(config, () => initializeSquatState()),
     }),
 
@@ -3840,11 +3884,19 @@ export function createSquatDefinition(
           }
         : null;
       const completedNewRep = newInternal.repCount > state.repCount;
+      const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
       const liveQualityWarnings = newInternal.repWindow
         ? squatQualityWarnings(analyzeSquatRep(newInternal.repWindow))
         : completedNewRep
           ? (lastRepResult?.qualityWarnings ?? [])
           : [];
+      const liveAnalysisStatus = updateLiveCameraAnalysis
+        ? newInternal.repWindow
+          ? squatRepWindowAnalysisStatus(newInternal.repWindow, newInternal.visibleSide)
+          : completedNewRep
+            ? squatCompletedRepAnalysisStatus(lastRepResult)
+            : null
+        : (state.liveAnalysisStatus ?? null);
 
       return {
         repCount: newInternal.repCount,
@@ -3854,6 +3906,7 @@ export function createSquatDefinition(
         debugInfo: getSquatDebugInfo(newInternal) as unknown as Record<string, unknown>,
         repQualityWindowActive: newInternal.repWindow !== null,
         liveQualityWarnings,
+        liveAnalysisStatus,
         _internal: newInternal,
       };
     },

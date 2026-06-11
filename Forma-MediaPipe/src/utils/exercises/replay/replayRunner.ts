@@ -446,6 +446,8 @@ export function replayRecordingVerbose(
         feedback: state.feedback,
         debugInfo: state.debugInfo,
         quality,
+        liveQualityWarnings: state.liveQualityWarnings,
+        liveAnalysisStatus: state.liveAnalysisStatus,
       });
 
       if (currentPhase !== lastPhase) {

@@ -415,7 +415,7 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
   );
 
   it('keeps clean v2 PoseState lying leg curls fully scoreable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       lyingLegCurlDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic clean full-reliability v2 lying leg curl', fullRepPath(), {
@@ -448,10 +448,13 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
       unsafeCueFamilies: [],
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'full'
+    ))).toBe(true);
   });
 
   it('keeps one weak non-selected leg countable when the selected leg and torso are reliable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       lyingLegCurlDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic selected-leg reliable v2 lying leg curl', fullRepPath(), {
@@ -490,6 +493,9 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
       unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry']),
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'limited'
+    ))).toBe(true);
   });
 
   it('suppresses weak selected distal cues while leaving torso setup feedback safe in v2 replay', () => {
@@ -1015,7 +1021,7 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
   });
 
   it('counts a front-ish view but marks it unscorable for side-view uncertainty', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       lyingLegCurlDefinition,
       buildRecording('synthetic front-ish lying leg curl', fullRepPath(), {
         hiddenSideScore: 0.99,
@@ -1028,6 +1034,9 @@ describe('Lying Leg Curl synthetic replay coverage', () => {
     expect(result.reps[0].qualityWarnings).toContain('side_view_uncertain');
     expect(result.feedbackMessages).toContain('Turn fully side-on so I can judge your leg curl.');
     expect(result.reps[0].diagnostics?.viewQuality?.status).toBe('frontish_confirmed');
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'countOnly'
+    ))).toBe(true);
   });
 
   it('treats one-side-only captures as side-view scorable when not clearly front-ish', () => {

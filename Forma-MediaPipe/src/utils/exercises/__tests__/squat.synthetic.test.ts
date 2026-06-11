@@ -645,7 +645,7 @@ describe('Barbell Squat synthetic replay coverage', () => {
   });
 
   it('keeps clean v2 PoseState squats fully scoreable', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       squatDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic clean full-reliability v2 squat', fullRepPath(), {
@@ -680,10 +680,13 @@ describe('Barbell Squat synthetic replay coverage', () => {
       unsafeCueFamilies: [],
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'full'
+    ))).toBe(true);
   });
 
   it('keeps selected-side v2 squats scoreable when only the hidden side is weak', () => {
-    const result = replayRecording(
+    const result = replayRecordingVerbose(
       squatDefinition,
       recordingWithV2PoseMetadata(
         buildRecording('synthetic selected-side reliable v2 squat', fullRepPath()),
@@ -711,6 +714,9 @@ describe('Barbell Squat synthetic replay coverage', () => {
       unsafeCueFamilies: expect.arrayContaining(['bilateralSymmetry', 'setupStance']),
       suppressedIssueIds: [],
     });
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'limited'
+    ))).toBe(true);
   });
 
   it('suppresses weak selected-foot cues without blocking v2 squat counting', () => {
@@ -1366,6 +1372,9 @@ describe('Barbell Squat synthetic replay coverage', () => {
     expect(result.finalRepCount).toBe(1);
     expect(result.reps[0].diagnostics?.metrics.sideViewWidthRatio.value).toBeGreaterThan(0.28);
     expect(result.reps[0].diagnostics?.metrics.sideViewQuality.value).toBe(2);
+    expect(result.frameTraces.some(trace => (
+      trace.liveAnalysisStatus?.details?.feedbackMode === 'countOnly'
+    ))).toBe(true);
   });
 
   it('still flags a true fast descent', () => {

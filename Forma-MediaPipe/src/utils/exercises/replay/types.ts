@@ -17,6 +17,7 @@ import type {
   RepTrackingQuality,
   SetTrackingQualitySummary,
 } from '../shared/poseQuality';
+import type { CameraAnalysisStatus } from '../shared/cameraAnalysisStatus';
 
 export type LandmarkRecordingSchemaVersion = 1 | 2;
 export type LandmarkRecordingFrameStatus = 'poseDetected' | 'noPose' | 'trackingLost';
@@ -149,6 +150,8 @@ export interface FrameTrace {
   feedback: string | null;
   debugInfo: Record<string, unknown>;
   quality?: PoseQualitySnapshot;
+  liveQualityWarnings?: PoseQualityWarning[];
+  liveAnalysisStatus?: CameraAnalysisStatus | null;
 }
 
 /** One entry in the FSM trace, emitted each time the FSM phase changes. */

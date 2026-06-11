@@ -48,7 +48,9 @@ import {
   interpretPoseStateReliabilitySummary,
   type RepReliabilityInterpretation,
 } from '../shared/reliabilityInterpretation';
+import { cameraStatusFromExerciseFeedbackReadiness } from '../shared/liveAnalysisStatus';
 import tunedConfig from './tuned/lyingLegCurl.json';
+import type { CameraAnalysisStatus } from '../shared/cameraAnalysisStatus';
 
 import type {
   ExerciseDefinition,
@@ -1456,6 +1458,42 @@ function lyingLegCurlQualityWarnings(repWindow: RepWindow): FrameworkRepResult['
   return warnings;
 }
 
+function lyingLegCurlRepWindowAnalysisStatus(
+  repWindow: RepWindow,
+  visibleSide: 'left' | 'right',
+): CameraAnalysisStatus | null {
+  if (repWindow.frameCount < FORM_THRESHOLDS.KNEE_METRIC_MIN_SAMPLES) return null;
+  const viewQuality = buildLyingLegCurlViewQuality(repWindow);
+  const reliability = reliabilityInterpretationForRepWindow(repWindow, visibleSide)?.interpretation ?? null;
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability,
+    viewReady: sideViewIsScorable(repWindow),
+    viewRequired: 'side',
+    viewCurrent: viewQuality.sideConfirmed ? 'side' : viewQuality.frontishConfirmed ? 'front' : 'unknown',
+    scorable: primaryConfidenceIsScorable(repWindow),
+    fullReason: 'lying_leg_curl_live_full_feedback',
+    viewBlockedReason: 'lying_leg_curl_side_view_uncertain',
+    viewBlockedMessage: 'Turn side-on for full form analysis',
+  });
+}
+
+function lyingLegCurlCompletedRepAnalysisStatus(
+  repResult: Pick<FrameworkRepResult, 'scorable' | 'qualityWarnings' | 'diagnostics'> | null,
+): CameraAnalysisStatus | null {
+  if (!repResult?.diagnostics) return null;
+  const qualityWarnings = repResult.qualityWarnings ?? [];
+  return cameraStatusFromExerciseFeedbackReadiness({
+    reliability: repResult.diagnostics.reliability ?? null,
+    viewReady: !qualityWarnings.includes('side_view_uncertain'),
+    viewRequired: 'side',
+    viewCurrent: repResult.diagnostics.view,
+    scorable: repResult.scorable,
+    fullReason: 'lying_leg_curl_completed_full_feedback',
+    viewBlockedReason: 'lying_leg_curl_completed_side_view_uncertain',
+    viewBlockedMessage: 'Turn side-on for full form analysis',
+  });
+}
+
 function buildLyingLegCurlViewQuality(repWindow: RepWindow): RepViewQualityDiagnostic {
   const averageConfidence = averageSideViewConfidence(repWindow);
   const hasEnoughSamples =
@@ -2625,6 +2663,7 @@ export function createLyingLegCurlDefinition(
     debugInfo: {},
     repQualityWindowActive: false,
     liveQualityWarnings: [],
+    liveAnalysisStatus: null,
     _internal: withLyingLegCurlConfig(config, () => initializeLyingLegCurlState()),
   }),
 
@@ -2647,11 +2686,19 @@ export function createLyingLegCurlDefinition(
       }
       : null;
     const completedNewRep = newInternal.repCount > state.repCount;
+    const updateLiveCameraAnalysis = completedNewRep || frameContext?.cameraAnalysisStatusRequested !== false;
     const liveQualityWarnings = newInternal.repWindow
       ? lyingLegCurlQualityWarnings(newInternal.repWindow)
       : completedNewRep
         ? (lastRepResult?.qualityWarnings ?? [])
         : [];
+    const liveAnalysisStatus = updateLiveCameraAnalysis
+      ? newInternal.repWindow
+        ? lyingLegCurlRepWindowAnalysisStatus(newInternal.repWindow, newInternal.visibleSide)
+        : completedNewRep
+          ? lyingLegCurlCompletedRepAnalysisStatus(lastRepResult)
+          : null
+      : (state.liveAnalysisStatus ?? null);
 
     return {
       repCount: newInternal.repCount,
@@ -2661,6 +2708,7 @@ export function createLyingLegCurlDefinition(
       debugInfo: getDebugInfo(newInternal) as unknown as Record<string, unknown>,
       repQualityWindowActive: newInternal.repWindow !== null || newInternal.pendingCompletedRep !== null,
       liveQualityWarnings,
+      liveAnalysisStatus,
       _internal: newInternal,
     };
   },
