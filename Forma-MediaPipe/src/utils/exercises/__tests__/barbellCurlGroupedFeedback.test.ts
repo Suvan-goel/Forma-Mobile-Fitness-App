@@ -459,6 +459,153 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
     expect(result.selectedMessage).toBeNull();
   });
 
+  it('never lets a fallback-only group override a main-policy prediction', () => {
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
+    const fallbackShadowState = createBarbellCurlGroupedFallbackShadowState();
+    // Two reps with ROM fallback evidence AND a heuristic shoulder warning.
+    // The collapsed shoulder group predicts from the heuristic (main policy);
+    // ROM (priority 80) fires only via fallback. Despite outranking shoulder
+    // (priority 60) on raw priority, the fallback-only ROM group must not
+    // steal the selected message from the main-policy shoulder prediction.
+    const features = {
+      ...romFallbackFeatures(),
+      'feature__scorable.issue.barbell_curl_shoulder_warn': 1,
+      'feature__diagnostic.cue.barbell_curl_shoulder_warn.eligible': 1,
+    };
+    const heuristicIssueIds = ['barbell-curl.incomplete_flex', 'barbell-curl.shoulder_warn'];
+    predictBarbellCurlGroupedFeedback({
+      features,
+      heuristicIssueIds,
+      repIndex: 1,
+      fallbackShadowState,
+    });
+    const result = predictBarbellCurlGroupedFeedback({
+      features,
+      heuristicIssueIds,
+      repIndex: 2,
+      fallbackShadowState,
+    });
+
+    expect(result.finalPredictedGroups).toContain('barbell-curl.shoulder_issue');
+    expect(result.fallbackShadow?.fallbackGroups).toContain('barbell-curl.ROM_issue');
+    expect(result.selectedIssueId).toBe('barbell-curl.shoulder_issue');
+    expect(result.messages).toEqual(['Avoid using your shoulders to lift the bar.']);
+    // Both groups remain visible in issueIds for diagnostics.
+    expect(result.issueIds).toEqual(
+      expect.arrayContaining(['barbell-curl.shoulder_issue', 'barbell-curl.ROM_issue']),
+    );
+  });
+
+  it('tracks shoulder and tempo repeated fallback evidence in the shadow diagnostics', () => {
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
+    const fallbackShadowState = createBarbellCurlGroupedFallbackShadowState();
+    const features = {
+      ...baseFeatures(true),
+      'feature__scorable.issue.barbell_curl_shoulder_warn': 1,
+      'feature__diagnostic.cue.barbell_curl_shoulder_warn.eligible': 1,
+      'feature__diagnostic.cue.barbell_curl_shoulder_warn.margin': 8,
+      'feature__scorable.issue.barbell_curl_tempo_up': 1,
+      'feature__diagnostic.cue.barbell_curl_tempo_up.eligible': 1,
+      'feature__diagnostic.cue.barbell_curl_tempo_up.margin': 0.05,
+      'feature__v2.reliability.unsafe_cue_family_count': 0,
+      'feature__v2.tempo.full.tracking_gap_count': 0,
+      'feature__v2.tempo.full.max_tracking_gap_ms': 0,
+    };
+    const heuristicIssueIds = ['barbell-curl.shoulder_warn', 'barbell-curl.tempo_up'];
+    predictBarbellCurlGroupedFeedback({
+      features,
+      heuristicIssueIds,
+      repIndex: 1,
+      fallbackShadowState,
+    });
+    const result = predictBarbellCurlGroupedFeedback({
+      features,
+      heuristicIssueIds,
+      repIndex: 2,
+      fallbackShadowState,
+    });
+
+    const shoulderPolicy = fallbackPolicy(result, 'shoulder_warn_repeated_fallback');
+    const tempoPolicy = fallbackPolicy(result, 'tempo_up_repeated_fallback');
+    expect(shoulderPolicy).toBeDefined();
+    expect(tempoPolicy).toBeDefined();
+    expect(shoulderPolicy?.evidenceCount).toBe(2);
+    expect(tempoPolicy?.evidenceCount).toBe(2);
+    // When the collapsed main policy already predicts the group from the same
+    // heuristic evidence, the fallback stays redundant by design.
+    for (const policy of [shoulderPolicy, tempoPolicy]) {
+      if (policy?.currentPolicyPredicted) {
+        expect(policy.fallbackWouldPredict).toBe(false);
+        expect(policy.blockReasons).toContain('current_ml_group_already_predicted');
+      } else {
+        expect(policy?.fallbackWouldPredict).toBe(true);
+      }
+    }
+  });
+
+  it('blocks shoulder and tempo fallbacks on small margins', () => {
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
+    const fallbackShadowState = createBarbellCurlGroupedFallbackShadowState();
+    const features = {
+      ...baseFeatures(true),
+      'feature__scorable.issue.barbell_curl_shoulder_warn': 1,
+      'feature__diagnostic.cue.barbell_curl_shoulder_warn.eligible': 1,
+      'feature__diagnostic.cue.barbell_curl_shoulder_warn.margin': 1,
+      'feature__scorable.issue.barbell_curl_tempo_up': 1,
+      'feature__diagnostic.cue.barbell_curl_tempo_up.eligible': 1,
+      'feature__diagnostic.cue.barbell_curl_tempo_up.margin': 0.005,
+      'feature__v2.reliability.unsafe_cue_family_count': 0,
+      'feature__v2.tempo.full.tracking_gap_count': 0,
+      'feature__v2.tempo.full.max_tracking_gap_ms': 0,
+    };
+    const heuristicIssueIds = ['barbell-curl.shoulder_warn', 'barbell-curl.tempo_up'];
+    const result = predictBarbellCurlGroupedFeedback({
+      features,
+      heuristicIssueIds,
+      repIndex: 1,
+      fallbackShadowState,
+    });
+
+    const shoulderEvidence = fallbackPolicy(result, 'shoulder_warn_repeated_fallback')?.evidence.at(-1);
+    const tempoEvidence = fallbackPolicy(result, 'tempo_up_repeated_fallback')?.evidence.at(-1);
+    expect(shoulderEvidence?.passes).toBe(false);
+    expect(shoulderEvidence?.blockReasons).toContain('shoulder_warn_margin_below_4deg');
+    expect(tempoEvidence?.passes).toBe(false);
+    expect(tempoEvidence?.blockReasons).toContain('tempo_up_margin_below_0_02s');
+  });
+
+  it('surfaces repeated fallbacks user-facing when both flags are enabled', () => {
+    process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG] = '1';
+    process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
+    const fallbackShadowState = createBarbellCurlGroupedFallbackShadowState();
+    const firstRep = predictBarbellCurlGroupedFeedback({
+      features: romFallbackFeatures(),
+      heuristicIssueIds: ['barbell-curl.incomplete_flex'],
+      repIndex: 1,
+      fallbackShadowState,
+    });
+    // First rep: only 1/2 contributing reps — fallback must not fire yet.
+    expect(firstRep.issueIds).not.toContain('barbell-curl.ROM_issue');
+    expect(firstRep.messages).toEqual([]);
+
+    const result = predictBarbellCurlGroupedFeedback({
+      features: romFallbackFeatures(),
+      heuristicIssueIds: ['barbell-curl.incomplete_flex'],
+      repIndex: 2,
+      fallbackShadowState,
+    });
+
+    expect(result.fallbackShadow?.fallbackUserFacingFlagEnabled).toBe(true);
+    expect(result.fallbackShadow?.fallbackGroups).toContain('barbell-curl.ROM_issue');
+    expect(result.issueIds).toContain('barbell-curl.ROM_issue');
+    expect(result.selectedIssueId).toBe('barbell-curl.ROM_issue');
+    expect(result.selectedMessage).toBe('Use a fuller range of motion.');
+    expect(result.messages).toEqual(['Use a fuller range of motion.']);
+  });
+
   it('gates fallback user-facing diagnostics behind the grouped feedback base flag', () => {
     process.env[BARBELL_CURL_GROUPED_FALLBACK_FEEDBACK_FLAG] = '1';
     delete process.env[BARBELL_CURL_GROUPED_FEEDBACK_FLAG];

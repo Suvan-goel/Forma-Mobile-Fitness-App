@@ -121,7 +121,12 @@ const FORM_THRESHOLDS = {
 const PENALTY_CONFIGS = {
   TORSO: { cap: 35, scale: 0.40, deadzone: 0 },
   SHOULDER: { cap: 30, scale: 0.018, deadzone: 0 },
-  ROM_FLEX: { cap: 20, scale: 300, deadzone: 0 },
+  // ROM_FLEX scale recalibrated 2026-06-11: at scale 300, deliberate short-ROM reps
+  // (minCurlRatio 0.68-0.74, ~0.05-0.11 over the tuned 0.63 warn threshold) only lost
+  // 1-4 points and scored 89-95 ("clean" band). Scale 5000 lands them at ~73-84 while
+  // reps below the warn threshold remain untouched (penalty is 0 below threshold).
+  // Calibrated against scripts/recordings/recording_Barbell_Curl_2026-06-09T12-56-17-558Z.json
+  ROM_FLEX: { cap: 20, scale: 5000, deadzone: 0 },
   ROM_EXTEND: { cap: 20, scale: 300, deadzone: 0 },
   ROM_TOTAL: { cap: 15, scale: 250, deadzone: 0 },
   TEMPO_UP: { cap: 10, scale: 60, deadzone: 0 },

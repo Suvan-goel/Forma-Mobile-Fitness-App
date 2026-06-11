@@ -158,6 +158,8 @@ export interface BarbellCurlGroupedRepeatedFallbackEvidence {
   passes: boolean;
   blockReasons: string[];
   flexMargin?: number | null;
+  shoulderWarnMargin?: number | null;
+  tempoUpMargin?: number | null;
   torsoRawDelta?: number | null;
   torsoRobustDelta?: number | null;
   torsoSustained3Support?: number | null;
@@ -173,6 +175,8 @@ export interface BarbellCurlGroupedRepeatedFallbackEvidence {
 
 export interface BarbellCurlGroupedFallbackShadowState {
   romIncompleteFlexEvidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
+  shoulderWarnEvidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
+  tempoUpEvidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
   torsoSustainedEvidence: BarbellCurlGroupedRepeatedFallbackEvidence[];
 }
 
@@ -252,6 +256,8 @@ let loggedEnabled = false;
 
 const ROM_GROUP_ID = 'barbell-curl.ROM_issue';
 const TORSO_GROUP_ID = 'barbell-curl.torso_issue';
+const SHOULDER_GROUP_ID = 'barbell-curl.shoulder_issue';
+const TEMPO_GROUP_ID = 'barbell-curl.tempo_issue';
 
 const IMPORTANT_DEBUG_FEATURES_BY_GROUP: Record<string, string[]> = {
   [ROM_GROUP_ID]: [
@@ -522,6 +528,8 @@ function createFallbackEvidenceStore(): BarbellCurlGroupedRepeatedFallbackEviden
 export function createBarbellCurlGroupedFallbackShadowState(): BarbellCurlGroupedFallbackShadowState {
   return {
     romIncompleteFlexEvidence: createFallbackEvidenceStore(),
+    shoulderWarnEvidence: createFallbackEvidenceStore(),
+    tempoUpEvidence: createFallbackEvidenceStore(),
     torsoSustainedEvidence: createFallbackEvidenceStore(),
   };
 }
@@ -572,6 +580,76 @@ function romRepeatedEvidenceForRep(
     passes: blockReasons.length === 0,
     blockReasons,
     flexMargin,
+    cueSafetyPass,
+    scorable: scorableRep,
+    trackingClean,
+  };
+}
+
+function shoulderWarnRepeatedEvidenceForRep(
+  repIndex: number,
+  features: FeatureVector,
+  heuristicIssueIds: Set<string>,
+): BarbellCurlGroupedRepeatedFallbackEvidence {
+  const warnIssue = 'barbell-curl.shoulder_warn';
+  const failIssue = 'barbell-curl.shoulder_fail';
+  const shoulderWarnMargin = finiteFeature(features, 'feature__diagnostic.cue.barbell_curl_shoulder_warn.margin');
+  const hasWarn = heuristicIssuePresent(features, heuristicIssueIds, warnIssue);
+  const hasFail = heuristicIssuePresent(features, heuristicIssueIds, failIssue);
+  const scorableRep = scorable(features);
+  const cueSafetyPass =
+    (issueAddEligible(features, warnIssue) || issueAddEligible(features, failIssue)) &&
+    cueReliabilitySafe(features);
+  const trackingClean = trackingContaminationClean(features);
+  // Margin units are degrees above SHOULDER_WARN; require a meaningful exceedance
+  // so marginal threshold crossings cannot accumulate into a fallback.
+  const marginPass = shoulderWarnMargin === null || shoulderWarnMargin >= 4;
+  const blockReasons = [
+    ...(!hasWarn && !hasFail ? ['missing_heuristic_shoulder_warn_or_fail'] : []),
+    ...(!scorableRep ? ['rep_not_scorable'] : []),
+    ...(!cueSafetyPass ? ['shoulder_cue_not_safe_or_eligible'] : []),
+    ...(!trackingClean ? ['tracking_interruption_contamination'] : []),
+    ...(!marginPass ? ['shoulder_warn_margin_below_4deg'] : []),
+  ];
+  return {
+    repIndex,
+    issueIds: [hasWarn ? warnIssue : null, hasFail ? failIssue : null].filter(Boolean) as string[],
+    passes: blockReasons.length === 0,
+    blockReasons,
+    shoulderWarnMargin,
+    cueSafetyPass,
+    scorable: scorableRep,
+    trackingClean,
+  };
+}
+
+function tempoUpRepeatedEvidenceForRep(
+  repIndex: number,
+  features: FeatureVector,
+  heuristicIssueIds: Set<string>,
+): BarbellCurlGroupedRepeatedFallbackEvidence {
+  const issueId = 'barbell-curl.tempo_up';
+  const tempoUpMargin = finiteFeature(features, 'feature__diagnostic.cue.barbell_curl_tempo_up.margin');
+  const heuristicPresent = heuristicIssuePresent(features, heuristicIssueIds, issueId);
+  const scorableRep = scorable(features);
+  const cueSafetyPass = issueAddEligible(features, issueId) && cueReliabilitySafe(features);
+  const trackingClean = trackingContaminationClean(features);
+  // Margin units are seconds faster than TEMPO_UP_MIN; tracking gaps can fake a
+  // fast concentric, so tracking cleanliness plus a real margin are both required.
+  const marginPass = tempoUpMargin === null || tempoUpMargin >= 0.02;
+  const blockReasons = [
+    ...(!heuristicPresent ? ['missing_heuristic_tempo_up'] : []),
+    ...(!scorableRep ? ['rep_not_scorable'] : []),
+    ...(!cueSafetyPass ? ['tempo_cue_not_safe_or_eligible'] : []),
+    ...(!trackingClean ? ['tracking_interruption_contamination'] : []),
+    ...(!marginPass ? ['tempo_up_margin_below_0_02s'] : []),
+  ];
+  return {
+    repIndex,
+    issueIds: heuristicPresent ? [issueId] : [],
+    passes: blockReasons.length === 0,
+    blockReasons,
+    tempoUpMargin,
     cueSafetyPass,
     scorable: scorableRep,
     trackingClean,
@@ -1107,9 +1185,19 @@ function computeFallbackShadow(input: {
 }): BarbellCurlGroupedFallbackShadowDiagnostic {
   const romPrediction = input.predictions.find((prediction) => prediction.issueId === ROM_GROUP_ID);
   const torsoPrediction = input.predictions.find((prediction) => prediction.issueId === TORSO_GROUP_ID);
+  const shoulderPrediction = input.predictions.find((prediction) => prediction.issueId === SHOULDER_GROUP_ID);
+  const tempoPrediction = input.predictions.find((prediction) => prediction.issueId === TEMPO_GROUP_ID);
   upsertEvidence(
     input.state.romIncompleteFlexEvidence,
     romRepeatedEvidenceForRep(input.repIndex, input.features, input.heuristicIssueIds),
+  );
+  upsertEvidence(
+    input.state.shoulderWarnEvidence,
+    shoulderWarnRepeatedEvidenceForRep(input.repIndex, input.features, input.heuristicIssueIds),
+  );
+  upsertEvidence(
+    input.state.tempoUpEvidence,
+    tempoUpRepeatedEvidenceForRep(input.repIndex, input.features, input.heuristicIssueIds),
   );
   upsertEvidence(
     input.state.torsoSustainedEvidence,
@@ -1127,6 +1215,24 @@ function computeFallbackShadow(input: {
       requiredEvidenceCount: 2,
     }),
     fallbackPolicyDiagnostic({
+      name: 'shoulder_warn_repeated_fallback',
+      groupId: SHOULDER_GROUP_ID,
+      message: shoulderPrediction?.message ?? 'Avoid using your shoulders to lift the bar.',
+      currentPolicyPredicted: shoulderPrediction?.predicted ?? false,
+      currentRepIndex: input.repIndex,
+      evidence: input.state.shoulderWarnEvidence,
+      requiredEvidenceCount: 2,
+    }),
+    fallbackPolicyDiagnostic({
+      name: 'tempo_up_repeated_fallback',
+      groupId: TEMPO_GROUP_ID,
+      message: tempoPrediction?.message ?? 'Control the speed of the rep.',
+      currentPolicyPredicted: tempoPrediction?.predicted ?? false,
+      currentRepIndex: input.repIndex,
+      evidence: input.state.tempoUpEvidence,
+      requiredEvidenceCount: 2,
+    }),
+    fallbackPolicyDiagnostic({
       name: 'torso_repeated_sustained_fallback',
       groupId: TORSO_GROUP_ID,
       message: torsoPrediction?.message ?? 'Keep your torso still.',
@@ -1140,9 +1246,21 @@ function computeFallbackShadow(input: {
     .filter((policy) => policy.fallbackWouldPredict)
     .map((policy) => policy.groupId);
   const fallbackGroupsWouldShow = Array.from(new Set([...input.finalPredictedGroups, ...fallbackGroups]));
+  // Selection rule: fallbacks fill silence, they never override the main policy.
+  // A fallback-only group can only be selected when the main policy predicted
+  // nothing; among groups of the same tier, policy priority decides. Without
+  // this, a high-priority fallback (ROM, priority 80) fired by co-expressed
+  // endpoint evidence steals the message from a correct main-policy torso or
+  // shoulder prediction — measured as +16 wrong names on the labeled dataset.
+  const mainPredicted = new Set(input.finalPredictedGroups);
   const fallbackSelectedIssueId = fallbackGroupsWouldShow
     .slice()
-    .sort((a, b) => groupPriority(input.predictions, b) - groupPriority(input.predictions, a))[0] ?? null;
+    .sort((a, b) => {
+      const tierA = mainPredicted.has(a) ? 1 : 0;
+      const tierB = mainPredicted.has(b) ? 1 : 0;
+      if (tierA !== tierB) return tierB - tierA;
+      return groupPriority(input.predictions, b) - groupPriority(input.predictions, a);
+    })[0] ?? null;
 
   return {
     policyName: 'barbellCurlGroupedWithRepeatedFallbackShadow',
@@ -1216,6 +1334,22 @@ export function predictBarbellCurlGroupedFeedback(input: {
       })
     : undefined;
 
+  // When the fallback user-facing flag is on (requires the base grouped flag too),
+  // promote the repeated-evidence fallback groups into the user-facing output.
+  // fallbackGroupsWouldShow is the union of main-policy predictions and fallback
+  // groups; fallbackSelectedIssueId is already priority-sorted. With the flag off,
+  // fallbacks stay shadow-only and output is unchanged.
+  const fallbackUserFacing = fallbackShadow?.fallbackUserFacingFlagEnabled === true;
+  const userFacingIssueIds = fallbackUserFacing && fallbackShadow
+    ? fallbackShadow.fallbackGroupsWouldShow
+    : selected.map((prediction) => prediction.issueId);
+  const userFacingSelectedIssueId = fallbackUserFacing && fallbackShadow
+    ? fallbackShadow.fallbackSelectedIssueId
+    : top?.issueId ?? null;
+  const userFacingSelectedMessage = fallbackUserFacing && fallbackShadow
+    ? fallbackShadow.fallbackSelectedMessage
+    : top?.message ?? null;
+
   return {
     enabled: true,
     applied: true,
@@ -1224,10 +1358,10 @@ export function predictBarbellCurlGroupedFeedback(input: {
     featureSchemaVersion: BARBELL_CURL_GROUPED_FEEDBACK_POLICY.featureSchemaVersion,
     latencyMs: (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt,
     heuristicIssueIds: input.heuristicIssueIds,
-    issueIds: selected.map((prediction) => prediction.issueId),
-    messages: top ? [top.message] : [],
-    selectedIssueId: top?.issueId ?? null,
-    selectedMessage: top?.message ?? null,
+    issueIds: userFacingIssueIds,
+    messages: userFacingSelectedMessage ? [userFacingSelectedMessage] : [],
+    selectedIssueId: userFacingSelectedIssueId,
+    selectedMessage: userFacingSelectedMessage,
     predictions,
     candidateProbabilityGroups,
     candidateGateBlockedGroups,

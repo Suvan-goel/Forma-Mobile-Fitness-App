@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/testing/barbell-curl/test12-live-short-rom.mp4",
+  "landmarkFile": "landmarks/testing/barbell-curl/test12-live-short-rom.json",
+  "split": "test",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-barbell-curl-001",
+    "sessionId": "barbell-curl-session-live-2026-06-09",
+    "cameraSetupId": "barbell-curl-live-phone-2026-06-09",
+    "reviewerConfidence": "high"
+  },
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 2342,
+      "endMs": 3401,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 5281,
+      "endMs": 5916,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 8020,
+      "endMs": 8704,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 10280,
+      "endMs": 11115,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 13048,
+      "endMs": 13787,
+      "issueIds": [
+        "barbell-curl.incomplete_flex"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 16627,
+      "endMs": 18115,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Live on-device session 2026-06-09 (no video; landmark-only capture). Performer-confirmed ground truth: reps 1/6 clean, reps 2-5 deliberate short ROM (incomplete flex) with no other intended issues. Regression case for live ML ROM under-prediction."
+}

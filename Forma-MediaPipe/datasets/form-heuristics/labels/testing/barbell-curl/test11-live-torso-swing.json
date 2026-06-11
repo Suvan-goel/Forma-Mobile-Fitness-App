@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "exerciseName": "Barbell Curl",
+  "sourceVideo": "videos/testing/barbell-curl/test11-live-torso-swing.mp4",
+  "landmarkFile": "landmarks/testing/barbell-curl/test11-live-torso-swing.json",
+  "split": "test",
+  "reviewStatus": "reviewed",
+  "captureMetadata": {
+    "subjectId": "subject-barbell-curl-001",
+    "sessionId": "barbell-curl-session-live-2026-06-09",
+    "cameraSetupId": "barbell-curl-live-phone-2026-06-09",
+    "reviewerConfidence": "high"
+  },
+  "expectedReps": 6,
+  "reps": [
+    {
+      "index": 1,
+      "startMs": 5664,
+      "endMs": 6721,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 2,
+      "startMs": 9977,
+      "endMs": 11035,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 3,
+      "startMs": 13470,
+      "endMs": 14037,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 4,
+      "startMs": 17581,
+      "endMs": 18080,
+      "issueIds": [
+        "barbell-curl.torso_fail"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 5,
+      "startMs": 21301,
+      "endMs": 22333,
+      "issueIds": [
+        "barbell-curl.torso_warn"
+      ],
+      "view": "front",
+      "scorable": true
+    },
+    {
+      "index": 6,
+      "startMs": 24571,
+      "endMs": 25614,
+      "issueIds": [],
+      "view": "front",
+      "scorable": true
+    }
+  ],
+  "notes": "Live on-device session 2026-06-09 (no video; landmark-only capture). Performer-confirmed ground truth: reps 1/6 clean, reps 2-5 deliberate torso swing with no other intended issues. Severity (warn vs fail) assigned from replayed torso delta magnitudes. Regression case for live torso-vs-shoulder misattribution."
+}

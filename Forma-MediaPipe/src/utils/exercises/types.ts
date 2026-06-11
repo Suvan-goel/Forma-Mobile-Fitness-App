@@ -253,6 +253,8 @@ export interface RepMlGroupedFeedbackDiagnostic {
         passes: boolean;
         blockReasons: string[];
         flexMargin?: number | null;
+        shoulderWarnMargin?: number | null;
+        tempoUpMargin?: number | null;
         torsoRawDelta?: number | null;
         torsoRobustDelta?: number | null;
         torsoSustained3Support?: number | null;
