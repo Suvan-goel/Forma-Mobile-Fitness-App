@@ -1,4 +1,5 @@
 import type { ExerciseDefinition } from '../types';
+import { getGroupedFeedbackDefinitionForExercise } from '../groupedFeedback';
 import { getFeedbackIssueIdMap } from '../replay';
 import type { AvailableIssue, RepViewLabel } from './types';
 
@@ -215,7 +216,14 @@ export function isIssueNonGroundTruth(
   policy: ExerciseLabelPolicy,
   issueId: string,
 ): boolean {
-  return policy.nonGroundTruthIssueIds.includes(issueId);
+  if (policy.nonGroundTruthIssueIds.includes(issueId)) return true;
+  // Grouped feedback IDs (e.g. barbell-curl.ROM_issue) are a derived
+  // presentation layer, never ground truth: evaluation maps labeled fine
+  // issues to groups, and a group ID in a label would silently drop out of
+  // the truth set. They leak into feedbackToIssue once an exercise's grouped
+  // taxonomy goes runtime-active, so exclude them centrally here.
+  const groupedDefinition = getGroupedFeedbackDefinitionForExercise(policy.exerciseName);
+  return groupedDefinition?.groups.some((group) => group.id === issueId) ?? false;
 }
 
 export function isIssueLabelableForView(
