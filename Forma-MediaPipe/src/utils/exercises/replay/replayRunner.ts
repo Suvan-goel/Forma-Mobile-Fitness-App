@@ -18,6 +18,10 @@ import {
 } from '../shared/poseQuality';
 import type { PoseQualityWarning } from '../shared/poseQuality';
 import type { PoseState } from '../../pose/PoseState';
+import {
+  ValidHumanSubjectTracker,
+  evaluateValidHumanSubject,
+} from '../../pose/validHumanSubject';
 import { poseStateFromLandmarkRecordingFrame } from './reliabilityReport';
 import type {
   FrameTrace,
@@ -124,6 +128,26 @@ function frameContextForReplay(
   };
 }
 
+/**
+ * Mirrors CameraScreen: a subject-gone verdict (subject left the frame while
+ * MediaPipe hallucinates a pose, distinct from occlusion and frame gaps) is
+ * surfaced to the exercise as a tracking interruption.
+ */
+function applySubjectGoneInterruption(
+  subjectTracker: ValidHumanSubjectTracker,
+  frameContext: ExerciseFrameContext,
+  poseState: PoseState,
+  timestampMs: number,
+): void {
+  const subject = subjectTracker.update(
+    evaluateValidHumanSubject({ poseState, imageKeypoints: frameContext.imageKeypoints }),
+    timestampMs,
+  );
+  if (subject.subjectGone) {
+    frameContext.trackingInterrupted = true;
+  }
+}
+
 function shouldSkipFrameForCurrentReplay(frame: LandmarkRecording['frames'][number]): boolean {
   return frame.status === 'noPose' || frame.status === 'trackingLost';
 }
@@ -134,6 +158,7 @@ function firstReplayableFrameTimestamp(recording: LandmarkRecording): number | n
 
 export function buildReplayFrameCache(recording: LandmarkRecording): ReplayFrameCache {
   const frameGapTracker = createPoseFrameGapTracker();
+  const subjectTracker = new ValidHumanSubjectTracker();
   let previousPoseState: PoseState | null = null;
   const frames: ReplayFrameCache['frames'] = [];
 
@@ -147,11 +172,13 @@ export function buildReplayFrameCache(recording: LandmarkRecording): ReplayFrame
       ...frameGap,
     });
     previousPoseState = poseState;
+    const frameContext = frameContextForReplay(frame, frameGap, poseState);
+    applySubjectGoneInterruption(subjectTracker, frameContext, poseState, frame.timestamp);
     frames.push({
       frameIndex,
       timestamp: frame.timestamp,
       keypoints: frame.keypoints,
-      frameContext: frameContextForReplay(frame, frameGap, poseState),
+      frameContext,
     });
   }
 
@@ -181,6 +208,7 @@ export function replayRecording(
   let previousQualityWindowActive = false;
   const originalDateNow = Date.now;
   const frameGapTracker = createPoseFrameGapTracker();
+  const subjectTracker = new ValidHumanSubjectTracker();
   let previousPoseState: PoseState | null = null;
   // Keep replay deterministic and compatible with existing synthetic fixtures:
   // frame timestamps are elapsed milliseconds from the start of the recording.
@@ -198,6 +226,7 @@ export function replayRecording(
       });
       previousPoseState = poseState;
       const frameContext = frameContextForReplay(frame, frameGap, poseState);
+      applySubjectGoneInterruption(subjectTracker, frameContext, poseState, frame.timestamp);
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
         frameBoundsKeypoints: frameContext.imageKeypoints,
       });
@@ -410,6 +439,7 @@ export function replayRecordingVerbose(
   let previousQualityWindowActive = false;
   const baseTimeMs = 0;
   const frameGapTracker = createPoseFrameGapTracker();
+  const subjectTracker = new ValidHumanSubjectTracker();
   let previousPoseState: PoseState | null = null;
 
   try {
@@ -425,6 +455,7 @@ export function replayRecordingVerbose(
       });
       previousPoseState = poseState;
       const frameContext = frameContextForReplay(frame, frameGap, poseState);
+      applySubjectGoneInterruption(subjectTracker, frameContext, poseState, frame.timestamp);
       const quality = qualityTracker.update(frame.keypoints, qualityProfile, {
         frameBoundsKeypoints: frameContext.imageKeypoints,
       });

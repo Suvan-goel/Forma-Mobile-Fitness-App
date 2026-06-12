@@ -39,6 +39,16 @@ export interface ValidHumanSubjectTrackingResult extends ValidHumanSubjectResult
   reacquisitionFrameCount: number;
   sustainedInvalid: boolean;
   rejectedAsLikelyFalseSubject: boolean;
+  /**
+   * Subject judged to have left the frame — distinct from occlusion. Requires a
+   * sustained run of frames with zero reliable chains plus center/scale-jump or
+   * off-frame evidence within that run (occlusion keeps reliable chains and a
+   * stable bounding box). Held true through the gone window and on the re-entry
+   * frame, so callers can map it to a tracking interruption.
+   */
+  subjectGone: boolean;
+  /** True only on the frame where a reliable subject returns after a gone window. */
+  subjectGoneReentry: boolean;
   subjectCenter?: { x: number; y: number };
   previousSubjectCenter?: { x: number; y: number };
   centerJump?: number;
@@ -57,6 +67,7 @@ export interface ValidHumanSubjectTrackerOptions {
   hardCenterJumpThreshold?: number;
   scaleRatioMin?: number;
   scaleRatioMax?: number;
+  subjectGoneMinDurationMs?: number;
 }
 
 const MAJOR_JOINTS = [
@@ -85,6 +96,17 @@ const DEFAULT_CENTER_JUMP_THRESHOLD = 0.42;
 const DEFAULT_HARD_CENTER_JUMP_THRESHOLD = 0.52;
 const DEFAULT_SCALE_RATIO_MIN = 0.25;
 const DEFAULT_SCALE_RATIO_MAX = 4.0;
+// Real occlusions and rep motion produce zero-reliable-chain runs of well under
+// 1s (max observed across the labeled dataset: 968ms); a subject walking out
+// degrades chains for many seconds. 2.5s sits between those with margin.
+const DEFAULT_SUBJECT_GONE_MIN_DURATION_MS = 2500;
+// A legitimate subject's box center can touch 0/1 at full reach; hallucinated
+// boxes after a walk-out sit clearly outside (observed: -0.10, 1.16).
+const SUBJECT_GONE_OFF_FRAME_MARGIN = 0.05;
+// "Gone" only makes sense after the subject was confidently tracked for a
+// while. A single reliable frame inside otherwise-junk data (synthetic
+// unscorable fixtures, brief flickers) must not qualify as a tracked subject.
+const SUBJECT_GONE_MIN_RELIABLE_STREAK_MS = 1000;
 
 function isJointPresent(poseState: PoseState, jointName: string): boolean {
   const joint = poseState.joints[jointName];
@@ -254,6 +276,12 @@ export class ValidHumanSubjectTracker {
   private sustainedInvalid = false;
   private activeSubject: SubjectObservation | null = null;
   private reacquisitionCandidate: SubjectObservation | null = null;
+  private goneRunStartMs: number | null = null;
+  private goneJumpEvidence = false;
+  private subjectGoneActive = false;
+  private hadReliableChains = false;
+  private reliableStreakStartMs: number | null = null;
+  private previousFrameObservation: SubjectObservation | null = null;
   private readonly invalidFrameThreshold: number;
   private readonly validFrameThreshold: number;
   private readonly reacquisitionFrameThreshold: number;
@@ -261,6 +289,7 @@ export class ValidHumanSubjectTracker {
   private readonly hardCenterJumpThreshold: number;
   private readonly scaleRatioMin: number;
   private readonly scaleRatioMax: number;
+  private readonly subjectGoneMinDurationMs: number;
 
   constructor(options: ValidHumanSubjectTrackerOptions = {}) {
     this.invalidFrameThreshold = options.invalidFrameThreshold ?? DEFAULT_INVALID_FRAME_THRESHOLD;
@@ -270,6 +299,7 @@ export class ValidHumanSubjectTracker {
     this.hardCenterJumpThreshold = options.hardCenterJumpThreshold ?? DEFAULT_HARD_CENTER_JUMP_THRESHOLD;
     this.scaleRatioMin = options.scaleRatioMin ?? DEFAULT_SCALE_RATIO_MIN;
     this.scaleRatioMax = options.scaleRatioMax ?? DEFAULT_SCALE_RATIO_MAX;
+    this.subjectGoneMinDurationMs = options.subjectGoneMinDurationMs ?? DEFAULT_SUBJECT_GONE_MIN_DURATION_MS;
   }
 
   reset(): void {
@@ -279,6 +309,12 @@ export class ValidHumanSubjectTracker {
     this.sustainedInvalid = false;
     this.activeSubject = null;
     this.reacquisitionCandidate = null;
+    this.goneRunStartMs = null;
+    this.goneJumpEvidence = false;
+    this.subjectGoneActive = false;
+    this.hadReliableChains = false;
+    this.reliableStreakStartMs = null;
+    this.previousFrameObservation = null;
   }
 
   private continuityIssue(current: SubjectObservation, previous: SubjectObservation): {
@@ -448,6 +484,8 @@ export class ValidHumanSubjectTracker {
       reacquisitionFrameCount: this.reacquisitionFrameCount,
       sustainedInvalid: this.sustainedInvalid,
       rejectedAsLikelyFalseSubject: args.rejectedAsLikelyFalseSubject,
+      subjectGone: false,
+      subjectGoneReentry: false,
       subjectCenter: observation
         ? { x: observation.centerX, y: observation.centerY }
         : undefined,
@@ -463,7 +501,93 @@ export class ValidHumanSubjectTracker {
     };
   }
 
-  update(result: ValidHumanSubjectResult): ValidHumanSubjectTrackingResult {
+  /**
+   * Subject-gone detection, distinct from both occlusion and frame gaps:
+   * - Occlusion keeps at least one reliable chain (or recovers in well under a
+   *   second) and the bounding box stays continuous.
+   * - A subject leaving the frame leaves MediaPipe hallucinating a pose with
+   *   zero reliable chains for seconds, with the box jumping around/off-frame.
+   * The signal arms after a sustained zero-reliable run with jump evidence and
+   * holds through the re-entry frame, where it should be treated as a tracking
+   * interruption so the exercise FSM cannot complete a phantom rep.
+   */
+  private updateSubjectGone(
+    result: ValidHumanSubjectResult,
+    timestampMs?: number,
+  ): { subjectGone: boolean; subjectGoneReentry: boolean } {
+    const reliableChainCount = Object.values(result.chainStatuses)
+      .filter((status) => status === 'reliable').length;
+    const observation = result.boundingBox ?? null;
+    const previousObservation = this.previousFrameObservation;
+    if (observation) this.previousFrameObservation = observation;
+
+    if (reliableChainCount > 0) {
+      const reentry = this.subjectGoneActive;
+      this.subjectGoneActive = false;
+      this.goneRunStartMs = null;
+      this.goneJumpEvidence = false;
+      if (typeof timestampMs === 'number' && Number.isFinite(timestampMs)) {
+        if (this.reliableStreakStartMs === null) {
+          this.reliableStreakStartMs = timestampMs;
+        }
+        if (timestampMs - this.reliableStreakStartMs >= SUBJECT_GONE_MIN_RELIABLE_STREAK_MS) {
+          this.hadReliableChains = true;
+        }
+      }
+      return { subjectGone: reentry, subjectGoneReentry: reentry };
+    }
+    this.reliableStreakStartMs = null;
+
+    // "Gone" is a transition: a subject tracked with reliable chains for a
+    // sustained stretch collapses into sustained junk. A subject that never
+    // produces a reliable streak (tight framing, lying exercises with partial
+    // visibility, deliberately unscorable noisy sets) must not arm this. Also
+    // only measurable when callers provide frame timestamps.
+    if (!this.hadReliableChains) {
+      return { subjectGone: false, subjectGoneReentry: false };
+    }
+    if (typeof timestampMs !== 'number' || !Number.isFinite(timestampMs)) {
+      return { subjectGone: this.subjectGoneActive, subjectGoneReentry: false };
+    }
+
+    if (this.goneRunStartMs === null) {
+      this.goneRunStartMs = timestampMs;
+      this.goneJumpEvidence = false;
+    }
+
+    // Hallucinated boxes teleport between frames or sit clearly outside the
+    // frame; a still-present subject with degraded confidence (occluded distal
+    // joints, lying poses with near-collinear boxes) keeps a continuous,
+    // in-frame center. Scale changes are deliberately not evidence: a joint
+    // dropout shrinks the box in one step and looks identical to occlusion.
+    if (observation) {
+      const offFrame =
+        observation.centerX < -SUBJECT_GONE_OFF_FRAME_MARGIN ||
+        observation.centerX > 1 + SUBJECT_GONE_OFF_FRAME_MARGIN ||
+        observation.centerY < -SUBJECT_GONE_OFF_FRAME_MARGIN ||
+        observation.centerY > 1 + SUBJECT_GONE_OFF_FRAME_MARGIN;
+      const jump = previousObservation ? centerDistance(observation, previousObservation) : 0;
+      if (offFrame || jump > this.centerJumpThreshold) {
+        this.goneJumpEvidence = true;
+      }
+    }
+
+    if (
+      !this.subjectGoneActive &&
+      this.goneJumpEvidence &&
+      timestampMs - this.goneRunStartMs >= this.subjectGoneMinDurationMs
+    ) {
+      this.subjectGoneActive = true;
+    }
+    return { subjectGone: this.subjectGoneActive, subjectGoneReentry: false };
+  }
+
+  update(result: ValidHumanSubjectResult, timestampMs?: number): ValidHumanSubjectTrackingResult {
+    const gone = this.updateSubjectGone(result, timestampMs);
+    return { ...this.updateValidity(result), ...gone };
+  }
+
+  private updateValidity(result: ValidHumanSubjectResult): ValidHumanSubjectTrackingResult {
     const observation = observationFromResult(result);
     if (!result.valid || !observation) {
       return this.reject(result, {

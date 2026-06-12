@@ -253,6 +253,8 @@ function summarizeValidSubjectForStatusLog(subject: ValidHumanSubjectTrackingRes
     reacquisitionFrameCount: subject.reacquisitionFrameCount,
     sustainedInvalid: subject.sustainedInvalid,
     rejectedAsLikelyFalseSubject: subject.rejectedAsLikelyFalseSubject,
+    subjectGone: subject.subjectGone,
+    subjectGoneReentry: subject.subjectGoneReentry,
     continuityOverride: subject.continuityOverride,
     suspiciousSignals: subject.suspiciousSignals,
     strongHumanEvidence: subject.strongHumanEvidence,
@@ -1179,7 +1181,7 @@ export const CameraScreen: React.FC = () => {
     const validSubject = validHumanSubjectTrackerRef.current.update(evaluateValidHumanSubject({
       poseState,
       imageKeypoints,
-    }));
+    }), converted.timestampMs ?? now);
     const validSubjectMs = perfEnabled ? cameraPerfNow() - markMs : 0;
     const validSubjectStatus = cameraStatusFromValidSubject(validSubject);
     const frameContext: ExerciseFrameContext = {
@@ -1190,6 +1192,9 @@ export const CameraScreen: React.FC = () => {
       poseState,
       cameraAnalysisStatusRequested: shouldUpdateCameraAnalysisStatus,
       ...frameGap,
+      // Subject-gone (left frame, not occlusion) interrupts tracking the same
+      // way a silent frame gap does, so re-entry cannot complete a phantom rep.
+      trackingInterrupted: frameGap.trackingInterrupted || validSubject.subjectGone,
     };
 
     // __DEV__-only: buffer keypoints for landmark recording
