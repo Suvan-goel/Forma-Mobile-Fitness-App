@@ -174,19 +174,21 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
     });
   });
 
-  it('blocks torso fallback shadows when direct evidence fails', () => {
+  it('does not block torso fallback shadows on direct evidence since the v2 gate removal', () => {
+    // v2 policy: the torso direct-evidence gate was removed (candidate sweep,
+    // 2026-06-12), so a low raw torso delta no longer blocks shadow fallbacks.
     const result = predictBarbellCurlGroupedFeedback({
       features: torsoFallbackFeatures(2),
       heuristicIssueIds: ['barbell-curl.torso_fail'],
     });
 
     expect(shadowAlternative(result, 'barbell-curl.torso_issue', 'torso_heuristic_direct_evidence_fallback')).toMatchObject({
-      wouldPredict: false,
-      reason: 'blocked_by_direct_evidence_gate',
+      wouldPredict: true,
+      reason: 'heuristic_torso_and_direct_evidence_pass',
     });
     expect(shadowAlternative(result, 'barbell-curl.torso_issue', 'torso_fail_only_fallback')).toMatchObject({
-      wouldPredict: false,
-      reason: 'blocked_by_direct_evidence_gate',
+      wouldPredict: true,
+      reason: 'heuristic_torso_fail_and_direct_evidence_pass',
     });
   });
 
@@ -353,7 +355,7 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
     ]);
   });
 
-  it('reports repeated torso sustained fallback after two safe torso warn/fail reps', () => {
+  it('keeps the torso repeated sustained fallback inert without a direct-evidence gate (v2)', () => {
     const fallbackShadowState = createBarbellCurlGroupedFallbackShadowState();
     const features = {
       ...torsoFallbackFeatures(24),
@@ -374,14 +376,18 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
       fallbackShadowState,
     });
 
+    // v2 policy: the torso repeated fallback requires the direct-evidence
+    // gate, which was removed from the policy — the fallback is inert and the
+    // un-gated main torso path takes over. Validated by the candidate sweep
+    // (no outcome regression on the labeled dataset with the fallback inert).
     expect(fallbackPolicy(result, 'torso_repeated_sustained_fallback')).toMatchObject({
-      fallbackWouldPredict: true,
-      evidenceCount: 2,
-      contributingReps: [1, 2],
+      fallbackWouldPredict: false,
+      evidenceCount: 0,
+      contributingReps: [],
     });
-    expect(result.fallbackShadow?.fallbackGroups).toContain('barbell-curl.torso_issue');
-    expect(result.fallbackShadow?.fallbackGroupsWouldShow).toContain('barbell-curl.torso_issue');
-    expect(result.fallbackShadow?.fallbackSelectedMessage).toBe('Keep your torso still.');
+    expect(fallbackPolicy(result, 'torso_repeated_sustained_fallback')?.evidence.flatMap((entry) => entry.blockReasons))
+      .toContain('direct_torso_evidence_failed');
+    expect(result.fallbackShadow?.fallbackGroups).not.toContain('barbell-curl.torso_issue');
     expect(result.issueIds).not.toContain('barbell-curl.torso_issue');
     expect(result.messages).toEqual([]);
   });
@@ -408,10 +414,11 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
     });
     const policy = fallbackPolicy(result, 'torso_repeated_sustained_fallback');
 
+    // v2 policy: with the direct-evidence gate removed, fallback evidence is
+    // blocked before the raw-spike signature is even consulted.
     expect(policy?.fallbackWouldPredict).toBe(false);
     expect(policy?.evidenceCount).toBe(0);
-    expect(policy?.evidence.every((entry) => entry.rawSpikeBlocked)).toBe(true);
-    expect(policy?.evidence.flatMap((entry) => entry.blockReasons)).toContain('raw_spike_contamination_signature');
+    expect(policy?.evidence.flatMap((entry) => entry.blockReasons)).toContain('direct_torso_evidence_failed');
   });
 
   it('does not report repeated torso fallback for one isolated torso warning', () => {
@@ -429,8 +436,10 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
 
     expect(fallbackPolicy(result, 'torso_repeated_sustained_fallback')).toMatchObject({
       fallbackWouldPredict: false,
-      evidenceCount: 1,
-      contributingReps: [1],
+      // v2 policy: fallback evidence cannot contribute without the
+      // direct-evidence gate, so even a safe isolated warning records none.
+      evidenceCount: 0,
+      contributingReps: [],
     });
     expect(result.fallbackShadow?.fallbackGroups).toEqual([]);
   });
@@ -644,7 +653,7 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
 
   it('validates the bundled runtime policy artifact shape without offline ML files', () => {
     const policy = BARBELL_CURL_GROUPED_FEEDBACK_POLICY;
-    expect(policy.policyId).toBe('barbell-curl-grouped-feedback-v1-20260608T183615Z');
+    expect(policy.policyId).toBe('barbell-curl-grouped-feedback-v2-20260612T000000Z');
     expect(policy.modelRunId).toBe('2026-06-08T17-27-07Z');
     expect(policy.featureSchemaVersion).toBe('rep-features-v2');
 
@@ -660,14 +669,14 @@ describe('Barbell Curl grouped ML feedback runtime policy', () => {
       modelId: 'rom',
       threshold: 0.85,
     });
+    // v2: torso is a plain thresholded model; the heuristic direct-evidence
+    // gate was removed by the 2026-06-12 candidate sweep.
     expect(groups['barbell-curl.torso_issue']).toMatchObject({
-      kind: 'thresholded_model_with_direct_evidence',
+      kind: 'thresholded_model',
       modelId: 'torso',
       threshold: 0.67,
-      directEvidence: {
-        featureColumn: 'feature__diagnostic.metric.torsodeltaraw.value',
-      },
     });
+    expect(groups['barbell-curl.torso_issue'].directEvidence).toBeUndefined();
     expect(groups['barbell-curl.shoulder_issue'].childPolicies).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ issueId: 'barbell-curl.shoulder_warn', policy: 'heuristic-only' }),

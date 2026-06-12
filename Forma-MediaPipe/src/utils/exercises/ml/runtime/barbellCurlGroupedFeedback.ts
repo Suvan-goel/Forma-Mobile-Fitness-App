@@ -88,7 +88,8 @@ interface CollapsedFineGroup extends RuntimeGroupBase {
   childPolicies: ChildPolicy[];
 }
 
-type RuntimeGroup = ThresholdedGroup | DirectEvidenceGroup | CollapsedFineGroup;
+export type BarbellCurlGroupedRuntimeGroup = ThresholdedGroup | DirectEvidenceGroup | CollapsedFineGroup;
+type RuntimeGroup = BarbellCurlGroupedRuntimeGroup;
 
 interface BarbellCurlGroupedPolicy {
   schemaVersion: number;
@@ -857,7 +858,10 @@ function shadowAlternativesForGroup(
       isTruthyFeature(features, 'feature__heuristic.issue.barbell_curl_torso_issue');
     const hasFailHeuristic = hasHeuristicTorsoFail;
     const hasWarnOrFailHeuristic = hasHeuristicTorsoWarn || hasFailHeuristic;
-    const fallbackEligible = eligible && (directEvidence?.passes ?? false);
+    // A torso group without a direct-evidence gate (plain thresholded_model)
+    // has no gate to fail: shadow fallbacks treat the gate as passing.
+    const directEvidencePasses = directEvidence ? directEvidence.passes : true;
+    const fallbackEligible = eligible && directEvidencePasses;
     const sustainedEvidence = torsoSustainedEvidence(features);
     const robustAndSustainedEvidence = torsoRobustAndSustainedEvidence(features);
     const rawSpikeContamination = fallbackEligible && !sustainedEvidence;
@@ -865,10 +869,10 @@ function shadowAlternativesForGroup(
     return [
       {
         id: 'torso_probability_only',
-        probabilityThreshold: group.kind === 'thresholded_model_with_direct_evidence' ? group.threshold : undefined,
+        probabilityThreshold: group.kind === 'collapsed_fine_policy' ? undefined : group.threshold,
         directEvidenceRequired: false,
         wouldPredict:
-          group.kind === 'thresholded_model_with_direct_evidence' &&
+          group.kind !== 'collapsed_fine_policy' &&
           probability >= group.threshold &&
           eligible,
         reason: eligible ? 'runtime_threshold_without_direct_evidence_gate' : 'blocked_by_safety_or_cue_gate',
@@ -879,7 +883,7 @@ function shadowAlternativesForGroup(
         wouldPredict: fallbackEligible && hasAnyHeuristicTorso,
         reason: !eligible
           ? 'blocked_by_safety_or_cue_gate'
-          : !(directEvidence?.passes ?? false)
+          : !directEvidencePasses
             ? 'blocked_by_direct_evidence_gate'
             : hasAnyHeuristicTorso
               ? 'heuristic_torso_and_direct_evidence_pass'
@@ -891,7 +895,7 @@ function shadowAlternativesForGroup(
         wouldPredict: fallbackEligible && hasFailHeuristic && !rawSpikeContamination,
         reason: !eligible
           ? 'blocked_by_safety_or_cue_gate'
-          : !(directEvidence?.passes ?? false)
+          : !directEvidencePasses
             ? 'blocked_by_direct_evidence_gate'
             : rawSpikeContamination
               ? 'blocked_by_raw_spike_contamination_signature'
@@ -906,7 +910,7 @@ function shadowAlternativesForGroup(
         wouldPredict: hasFailHeuristic && directEvidenceAndRobust && probability >= 0.5,
         reason: !eligible
           ? 'blocked_by_safety_or_cue_gate'
-          : !(directEvidence?.passes ?? false)
+          : !directEvidencePasses
             ? 'blocked_by_direct_evidence_gate'
             : !robustAndSustainedEvidence
               ? 'blocked_by_weak_robust_or_sustained_torso_evidence'
@@ -922,7 +926,7 @@ function shadowAlternativesForGroup(
         wouldPredict: fallbackEligible && hasFailHeuristic,
         reason: !eligible
           ? 'blocked_by_safety_or_cue_gate'
-          : !(directEvidence?.passes ?? false)
+          : !directEvidencePasses
             ? 'blocked_by_direct_evidence_gate'
             : hasFailHeuristic
               ? 'heuristic_torso_fail_and_direct_evidence_pass'
@@ -934,7 +938,7 @@ function shadowAlternativesForGroup(
         wouldPredict: fallbackEligible && hasWarnOrFailHeuristic,
         reason: !eligible
           ? 'blocked_by_safety_or_cue_gate'
-          : !(directEvidence?.passes ?? false)
+          : !directEvidencePasses
             ? 'blocked_by_direct_evidence_gate'
             : hasWarnOrFailHeuristic
               ? 'heuristic_torso_warn_or_fail_and_direct_evidence_pass'
@@ -944,16 +948,16 @@ function shadowAlternativesForGroup(
         id: 'torso_threshold_0_55_with_direct_evidence',
         probabilityThreshold: relaxedThreshold,
         directEvidenceRequired: true,
-        wouldPredict: probability >= relaxedThreshold && eligible && (directEvidence?.passes ?? false),
-        reason: directEvidence?.passes
+        wouldPredict: probability >= relaxedThreshold && eligible && directEvidencePasses,
+        reason: directEvidencePasses
           ? (eligible ? 'relaxed_probability_threshold' : 'blocked_by_safety_or_cue_gate')
           : 'blocked_by_direct_evidence_gate',
       },
       {
         id: 'torso_direct_evidence_only',
         directEvidenceRequired: true,
-        wouldPredict: eligible && (directEvidence?.passes ?? false),
-        reason: directEvidence?.passes ? 'direct_evidence_passes' : 'blocked_by_direct_evidence_gate',
+        wouldPredict: eligible && directEvidencePasses,
+        reason: directEvidencePasses ? 'direct_evidence_passes' : 'blocked_by_direct_evidence_gate',
       },
     ];
   }
@@ -1279,6 +1283,12 @@ export function predictBarbellCurlGroupedFeedback(input: {
   heuristicIssueIds: string[];
   repIndex?: number;
   fallbackShadowState?: BarbellCurlGroupedFallbackShadowState;
+  /**
+   * Offline candidate evaluation only (bake-off / policy sweeps): evaluate
+   * these group definitions instead of the frozen policy's. Models, fallback
+   * evidence, and feature handling stay frozen. Never set in app code.
+   */
+  policyGroupsOverride?: BarbellCurlGroupedRuntimeGroup[];
 }): BarbellCurlGroupedFeedbackResult {
   const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const warnings: string[] = [];
@@ -1289,7 +1299,8 @@ export function predictBarbellCurlGroupedFeedback(input: {
       missingFeatureSummary(model, input.features),
     ]),
   );
-  const predictions = BARBELL_CURL_GROUPED_FEEDBACK_POLICY.groups.map((group) => {
+  const policyGroups = input.policyGroupsOverride ?? BARBELL_CURL_GROUPED_FEEDBACK_POLICY.groups;
+  const predictions = policyGroups.map((group) => {
     try {
       return evaluateGroup(group, input.features, heuristicIssueIds);
     } catch (error) {

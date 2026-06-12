@@ -783,7 +783,7 @@ describe('Barbell Curl synthetic replay coverage', () => {
       expect(result.reps[0]?.diagnostics?.mlGroupedFeedback).toMatchObject({
         enabled: true,
         applied: true,
-        policyId: 'barbell-curl-grouped-feedback-v1-20260608T183615Z',
+        policyId: 'barbell-curl-grouped-feedback-v2-20260612T000000Z',
         modelRunId: '2026-06-08T17-27-07Z',
       });
       expect(result.reps[0]?.messages.length ?? 0).toBeLessThanOrEqual(1);
