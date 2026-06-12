@@ -618,6 +618,98 @@ export function cameraStatusFromViewCueGating(args: {
   };
 }
 
+interface PoseStateReadinessSpec {
+  /** Reason-string prefix, e.g. `barbell_curl` → `barbell_curl_pose_state_full_readiness`. */
+  reasonSlug: string;
+  /** Chains that must be reliable for full feedback and usable for limited. */
+  coreChains: string[];
+  /** Movement-limb chains graded by how many are reliable. */
+  limbChains: string[];
+  /** `arm`/`leg` — used in the limited-tier reason string. */
+  limbLabel: string;
+  minReliableLimbsForFull: number;
+  minReliableLimbsForLimited: number;
+}
+
+/**
+ * Per-exercise chain requirements for the pose-state readiness status.
+ * Bilateral front-view exercises need both limbs reliable for full feedback;
+ * side-view exercises score from one visible side, so one reliable limb is
+ * full readiness there.
+ *
+ * Deliberately absent: Lying Leg Curl and Machine Ab Crunches. Their scoring
+ * joints (hip+knee, with heel/foot fallbacks behind machine pads) do not map
+ * onto whole pose chains — chain-level grading would report count-only while
+ * feedback actually works. They keep returning null until they get a
+ * joint-level readiness model.
+ */
+const POSE_STATE_READINESS_SPECS: Record<string, PoseStateReadinessSpec> = {
+  'barbell curl': {
+    reasonSlug: 'barbell_curl',
+    coreChains: ['torso'],
+    limbChains: ['leftArm', 'rightArm'],
+    limbLabel: 'arm',
+    minReliableLimbsForFull: 2,
+    minReliableLimbsForLimited: 1,
+  },
+  'standing dumbbell lateral raises': {
+    reasonSlug: 'lateral_raise',
+    coreChains: ['torso'],
+    limbChains: ['leftArm', 'rightArm'],
+    limbLabel: 'arm',
+    minReliableLimbsForFull: 2,
+    minReliableLimbsForLimited: 1,
+  },
+  'cable lat pulldowns': {
+    reasonSlug: 'lat_pulldown',
+    coreChains: ['torso'],
+    limbChains: ['leftArm', 'rightArm'],
+    limbLabel: 'arm',
+    minReliableLimbsForFull: 1,
+    minReliableLimbsForLimited: 1,
+  },
+  'cable row': {
+    reasonSlug: 'cable_row',
+    coreChains: ['torso'],
+    limbChains: ['leftArm', 'rightArm'],
+    limbLabel: 'arm',
+    minReliableLimbsForFull: 1,
+    minReliableLimbsForLimited: 1,
+  },
+  'cable pushdowns': {
+    reasonSlug: 'cable_pushdown',
+    coreChains: ['torso'],
+    limbChains: ['leftArm', 'rightArm'],
+    limbLabel: 'arm',
+    minReliableLimbsForFull: 1,
+    minReliableLimbsForLimited: 1,
+  },
+  'push-up': {
+    reasonSlug: 'pushup',
+    coreChains: ['torso'],
+    limbChains: ['leftArm', 'rightArm'],
+    limbLabel: 'arm',
+    minReliableLimbsForFull: 1,
+    minReliableLimbsForLimited: 1,
+  },
+  'barbell squat': {
+    reasonSlug: 'barbell_squat',
+    coreChains: ['torso'],
+    limbChains: ['leftLeg', 'rightLeg'],
+    limbLabel: 'leg',
+    minReliableLimbsForFull: 1,
+    minReliableLimbsForLimited: 1,
+  },
+  'leg extensions': {
+    reasonSlug: 'leg_extensions',
+    coreChains: ['torso'],
+    limbChains: ['leftLeg', 'rightLeg'],
+    limbLabel: 'leg',
+    minReliableLimbsForFull: 1,
+    minReliableLimbsForLimited: 1,
+  },
+};
+
 export function cameraStatusFromPoseStateReadiness(args: {
   exerciseName?: string | null;
   poseState?: PoseStateReadinessLike | null;
@@ -625,41 +717,36 @@ export function cameraStatusFromPoseStateReadiness(args: {
 }): CameraAnalysisStatus | null {
   const { exerciseName, poseState, source = 'poseState' } = args;
   if (!exerciseName || !poseState?.chains) return null;
-  if (exerciseName.trim().toLowerCase() !== 'barbell curl') return null;
+  const spec = POSE_STATE_READINESS_SPECS[exerciseName.trim().toLowerCase()];
+  if (!spec) return null;
 
-  const torsoStatus = poseState.chains.torso?.status;
-  const leftArmStatus = poseState.chains.leftArm?.status;
-  const rightArmStatus = poseState.chains.rightArm?.status;
-  const reliableArms = uniqueStrings([
-    leftArmStatus === 'reliable' ? 'leftArm' : undefined,
-    rightArmStatus === 'reliable' ? 'rightArm' : undefined,
-  ]);
-  const weakChains = uniqueStrings([
-    torsoStatus !== 'reliable' ? 'torso' : undefined,
-    leftArmStatus !== 'reliable' ? 'leftArm' : undefined,
-    rightArmStatus !== 'reliable' ? 'rightArm' : undefined,
-  ]);
-  const torsoUsable = isUsableChainStatus(torsoStatus);
+  const chainStatus = (chain: string) => poseState.chains?.[chain]?.status;
+  const reliableLimbs = spec.limbChains.filter((chain) => chainStatus(chain) === 'reliable');
+  const coreReliable = spec.coreChains.every((chain) => chainStatus(chain) === 'reliable');
+  const coreUsable = spec.coreChains.every((chain) => isUsableChainStatus(chainStatus(chain)));
+  const weakChains = uniqueStrings(
+    [...spec.coreChains, ...spec.limbChains].filter((chain) => chainStatus(chain) !== 'reliable'),
+  );
   const details = {
     feedbackMode: 'full' as CameraAnalysisFeedbackMode,
     usableChains: uniqueStrings([
-      torsoUsable ? 'torso' : undefined,
-      ...reliableArms,
+      ...spec.coreChains.filter((chain) => isUsableChainStatus(chainStatus(chain))),
+      ...reliableLimbs,
     ]),
     weakChains,
   };
 
-  if (torsoStatus === 'reliable' && reliableArms.length === 2) {
+  if (coreReliable && reliableLimbs.length >= spec.minReliableLimbsForFull) {
     return {
-      ...fullFeedbackCameraStatus(source, 'barbell_curl_pose_state_full_readiness'),
+      ...fullFeedbackCameraStatus(source, `${spec.reasonSlug}_pose_state_full_readiness`),
       details,
     };
   }
 
-  if (torsoUsable && reliableArms.length >= 1) {
+  if (coreUsable && reliableLimbs.length >= spec.minReliableLimbsForLimited) {
     return limitedFeedbackCameraStatus({
       source,
-      reason: 'barbell_curl_pose_state_partial_arm_readiness',
+      reason: `${spec.reasonSlug}_pose_state_partial_${spec.limbLabel}_readiness`,
       message: 'Limited feedback - keep key joints visible',
       details: {
         ...details,
@@ -670,7 +757,7 @@ export function cameraStatusFromPoseStateReadiness(args: {
 
   return countOnlyCameraStatus({
     source,
-    reason: 'barbell_curl_pose_state_count_only_readiness',
+    reason: `${spec.reasonSlug}_pose_state_count_only_readiness`,
     message: 'Count only - keep key joints visible',
     details: {
       ...details,

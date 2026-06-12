@@ -696,4 +696,101 @@ describe('CameraAnalysisStatus resolver', () => {
     expect(status?.details?.feedbackMode).toBe('countOnly');
     expect(status?.reason).toBe('barbell_curl_pose_state_count_only_readiness');
   });
+
+  it('maps a side-view Barbell Squat with one reliable leg and torso to full readiness', () => {
+    const status = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Barbell Squat',
+      poseState: poseStateReadiness({
+        torso: 'reliable',
+        leftLeg: 'reliable',
+        rightLeg: 'partial',
+      }),
+    });
+
+    expect(status?.details?.feedbackMode).toBe('full');
+    expect(status?.reason).toBe('barbell_squat_pose_state_full_readiness');
+    expect(status?.details?.weakChains).toContain('rightLeg');
+  });
+
+  it('requires both reliable arms for full Lateral Raise readiness (front bilateral)', () => {
+    const status = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Standing Dumbbell Lateral Raises',
+      poseState: poseStateReadiness({
+        torso: 'reliable',
+        leftArm: 'reliable',
+        rightArm: 'partial',
+      }),
+    });
+
+    expect(status?.details?.feedbackMode).toBe('limited');
+    expect(status?.reason).toBe('lateral_raise_pose_state_partial_arm_readiness');
+  });
+
+  it('maps a side-view Push-Up with one reliable arm and usable torso to readiness tiers', () => {
+    const full = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Push-Up',
+      poseState: poseStateReadiness({
+        torso: 'reliable',
+        leftArm: 'reliable',
+        rightArm: 'unreliable',
+      }),
+    });
+    const limited = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Push-Up',
+      poseState: poseStateReadiness({
+        torso: 'partial',
+        leftArm: 'reliable',
+        rightArm: 'unreliable',
+      }),
+    });
+    const countOnly = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Push-Up',
+      poseState: poseStateReadiness({
+        torso: 'partial',
+        leftArm: 'partial',
+        rightArm: 'unreliable',
+      }),
+    });
+
+    expect(full?.details?.feedbackMode).toBe('full');
+    expect(limited?.details?.feedbackMode).toBe('limited');
+    expect(countOnly?.details?.feedbackMode).toBe('countOnly');
+    expect(countOnly?.message).toBe('Count only - keep key joints visible');
+  });
+
+  it('maps Leg Extensions readiness to count-only when no leg chain is reliable', () => {
+    const status = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Leg Extensions',
+      poseState: poseStateReadiness({
+        torso: 'reliable',
+        leftLeg: 'partial',
+        rightLeg: 'unreliable',
+      }),
+    });
+
+    expect(status?.details?.feedbackMode).toBe('countOnly');
+    expect(status?.reason).toBe('leg_extensions_pose_state_count_only_readiness');
+  });
+
+  it('returns null for machine-occluded exercises whose joints do not map onto chains', () => {
+    for (const exerciseName of ['Lying Leg Curl', 'Machine Ab Crunches']) {
+      const status = cameraStatusFromPoseStateReadiness({
+        exerciseName,
+        poseState: poseStateReadiness({
+          torso: 'reliable',
+          leftLeg: 'reliable',
+          rightLeg: 'reliable',
+        }),
+      });
+      expect(status).toBeNull();
+    }
+  });
+
+  it('returns null for unknown exercises', () => {
+    const status = cameraStatusFromPoseStateReadiness({
+      exerciseName: 'Unknown Exercise',
+      poseState: poseStateReadiness({ torso: 'reliable' }),
+    });
+    expect(status).toBeNull();
+  });
 });
